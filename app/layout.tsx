@@ -30,18 +30,18 @@ export default function RootLayout({
     >
       <body className="h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-blue-600 text-white flex items-center px-6 border-b border-blue-700 shrink-0">
+        <header className="h-16 bg-slate-600 text-white flex items-center px-10 border-b border-slate-700 shrink-0">
           <div className="text-xl font-bold">PicPony</div>
         </header>
         
         {/* Body Container */}
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
-          <aside className="w-64 bg-blue-50 border-r border-blue-200 flex flex-col shrink-0">
+          <aside className="w-64 bg-slate-50 flex flex-col shrink-0">
             <nav className="flex-1 py-4">
               <Link 
                 href="/" 
-                className="block px-6 py-3 text-blue-700 bg-blue-100 font-medium border-r-4 border-blue-600"
+                className="block px-6 py-3 text-slate-700 bg-slate-100 font-medium border-r-4 border-slate-600"
               >
                 主页
               </Link>
