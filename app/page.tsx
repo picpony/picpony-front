@@ -68,7 +68,7 @@ async function ImageList() {
               alt={image.name || `Image ${image.id}`}
               width={image.width}
               height={image.height}
-              className="w-full h-auto object-cover transition-all duration-500 group-hover:scale-105"
+              className="w-full h-auto object-cover transition-all duration-500"
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />

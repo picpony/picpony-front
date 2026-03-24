@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Link from "next/link";
+import { cookies } from "next/headers";
+import AppLayout from "@/components/AppLayout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,37 +19,23 @@ export const metadata: Metadata = {
   description: "PicPony Frontend",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const sidebarCollapsed = cookieStore.get('sidebarCollapsed')?.value === 'true';
+
   return (
     <html
       lang="zh"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="h-full flex flex-col overflow-hidden">
-        <header className="h-16 bg-slate-50 text-slate-900 flex items-center px-10 shrink-0">
-          <div className="text-xl font-bold">PicPony</div>
-        </header>
-        
-        <div className="flex flex-1 overflow-hidden">
-          <aside className="w-64 bg-slate-50 flex flex-col shrink-0">
-            <nav className="flex-1 py-4">
-              <Link 
-                href="/" 
-                className="block px-6 py-3 text-slate-700 bg-slate-100 font-medium border-r-4 border-slate-600"
-              >
-                主页
-              </Link>
-            </nav>
-          </aside>
-          
-          <main className="flex-1 overflow-y-auto bg-white p-6">
-            {children}
-          </main>
-        </div>
+        <AppLayout initialCollapsed={sidebarCollapsed}>
+          {children}
+        </AppLayout>
       </body>
     </html>
   );
