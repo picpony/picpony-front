@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
         hostname: 'derpicdn.net',
       },
     ],
+    unoptimized: process.env.NODE_ENV === 'development',
   },
 };
 

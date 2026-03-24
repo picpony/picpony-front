@@ -29,7 +29,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="h-full flex flex-col overflow-hidden">
-        <header className="h-16 bg-slate-600 text-white flex items-center px-10 border-b border-slate-700 shrink-0">
+        <header className="h-16 bg-slate-50 text-slate-900 flex items-center px-10 shrink-0">
           <div className="text-xl font-bold">PicPony</div>
         </header>
         
