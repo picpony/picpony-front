@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import Image from "next/image";
+import FadeInImage from "@/components/FadeInImage";
 
 interface ImageRepresentation {
   full: string;
@@ -54,7 +54,7 @@ async function ImageList() {
   const data = await getImages();
 
   return (
-    <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+    <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 animate-fade-in">
       {data.images.map((image) => (
         <div key={image.id} className="break-inside-avoid">
           <a 
@@ -63,12 +63,12 @@ async function ImageList() {
             rel="noopener noreferrer"
             className="block relative rounded-lg overflow-hidden group bg-slate-100"
           >
-            <Image
+            <FadeInImage
               src={image.representations.thumb}
               alt={image.name || `Image ${image.id}`}
               width={image.width}
               height={image.height}
-              className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105"
+              className="w-full h-auto object-cover transition-all duration-500 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
