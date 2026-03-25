@@ -68,7 +68,7 @@ export default function AppLayout({
       
       <div className="flex flex-1 overflow-hidden">
         <aside 
-          className={`bg-slate-50 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden border-r border-slate-200 ${
+          className={`bg-slate-50 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
             isCollapsed ? 'w-0' : 'w-64'
           }`}
         >
