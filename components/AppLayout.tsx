@@ -13,7 +13,8 @@ function SearchBar() {
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/?search=${encodeURIComponent(searchQuery.trim())}`);
+      const formattedQuery = searchQuery.trim().replace(/，/g, ',');
+      router.push(`/?search=${encodeURIComponent(formattedQuery)}`);
     } else {
       router.push('/');
     }
@@ -97,8 +98,10 @@ export default function AppLayout({
           </nav>
         </aside>
         
-        <main className="flex-1 overflow-y-auto bg-white p-6">
-          {children}
+        <main className="flex-1 overflow-y-auto bg-white p-6 relative">
+          <div key={pathname} className="animate-page-transition">
+            {children}
+          </div>
         </main>
       </div>
     </div>
