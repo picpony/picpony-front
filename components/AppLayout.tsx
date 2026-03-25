@@ -1,9 +1,37 @@
 'use client';
 
-import { useState } from "react";
+import { useState, FormEvent, Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { MdMenu, MdHome, MdSettings } from "react-icons/md";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { MdMenu, MdHome, MdSettings, MdSearch } from "react-icons/md";
+
+function SearchBar() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+
+  const handleSearch = (e: FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/?search=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      router.push('/');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSearch} className="flex items-center bg-white/10 rounded-md px-3 py-1.5 ml-4 focus-within:bg-white/20 transition-colors">
+      <MdSearch size={20} className="text-white/70 mr-2" />
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="搜索..."
+        className="bg-transparent border-none outline-none text-white placeholder:text-white/50 text-sm w-48 focus:w-64 transition-all duration-300"
+      />
+    </form>
+  );
+}
 
 export default function AppLayout({ 
   children, 
@@ -31,7 +59,10 @@ export default function AppLayout({
         >
           <MdMenu size={24} />
         </button>
-        <div className="text-xl font-bold">PicPony</div>
+        <div className="text-xl font-bold shrink-0">PicPony</div>
+        <Suspense fallback={<div className="w-48 ml-4 h-8 bg-white/10 rounded-md animate-pulse"></div>}>
+          <SearchBar />
+        </Suspense>
       </header>
       
       <div className="flex flex-1 overflow-hidden">
@@ -40,10 +71,10 @@ export default function AppLayout({
             isCollapsed ? 'w-0' : 'w-64'
           }`}
         >
-          <nav className="flex-1 py-4 w-64">
+          <nav className="flex-1 py-4 w-64 px-3 space-y-1">
             <Link 
               href="/" 
-              className={`flex items-center px-6 py-3 font-medium transition-colors ${
+              className={`flex items-center px-3 py-3 font-medium transition-colors rounded-lg ${
                 pathname === '/' 
                   ? 'text-primary bg-primary/10' 
                   : 'text-slate-700 hover:bg-slate-100'
@@ -54,7 +85,7 @@ export default function AppLayout({
             </Link>
             <Link 
               href="/settings" 
-              className={`flex items-center px-6 py-3 font-medium transition-colors ${
+              className={`flex items-center px-3 py-3 font-medium transition-colors rounded-lg ${
                 pathname === '/settings' 
                   ? 'text-primary bg-primary/10' 
                   : 'text-slate-700 hover:bg-slate-100'

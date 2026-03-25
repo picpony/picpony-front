@@ -30,9 +30,14 @@ interface ApiResponse {
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-async function getImages(): Promise<ApiResponse> {
+async function getImages(search?: string): Promise<ApiResponse> {
+  let query = "-explicit%2C%20-questionable%2C%20-suggestive%2C%20-grotesque%2C%20-grimdark%2C%20-spoiler%2C%20pony";
+  if (search) {
+    query = `${encodeURIComponent(search)}%2C%20${query}`;
+  }
+
   const res = await fetch(
-    "https://derpibooru.org/api/v1/json/search/images?q=-explicit%2C%20-questionable%2C%20-suggestive%2C%20-grotesque%2C%20-grimdark%2C%20-spoiler%2C%20pony&page=1&per_page=50&sf=created_at&sd=desc",
+    `https://derpibooru.org/api/v1/json/search/images?q=${query}&page=1&per_page=50&sf=created_at&sd=desc`,
     { 
       cache: 'no-store',
       headers: {
@@ -50,8 +55,8 @@ async function getImages(): Promise<ApiResponse> {
   return res.json();
 }
 
-async function ImageList() {
-  const data = await getImages();
+async function ImageList({ search }: { search?: string }) {
+  const data = await getImages(search);
 
   return (
     <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 animate-fade-in">
@@ -87,11 +92,17 @@ function ImageSkeleton() {
   );
 }
 
-export default function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string }>;
+}) {
+  const { search } = await searchParams;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <Suspense fallback={<ImageSkeleton />}>
-        <ImageList />
+      <Suspense fallback={<ImageSkeleton />} key={search}>
+        <ImageList search={search} />
       </Suspense>
     </div>
   );
