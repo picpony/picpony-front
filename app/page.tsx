@@ -82,7 +82,7 @@ async function ImageList() {
 function ImageSkeleton() {
   return (
     <div className="flex justify-center items-center min-h-[50vh]">
-      <div className="w-8 h-8 border-[4px] border-transparent border-t-blue-300 rounded-full animate-[spin_0.5s_linear_infinite]"></div>
+      <div className="w-8 h-8 border-[4px] border-transparent border-t-primary rounded-full animate-[spin_0.5s_linear_infinite]"></div>
     </div>
   );
 }
