@@ -3,7 +3,7 @@
 import { useState, FormEvent, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson } from "react-icons/md";
 
 function SearchBar() {
   const router = useRouter();
@@ -68,10 +68,24 @@ export default function AppLayout({
       
       <div className="flex flex-1 overflow-hidden">
         <aside 
-          className={`bg-slate-50 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
+          className={`bg-slate-50 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden border-r border-slate-200 ${
             isCollapsed ? 'w-0' : 'w-64'
           }`}
         >
+          <div className="w-64 p-4">
+            <Link 
+              href="/login"
+              className="flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors group"
+            >
+              <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
+                <MdPerson size={24} />
+              </div>
+              <div className="ml-3 overflow-hidden">
+                <p className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors truncate">未登录</p>
+                <p className="text-xs text-slate-500 truncate">点击登录</p>
+              </div>
+            </Link>
+          </div>
           <nav className="flex-1 py-4 w-64 px-3 space-y-1">
             <Link 
               href="/" 
