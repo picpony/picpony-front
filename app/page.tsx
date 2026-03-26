@@ -74,6 +74,20 @@ function ImageList({ search }: { search?: string }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [selectedImage, setSelectedImage] = useState<PonyImage | null>(null);
+  const [columns, setColumns] = useState(4);
+
+  useEffect(() => {
+    const updateColumns = () => {
+      if (window.innerWidth < 640) setColumns(1);
+      else if (window.innerWidth < 768) setColumns(2);
+      else if (window.innerWidth < 1024) setColumns(3);
+      else setColumns(4);
+    };
+    
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -149,25 +163,34 @@ function ImageList({ search }: { search?: string }) {
     );
   }
 
+  const columnData: PonyImage[][] = Array.from({ length: columns }, () => []);
+  images.forEach((img, index) => {
+    columnData[index % columns].push(img);
+  });
+
   return (
     <>
-      <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 animate-fade-in">
-        {images.map((image) => (
-          <div key={image.id} className="break-inside-avoid">
-            <button 
-              onClick={() => setSelectedImage(image)}
-              className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
-            >
-              <FadeInImage
-                src={image.representations.thumb}
-                alt={image.name || `Image ${image.id}`}
-                width={image.width}
-                height={image.height}
-                className="w-full h-auto object-cover transition-all duration-500"
-                sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-            </button>
+      <div className="flex gap-4 animate-fade-in items-start">
+        {columnData.map((col, colIndex) => (
+          <div key={colIndex} className="flex flex-col gap-4 flex-1 min-w-0">
+            {col.map((image) => (
+              <div key={image.id} className="w-full">
+                <button 
+                  onClick={() => setSelectedImage(image)}
+                  className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
+                >
+                  <FadeInImage
+                    src={image.representations.thumb}
+                    alt={image.name || `Image ${image.id}`}
+                    width={image.width}
+                    height={image.height}
+                    className="w-full h-auto object-cover transition-all duration-500"
+                    sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                </button>
+              </div>
+            ))}
           </div>
         ))}
       </div>

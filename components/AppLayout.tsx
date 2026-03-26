@@ -105,7 +105,7 @@ export default function AppLayout({
               <div className="relative">
                 <button 
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors text-left"
+                  className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors text-left relative z-20"
                 >
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
                     {userInfo.avatar ? (
@@ -127,21 +127,28 @@ export default function AppLayout({
                     </p>
                   </div>
                   <div className="text-slate-400 shrink-0 ml-2">
-                    {isUserMenuOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
+                    <MdExpandMore 
+                      size={20} 
+                      className={`transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} 
+                    />
                   </div>
                 </button>
                 
-                {isUserMenuOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-10">
-                    <button 
-                      onClick={handleLogout}
-                      className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      <MdLogout size={18} className="mr-2" />
-                      退出登录
-                    </button>
-                  </div>
-                )}
+                <div 
+                  className={`absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-10 transition-all duration-200 origin-top ${
+                    isUserMenuOpen 
+                      ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto' 
+                      : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
+                  }`}
+                >
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <MdLogout size={18} className="mr-2" />
+                    退出登录
+                  </button>
+                </div>
               </div>
             ) : (
               <Link 

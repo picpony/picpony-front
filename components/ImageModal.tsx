@@ -16,24 +16,34 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
   const [displayImage, setDisplayImage] = useState<PonyImage | null>(null);
 
   useEffect(() => {
+    let timer: NodeJS.Timeout;
+    let frameId: number;
+
     if (image) {
       setDisplayImage(image);
       setRender(true);
-      const timer = setTimeout(() => setIsVisible(true), 10);
+      
+      frameId = requestAnimationFrame(() => {
+        frameId = requestAnimationFrame(() => {
+          setIsVisible(true);
+        });
+      });
+      
       document.body.style.overflow = 'hidden';
-      return () => clearTimeout(timer);
     } else {
       setIsVisible(false);
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         setRender(false);
         setDisplayImage(null);
       }, 300);
       document.body.style.overflow = 'unset';
-      return () => {
-        clearTimeout(timer);
-        document.body.style.overflow = 'unset';
-      };
     }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      if (frameId) cancelAnimationFrame(frameId);
+      document.body.style.overflow = 'unset';
+    };
   }, [image]);
 
   if (!render || !displayImage) return null;
