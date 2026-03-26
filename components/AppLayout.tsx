@@ -72,7 +72,7 @@ export default function AppLayout({
             isCollapsed ? 'w-0' : 'w-64'
           }`}
         >
-          <div className="w-64 p-4">
+          <div className="w-64 p-3 pb-0">
             <Link 
               href="/login"
               className="flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors group"
@@ -86,7 +86,7 @@ export default function AppLayout({
               </div>
             </Link>
           </div>
-          <nav className="flex-1 py-4 w-64 px-3 space-y-1">
+          <nav className="flex-1 py-3 w-64 px-3 space-y-1">
             <Link 
               href="/" 
               className={`flex items-center px-3 py-3 font-medium transition-colors rounded-lg ${

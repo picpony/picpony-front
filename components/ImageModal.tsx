@@ -11,39 +11,49 @@ interface ImageModalProps {
 }
 
 export default function ImageModal({ image, onClose }: ImageModalProps) {
+  const [render, setRender] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [displayImage, setDisplayImage] = useState<PonyImage | null>(null);
 
   useEffect(() => {
     if (image) {
-      setIsVisible(true);
+      setDisplayImage(image);
+      setRender(true);
+      const timer = setTimeout(() => setIsVisible(true), 10);
       document.body.style.overflow = 'hidden';
+      return () => clearTimeout(timer);
     } else {
       setIsVisible(false);
+      const timer = setTimeout(() => {
+        setRender(false);
+        setDisplayImage(null);
+      }, 300);
       document.body.style.overflow = 'unset';
+      return () => {
+        clearTimeout(timer);
+        document.body.style.overflow = 'unset';
+      };
     }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
   }, [image]);
 
-  if (!image) return null;
+  if (!render || !displayImage) return null;
 
   return (
     <div 
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-opacity duration-300 ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0'}`}
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)' }}
       onClick={onClose}
     >
       <div 
-        className={`bg-white rounded-xl overflow-hidden w-full max-w-6xl max-h-[90vh] flex flex-col md:flex-row shadow-2xl transition-transform duration-300 ${isVisible ? 'scale-100' : 'scale-95'}`}
+        className={`bg-white rounded-xl overflow-hidden w-full max-w-6xl max-h-[90vh] flex flex-col md:flex-row shadow-2xl transition-all duration-300 ease-in-out ${isVisible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-1 bg-slate-100 flex items-center justify-center overflow-hidden relative min-h-[300px] md:min-h-0">
           <FadeInImage
-            src={image.representations.large || image.representations.full}
-            alt={image.name || `Image ${image.id}`}
-            width={image.width}
-            height={image.height}
+            src={displayImage.representations.large || displayImage.representations.full}
+            alt={displayImage.name || `Image ${displayImage.id}`}
+            width={displayImage.width}
+            height={displayImage.height}
             className="max-w-full max-h-full object-contain"
           />
           <button 
@@ -57,7 +67,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
         <div className="w-full md:w-80 lg:w-96 p-6 flex flex-col overflow-y-auto overflow-x-hidden bg-white">
           <div className="flex justify-between items-start mb-6">
             <h2 className="text-xl font-bold text-slate-800 break-all pr-8">
-              {image.name || `Image #${image.id}`}
+              {displayImage.name || `Image #${displayImage.id}`}
             </h2>
             <button 
               onClick={onClose}
@@ -71,29 +81,29 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">尺寸</h3>
-                <p className="text-slate-700 text-sm">{image.width} × {image.height} px</p>
+                <p className="text-slate-700 text-sm">{displayImage.width} × {displayImage.height} px</p>
               </div>
               
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">大小</h3>
-                <p className="text-slate-700 text-sm">{(image.size / 1024 / 1024).toFixed(2)} MB</p>
+                <p className="text-slate-700 text-sm">{(displayImage.size / 1024 / 1024).toFixed(2)} MB</p>
               </div>
 
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">上传者</h3>
-                <p className="text-slate-700 text-sm truncate" title={image.uploader}>{image.uploader}</p>
+                <p className="text-slate-700 text-sm truncate" title={displayImage.uploader}>{displayImage.uploader}</p>
               </div>
 
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">评分</h3>
-                <p className="text-slate-700 text-sm">{image.score}</p>
+                <p className="text-slate-700 text-sm">{displayImage.score}</p>
               </div>
             </div>
 
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">上传日期</h3>
               <p className="text-slate-700 text-sm">
-                {new Date(image.created_at).toLocaleString('zh-CN', {
+                {new Date(displayImage.created_at).toLocaleString('zh-CN', {
                   year: 'numeric',
                   month: '2-digit',
                   day: '2-digit',
@@ -103,11 +113,11 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
               </p>
             </div>
 
-            {image.description && (
+            {displayImage.description && (
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">简介</h3>
                 <p className="text-slate-700 text-sm whitespace-pre-wrap break-words bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  {image.description}
+                  {displayImage.description}
                 </p>
               </div>
             )}
@@ -115,7 +125,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 mb-2">标签</h3>
               <div className="flex flex-wrap gap-1.5">
-                {image.tags.map((tag, index) => (
+                {displayImage.tags.map((tag, index) => (
                   <span 
                     key={index}
                     className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md hover:bg-slate-200 transition-colors cursor-pointer"
@@ -128,7 +138,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
 
             <div className="pt-4 space-y-3 mt-auto">
               <a 
-                href={image.representations.full}
+                href={displayImage.representations.full}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center w-full px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium text-center"
@@ -137,7 +147,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
                 <span className="truncate">下载原图</span>
               </a>
               <a 
-                href={`https://trixiebooru.org/${image.id}`}
+                href={`https://trixiebooru.org/${displayImage.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center w-full px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium text-center"
