@@ -112,10 +112,18 @@ export default function AppLayout({
           </nav>
         </aside>
         
-        <main className="flex-1 overflow-y-auto bg-white p-6 relative">
-          <div key={pathname} className="animate-page-transition">
+        <main className="flex-1 overflow-y-auto bg-white relative flex flex-col">
+          <div key={pathname} className="animate-page-transition p-6 flex-1">
             {children}
           </div>
+          <footer className="py-8 px-6 border-t border-slate-100 text-slate-500 text-sm">
+            <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+              <div>
+                <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
+                <p>本站作为第三方镜像客户端，数据与功能严格按照 Derpibooru API 文档 进行开发与规范化同步。</p>
+              </div>
+            </div>
+          </footer>
         </main>
       </div>
     </div>
