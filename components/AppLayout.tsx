@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, FormEvent, Suspense } from "react";
+import { useState, FormEvent, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout } from "react-icons/md";
 
 function SearchBar() {
   const router = useRouter();
@@ -34,6 +34,13 @@ function SearchBar() {
   );
 }
 
+interface UserInfo {
+  username: string;
+  avatar: string;
+  role: string;
+  token: string;
+}
+
 export default function AppLayout({ 
   children, 
   initialCollapsed 
@@ -42,12 +49,33 @@ export default function AppLayout({
   initialCollapsed: boolean;
 }) {
   const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user_info');
+    if (storedUser) {
+      try {
+        setUserInfo(JSON.parse(storedUser));
+      } catch (e) {
+        console.error("Failed to parse user info", e);
+      }
+    }
+  }, [pathname]);
 
   const toggleSidebar = () => {
     const newState = !isCollapsed;
     setIsCollapsed(newState);
     document.cookie = `sidebarCollapsed=${newState}; path=/; max-age=31536000`;
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('user_info');
+    setUserInfo(null);
+    setIsUserMenuOpen(false);
+    router.push('/');
   };
 
   return (
@@ -73,18 +101,62 @@ export default function AppLayout({
           }`}
         >
           <div className="w-64 p-3 pb-0">
-            <Link 
-              href="/login"
-              className="flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors group"
-            >
-              <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
-                <MdPerson size={24} />
+            {userInfo ? (
+              <div className="relative">
+                <button 
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors text-left"
+                >
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
+                    {userInfo.avatar ? (
+                      <img 
+                        src={`https://picpony.top/${userInfo.avatar}`} 
+                        alt={userInfo.username}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-500">
+                        <MdPerson size={24} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="ml-3 overflow-hidden flex-1">
+                    <p className="text-sm font-bold text-slate-800 truncate">{userInfo.username}</p>
+                    <p className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium inline-block uppercase tracking-wider mt-0.5">
+                      {userInfo.role}
+                    </p>
+                  </div>
+                  <div className="text-slate-400 shrink-0 ml-2">
+                    {isUserMenuOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
+                  </div>
+                </button>
+                
+                {isUserMenuOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-10">
+                    <button 
+                      onClick={handleLogout}
+                      className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <MdLogout size={18} className="mr-2" />
+                      退出登录
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="ml-3 overflow-hidden">
-                <p className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors truncate">未登录</p>
-                <p className="text-xs text-slate-500 truncate">点击登录</p>
-              </div>
-            </Link>
+            ) : (
+              <Link 
+                href="/login"
+                className="flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
+                  <MdPerson size={24} />
+                </div>
+                <div className="ml-3 overflow-hidden">
+                  <p className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors truncate">未登录</p>
+                  <p className="text-xs text-slate-500 truncate">点击登录</p>
+                </div>
+              </Link>
+            )}
           </div>
           <nav className="flex-1 py-3 w-64 px-3 space-y-1">
             <Link 
@@ -120,7 +192,7 @@ export default function AppLayout({
             <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
               <div>
                 <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
-                <p>本站作为第三方镜像客户端，数据与功能严格按照 Derpibooru API 文档 进行开发与规范化同步。</p>
+                <p>本站为 Derpibooru 第三方镜像站点</p>
               </div>
             </div>
           </footer>

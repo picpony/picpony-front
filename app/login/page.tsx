@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { MdPerson, MdArrowBack, MdErrorOutline, MdCheckCircleOutline } from "react-icons/md";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ReCAPTCHA from "react-google-recaptcha";
 
 export default function LoginPage() {
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [success, setSuccess] = useState(false);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
+  const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +54,19 @@ export default function LoginPage() {
 
       if (res.ok && data.success) {
         setSuccess(true);
+        localStorage.setItem('user_info', JSON.stringify({
+          token: data.token,
+          username: data.username,
+          avatar: data.avatar,
+          role: data.role,
+          api_key: data.api_key,
+          derpi_user_id: data.derpi_user_id,
+          derpi_username: data.derpi_username
+        }));
+        
+        setTimeout(() => {
+          router.push('/');
+        }, 1000);
       } else {
         setError(data.message || "登录失败，请检查用户名和密码");
         recaptchaRef.current?.reset();
@@ -117,7 +132,7 @@ export default function LoginPage() {
         {showCaptchaModal && (
           <div className="fixed top-0 left-0 w-screen h-screen bg-black/50 flex items-center justify-center z-[9999] animate-modal-overlay">
             <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4 animate-modal-content">
-              <h3 className="text-lg font-semibold mb-4 text-slate-800 text-center">安全验证</h3>
+              <h3 className="text-lg font-semibold mb-4 text-slate-800 text-center">人机验证</h3>
               <div className="flex justify-center">
                 <ReCAPTCHA
                   ref={recaptchaRef}
