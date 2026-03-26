@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import FadeInImage from "@/components/FadeInImage";
 import { MdErrorOutline, MdRefresh } from "react-icons/md";
 import { useSearchParams } from "next/navigation";
+import ImageModal from "@/components/ImageModal";
 
 interface ImageRepresentation {
   full: string;
@@ -24,6 +25,12 @@ export interface PonyImage {
   representations: ImageRepresentation;
   name: string;
   view_url: string;
+  uploader: string;
+  created_at: string;
+  size: number;
+  score: number;
+  tags: string[];
+  description: string;
 }
 
 interface ApiResponse {
@@ -63,6 +70,7 @@ function ImageList({ search }: { search?: string }) {
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  const [selectedImage, setSelectedImage] = useState<PonyImage | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -117,28 +125,32 @@ function ImageList({ search }: { search?: string }) {
   if (!data) return null;
 
   return (
-    <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 animate-fade-in">
-      {data.images.map((image) => (
-        <div key={image.id} className="break-inside-avoid">
-          <a 
-            href={`https://trixiebooru.org/${image.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block relative rounded-lg overflow-hidden group bg-slate-100"
-          >
-            <FadeInImage
-              src={image.representations.thumb}
-              alt={image.name || `Image ${image.id}`}
-              width={image.width}
-              height={image.height}
-              className="w-full h-auto object-cover transition-all duration-500"
-              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-          </a>
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 animate-fade-in">
+        {data.images.map((image) => (
+          <div key={image.id} className="break-inside-avoid">
+            <button 
+              onClick={() => setSelectedImage(image)}
+              className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
+            >
+              <FadeInImage
+                src={image.representations.thumb}
+                alt={image.name || `Image ${image.id}`}
+                width={image.width}
+                height={image.height}
+                className="w-full h-auto object-cover transition-all duration-500"
+                sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <ImageModal 
+        image={selectedImage} 
+        onClose={() => setSelectedImage(null)} 
+      />
+    </>
   );
 }
 
