@@ -38,14 +38,14 @@ interface ApiResponse {
   images: PonyImage[];
 }
 
-async function getImages(search?: string): Promise<ApiResponse> {
+async function getImages(search?: string, page: number = 1): Promise<ApiResponse> {
   let query = "-explicit%2C%20-questionable%2C%20-suggestive%2C%20-grotesque%2C%20-grimdark%2C%20-spoiler%2C%20pony";
   if (search) {
     query = `${encodeURIComponent(search)}%2C%20${query}`;
   }
 
   const res = await fetch(
-    `https://derpibooru.org/api/v1/json/search/images?q=${query}&page=1&per_page=50&sf=created_at&sd=desc`,
+    `https://derpibooru.org/api/v1/json/search/images?q=${query}&page=${page}&per_page=50&sf=created_at&sd=desc`,
     { 
       cache: 'no-store',
       headers: {
@@ -66,9 +66,12 @@ async function getImages(search?: string): Promise<ApiResponse> {
 }
 
 function ImageList({ search }: { search?: string }) {
-  const [data, setData] = useState<ApiResponse | null>(null);
+  const [images, setImages] = useState<PonyImage[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [selectedImage, setSelectedImage] = useState<PonyImage | null>(null);
 
@@ -76,11 +79,13 @@ function ImageList({ search }: { search?: string }) {
     let isMounted = true;
     setIsLoading(true);
     setError(null);
+    setPage(1);
 
-    getImages(search)
+    getImages(search, 1)
       .then((res) => {
         if (isMounted) {
-          setData(res);
+          setImages(res.images);
+          setHasMore(res.images.length === 50);
           setIsLoading(false);
         }
       })
@@ -95,6 +100,24 @@ function ImageList({ search }: { search?: string }) {
       isMounted = false;
     };
   }, [search, retryCount]);
+
+  const loadMore = async () => {
+    if (isLoadingMore || !hasMore) return;
+    
+    setIsLoadingMore(true);
+    const nextPage = page + 1;
+    
+    try {
+      const res = await getImages(search, nextPage);
+      setImages(prev => [...prev, ...res.images]);
+      setPage(nextPage);
+      setHasMore(res.images.length === 50);
+    } catch (err) {
+      console.error("Failed to load more images:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   if (isLoading) {
     return <ImageSkeleton />;
@@ -122,12 +145,10 @@ function ImageList({ search }: { search?: string }) {
     );
   }
 
-  if (!data) return null;
-
   return (
     <>
       <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 animate-fade-in">
-        {data.images.map((image) => (
+        {images.map((image) => (
           <div key={image.id} className="break-inside-avoid">
             <button 
               onClick={() => setSelectedImage(image)}
@@ -146,6 +167,24 @@ function ImageList({ search }: { search?: string }) {
           </div>
         ))}
       </div>
+
+      {hasMore && (
+        <div className="mt-12 flex justify-center">
+          <button
+            onClick={loadMore}
+            disabled={isLoadingMore}
+            className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-full transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
+          >
+            {isLoadingMore ? (
+              <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+            ) : (
+              <MdRefresh size={20} className="group-hover:rotate-180 transition-transform duration-500" />
+            )}
+            <span>加载更多</span>
+          </button>
+        </div>
+      )}
+
       <ImageModal 
         image={selectedImage} 
         onClose={() => setSelectedImage(null)} 
