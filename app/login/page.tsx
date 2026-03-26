@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
+  const [isClosingCaptcha, setIsClosingCaptcha] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const router = useRouter();
 
@@ -28,13 +29,21 @@ export default function LoginPage() {
     setShowCaptchaModal(true);
   };
 
+  const closeCaptchaModal = () => {
+    setIsClosingCaptcha(true);
+    setTimeout(() => {
+      setShowCaptchaModal(false);
+      setIsClosingCaptcha(false);
+    }, 200);
+  };
+
   const onReCAPTCHAChange = async (token: string | null) => {
     if (!token) {
       setIsLoading(false);
       return;
     }
 
-    setShowCaptchaModal(false);
+    closeCaptchaModal();
     setIsLoading(true);
 
     try {
@@ -130,9 +139,15 @@ export default function LoginPage() {
         </div>
         
         {showCaptchaModal && (
-          <div className="fixed top-0 left-0 w-screen h-screen bg-black/50 flex items-center justify-center z-[9999] animate-modal-overlay">
-            <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4 animate-modal-content">
-              <h3 className="text-lg font-semibold mb-4 text-slate-800 text-center">人机验证</h3>
+          <div 
+            className={`fixed top-0 left-0 w-screen h-screen bg-black/50 flex items-center justify-center z-[9999] ${isClosingCaptcha ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
+            onClick={closeCaptchaModal}
+          >
+            <div 
+              className={`bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4 ${isClosingCaptcha ? 'animate-modal-content-out' : 'animate-modal-content'}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold mb-4 text-slate-800 text-center">请先完成验证码</h3>
               <div className="flex justify-center">
                 <ReCAPTCHA
                   ref={recaptchaRef}

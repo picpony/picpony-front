@@ -55,14 +55,23 @@ export default function AppLayout({
   const router = useRouter();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user_info');
-    if (storedUser) {
-      try {
-        setUserInfo(JSON.parse(storedUser));
-      } catch (e) {
-        console.error("Failed to parse user info", e);
+    const updateUserInfo = () => {
+      const storedUser = localStorage.getItem('user_info');
+      if (storedUser) {
+        try {
+          setUserInfo(JSON.parse(storedUser));
+        } catch (e) {
+          console.error("Failed to parse user info", e);
+        }
+      } else {
+        setUserInfo(null);
       }
-    }
+    };
+
+    updateUserInfo();
+    
+    window.addEventListener('user_info_updated', updateUserInfo);
+    return () => window.removeEventListener('user_info_updated', updateUserInfo);
   }, [pathname]);
 
   const toggleSidebar = () => {
@@ -135,12 +144,24 @@ export default function AppLayout({
                 </button>
                 
                 <div 
-                  className={`absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-10 transition-all duration-200 origin-top ${
+                  className={`mt-1 bg-white rounded-lg border border-slate-100 py-1 overflow-hidden transition-all duration-300 ease-in-out ${
                     isUserMenuOpen 
-                      ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto' 
-                      : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
+                      ? 'max-h-40 opacity-100 mb-2' 
+                      : 'max-h-0 opacity-0 border-none'
                   }`}
                 >
+                  <Link 
+                    href="/settings"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className={`w-full flex items-center px-4 py-2 text-sm transition-colors ${
+                      pathname === '/settings' 
+                        ? 'text-primary bg-primary/5 font-medium' 
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <MdSettings size={18} className="mr-2" />
+                    设置
+                  </Link>
                   <button 
                     onClick={handleLogout}
                     className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -176,17 +197,6 @@ export default function AppLayout({
             >
               <MdHome size={20} className="shrink-0 mr-3" />
               <span>主页</span>
-            </Link>
-            <Link 
-              href="/settings" 
-              className={`flex items-center px-3 py-3 font-medium transition-colors rounded-lg ${
-                pathname === '/settings' 
-                  ? 'text-primary bg-primary/10' 
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <MdSettings size={20} className="shrink-0 mr-3" />
-              <span>设置</span>
             </Link>
           </nav>
         </aside>
