@@ -109,7 +109,11 @@ function ImageList({ search }: { search?: string }) {
     
     try {
       const res = await getImages(search, nextPage);
-      setImages(prev => [...prev, ...res.images]);
+      setImages(prev => {
+        const existingIds = new Set(prev.map(img => img.id));
+        const newImages = res.images.filter(img => !existingIds.has(img.id));
+        return [...prev, ...newImages];
+      });
       setPage(nextPage);
       setHasMore(res.images.length === 50);
     } catch (err) {
