@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MdClose, MdDownload, MdOpenInNew } from 'react-icons/md';
 import FadeInImage from './FadeInImage';
 import { PonyImage } from '@/app/page';
@@ -17,17 +18,11 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    let frameId: number;
 
     if (image) {
       setDisplayImage(image);
       setRender(true);
-      
-      frameId = requestAnimationFrame(() => {
-        frameId = requestAnimationFrame(() => {
-          setIsVisible(true);
-        });
-      });
+      setIsVisible(true);
       
       document.body.style.overflow = 'hidden';
     } else {
@@ -35,27 +30,25 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
       timer = setTimeout(() => {
         setRender(false);
         setDisplayImage(null);
-      }, 300);
+      }, 200);
       document.body.style.overflow = 'unset';
     }
 
     return () => {
       if (timer) clearTimeout(timer);
-      if (frameId) cancelAnimationFrame(frameId);
       document.body.style.overflow = 'unset';
     };
   }, [image]);
 
   if (!render || !displayImage) return null;
 
-  return (
+  const modalContent = (
     <div 
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-opacity duration-300 ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0'}`}
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)' }}
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/50 ${isVisible ? 'animate-modal-overlay' : 'animate-modal-overlay-out'}`}
       onClick={onClose}
     >
       <div 
-        className={`bg-white rounded-xl overflow-hidden w-full max-w-6xl max-h-[90vh] flex flex-col md:flex-row shadow-2xl transition-all duration-300 ease-in-out ${isVisible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}
+        className={`bg-white rounded-xl overflow-hidden w-full max-w-6xl max-h-[90vh] flex flex-col md:flex-row shadow-2xl ${isVisible ? 'animate-modal-content' : 'animate-modal-content-out'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-1 bg-slate-100 flex items-center justify-center overflow-hidden relative min-h-[300px] md:min-h-0">
@@ -171,4 +164,6 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null;
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MdEdit, MdClose } from 'react-icons/md';
 
 export default function SettingsPage() {
@@ -91,7 +92,7 @@ export default function SettingsPage() {
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6 text-primary">设置</h1>
       
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white overflow-hidden">
         <div className="p-6 border-b border-slate-100">
           <h2 className="text-lg font-semibold text-slate-800 mb-4">账户设置</h2>
           
@@ -112,9 +113,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
-          className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 ${isClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
+          className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
           onClick={closeModal}
         >
           <div 
@@ -182,7 +183,8 @@ export default function SettingsPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
