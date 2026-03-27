@@ -169,6 +169,7 @@ export default function AppLayout({
                     <span>退出登录</span>
                   </button>
                 </div>
+                <div className="h-px bg-slate-200 mt-2 mx-2"></div>
               </div>
             ) : (
               <Link 
@@ -184,6 +185,7 @@ export default function AppLayout({
                 </div>
               </Link>
             )}
+            {!userInfo && <div className="h-px bg-slate-200 mt-2 mx-2"></div>}
           </div>
           <nav className="flex-1 py-3 w-64 px-3 space-y-1">
             <Link 

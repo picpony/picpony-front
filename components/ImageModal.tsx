@@ -42,6 +42,14 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
 
   if (!render || !displayImage) return null;
 
+  const artists = displayImage.tags
+    .filter(tag => tag.startsWith('artist:'))
+    .map(tag => tag.replace('artist:', ''));
+
+  const ocs = displayImage.tags
+    .filter(tag => tag.startsWith('oc:'))
+    .map(tag => tag.replace('oc:', ''));
+
   const modalContent = (
     <div 
       className={`fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/50 ${isVisible ? 'animate-modal-overlay' : 'animate-modal-overlay-out'}`}
@@ -94,7 +102,9 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
 
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">上传者</h3>
-                <p className="text-slate-700 text-sm truncate" title={displayImage.uploader}>{displayImage.uploader}</p>
+                <p className="text-slate-700 text-sm truncate" title={displayImage.uploader || '匿名用户'}>
+                  {displayImage.uploader || '匿名用户'}
+                </p>
               </div>
 
               <div>
@@ -122,6 +132,38 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
                 <p className="text-slate-700 text-sm whitespace-pre-wrap break-words bg-slate-50 p-3 rounded-lg border border-slate-100">
                   {displayImage.description}
                 </p>
+              </div>
+            )}
+
+            {artists.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">艺术家</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {artists.map((artist, index) => (
+                    <span 
+                      key={index}
+                      className="px-2 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-md border border-blue-100"
+                    >
+                      {artist}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {ocs.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">图中包含的 OC</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {ocs.map((oc, index) => (
+                    <span 
+                      key={index}
+                      className="px-2 py-1 bg-purple-50 text-purple-600 text-xs font-medium rounded-md border border-purple-100"
+                    >
+                      {oc}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 
