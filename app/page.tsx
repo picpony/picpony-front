@@ -116,6 +116,7 @@ function ImageList({ search }: { search?: string }) {
         {columnData.map((col, colIndex) => (
           <div key={colIndex} className="flex flex-col gap-4 flex-1 min-w-0">
             {col.map((image) => {
+              const isWebm = image.representations.full.endsWith('.webm');
               
               return (
                 <div key={image.id} className="w-full">
