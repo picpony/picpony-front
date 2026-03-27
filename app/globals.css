@@ -18,6 +18,8 @@
   --animate-modal-content: modalContent 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-modal-overlay-out: modalOverlayOut 0.2s ease-in forwards;
   --animate-modal-content-out: modalContentOut 0.2s ease-in forwards;
+  --animate-toast-in: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-toast-out: toastOut 0.2s ease-in forwards;
   
   @keyframes fadeIn {
     from {
@@ -76,6 +78,28 @@
     to {
       opacity: 0;
       transform: scale(0.95);
+    }
+  }
+
+  @keyframes toastIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes toastOut {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-20px);
     }
   }
 }

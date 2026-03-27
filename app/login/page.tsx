@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useRef } from "react";
-import { MdPerson, MdArrowBack, MdErrorOutline, MdCheckCircleOutline } from "react-icons/md";
+import { MdPerson, MdArrowBack, MdErrorOutline } from "react-icons/md";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReCAPTCHA from "react-google-recaptcha";
+import Toast from "@/components/Toast";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [toastConfig, setToastConfig] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const [isClosingCaptcha, setIsClosingCaptcha] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
@@ -19,10 +20,9 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     
     if (!username || !password) {
-      setError("请输入用户名和密码");
+      setToastConfig({ message: "请输入用户名和密码", type: "error" });
       return;
     }
 
@@ -63,6 +63,7 @@ export default function LoginPage() {
 
       if (res.ok && data.success) {
         setSuccess(true);
+        setToastConfig({ message: '登录成功', type: 'success' });
         localStorage.setItem('user_info', JSON.stringify({
           token: data.token,
           username: data.username,
@@ -77,11 +78,11 @@ export default function LoginPage() {
           router.push('/');
         }, 1000);
       } else {
-        setError(data.message || "登录失败，请检查用户名和密码");
+        setToastConfig({ message: data.message || "登录失败，请检查用户名和密码", type: "error" });
         recaptchaRef.current?.reset();
       }
     } catch (err) {
-      setError("网络错误，请稍后再试");
+      setToastConfig({ message: "网络错误，请稍后再试", type: "error" });
       recaptchaRef.current?.reset();
     } finally {
       setIsLoading(false);
@@ -99,20 +100,6 @@ export default function LoginPage() {
         </Link>
         <h1 className="text-2xl font-bold ml-2 text-slate-800">登录</h1>
       </div>
-
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg flex items-center text-red-600">
-          <MdErrorOutline size={20} className="shrink-0 mr-2" />
-          <p className="text-sm">{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-lg flex items-center text-green-600">
-          <MdCheckCircleOutline size={20} className="shrink-0 mr-2" />
-          <p className="text-sm">登录成功！正在跳转...</p>
-        </div>
-      )}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
@@ -141,11 +128,9 @@ export default function LoginPage() {
         {showCaptchaModal && (
           <div 
             className={`fixed top-0 left-0 w-screen h-screen bg-black/50 flex items-center justify-center z-[9999] ${isClosingCaptcha ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-            onClick={closeCaptchaModal}
           >
             <div 
-              className={`bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4 ${isClosingCaptcha ? 'animate-modal-content-out' : 'animate-modal-content'}`}
-              onClick={(e) => e.stopPropagation()}
+              className={`bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4 relative ${isClosingCaptcha ? 'animate-modal-content-out' : 'animate-modal-content'}`}
             >
               <h3 className="text-lg font-semibold mb-4 text-slate-800 text-center">请先完成验证码</h3>
               <div className="flex justify-center">
@@ -177,6 +162,14 @@ export default function LoginPage() {
           还没有账号？ <span className="text-primary cursor-pointer hover:underline">立即注册</span>
         </p>
       </div>
+
+      {toastConfig && (
+        <Toast 
+          message={toastConfig.message} 
+          type={toastConfig.type} 
+          onClose={() => setToastConfig(null)} 
+        />
+      )}
     </div>
   );
 }
