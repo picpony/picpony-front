@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useRef } from "react";
-import { MdPerson, MdArrowBack, MdErrorOutline } from "react-icons/md";
+import { MdArrowBack } from "react-icons/md";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReCAPTCHA from "react-google-recaptcha";
 import Toast from "@/components/Toast";
 import { api } from "@/lib/api";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -22,8 +23,14 @@ export default function LoginPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!username || !password) {
-      setToastConfig({ message: "请输入用户名和密码", type: "error" });
+    if (!username || !email || !password) {
+      setToastConfig({ message: "请填写所有字段", type: "error" });
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setToastConfig({ message: "请输入有效的邮箱地址", type: "error" });
       return;
     }
 
@@ -48,8 +55,9 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await api.login({
+      const res = await api.register({
         username,
+        email,
         password,
         cf_token: token,
       });
@@ -58,22 +66,13 @@ export default function LoginPage() {
 
       if (res.ok && data.success) {
         setSuccess(true);
-        setToastConfig({ message: '登录成功', type: 'success' });
-        localStorage.setItem('user_info', JSON.stringify({
-          token: data.token,
-          username: data.username,
-          avatar: data.avatar,
-          role: data.role,
-          api_key: data.api_key,
-          derpi_user_id: data.derpi_user_id,
-          derpi_username: data.derpi_username
-        }));
+        setToastConfig({ message: '注册成功，请登录', type: 'success' });
         
         setTimeout(() => {
-          router.push('/');
-        }, 1000);
+          router.push('/login');
+        }, 1500);
       } else {
-        setToastConfig({ message: data.message || "登录失败，请检查用户名和密码", type: "error" });
+        setToastConfig({ message: data.message || "注册失败，请检查输入", type: "error" });
         recaptchaRef.current?.reset();
       }
     } catch (err) {
@@ -88,12 +87,12 @@ export default function LoginPage() {
     <div className="max-w-md mx-auto mt-12 p-8 bg-white rounded-xl relative">
       <div className="flex items-center mb-8">
         <Link 
-          href="/"
+          href="/login"
           className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500 transition-colors"
         >
           <MdArrowBack size={24} />
         </Link>
-        <h1 className="text-2xl font-bold ml-2 text-slate-800">登录</h1>
+        <h1 className="text-2xl font-bold ml-2 text-slate-800">注册</h1>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
@@ -106,6 +105,17 @@ export default function LoginPage() {
             required
             className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             placeholder="请输入用户名"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">邮箱</label>
+          <input 
+            type="email" 
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            placeholder="请输入邮箱"
           />
         </div>
         <div>
@@ -148,13 +158,13 @@ export default function LoginPage() {
         >
           {isLoading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-          ) : "登录"}
+          ) : "注册"}
         </button>
       </form>
 
       <div className="mt-6 text-center">
         <p className="text-sm text-slate-500">
-          还没有账号？ <Link href="/register" className="text-primary cursor-pointer hover:underline">立即注册</Link>
+          已有账号？ <Link href="/login" className="text-primary cursor-pointer hover:underline">立即登录</Link>
         </p>
       </div>
 

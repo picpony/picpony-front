@@ -5,65 +5,7 @@ import FadeInImage from "@/components/FadeInImage";
 import { MdErrorOutline, MdRefresh } from "react-icons/md";
 import { useSearchParams } from "next/navigation";
 import ImageModal from "@/components/ImageModal";
-
-interface ImageRepresentation {
-  full: string;
-  small: string;
-  thumb_tiny: string;
-  thumb_small: string;
-  thumb: string;
-  medium: string;
-  large: string;
-  tall: string;
-}
-
-export interface PonyImage {
-  id: number;
-  width: number;
-  height: number;
-  aspect_ratio: number;
-  representations: ImageRepresentation;
-  name: string;
-  view_url: string;
-  uploader: string;
-  created_at: string;
-  size: number;
-  score: number;
-  tags: string[];
-  description: string;
-}
-
-interface ApiResponse {
-  total: number;
-  images: PonyImage[];
-}
-
-async function getImages(search?: string, page: number = 1): Promise<ApiResponse> {
-  let query = "-explicit%2C%20-questionable%2C%20-suggestive%2C%20-grotesque%2C%20-grimdark%2C%20-spoiler%2C%20pony";
-  if (search) {
-    query = `${encodeURIComponent(search)}%2C%20${query}`;
-  }
-
-  const res = await fetch(
-    `https://derpibooru.org/api/v1/json/search/images?q=${query}&page=${page}&per_page=50&sf=created_at&sd=desc`,
-    { 
-      cache: 'no-store',
-      headers: {
-        'User-Agent': 'PicPony/1.0'
-      }
-    }
-  );
-
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => 'No error text');
-    console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
-    const error = new Error(errorText || res.statusText);
-    (error as any).status = res.status;
-    throw error;
-  }
-
-  return res.json();
-}
+import { api, PonyImage } from "@/lib/api";
 
 function ImageList({ search }: { search?: string }) {
   const [images, setImages] = useState<PonyImage[]>([]);
@@ -95,7 +37,7 @@ function ImageList({ search }: { search?: string }) {
     setError(null);
     setPage(1);
 
-    getImages(search, 1)
+    api.getImages(search, 1)
       .then((res) => {
         if (isMounted) {
           setImages(res.images);
@@ -122,7 +64,7 @@ function ImageList({ search }: { search?: string }) {
     const nextPage = page + 1;
     
     try {
-      const res = await getImages(search, nextPage);
+      const res = await api.getImages(search, nextPage);
       setImages(prev => {
         const existingIds = new Set(prev.map(img => img.id));
         const newImages = res.images.filter(img => !existingIds.has(img.id));

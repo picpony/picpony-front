@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { MdEdit, MdClose } from 'react-icons/md';
 import Toast from '@/components/Toast';
+import { api } from '@/lib/api';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -70,16 +71,9 @@ export default function SettingsPage() {
       if (!storedUser) throw new Error('未登录');
       const user = JSON.parse(storedUser);
 
-      const res = await fetch('https://picpony.top/api.php?action=change_password', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          old_password: oldPassword,
-          new_password: newPassword
-        })
+      const res = await api.changePassword(user.token, {
+        old_password: oldPassword,
+        new_password: newPassword
       });
 
       const data = await res.json();
@@ -117,16 +111,7 @@ export default function SettingsPage() {
       if (!storedUser) throw new Error('未登录');
       const user = JSON.parse(storedUser);
 
-      const res = await fetch('https://picpony.top/api.php?action=change_username', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          new_username: newUsername.trim()
-        })
-      });
+      const res = await api.changeUsername(user.token, newUsername.trim());
 
       const data = await res.json();
 

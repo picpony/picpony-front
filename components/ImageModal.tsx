@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose, MdDownload, MdOpenInNew } from 'react-icons/md';
 import FadeInImage from './FadeInImage';
-import { PonyImage } from '@/app/page';
+import { PonyImage } from '@/lib/api';
 
 interface ImageModalProps {
   image: PonyImage | null;
@@ -128,7 +128,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 mb-2">标签</h3>
               <div className="flex flex-wrap gap-1.5">
-                {displayImage.tags.map((tag, index) => (
+                {displayImage.tags.map((tag: string, index: number) => (
                   <span 
                     key={index}
                     className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md hover:bg-slate-200 transition-colors cursor-pointer"
