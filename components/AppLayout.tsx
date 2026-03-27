@@ -97,7 +97,9 @@ export default function AppLayout({
         >
           <MdMenu size={24} />
         </button>
-        <div className="text-xl font-bold shrink-0">PicPony</div>
+        <Link href="/" className="text-xl font-bold shrink-0 hover:text-white/80 transition-colors">
+          PicPony
+        </Link>
         <Suspense fallback={<div className="w-48 ml-4 h-8 bg-white/10 rounded-md animate-pulse"></div>}>
           <SearchBar />
         </Suspense>

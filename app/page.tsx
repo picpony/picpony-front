@@ -115,24 +115,45 @@ function ImageList({ search }: { search?: string }) {
       <div className="flex gap-4 animate-fade-in items-start">
         {columnData.map((col, colIndex) => (
           <div key={colIndex} className="flex flex-col gap-4 flex-1 min-w-0">
-            {col.map((image) => (
-              <div key={image.id} className="w-full">
-                <button 
-                  onClick={() => setSelectedImage(image)}
-                  className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
-                >
-                  <FadeInImage
-                    src={image.representations.thumb}
-                    alt={image.name || `Image ${image.id}`}
-                    width={image.width}
-                    height={image.height}
-                    className="w-full h-auto object-cover transition-all duration-500"
-                    sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-                </button>
-              </div>
-            ))}
+            {col.map((image) => {
+              
+              return (
+                <div key={image.id} className="w-full">
+                  <button 
+                    onClick={() => setSelectedImage(image)}
+                    className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
+                  >
+                    {isWebm ? (
+                      <div 
+                        className="relative w-full overflow-hidden" 
+                        style={{ paddingBottom: `${(image.height / image.width) * 100}%` }}
+                      >
+                        <video
+                          src={`${image.representations.full}#t=0.1`}
+                          preload="metadata"
+                          className="absolute top-0 left-0 w-full h-full object-cover transition-all duration-500"
+                        />
+                      </div>
+                    ) : (
+                      <FadeInImage
+                        src={image.representations.thumb}
+                        alt={image.name || `Image ${image.id}`}
+                        width={image.width}
+                        height={image.height}
+                        className="w-full h-auto object-cover transition-all duration-500"
+                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                    {isWebm && (
+                      <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none">
+                        WEBM
+                      </div>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>

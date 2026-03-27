@@ -60,13 +60,23 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-1 bg-slate-100 flex items-center justify-center overflow-hidden relative min-h-[300px] md:min-h-0">
-          <FadeInImage
-            src={displayImage.representations.large || displayImage.representations.full}
-            alt={displayImage.name || `Image ${displayImage.id}`}
-            width={displayImage.width}
-            height={displayImage.height}
-            className="max-w-full max-h-full object-contain"
-          />
+          {displayImage.representations.full.endsWith('.webm') ? (
+            <video
+              src={displayImage.representations.full}
+              controls
+              autoPlay
+              loop
+              className="max-w-full max-h-full object-contain"
+            />
+          ) : (
+            <FadeInImage
+              src={displayImage.representations.large || displayImage.representations.full}
+              alt={displayImage.name || `Image ${displayImage.id}`}
+              width={displayImage.width}
+              height={displayImage.height}
+              className="max-w-full max-h-full object-contain"
+            />
+          )}
           <button 
             onClick={onClose}
             className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors md:hidden"
