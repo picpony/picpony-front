@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { MdPerson, MdArrowBack, MdErrorOutline } from "react-icons/md";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,8 +17,13 @@ export default function LoginPage() {
   const [toastConfig, setToastConfig] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const [isClosingCaptcha, setIsClosingCaptcha] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +126,7 @@ export default function LoginPage() {
           />
         </div>
         
-        {showCaptchaModal && (
+        {showCaptchaModal && mounted && createPortal(
           <div 
             className={`fixed top-0 left-0 w-screen h-screen bg-black/50 flex items-center justify-center z-[9999] ${isClosingCaptcha ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
           >
@@ -136,7 +142,8 @@ export default function LoginPage() {
                 />
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         <button 
