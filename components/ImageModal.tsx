@@ -15,6 +15,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
   const [render, setRender] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [displayImage, setDisplayImage] = useState<PonyImage | null>(null);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -23,6 +24,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
       setDisplayImage(image);
       setRender(true);
       setIsVisible(true);
+      setIsDescriptionExpanded(false);
       
       document.body.style.overflow = 'hidden';
     } else {
@@ -139,9 +141,23 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
             {displayImage.description && (
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">简介</h3>
-                <p className="text-slate-700 text-sm whitespace-pre-wrap break-words bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  {displayImage.description}
-                </p>
+                {displayImage.description.length > 100 || (displayImage.description.match(/\n/g) || []).length >= 3 ? (
+                  <div 
+                    className="bg-slate-50 p-3 rounded-lg border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors"
+                    onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                  >
+                    <p className={`text-slate-700 text-sm whitespace-pre-wrap break-words ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}>
+                      {displayImage.description}
+                    </p>
+                    <div className="text-xs text-primary mt-1.5 font-medium text-center">
+                      {isDescriptionExpanded ? '折叠' : '展开'}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-slate-700 text-sm whitespace-pre-wrap break-words bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    {displayImage.description}
+                  </p>
+                )}
               </div>
             )}
 
