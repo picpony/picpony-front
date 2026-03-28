@@ -4,6 +4,7 @@ import { useState, FormEvent, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout } from "react-icons/md";
+import AnnouncementModal from "./AnnouncementModal";
 
 function SearchBar() {
   const router = useRouter();
@@ -248,6 +249,7 @@ export default function AppLayout({
           </footer>
         </main>
       </div>
+      <AnnouncementModal />
     </div>
   );
 }

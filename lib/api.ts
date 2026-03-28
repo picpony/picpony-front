@@ -104,5 +104,10 @@ export const api = {
       },
       body: JSON.stringify(data)
     });
+  },
+
+  getAnnouncement: async () => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_announcement`);
+    return res.json();
   }
 };
