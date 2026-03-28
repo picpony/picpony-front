@@ -20,7 +20,7 @@ function ImageList({ search }: { search?: string }) {
 
   useEffect(() => {
     const updateColumns = () => {
-      if (window.innerWidth < 640) setColumns(1);
+      if (window.innerWidth < 640) setColumns(2);
       else if (window.innerWidth < 768) setColumns(2);
       else if (window.innerWidth < 1024) setColumns(3);
       else setColumns(4);
@@ -112,9 +112,9 @@ function ImageList({ search }: { search?: string }) {
 
   return (
     <>
-      <div className="flex gap-4 animate-fade-in items-start">
+      <div className="flex gap-2 sm:gap-4 animate-fade-in items-start">
         {columnData.map((col, colIndex) => (
-          <div key={colIndex} className="flex flex-col gap-4 flex-1 min-w-0">
+          <div key={colIndex} className="flex flex-col gap-2 sm:gap-4 flex-1 min-w-0">
             {col.map((image) => {
               const isWebm = image.representations.full.endsWith('.webm');
               
@@ -197,7 +197,7 @@ function HomeContent() {
   const search = searchParams.get('search') || undefined;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8">
       <ImageList search={search} />
     </div>
   );

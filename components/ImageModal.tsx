@@ -54,14 +54,14 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
 
   const modalContent = (
     <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/50 ${isVisible ? 'animate-modal-overlay' : 'animate-modal-overlay-out'}`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 md:p-6 bg-black/50 ${isVisible ? 'animate-modal-overlay' : 'animate-modal-overlay-out'}`}
       onClick={onClose}
     >
       <div 
-        className={`bg-white rounded-xl overflow-hidden w-full max-w-6xl max-h-[90vh] flex flex-col md:flex-row shadow-2xl ${isVisible ? 'animate-modal-content' : 'animate-modal-content-out'}`}
+        className={`bg-white sm:rounded-xl overflow-hidden w-full h-full sm:h-auto sm:max-w-6xl sm:max-h-[90vh] flex flex-col md:flex-row shadow-2xl ${isVisible ? 'animate-modal-content' : 'animate-modal-content-out'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex-1 bg-slate-100 flex items-center justify-center overflow-hidden relative min-h-[300px] md:min-h-0">
+        <div className="flex-[1.5] md:flex-1 bg-black sm:bg-slate-100 flex items-center justify-center overflow-hidden relative min-h-[40vh] md:min-h-0">
           {displayImage.representations.full.endsWith('.webm') ? (
             <video
               src={displayImage.representations.full}
@@ -81,14 +81,14 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
           )}
           <button 
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors md:hidden"
+            className="absolute top-2 right-2 sm:top-4 sm:right-4 p-2 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors md:hidden z-10"
           >
             <MdClose size={24} />
           </button>
         </div>
 
-        <div className="w-full md:w-80 lg:w-96 p-6 flex flex-col overflow-y-auto overflow-x-hidden bg-white">
-          <div className="flex justify-between items-start mb-6">
+        <div className="flex-1 md:w-80 lg:w-96 p-4 sm:p-6 flex flex-col overflow-y-auto overflow-x-hidden bg-white">
+          <div className="flex justify-between items-start mb-4 sm:mb-6">
             <h2 className="text-xl font-bold text-slate-800 break-all pr-8">
               {displayImage.name || `Image #${displayImage.id}`}
             </h2>
@@ -101,7 +101,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
           </div>
 
           <div className="space-y-4 flex-1">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">尺寸</h3>
                 <p className="text-slate-700 text-sm">{displayImage.width} × {displayImage.height} px</p>
@@ -207,12 +207,12 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
               </div>
             </div>
 
-            <div className="pt-4 space-y-3 mt-auto">
+            <div className="pt-4 space-y-2 sm:space-y-3 mt-auto pb-4 sm:pb-0">
               <a 
                 href={displayImage.representations.full}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center w-full px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium text-center"
+                className="flex items-center justify-center w-full px-4 py-2 sm:py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium text-center text-sm sm:text-base"
               >
                 <MdDownload size={20} className="mr-2 flex-shrink-0" />
                 <span className="truncate">下载原图</span>
@@ -221,9 +221,9 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
                 href={`https://trixiebooru.org/${displayImage.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center w-full px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium text-center"
+                className="flex items-center justify-center w-full px-4 py-2 sm:py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium text-center text-sm sm:text-base"
               >
-                <MdOpenInNew size={20} className="mr-2 flex-shrink-0" />
+                <MdOpenInNew size={18} className="mr-2 flex-shrink-0 sm:w-5 sm:h-5" />
                 <span className="truncate">在 Derpibooru 查看</span>
               </a>
             </div>

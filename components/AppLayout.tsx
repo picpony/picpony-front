@@ -74,10 +74,28 @@ export default function AppLayout({
     return () => window.removeEventListener('user_info_updated', updateUserInfo);
   }, [pathname]);
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setIsCollapsed(true);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const toggleSidebar = () => {
     const newState = !isCollapsed;
     setIsCollapsed(newState);
     document.cookie = `sidebarCollapsed=${newState}; path=/; max-age=31536000`;
+  };
+
+  const handleMobileNavigation = () => {
+    if (window.innerWidth < 768) {
+      setIsCollapsed(true);
+    }
   };
 
   const handleLogout = () => {
@@ -89,26 +107,35 @@ export default function AppLayout({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <header className="h-16 bg-primary text-white flex items-center px-4 shrink-0">
+      <header className="h-16 bg-primary text-white flex items-center px-4 shrink-0 relative z-50">
         <button 
           onClick={toggleSidebar}
-          className="p-2 mr-4 rounded-md hover:bg-white/20 text-white transition-colors"
+          className="p-2 mr-2 sm:mr-4 rounded-md hover:bg-white/20 text-white transition-colors"
           aria-label={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
         >
           <MdMenu size={24} />
         </button>
-        <Link href="/" className="text-xl font-bold shrink-0 hover:text-white/80 transition-colors">
+        <Link href="/" className="text-xl font-bold shrink-0 hover:text-white/80 transition-colors hidden sm:block">
           PicPony
         </Link>
-        <Suspense fallback={<div className="w-48 ml-4 h-8 bg-white/10 rounded-md animate-pulse"></div>}>
-          <SearchBar />
-        </Suspense>
+        <div className="flex-1 flex justify-end sm:justify-start sm:ml-4">
+          <Suspense fallback={<div className="w-full max-w-[200px] h-8 bg-white/10 rounded-md animate-pulse"></div>}>
+            <SearchBar />
+          </Suspense>
+        </div>
       </header>
       
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        <div 
+          className={`fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 ease-in-out ${
+            isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+          onClick={() => setIsCollapsed(true)}
+        />
+        
         <aside 
-          className={`bg-slate-50 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
-            isCollapsed ? 'w-0' : 'w-64'
+          className={`bg-slate-50 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden absolute md:relative h-full z-50 md:z-auto ${
+            isCollapsed ? '-translate-x-full md:translate-x-0 md:w-0' : 'translate-x-0 w-64'
           }`}
         >
           <div className="w-64 p-3 pb-0">
@@ -154,6 +181,7 @@ export default function AppLayout({
                 >
                   <Link 
                     href="/settings"
+                    onClick={handleMobileNavigation}
                     className={`flex items-center px-3 py-3 font-medium transition-colors rounded-lg ${
                       pathname === '/settings' 
                         ? 'text-primary bg-primary/10' 
@@ -176,6 +204,7 @@ export default function AppLayout({
             ) : (
               <Link 
                 href="/login"
+                onClick={handleMobileNavigation}
                 className="flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors group"
               >
                 <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
@@ -192,6 +221,7 @@ export default function AppLayout({
           <nav className="flex-1 py-3 w-64 px-3 space-y-1">
             <Link 
               href="/" 
+              onClick={handleMobileNavigation}
               className={`flex items-center px-3 py-3 font-medium transition-colors rounded-lg ${
                 pathname === '/' 
                   ? 'text-primary bg-primary/10' 
@@ -204,11 +234,11 @@ export default function AppLayout({
           </nav>
         </aside>
         
-        <main className="flex-1 overflow-y-auto bg-white relative flex flex-col">
-          <div key={pathname} className="animate-page-transition p-6 flex-1">
+        <main className="flex-1 overflow-y-auto bg-white relative flex flex-col w-full">
+          <div key={pathname} className="animate-page-transition p-4 sm:p-6 flex-1">
             {children}
           </div>
-          <footer className="py-8 px-6 border-t border-slate-100 text-slate-500 text-sm">
+          <footer className="py-6 sm:py-8 px-4 sm:px-6 border-t border-slate-100 text-slate-500 text-sm">
             <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
               <div>
                 <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
