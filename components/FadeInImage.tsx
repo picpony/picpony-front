@@ -9,7 +9,29 @@ interface FadeInImageProps extends ImageProps {
 
 export default function FadeInImage({ className, onLoad, ...props }: FadeInImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isInView, setIsInView] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      {
+        rootMargin: '200px',
+      }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (imgRef.current?.complete) {
@@ -18,28 +40,28 @@ export default function FadeInImage({ className, onLoad, ...props }: FadeInImage
   }, [props.src]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-      {!isLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-8 h-8 border-[4px] border-transparent border-t-primary rounded-full animate-[spin_0.5s_linear_infinite]"></div>
-        </div>
+    <div 
+      ref={containerRef}
+      className="relative w-full h-full flex items-center justify-center overflow-hidden"
+    >
+      {isInView && (
+        <Image
+          {...props}
+          ref={imgRef}
+          className={`
+            ${className || ''}
+            transition-opacity duration-500 ease-in-out
+            ${isLoaded ? 'opacity-100' : 'opacity-0'}
+          `}
+          onLoad={(e) => {
+            setIsLoaded(true);
+            if (onLoad) {
+              onLoad(e);
+            }
+          }}
+          loading="lazy"
+        />
       )}
-      <Image
-        {...props}
-        ref={imgRef}
-        className={`
-          ${className || ''}
-          transition-opacity duration-500 ease-in-out
-          ${isLoaded ? 'opacity-100' : 'opacity-0'}
-        `}
-        onLoad={(e) => {
-          setIsLoaded(true);
-          if (onLoad) {
-            onLoad(e);
-          }
-        }}
-        loading="lazy"
-      />
     </div>
   );
 }

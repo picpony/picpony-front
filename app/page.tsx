@@ -106,8 +106,22 @@ function ImageList({ search }: { search?: string }) {
   }
 
   const columnData: PonyImage[][] = Array.from({ length: columns }, () => []);
-  images.forEach((img, index) => {
-    columnData[index % columns].push(img);
+  const columnHeights = new Array(columns).fill(0);
+
+  images.forEach((img) => {
+    let shortestColIndex = 0;
+    let minHeight = columnHeights[0];
+    for (let i = 1; i < columns; i++) {
+      if (columnHeights[i] < minHeight) {
+        minHeight = columnHeights[i];
+        shortestColIndex = i;
+      }
+    }
+
+    columnData[shortestColIndex].push(img);
+    
+    const aspectRatio = img.height / img.width;
+    columnHeights[shortestColIndex] += aspectRatio;
   });
 
   return (
