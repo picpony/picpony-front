@@ -116,8 +116,8 @@ export default function AppLayout({
         >
           <MdMenu size={24} />
         </button>
-        <Link href="/" className="text-xl font-bold shrink-0 hover:text-white/80 transition-colors hidden sm:block">
-          PicPony
+        <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex">
+          <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
         </Link>
         <div className="flex-1 flex justify-end sm:justify-start sm:ml-4">
           <Suspense fallback={<div className="w-full max-w-[200px] h-8 bg-white/10 rounded-md animate-pulse"></div>}>
