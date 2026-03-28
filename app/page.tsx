@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react";
 import FadeInImage from "@/components/FadeInImage";
-import { MdErrorOutline, MdRefresh } from "react-icons/md";
+import { MdErrorOutline, MdRefresh, MdThumbUp, MdComment } from "react-icons/md";
 import { useSearchParams } from "next/navigation";
 import ImageModal from "@/components/ImageModal";
 import { api, PonyImage } from "@/lib/api";
@@ -117,6 +117,7 @@ function ImageList({ search }: { search?: string }) {
           <div key={colIndex} className="flex flex-col gap-2 sm:gap-4 flex-1 min-w-0">
             {col.map((image) => {
               const isWebm = image.representations.full.endsWith('.webm');
+              const format = image.representations.full.split('.').pop()?.toUpperCase() || 'UNKNOWN';
               
               return (
                 <div key={image.id} className="w-full">
@@ -146,11 +147,17 @@ function ImageList({ search }: { search?: string }) {
                       />
                     )}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-                    {isWebm && (
-                      <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none">
-                        WEBM
-                      </div>
-                    )}
+                    <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none">
+                      {format}
+                    </div>
+                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none flex items-center gap-1">
+                      <MdThumbUp size={12} />
+                      <span>{image.score}</span>
+                    </div>
+                    <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none flex items-center gap-1">
+                      <MdComment size={12} />
+                      <span>{image.comment_count}</span>
+                    </div>
                   </button>
                 </div>
               );

@@ -21,6 +21,7 @@ export interface PonyImage {
   created_at: string;
   size: number;
   score: number;
+  comment_count: number;
   tags: string[];
   description: string;
 }
