@@ -6,6 +6,7 @@ import { MdErrorOutline, MdRefresh, MdThumbUp, MdComment } from "react-icons/md"
 import { useSearchParams } from "next/navigation";
 import ImageModal from "@/components/ImageModal";
 import { api, PonyImage } from "@/lib/api";
+import CircularProgress from '@mui/material/CircularProgress';
 
 function ImageList({ search }: { search?: string }) {
   const [images, setImages] = useState<PonyImage[]>([]);
@@ -188,7 +189,7 @@ function ImageList({ search }: { search?: string }) {
             className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-full transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
           >
             {isLoadingMore ? (
-              <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+              <CircularProgress size={20} sx={{ color: 'var(--color-primary)' }} />
             ) : (
               <MdRefresh size={20} className="group-hover:rotate-180 transition-transform duration-500" />
             )}
@@ -208,7 +209,7 @@ function ImageList({ search }: { search?: string }) {
 function ImageSkeleton() {
   return (
     <div className="flex justify-center items-center min-h-[50vh]">
-      <div className="w-8 h-8 border-[4px] border-transparent border-t-primary rounded-full animate-[spin_0.5s_linear_infinite]"></div>
+      <CircularProgress size={40} thickness={4} sx={{ color: 'var(--color-primary)' }} />
     </div>
   );
 }
