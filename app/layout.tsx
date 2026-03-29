@@ -4,6 +4,7 @@ import "./globals.css";
 import { cookies } from "next/headers";
 import AppLayout from "@/components/AppLayout";
 import NextTopLoader from 'nextjs-toploader';
+import { ToastContainer } from "@/components/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,6 +48,7 @@ export default async function RootLayout({
         <AppLayout initialCollapsed={sidebarCollapsed}>
           {children}
         </AppLayout>
+        <ToastContainer />
       </body>
     </html>
   );
