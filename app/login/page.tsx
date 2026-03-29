@@ -6,7 +6,7 @@ import { MdPerson, MdArrowBack, MdErrorOutline } from "react-icons/md";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReCAPTCHA from "react-google-recaptcha";
-import Toast from "@/components/Toast";
+import { showToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 
 export default function LoginPage() {
@@ -14,7 +14,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [toastConfig, setToastConfig] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const [isClosingCaptcha, setIsClosingCaptcha] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -29,7 +28,7 @@ export default function LoginPage() {
     e.preventDefault();
     
     if (!username || !password) {
-      setToastConfig({ message: "请输入用户名和密码", type: "error" });
+      showToast("请输入用户名和密码", "error");
       return;
     }
 
@@ -64,7 +63,7 @@ export default function LoginPage() {
 
       if (res.ok && data.success) {
         setSuccess(true);
-        setToastConfig({ message: '登录成功', type: 'success' });
+        showToast('登录成功', 'success');
         localStorage.setItem('user_info', JSON.stringify({
           token: data.token,
           username: data.username,
@@ -79,11 +78,11 @@ export default function LoginPage() {
           router.push('/');
         }, 1000);
       } else {
-        setToastConfig({ message: data.message || "登录失败，请检查用户名和密码", type: "error" });
+        showToast(data.message || "登录失败，请检查用户名和密码", "error");
         recaptchaRef.current?.reset();
       }
     } catch (err) {
-      setToastConfig({ message: "网络错误，请稍后再试", type: "error" });
+      showToast("网络错误，请稍后再试", "error");
       recaptchaRef.current?.reset();
     } finally {
       setIsLoading(false);
@@ -164,14 +163,6 @@ export default function LoginPage() {
           还没有账号？ <Link href="/register" className="text-primary cursor-pointer hover:underline">立即注册</Link>
         </p>
       </div>
-
-      {toastConfig && (
-        <Toast 
-          message={toastConfig.message} 
-          type={toastConfig.type} 
-          onClose={() => setToastConfig(null)} 
-        />
-      )}
     </div>
   );
 }

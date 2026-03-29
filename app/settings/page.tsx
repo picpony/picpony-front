@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { MdEdit, MdClose } from 'react-icons/md';
-import Toast from '@/components/Toast';
+import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 
 export default function SettingsPage() {
@@ -21,8 +21,6 @@ export default function SettingsPage() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
-  
-  const [toastConfig, setToastConfig] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
   const closeModal = () => {
     if (isLoading) return;
@@ -60,7 +58,7 @@ export default function SettingsPage() {
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oldPassword.trim() || !newPassword.trim()) {
-      setToastConfig({ message: '密码不能为空', type: 'error' });
+      showToast('密码不能为空', 'error');
       return;
     }
 
@@ -79,7 +77,7 @@ export default function SettingsPage() {
       const data = await res.json();
 
       if (data.success) {
-        setToastConfig({ message: '密码修改成功，你将会退出登录', type: 'success' });
+        showToast('密码修改成功，你将会退出登录', 'success');
         closePasswordModal();
         
         setTimeout(() => {
@@ -88,10 +86,10 @@ export default function SettingsPage() {
           router.push('/login');
         }, 1500);
       } else {
-        setToastConfig({ message: data.message || '修改失败，请重试', type: 'error' });
+        showToast(data.message || '修改失败，请重试', 'error');
       }
     } catch (err: any) {
-      setToastConfig({ message: err.message || '网络错误，请重试', type: 'error' });
+      showToast(err.message || '网络错误，请重试', 'error');
     } finally {
       setPasswordLoading(false);
     }
@@ -100,7 +98,7 @@ export default function SettingsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUsername.trim()) {
-      setToastConfig({ message: '用户名不能为空', type: 'error' });
+      showToast('用户名不能为空', 'error');
       return;
     }
 
@@ -116,7 +114,7 @@ export default function SettingsPage() {
       const data = await res.json();
 
       if (data.success) {
-        setToastConfig({ message: '用户名修改成功！', type: 'success' });
+        showToast('用户名修改成功！', 'success');
         setCurrentUsername(newUsername.trim());
         
         const updatedUser = { ...user, username: newUsername.trim() };
@@ -126,10 +124,10 @@ export default function SettingsPage() {
 
         closeModal();
       } else {
-        setToastConfig({ message: data.message || '修改失败，请重试', type: 'error' });
+        showToast(data.message || '修改失败，请重试', 'error');
       }
     } catch (err: any) {
-      setToastConfig({ message: err.message || '网络错误，请重试', type: 'error' });
+      showToast(err.message || '网络错误，请重试', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -319,14 +317,6 @@ export default function SettingsPage() {
           </div>
         </div>,
         document.body
-      )}
-
-      {toastConfig && (
-        <Toast 
-          message={toastConfig.message} 
-          type={toastConfig.type} 
-          onClose={() => setToastConfig(null)} 
-        />
       )}
     </div>
   );

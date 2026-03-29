@@ -6,7 +6,7 @@ import { MdArrowBack } from "react-icons/md";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReCAPTCHA from "react-google-recaptcha";
-import Toast from "@/components/Toast";
+import { showToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 
 export default function RegisterPage() {
@@ -15,7 +15,6 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [toastConfig, setToastConfig] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const [isClosingCaptcha, setIsClosingCaptcha] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -30,13 +29,13 @@ export default function RegisterPage() {
     e.preventDefault();
     
     if (!username || !email || !password) {
-      setToastConfig({ message: "请填写所有字段", type: "error" });
+      showToast("请填写所有字段", "error");
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setToastConfig({ message: "请输入有效的邮箱地址", type: "error" });
+      showToast("请输入有效的邮箱地址", "error");
       return;
     }
 
@@ -72,17 +71,17 @@ export default function RegisterPage() {
 
       if (res.ok && data.success) {
         setSuccess(true);
-        setToastConfig({ message: '注册成功，请登录', type: 'success' });
+        showToast('注册成功，请登录', 'success');
         
         setTimeout(() => {
           router.push('/login');
         }, 1500);
       } else {
-        setToastConfig({ message: data.message || "注册失败，请检查输入", type: "error" });
+        showToast(data.message || "注册失败，请检查输入", "error");
         recaptchaRef.current?.reset();
       }
     } catch (err) {
-      setToastConfig({ message: "网络错误，请稍后再试", type: "error" });
+      showToast("网络错误，请稍后再试", "error");
       recaptchaRef.current?.reset();
     } finally {
       setIsLoading(false);
@@ -174,14 +173,6 @@ export default function RegisterPage() {
           已有账号？ <Link href="/login" className="text-primary cursor-pointer hover:underline">立即登录</Link>
         </p>
       </div>
-
-      {toastConfig && (
-        <Toast 
-          message={toastConfig.message} 
-          type={toastConfig.type} 
-          onClose={() => setToastConfig(null)} 
-        />
-      )}
     </div>
   );
 }
