@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, FormEvent, Suspense, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications, MdClose } from "react-icons/md";
 import { ButtonBase } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 
@@ -70,6 +71,8 @@ export default function AppLayout({
   const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [isLogoutClosing, setIsLogoutClosing] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -137,11 +140,28 @@ export default function AppLayout({
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('user_info');
-    setUserInfo(null);
-    setIsUserMenuOpen(false);
-    router.push('/');
+  const handleLogoutClick = () => {
+    setIsLogoutDialogOpen(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    setIsLogoutClosing(true);
+    setTimeout(() => {
+      localStorage.removeItem('user_info');
+      setUserInfo(null);
+      setIsUserMenuOpen(false);
+      setIsLogoutDialogOpen(false);
+      setIsLogoutClosing(false);
+      router.push('/');
+    }, 200);
+  };
+
+  const handleLogoutCancel = () => {
+    setIsLogoutClosing(true);
+    setTimeout(() => {
+      setIsLogoutDialogOpen(false);
+      setIsLogoutClosing(false);
+    }, 200);
   };
 
   return (
@@ -235,7 +255,7 @@ export default function AppLayout({
                     <span>设置</span>
                   </ButtonBase>
                   <ButtonBase 
-                    onClick={handleLogout}
+                    onClick={handleLogoutClick}
                     sx={sidebarButtonSx(false)}
                   >
                     <MdLogout size={20} className="shrink-0 mr-3" />
@@ -289,6 +309,51 @@ export default function AppLayout({
         </main>
       </div>
       <AnnouncementModal />
+      
+      {isLogoutDialogOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isLogoutClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
+          onClick={handleLogoutCancel}
+        >
+          <div 
+            className={`bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isLogoutClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center p-6">
+              <h3 className="text-lg font-semibold text-slate-800">确认退出登录？</h3>
+              <button 
+                onClick={handleLogoutCancel}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <MdClose size={24} />
+              </button>
+            </div>
+            
+            <div className="px-6 pb-6">
+              <p className="text-slate-600 mb-6">
+                退出登录后，您将无法进行某些操作。您确定要退出吗？
+              </p>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleLogoutCancel}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleLogoutConfirm}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                >
+                  确认退出
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

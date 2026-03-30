@@ -73,7 +73,7 @@ export default function MessagesPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">消息中心</h1>
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">消息</h1>
       
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs 
