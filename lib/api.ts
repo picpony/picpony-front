@@ -32,7 +32,7 @@ export interface ApiResponse {
 }
 
 const PICPONY_API_BASE = 'https://picpony.top/api.php';
-const DERPIBOORU_API_BASE = 'https://derpibooru.org/api/v1/json';
+const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
 export const api = {
   getImages: async (search?: string, page: number = 1): Promise<ApiResponse> => {
