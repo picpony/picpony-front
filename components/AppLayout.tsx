@@ -3,7 +3,7 @@
 import { useState, FormEvent, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications } from "react-icons/md";
 import AnnouncementModal from "./AnnouncementModal";
 
 function SearchBar() {
@@ -144,6 +144,13 @@ export default function AppLayout({
             <SearchBar />
           </Suspense>
         </div>
+        <Link 
+          href="/messages" 
+          className="p-2 ml-2 rounded-md hover:bg-white/20 text-white transition-colors relative"
+          aria-label="消息"
+        >
+          <MdNotifications size={24} />
+        </Link>
       </header>
       
       <div className="flex flex-1 overflow-hidden relative">

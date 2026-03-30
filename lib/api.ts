@@ -109,5 +109,15 @@ export const api = {
   getAnnouncement: async () => {
     const res = await fetch(`${PICPONY_API_BASE}?action=get_announcement`);
     return res.json();
+  },
+
+  getAnnouncementHistory: async () => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_announcement_history`);
+    return res.json();
+  },
+
+  getNotifications: async () => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_notifications`);
+    return res.json();
   }
 };
