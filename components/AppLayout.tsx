@@ -4,6 +4,7 @@ import { useState, FormEvent, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications } from "react-icons/md";
+import { ButtonBase } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 
 function SearchBar() {
@@ -41,6 +42,23 @@ interface UserInfo {
   role: string;
   token: string;
 }
+
+const sidebarButtonSx = (isActive: boolean) => ({
+  display: 'flex',
+  alignItems: 'center',
+  px: 1.5,
+  py: 1.5,
+  fontWeight: 500,
+  transition: 'all 0.2s',
+  borderRadius: '8px',
+  width: '100%',
+  justifyContent: 'flex-start',
+  color: isActive ? 'var(--color-primary)' : 'rgb(51, 65, 85)',
+  backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+  '&:hover': {
+    backgroundColor: isActive ? 'rgba(59, 130, 246, 0.15)' : 'rgb(241, 245, 249)',
+  }
+});
 
 export default function AppLayout({ 
   children, 
@@ -207,25 +225,22 @@ export default function AppLayout({
                       : 'max-h-0 opacity-0'
                   }`}
                 >
-                  <Link 
+                  <ButtonBase
+                    component={Link}
                     href="/settings"
                     onClick={handleMobileNavigation}
-                    className={`flex items-center px-3 py-3 font-medium transition-colors rounded-lg ${
-                      pathname === '/settings' 
-                        ? 'text-primary bg-primary/10' 
-                        : 'text-slate-700 hover:bg-slate-100'
-                    }`}
+                    sx={sidebarButtonSx(pathname === '/settings')}
                   >
                     <MdSettings size={20} className="shrink-0 mr-3" />
                     <span>设置</span>
-                  </Link>
-                  <button 
+                  </ButtonBase>
+                  <ButtonBase 
                     onClick={handleLogout}
-                    className="flex items-center px-3 py-3 font-medium transition-colors rounded-lg text-slate-700 hover:bg-slate-100 w-full text-left"
+                    sx={sidebarButtonSx(false)}
                   >
                     <MdLogout size={20} className="shrink-0 mr-3" />
                     <span>退出登录</span>
-                  </button>
+                  </ButtonBase>
                 </div>
                 <div className="h-px bg-slate-200 mt-2 mx-2"></div>
               </div>
@@ -247,18 +262,15 @@ export default function AppLayout({
             {!userInfo && <div className="h-px bg-slate-200 mt-2 mx-2"></div>}
           </div>
           <nav className="flex-1 py-3 w-64 px-3 space-y-1">
-            <Link 
+            <ButtonBase
+              component={Link}
               href="/" 
               onClick={handleMobileNavigation}
-              className={`flex items-center px-3 py-3 font-medium transition-colors rounded-lg ${
-                pathname === '/' 
-                  ? 'text-primary bg-primary/10' 
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
+              sx={sidebarButtonSx(pathname === '/')}
             >
               <MdHome size={20} className="shrink-0 mr-3" />
               <span>主页</span>
-            </Link>
+            </ButtonBase>
           </nav>
         </aside>
         
