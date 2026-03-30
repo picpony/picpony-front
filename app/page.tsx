@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import ImageModal from "@/components/ImageModal";
 import { api, PonyImage } from "@/lib/api";
 import CircularProgress from '@mui/material/CircularProgress';
+import Tooltip from '@mui/material/Tooltip';
 
 function ImageList({ search }: { search?: string }) {
   const [images, setImages] = useState<PonyImage[]>([]);
@@ -165,14 +166,18 @@ function ImageList({ search }: { search?: string }) {
                     <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none">
                       {format}
                     </div>
-                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none flex items-center gap-1">
-                      <MdThumbUp size={12} />
-                      <span>{image.score}</span>
-                    </div>
-                    <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none flex items-center gap-1">
-                      <MdComment size={12} />
-                      <span>{image.comment_count}</span>
-                    </div>
+                    <Tooltip title="点赞数" placement="top" arrow>
+                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm flex items-center gap-1">
+                        <MdThumbUp size={12} />
+                        <span>{image.score}</span>
+                      </div>
+                    </Tooltip>
+                    <Tooltip title="评论数" placement="top" arrow>
+                      <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm flex items-center gap-1">
+                        <MdComment size={12} />
+                        <span>{image.comment_count}</span>
+                      </div>
+                    </Tooltip>
                   </button>
                 </div>
               );

@@ -53,6 +53,26 @@ export default function AppLayout({
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    const savedMenuState = localStorage.getItem('user_menu_open');
+    if (savedMenuState !== null) {
+      setIsUserMenuOpen(savedMenuState === 'true');
+    }
+    
+    if (window.innerWidth >= 768) {
+      const savedSidebarState = localStorage.getItem('sidebar_collapsed');
+      if (savedSidebarState !== null) {
+        setIsCollapsed(savedSidebarState === 'true');
+      }
+    }
+  }, []);
+
+  const toggleUserMenu = () => {
+    const newState = !isUserMenuOpen;
+    setIsUserMenuOpen(newState);
+    localStorage.setItem('user_menu_open', String(newState));
+  };
   const router = useRouter();
 
   useEffect(() => {
@@ -90,7 +110,7 @@ export default function AppLayout({
   const toggleSidebar = () => {
     const newState = !isCollapsed;
     setIsCollapsed(newState);
-    document.cookie = `sidebarCollapsed=${newState}; path=/; max-age=31536000`;
+    localStorage.setItem('sidebar_collapsed', String(newState));
   };
 
   const handleMobileNavigation = () => {
@@ -143,7 +163,7 @@ export default function AppLayout({
             {userInfo ? (
               <div className="relative">
                 <button 
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  onClick={toggleUserMenu}
                   className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors text-left relative z-20"
                 >
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
