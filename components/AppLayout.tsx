@@ -166,7 +166,7 @@ export default function AppLayout({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <header className="h-16 bg-primary text-white flex items-center px-4 shrink-0 relative z-50">
+      <header className="h-16 bg-primary text-white flex items-center px-4 sm:px-26 shrink-0 relative z-50">
         <ButtonBase 
           onClick={toggleSidebar}
           aria-label={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
