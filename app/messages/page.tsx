@@ -123,7 +123,7 @@ export default function MessagesPage() {
                 {announcements.map((item) => (
                   <div 
                     key={item.id} 
-                    className="bg-white border border-slate-100 rounded-xl p-5 hover:bg-slate-50/50 transition-colors"
+                    className="bg-white rounded-xl p-5"
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center">
@@ -170,7 +170,7 @@ export default function MessagesPage() {
                 {notifications.map((item) => (
                   <div 
                     key={item.id} 
-                    className="bg-white border border-slate-100 rounded-xl p-5 hover:bg-slate-50/50 transition-colors relative overflow-hidden"
+                    className="bg-white rounded-xl p-5 relative overflow-hidden"
                   >
                     {item.is_read === 0 && (
                       <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>

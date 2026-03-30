@@ -167,13 +167,17 @@ export default function AppLayout({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <header className="h-16 bg-primary text-white flex items-center px-4 shrink-0 relative z-50">
-        <button 
+        <ButtonBase 
           onClick={toggleSidebar}
-          className="p-2 mr-2 sm:mr-4 rounded-md hover:bg-white/20 text-white transition-colors"
           aria-label={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
+          sx={{ 
+            borderRadius: '6px',
+            p: '8px',
+            mr: { xs: '8px', sm: '16px' }
+          }}
         >
           <MdMenu size={24} />
-        </button>
+        </ButtonBase>
         <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex">
           <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
         </Link>
@@ -182,13 +186,18 @@ export default function AppLayout({
             <SearchBar />
           </Suspense>
         </div>
-        <Link 
-          href="/messages" 
-          className="p-2 ml-2 rounded-md hover:bg-white/20 text-white transition-colors relative"
+        <ButtonBase 
+          component={Link}
+          href="/messages"
           aria-label="消息"
+          sx={{ 
+            borderRadius: '6px',
+            p: '8px',
+            ml: '8px'
+          }}
         >
           <MdNotifications size={24} />
-        </Link>
+        </ButtonBase>
       </header>
       
       <div className="flex flex-1 overflow-hidden relative">
