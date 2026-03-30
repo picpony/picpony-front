@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { MdAnnouncement, MdNotifications, MdChevronRight } from 'react-icons/md';
 import { api } from '@/lib/api';
+import { Tabs, Tab, Box } from '@mui/material';
 
 interface Announcement {
   id: number;
@@ -75,33 +75,29 @@ export default function MessagesPage() {
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-800 mb-6">消息中心</h1>
       
-      <div className="flex border-b border-slate-200 mb-6 relative">
-        <button
-          onClick={() => setActiveTab('announcement')}
-          className={`flex items-center px-6 py-3 font-medium transition-colors relative z-10 ${
-            activeTab === 'announcement' ? 'text-primary' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <MdAnnouncement size={20} className="mr-2" />
-          <span>公告</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('notification')}
-          className={`flex items-center px-6 py-3 font-medium transition-colors relative z-10 ${
-            activeTab === 'notification' ? 'text-primary' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <MdNotifications size={20} className="mr-2" />
-          <span>通知</span>
-        </button>
-        <div 
-          className="absolute bottom-0 h-0.5 bg-primary transition-all duration-300 ease-in-out"
-          style={{
-            left: activeTab === 'announcement' ? '0' : '104px',
-            width: activeTab === 'announcement' ? '104px' : '104px'
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs 
+          value={activeTab} 
+          onChange={(_, newValue) => setActiveTab(newValue)}
+          sx={{
+            '& .MuiTab-root': {
+              fontSize: '1rem',
+              fontWeight: 500,
+              textTransform: 'none',
+              minWidth: 100,
+            },
+            '& .Mui-selected': {
+              color: 'var(--color-primary) !important',
+            },
+            '& .MuiTabs-indicator': {
+              backgroundColor: 'var(--color-primary)',
+            }
           }}
-        />
-      </div>
+        >
+          <Tab label="公告" value="announcement" />
+          <Tab label="通知" value="notification" />
+        </Tabs>
+      </Box>
 
       <div className="min-h-[400px]">
         {activeTab === 'announcement' ? (
