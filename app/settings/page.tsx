@@ -182,7 +182,7 @@ export default function SettingsPage() {
             className={`bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center p-6 border-b border-slate-100">
+            <div className="flex justify-between items-center p-6">
               <h3 className="text-lg font-semibold text-slate-800">修改用户名</h3>
               <button 
                 onClick={closeModal}
@@ -248,7 +248,7 @@ export default function SettingsPage() {
             className={`bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isPasswordClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center p-6 border-b border-slate-100">
+            <div className="flex justify-between items-center p-6">
               <h3 className="text-lg font-semibold text-slate-800">修改密码</h3>
               <button 
                 onClick={closePasswordModal}

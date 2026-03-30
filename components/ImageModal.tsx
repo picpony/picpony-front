@@ -52,6 +52,26 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
     .filter(tag => tag.startsWith('oc:'))
     .map(tag => tag.replace('oc:', ''));
 
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(displayImage.representations.full);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const fileName = displayImage.representations.full.split('/').pop() || `image-${displayImage.id}`;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(displayImage.representations.full, '_blank');
+    }
+  };
+
   const modalContent = (
     <div 
       className={`fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 md:p-6 bg-black/50 ${isVisible ? 'animate-modal-overlay' : 'animate-modal-overlay-out'}`}
@@ -208,15 +228,13 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
             </div>
 
             <div className="pt-4 space-y-2 sm:space-y-3 mt-auto pb-4 sm:pb-0">
-              <a 
-                href={displayImage.representations.full}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button 
+                onClick={handleDownload}
                 className="flex items-center justify-center w-full px-4 py-2 sm:py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium text-center text-sm sm:text-base"
               >
                 <MdDownload size={20} className="mr-2 flex-shrink-0" />
                 <span className="truncate">下载原图</span>
-              </a>
+              </button>
               <a 
                 href={`https://trixiebooru.org/${displayImage.id}`}
                 target="_blank"
