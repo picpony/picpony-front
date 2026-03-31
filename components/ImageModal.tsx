@@ -16,6 +16,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [displayImage, setDisplayImage] = useState<PonyImage | null>(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [cdnEnabled, setCdnEnabled] = useState(false);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -42,6 +43,17 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
     };
   }, [image]);
 
+  useEffect(() => {
+    const checkCdn = () => {
+      const storedCdn = localStorage.getItem('cdn_enabled');
+      setCdnEnabled(storedCdn === 'true');
+    };
+    
+    checkCdn();
+    window.addEventListener('cdn_settings_updated', checkCdn);
+    return () => window.removeEventListener('cdn_settings_updated', checkCdn);
+  }, []);
+
   if (!render || !displayImage) return null;
 
   const artists = displayImage.tags
@@ -51,6 +63,11 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
   const ocs = displayImage.tags
     .filter(tag => tag.startsWith('oc:'))
     .map(tag => tag.replace('oc:', ''));
+
+  const getCdnUrl = (url: string) => {
+    if (!cdnEnabled || !url) return url;
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
+  };
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -84,7 +101,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
         <div className="flex-[1.5] md:flex-1 bg-black sm:bg-slate-100 flex items-center justify-center overflow-hidden relative min-h-[40vh] md:min-h-0">
           {displayImage.representations.full.endsWith('.webm') ? (
             <video
-              src={displayImage.representations.full}
+              src={getCdnUrl(displayImage.representations.full)}
               controls
               autoPlay
               loop
@@ -92,7 +109,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
             />
           ) : (
             <FadeInImage
-              src={displayImage.representations.large || displayImage.representations.full}
+              src={getCdnUrl(displayImage.representations.large || displayImage.representations.full)}
               alt={displayImage.name || `Image ${displayImage.id}`}
               width={displayImage.width}
               height={displayImage.height}

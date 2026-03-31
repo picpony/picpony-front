@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { MdEdit, MdClose } from 'react-icons/md';
-import { ButtonBase } from '@mui/material';
+import { ButtonBase, Switch } from '@mui/material';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 
@@ -49,6 +49,8 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  const [cdnEnabled, setCdnEnabled] = useState(false);
+
   const closeModal = () => {
     if (isLoading) return;
     setIsClosing(true);
@@ -80,7 +82,19 @@ export default function SettingsPage() {
         console.error("Failed to parse user info", e);
       }
     }
+    
+    const storedCdn = localStorage.getItem('cdn_enabled');
+    if (storedCdn === 'true') {
+      setCdnEnabled(true);
+    }
   }, []);
+
+  const handleCdnToggle = () => {
+    const newValue = !cdnEnabled;
+    setCdnEnabled(newValue);
+    localStorage.setItem('cdn_enabled', String(newValue));
+    window.dispatchEvent(new Event('cdn_settings_updated'));
+  };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,6 +210,31 @@ export default function SettingsPage() {
               <MdEdit size={16} className="mr-2" />
               修改密码
             </ButtonBase>
+          </div>
+        </div>
+        
+        <div className="p-6 border-b border-slate-100">
+          <h2 className="text-lg font-semibold text-slate-800 mb-4">偏好设置</h2>
+          
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-slate-800 mb-1">启用图片 CDN 加速</p>
+              <p className="text-sm text-slate-500">
+                开启后图片链接将通过 wsrv.nl 代理。
+              </p>
+            </div>
+            <Switch
+              checked={cdnEnabled}
+              onChange={handleCdnToggle}
+              sx={{
+                '& .MuiSwitch-switchBase.Mui-checked': {
+                  color: 'var(--color-primary)',
+                },
+                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                  backgroundColor: 'var(--color-primary)',
+                },
+              }}
+            />
           </div>
         </div>
       </div>
