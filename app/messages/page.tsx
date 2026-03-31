@@ -35,6 +35,8 @@ export default function MessagesPage() {
   const [error, setError] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState('');
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     document.title = "消息 - PicPony";
@@ -121,8 +123,8 @@ export default function MessagesPage() {
     }
   };
 
-  const fetchMessages = async (contactId: number) => {
-    setLoadingMessages(true);
+  const fetchMessages = async (contactId: number, silent = false) => {
+    if (!silent) setLoadingMessages(true);
     try {
       const storedUser = localStorage.getItem('user_info');
       if (!storedUser) return;
@@ -144,6 +146,39 @@ export default function MessagesPage() {
       fetchMessages(selectedContact.id);
     }
   }, [selectedContact]);
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedContact || sending) return;
+
+    setSending(true);
+    try {
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) return;
+      const user = JSON.parse(storedUser);
+      
+      const res = await api.sendMessage(user.token, selectedContact.id, newMessage.trim());
+      const data = await res.json();
+      
+      if (data.success) {
+        setNewMessage('');
+        fetchMessages(selectedContact.id, true);
+        fetchContacts();
+      } else {
+        console.error('发送消息失败:', data.message);
+      }
+    } catch (err) {
+      console.error('发送消息出错:', err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -303,12 +338,21 @@ export default function MessagesPage() {
                       <div className="flex space-x-2">
                         <input 
                           type="text" 
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          onKeyPress={handleKeyPress}
                           placeholder="输入消息..." 
                           className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                          disabled
+                          disabled={sending}
                         />
-                        <button className="bg-primary text-white px-4 py-2 rounded-full text-sm font-bold opacity-50 cursor-not-allowed">
-                          发送
+                        <button 
+                          onClick={handleSendMessage}
+                          disabled={!newMessage.trim() || sending}
+                          className={`bg-primary text-white px-4 py-2 rounded-full text-sm font-bold transition-colors flex items-center justify-center min-w-[64px] ${
+                            !newMessage.trim() || sending ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/90'
+                          }`}
+                        >
+                          {sending ? <CircularProgress size={20} sx={{ color: 'white' }} /> : '发送'}
                         </button>
                       </div>
                     </div>

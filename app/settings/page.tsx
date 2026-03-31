@@ -139,7 +139,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6 text-primary">设置</h1>
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">设置</h1>
       
       <div className="bg-white overflow-hidden">
         <div className="p-6 border-b border-slate-100">

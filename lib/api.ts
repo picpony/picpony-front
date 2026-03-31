@@ -166,5 +166,19 @@ export const api = {
       }
     });
     return res.json();
+  },
+
+  sendMessage: async (token: string, receiverId: number, content: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=send_message`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        receiver_id: receiverId,
+        content: content
+      })
+    });
   }
 };
