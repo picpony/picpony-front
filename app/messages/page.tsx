@@ -20,7 +20,7 @@ interface Notification {
   created_at: string;
 }
 
-import { Contact } from '@/lib/api';
+import { Contact, Message } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 
 export default function MessagesPage() {
@@ -29,9 +29,12 @@ export default function MessagesPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "消息 - PicPony";
@@ -103,6 +106,7 @@ export default function MessagesPage() {
         return;
       }
       const user = JSON.parse(storedUser);
+      setCurrentUsername(user.username);
       const data = await api.getRecentContacts(user.token);
       if (data.success) {
         setContacts(data.contacts);
@@ -116,6 +120,30 @@ export default function MessagesPage() {
       setLoading(false);
     }
   };
+
+  const fetchMessages = async (contactId: number) => {
+    setLoadingMessages(true);
+    try {
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) return;
+      const user = JSON.parse(storedUser);
+      if (!currentUsername) setCurrentUsername(user.username);
+      const data = await api.getMessages(user.token, contactId);
+      if (data.success) {
+        setMessages(data.messages);
+      }
+    } catch (err) {
+      console.error('获取聊天记录失败', err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedContact) {
+      fetchMessages(selectedContact.id);
+    }
+  }, [selectedContact]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -224,8 +252,57 @@ export default function MessagesPage() {
                         <span className="font-bold text-slate-800">{selectedContact.username}</span>
                       </div>
                     </div>
-                    <div className="flex-1 p-4 overflow-y-auto flex flex-col items-center justify-center text-slate-400">
-                      <p>聊天功能开发中...</p>
+                    <div className="flex-1 p-4 overflow-y-auto flex flex-col space-y-4">
+                      {loadingMessages ? (
+                        <div className="flex-1 flex items-center justify-center">
+                          <div className="flex gap-1 items-center animate-pulse">
+                            <div className="w-2 h-2 bg-primary rounded-full"></div>
+                            <div className="w-2 h-2 bg-primary rounded-full"></div>
+                            <div className="w-2 h-2 bg-primary rounded-full"></div>
+                          </div>
+                        </div>
+                      ) : messages.length > 0 ? (
+                        messages.map((msg) => {
+                          const isMe = currentUsername ? msg.sender_name === currentUsername : msg.sender_id !== selectedContact?.id;
+                          return (
+                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`flex max-w-[70%] ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2`}>
+                                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-slate-100">
+                                  {msg.sender_avatar ? (
+                                    <FadeInImage 
+                                      src={`https://picpony.top/${msg.sender_avatar}`} 
+                                      alt={msg.sender_name}
+                                      width={32}
+                                      height={32}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs bg-slate-200">
+                                      {msg.sender_name[0].toUpperCase()}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                  <span className="text-[10px] text-slate-400 mb-1 px-1">{msg.created_at}</span>
+                                  <div 
+                                    className={`px-4 py-2 rounded-2xl text-sm ${
+                                      isMe 
+                                        ? 'bg-primary text-white rounded-br-sm' 
+                                        : 'bg-white border border-slate-100 text-slate-800 rounded-bl-sm'
+                                    }`}
+                                  >
+                                    {msg.content}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center text-slate-400">
+                          <p>暂无聊天记录</p>
+                        </div>
+                      )}
                     </div>
                     <div className="p-4 bg-white border-t border-slate-100">
                       <div className="flex space-x-2">

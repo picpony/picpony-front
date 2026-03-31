@@ -44,6 +44,22 @@ export interface ContactsResponse {
   contacts: Contact[];
 }
 
+export interface Message {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  content: string;
+  is_read: number;
+  created_at: string;
+  sender_name: string;
+  sender_avatar: string | null;
+}
+
+export interface MessagesResponse {
+  success: boolean;
+  messages: Message[];
+}
+
 const PICPONY_API_BASE = 'https://picpony.top/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
@@ -136,6 +152,15 @@ export const api = {
 
   getRecentContacts: async (token: string): Promise<ContactsResponse> => {
     const res = await fetch(`${PICPONY_API_BASE}?action=get_recent_contacts`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.json();
+  },
+
+  getMessages: async (token: string, withUserId: number): Promise<MessagesResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_messages&with_user_id=${withUserId}`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
