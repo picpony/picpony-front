@@ -20,10 +20,15 @@ interface Notification {
   created_at: string;
 }
 
+import { Contact } from '@/lib/api';
+import FadeInImage from '@/components/FadeInImage';
+
 export default function MessagesPage() {
-  const [activeTab, setActiveTab] = useState<'announcement' | 'notification'>('announcement');
+  const [activeTab, setActiveTab] = useState<'announcement' | 'notification' | 'chat'>('announcement');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -32,7 +37,7 @@ export default function MessagesPage() {
     document.title = "消息 - PicPony";
   }, []);
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: 'announcement' | 'notification') => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: 'announcement' | 'notification' | 'chat') => {
     if (newValue === activeTab) return;
     
     setIsTransitioning(true);
@@ -45,8 +50,10 @@ export default function MessagesPage() {
   useEffect(() => {
     if (activeTab === 'announcement') {
       fetchAnnouncements();
-    } else {
+    } else if (activeTab === 'notification') {
       fetchNotifications();
+    } else {
+      fetchContacts();
     }
   }, [activeTab]);
 
@@ -86,6 +93,30 @@ export default function MessagesPage() {
     }
   };
 
+  const fetchContacts = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) {
+        setError('请先登录');
+        return;
+      }
+      const user = JSON.parse(storedUser);
+      const data = await api.getRecentContacts(user.token);
+      if (data.success) {
+        setContacts(data.contacts);
+      } else {
+        setError('获取联系人失败');
+      }
+    } catch (err) {
+      setError('网络请求失败');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-800 mb-6">消息</h1>
@@ -111,12 +142,116 @@ export default function MessagesPage() {
         >
           <Tab label="公告" value="announcement" />
           <Tab label="通知" value="notification" />
+          <Tab label="私信" value="chat" />
         </Tabs>
       </Box>
 
       <div className="min-h-[400px] relative">
         <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
-          {activeTab === 'announcement' ? (
+          {activeTab === 'chat' ? (
+            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex h-[600px]">
+              <div className="w-80 border-right border-slate-100 flex flex-col">
+                <div className="flex-1 overflow-y-auto">
+                  {loading && contacts.length === 0 ? (
+                    <div className="p-4 space-y-4">
+                      {[1, 2, 3, 4].map(i => (
+                        <div key={i} className="flex items-center space-x-3 animate-pulse">
+                          <div className="w-12 h-12 bg-slate-100 rounded-full"></div>
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-slate-100 rounded w-3/4"></div>
+                            <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : error ? (
+                    <div className="p-10 text-center text-slate-400 text-sm">
+                      {error}
+                    </div>
+                  ) : contacts.length > 0 ? (
+                    contacts.map(contact => (
+                      <div 
+                        key={contact.id}
+                        onClick={() => setSelectedContact(contact)}
+                        className={`p-4 flex items-center space-x-3 cursor-pointer transition-colors hover:bg-slate-50 ${selectedContact?.id === contact.id ? 'bg-slate-50' : ''}`}
+                      >
+                        <div className="relative">
+                          <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 border border-slate-100">
+                            {contact.avatar ? (
+                              <FadeInImage 
+                                src={`https://picpony.top/${contact.avatar}`} 
+                                alt={contact.username}
+                                width={48}
+                                height={48}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-200">
+                                {contact.username[0].toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          {contact.unread_count > 0 && (
+                            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
+                              {contact.unread_count}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-baseline">
+                            <h4 className="font-bold text-slate-800 truncate text-sm">{contact.username}</h4>
+                            <span className="text-[10px] text-slate-400">{contact.last_msg_time.split(' ')[0]}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 truncate mt-1">
+                            点击开始聊天
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-10 text-center text-slate-400 text-sm">
+                      暂无联系人
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 flex flex-col bg-slate-50/30">
+                {selectedContact ? (
+                  <>
+                    <div className="p-4 border-b border-slate-100 bg-white flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <span className="font-bold text-slate-800">{selectedContact.username}</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 p-4 overflow-y-auto flex flex-col items-center justify-center text-slate-400">
+                      <p>聊天功能开发中...</p>
+                    </div>
+                    <div className="p-4 bg-white border-t border-slate-100">
+                      <div className="flex space-x-2">
+                        <input 
+                          type="text" 
+                          placeholder="输入消息..." 
+                          className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                          disabled
+                        />
+                        <button className="bg-primary text-white px-4 py-2 rounded-full text-sm font-bold opacity-50 cursor-not-allowed">
+                          发送
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                    <svg className="w-16 h-16 mb-4 opacity-20" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+                    </svg>
+                    <p>选择一个联系人开始聊天</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : activeTab === 'announcement' ? (
             <div>
               {loading ? (
                 <div className="space-y-4">

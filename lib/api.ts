@@ -31,6 +31,19 @@ export interface ApiResponse {
   images: PonyImage[];
 }
 
+export interface Contact {
+  id: number;
+  username: string;
+  avatar: string | null;
+  last_msg_time: string;
+  unread_count: number;
+}
+
+export interface ContactsResponse {
+  success: boolean;
+  contacts: Contact[];
+}
+
 const PICPONY_API_BASE = 'https://picpony.top/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
@@ -118,6 +131,15 @@ export const api = {
 
   getNotifications: async () => {
     const res = await fetch(`${PICPONY_API_BASE}?action=get_notifications`);
+    return res.json();
+  },
+
+  getRecentContacts: async (token: string): Promise<ContactsResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_recent_contacts`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
     return res.json();
   }
 };

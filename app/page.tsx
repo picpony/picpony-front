@@ -6,7 +6,6 @@ import { MdErrorOutline, MdRefresh, MdThumbUp, MdComment } from "react-icons/md"
 import { useSearchParams } from "next/navigation";
 import ImageModal from "@/components/ImageModal";
 import { api, PonyImage } from "@/lib/api";
-import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip from '@mui/material/Tooltip';
 
 function ImageList({ search }: { search?: string }) {
@@ -194,11 +193,15 @@ function ImageList({ search }: { search?: string }) {
             className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-full transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
           >
             {isLoadingMore ? (
-              <CircularProgress size={20} sx={{ color: 'var(--color-primary)' }} />
+              <div className="flex gap-1 items-center animate-pulse">
+                <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
+                <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
+                <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
+              </div>
             ) : (
               <MdRefresh size={20} className="group-hover:rotate-180 transition-transform duration-500" />
             )}
-            <span>加载更多</span>
+            <span>{isLoadingMore ? '正在加载' : '加载更多'}</span>
           </button>
         </div>
       )}
@@ -212,9 +215,33 @@ function ImageList({ search }: { search?: string }) {
 }
 
 function ImageSkeleton() {
+  const skeletonHeights = [
+    [280, 320, 240],
+    [200, 380, 260],
+    [340, 220, 300],
+    [260, 280, 340]
+  ];
+
   return (
-    <div className="flex justify-center items-center min-h-[50vh]">
-      <CircularProgress size={40} thickness={4} sx={{ color: 'var(--color-primary)' }} />
+    <div className="flex gap-2 sm:gap-4 animate-fade-in items-start">
+      {skeletonHeights.map((colHeights, colIndex) => (
+        <div 
+          key={colIndex} 
+          className={`flex flex-col gap-2 sm:gap-4 flex-1 min-w-0 ${
+            colIndex === 2 ? 'hidden md:flex' : 
+            colIndex === 3 ? 'hidden lg:flex' : 
+            colIndex >= 2 ? 'hidden' : 'flex'
+          }`}
+        >
+          {colHeights.map((height, i) => (
+            <div 
+              key={i} 
+              className="w-full bg-slate-100 rounded-lg animate-pulse"
+              style={{ height: `${height}px` }}
+            ></div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
