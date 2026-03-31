@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Tabs, Tab, Box } from '@mui/material';
+import { Tabs, Tab, Box, CircularProgress } from '@mui/material';
 
 interface Announcement {
   id: number;
@@ -178,7 +178,7 @@ export default function MessagesPage() {
         <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {activeTab === 'chat' ? (
             <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex h-[600px]">
-              <div className="w-80 border-right border-slate-100 flex flex-col">
+              <div className="w-80 border-r border-slate-100 flex flex-col">
                 <div className="flex-1 overflow-y-auto">
                   {loading && contacts.length === 0 ? (
                     <div className="p-4 space-y-4">
@@ -228,10 +228,9 @@ export default function MessagesPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-baseline">
                             <h4 className="font-bold text-slate-800 truncate text-sm">{contact.username}</h4>
-                            <span className="text-[10px] text-slate-400">{contact.last_msg_time.split(' ')[0]}</span>
                           </div>
                           <p className="text-xs text-slate-500 truncate mt-1">
-                            点击开始聊天
+                            {contact.last_msg_time}
                           </p>
                         </div>
                       </div>
@@ -255,11 +254,7 @@ export default function MessagesPage() {
                     <div className="flex-1 p-4 overflow-y-auto flex flex-col space-y-4">
                       {loadingMessages ? (
                         <div className="flex-1 flex items-center justify-center">
-                          <div className="flex gap-1 items-center animate-pulse">
-                            <div className="w-2 h-2 bg-primary rounded-full"></div>
-                            <div className="w-2 h-2 bg-primary rounded-full"></div>
-                            <div className="w-2 h-2 bg-primary rounded-full"></div>
-                          </div>
+                          <CircularProgress size={30} sx={{ color: 'var(--color-primary)' }} />
                         </div>
                       ) : messages.length > 0 ? (
                         messages.map((msg) => {
