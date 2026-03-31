@@ -4,14 +4,16 @@ import { useState, FormEvent, Suspense, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications, MdClose } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications, MdClose, MdImageSearch } from "react-icons/md";
 import { ButtonBase } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
+import ImageSearchModal from "./ImageSearchModal";
 
 function SearchBar() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -24,16 +26,38 @@ function SearchBar() {
   };
 
   return (
-    <form onSubmit={handleSearch} className="flex items-center bg-white/10 rounded-md px-3 py-1.5 ml-4 focus-within:bg-white/20 transition-colors">
-      <MdSearch size={20} className="text-white/70 mr-2" />
-      <input
-        type="text"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="搜索..."
-        className="bg-transparent border-none outline-none text-white placeholder:text-white/50 text-sm w-48 focus:w-64 transition-all duration-300"
+    <>
+      <form onSubmit={handleSearch} className="flex items-center bg-white/10 rounded-md px-3 py-1.5 ml-4 focus-within:bg-white/20 transition-colors">
+        <MdSearch size={20} className="text-white/70 mr-2" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="搜索..."
+          className="bg-transparent border-none outline-none text-white placeholder:text-white/50 text-sm w-48 focus:w-64 transition-all duration-300"
+        />
+        <button
+          type="button"
+          onClick={() => setIsImageSearchOpen(true)}
+          className="ml-2 text-white/70 hover:text-white transition-colors flex items-center justify-center"
+          title="以图搜图"
+        >
+          <MdImageSearch size={20} />
+        </button>
+      </form>
+      <ImageSearchModal 
+        isOpen={isImageSearchOpen} 
+        onClose={() => setIsImageSearchOpen(false)} 
+        onSearchSuccess={(results) => {
+          const event = new CustomEvent('image_search_results', { detail: results });
+          window.dispatchEvent(event);
+          
+          if (window.location.pathname !== '/') {
+            router.push('/');
+          }
+        }}
       />
-    </form>
+    </>
   );
 }
 

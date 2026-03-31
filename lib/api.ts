@@ -180,5 +180,22 @@ export const api = {
         content: content
       })
     });
+  },
+
+  searchImage: async (imageFile: File, distance: number) => {
+    const formData = new FormData();
+    formData.append('imageFile', imageFile);
+    formData.append('distance', distance.toString());
+
+    const response = await fetch('https://picpony.top/search-api/api/upload-search', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error('搜索请求失败');
+    }
+
+    return response.json();
   }
 };
