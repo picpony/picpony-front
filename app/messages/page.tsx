@@ -46,23 +46,24 @@ export default function MessagesPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const fetchUnreadCounts = async () => {
-      try {
-        const storedUser = localStorage.getItem('user_info');
-        if (!storedUser) return;
-        const user = JSON.parse(storedUser);
-        const data = await api.getUnreadCounts(user.token);
-        if (data.success) {
-          setUnreadCounts({
-            messages: data.unread_messages,
-            notifications: data.unread_notifications
-          });
-        }
-      } catch (err) {
-        console.error('获取未读数量失败', err);
+  const fetchUnreadCounts = async () => {
+    try {
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) return;
+      const user = JSON.parse(storedUser);
+      const data = await api.getUnreadCounts(user.token);
+      if (data.success) {
+        setUnreadCounts({
+          messages: data.unread_messages,
+          notifications: data.unread_notifications
+        });
       }
-    };
+    } catch (err) {
+      console.error('获取未读数量失败', err);
+    }
+  };
+
+  useEffect(() => {
     fetchUnreadCounts();
   }, []);
 
@@ -151,9 +152,16 @@ export default function MessagesPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getNotifications();
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) {
+        setError('请先登录');
+        return;
+      }
+      const user = JSON.parse(storedUser);
+      const data = await api.getNotifications(user.token);
       if (data.success) {
         setNotifications(data.notifications);
+        fetchUnreadCounts();
       } else {
         setError('获取通知失败');
       }
@@ -200,6 +208,7 @@ export default function MessagesPage() {
       const data = await api.getMessages(user.token, contactId);
       if (data.success) {
         setMessages(data.messages);
+        fetchUnreadCounts();
       }
     } catch (err) {
       console.error('获取聊天记录失败', err);
@@ -633,11 +642,8 @@ export default function MessagesPage() {
                   {notifications.map((item) => (
                     <div 
                       key={item.id} 
-                      className="bg-white rounded-xl p-5 relative overflow-hidden"
+                      className={`rounded-xl p-5 relative overflow-hidden transition-colors ${item.is_read === 0 ? 'bg-primary/5 border border-primary/20' : 'bg-white'}`}
                     >
-                      {item.is_read === 0 && (
-                        <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-                      )}
                       <div className="flex justify-between items-start mb-2">
                         <h3 className={`text-lg font-bold ${item.is_read === 0 ? 'text-slate-900' : 'text-slate-700'}`}>
                           {item.title}

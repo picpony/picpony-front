@@ -152,8 +152,12 @@ export const api = {
     return res.json();
   },
 
-  getNotifications: async () => {
-    const res = await fetch(`${PICPONY_API_BASE}?action=get_notifications`);
+  getNotifications: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_notifications`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
     return res.json();
   },
 
