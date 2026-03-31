@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
-import { Tabs, Tab, Box, CircularProgress, ButtonBase, IconButton } from '@mui/material';
+import { Tabs, Tab, Box, CircularProgress, ButtonBase, IconButton, Badge } from '@mui/material';
 import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
 
@@ -42,8 +42,29 @@ export default function MessagesPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEmojiPickerClosing, setIsEmojiPickerClosing] = useState(false);
   const [emojiList, setEmojiList] = useState<string[]>([]);
+  const [unreadCounts, setUnreadCounts] = useState({ messages: 0, notifications: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchUnreadCounts = async () => {
+      try {
+        const storedUser = localStorage.getItem('user_info');
+        if (!storedUser) return;
+        const user = JSON.parse(storedUser);
+        const data = await api.getUnreadCounts(user.token);
+        if (data.success) {
+          setUnreadCounts({
+            messages: data.unread_messages,
+            notifications: data.unread_notifications
+          });
+        }
+      } catch (err) {
+        console.error('获取未读数量失败', err);
+      }
+    };
+    fetchUnreadCounts();
+  }, []);
 
   useEffect(() => {
     const loadEmojis = async () => {
@@ -296,8 +317,22 @@ export default function MessagesPage() {
           }}
         >
           <Tab label="公告" value="announcement" />
-          <Tab label="通知" value="notification" />
-          <Tab label="私信" value="chat" />
+          <Tab 
+            label={
+              <Badge color="error" badgeContent={unreadCounts.notifications} sx={{ '& .MuiBadge-badge': { right: -15, top: 5 } }}>
+                通知
+              </Badge>
+            } 
+            value="notification" 
+          />
+          <Tab 
+            label={
+              <Badge color="error" badgeContent={unreadCounts.messages} sx={{ '& .MuiBadge-badge': { right: -15, top: 5 } }}>
+                私信
+              </Badge>
+            } 
+            value="chat" 
+          />
         </Tabs>
       </Box>
 

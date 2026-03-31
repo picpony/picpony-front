@@ -32,7 +32,7 @@ export default function AnnouncementModal() {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch announcement:', error);
+        console.error('获取公告失败', error);
       }
     };
 

@@ -60,6 +60,13 @@ export interface MessagesResponse {
   messages: Message[];
 }
 
+export interface UnreadCountsResponse {
+  success: boolean;
+  unread_messages: number;
+  unread_notifications: number;
+  total_unread: number;
+}
+
 const PICPONY_API_BASE = 'https://picpony.top/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
@@ -161,6 +168,15 @@ export const api = {
 
   getMessages: async (token: string, withUserId: number): Promise<MessagesResponse> => {
     const res = await fetch(`${PICPONY_API_BASE}?action=get_messages&with_user_id=${withUserId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.json();
+  },
+
+  getUnreadCounts: async (token: string): Promise<UnreadCountsResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_unread_counts`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

@@ -5,9 +5,10 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications, MdClose, MdImageSearch } from "react-icons/md";
-import { ButtonBase } from "@mui/material";
+import { ButtonBase, Badge } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
+import { api } from "@/lib/api";
 
 function SearchBar() {
   const router = useRouter();
@@ -97,7 +98,27 @@ export default function AppLayout({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLogoutClosing, setIsLogoutClosing] = useState(false);
+  const [totalUnread, setTotalUnread] = useState(0);
   const pathname = usePathname();
+
+  useEffect(() => {
+    const fetchUnreadCounts = async () => {
+      if (userInfo && userInfo.token) {
+        try {
+          const data = await api.getUnreadCounts(userInfo.token);
+          if (data.success) {
+            setTotalUnread(data.total_unread);
+          }
+        } catch (error) {
+          console.error('Failed to fetch unread counts:', error);
+        }
+      } else {
+        setTotalUnread(0);
+      }
+    };
+
+    fetchUnreadCounts();
+  }, [userInfo]);
 
   useEffect(() => {
     const savedMenuState = localStorage.getItem('user_menu_open');
@@ -220,7 +241,9 @@ export default function AppLayout({
             ml: '8px'
           }}
         >
-          <MdNotifications size={24} />
+          <Badge color="error" badgeContent={totalUnread} sx={{ '& .MuiBadge-badge': { right: -3, top: 3 } }}>
+            <MdNotifications size={24} />
+          </Badge>
         </ButtonBase>
       </header>
       
