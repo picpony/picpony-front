@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
-import { Tabs, Tab, Box, CircularProgress, ButtonBase } from '@mui/material';
+import { Tabs, Tab, Box, CircularProgress, ButtonBase, IconButton } from '@mui/material';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import EmojiEmotionsOutlinedIcon from '@mui/icons-material/EmojiEmotionsOutlined';
+import { getEmojis } from '@/app/actions/getEmojis';
 
 interface Announcement {
   id: number;
@@ -38,9 +40,53 @@ export default function MessagesPage() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isEmojiPickerClosing, setIsEmojiPickerClosing] = useState(false);
+  const [emojiList, setEmojiList] = useState<string[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const loadEmojis = async () => {
+      const emojis = await getEmojis();
+      setEmojiList(emojis);
+    };
+    loadEmojis();
+  }, []);
+
+  const handleCloseEmojiPicker = () => {
+    setIsEmojiPickerClosing(true);
+    setTimeout(() => {
+      setShowEmojiPicker(false);
+      setIsEmojiPickerClosing(false);
+    }, 200);
+  };
+
+  const toggleEmojiPicker = () => {
+    if (showEmojiPicker) {
+      handleCloseEmojiPicker();
+    } else {
+      setShowEmojiPicker(true);
+    }
+  };
 
   useEffect(() => {
     document.title = "消息 - PicPony";
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        if (showEmojiPicker && !isEmojiPickerClosing) {
+          handleCloseEmojiPicker();
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: 'announcement' | 'notification' | 'chat') => {
@@ -178,6 +224,26 @@ export default function MessagesPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const handleEmojiClick = (emojiName: string) => {
+    const emojiPlaceholder = `$emoji_${emojiName}$`;
+    const input = inputRef.current;
+    
+    if (input) {
+      const startPos = input.selectionStart || 0;
+      const endPos = input.selectionEnd || 0;
+      
+      const newValue = newMessage.substring(0, startPos) + emojiPlaceholder + newMessage.substring(endPos);
+      setNewMessage(newValue);
+      
+      setTimeout(() => {
+        input.focus();
+        input.setSelectionRange(startPos + emojiPlaceholder.length, startPos + emojiPlaceholder.length);
+      }, 0);
+    } else {
+      setNewMessage(prev => prev + emojiPlaceholder);
     }
   };
 
@@ -374,9 +440,42 @@ export default function MessagesPage() {
                         </div>
                       )}
                     </div>
-                    <div className="p-4 bg-white border-t border-slate-100">
+                    <div className="px-4 pb-4 pt-2 bg-white border-t border-slate-100 relative">
+                      <div className="flex items-center mb-1" ref={emojiPickerRef}>
+                        <div className="relative">
+                          <IconButton 
+                            size="small" 
+                            onClick={toggleEmojiPicker}
+                            sx={{ color: showEmojiPicker ? 'var(--color-primary)' : 'text.secondary' }}
+                          >
+                            <EmojiEmotionsOutlinedIcon />
+                          </IconButton>
+                          
+                          {(showEmojiPicker || isEmojiPickerClosing) && (
+                            <div className={`absolute bottom-full left-0 mb-2 w-72 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}>
+                              <div className="grid grid-cols-6 gap-2 max-h-60 overflow-y-auto p-1">
+                                {emojiList.map(emoji => (
+                                  <button
+                                    key={emoji}
+                                    onClick={() => handleEmojiClick(emoji)}
+                                    className="p-1 hover:bg-slate-100 rounded transition-colors flex items-center justify-center"
+                                    title={emoji}
+                                  >
+                                    <img 
+                                      src={`/img/emoji/${emoji}.png`} 
+                                      alt={emoji} 
+                                      className="w-8 h-8 object-contain"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                       <div className="flex space-x-2">
                         <input 
+                          ref={inputRef}
                           type="text" 
                           value={newMessage}
                           onChange={(e) => setNewMessage(e.target.value)}
@@ -524,6 +623,32 @@ export default function MessagesPage() {
           margin-bottom: 0.5rem;
           display: block;
           content: "";
+        }
+        @keyframes slideUpFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        @keyframes slideDownFadeOut {
+          from {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: translateY(10px) scale(0.95);
+          }
+        }
+        .emoji-picker-animate-in {
+          animation: slideUpFadeIn 0.2s ease-out forwards;
+        }
+        .emoji-picker-animate-out {
+          animation: slideDownFadeOut 0.2s ease-in forwards;
         }
       `}</style>
     </div>
