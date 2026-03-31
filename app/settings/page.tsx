@@ -10,6 +10,10 @@ import { api } from '@/lib/api';
 export default function SettingsPage() {
   const router = useRouter();
 
+  useEffect(() => {
+    document.title = "设置 - PicPony";
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [newUsername, setNewUsername] = useState('');

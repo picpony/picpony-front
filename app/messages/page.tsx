@@ -28,6 +28,10 @@ export default function MessagesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = "消息 - PicPony";
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'announcement') {
       fetchAnnouncements();
     } else {

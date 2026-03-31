@@ -18,7 +18,6 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "PicPony",
-  description: "PicPony Frontend",
 };
 
 export default async function RootLayout({
