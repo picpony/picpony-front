@@ -4,8 +4,31 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { MdEdit, MdClose } from 'react-icons/md';
+import { ButtonBase } from '@mui/material';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
+
+const buttonSx = {
+  display: 'flex',
+  alignItems: 'center',
+  px: 2,
+  py: 1,
+  backgroundColor: 'white',
+  borderColor: 'rgb(226 232 240)',
+  borderRadius: '0.375rem',
+  fontSize: '0.875rem',
+  fontWeight: 500,
+  color: 'rgb(51 65 85)',
+  transition: 'all 0.2s',
+  '&:hover': {
+    backgroundColor: 'rgb(248 250 252)',
+    color: 'var(--color-primary)',
+  },
+  '&.Mui-disabled': {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  }
+};
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -150,14 +173,14 @@ export default function SettingsPage() {
               <p className="text-sm text-slate-500 mb-1">当前用户名</p>
               <p className="font-medium text-slate-800">{currentUsername || '未登录'}</p>
             </div>
-            <button
+            <ButtonBase
               onClick={() => setIsModalOpen(true)}
               disabled={!currentUsername}
-              className="flex items-center px-4 py-2 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              sx={buttonSx}
             >
               <MdEdit size={16} className="mr-2" />
               修改用户名
-            </button>
+            </ButtonBase>
           </div>
 
           <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg mt-4">
@@ -165,14 +188,14 @@ export default function SettingsPage() {
               <p className="text-sm text-slate-500 mb-1">账号密码</p>
               <p className="font-medium text-slate-800">********</p>
             </div>
-            <button
+            <ButtonBase
               onClick={() => setIsPasswordModalOpen(true)}
               disabled={!currentUsername}
-              className="flex items-center px-4 py-2 bg-white border border-slate-200 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              sx={buttonSx}
             >
               <MdEdit size={16} className="mr-2" />
               修改密码
-            </button>
+            </ButtonBase>
           </div>
         </div>
       </div>

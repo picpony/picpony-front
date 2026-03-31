@@ -268,7 +268,7 @@ export default function AppLayout({
                     sx={sidebarButtonSx(false)}
                   >
                     <MdLogout size={20} className="shrink-0 mr-3" />
-                    <span>退出登录</span>
+                    <span>登出</span>
                   </ButtonBase>
                 </div>
                 <div className="h-px bg-slate-200 mt-2 mx-2"></div>
@@ -329,7 +329,7 @@ export default function AppLayout({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800">确认退出登录？</h3>
+              <h3 className="text-lg font-semibold text-slate-800">登出</h3>
               <button 
                 onClick={handleLogoutCancel}
                 className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -340,7 +340,7 @@ export default function AppLayout({
             
             <div className="px-6 pb-6">
               <p className="text-slate-600 mb-6">
-                退出登录后，您将无法进行某些操作。您确定要退出吗？
+                确定要登出当前账号吗？
               </p>
 
               <div className="flex justify-end gap-3">
@@ -355,7 +355,7 @@ export default function AppLayout({
                   onClick={handleLogoutConfirm}
                   className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                 >
-                  确认退出
+                  确认登出
                 </button>
               </div>
             </div>
