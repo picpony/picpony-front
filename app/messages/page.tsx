@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Tabs, Tab, Box, CircularProgress } from '@mui/material';
+import { Tabs, Tab, Box, CircularProgress, ButtonBase } from '@mui/material';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 
 interface Announcement {
   id: number;
@@ -233,10 +234,23 @@ export default function MessagesPage() {
                     </div>
                   ) : contacts.length > 0 ? (
                     contacts.map(contact => (
-                      <div 
+                      <ButtonBase 
                         key={contact.id}
                         onClick={() => setSelectedContact(contact)}
-                        className={`p-4 flex items-center space-x-3 cursor-pointer transition-colors hover:bg-slate-50 ${selectedContact?.id === contact.id ? 'bg-slate-50' : ''}`}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'flex-start',
+                          textAlign: 'left',
+                          width: '100%',
+                          p: 2,
+                          gap: 1.5,
+                          transition: 'background-color 0.2s',
+                          backgroundColor: selectedContact?.id === contact.id ? 'rgb(248 250 252)' : 'transparent',
+                          '&:hover': {
+                            backgroundColor: 'rgb(248 250 252)',
+                          }
+                        }}
                       >
                         <div className="relative">
                           <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 border border-slate-100">
@@ -268,7 +282,7 @@ export default function MessagesPage() {
                             {contact.last_msg_time}
                           </p>
                         </div>
-                      </div>
+                      </ButtonBase>
                     ))
                   ) : (
                     <div className="p-10 text-center text-slate-400 text-sm">
@@ -345,23 +359,38 @@ export default function MessagesPage() {
                           className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
                           disabled={sending}
                         />
-                        <button 
+                        <ButtonBase 
                           onClick={handleSendMessage}
                           disabled={!newMessage.trim() || sending}
-                          className={`bg-primary text-white px-4 py-2 rounded-full text-sm font-bold transition-colors flex items-center justify-center min-w-[64px] ${
-                            !newMessage.trim() || sending ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/90'
-                          }`}
+                          sx={{
+                            backgroundColor: 'var(--color-primary)',
+                            color: 'white',
+                            px: 2,
+                            py: 1,
+                            borderRadius: '9999px',
+                            fontSize: '0.875rem',
+                            fontWeight: 'bold',
+                            transition: 'background-color 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: '64px',
+                            opacity: !newMessage.trim() || sending ? 0.5 : 1,
+                            cursor: !newMessage.trim() || sending ? 'not-allowed' : 'pointer',
+                            '&.Mui-disabled': {
+                              color: 'white',
+                              opacity: 0.5,
+                            }
+                          }}
                         >
                           {sending ? <CircularProgress size={20} sx={{ color: 'white' }} /> : '发送'}
-                        </button>
+                        </ButtonBase>
                       </div>
                     </div>
                   </>
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
-                    <svg className="w-16 h-16 mb-4 opacity-20" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
-                    </svg>
+                    <ChatBubbleOutlineIcon sx={{ fontSize: 64, mb: 2, opacity: 0.2 }} />
                     <p>选择一个联系人开始聊天</p>
                   </div>
                 )}
