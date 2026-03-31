@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { Tabs, Tab, Box, CircularProgress, ButtonBase, IconButton } from '@mui/material';
-import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
-import EmojiEmotionsOutlinedIcon from '@mui/icons-material/EmojiEmotionsOutlined';
+import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
 
 interface Announcement {
@@ -440,15 +439,15 @@ export default function MessagesPage() {
                         </div>
                       )}
                     </div>
-                    <div className="px-4 pb-4 pt-2 bg-white border-t border-slate-100 relative">
-                      <div className="flex items-center mb-1" ref={emojiPickerRef}>
-                        <div className="relative">
+                    <div className="px-4 pb-4 pt-1 bg-white border-t border-slate-100 relative">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="relative" ref={emojiPickerRef}>
                           <IconButton 
                             size="small" 
                             onClick={toggleEmojiPicker}
                             sx={{ color: showEmojiPicker ? 'var(--color-primary)' : 'text.secondary' }}
                           >
-                            <EmojiEmotionsOutlinedIcon />
+                            <MdOutlineEmojiEmotions size={24} />
                           </IconButton>
                           
                           {(showEmojiPicker || isEmojiPickerClosing) && (
@@ -472,6 +471,14 @@ export default function MessagesPage() {
                             </div>
                           )}
                         </div>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => fetchMessages(selectedContact.id)}
+                          disabled={loadingMessages}
+                          sx={{ color: 'text.secondary' }}
+                        >
+                          <MdRefresh size={24} className={loadingMessages ? 'animate-spin' : ''} />
+                        </IconButton>
                       </div>
                       <div className="flex space-x-2">
                         <input 
@@ -515,7 +522,7 @@ export default function MessagesPage() {
                   </>
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
-                    <ChatBubbleOutlineIcon sx={{ fontSize: 64, mb: 2, opacity: 0.2 }} />
+                    <MdOutlineChatBubbleOutline size={64} className="mb-2 opacity-20" />
                     <p>选择一个联系人开始聊天</p>
                   </div>
                 )}
