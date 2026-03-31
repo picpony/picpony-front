@@ -181,6 +181,32 @@ export default function MessagesPage() {
     }
   };
 
+  const renderMessageContent = (content: string) => {
+    const parts = content.split(/(\$emoji_[a-zA-Z0-9_]+\$)/g);
+    return parts.map((part, index) => {
+      const match = part.match(/^\$emoji_([a-zA-Z0-9_]+)\$$/);
+      if (match) {
+        const emojiName = match[1];
+        return (
+          <img 
+            key={index} 
+            src={`/img/emoji/${emojiName}.png`} 
+            alt={emojiName} 
+            className="inline-block w-6 h-6 align-middle mx-0.5" 
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              if (!target.nextSibling || target.nextSibling.textContent !== part) {
+                target.insertAdjacentText('afterend', part);
+              }
+            }}
+          />
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-800 mb-6">消息</h1>
@@ -335,7 +361,7 @@ export default function MessagesPage() {
                                         : 'bg-white border border-slate-100 text-slate-800 rounded-bl-sm'
                                     }`}
                                   >
-                                    {msg.content}
+                                    {renderMessageContent(msg.content)}
                                   </div>
                                 </div>
                               </div>
