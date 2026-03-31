@@ -303,7 +303,7 @@ export default function AppLayout({
           </nav>
         </aside>
         
-        <main className="flex-1 overflow-y-auto bg-white relative flex flex-col w-full">
+        <main className="flex-1 overflow-y-scroll bg-white relative flex flex-col w-full">
           <div key={pathname} className="animate-page-transition p-4 sm:p-6 flex-1">
             {children}
           </div>
