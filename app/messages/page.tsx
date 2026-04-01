@@ -45,6 +45,22 @@ export default function MessagesPage() {
   const [unreadCounts, setUnreadCounts] = useState({ messages: 0, notifications: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      const timer = setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [messages, activeTab]);
 
   const fetchUnreadCounts = async () => {
     try {
@@ -446,7 +462,7 @@ export default function MessagesPage() {
                         <span className="font-bold text-slate-800">{selectedContact.username}</span>
                       </div>
                     </div>
-                    <div className="flex-1 p-4 overflow-y-auto flex flex-col space-y-4">
+                    <div ref={messagesContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col space-y-4">
                       {loadingMessages ? (
                         <div className="flex-1 flex items-center justify-center">
                           <CircularProgress size={30} sx={{ color: 'var(--color-primary)' }} />
