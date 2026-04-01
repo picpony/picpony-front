@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { Tabs, Tab, Box, CircularProgress, ButtonBase, IconButton, Badge } from '@mui/material';
-import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh } from 'react-icons/md';
+import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
 
 interface Announcement {
@@ -352,8 +352,8 @@ export default function MessagesPage() {
       <div className="min-h-[400px] relative">
         <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {activeTab === 'chat' ? (
-            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex h-[600px]">
-              <div className="w-80 border-r border-slate-100 flex flex-col">
+            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex h-[calc(100vh-200px)] md:h-[600px]">
+              <div className={`w-full md:w-80 border-r border-slate-100 flex-col ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
                 <div className="flex-1 overflow-y-auto">
                   {loading && contacts.length === 0 ? (
                     <div className="p-4 space-y-4">
@@ -431,11 +431,18 @@ export default function MessagesPage() {
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col bg-slate-50/30">
+              <div className={`flex-1 flex-col bg-slate-50/30 ${!selectedContact ? 'hidden md:flex' : 'flex'}`}>
                 {selectedContact ? (
                   <>
                     <div className="p-4 border-b border-slate-100 bg-white flex items-center justify-between">
                       <div className="flex items-center space-x-3">
+                        <IconButton 
+                          onClick={() => setSelectedContact(null)}
+                          className="md:hidden -ml-2"
+                          size="small"
+                        >
+                          <MdArrowBack />
+                        </IconButton>
                         <span className="font-bold text-slate-800">{selectedContact.username}</span>
                       </div>
                     </div>
@@ -499,7 +506,7 @@ export default function MessagesPage() {
                           </IconButton>
                           
                           {(showEmojiPicker || isEmojiPickerClosing) && (
-                            <div className={`absolute bottom-full left-0 mb-2 w-72 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}>
+                            <div className={`absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}>
                               <div className="grid grid-cols-6 gap-2 max-h-60 overflow-y-auto p-1">
                                 {emojiList.map(emoji => (
                                   <button
