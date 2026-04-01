@@ -438,7 +438,7 @@ export default function MessagesPage() {
                       <div className="flex items-center space-x-3">
                         <IconButton 
                           onClick={() => setSelectedContact(null)}
-                          className="md:hidden -ml-2"
+                          className="md:!hidden -ml-2"
                           size="small"
                         >
                           <MdArrowBack />
