@@ -49,6 +49,12 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  const [currentApiKey, setCurrentApiKey] = useState('');
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isApiKeyClosing, setIsApiKeyClosing] = useState(false);
+  const [newApiKey, setNewApiKey] = useState('');
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+
   const [cdnEnabled, setCdnEnabled] = useState(false);
 
   const closeModal = () => {
@@ -72,12 +78,31 @@ export default function SettingsPage() {
     }, 200);
   };
 
+  const closeApiKeyModal = () => {
+    if (apiKeyLoading) return;
+    setIsApiKeyClosing(true);
+    setTimeout(() => {
+      setIsApiKeyModalOpen(false);
+      setIsApiKeyClosing(false);
+      setNewApiKey('');
+    }, 200);
+  };
+
   useEffect(() => {
     const storedUser = localStorage.getItem('user_info');
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
         setCurrentUsername(user.username);
+        
+        api.getUser(user.token)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.user) {
+              setCurrentApiKey(data.user.api_key || '');
+            }
+          })
+          .catch(err => console.error("Failed to fetch user info", err));
       } catch (e) {
         console.error("Failed to parse user info", e);
       }
@@ -94,6 +119,38 @@ export default function SettingsPage() {
     setCdnEnabled(newValue);
     localStorage.setItem('cdn_enabled', String(newValue));
     window.dispatchEvent(new Event('cdn_settings_updated'));
+  };
+
+  const handleApiKeySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    setApiKeyLoading(true);
+
+    try {
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) throw new Error('未登录');
+      const user = JSON.parse(storedUser);
+
+      const res = await api.saveApikey(user.token, {
+        api_key: newApiKey.trim(),
+        derpi_user_id: "",
+        derpi_username: ""
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        showToast('已更新 Derpibooru API Key', 'success');
+        setCurrentApiKey(newApiKey.trim());
+        closeApiKeyModal();
+      } else {
+        showToast(data.message || '配置失败，请重试', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || '网络错误，请重试', 'error');
+    } finally {
+      setApiKeyLoading(false);
+    }
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -211,6 +268,26 @@ export default function SettingsPage() {
               修改密码
             </ButtonBase>
           </div>
+
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg mt-4">
+            <div>
+              <p className="text-sm text-slate-500 mb-1">Derpibooru API Key</p>
+              <p className="font-medium text-slate-800">
+                {currentApiKey ? `${currentApiKey.substring(0, 4)}...${currentApiKey.substring(currentApiKey.length - 4)}` : '未配置'}
+              </p>
+            </div>
+            <ButtonBase
+              onClick={() => {
+                setNewApiKey(currentApiKey);
+                setIsApiKeyModalOpen(true);
+              }}
+              disabled={!currentUsername}
+              sx={buttonSx}
+            >
+              <MdEdit size={16} className="mr-2" />
+              {currentApiKey ? '修改配置' : '去配置'}
+            </ButtonBase>
+          </div>
         </div>
         
         <div className="p-6 border-b border-slate-100">
@@ -296,6 +373,79 @@ export default function SettingsPage() {
                     </>
                   ) : (
                     '确认修改'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {isApiKeyModalOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isApiKeyClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
+          onClick={closeApiKeyModal}
+        >
+          <div 
+            className={`bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isApiKeyClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center p-6">
+              <h3 className="text-lg font-semibold text-slate-800">配置 API Key</h3>
+              <button 
+                onClick={closeApiKeyModal}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <MdClose size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleApiKeySubmit} className="p-6">
+              <div className="mb-4">
+                <label htmlFor="newApiKey" className="block text-sm font-medium text-slate-700 mb-2">
+                  Derpibooru API Key
+                </label>
+                <input
+                  type="text"
+                  id="newApiKey"
+                  value={newApiKey}
+                  onChange={(e) => setNewApiKey(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  placeholder="请输入你的 API Key"
+                  disabled={apiKeyLoading}
+                  autoFocus
+                />
+                <p className="text-xs text-slate-500 mt-2">
+                  通过绑定Derpibooru API Key，您可以同步您的黑名单过滤、解锁内容等，且绝对安全（不涉密码）。<br />
+                  获取教程：<br />
+                  1. 登录Derpibooru<br />
+                  2. 进入Account Settings<br />
+                  3. 在页面中找到 API Key 区域的 Click to show 点击查看并复制粘贴到下方。
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={closeApiKeyModal}
+                  disabled={apiKeyLoading}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={apiKeyLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50 flex items-center"
+                >
+                  {apiKeyLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                      提交中...
+                    </>
+                  ) : (
+                    '确认保存'
                   )}
                 </button>
               </div>

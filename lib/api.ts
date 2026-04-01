@@ -232,5 +232,24 @@ export const api = {
       }
     });
     return res.json();
+  },
+
+  getUser: async (token: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=get_user`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  },
+
+  saveApikey: async (token: string, data: {api_key: string, derpi_user_id: string, derpi_username: string}) => {
+    return fetch(`${PICPONY_API_BASE}?action=save_apikey`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
   }
 };
