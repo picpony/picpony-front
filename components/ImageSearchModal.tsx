@@ -160,13 +160,13 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
             />
             
             {selectedImage ? (
-              <div className="relative w-full h-48">
+              <div className="relative w-full h-48 flex items-center justify-center">
                 <img 
                   src={selectedImage} 
                   alt="Selected" 
-                  className="w-full h-full object-contain rounded-lg"
+                  className="max-w-full max-h-full object-contain rounded-xl shadow-sm"
                 />
-                <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
                   <span className="text-white font-medium">更换图片</span>
                 </div>
               </div>
