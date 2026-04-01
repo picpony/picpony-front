@@ -25,6 +25,7 @@ function FavoritesList() {
   const [faveIds, setFaveIds] = useState<number[]>([]);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'picpony' | 'derpibooru'>('picpony');
+  const [apiKey, setApiKey] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "我的收藏 - PicPony";
@@ -67,6 +68,11 @@ function FavoritesList() {
 
         const userInfo = JSON.parse(storedUser);
 
+        const userRes = await api.getUser(userInfo.token);
+        const userData = await userRes.json();
+        const currentApiKey = userData.success && userData.user ? userData.user.api_key : null;
+        setApiKey(currentApiKey);
+
         if (activeTab === 'picpony') {
           const res = await api.getFaves(userInfo.token);
           if (res.success && res.faves) {
@@ -82,9 +88,13 @@ function FavoritesList() {
             throw new Error(res.message || 'Failed to fetch favorites');
           }
         } else {
-          setImages([]);
-          setHasMore(false);
-          setIsLoading(false);
+          if (!currentApiKey) {
+            setImages([]);
+            setHasMore(false);
+            setIsLoading(false);
+            return;
+          }
+          loadDerpibooruFaves(currentApiKey, 1);
         }
       } catch (err) {
         setError(err as Error);
@@ -94,6 +104,41 @@ function FavoritesList() {
 
     fetchFaves();
   }, [retryCount, activeTab, router]);
+
+  const loadDerpibooruFaves = async (key: string, targetPage: number) => {
+    try {
+      const query = encodeURIComponent('(my:faves), -explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, -anthro, -humanized, pony');
+      const res = await fetch(`https://trixiebooru.org/api/v1/json/search/images?q=${query}&page=${targetPage}&per_page=50&sf=created_at&sd=desc&key=${key}`, {
+        cache: 'no-store',
+        headers: {
+          'User-Agent': 'PicPony/1.0'
+        }
+      });
+
+      if (!res.ok) throw new Error('Failed to load Derpibooru favorites');
+
+      const data = await res.json();
+
+      if (targetPage === 1) {
+        setImages(data.images);
+      } else {
+        setImages(prev => {
+          const existingIds = new Set(prev.map(img => img.id));
+          const newImages = data.images.filter((img: PonyImage) => !existingIds.has(img.id));
+          return [...prev, ...newImages];
+        });
+      }
+
+      setPage(targetPage);
+      setHasMore(data.images.length === 50);
+    } catch (err) {
+      console.error("Failed to load Derpibooru favorites:", err);
+      if (targetPage === 1) setError(err as Error);
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
 
   const loadImages = async (ids: number[], targetPage: number) => {
     try {
@@ -146,7 +191,11 @@ function FavoritesList() {
   const loadMore = async () => {
     if (isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);
-    await loadImages(faveIds, page + 1);
+    if (activeTab === 'picpony') {
+      await loadImages(faveIds, page + 1);
+    } else if (apiKey) {
+      await loadDerpibooruFaves(apiKey, page + 1);
+    }
   };
 
   if (isLoading) {
@@ -257,7 +306,21 @@ function FavoritesList() {
         </Tabs>
       </Box>
 
-      {images.length === 0 ? (
+      {activeTab === 'derpibooru' && !apiKey ? (
+        <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 animate-fade-in px-4 text-center">
+          <MdErrorOutline size={48} className="mb-4 text-slate-300" />
+          <h2 className="text-xl font-medium mb-2 text-slate-600">未绑定 API Key</h2>
+          <p className="text-sm text-slate-500 mb-6">
+            您需要绑定 Derpibooru API Key 才能查看 Derpibooru 的收藏数据
+          </p>
+          <button
+            onClick={() => router.push('/settings')}
+            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            去绑定
+          </button>
+        </div>
+      ) : images.length === 0 ? (
         <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 animate-fade-in px-4 text-center">
           <MdCollectionsBookmark size={48} className="mb-4 text-slate-300" />
           <h2 className="text-xl font-medium mb-2 text-slate-600">滚木</h2>
