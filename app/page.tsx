@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import FadeInImage from "@/components/FadeInImage";
 import { MdErrorOutline, MdRefresh, MdThumbUp, MdComment, MdArrowBack } from "react-icons/md";
 import { useSearchParams } from "next/navigation";
@@ -289,8 +289,12 @@ function HomeContent() {
     return () => window.removeEventListener('image_search_results', handleImageSearchResults as EventListener);
   }, []);
 
+  const prevSearchRef = useRef(search);
   useEffect(() => {
-    setCustomResults(null);
+    if (prevSearchRef.current !== search) {
+      setCustomResults(null);
+      prevSearchRef.current = search;
+    }
   }, [search]);
 
   useEffect(() => {
