@@ -67,6 +67,12 @@ export interface UnreadCountsResponse {
   total_unread: number;
 }
 
+export interface FavesResponse {
+  success: boolean;
+  faves?: number[];
+  message?: string;
+}
+
 const PICPONY_API_BASE = 'https://picpony.top/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
@@ -217,5 +223,14 @@ export const api = {
     }
 
     return response.json();
+  },
+
+  getFaves: async (token: string): Promise<FavesResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_faves`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.json();
   }
 };

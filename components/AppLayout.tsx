@@ -4,7 +4,7 @@ import { useState, FormEvent, Suspense, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications, MdClose, MdImageSearch } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark } from "react-icons/md";
 import { ButtonBase, Badge } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
@@ -50,11 +50,12 @@ function SearchBar() {
         isOpen={isImageSearchOpen} 
         onClose={() => setIsImageSearchOpen(false)} 
         onSearchSuccess={(results) => {
-          const event = new CustomEvent('image_search_results', { detail: results });
-          window.dispatchEvent(event);
-          
           if (window.location.pathname !== '/') {
+            sessionStorage.setItem('pending_image_search_results', JSON.stringify(results));
             router.push('/');
+          } else {
+            const event = new CustomEvent('image_search_results', { detail: results });
+            window.dispatchEvent(event);
           }
         }}
       />
@@ -304,6 +305,15 @@ export default function AppLayout({
                       : 'max-h-0 opacity-0'
                   }`}
                 >
+                  <ButtonBase
+                    component={Link}
+                    href="/favorites" 
+                    onClick={handleMobileNavigation}
+                    sx={sidebarButtonSx(pathname === '/favorites')}
+                  >
+                    <MdCollectionsBookmark size={20} className="shrink-0 mr-3" />
+                    <span>我的收藏</span>
+                  </ButtonBase>
                   <ButtonBase
                     component={Link}
                     href="/settings"

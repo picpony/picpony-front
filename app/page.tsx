@@ -275,6 +275,17 @@ function HomeContent() {
     };
 
     window.addEventListener('image_search_results', handleImageSearchResults as EventListener);
+    
+    const pendingResults = sessionStorage.getItem('pending_image_search_results');
+    if (pendingResults) {
+      try {
+        setCustomResults(JSON.parse(pendingResults));
+        sessionStorage.removeItem('pending_image_search_results');
+      } catch (e) {
+        console.error('Failed to parse pending search results', e);
+      }
+    }
+    
     return () => window.removeEventListener('image_search_results', handleImageSearchResults as EventListener);
   }, []);
 
