@@ -57,6 +57,8 @@ export default function MessagesPage() {
           messages: data.unread_messages,
           notifications: data.unread_notifications
         });
+        const event = new CustomEvent('unread_counts_updated');
+        window.dispatchEvent(event);
       }
     } catch (err) {
       console.error('获取未读数量失败', err);
@@ -173,13 +175,15 @@ export default function MessagesPage() {
     }
   };
 
-  const fetchContacts = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchContacts = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const storedUser = localStorage.getItem('user_info');
       if (!storedUser) {
-        setError('请先登录');
+        if (!silent) setError('请先登录');
         return;
       }
       const user = JSON.parse(storedUser);
@@ -188,13 +192,13 @@ export default function MessagesPage() {
       if (data.success) {
         setContacts(data.contacts);
       } else {
-        setError('获取联系人失败');
+        if (!silent) setError('获取联系人失败');
       }
     } catch (err) {
-      setError('网络请求失败');
+      if (!silent) setError('网络请求失败');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -209,6 +213,7 @@ export default function MessagesPage() {
       if (data.success) {
         setMessages(data.messages);
         fetchUnreadCounts();
+        fetchContacts(true);
       }
     } catch (err) {
       console.error('获取聊天记录失败', err);
@@ -238,7 +243,6 @@ export default function MessagesPage() {
       if (data.success) {
         setNewMessage('');
         fetchMessages(selectedContact.id, true);
-        fetchContacts();
       } else {
         console.error('发送消息失败:', data.message);
       }

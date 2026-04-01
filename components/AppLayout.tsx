@@ -118,6 +118,9 @@ export default function AppLayout({
     };
 
     fetchUnreadCounts();
+
+    window.addEventListener('unread_counts_updated', fetchUnreadCounts);
+    return () => window.removeEventListener('unread_counts_updated', fetchUnreadCounts);
   }, [userInfo]);
 
   useEffect(() => {
