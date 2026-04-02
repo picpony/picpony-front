@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime } from 'react-icons/md';
+import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage } from '@/lib/api';
 import Tooltip from '@mui/material/Tooltip';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import CircularProgress from '@mui/material/CircularProgress';
+import { showToast } from '@/components/Toast';
 
 const buttonBaseSx = {
   flex: 1,
@@ -55,6 +58,8 @@ export default function PicPage() {
   
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [cdnEnabled, setCdnEnabled] = useState(false);
+  const [isFaved, setIsFaved] = useState(false);
+  const [isFaveLoading, setIsFaveLoading] = useState(false);
 
   useEffect(() => {
     const checkCdn = () => {
@@ -66,6 +71,29 @@ export default function PicPage() {
     window.addEventListener('cdn_settings_updated', checkCdn);
     return () => window.removeEventListener('cdn_settings_updated', checkCdn);
   }, []);
+
+  useEffect(() => {
+    const checkFaveStatus = async () => {
+      try {
+        const userInfoStr = localStorage.getItem('user_info');
+        if (userInfoStr) {
+          const userInfo = JSON.parse(userInfoStr);
+          if (userInfo.token) {
+            const res = await api.getFaves(userInfo.token);
+            if (res.success && res.faves) {
+              setIsFaved(res.faves.includes(Number(id)));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to get faves:', err);
+      }
+    };
+
+    if (id) {
+      checkFaveStatus();
+    }
+  }, [id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -129,6 +157,45 @@ export default function PicPage() {
     return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
   };
 
+  const handleToggleFave = async () => {
+    let token = null;
+    try {
+      const userInfoStr = localStorage.getItem('user_info');
+      if (userInfoStr) {
+        token = JSON.parse(userInfoStr).token;
+      }
+    } catch (e) {
+      console.error('Failed to parse user info', e);
+    }
+
+    if (!token) {
+      showToast('请先登录', 'error');
+      router.push('/login');
+      return;
+    }
+
+    if (isFaveLoading || !image) return;
+
+    setIsFaveLoading(true);
+    try {
+      const res = await api.toggleFave(token, image.id);
+      const data = await res.json();
+      
+      if (data.success) {
+        const newFavedStatus = data.is_faved !== undefined ? data.is_faved : !isFaved;
+        setIsFaved(newFavedStatus);
+        showToast(newFavedStatus ? '收藏成功' : '已取消收藏', 'success');
+      } else {
+        showToast(data.message || '操作失败', 'error');
+      }
+    } catch (err) {
+      console.error('Toggle fave error:', err);
+      showToast('操作失败', 'error');
+    } finally {
+      setIsFaveLoading(false);
+    }
+  };
+
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault();
     try {
@@ -154,9 +221,33 @@ export default function PicPage() {
       <div className="bg-white flex flex-col">
         
         <div className="p-4 sm:p-6 bg-white">
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-800 break-all text-left mb-4">
-            {image.name || `Image #${image.id}`}
-          </h1>
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-800 break-all text-left">
+              {image.name || `Image #${image.id}`}
+            </h1>
+            <Tooltip title={isFaved ? '取消收藏' : '收藏'} placement="top">
+              <IconButton 
+                onClick={handleToggleFave}
+                disabled={isFaveLoading}
+                sx={{ 
+                  color: isFaved ? '#eab308' : '#94a3b8',
+                  transition: 'color 0.2s',
+                  '&:hover': {
+                    color: isFaved ? '#ca8a04' : '#eab308',
+                    backgroundColor: 'rgba(234, 179, 8, 0.08)'
+                  }
+                }}
+              >
+                {isFaveLoading ? (
+                  <CircularProgress size={28} thickness={5} sx={{ color: 'inherit' }} />
+                ) : isFaved ? (
+                  <MdStar size={28} />
+                ) : (
+                  <MdStarBorder size={28} />
+                )}
+              </IconButton>
+            </Tooltip>
+          </div>
           <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
             <Tooltip title="尺寸" placement="top" arrow>
               <div className="flex items-center gap-1.5 cursor-pointer">

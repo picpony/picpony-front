@@ -273,5 +273,16 @@ export const api = {
       },
       body: JSON.stringify(data)
     });
+  },
+
+  toggleFave: async (token: string, imageId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=toggle_fave`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image_id: imageId })
+    });
   }
 };
