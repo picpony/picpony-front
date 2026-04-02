@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'derpicdn.net',
       },
+      {
+        protocol: 'https',
+        hostname: 'picpony.top',
+      },
     ],
     unoptimized: process.env.NODE_ENV === 'development',
   },
