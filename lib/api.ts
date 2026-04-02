@@ -17,6 +17,7 @@ export interface PonyImage {
   representations: ImageRepresentation;
   name: string;
   view_url: string;
+  source_url: string | null;
   uploader: string;
   created_at: string;
   size: number;

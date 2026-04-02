@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdDownload, MdOpenInNew, MdArrowBack } from 'react-icons/md';
+import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage } from '@/lib/api';
+import Tooltip from '@mui/material/Tooltip';
 
 export default function PicPage() {
   const params = useParams();
@@ -116,9 +117,49 @@ export default function PicPage() {
       <div className="bg-white flex flex-col">
         
         <div className="p-4 sm:p-6 bg-white">
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-800 break-all text-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-800 break-all text-left mb-4">
             {image.name || `Image #${image.id}`}
           </h1>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+            <Tooltip title="尺寸" placement="top" arrow>
+              <div className="flex items-center gap-1.5 cursor-pointer">
+                <MdImage size={18} className="text-slate-400" />
+                <span>{image.width} × {image.height} px</span>
+              </div>
+            </Tooltip>
+            <Tooltip title="大小" placement="top" arrow>
+              <div className="flex items-center gap-1.5 cursor-pointer">
+                <MdSdStorage size={18} className="text-slate-400" />
+                <span>{(image.size / 1024 / 1024).toFixed(2)} MB</span>
+              </div>
+            </Tooltip>
+            <Tooltip title="上传者" placement="top" arrow>
+              <div className="flex items-center gap-1.5 cursor-pointer">
+                <MdPerson size={18} className="text-slate-400" />
+                <span className="truncate max-w-[150px]">{image.uploader || '匿名用户'}</span>
+              </div>
+            </Tooltip>
+            <Tooltip title="评分" placement="top" arrow>
+              <div className="flex items-center gap-1.5 cursor-pointer">
+                <MdStar size={18} className="text-slate-400" />
+                <span>{image.score}</span>
+              </div>
+            </Tooltip>
+            <Tooltip title="上传日期" placement="top" arrow>
+              <div className="flex items-center gap-1.5 cursor-pointer">
+                <MdAccessTime size={18} className="text-slate-400" />
+                <span>
+                  {new Date(image.created_at).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+            </Tooltip>
+          </div>
         </div>
 
         <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
@@ -143,47 +184,10 @@ export default function PicPage() {
 
         <div className="p-4 sm:p-6 flex flex-col bg-white">
           <div className="max-w-5xl mx-auto w-full space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">尺寸</h3>
-                <p className="text-slate-700 font-medium">{image.width} × {image.height} px</p>
-              </div>
-              
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">大小</h3>
-                <p className="text-slate-700 font-medium">{(image.size / 1024 / 1024).toFixed(2)} MB</p>
-              </div>
-
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">上传者</h3>
-                <p className="text-slate-700 font-medium truncate" title={image.uploader || '匿名用户'}>
-                  {image.uploader || '匿名用户'}
-                </p>
-              </div>
-
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">评分</h3>
-                <p className="text-slate-700 font-medium">{image.score}</p>
-              </div>
-            </div>
-
             <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">上传日期</h3>
-              <p className="text-slate-700">
-                {new Date(image.created_at).toLocaleString('zh-CN', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </p>
-            </div>
-
-            {image.description && (
-              <div>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">简介</h3>
-                {image.description.length > 100 || (image.description.match(/\n/g) || []).length >= 3 ? (
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">简介</h3>
+              {image.description ? (
+                image.description.length > 100 || (image.description.match(/\n/g) || []).length >= 3 ? (
                   <div 
                     className="bg-slate-50 p-4 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors"
                     onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
@@ -199,7 +203,23 @@ export default function PicPage() {
                   <p className="text-slate-700 whitespace-pre-wrap break-words bg-slate-50 p-4 rounded-xl border border-slate-100">
                     {image.description}
                   </p>
-                )}
+                )
+              ) : (
+                <p className="text-slate-400 italic bg-slate-50 p-4 rounded-xl border border-slate-100">滚木</p>
+              )}
+            </div>
+
+            {image.source_url && (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">来源</h3>
+                <a 
+                  href={image.source_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-block text-blue-600 hover:text-blue-800 break-all"
+                >
+                  {image.source_url}
+                </a>
               </div>
             )}
 
@@ -236,7 +256,7 @@ export default function PicPage() {
             )}
 
             <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">标签</h3>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">标签 (Tag)</h3>
               <div className="flex flex-wrap gap-2">
                 {image.tags.map((tag: string, index: number) => (
                   <span 
