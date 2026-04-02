@@ -6,6 +6,43 @@ import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, M
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage } from '@/lib/api';
 import Tooltip from '@mui/material/Tooltip';
+import Button from '@mui/material/Button';
+
+const buttonBaseSx = {
+  flex: 1,
+  px: 2,
+  py: 1.5,
+  borderRadius: '0.75rem',
+  textTransform: 'none',
+  fontWeight: 500,
+  fontSize: '1rem',
+  lineHeight: 1.5,
+};
+
+const downloadBtnSx = {
+  ...buttonBaseSx,
+  bgcolor: 'var(--color-primary, #063DA1)',
+  color: 'white',
+  boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+  '&:hover': {
+    bgcolor: 'rgba(6, 61, 161, 0.9)',
+    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+  },
+};
+
+const viewBtnSx = {
+  ...buttonBaseSx,
+  bgcolor: '#f1f5f9',
+  color: '#334155',
+  border: '1px solid',
+  borderColor: '#e2e8f0',
+  boxShadow: 'none',
+  '&:hover': {
+    bgcolor: '#e2e8f0',
+    borderColor: '#cbd5e1',
+    boxShadow: 'none',
+  },
+};
 
 export default function PicPage() {
   const params = useParams();
@@ -270,22 +307,23 @@ export default function PicPage() {
             </div>
 
             <div className="pt-6 flex flex-col sm:flex-row gap-3">
-              <button 
+              <Button 
                 onClick={handleDownload}
-                className="flex items-center justify-center flex-1 px-4 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all font-medium shadow-sm hover:shadow-md"
+                sx={downloadBtnSx}
+                startIcon={<MdDownload size={22} />}
               >
-                <MdDownload size={22} className="mr-2" />
-                <span>下载原图</span>
-              </button>
-              <a 
+                下载原图
+              </Button>
+              <Button 
+                component="a"
                 href={`https://trixiebooru.org/${image.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium border border-slate-200"
+                sx={viewBtnSx}
+                startIcon={<MdOpenInNew size={20} />}
               >
-                <MdOpenInNew size={20} className="mr-2" />
-                <span>在 Derpibooru 查看</span>
-              </a>
+                在 Derpibooru 查看
+              </Button>
             </div>
           </div>
         </div>
