@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import FadeInImage from "@/components/FadeInImage";
 import { MdErrorOutline, MdRefresh, MdThumbUp, MdComment, MdCollectionsBookmark } from "react-icons/md";
-import ImageModal from "@/components/ImageModal";
+import Link from "next/link";
 import { api, PonyImage } from "@/lib/api";
 import Tooltip from '@mui/material/Tooltip';
 import Tabs from '@mui/material/Tabs';
@@ -20,7 +20,6 @@ function FavoritesList() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const [selectedImage, setSelectedImage] = useState<PonyImage | null>(null);
   const [columns, setColumns] = useState(4);
   const [faveIds, setFaveIds] = useState<number[]>([]);
   const router = useRouter();
@@ -336,8 +335,8 @@ function FavoritesList() {
 
                   return (
                     <div key={image.id} className="w-full">
-                      <button
-                        onClick={() => setSelectedImage(image)}
+                      <Link
+                        href={`/pic/${image.id}`}
                         className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
                       >
                         {isWebm ? (
@@ -377,7 +376,7 @@ function FavoritesList() {
                             <span>{image.comment_count}</span>
                           </div>
                         </Tooltip>
-                      </button>
+                      </Link>
                     </div>
                   );
                 })}
@@ -407,11 +406,6 @@ function FavoritesList() {
           )}
         </>
       )}
-
-      <ImageModal
-        image={selectedImage}
-        onClose={() => setSelectedImage(null)}
-      />
     </div>
   );
 }

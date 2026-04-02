@@ -77,6 +77,25 @@ const PICPONY_API_BASE = 'https://picpony.top/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
 export const api = {
+  getImage: async (id: string): Promise<{ image: PonyImage }> => {
+    const res = await fetch(`${DERPIBOORU_API_BASE}/images/${id}`, {
+      cache: 'no-store',
+      headers: {
+        'User-Agent': 'PicPony/1.0'
+      }
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => 'No error text');
+      console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
+      const error = new Error(errorText || res.statusText);
+      (error as any).status = res.status;
+      throw error;
+    }
+
+    return res.json();
+  },
+
   getImages: async (search?: string, page: number = 1): Promise<ApiResponse> => {
     let query = "-explicit%2C%20-questionable%2C%20-suggestive%2C%20-grotesque%2C%20-grimdark%2C%20-spoiler%2C%20pony";
     if (search) {

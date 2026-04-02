@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useRef } from "react";
 import FadeInImage from "@/components/FadeInImage";
 import { MdErrorOutline, MdRefresh, MdThumbUp, MdComment, MdArrowBack } from "react-icons/md";
 import { useSearchParams } from "next/navigation";
-import ImageModal from "@/components/ImageModal";
+import Link from "next/link";
 import { api, PonyImage } from "@/lib/api";
 import Tooltip from '@mui/material/Tooltip';
 
@@ -17,7 +17,6 @@ function ImageList({ search }: { search?: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const [selectedImage, setSelectedImage] = useState<PonyImage | null>(null);
   const [columns, setColumns] = useState(4);
 
   useEffect(() => {
@@ -153,8 +152,8 @@ function ImageList({ search }: { search?: string }) {
               
               return (
                 <div key={image.id} className="w-full">
-                  <button 
-                    onClick={() => setSelectedImage(image)}
+                  <Link 
+                    href={`/pic/${image.id}`}
                     className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
                   >
                     {isWebm ? (
@@ -194,7 +193,7 @@ function ImageList({ search }: { search?: string }) {
                         <span>{image.comment_count}</span>
                       </div>
                     </Tooltip>
-                  </button>
+                  </Link>
                 </div>
               );
             })}
@@ -222,11 +221,6 @@ function ImageList({ search }: { search?: string }) {
           </button>
         </div>
       )}
-
-      <ImageModal 
-        image={selectedImage} 
-        onClose={() => setSelectedImage(null)} 
-      />
     </>
   );
 }
@@ -319,7 +313,6 @@ function HomeContent() {
 function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () => void }) {
   const [columns, setColumns] = useState(4);
   const [cdnEnabled, setCdnEnabled] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<PonyImage | null>(null);
 
   useEffect(() => {
     const updateColumns = () => {
@@ -412,8 +405,8 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
               
               return (
                 <div key={image.id} className="w-full">
-                  <button 
-                    onClick={() => setSelectedImage(image)}
+                  <Link 
+                    href={`/pic/${image.id}`}
                     className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
                   >
                     {isWebm ? (
@@ -453,18 +446,13 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
                         <span>{image.comment_count}</span>
                       </div>
                     </Tooltip>
-                  </button>
+                  </Link>
                 </div>
               );
             })}
           </div>
         ))}
       </div>
-
-      <ImageModal 
-        image={selectedImage} 
-        onClose={() => setSelectedImage(null)} 
-      />
     </>
   );
 }
