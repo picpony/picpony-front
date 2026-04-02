@@ -137,7 +137,7 @@ function ImageList({ search }: { search?: string }) {
 
     columnData[shortestColIndex].push(img);
     
-    const aspectRatio = img.height / img.width;
+    const aspectRatio = (img.height || 1) / (img.width || 1);
     columnHeights[shortestColIndex] += aspectRatio;
   });
 
@@ -147,8 +147,10 @@ function ImageList({ search }: { search?: string }) {
         {columnData.map((col, colIndex) => (
           <div key={colIndex} className="flex flex-col gap-2 sm:gap-4 flex-1 min-w-0">
             {col.map((image) => {
-              const isWebm = image.representations.full.endsWith('.webm');
-              const format = image.representations.full.split('.').pop()?.toUpperCase() || 'UNKNOWN';
+              const fullUrl = image.representations?.full || image.view_url || '';
+              const thumbUrl = image.representations?.thumb || image.representations?.full || image.view_url || '';
+              const isWebm = fullUrl.endsWith('.webm');
+              const format = fullUrl.split('.').pop()?.toUpperCase() || 'UNKNOWN';
               
               return (
                 <div key={image.id} className="w-full">
@@ -159,20 +161,20 @@ function ImageList({ search }: { search?: string }) {
                     {isWebm ? (
                       <div 
                         className="relative w-full overflow-hidden" 
-                        style={{ paddingBottom: `${(image.height / image.width) * 100}%` }}
+                        style={{ paddingBottom: `${((image.height || 1) / (image.width || 1)) * 100}%` }}
                       >
                         <video
-                          src={`${getCdnUrl(image.representations.full)}#t=0.1`}
+                          src={`${getCdnUrl(fullUrl)}#t=0.1`}
                           preload="metadata"
                           className="absolute top-0 left-0 w-full h-full object-cover transition-all duration-500"
                         />
                       </div>
                     ) : (
                       <FadeInImage
-                        src={getCdnUrl(image.representations.thumb)}
+                        src={getCdnUrl(thumbUrl)}
                         alt={image.name || `Image ${image.id}`}
-                        width={image.width}
-                        height={image.height}
+                        width={image.width || 0}
+                        height={image.height || 0}
                         className="w-full h-auto object-cover transition-all duration-500"
                         sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       />
@@ -358,7 +360,7 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
 
     columnData[shortestColIndex].push(img);
     
-    const aspectRatio = img.height / img.width;
+    const aspectRatio = (img.height || 1) / (img.width || 1);
     columnHeights[shortestColIndex] += aspectRatio;
   });
 
@@ -400,8 +402,10 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
         {columnData.map((col, colIndex) => (
           <div key={colIndex} className="flex flex-col gap-2 sm:gap-4 flex-1 min-w-0">
             {col.map((image) => {
-              const isWebm = image.representations.full.endsWith('.webm');
-              const format = image.representations.full.split('.').pop()?.toUpperCase() || 'UNKNOWN';
+              const fullUrl = image.representations?.full || image.view_url || '';
+              const thumbUrl = image.representations?.thumb || image.representations?.full || image.view_url || '';
+              const isWebm = fullUrl.endsWith('.webm');
+              const format = fullUrl.split('.').pop()?.toUpperCase() || 'UNKNOWN';
               
               return (
                 <div key={image.id} className="w-full">
@@ -412,20 +416,20 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
                     {isWebm ? (
                       <div 
                         className="relative w-full overflow-hidden" 
-                        style={{ paddingBottom: `${(image.height / image.width) * 100}%` }}
+                        style={{ paddingBottom: `${((image.height || 1) / (image.width || 1)) * 100}%` }}
                       >
                         <video
-                          src={`${getCdnUrl(image.representations.full)}#t=0.1`}
+                          src={`${getCdnUrl(fullUrl)}#t=0.1`}
                           preload="metadata"
                           className="absolute top-0 left-0 w-full h-full object-cover transition-all duration-500"
                         />
                       </div>
                     ) : (
                       <FadeInImage
-                        src={getCdnUrl(image.representations.thumb)}
+                        src={getCdnUrl(thumbUrl)}
                         alt={image.name || `Image ${image.id}`}
-                        width={image.width}
-                        height={image.height}
+                        width={image.width || 0}
+                        height={image.height || 0}
                         className="w-full h-auto object-cover transition-all duration-500"
                         sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       />

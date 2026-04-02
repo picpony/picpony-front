@@ -328,6 +328,7 @@ export default function PicPage() {
                 {image.tags.map((tag: string, index: number) => (
                   <span 
                     key={index}
+                    onClick={() => router.push(`/?search=${encodeURIComponent(tag)}`)}
                     className="px-2.5 py-1 bg-slate-100 text-slate-600 text-sm rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
                   >
                     {tag}
