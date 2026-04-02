@@ -221,6 +221,36 @@ export default function PicPage() {
 
         <div className="p-4 sm:p-6 flex flex-col bg-white">
           <div className="max-w-5xl mx-auto w-full space-y-6">
+            
+            {image.upvotes !== undefined && image.downvotes !== undefined && (
+              <div className="mb-6">
+                <div className="flex justify-between text-sm font-medium mb-1.5">
+                  <span className="text-green-600 flex items-center gap-1">
+                    <MdStar size={16} /> {image.upvotes}
+                  </span>
+                  <span className="text-red-500 flex items-center gap-1">
+                    {image.downvotes} <MdStar size={16} />
+                  </span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
+                  {image.upvotes === 0 && image.downvotes === 0 ? (
+                    <div className="bg-slate-300 h-full w-full" />
+                  ) : (
+                    <>
+                      <div 
+                        className="bg-green-500 h-full transition-all duration-500" 
+                        style={{ width: `${(image.upvotes / (image.upvotes + image.downvotes)) * 100}%` }}
+                      />
+                      <div 
+                        className="bg-red-500 h-full transition-all duration-500" 
+                        style={{ width: `${(image.downvotes / (image.upvotes + image.downvotes)) * 100}%` }}
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">简介</h3>
               {image.description ? (

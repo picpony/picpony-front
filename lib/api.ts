@@ -25,6 +25,8 @@ export interface PonyImage {
   comment_count: number;
   tags: string[];
   description: string;
+  upvotes: number;
+  downvotes: number;
 }
 
 export interface ApiResponse {
