@@ -76,6 +76,21 @@ export interface FavesResponse {
   message?: string;
 }
 
+export interface Comment {
+  id: number;
+  body: string;
+  created_at: string;
+  user_id: number;
+  username: string;
+  avatar: string | null;
+}
+
+export interface CommentsResponse {
+  success: boolean;
+  comments: Comment[];
+  message?: string;
+}
+
 const PICPONY_API_BASE = 'https://picpony.top/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
@@ -284,5 +299,10 @@ export const api = {
       },
       body: JSON.stringify({ image_id: imageId })
     });
+  },
+
+  getComments: async (imageId: string): Promise<CommentsResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_comments&image_id=${imageId}`);
+    return res.json();
   }
 };

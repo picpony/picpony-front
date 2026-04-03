@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder } from 'react-icons/md';
+import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
-import { api, PonyImage } from '@/lib/api';
+import { api, PonyImage, Comment } from '@/lib/api';
 import Tooltip from '@mui/material/Tooltip';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
@@ -61,6 +61,9 @@ export default function PicPage() {
   const [isFaved, setIsFaved] = useState(false);
   const [isFaveLoading, setIsFaveLoading] = useState(false);
 
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+
   useEffect(() => {
     const checkCdn = () => {
       const storedCdn = localStorage.getItem('cdn_enabled');
@@ -111,6 +114,22 @@ export default function PicPage() {
           if (isMounted) {
             setError(err);
             setIsLoading(false);
+          }
+        });
+
+      setIsLoadingComments(true);
+      api.getComments(id)
+        .then((res) => {
+          if (isMounted && res.success) {
+            setComments(res.comments);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load comments:', err);
+        })
+        .finally(() => {
+          if (isMounted) {
+            setIsLoadingComments(false);
           }
         });
     }
@@ -447,6 +466,58 @@ export default function PicPage() {
                 在 Derpibooru 查看
               </Button>
             </div>
+
+            <div className="mt-8 pt-8 border-t border-slate-100">
+              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <MdChatBubbleOutline className="text-primary" size={24} />
+                评论 ({comments.length})
+              </h3>
+              
+              {isLoadingComments ? (
+                <div className="flex justify-center py-8">
+                  <CircularProgress size={32} />
+                </div>
+              ) : comments.length > 0 ? (
+                <div className="space-y-4">
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="bg-slate-50 rounded-xl p-4 flex gap-4">
+                      <div className="flex-shrink-0">
+                        {comment.avatar ? (
+                          <img 
+                            src={`https://picpony.top/${comment.avatar}`} 
+                            alt={`${comment.username}`}
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20">
+                            {comment.username.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-slate-800 text-sm">
+                            {comment.username}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {comment.created_at}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-sm whitespace-pre-wrap break-words">
+                          {comment.body}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-slate-100">
+                  滚木
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
