@@ -54,6 +54,10 @@ export default function PicPage() {
 
   const [image, setImage] = useState<PonyImage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    document.title = `#${id} - PicPony`;
+  }, [id]);
   const [error, setError] = useState<Error | null>(null);
   
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
@@ -480,11 +484,11 @@ export default function PicPage() {
               ) : comments.length > 0 ? (
                 <div className="space-y-4">
                   {comments.map((comment) => (
-                    <div key={comment.id} className="bg-slate-50 rounded-xl p-4 flex gap-4">
+                    <div key={`${comment.source}-${comment.id}`} className="bg-slate-50 rounded-xl p-4 flex gap-4">
                       <div className="flex-shrink-0">
                         {comment.avatar ? (
                           <img 
-                            src={`https://picpony.top/${comment.avatar}`} 
+                            src={comment.source === 'trixiebooru' ? comment.avatar : `https://picpony.top/${comment.avatar}`} 
                             alt={`${comment.username}`}
                             className="w-10 h-10 rounded-full object-cover border border-slate-200"
                           />
@@ -497,11 +501,24 @@ export default function PicPage() {
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-slate-800 text-sm">
-                            {comment.username}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-800 text-sm">
+                              {comment.username}
+                            </span>
+                            {comment.source === 'trixiebooru' && (
+                              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded border border-blue-200">
+                                Derpibooru
+                              </span>
+                            )}
+                          </div>
                           <span className="text-xs text-slate-500">
-                            {comment.created_at}
+                            {new Date(comment.created_at).toLocaleString('zh-CN', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </span>
                         </div>
                         <p className="text-slate-600 text-sm whitespace-pre-wrap break-words">

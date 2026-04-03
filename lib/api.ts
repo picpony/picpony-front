@@ -83,6 +83,7 @@ export interface Comment {
   user_id: number;
   username: string;
   avatar: string | null;
+  source?: 'picpony' | 'trixiebooru';
 }
 
 export interface CommentsResponse {
@@ -302,7 +303,55 @@ export const api = {
   },
 
   getComments: async (imageId: string): Promise<CommentsResponse> => {
-    const res = await fetch(`${PICPONY_API_BASE}?action=get_comments&image_id=${imageId}`);
-    return res.json();
+    try {
+      const [picponyRes, trixieRes] = await Promise.all([
+        fetch(`${PICPONY_API_BASE}?action=get_comments&image_id=${imageId}`).catch(() => null),
+        fetch(`${DERPIBOORU_API_BASE}/search/comments?q=image_id:${imageId}&page=1&per_page=25&key=TVdjt-Q8qRn39rcoWYl5`).catch(() => null)
+      ]);
+
+      let comments: Comment[] = [];
+
+      if (picponyRes && picponyRes.ok) {
+        const picponyData = await picponyRes.json();
+        if (picponyData.success && picponyData.comments) {
+          comments = comments.concat(
+            picponyData.comments.map((c: any) => ({
+              ...c,
+              source: 'picpony' as const
+            }))
+          );
+        }
+      }
+
+      if (trixieRes && trixieRes.ok) {
+        const trixieData = await trixieRes.json();
+        if (trixieData.comments) {
+          comments = comments.concat(
+            trixieData.comments.map((c: any) => ({
+              id: c.id,
+              body: c.body,
+              created_at: c.created_at,
+              user_id: c.user_id,
+              username: c.author,
+              avatar: c.avatar,
+              source: 'trixiebooru' as const
+            }))
+          );
+        }
+      }
+
+      comments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+      return {
+        success: true,
+        comments: comments
+      };
+    } catch (err) {
+      console.error('Failed to fetch comments', err);
+      return {
+        success: false,
+        comments: []
+      };
+    }
   }
 };
