@@ -22,10 +22,6 @@ export default function RegisterPage() {
   const router = useRouter();
 
   useEffect(() => {
-    document.title = "注册 - PicPony";
-  }, []);
-
-  useEffect(() => {
     setMounted(true);
   }, []);
 

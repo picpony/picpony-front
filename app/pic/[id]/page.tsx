@@ -55,9 +55,6 @@ export default function PicPage() {
   const [image, setImage] = useState<PonyImage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    document.title = `#${id} - PicPony`;
-  }, [id]);
   const [error, setError] = useState<Error | null>(null);
   
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);

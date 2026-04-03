@@ -110,10 +110,6 @@ export default function MessagesPage() {
   };
 
   useEffect(() => {
-    document.title = "消息 - PicPony";
-  }, []);
-
-  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
         if (showEmojiPicker && !isEmojiPickerClosing) {

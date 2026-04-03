@@ -21,10 +21,6 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    document.title = "登录 - PicPony";
-  }, []);
-
-  useEffect(() => {
     setMounted(true);
   }, []);
 

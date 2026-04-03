@@ -27,10 +27,6 @@ function FavoritesList() {
   const [apiKey, setApiKey] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = "我的收藏 - PicPony";
-  }, []);
-
-  useEffect(() => {
     const updateColumns = () => {
       if (window.innerWidth < 640) setColumns(2);
       else if (window.innerWidth < 768) setColumns(2);

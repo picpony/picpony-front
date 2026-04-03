@@ -17,7 +17,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PicPony",
+  title: {
+    template: "%s - PicPony",
+    default: "主页 - PicPony",
+  },
 };
 
 export default async function RootLayout({
