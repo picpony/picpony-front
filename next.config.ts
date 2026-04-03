@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'picpony.top',
       },
+      {
+        protocol: 'https',
+        hostname: 'wsrv.nl',
+      },
     ],
     unoptimized: process.env.NODE_ENV === 'development',
   },
