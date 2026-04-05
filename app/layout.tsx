@@ -36,6 +36,13 @@ export default async function RootLayout({
       lang="zh"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.recaptchaOptions = { useRecaptchaNet: true };`,
+          }}
+        />
+      </head>
       <body className="h-full flex flex-col overflow-hidden">
         <NextTopLoader 
           color="#ffffff"
