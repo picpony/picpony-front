@@ -302,6 +302,20 @@ export const api = {
     });
   },
 
+  postComment: async (token: string, imageId: number, body: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=post_comment`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        image_id: imageId,
+        body: body
+      })
+    });
+  },
+
   getComments: async (imageId: string): Promise<CommentsResponse> => {
     try {
       const [picponyRes, trixieRes] = await Promise.all([

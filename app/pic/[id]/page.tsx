@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline } from 'react-icons/md';
+import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
 import Tooltip from '@mui/material/Tooltip';
@@ -64,6 +64,19 @@ export default function PicPage() {
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  const fetchComments = async () => {
+    try {
+      const res = await api.getComments(id);
+      if (res.success) {
+        setComments(res.comments);
+      }
+    } catch (err) {
+      console.error('Failed to load comments:', err);
+    }
+  };
 
   useEffect(() => {
     const checkCdn = () => {
@@ -119,20 +132,11 @@ export default function PicPage() {
         });
 
       setIsLoadingComments(true);
-      api.getComments(id)
-        .then((res) => {
-          if (isMounted && res.success) {
-            setComments(res.comments);
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to load comments:', err);
-        })
-        .finally(() => {
-          if (isMounted) {
-            setIsLoadingComments(false);
-          }
-        });
+      fetchComments().finally(() => {
+        if (isMounted) {
+          setIsLoadingComments(false);
+        }
+      });
     }
 
     return () => {
@@ -213,6 +217,45 @@ export default function PicPage() {
       showToast('操作失败', 'error');
     } finally {
       setIsFaveLoading(false);
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!newComment.trim()) return;
+
+    let token = null;
+    try {
+      const userInfoStr = localStorage.getItem('user_info');
+      if (userInfoStr) {
+        token = JSON.parse(userInfoStr).token;
+      }
+    } catch (e) {
+      console.error('Failed to parse user info', e);
+    }
+
+    if (!token) {
+      showToast('请先登录', 'error');
+      router.push('/login');
+      return;
+    }
+
+    setIsSubmittingComment(true);
+    try {
+      const res = await api.postComment(token, Number(id), newComment);
+      const data = await res.json();
+      
+      if (data.success) {
+        showToast('评论发送成功', 'success');
+        setNewComment('');
+        await fetchComments();
+      } else {
+        showToast(data.message || '发送失败', 'error');
+      }
+    } catch (err) {
+      console.error('Post comment error:', err);
+      showToast('发送失败', 'error');
+    } finally {
+      setIsSubmittingComment(false);
     }
   };
 
@@ -474,6 +517,44 @@ export default function PicPage() {
                 评论 ({comments.length})
               </h3>
               
+              <div className="mb-8 flex gap-3">
+                <div className="flex-1">
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="写下你的评论..."
+                    className="w-full min-h-[100px] p-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-y text-slate-700"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      onClick={handlePostComment}
+                      disabled={isSubmittingComment || !newComment.trim()}
+                      variant="contained"
+                      sx={{
+                        bgcolor: 'var(--color-primary, #063DA1)',
+                        color: 'white',
+                        borderRadius: '0.5rem',
+                        textTransform: 'none',
+                        px: 3,
+                        py: 1,
+                        boxShadow: 'none',
+                        '&:hover': {
+                          bgcolor: 'rgba(6, 61, 161, 0.9)',
+                          boxShadow: '0 2px 4px rgb(0 0 0 / 0.1)',
+                        },
+                        '&.Mui-disabled': {
+                          bgcolor: 'rgba(0, 0, 0, 0.12)',
+                          color: 'rgba(0, 0, 0, 0.26)',
+                        }
+                      }}
+                      endIcon={isSubmittingComment ? <CircularProgress size={16} color="inherit" /> : <MdSend size={18} />}
+                    >
+                      {isSubmittingComment ? '发送中...' : '发送评论'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               {isLoadingComments ? (
                 <div className="flex justify-center py-8">
                   <CircularProgress size={32} />
