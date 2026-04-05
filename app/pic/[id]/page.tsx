@@ -6,6 +6,8 @@ import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, M
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
 import Tooltip from '@mui/material/Tooltip';
+import BBCodeRenderer from '@/components/BBCodeRenderer';
+import BBCodeEditor from '@/components/BBCodeEditor';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -519,11 +521,11 @@ export default function PicPage() {
               
               <div className="mb-8 flex gap-3">
                 <div className="flex-1">
-                  <textarea
+                  <BBCodeEditor
                     value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
+                    onChange={setNewComment}
                     placeholder="写下你的评论..."
-                    className="w-full min-h-[100px] p-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-y text-slate-700"
+                    disabled={isSubmittingComment}
                   />
                   <div className="mt-2 flex justify-end">
                     <Button
@@ -599,9 +601,9 @@ export default function PicPage() {
                             })}
                           </span>
                         </div>
-                        <p className="text-slate-600 text-sm whitespace-pre-wrap break-words">
-                          {comment.body}
-                        </p>
+                        <div className="text-slate-600 text-sm whitespace-pre-wrap break-words">
+                          <BBCodeRenderer content={comment.body} />
+                        </div>
                       </div>
                     </div>
                   ))}
