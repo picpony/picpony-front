@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import AppLayout from "@/components/AppLayout";
 import NextTopLoader from 'nextjs-toploader';
 import { ToastContainer } from "@/components/Toast";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +45,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="h-full flex flex-col overflow-hidden">
+        <LoadingOverlay />
         <NextTopLoader 
           color="#ffffff"
           initialPosition={0.08}
