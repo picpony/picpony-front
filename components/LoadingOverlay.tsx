@@ -30,8 +30,7 @@ export default function LoadingOverlay() {
       }`}
     >
       <img 
-        src="/img/picpony.svg" 
-        alt="Loading..." 
+        src="/img/picpony.svg"
         className="w-32 h-auto opacity-10" 
       />
     </div>
