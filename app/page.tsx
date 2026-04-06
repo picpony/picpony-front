@@ -103,7 +103,9 @@ function ImageList({ search }: { search?: string }) {
         <h2 className="text-xl font-semibold mb-2 text-slate-700">图片加载失败</h2>
         <div className="mb-6 max-w-md">
           <p className="text-sm text-slate-500 mb-1">
-            {status ? `HTTP Error ${status}: ` : ''}{error.message}
+            {status == 429 || error.message === 'Failed to fetch' || error.message === 'Too Many Requests' ? '你的请求次数过快，超出原站限制' : (
+              <>{status ? `HTTP Error ${status}: ` : ''}{error.message}</>
+            )}
           </p>
         </div>
         <button 

@@ -105,9 +105,13 @@ export const api = {
     });
 
     if (!res.ok) {
-      const errorText = await res.text().catch(() => 'No error text');
+      let errorText = await res.text().catch(() => 'No error text');
+      // Trixiebooru API returns HTML for 429 errors which causes "Failed to fetch" or messy errors
+      if (res.status === 429) {
+          errorText = 'Too Many Requests';
+      }
       console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
-      const error = new Error(errorText || res.statusText);
+      const error = new Error(errorText || res.statusText || 'Failed to fetch');
       (error as any).status = res.status;
       throw error;
     }
@@ -132,9 +136,13 @@ export const api = {
     );
 
     if (!res.ok) {
-      const errorText = await res.text().catch(() => 'No error text');
+      let errorText = await res.text().catch(() => 'No error text');
+      // Trixiebooru API returns HTML for 429 errors which causes "Failed to fetch" or messy errors
+      if (res.status === 429) {
+          errorText = 'Too Many Requests';
+      }
       console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
-      const error = new Error(errorText || res.statusText);
+      const error = new Error(errorText || res.statusText || 'Failed to fetch');
       (error as any).status = res.status;
       throw error;
     }

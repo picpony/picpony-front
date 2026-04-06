@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent, Suspense, useEffect } from "react";
+import { useState, FormEvent, Suspense, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -15,6 +15,8 @@ function SearchBar() {
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -26,21 +28,46 @@ function SearchBar() {
     }
   };
 
+  const isExpanded = isFocused || searchQuery.length > 0;
+
   return (
     <>
-      <form onSubmit={handleSearch} className="flex items-center bg-white/10 rounded-md px-3 py-1.5 ml-4 focus-within:bg-white/20 transition-colors">
-        <MdSearch size={20} className="text-white/70 mr-2" />
+      <form 
+        onSubmit={handleSearch} 
+        className={`flex items-center rounded-md transition-all duration-300 focus-within:bg-white/20
+          ${isExpanded ? 'bg-white/20 px-2 py-1.5 ml-2' : 'bg-transparent p-1.5 ml-0'} 
+          sm:bg-white/10 sm:px-3 sm:py-1.5 sm:ml-4`}
+      >
+        <label 
+          htmlFor="mobile-search" 
+          className="cursor-pointer sm:cursor-text flex items-center justify-center shrink-0"
+          onClick={() => {
+            if (!isExpanded && window.innerWidth < 640) {
+              setTimeout(() => inputRef.current?.focus(), 10);
+            }
+          }}
+        >
+          <MdSearch size={20} className={`text-white/70 transition-all ${isExpanded ? 'mr-2' : 'mr-0'} sm:mr-2`} />
+        </label>
         <input
+          id="mobile-search"
+          ref={inputRef}
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder="搜索..."
-          className="bg-transparent border-none outline-none text-white placeholder:text-white/50 text-sm w-48 focus:w-64 transition-all duration-300"
+          className={`bg-transparent border-none outline-none text-white placeholder:text-white/50 text-sm transition-all duration-300
+            ${isExpanded ? 'w-32 xs:w-40 opacity-100' : 'w-0 opacity-0'} 
+            sm:w-48 sm:focus:w-64 sm:opacity-100`}
         />
         <button
           type="button"
           onClick={() => setIsImageSearchOpen(true)}
-          className="ml-2 text-white/70 hover:text-white transition-colors flex items-center justify-center"
+          className={`text-white/70 hover:text-white transition-all flex items-center justify-center overflow-hidden shrink-0
+            ${isExpanded ? 'ml-2 w-5 opacity-100' : 'w-0 opacity-0'} 
+            sm:w-5 sm:opacity-100 sm:ml-2`}
           title="以图搜图"
         >
           <MdImageSearch size={20} />
@@ -230,7 +257,7 @@ export default function AppLayout({
         <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex">
           <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
         </Link>
-        <div className="flex-1 flex justify-end sm:justify-start sm:ml-4">
+        <div className="flex-1 flex justify-start sm:ml-4 pl-1 sm:pl-0">
           <Suspense fallback={<div className="w-full max-w-[200px] h-8 bg-white/10 rounded-md animate-pulse"></div>}>
             <SearchBar />
           </Suspense>
