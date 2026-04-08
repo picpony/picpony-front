@@ -437,7 +437,7 @@ export default function MessagesPage() {
                     ))
                   ) : (
                     <div className="p-10 text-center text-slate-400 text-sm">
-                      暂无联系人
+                      滚木
                     </div>
                   )}
                 </div>
@@ -502,7 +502,7 @@ export default function MessagesPage() {
                         })
                       ) : (
                         <div className="flex-1 flex items-center justify-center text-slate-400">
-                          <p>暂无聊天记录</p>
+                          <p>滚木</p>
                         </div>
                       )}
                     </div>
@@ -638,7 +638,7 @@ export default function MessagesPage() {
                 </div>
               ) : (
                 <div className="text-center py-20 text-slate-500">
-                  暂无公告
+                  滚木
                 </div>
               )}
             </div>
@@ -681,7 +681,7 @@ export default function MessagesPage() {
                 </div>
               ) : (
                 <div className="text-center py-20 text-slate-500">
-                  暂无通知
+                  滚木
                 </div>
               )}
             </div>
