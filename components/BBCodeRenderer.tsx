@@ -11,7 +11,12 @@ interface BBCodeRendererProps {
 export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
   return (
     <div className="bbcode-content">
-      <BBCode plugins={[presetReact()]}>
+      <BBCode 
+        plugins={[presetReact()]}
+        options={{
+          onlyAllowTags: ['b', 'i', 'u', 's', 'url', 'img', 'quote', 'code', 'style', 'list', 'color', '*']
+        }}
+      >
         {content}
       </BBCode>
     </div>
