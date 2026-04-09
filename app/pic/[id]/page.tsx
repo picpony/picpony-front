@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdDownload, MdOpenInNew, MdArrowBack, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend } from 'react-icons/md';
+import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
 import Tooltip from '@mui/material/Tooltip';
@@ -567,9 +567,11 @@ export default function PicPage() {
                     <div key={`${comment.source}-${comment.id}`} className="bg-slate-50 rounded-xl p-4 flex gap-4">
                       <div className="flex-shrink-0">
                         {comment.avatar ? (
-                          <img 
+                          <FadeInImage 
                             src={comment.source === 'trixiebooru' ? comment.avatar : `https://picpony.top/${comment.avatar}`} 
                             alt={`${comment.username}`}
+                            width={40}
+                            height={40}
                             className="w-10 h-10 rounded-full object-cover border border-slate-200"
                           />
                         ) : (

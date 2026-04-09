@@ -4,7 +4,7 @@ import { useState, FormEvent, Suspense, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdExpandLess, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark } from "react-icons/md";
 import { ButtonBase, Badge } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
@@ -154,13 +154,17 @@ export default function AppLayout({
   useEffect(() => {
     const savedMenuState = localStorage.getItem('user_menu_open');
     if (savedMenuState !== null) {
-      setIsUserMenuOpen(savedMenuState === 'true');
+      requestAnimationFrame(() => {
+        setIsUserMenuOpen(savedMenuState === 'true');
+      });
     }
     
     if (window.innerWidth >= 768) {
       const savedSidebarState = localStorage.getItem('sidebar_collapsed');
       if (savedSidebarState !== null) {
-        setIsCollapsed(savedSidebarState === 'true');
+        requestAnimationFrame(() => {
+          setIsCollapsed(savedSidebarState === 'true');
+        });
       }
     }
   }, []);
@@ -300,11 +304,13 @@ export default function AppLayout({
                 >
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
                     {userInfo.avatar ? (
-                      <img 
-                        src={`https://picpony.top/${userInfo.avatar}`} 
-                        alt={userInfo.username}
-                        className="w-full h-full object-cover"
-                      />
+                      <div className="w-full h-full">
+                        <img 
+                          src={`https://picpony.top/${userInfo.avatar}`} 
+                          alt={userInfo.username}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-slate-500">
                         <MdPerson size={24} />

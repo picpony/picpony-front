@@ -2,16 +2,18 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MdClose, MdCloudUpload, MdImageSearch } from 'react-icons/md';
+import { MdClose, MdCloudUpload } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import Slider from '@mui/material/Slider';
 import { showToast } from './Toast';
 import { api } from '../lib/api';
 
+import { PonyImage } from '../lib/api';
+
 interface ImageSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSearchSuccess?: (results: any[]) => void;
+  onSearchSuccess?: (results: PonyImage[]) => void;
 }
 
 export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: ImageSearchModalProps) {

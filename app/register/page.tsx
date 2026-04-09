@@ -80,7 +80,7 @@ export default function RegisterPage() {
         showToast(data.message || "注册失败，请检查输入", "error");
         recaptchaRef.current?.reset();
       }
-    } catch (err) {
+    } catch {
       showToast("网络错误，请稍后再试", "error");
       recaptchaRef.current?.reset();
     } finally {

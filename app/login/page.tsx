@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { MdPerson, MdArrowBack, MdErrorOutline } from "react-icons/md";
+import { MdArrowBack } from "react-icons/md";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReCAPTCHA from "react-google-recaptcha";
@@ -81,7 +81,7 @@ export default function LoginPage() {
         showToast(data.message || "登录失败，请检查用户名和密码", "error");
         recaptchaRef.current?.reset();
       }
-    } catch (err) {
+    } catch {
       showToast("网络错误，请稍后再试", "error");
       recaptchaRef.current?.reset();
     } finally {

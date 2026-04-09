@@ -118,7 +118,14 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage, onClose: () => voi
   );
 }
 
-export default function Toast({ message, type = 'success', duration = 3000, onClose }: any) {
+interface ToastProps {
+  message: string;
+  type?: ToastType;
+  duration?: number;
+  onClose?: () => void;
+}
+
+export default function Toast({ message, type = 'success', duration = 3000, onClose }: ToastProps) {
   useEffect(() => {
     showToast(message, type, duration);
     const timer = setTimeout(() => {

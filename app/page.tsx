@@ -96,7 +96,7 @@ function ImageList({ search }: { search?: string }) {
   }
 
   if (error) {
-    const status = (error as any).status;
+    const status = (error as { status?: number }).status;
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 animate-fade-in px-4 text-center">
         <MdErrorOutline size={48} className="mb-4 text-slate-400" />
@@ -274,23 +274,30 @@ function HomeContent() {
 
     window.addEventListener('image_search_results', handleImageSearchResults as EventListener);
     
+    return () => window.removeEventListener('image_search_results', handleImageSearchResults as EventListener);
+  }, []);
+
+  useEffect(() => {
     const pendingResults = sessionStorage.getItem('pending_image_search_results');
     if (pendingResults) {
       try {
-        setCustomResults(JSON.parse(pendingResults));
+        const parsedResults = JSON.parse(pendingResults);
+        setTimeout(() => {
+          setCustomResults(parsedResults);
+        }, 0);
         sessionStorage.removeItem('pending_image_search_results');
       } catch (e) {
         console.error('Failed to parse pending search results', e);
       }
     }
-    
-    return () => window.removeEventListener('image_search_results', handleImageSearchResults as EventListener);
   }, []);
 
   const prevSearchRef = useRef(search);
   useEffect(() => {
     if (prevSearchRef.current !== search) {
-      setCustomResults(null);
+      setTimeout(() => {
+        setCustomResults(null);
+      }, 0);
       prevSearchRef.current = search;
     }
   }, [search]);

@@ -112,7 +112,7 @@ export const api = {
       }
       console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
       const error = new Error(errorText || res.statusText || 'Failed to fetch');
-      (error as any).status = res.status;
+      (error as Error & { status?: number }).status = res.status;
       throw error;
     }
 
@@ -143,14 +143,14 @@ export const api = {
       }
       console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
       const error = new Error(errorText || res.statusText || 'Failed to fetch');
-      (error as any).status = res.status;
+      (error as Error & { status?: number }).status = res.status;
       throw error;
     }
 
     return res.json();
   },
 
-  login: async (data: any) => {
+  login: async (data: Record<string, unknown>) => {
     return fetch(`${PICPONY_API_BASE}?action=login`, {
       method: "POST",
       headers: {
@@ -160,7 +160,7 @@ export const api = {
     });
   },
 
-  register: async (data: any) => {
+  register: async (data: Record<string, unknown>) => {
     return fetch(`${PICPONY_API_BASE}?action=register`, {
       method: "POST",
       headers: {
@@ -183,7 +183,7 @@ export const api = {
     });
   },
 
-  changePassword: async (token: string, data: any) => {
+  changePassword: async (token: string, data: Record<string, unknown>) => {
     return fetch(`${PICPONY_API_BASE}?action=change_password`, {
       method: 'POST',
       headers: {
@@ -337,7 +337,7 @@ export const api = {
         const picponyData = await picponyRes.json();
         if (picponyData.success && picponyData.comments) {
           comments = comments.concat(
-            picponyData.comments.map((c: any) => ({
+            picponyData.comments.map((c: Comment) => ({
               ...c,
               source: 'picpony' as const
             }))
@@ -349,7 +349,7 @@ export const api = {
         const trixieData = await trixieRes.json();
         if (trixieData.comments) {
           comments = comments.concat(
-            trixieData.comments.map((c: any) => ({
+            trixieData.comments.map((c: {id: number, body: string, created_at: string, user_id: number, author: string, avatar: string | null}) => ({
               id: c.id,
               body: c.body,
               created_at: c.created_at,

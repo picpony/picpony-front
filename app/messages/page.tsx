@@ -122,7 +122,7 @@ export default function MessagesPage() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [showEmojiPicker, isEmojiPickerClosing]);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: 'announcement' | 'notification' | 'chat') => {
     if (newValue === activeTab) return;
@@ -133,16 +133,6 @@ export default function MessagesPage() {
       setIsTransitioning(false);
     }, 200);
   };
-
-  useEffect(() => {
-    if (activeTab === 'announcement') {
-      fetchAnnouncements();
-    } else if (activeTab === 'notification') {
-      fetchNotifications();
-    } else {
-      fetchContacts();
-    }
-  }, [activeTab]);
 
   const fetchAnnouncements = async () => {
     setLoading(true);
@@ -235,6 +225,16 @@ export default function MessagesPage() {
   };
 
   useEffect(() => {
+    if (activeTab === 'announcement') {
+      fetchAnnouncements();
+    } else if (activeTab === 'notification') {
+      fetchNotifications();
+    } else {
+      fetchContacts();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     if (selectedContact) {
       fetchMessages(selectedContact.id);
     }
@@ -299,18 +299,13 @@ export default function MessagesPage() {
       if (match) {
         const emojiName = match[1];
         return (
-          <img 
+          <FadeInImage 
             key={index} 
             src={`/img/emoji/${emojiName}.png`} 
             alt={emojiName} 
+            width={24}
+            height={24}
             className="inline-block w-6 h-6 align-middle mx-0.5" 
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              if (!target.nextSibling || target.nextSibling.textContent !== part) {
-                target.insertAdjacentText('afterend', part);
-              }
-            }}
           />
         );
       }
@@ -527,9 +522,11 @@ export default function MessagesPage() {
                                     className="p-1 hover:bg-slate-100 rounded transition-colors flex items-center justify-center"
                                     title={emoji}
                                   >
-                                    <img 
+                                    <FadeInImage 
                                       src={`/img/emoji/${emoji}.png`} 
                                       alt={emoji} 
+                                      width={32}
+                                      height={32}
                                       className="w-8 h-8 object-contain"
                                     />
                                   </button>

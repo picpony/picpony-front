@@ -35,7 +35,9 @@ export default function FadeInImage({ className, onLoad, ...props }: FadeInImage
 
   useEffect(() => {
     if (imgRef.current?.complete) {
-      setIsLoaded(true);
+      requestAnimationFrame(() => {
+        setIsLoaded(true);
+      });
     }
   }, [props.src]);
 
@@ -47,6 +49,7 @@ export default function FadeInImage({ className, onLoad, ...props }: FadeInImage
       {isInView && (
         <Image
           {...props}
+          alt={props.alt || ""}
           ref={imgRef}
           className={`
             ${className || ''}

@@ -142,8 +142,8 @@ export default function SettingsPage() {
       } else {
         showToast(data.message || '配置失败，请重试', 'error');
       }
-    } catch (err: any) {
-      showToast(err.message || '网络错误，请重试', 'error');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '网络错误，请重试', 'error');
     } finally {
       setApiKeyLoading(false);
     }
@@ -182,8 +182,8 @@ export default function SettingsPage() {
       } else {
         showToast(data.message || '修改失败，请重试', 'error');
       }
-    } catch (err: any) {
-      showToast(err.message || '网络错误，请重试', 'error');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '网络错误，请重试', 'error');
     } finally {
       setPasswordLoading(false);
     }
@@ -220,8 +220,8 @@ export default function SettingsPage() {
       } else {
         showToast(data.message || '修改失败，请重试', 'error');
       }
-    } catch (err: any) {
-      showToast(err.message || '网络错误，请重试', 'error');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '网络错误，请重试', 'error');
     } finally {
       setIsLoading(false);
     }
