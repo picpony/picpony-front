@@ -402,9 +402,12 @@ export default function AppLayout({
           </div>
           <footer className="py-6 sm:py-8 px-4 sm:px-6 border-t border-slate-100 text-slate-500 text-sm">
             <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-              <div>
-                <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
-                <p>本站为 Derpibooru 第三方镜像站点</p>
+              <div className="flex flex-col items-center md:items-start gap-4 w-full md:w-auto">
+                <img src="/img/picpony.svg" alt="PicPony Logo" className="h-5 w-auto opacity-60" />
+                <div>
+                  <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
+                  <p>本站为 Derpibooru 第三方镜像站点</p>
+                </div>
               </div>
             </div>
           </footer>
