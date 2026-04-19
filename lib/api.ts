@@ -288,6 +288,19 @@ export const api = {
     });
   },
 
+  uploadAvatar: async (token: string, file: File) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    return fetch(`${PICPONY_API_BASE}?action=upload_avatar`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+  },
+
   saveApikey: async (token: string, data: {api_key: string, derpi_user_id: string, derpi_username: string}) => {
     return fetch(`${PICPONY_API_BASE}?action=save_apikey`, {
       method: 'POST',

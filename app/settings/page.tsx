@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { MdEdit, MdClose } from 'react-icons/md';
@@ -38,6 +38,9 @@ export default function SettingsPage() {
   const [newUsername, setNewUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentUsername, setCurrentUsername] = useState('');
+  const [currentAvatar, setCurrentAvatar] = useState('');
+  const [isAvatarUploading, setIsAvatarUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isPasswordClosing, setIsPasswordClosing] = useState(false);
@@ -90,12 +93,19 @@ export default function SettingsPage() {
       try {
         const user = JSON.parse(storedUser);
         setCurrentUsername(user.username);
+        setCurrentAvatar(user.avatar || '');
         
         api.getUser(user.token)
           .then(res => res.json())
           .then(data => {
             if (data.success && data.user) {
               setCurrentApiKey(data.user.api_key || '');
+              if (data.user.avatar) {
+                const fullAvatarUrl = data.user.avatar.startsWith('http') ? data.user.avatar : `https://picpony.top/${data.user.avatar}`;
+                setCurrentAvatar(fullAvatarUrl);
+                const updatedUser = { ...user, avatar: fullAvatarUrl };
+                localStorage.setItem('user_info', JSON.stringify(updatedUser));
+              }
             }
           })
           .catch(err => console.error("Failed to fetch user info", err));
@@ -109,6 +119,49 @@ export default function SettingsPage() {
       setCdnEnabled(true);
     }
   }, []);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('请选择图片文件', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('图片大小不能超过 5MB', 'error');
+      return;
+    }
+
+    setIsAvatarUploading(true);
+    try {
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) throw new Error('未登录');
+      const user = JSON.parse(storedUser);
+
+      const res = await api.uploadAvatar(user.token, file);
+      const data = await res.json();
+
+      if (data.success) {
+        showToast('头像上传成功', 'success');
+        const fullAvatarUrl = data.avatar_url.startsWith('http') ? data.avatar_url : `https://picpony.top/${data.avatar_url}`;
+        setCurrentAvatar(fullAvatarUrl);
+        
+        const updatedUser = { ...user, avatar: fullAvatarUrl };
+        localStorage.setItem('user_info', JSON.stringify(updatedUser));
+        window.dispatchEvent(new Event('user_info_updated'));
+      } else {
+        showToast(data.message || '上传失败，请重试', 'error');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '网络错误，请重试', 'error');
+    } finally {
+      setIsAvatarUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleCdnToggle = () => {
     const newValue = !cdnEnabled;
@@ -235,6 +288,44 @@ export default function SettingsPage() {
         <div className="p-6 border-b border-slate-100">
           <h2 className="text-lg font-semibold text-slate-800 mb-4">账户设置</h2>
           
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg mb-4">
+            <div className="flex items-center gap-4">
+              <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 flex-shrink-0">
+                {currentAvatar ? (
+                  <img src={currentAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-400 text-2xl font-bold">
+                    {currentUsername ? currentUsername.charAt(0).toUpperCase() : '?'}
+                  </div>
+                )}
+                {isAvatarUploading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-sm text-slate-500 mb-1">用户头像</p>
+                <p className="text-xs text-slate-400">支持 JPG、PNG、GIF 格式，最大 5MB</p>
+              </div>
+            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleAvatarUpload}
+              accept="image/*"
+              className="hidden"
+            />
+            <ButtonBase
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!currentUsername || isAvatarUploading}
+              sx={buttonSx}
+            >
+              <MdEdit size={16} className="mr-2" />
+              修改头像
+            </ButtonBase>
+          </div>
+
           <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
             <div>
               <p className="text-sm text-slate-500 mb-1">当前用户名</p>
