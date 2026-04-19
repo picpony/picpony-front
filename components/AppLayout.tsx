@@ -177,11 +177,31 @@ export default function AppLayout({
   const router = useRouter();
 
   useEffect(() => {
-    const updateUserInfo = () => {
+    const updateUserInfo = async () => {
       const storedUser = localStorage.getItem('user_info');
       if (storedUser) {
         try {
-          setUserInfo(JSON.parse(storedUser));
+          const parsedUser = JSON.parse(storedUser);
+          setUserInfo(parsedUser);
+          
+          if (parsedUser.token) {
+            try {
+              const res = await api.getUser(parsedUser.token);
+              const data = await res.json();
+              if (data.success && data.user) {
+                const updatedUser = {
+                  ...parsedUser,
+                  username: data.user.username,
+                  avatar: data.user.avatar,
+                  role: data.user.role,
+                };
+                localStorage.setItem('user_info', JSON.stringify(updatedUser));
+                setUserInfo(updatedUser);
+              }
+            } catch (err) {
+              console.error("Failed to fetch latest user info", err);
+            }
+          }
         } catch (e) {
           console.error("Failed to parse user info", e);
         }

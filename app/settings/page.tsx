@@ -11,8 +11,11 @@ import { api } from '@/lib/api';
 const buttonSx = {
   display: 'flex',
   alignItems: 'center',
-  px: 2,
-  py: 1,
+  justifyContent: 'center',
+  minWidth: { xs: '36px', sm: 'auto' },
+  minHeight: { xs: '36px', sm: 'auto' },
+  px: { xs: 0, sm: 2 },
+  py: { xs: 0, sm: 1 },
   backgroundColor: 'white',
   borderColor: 'rgb(226 232 240)',
   borderRadius: '0.375rem',
@@ -321,8 +324,8 @@ export default function SettingsPage() {
               disabled={!currentUsername || isAvatarUploading}
               sx={buttonSx}
             >
-              <MdEdit size={16} className="mr-2" />
-              修改头像
+              <MdEdit size={16} className="sm:mr-2" />
+              <span className="hidden sm:inline">修改头像</span>
             </ButtonBase>
           </div>
 
@@ -336,8 +339,8 @@ export default function SettingsPage() {
               disabled={!currentUsername}
               sx={buttonSx}
             >
-              <MdEdit size={16} className="mr-2" />
-              修改用户名
+              <MdEdit size={16} className="sm:mr-2" />
+              <span className="hidden sm:inline">修改用户名</span>
             </ButtonBase>
           </div>
 
@@ -351,8 +354,8 @@ export default function SettingsPage() {
               disabled={!currentUsername}
               sx={buttonSx}
             >
-              <MdEdit size={16} className="mr-2" />
-              修改密码
+              <MdEdit size={16} className="sm:mr-2" />
+              <span className="hidden sm:inline">修改密码</span>
             </ButtonBase>
           </div>
 
@@ -371,8 +374,8 @@ export default function SettingsPage() {
               disabled={!currentUsername}
               sx={buttonSx}
             >
-              <MdEdit size={16} className="mr-2" />
-              {currentApiKey ? '修改配置' : '去配置'}
+              <MdEdit size={16} className="sm:mr-2" />
+              <span className="hidden sm:inline">{currentApiKey ? '修改配置' : '去配置'}</span>
             </ButtonBase>
           </div>
         </div>
