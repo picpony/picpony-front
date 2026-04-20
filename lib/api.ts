@@ -337,6 +337,11 @@ export const api = {
     });
   },
 
+  getUserProfile: async (userId: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_user_profile&user_id=${userId}`);
+    return res.json();
+  },
+
   getComments: async (imageId: string): Promise<CommentsResponse> => {
     try {
       const [picponyRes, trixieRes] = await Promise.all([
