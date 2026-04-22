@@ -47,9 +47,8 @@ function ImageList({ search }: { search?: string }) {
     let isMounted = true;
     setIsLoading(true);
     setError(null);
-    setPage(1);
 
-    api.getImages(search, 1)
+    api.getImages(search, page)
       .then((res) => {
         if (isMounted) {
           setImages(res.images);
@@ -67,29 +66,7 @@ function ImageList({ search }: { search?: string }) {
     return () => {
       isMounted = false;
     };
-  }, [search, retryCount]);
-
-  const loadMore = async () => {
-    if (isLoadingMore || !hasMore) return;
-    
-    setIsLoadingMore(true);
-    const nextPage = page + 1;
-    
-    try {
-      const res = await api.getImages(search, nextPage);
-      setImages(prev => {
-        const existingIds = new Set(prev.map(img => img.id));
-        const newImages = res.images.filter(img => !existingIds.has(img.id));
-        return [...prev, ...newImages];
-      });
-      setPage(nextPage);
-      setHasMore(res.images.length === 50);
-    } catch (err) {
-      console.error("Failed to load more images:", err);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
+  }, [search, page, retryCount]);
 
   if (isLoading) {
     return <ImageSkeleton />;
@@ -142,6 +119,13 @@ function ImageList({ search }: { search?: string }) {
     const aspectRatio = (img.height || 1) / (img.width || 1);
     columnHeights[shortestColIndex] += aspectRatio;
   });
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1) {
+      setPage(newPage);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   return (
     <>
@@ -205,26 +189,49 @@ function ImageList({ search }: { search?: string }) {
         ))}
       </div>
 
-      {hasMore && (
-        <div className="mt-12 flex justify-center">
-          <button
-            onClick={loadMore}
-            disabled={isLoadingMore}
-            className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-full transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
-          >
-            {isLoadingMore ? (
-              <div className="flex gap-1 items-center animate-pulse">
-                <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
-                <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
-                <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
-              </div>
-            ) : (
-              <MdRefresh size={20} className="group-hover:rotate-180 transition-transform duration-500" />
-            )}
-            <span>{isLoadingMore ? '正在加载' : '加载更多'}</span>
-          </button>
+      <div className="mt-12 flex justify-center items-center gap-2">
+        <button
+          onClick={() => handlePageChange(page - 1)}
+          disabled={page === 1 || isLoadingMore}
+          className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          上一页
+        </button>
+        
+        <div className="flex items-center gap-1">
+          {Array.from({ length: 5 }, (_, i) => {
+            let pageNum;
+            if (page <= 3) {
+              pageNum = i + 1;
+            } else {
+              pageNum = page - 2 + i;
+            }
+
+            return (
+              <button
+                key={pageNum}
+                onClick={() => handlePageChange(pageNum)}
+                disabled={isLoadingMore}
+                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                  page === pageNum
+                    ? 'bg-primary text-white font-medium'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
         </div>
-      )}
+
+        <button
+          onClick={() => handlePageChange(page + 1)}
+          disabled={!hasMore || isLoadingMore}
+          className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          下一页
+        </button>
+      </div>
     </>
   );
 }

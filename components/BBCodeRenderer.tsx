@@ -9,6 +9,8 @@ interface BBCodeRendererProps {
 }
 
 export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
+  const processedContent = content.replace(/\[img\](\/[^\[\]]+)\[\/img\]/gi, '[img]https://picpony.top$1[/img]');
+
   return (
     <div className="bbcode-content">
       <BBCode 
@@ -17,7 +19,7 @@ export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
           onlyAllowTags: ['b', 'i', 'u', 's', 'url', 'img', 'quote', 'code', 'style', 'list', 'color', '*']
         }}
       >
-        {content}
+        {processedContent}
       </BBCode>
     </div>
   );

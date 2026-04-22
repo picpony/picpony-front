@@ -4,7 +4,7 @@ import { useState, FormEvent, Suspense, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark, MdForum } from "react-icons/md";
 import { ButtonBase, Badge } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
@@ -412,6 +412,15 @@ export default function AppLayout({
             >
               <MdHome size={20} className="shrink-0 mr-3" />
               <span>主页</span>
+            </ButtonBase>
+            <ButtonBase
+              component={Link}
+              href="/forum" 
+              onClick={handleMobileNavigation}
+              sx={sidebarButtonSx(pathname.startsWith('/forum'))}
+            >
+              <MdForum size={20} className="shrink-0 mr-3" />
+              <span>论坛</span>
             </ButtonBase>
           </nav>
         </aside>

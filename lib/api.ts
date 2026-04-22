@@ -92,6 +92,74 @@ export interface CommentsResponse {
   message?: string;
 }
 
+export interface ForumPost {
+  id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  views: number;
+  reply_count: number;
+  is_pinned: number;
+  created_at: string;
+  updated_at: string;
+  cover_image: string | null;
+  like_count: number;
+  username: string;
+  avatar: string | null;
+  role: string;
+  experience: number;
+  equipped_badges: string;
+  is_liked: number;
+}
+
+export interface ForumPostsResponse {
+  success: boolean;
+  posts: ForumPost[];
+  total: number;
+  total_pages: number;
+}
+
+export interface ForumComment {
+  id: number;
+  post_id: number;
+  user_id: number;
+  content: string;
+  created_at: string;
+  username: string;
+  avatar: string | null;
+  role: string;
+  experience: number;
+  equipped_badges: string;
+}
+
+export interface ForumPostDetail {
+  id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  views: number;
+  reply_count: number;
+  is_pinned: number;
+  created_at: string;
+  updated_at: string;
+  cover_image: string | null;
+  like_count: number;
+  username: string;
+  avatar: string | null;
+  role: string;
+  experience: number;
+  user_created_at: string;
+  is_liked: number;
+}
+
+export interface ForumPostDetailResponse {
+  success: boolean;
+  post: ForumPostDetail;
+  comments: ForumComment[];
+  total_comments: number;
+  total_pages: number;
+}
+
 const PICPONY_API_BASE = 'https://picpony.top/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
@@ -337,8 +405,42 @@ export const api = {
     });
   },
 
+  createForumComment: async (token: string, postId: number, content: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=create_forum_comment`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        post_id: postId,
+        content: content
+      })
+    });
+  },
+
   getUserProfile: async (userId: string) => {
     const res = await fetch(`${PICPONY_API_BASE}?action=get_user_profile&user_id=${userId}`);
+    return res.json();
+  },
+
+  getForumPosts: async (page: number = 1): Promise<ForumPostsResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_forum_posts&page=${page}`, {
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      throw new Error('Failed to fetch forum posts');
+    }
+    return res.json();
+  },
+
+  getForumPostDetail: async (id: string, page: number = 1): Promise<ForumPostDetailResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_forum_post_detail&id=${id}&page=${page}`, {
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      throw new Error('Failed to fetch forum post detail');
+    }
     return res.json();
   },
 
