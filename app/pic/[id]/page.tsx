@@ -148,9 +148,27 @@ export default function PicPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8 animate-pulse flex flex-col md:flex-row gap-6">
-        <div className="flex-1 bg-slate-200 rounded-xl h-[60vh]"></div>
-        <div className="w-full md:w-96 bg-slate-200 rounded-xl h-[60vh]"></div>
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-pulse">
+        <div className="bg-white flex flex-col">
+          <div className="p-4 sm:p-6 bg-white">
+            <div className="h-8 bg-slate-200 rounded w-1/2 mb-4"></div>
+            <div className="flex gap-4">
+              <div className="h-5 bg-slate-200 rounded w-20"></div>
+              <div className="h-5 bg-slate-200 rounded w-20"></div>
+              <div className="h-5 bg-slate-200 rounded w-20"></div>
+            </div>
+          </div>
+          <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
+            <div className="w-full h-full bg-slate-200 rounded-lg absolute inset-4"></div>
+          </div>
+          <div className="p-4 sm:p-6 flex flex-col bg-white">
+            <div className="max-w-5xl mx-auto w-full space-y-6">
+              <div className="h-4 bg-slate-200 rounded w-full"></div>
+              <div className="h-4 bg-slate-200 rounded w-full"></div>
+              <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
