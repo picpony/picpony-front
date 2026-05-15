@@ -60,21 +60,21 @@ export default function AnnouncementModal() {
 
   const modalContent = (
     <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/50 ${!isClosing ? 'animate-modal-overlay' : 'animate-modal-overlay-out'}`}>
-      <div className={`bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col ${!isClosing ? 'animate-modal-content' : 'animate-modal-content-out'}`}>
-        <div className="bg-white px-5 py-4 flex items-center text-slate-800">
+      <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col ${!isClosing ? 'animate-modal-content' : 'animate-modal-content-out'}`}>
+        <div className="bg-white dark:bg-slate-800 px-5 py-4 flex items-center text-slate-800 dark:text-slate-100">
           <h2 className="text-lg font-bold truncate pr-4">系统公告</h2>
         </div>
         
-        <div className="p-5 sm:p-6 overflow-y-auto max-h-[60vh] bg-white">
-          <h3 className="text-lg font-bold text-slate-800 mb-2">{announcement.title}</h3>
-          <p className="text-xs text-slate-400 mb-4 font-medium pb-3">发布日期：{announcement.date}</p>
+        <div className="p-5 sm:p-6 overflow-y-auto max-h-[60vh] bg-white dark:bg-slate-800">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">{announcement.title}</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 font-medium pb-3">发布日期：{announcement.date}</p>
           <div 
-            className="text-slate-600 text-sm leading-relaxed space-y-2"
+            className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed space-y-2"
             dangerouslySetInnerHTML={{ __html: announcement.content }}
           />
         </div>
         
-        <div className="px-5 py-4 sm:px-6 bg-white flex justify-end">
+        <div className="px-5 py-4 sm:px-6 bg-white dark:bg-slate-800 flex justify-end border-t border-slate-100 dark:border-slate-700">
           <button
             onClick={handleClose}
             className="px-4 py-2 text-primary font-medium hover:bg-primary/10 rounded-lg transition-colors active:scale-95 cursor-pointer"

@@ -58,6 +58,7 @@ export default function SettingsPage() {
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
 
   const [cdnEnabled, setCdnEnabled] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
 
   const closeModal = () => {
     if (isLoading) return;
@@ -121,6 +122,9 @@ export default function SettingsPage() {
     if (storedCdn === 'true') {
       setCdnEnabled(true);
     }
+
+    const storedDark = localStorage.getItem('darkMode');
+    setDarkMode(storedDark === 'true');
   }, []);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,6 +175,14 @@ export default function SettingsPage() {
     setCdnEnabled(newValue);
     localStorage.setItem('cdn_enabled', String(newValue));
     window.dispatchEvent(new Event('cdn_settings_updated'));
+  };
+
+  const handleDarkModeToggle = () => {
+    const newValue = !darkMode;
+    setDarkMode(newValue);
+    localStorage.setItem('darkMode', String(newValue));
+    document.documentElement.classList.toggle('dark', newValue);
+    document.cookie = `darkMode=${newValue};path=/;max-age=${365 * 24 * 60 * 60}`;
   };
 
   const handleApiKeySubmit = async (e: React.FormEvent) => {
@@ -285,15 +297,15 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">设置</h1>
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">设置</h1>
       
-      <div className="bg-white overflow-hidden">
-        <div className="p-6 border-b border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-800 mb-4">账户设置</h2>
+      <div className="bg-white dark:bg-slate-800 overflow-hidden rounded-xl">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">账户设置</h2>
           
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg mb-4">
-            <div className="flex items-center gap-4">
-              <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 flex-shrink-0">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mb-4">
+              <div className="flex items-center gap-4">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
                 {currentAvatar ? (
                   <img src={currentAvatar} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
@@ -308,8 +320,8 @@ export default function SettingsPage() {
                 )}
               </div>
               <div>
-                <p className="text-sm text-slate-500 mb-1">用户头像</p>
-                <p className="text-xs text-slate-400">支持 JPG、PNG、GIF 格式，最大 5MB</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">用户头像</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">支持 JPG、PNG、GIF 格式，最大 5MB</p>
               </div>
             </div>
             <input
@@ -329,10 +341,10 @@ export default function SettingsPage() {
             </ButtonBase>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
             <div>
-              <p className="text-sm text-slate-500 mb-1">当前用户名</p>
-              <p className="font-medium text-slate-800">{currentUsername || '未登录'}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">当前用户名</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">{currentUsername || '未登录'}</p>
             </div>
             <ButtonBase
               onClick={() => setIsModalOpen(true)}
@@ -344,10 +356,10 @@ export default function SettingsPage() {
             </ButtonBase>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg mt-4">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mt-4">
             <div>
-              <p className="text-sm text-slate-500 mb-1">账号密码</p>
-              <p className="font-medium text-slate-800">********</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">账号密码</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">********</p>
             </div>
             <ButtonBase
               onClick={() => setIsPasswordModalOpen(true)}
@@ -359,10 +371,10 @@ export default function SettingsPage() {
             </ButtonBase>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg mt-4">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mt-4">
             <div>
-              <p className="text-sm text-slate-500 mb-1">Derpibooru API Key</p>
-              <p className="font-medium text-slate-800">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Derpibooru API Key</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">
                 {currentApiKey ? `${currentApiKey.substring(0, 4)}...${currentApiKey.substring(currentApiKey.length - 4)}` : '未配置'}
               </p>
             </div>
@@ -380,13 +392,34 @@ export default function SettingsPage() {
           </div>
         </div>
         
-        <div className="p-6 border-b border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-800 mb-4">偏好设置</h2>
+        <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">偏好设置</h2>
           
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mb-4">
             <div>
-              <p className="text-sm font-medium text-slate-800 mb-1">启用图片 CDN 加速</p>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">深色模式</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                切换浅色/深色显示模式。
+              </p>
+            </div>
+            <Switch
+              checked={darkMode}
+              onChange={handleDarkModeToggle}
+              sx={{
+                '& .MuiSwitch-switchBase.Mui-checked': {
+                  color: 'var(--color-primary)',
+                },
+                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                  backgroundColor: 'var(--color-primary)',
+                },
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">启用图片 CDN 加速</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 开启后图片链接将通过 wsrv.nl 代理。
               </p>
             </div>
@@ -412,14 +445,14 @@ export default function SettingsPage() {
           onClick={closeModal}
         >
           <div 
-            className={`bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
+            className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800">修改用户名</h3>
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">修改用户名</h3>
               <button 
                 onClick={closeModal}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
                 <MdClose size={24} />
               </button>
@@ -427,7 +460,7 @@ export default function SettingsPage() {
             
             <form onSubmit={handleSubmit} className="p-6">
               <div className="mb-4">
-                <label htmlFor="newUsername" className="block text-sm font-medium text-slate-700 mb-2">
+                <label htmlFor="newUsername" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   新用户名
                 </label>
                 <input
@@ -435,7 +468,7 @@ export default function SettingsPage() {
                   id="newUsername"
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                   placeholder="请输入新用户名"
                   disabled={isLoading}
                   autoFocus
@@ -447,7 +480,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={closeModal}
                   disabled={isLoading}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
                   取消
                 </button>
@@ -478,7 +511,7 @@ export default function SettingsPage() {
           onClick={closeApiKeyModal}
         >
           <div 
-            className={`bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isApiKeyClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
+            className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isApiKeyClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6">
@@ -551,7 +584,7 @@ export default function SettingsPage() {
           onClick={closePasswordModal}
         >
           <div 
-            className={`bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isPasswordClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
+            className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isPasswordClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6">

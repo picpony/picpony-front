@@ -1,8 +1,23 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --sidebar-text: #334155;
+  --sidebar-hover: #f1f5f9;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --sidebar-text: #cbd5e1;
+  --sidebar-hover: #1e293b;
+}
+
+.dark aside .MuiButtonBase-root {
+  color: var(--sidebar-text);
 }
 
 @theme inline {

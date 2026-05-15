@@ -31,11 +31,13 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const sidebarCollapsed = cookieStore.get('sidebarCollapsed')?.value === 'true';
+  const darkMode = cookieStore.get('darkMode')?.value === 'true';
 
   return (
     <html
       lang="zh"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased ${darkMode ? 'dark' : ''}`}
+      suppressHydrationWarning
     >
       <head>
         <script
@@ -56,7 +58,7 @@ export default async function RootLayout({
           easing="ease"
           speed={200}
         />
-        <AppLayout initialCollapsed={sidebarCollapsed}>
+        <AppLayout initialCollapsed={sidebarCollapsed} initialDark={darkMode}>
           {children}
         </AppLayout>
         <ToastContainer />

@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, FormEvent, Suspense, useEffect, useRef } from "react";
+import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark, MdForum } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode } from "react-icons/md";
 import { ButtonBase, Badge } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
@@ -107,19 +107,21 @@ const sidebarButtonSx = (isActive: boolean) => ({
   borderRadius: '8px',
   width: '100%',
   justifyContent: 'flex-start',
-  color: isActive ? 'var(--color-primary)' : 'rgb(51, 65, 85)',
+  color: isActive ? 'var(--color-primary)' : 'var(--sidebar-text, rgb(51, 65, 85))',
   backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
   '&:hover': {
-    backgroundColor: isActive ? 'rgba(59, 130, 246, 0.15)' : 'rgb(241, 245, 249)',
+    backgroundColor: isActive ? 'rgba(59, 130, 246, 0.15)' : 'var(--sidebar-hover, rgb(241, 245, 249))',
   }
 });
 
 export default function AppLayout({ 
   children, 
-  initialCollapsed 
+  initialCollapsed,
+  initialDark
 }: { 
   children: React.ReactNode;
   initialCollapsed: boolean;
+  initialDark: boolean;
 }) {
   const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -127,7 +129,29 @@ export default function AppLayout({
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLogoutClosing, setIsLogoutClosing] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
+  const [darkMode, setDarkMode] = useState(initialDark);
   const pathname = usePathname();
+
+  const applyDarkMode = useCallback((dark: boolean) => {
+    document.documentElement.classList.toggle('dark', dark);
+    document.cookie = `darkMode=${dark};path=/;max-age=${365 * 24 * 60 * 60}`;
+  }, []);
+
+  useEffect(() => {
+    const storedDark = localStorage.getItem('darkMode');
+    if (storedDark !== null) {
+      const isDark = storedDark === 'true';
+      setDarkMode(isDark);
+      applyDarkMode(isDark);
+    }
+  }, [applyDarkMode]);
+
+  const toggleDarkMode = () => {
+    const newDark = !darkMode;
+    setDarkMode(newDark);
+    applyDarkMode(newDark);
+    localStorage.setItem('darkMode', String(newDark));
+  };
 
   useEffect(() => {
     const fetchUnreadCounts = async () => {
@@ -273,7 +297,11 @@ export default function AppLayout({
           sx={{ 
             borderRadius: '6px',
             p: '8px',
-            mr: { xs: '8px', sm: '16px' }
+            mr: { xs: '8px', sm: '16px' },
+            color: '#ffffff',
+            '&:hover': {
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            }
           }}
         >
           <MdMenu size={24} />
@@ -287,13 +315,33 @@ export default function AppLayout({
           </Suspense>
         </div>
         <ButtonBase 
+          onClick={toggleDarkMode}
+          aria-label={darkMode ? '切换浅色模式' : '切换深色模式'}
+          title={darkMode ? '浅色模式' : '深色模式'}
+          sx={{ 
+            borderRadius: '6px',
+            p: '8px',
+            ml: '2px',
+            color: '#ffffff',
+            '&:hover': {
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            }
+          }}
+        >
+          {darkMode ? <MdLightMode size={24} /> : <MdDarkMode size={24} />}
+        </ButtonBase>
+        <ButtonBase 
           component={Link}
           href="/messages"
           aria-label="消息"
           sx={{ 
             borderRadius: '6px',
             p: '8px',
-            ml: '8px'
+            ml: '2px',
+            color: '#ffffff',
+            '&:hover': {
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            }
           }}
         >
           <Badge color="error" badgeContent={totalUnread} sx={{ '& .MuiBadge-badge': { right: -3, top: 3 } }}>
@@ -311,7 +359,7 @@ export default function AppLayout({
         />
         
         <aside 
-          className={`bg-slate-50 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden absolute md:relative h-full z-50 md:z-auto ${
+          className={`bg-slate-50 dark:bg-slate-900 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden absolute md:relative h-full z-50 md:z-auto ${
             isCollapsed ? '-translate-x-full md:translate-x-0 md:w-0' : 'translate-x-0 w-64'
           }`}
         >
@@ -320,9 +368,9 @@ export default function AppLayout({
               <div className="relative">
                 <button 
                   onClick={toggleUserMenu}
-                  className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors text-left relative z-20"
+                  className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left relative z-20"
                 >
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 shrink-0">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0">
                     {userInfo.avatar ? (
                       <div className="w-full h-full">
                         <img 
@@ -332,18 +380,18 @@ export default function AppLayout({
                         />
                       </div>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-500">
+                      <div className="w-full h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
                         <MdPerson size={24} />
                       </div>
                     )}
                   </div>
                   <div className="ml-3 overflow-hidden flex-1">
-                    <p className="text-sm font-bold text-slate-800 truncate">{userInfo.username}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{userInfo.username}</p>
                     <p className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium inline-block uppercase tracking-wider mt-0.5">
                       {userInfo.role}
                     </p>
                   </div>
-                  <div className="text-slate-400 shrink-0 ml-2">
+                  <div className="text-slate-400 dark:text-slate-500 shrink-0 ml-2">
                     <MdExpandMore 
                       size={20} 
                       className={`transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} 
@@ -384,24 +432,24 @@ export default function AppLayout({
                     <span>登出</span>
                   </ButtonBase>
                 </div>
-                <div className="h-px bg-slate-200 mt-2 mx-2"></div>
+                <div className="h-px bg-slate-200 dark:bg-slate-700 mt-2 mx-2"></div>
               </div>
             ) : (
               <Link 
                 href="/login"
                 onClick={handleMobileNavigation}
-                className="flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors group"
+                className="flex items-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
               >
-                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
+                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
                   <MdPerson size={24} />
                 </div>
                 <div className="ml-3 overflow-hidden">
-                  <p className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors truncate">未登录</p>
-                  <p className="text-xs text-slate-500 truncate">点击登录</p>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-primary transition-colors truncate">未登录</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">点击登录</p>
                 </div>
               </Link>
             )}
-            {!userInfo && <div className="h-px bg-slate-200 mt-2 mx-2"></div>}
+            {!userInfo && <div className="h-px bg-slate-200 dark:bg-slate-700 mt-2 mx-2"></div>}
           </div>
           <nav className="flex-1 py-3 w-64 px-3 space-y-1">
             <ButtonBase
@@ -425,14 +473,14 @@ export default function AppLayout({
           </nav>
         </aside>
         
-        <main className="flex-1 overflow-y-scroll bg-white relative flex flex-col w-full">
+        <main className="flex-1 overflow-y-scroll bg-white dark:bg-slate-950 relative flex flex-col w-full">
           <div key={pathname} className="animate-page-transition p-4 sm:p-6 flex-1">
             {children}
           </div>
-          <footer className="py-6 sm:py-8 px-4 sm:px-6 border-t border-slate-100 text-slate-500 text-sm">
+          <footer className="py-6 sm:py-8 px-4 sm:px-6 border-t border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-sm">
             <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex flex-col items-center md:items-start gap-4 w-full md:w-auto">
-                <img src="/img/picpony.svg" alt="PicPony Logo" className="h-5 w-auto opacity-60" />
+                <img src="/img/picpony.svg" alt="PicPony Logo" className="h-5 w-auto opacity-60 dark:brightness-150 dark:opacity-80" />
                 <div>
                   <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
                   <p>本站为 Derpibooru 第三方镜像站点</p>
@@ -446,25 +494,25 @@ export default function AppLayout({
       
       {isLogoutDialogOpen && typeof document !== 'undefined' && createPortal(
         <div 
-          className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isLogoutClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
+          className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 ${isLogoutClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
           onClick={handleLogoutCancel}
         >
           <div 
-            className={`bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isLogoutClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
+            className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isLogoutClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800">登出</h3>
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">登出</h3>
               <button 
                 onClick={handleLogoutCancel}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
                 <MdClose size={24} />
               </button>
             </div>
             
             <div className="px-6 pb-6">
-              <p className="text-slate-600 mb-6">
+              <p className="text-slate-600 dark:text-slate-300 mb-6">
                 确定要登出当前账号吗？
               </p>
 
@@ -472,7 +520,7 @@ export default function AppLayout({
                 <button
                   type="button"
                   onClick={handleLogoutCancel}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
                   取消
                 </button>

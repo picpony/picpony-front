@@ -196,7 +196,7 @@ function FavoritesList() {
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8">
-        <h1 className="text-2xl font-bold text-slate-800 mb-6">我的收藏</h1>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">我的收藏</h1>
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
           <Tabs 
@@ -275,7 +275,7 @@ function FavoritesList() {
 
   return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">我的收藏</h1>
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">我的收藏</h1>
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
         <Tabs 
@@ -302,10 +302,10 @@ function FavoritesList() {
       </Box>
 
       {activeTab === 'derpibooru' && !apiKey ? (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 animate-fade-in px-4 text-center">
-          <MdErrorOutline size={48} className="mb-4 text-slate-300" />
-          <h2 className="text-xl font-medium mb-2 text-slate-600">未绑定 API Key</h2>
-          <p className="text-sm text-slate-500 mb-6">
+        <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
+          <MdErrorOutline size={48} className="mb-4 text-slate-300 dark:text-slate-500" />
+          <h2 className="text-xl font-medium mb-2 text-slate-600 dark:text-slate-300">未绑定 API Key</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
             您需要绑定 Derpibooru API Key 才能查看 Derpibooru 的收藏数据
           </p>
           <button
@@ -316,9 +316,9 @@ function FavoritesList() {
           </button>
         </div>
       ) : images.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 animate-fade-in px-4 text-center">
-          <MdCollectionsBookmark size={48} className="mb-4 text-slate-300" />
-          <h2 className="text-xl font-medium mb-2 text-slate-600">滚木</h2>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
+          <MdCollectionsBookmark size={48} className="mb-4 text-slate-300 dark:text-slate-500" />
+          <h2 className="text-xl font-medium mb-2 text-slate-600 dark:text-slate-300">滚木</h2>
         </div>
       ) : (
         <>
@@ -385,7 +385,7 @@ function FavoritesList() {
               <button
                 onClick={loadMore}
                 disabled={isLoadingMore}
-                className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-full transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
+                className="px-8 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-medium rounded-full transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
               >
                 {isLoadingMore ? (
                   <div className="flex gap-1 items-center animate-pulse">

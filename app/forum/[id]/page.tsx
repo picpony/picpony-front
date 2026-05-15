@@ -107,16 +107,16 @@ export default function ForumPostPage() {
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white p-6 rounded-xl animate-pulse mb-6">
-          <div className="h-8 bg-slate-200 rounded w-3/4 mb-4"></div>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl animate-pulse mb-6">
+          <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-4"></div>
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-10 h-10 bg-slate-200 rounded-full"></div>
-            <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+            <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
           </div>
           <div className="space-y-3">
-            <div className="h-4 bg-slate-200 rounded w-full"></div>
-            <div className="h-4 bg-slate-200 rounded w-full"></div>
-            <div className="h-4 bg-slate-200 rounded w-5/6"></div>
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
           </div>
         </div>
       </div>
@@ -125,16 +125,16 @@ export default function ForumPostPage() {
 
   if (error || !post) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 animate-fade-in px-4 text-center">
-        <MdErrorOutline size={48} className="mb-4 text-slate-400" />
-        <h2 className="text-xl font-semibold mb-2 text-slate-700">帖子加载失败</h2>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
+        <MdErrorOutline size={48} className="mb-4 text-slate-400 dark:text-slate-500" />
+        <h2 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">帖子加载失败</h2>
         <div className="mb-6 max-w-md">
-          <p className="text-sm text-slate-500 mb-1">{error?.message || '帖子不存在'}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">{error?.message || '帖子不存在'}</p>
         </div>
         <div className="flex gap-4">
           <button 
             onClick={() => router.back()}
-            className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors cursor-pointer"
+            className="flex items-center px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer"
           >
             <MdArrowBack size={20} className="mr-2" />
             <span>返回</span>
@@ -163,16 +163,16 @@ export default function ForumPostPage() {
         </button>
       </div>
 
-      <div className="bg-white p-6 rounded-xl mb-8">
-        <h1 className="text-2xl font-bold text-slate-800 mb-4">{post.title}</h1>
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl mb-8">
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">{post.title}</h1>
         
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4 mb-6">
           <div className="flex items-center gap-3">
             <Link href={`/user/${post.user_id}`}>
               <img 
                 src={post.avatar ? `https://picpony.top/${post.avatar}` : '/img/default-avatar.png'} 
                 alt={post.username}
-                className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = '/img/default-avatar.png';
                 }}
@@ -180,20 +180,20 @@ export default function ForumPostPage() {
             </Link>
             <div>
               <div className="flex items-center gap-2">
-                <Link href={`/user/${post.user_id}`} className="font-medium text-slate-700 hover:text-primary transition-colors">
+              <Link href={`/user/${post.user_id}`} className="font-medium text-slate-700 dark:text-slate-300 hover:text-primary transition-colors">
                   {post.username}
                 </Link>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium uppercase tracking-wider">
                   {post.role}
                 </span>
               </div>
-              <div className="text-xs text-slate-500 mt-0.5">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 发布于 {new Date(post.created_at).toLocaleString()}
               </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-4 text-sm text-slate-500">
+          <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
             <span className="flex items-center gap-1" title="浏览量">
               <MdVisibility size={16} /> {post.views}
             </span>
@@ -206,28 +206,28 @@ export default function ForumPostPage() {
           </div>
         </div>
 
-        <div className="prose max-w-none text-slate-700">
+        <div className="prose max-w-none text-slate-700 dark:text-slate-300">
           <BBCodeRenderer content={post.content} />
         </div>
       </div>
 
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">全部回复 ({post.reply_count})</h2>
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">全部回复 ({post.reply_count})</h2>
         
         <div className="space-y-4">
           {comments.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 bg-white rounded-xl">
+            <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-xl">
               暂无回复，快来抢沙发吧！
             </div>
           ) : (
             comments.map((comment, index) => (
-              <div key={comment.id} className="bg-white p-4 rounded-xl flex gap-4">
+              <div key={comment.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl flex gap-4">
                 <div className="flex-shrink-0">
                   <Link href={`/user/${comment.user_id}`}>
                     <img 
                       src={comment.avatar ? `https://picpony.top/${comment.avatar}` : '/img/default-avatar.png'} 
                       alt={comment.username}
-                      className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                      className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/img/default-avatar.png';
                       }}
@@ -237,19 +237,19 @@ export default function ForumPostPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Link href={`/user/${comment.user_id}`} className="font-medium text-slate-700 hover:text-primary transition-colors">
+                      <Link href={`/user/${comment.user_id}`} className="font-medium text-slate-700 dark:text-slate-300 hover:text-primary transition-colors">
                         {comment.username}
                       </Link>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium uppercase tracking-wider">
                         {comment.role}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-500 flex items-center gap-2">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                       <span>#{((page - 1) * 20) + index + 1}</span>
                       <span>{new Date(comment.created_at).toLocaleString()}</span>
                     </div>
                   </div>
-                  <div className="prose max-w-none text-slate-700 text-sm">
+                  <div className="prose max-w-none text-slate-700 dark:text-slate-300 text-sm">
                     <BBCodeRenderer content={comment.content} />
                   </div>
                 </div>
@@ -260,11 +260,11 @@ export default function ForumPostPage() {
       </div>
 
       {/* Comment Input */}
-      <div className="bg-white p-6 rounded-xl mb-8">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">发表回复</h3>
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl mb-8">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">发表回复</h3>
         {!isLoggedIn ? (
-          <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-200">
-            <p className="text-slate-500 mb-4">登录后才能发表回复</p>
+          <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+            <p className="text-slate-500 dark:text-slate-400 mb-4">登录后才能发表回复</p>
             <Link 
               href="/login"
               className="inline-flex items-center px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
@@ -314,7 +314,7 @@ export default function ForumPostPage() {
           <button
             onClick={() => handlePageChange(page - 1)}
             disabled={page === 1}
-            className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             上一页
           </button>
@@ -336,11 +336,11 @@ export default function ForumPostPage() {
                 <button
                   key={pageNum}
                   onClick={() => handlePageChange(pageNum)}
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
                     page === pageNum
                       ? 'bg-primary text-white font-medium'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
+                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    }`}
                 >
                   {pageNum}
                 </button>
@@ -351,7 +351,7 @@ export default function ForumPostPage() {
           <button
             onClick={() => handlePageChange(page + 1)}
             disabled={page === totalPages}
-            className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             下一页
           </button>

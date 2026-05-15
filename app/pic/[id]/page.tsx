@@ -148,24 +148,24 @@ export default function PicPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-pulse">
-        <div className="bg-white flex flex-col">
-          <div className="p-4 sm:p-6 bg-white">
-            <div className="h-8 bg-slate-200 rounded w-1/2 mb-4"></div>
+    <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-pulse">
+        <div className="bg-white dark:bg-slate-800 flex flex-col rounded-xl">
+          <div className="p-4 sm:p-6 bg-white dark:bg-slate-800">
+            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-4"></div>
             <div className="flex gap-4">
-              <div className="h-5 bg-slate-200 rounded w-20"></div>
-              <div className="h-5 bg-slate-200 rounded w-20"></div>
-              <div className="h-5 bg-slate-200 rounded w-20"></div>
+              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
             </div>
           </div>
           <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
-            <div className="w-full h-full bg-slate-200 rounded-lg absolute inset-4"></div>
+            <div className="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-lg absolute inset-4"></div>
           </div>
           <div className="p-4 sm:p-6 flex flex-col bg-white">
             <div className="max-w-5xl mx-auto w-full space-y-6">
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
               <div className="h-4 bg-slate-200 rounded w-full"></div>
-              <div className="h-4 bg-slate-200 rounded w-full"></div>
-              <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
             </div>
           </div>
         </div>
@@ -176,8 +176,8 @@ export default function PicPage() {
   if (error || !image) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 text-center">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4">加载失败</h2>
-        <p className="text-slate-600 mb-6">图片可能不存在</p>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">加载失败</h2>
+        <p className="text-slate-600 dark:text-slate-400 mb-6">图片可能不存在</p>
         <button 
           onClick={() => router.back()}
           className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
@@ -301,11 +301,11 @@ export default function PicPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-fade-in">
-      <div className="bg-white flex flex-col">
+      <div className="bg-white dark:bg-slate-800 flex flex-col rounded-xl">
         
-        <div className="p-4 sm:p-6 bg-white">
+        <div className="p-4 sm:p-6 bg-transparent">
           <div className="flex items-start justify-between gap-4 mb-4">
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-800 break-all text-left">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100 break-all text-left">
               {image.name || `Image #${image.id}`}
             </h1>
             <Tooltip title={isFaved ? '取消收藏' : '收藏'} placement="top">
@@ -331,7 +331,7 @@ export default function PicPage() {
               </IconButton>
             </Tooltip>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-slate-300">
             <Tooltip title="尺寸" placement="top" arrow>
               <div className="flex items-center gap-1.5 cursor-pointer">
                 <MdImage size={18} className="text-slate-400" />
@@ -393,7 +393,7 @@ export default function PicPage() {
           )}
         </div>
 
-        <div className="p-4 sm:p-6 flex flex-col bg-white">
+        <div className="p-4 sm:p-6 flex flex-col bg-transparent">
           <div className="max-w-5xl mx-auto w-full space-y-6">
             
             {image.upvotes !== undefined && image.downvotes !== undefined && (
@@ -531,8 +531,8 @@ export default function PicPage() {
               </Button>
             </div>
 
-            <div className="mt-8 pt-8 border-t border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
                 <MdChatBubbleOutline className="text-primary" size={24} />
                 评论 ({comments.length})
               </h3>
@@ -629,7 +629,7 @@ export default function PicPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
                   滚木
                 </div>
               )}

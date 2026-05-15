@@ -75,11 +75,11 @@ function ImageList({ search }: { search?: string }) {
   if (error) {
     const status = (error as { status?: number }).status;
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 animate-fade-in px-4 text-center">
-        <MdErrorOutline size={48} className="mb-4 text-slate-400" />
-        <h2 className="text-xl font-semibold mb-2 text-slate-700">图片加载失败</h2>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
+        <MdErrorOutline size={48} className="mb-4 text-slate-400 dark:text-slate-500" />
+        <h2 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">图片加载失败</h2>
         <div className="mb-6 max-w-md">
-          <p className="text-sm text-slate-500 mb-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
             {status == 429 || error.message === 'Failed to fetch' || error.message === 'Too Many Requests' ? '你的请求次数过快，超出原站限制' : (
               <>{status ? `HTTP Error ${status}: ` : ''}{error.message}</>
             )}
@@ -193,7 +193,7 @@ function ImageList({ search }: { search?: string }) {
         <button
           onClick={() => handlePageChange(page - 1)}
           disabled={page === 1 || isLoadingMore}
-          className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           上一页
         </button>
@@ -212,11 +212,11 @@ function ImageList({ search }: { search?: string }) {
                 key={pageNum}
                 onClick={() => handlePageChange(pageNum)}
                 disabled={isLoadingMore}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                  page === pageNum
-                    ? 'bg-primary text-white font-medium'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                      page === pageNum
+                        ? 'bg-primary text-white font-medium'
+                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {pageNum}
               </button>
@@ -227,7 +227,7 @@ function ImageList({ search }: { search?: string }) {
         <button
           onClick={() => handlePageChange(page + 1)}
           disabled={!hasMore || isLoadingMore}
-          className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           下一页
         </button>
@@ -382,12 +382,12 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
 
   if (images.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 animate-fade-in px-4 text-center">
-        <MdErrorOutline size={48} className="mb-4 text-slate-400" />
-        <h2 className="text-xl font-semibold mb-2 text-slate-700">没有找到匹配的图片</h2>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
+        <MdErrorOutline size={48} className="mb-4 text-slate-400 dark:text-slate-500" />
+        <h2 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">没有找到匹配的图片</h2>
         <button
           onClick={onBack}
-          className="mt-6 flex items-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+          className="mt-6 flex items-center px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors cursor-pointer"
         >
           <MdArrowBack size={20} className="mr-2" />
           <span>返回主页</span>
@@ -402,14 +402,14 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-2 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
+            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
             title="返回主页"
           >
             <MdArrowBack size={20} />
           </button>
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">以图搜图</h2>
-            <p className="text-sm text-slate-500">找到 {images.length} 张相似图片</p>
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">以图搜图</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">找到 {images.length} 张相似图片</p>
           </div>
         </div>
       </div>
