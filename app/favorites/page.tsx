@@ -211,6 +211,7 @@ function FavoritesList() {
                 fontWeight: 500,
                 fontSize: '0.875rem',
                 minWidth: 100,
+                color: 'var(--sidebar-text)',
                 '&.Mui-selected': {
                   color: 'var(--color-primary)',
                 }
@@ -229,11 +230,11 @@ function FavoritesList() {
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8">
-        <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 animate-fade-in px-4 text-center">
-          <MdErrorOutline size={48} className="mb-4 text-slate-400" />
-          <h2 className="text-xl font-semibold mb-2 text-slate-700">加载失败</h2>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
+          <MdErrorOutline size={48} className="mb-4 text-slate-400 dark:text-slate-500" />
+          <h2 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">加载失败</h2>
           <div className="mb-6 max-w-md">
-            <p className="text-sm text-slate-500 mb-1">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
               {error.message}
             </p>
           </div>
@@ -286,14 +287,15 @@ function FavoritesList() {
               backgroundColor: 'var(--color-primary)',
             },
             '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 500,
-              fontSize: '0.875rem',
-              minWidth: 100,
-              '&.Mui-selected': {
-                color: 'var(--color-primary)',
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                minWidth: 100,
+                color: 'var(--sidebar-text)',
+                '&.Mui-selected': {
+                  color: 'var(--color-primary)',
+                }
               }
-            }
           }}
         >
           <Tab label="PicPony" value="picpony" />
@@ -333,7 +335,7 @@ function FavoritesList() {
                     <div key={image.id} className="w-full">
                       <Link
                         href={`/pic/${image.id}`}
-                        className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
+                        className="block relative rounded-lg overflow-hidden group bg-slate-100 dark:bg-slate-800 w-full text-left cursor-pointer"
                       >
                         {isWebm ? (
                           <div
@@ -427,7 +429,7 @@ function ImageSkeleton() {
           {colHeights.map((height, i) => (
             <div
               key={i}
-              className="w-full bg-slate-100 rounded-lg animate-pulse"
+              className="w-full bg-slate-100 dark:bg-slate-700 rounded-lg animate-pulse"
               style={{ height: `${height}px` }}
             ></div>
           ))}

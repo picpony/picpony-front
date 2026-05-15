@@ -142,7 +142,7 @@ function ImageList({ search }: { search?: string }) {
                 <div key={image.id} className="w-full">
                   <Link 
                     href={`/pic/${image.id}`}
-                    className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
+                    className="block relative rounded-lg overflow-hidden group bg-slate-100 dark:bg-slate-800 w-full text-left cursor-pointer"
                   >
                     {isWebm ? (
                       <div 
@@ -258,7 +258,7 @@ function ImageSkeleton() {
           {colHeights.map((height, i) => (
             <div 
               key={i} 
-              className="w-full bg-slate-100 rounded-lg animate-pulse"
+              className="w-full bg-slate-100 dark:bg-slate-700 rounded-lg animate-pulse"
               style={{ height: `${height}px` }}
             ></div>
           ))}
@@ -427,7 +427,7 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
                 <div key={image.id} className="w-full">
                   <Link 
                     href={`/pic/${image.id}`}
-                    className="block relative rounded-lg overflow-hidden group bg-slate-100 w-full text-left cursor-pointer"
+                    className="block relative rounded-lg overflow-hidden group bg-slate-100 dark:bg-slate-800 w-full text-left cursor-pointer"
                   >
                     {isWebm ? (
                       <div 
