@@ -26,25 +26,25 @@ const buttonBaseSx = {
 
 const downloadBtnSx = {
   ...buttonBaseSx,
-  bgcolor: 'var(--color-primary, #063DA1)',
+  bgcolor: 'var(--color-primary)',
   color: 'white',
   boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
   '&:hover': {
-    bgcolor: 'rgba(6, 61, 161, 0.9)',
+    bgcolor: '#555555',
     boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
   },
 };
 
 const viewBtnSx = {
   ...buttonBaseSx,
-  bgcolor: '#f1f5f9',
-  color: '#334155',
+  bgcolor: 'var(--sidebar-hover)',
+  color: 'var(--sidebar-text)',
   border: '1px solid',
-  borderColor: '#e2e8f0',
+  borderColor: 'rgba(128, 128, 128, 0.2)',
   boxShadow: 'none',
   '&:hover': {
-    bgcolor: '#e2e8f0',
-    borderColor: '#cbd5e1',
+    bgcolor: 'var(--sidebar-hover)',
+    opacity: 0.8,
     boxShadow: 'none',
   },
 };
@@ -149,8 +149,8 @@ export default function PicPage() {
   if (isLoading) {
     return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-pulse">
-        <div className="bg-white dark:bg-slate-800 flex flex-col rounded-xl">
-          <div className="p-4 sm:p-6 bg-white dark:bg-slate-800">
+      <div className="flex flex-col">
+          <div className="p-4 sm:p-6 bg-transparent">
             <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-4"></div>
             <div className="flex gap-4">
               <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
@@ -161,7 +161,7 @@ export default function PicPage() {
           <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
             <div className="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-lg absolute inset-4"></div>
           </div>
-          <div className="p-4 sm:p-6 flex flex-col bg-white">
+          <div className="p-4 sm:p-6 flex flex-col bg-transparent">
             <div className="max-w-5xl mx-auto w-full space-y-6">
               <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
               <div className="h-4 bg-slate-200 rounded w-full"></div>
@@ -301,7 +301,7 @@ export default function PicPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-fade-in">
-      <div className="bg-white dark:bg-slate-800 flex flex-col rounded-xl">
+      <div className="bg-transparent flex flex-col rounded-xl">
         
         <div className="p-4 sm:p-6 bg-transparent">
           <div className="flex items-start justify-between gap-4 mb-4">
@@ -406,9 +406,9 @@ export default function PicPage() {
                     {image.downvotes} <MdStar size={16} />
                   </span>
                 </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
+                <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
                   {image.upvotes === 0 && image.downvotes === 0 ? (
-                    <div className="bg-slate-300 h-full w-full" />
+                    <div className="bg-slate-300 dark:bg-slate-700 h-full w-full" />
                   ) : (
                     <>
                       <div 
@@ -430,10 +430,10 @@ export default function PicPage() {
               {image.description ? (
                 image.description.length > 100 || (image.description.match(/\n/g) || []).length >= 3 ? (
                   <div 
-                    className="bg-slate-50 p-4 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors"
+                    className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
                     onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
                   >
-                    <p className={`text-slate-700 whitespace-pre-wrap break-words ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}>
+                    <p className={`text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}>
                       {image.description}
                     </p>
                     <div className="text-sm text-primary mt-2 font-medium text-center">
@@ -441,12 +441,12 @@ export default function PicPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-slate-700 whitespace-pre-wrap break-words bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
                     {image.description}
                   </p>
                 )
               ) : (
-                <p className="text-slate-400 italic bg-slate-50 p-4 rounded-xl border border-slate-100">滚木</p>
+                <p className="text-slate-400 italic bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">滚木</p>
               )}
             </div>
 
@@ -471,7 +471,7 @@ export default function PicPage() {
                   {artists.map((artist, index) => (
                     <span 
                       key={index}
-                      className="px-3 py-1.5 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg border border-blue-100"
+                      className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-medium rounded-lg border border-blue-100 dark:border-blue-800/30"
                     >
                       {artist}
                     </span>
@@ -487,7 +487,7 @@ export default function PicPage() {
                   {ocs.map((oc, index) => (
                     <span 
                       key={index}
-                      className="px-3 py-1.5 bg-purple-50 text-purple-600 text-sm font-medium rounded-lg border border-purple-100"
+                      className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-sm font-medium rounded-lg border border-purple-100 dark:border-purple-800/30"
                     >
                       {oc}
                     </span>
@@ -503,7 +503,7 @@ export default function PicPage() {
                   <span 
                     key={index}
                     onClick={() => router.push(`/?search=${encodeURIComponent(tag)}`)}
-                    className="px-2.5 py-1 bg-slate-100 text-slate-600 text-sm rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                   >
                     {tag}
                   </span>
@@ -563,8 +563,8 @@ export default function PicPage() {
                           boxShadow: '0 2px 4px rgb(0 0 0 / 0.1)',
                         },
                         '&.Mui-disabled': {
-                          bgcolor: 'rgba(0, 0, 0, 0.12)',
-                          color: 'rgba(0, 0, 0, 0.26)',
+                          bgcolor: 'rgba(128, 128, 128, 0.12)',
+                          color: 'rgba(128, 128, 128, 0.4)',
                         }
                       }}
                       endIcon={isSubmittingComment ? <CircularProgress size={16} color="inherit" /> : <MdSend size={18} />}
@@ -582,7 +582,7 @@ export default function PicPage() {
               ) : comments.length > 0 ? (
                 <div className="space-y-4">
                   {comments.map((comment) => (
-                    <div key={`${comment.source}-${comment.id}`} className="bg-slate-50 rounded-xl p-4 flex gap-4">
+                    <div key={`${comment.source}-${comment.id}`} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 flex gap-4">
                       <div className="flex-shrink-0">
                         {comment.avatar ? (
                           <FadeInImage 
