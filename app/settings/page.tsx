@@ -16,15 +16,16 @@ const buttonSx = {
   minHeight: { xs: '36px', sm: 'auto' },
   px: { xs: 0, sm: 2 },
   py: { xs: 0, sm: 1 },
-  backgroundColor: 'white',
-  borderColor: 'rgb(226 232 240)',
+  backgroundColor: 'var(--card-bg)',
+  border: '1px solid',
+  borderColor: 'var(--card-border)',
   borderRadius: '0.375rem',
   fontSize: '0.875rem',
   fontWeight: 500,
-  color: 'rgb(51 65 85)',
+  color: 'var(--sidebar-text)',
   transition: 'all 0.2s',
   '&:hover': {
-    backgroundColor: 'rgb(248 250 252)',
+    backgroundColor: 'var(--sidebar-hover)',
     color: 'var(--color-primary)',
   },
   '&.Mui-disabled': {
@@ -299,11 +300,11 @@ export default function SettingsPage() {
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">设置</h1>
       
-      <div className="bg-white dark:bg-slate-800 overflow-hidden rounded-xl">
+      <div className="bg-white dark:bg-slate-950 overflow-hidden rounded-xl">
         <div className="p-6 border-b border-slate-100 dark:border-slate-700">
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">账户设置</h2>
           
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mb-4">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg mb-4">
               <div className="flex items-center gap-4">
                 <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
                 {currentAvatar ? (
@@ -341,7 +342,7 @@ export default function SettingsPage() {
             </ButtonBase>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">当前用户名</p>
               <p className="font-medium text-slate-800 dark:text-slate-200">{currentUsername || '未登录'}</p>
@@ -356,7 +357,7 @@ export default function SettingsPage() {
             </ButtonBase>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mt-4">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg mt-4">
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">账号密码</p>
               <p className="font-medium text-slate-800 dark:text-slate-200">********</p>
@@ -371,7 +372,7 @@ export default function SettingsPage() {
             </ButtonBase>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mt-4">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg mt-4">
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Derpibooru API Key</p>
               <p className="font-medium text-slate-800 dark:text-slate-200">
@@ -395,7 +396,7 @@ export default function SettingsPage() {
         <div className="p-6 border-b border-slate-100 dark:border-slate-700">
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">偏好设置</h2>
           
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mb-4">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg mb-4">
             <div>
               <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">深色模式</p>
               <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -416,7 +417,7 @@ export default function SettingsPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
             <div>
               <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">启用图片 CDN 加速</p>
               <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -515,10 +516,10 @@ export default function SettingsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800">配置 API Key</h3>
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">配置 API Key</h3>
               <button 
                 onClick={closeApiKeyModal}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
                 <MdClose size={24} />
               </button>
@@ -526,7 +527,7 @@ export default function SettingsPage() {
             
             <form onSubmit={handleApiKeySubmit} className="p-6">
               <div className="mb-4">
-                <label htmlFor="newApiKey" className="block text-sm font-medium text-slate-700 mb-2">
+                <label htmlFor="newApiKey" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   Derpibooru API Key
                 </label>
                 <input
@@ -534,12 +535,12 @@ export default function SettingsPage() {
                   id="newApiKey"
                   value={newApiKey}
                   onChange={(e) => setNewApiKey(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                   placeholder="请输入你的 API Key"
                   disabled={apiKeyLoading}
                   autoFocus
                 />
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                   通过绑定Derpibooru API Key，您可以同步您的黑名单过滤、解锁内容等，且绝对安全（不涉密码）。<br />
                   获取教程：<br />
                   1. 登录Derpibooru<br />
@@ -553,7 +554,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={closeApiKeyModal}
                   disabled={apiKeyLoading}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
                   取消
                 </button>
@@ -588,10 +589,10 @@ export default function SettingsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800">修改密码</h3>
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">修改密码</h3>
               <button 
                 onClick={closePasswordModal}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
                 <MdClose size={24} />
               </button>
@@ -599,7 +600,7 @@ export default function SettingsPage() {
             
             <form onSubmit={handlePasswordSubmit} className="p-6">
               <div className="mb-4">
-                <label htmlFor="oldPassword" className="block text-sm font-medium text-slate-700 mb-2">
+                <label htmlFor="oldPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   原密码
                 </label>
                 <input
@@ -607,14 +608,14 @@ export default function SettingsPage() {
                   id="oldPassword"
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                   placeholder="请输入原密码"
                   disabled={passwordLoading}
                   autoFocus
                 />
               </div>
               <div className="mb-4">
-                <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 mb-2">
+                <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   新密码
                 </label>
                 <input
@@ -622,7 +623,7 @@ export default function SettingsPage() {
                   id="newPassword"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                   placeholder="请输入新密码"
                   disabled={passwordLoading}
                 />
@@ -633,7 +634,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={closePasswordModal}
                   disabled={passwordLoading}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
                   取消
                 </button>

@@ -7,6 +7,8 @@
   --foreground: #171717;
   --sidebar-text: #334155;
   --sidebar-hover: #f1f5f9;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
 }
 
 .dark {
@@ -14,6 +16,8 @@
   --foreground: #f1f5f9;
   --sidebar-text: #cbd5e1;
   --sidebar-hover: #1e293b;
+  --card-bg: #1e293b;
+  --card-border: #334155;
 }
 
 .dark aside .MuiButtonBase-root {
