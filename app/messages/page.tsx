@@ -315,7 +315,7 @@ export default function MessagesPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">消息</h1>
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">消息</h1>
       
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs 
@@ -327,6 +327,7 @@ export default function MessagesPage() {
               fontWeight: 500,
               textTransform: 'none',
               minWidth: 100,
+              color: 'var(--sidebar-text)',
             },
             '& .Mui-selected': {
               color: 'var(--color-primary) !important',
@@ -359,23 +360,23 @@ export default function MessagesPage() {
       <div className="min-h-[400px] relative">
         <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {activeTab === 'chat' ? (
-            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex h-[calc(100vh-200px)] md:h-[600px]">
-              <div className={`w-full md:w-80 border-r border-slate-100 flex-col ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden flex h-[calc(100vh-200px)] md:h-[600px]">
+              <div className={`w-full md:w-80 border-r border-slate-100 dark:border-slate-700 flex-col ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
                 <div className="flex-1 overflow-y-auto">
                   {loading && contacts.length === 0 ? (
                     <div className="p-4 space-y-4">
                       {[1, 2, 3, 4].map(i => (
                         <div key={i} className="flex items-center space-x-3 animate-pulse">
-                          <div className="w-12 h-12 bg-slate-100 rounded-full"></div>
+                          <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-full"></div>
                           <div className="flex-1 space-y-2">
-                            <div className="h-4 bg-slate-100 rounded w-3/4"></div>
-                            <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+                            <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded w-3/4"></div>
+                            <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-1/2"></div>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : error ? (
-                    <div className="p-10 text-center text-slate-400 text-sm">
+                    <div className="p-10 text-center text-slate-400 dark:text-slate-500 text-sm">
                       {error}
                     </div>
                   ) : contacts.length > 0 ? (
@@ -392,14 +393,14 @@ export default function MessagesPage() {
                           p: 2,
                           gap: 1.5,
                           transition: 'background-color 0.2s',
-                          backgroundColor: selectedContact?.id === contact.id ? 'rgb(248 250 252)' : 'transparent',
+                          backgroundColor: selectedContact?.id === contact.id ? 'var(--sidebar-hover)' : 'transparent',
                           '&:hover': {
-                            backgroundColor: 'rgb(248 250 252)',
+                            backgroundColor: 'var(--sidebar-hover)',
                           }
                         }}
                       >
                         <div className="relative">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 border border-slate-100">
+                          <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-700 border border-slate-100 dark:border-slate-600">
                             {contact.avatar ? (
                               <FadeInImage 
                                 src={`https://picpony.top/${contact.avatar}`} 
@@ -409,39 +410,39 @@ export default function MessagesPage() {
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-200">
+                              <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-200 dark:bg-slate-600">
                                 {contact.username[0].toUpperCase()}
                               </div>
                             )}
                           </div>
                           {contact.unread_count > 0 && (
-                            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
+                            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white dark:border-slate-800">
                               {contact.unread_count}
                             </div>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-baseline">
-                            <h4 className="font-bold text-slate-800 truncate text-sm">{contact.username}</h4>
+                            <h4 className="font-bold text-slate-800 dark:text-slate-200 truncate text-sm">{contact.username}</h4>
                           </div>
-                          <p className="text-xs text-slate-500 truncate mt-1">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
                             {contact.last_msg_time}
                           </p>
                         </div>
                       </ButtonBase>
                     ))
                   ) : (
-                    <div className="p-10 text-center text-slate-400 text-sm">
+                    <div className="p-10 text-center text-slate-400 dark:text-slate-500 text-sm">
                       滚木
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className={`flex-1 flex-col bg-slate-50/30 ${!selectedContact ? 'hidden md:flex' : 'flex'}`}>
+              <div className={`flex-1 flex-col bg-slate-50/30 dark:bg-slate-900/30 ${!selectedContact ? 'hidden md:flex' : 'flex'}`}>
                 {selectedContact ? (
                   <>
-                    <div className="p-4 border-b border-slate-100 bg-white flex items-center justify-between">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <IconButton 
                           onClick={() => setSelectedContact(null)}
@@ -450,7 +451,7 @@ export default function MessagesPage() {
                         >
                           <MdArrowBack />
                         </IconButton>
-                        <span className="font-bold text-slate-800">{selectedContact.username}</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{selectedContact.username}</span>
                       </div>
                     </div>
                     <div ref={messagesContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col space-y-4">
@@ -464,7 +465,7 @@ export default function MessagesPage() {
                           return (
                             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                               <div className={`flex max-w-[70%] ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2`}>
-                                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-slate-100">
+                                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-700">
                                   {msg.sender_avatar ? (
                                     <FadeInImage 
                                       src={`https://picpony.top/${msg.sender_avatar}`} 
@@ -474,18 +475,18 @@ export default function MessagesPage() {
                                       className="w-full h-full object-cover"
                                     />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs bg-slate-200">
+                                    <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-500 text-xs bg-slate-200 dark:bg-slate-600">
                                       {msg.sender_name[0].toUpperCase()}
                                     </div>
                                   )}
                                 </div>
                                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                                  <span className="text-[10px] text-slate-400 mb-1 px-1">{msg.created_at}</span>
+                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 mb-1 px-1">{msg.created_at}</span>
                                   <div 
                                     className={`px-4 py-2 rounded-2xl text-sm ${
                                       isMe 
                                         ? 'bg-primary text-white rounded-br-sm' 
-                                        : 'bg-white border border-slate-100 text-slate-800 rounded-bl-sm'
+                                        : 'bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 text-slate-800 dark:text-slate-200 rounded-bl-sm'
                                     }`}
                                   >
                                     {renderMessageContent(msg.content)}
@@ -496,30 +497,30 @@ export default function MessagesPage() {
                           );
                         })
                       ) : (
-                        <div className="flex-1 flex items-center justify-center text-slate-400">
+                        <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-slate-500">
                           <p>滚木</p>
                         </div>
                       )}
                     </div>
-                    <div className="px-4 pb-4 pt-1 bg-white border-t border-slate-100 relative">
+                    <div className="px-4 pb-4 pt-1 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 relative">
                       <div className="flex items-center justify-between mb-1">
                         <div className="relative" ref={emojiPickerRef}>
                           <IconButton 
                             size="small" 
                             onClick={toggleEmojiPicker}
-                            sx={{ color: showEmojiPicker ? 'var(--color-primary)' : 'text.secondary' }}
+                            sx={{ color: showEmojiPicker ? 'var(--color-primary)' : 'var(--sidebar-text)' }}
                           >
                             <MdOutlineEmojiEmotions size={24} />
                           </IconButton>
                           
                           {(showEmojiPicker || isEmojiPickerClosing) && (
-                            <div className={`absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}>
+                            <div className={`absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}>
                               <div className="grid grid-cols-6 gap-2 max-h-60 overflow-y-auto p-1">
                                 {emojiList.map(emoji => (
                                   <button
                                     key={emoji}
                                     onClick={() => handleEmojiClick(emoji)}
-                                    className="p-1 hover:bg-slate-100 rounded transition-colors flex items-center justify-center"
+                                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors flex items-center justify-center"
                                     title={emoji}
                                   >
                                     <FadeInImage 
@@ -539,7 +540,7 @@ export default function MessagesPage() {
                           size="small" 
                           onClick={() => fetchMessages(selectedContact.id)}
                           disabled={loadingMessages}
-                          sx={{ color: 'text.secondary' }}
+                          sx={{ color: 'var(--sidebar-text)' }}
                         >
                           <MdRefresh size={24} className={loadingMessages ? 'animate-spin' : ''} />
                         </IconButton>
@@ -552,7 +553,7 @@ export default function MessagesPage() {
                           onChange={(e) => setNewMessage(e.target.value)}
                           onKeyPress={handleKeyPress}
                           placeholder="输入消息..." 
-                          className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                          className="flex-1 bg-slate-100 dark:bg-slate-700 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none text-slate-800 dark:text-slate-200"
                           disabled={sending}
                         />
                         <ButtonBase 
@@ -585,7 +586,7 @@ export default function MessagesPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                  <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
                     <MdOutlineChatBubbleOutline size={64} className="mb-2 opacity-20" />
                     <p>选择一个联系人开始聊天</p>
                   </div>
@@ -597,11 +598,11 @@ export default function MessagesPage() {
               {loading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="bg-slate-50 h-32 rounded-xl animate-pulse"></div>
+                    <div key={i} className="bg-slate-50 dark:bg-slate-800 h-32 rounded-xl animate-pulse"></div>
                   ))}
                 </div>
               ) : error ? (
-                <div className="text-center py-20 text-slate-500">
+                <div className="text-center py-20 text-slate-500 dark:text-slate-400">
                   <p>{error}</p>
                   <button 
                     onClick={fetchAnnouncements}
@@ -615,26 +616,26 @@ export default function MessagesPage() {
                   {announcements.map((item) => (
                     <div 
                       key={item.id} 
-                      className="bg-white rounded-xl p-5"
+                      className="bg-white dark:bg-slate-800 rounded-xl p-5"
                     >
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex items-center">
                           <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded mr-3">
                             {item.version}
                           </span>
-                          <h3 className="text-lg font-bold text-slate-800">{item.title}</h3>
+                          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">{item.title}</h3>
                         </div>
-                        <span className="text-sm text-slate-400">{item.date}</span>
+                        <span className="text-sm text-slate-400 dark:text-slate-500">{item.date}</span>
                       </div>
                       <div 
-                        className="text-slate-600 text-sm leading-relaxed announcement-content"
+                        className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed announcement-content"
                         dangerouslySetInnerHTML={{ __html: item.content }}
                       />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-20 text-slate-500">
+                <div className="text-center py-20 text-slate-500 dark:text-slate-400">
                   滚木
                 </div>
               )}
@@ -644,11 +645,11 @@ export default function MessagesPage() {
               {loading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="bg-slate-50 h-24 rounded-xl animate-pulse"></div>
+                    <div key={i} className="bg-slate-50 dark:bg-slate-800 h-24 rounded-xl animate-pulse"></div>
                   ))}
                 </div>
               ) : error ? (
-                <div className="text-center py-20 text-slate-500">
+                <div className="text-center py-20 text-slate-500 dark:text-slate-400">
                   <p>{error}</p>
                   <button 
                     onClick={fetchNotifications}
@@ -662,22 +663,22 @@ export default function MessagesPage() {
                   {notifications.map((item) => (
                     <div 
                       key={item.id} 
-                      className={`rounded-xl p-5 relative overflow-hidden transition-colors ${item.is_read === 0 ? 'bg-primary/5 border border-primary/20' : 'bg-white'}`}
+                      className={`rounded-xl p-5 relative overflow-hidden transition-colors ${item.is_read === 0 ? 'bg-primary/5 border border-primary/20' : 'bg-white dark:bg-slate-800'}`}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <h3 className={`text-lg font-bold ${item.is_read === 0 ? 'text-slate-900' : 'text-slate-700'}`}>
+                        <h3 className={`text-lg font-bold ${item.is_read === 0 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'}`}>
                           {item.title}
                         </h3>
-                        <span className="text-sm text-slate-400">{item.created_at}</span>
+                        <span className="text-sm text-slate-400 dark:text-slate-500">{item.created_at}</span>
                       </div>
-                      <div className="text-slate-600 text-sm leading-relaxed">
+                      <div className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
                         {item.content}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-20 text-slate-500">
+                <div className="text-center py-20 text-slate-500 dark:text-slate-400">
                   滚木
                 </div>
               )}

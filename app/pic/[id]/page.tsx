@@ -590,7 +590,7 @@ export default function PicPage() {
                             alt={`${comment.username}`}
                             width={40}
                             height={40}
-                            className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20">
@@ -602,7 +602,7 @@ export default function PicPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-800 text-sm">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
                               {comment.username}
                             </span>
                             {comment.source === 'trixiebooru' && (
@@ -621,7 +621,7 @@ export default function PicPage() {
                             })}
                           </span>
                         </div>
-                        <div className="text-slate-600 text-sm whitespace-pre-wrap break-words">
+                        <div className="text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap break-words">
                           <BBCodeRenderer content={comment.body} />
                         </div>
                       </div>

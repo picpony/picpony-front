@@ -31,7 +31,11 @@ export default function LoadingOverlay() {
     >
       <img 
         src="/img/picpony.svg"
-        className="w-32 h-auto opacity-10" 
+        className="w-32 h-auto opacity-10 dark:hidden" 
+      />
+      <img 
+        src="/img/picpony-w.svg"
+        className="w-32 h-auto opacity-10 hidden dark:block" 
       />
     </div>
   );
