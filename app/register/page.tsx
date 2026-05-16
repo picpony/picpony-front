@@ -1,12 +1,11 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { MdArrowBack } from "react-icons/md";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ReCAPTCHA from "react-google-recaptcha";
 import { showToast } from "@/components/Toast";
+import SliderCaptcha from "@/components/SliderCaptcha";
 import { api } from "@/lib/api";
 
 export default function RegisterPage() {
@@ -18,7 +17,6 @@ export default function RegisterPage() {
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const [isClosingCaptcha, setIsClosingCaptcha] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -27,7 +25,7 @@ export default function RegisterPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!username || !email || !password) {
       showToast("请填写所有字段", "error");
       return;
@@ -50,12 +48,7 @@ export default function RegisterPage() {
     }, 200);
   };
 
-  const onReCAPTCHAChange = async (token: string | null) => {
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
+  const onCaptchaVerify = async (token: string) => {
     closeCaptchaModal();
     setIsLoading(true);
 
@@ -71,18 +64,16 @@ export default function RegisterPage() {
 
       if (res.ok && data.success) {
         setSuccess(true);
-        showToast('注册成功，请登录', 'success');
-        
+        showToast("注册成功，请登录", "success");
+
         setTimeout(() => {
-          router.push('/login');
+          router.push("/login");
         }, 1500);
       } else {
         showToast(data.message || "注册失败，请检查输入", "error");
-        recaptchaRef.current?.reset();
       }
     } catch {
       showToast("网络错误，请稍后再试", "error");
-      recaptchaRef.current?.reset();
     } finally {
       setIsLoading(false);
     }
@@ -90,21 +81,19 @@ export default function RegisterPage() {
 
   return (
     <div className="max-w-md mx-auto mt-12 p-8 bg-white dark:bg-slate-800 rounded-xl relative">
-      <div className="flex items-center mb-8">
-        <Link 
-          href="/login"
-          className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
-        >
-          <MdArrowBack size={24} />
-        </Link>
-        <h1 className="text-2xl font-bold ml-2 text-slate-800 dark:text-slate-100">注册</h1>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+          注册
+        </h1>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">用户名</label>
-          <input 
-            type="text" 
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            用户名
+          </label>
+          <input
+            type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
@@ -113,9 +102,11 @@ export default function RegisterPage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">邮箱</label>
-          <input 
-            type="email" 
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            邮箱
+          </label>
+          <input
+            type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -124,9 +115,11 @@ export default function RegisterPage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">密码</label>
-          <input 
-            type="password" 
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            密码
+          </label>
+          <input
+            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -134,43 +127,59 @@ export default function RegisterPage() {
             placeholder="请输入密码"
           />
         </div>
-        
-        {showCaptchaModal && mounted && createPortal(
-          <div 
-            className={`fixed top-0 left-0 w-screen h-screen bg-black/50 flex items-center justify-center z-[9999] ${isClosingCaptcha ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          >
-            <div 
-              className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-xl max-w-sm w-full mx-4 relative ${isClosingCaptcha ? 'animate-modal-content-out' : 'animate-modal-content'}`}
+
+        {showCaptchaModal &&
+          mounted &&
+          createPortal(
+            <div
+              className={`fixed top-0 left-0 w-screen h-screen bg-black/50 flex items-center justify-center z-[9999] ${
+                isClosingCaptcha
+                  ? "animate-modal-overlay-out"
+                  : "animate-modal-overlay"
+              }`}
             >
-              <h3 className="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100 text-center">请先完成验证码</h3>
-              <div className="flex justify-center">
-                <ReCAPTCHA
-                  ref={recaptchaRef}
-                  sitekey="6LfOWossAAAAAB8yn0r5JPp_7aCVm4KA1TdEd0Py"
-                  onChange={onReCAPTCHAChange}
+              <div
+                className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-xl w-fit mx-4 relative ${
+                  isClosingCaptcha
+                    ? "animate-modal-content-out"
+                    : "animate-modal-content"
+                }`}
+              >
+                <SliderCaptcha
+                  onVerify={onCaptchaVerify}
+                  onClose={closeCaptchaModal}
                 />
               </div>
-            </div>
-          </div>,
-          document.body
-        )}
+            </div>,
+            document.body
+          )}
 
-        <button 
+        <button
           type="submit"
           disabled={isLoading || success}
           className={`w-full py-3 bg-primary text-white rounded-lg font-semibold transition-colors shadow-sm flex items-center justify-center ${
-            isLoading || success ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary/90'
+            isLoading || success
+              ? "opacity-70 cursor-not-allowed"
+              : "hover:bg-primary/90"
           }`}
         >
           {isLoading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-          ) : "注册"}
+          ) : (
+            "注册"
+          )}
         </button>
       </form>
 
       <div className="mt-6 text-center">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          已有账号？ <Link href="/login" className="text-primary cursor-pointer hover:underline">立即登录</Link>
+          已有账号？{" "}
+          <Link
+            href="/login"
+            className="text-primary cursor-pointer hover:underline"
+          >
+            立即登录
+          </Link>
         </p>
       </div>
     </div>

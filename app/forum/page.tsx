@@ -104,7 +104,7 @@ export default function ForumPage() {
             <div 
               key={post.id}
               onClick={() => router.push(`/forum/${post.id}`)}
-              className="block bg-white dark:bg-slate-800 p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors duration-200 cursor-pointer"
+              className="block bg-white dark:bg-slate-800 p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-200 cursor-pointer"
             >
               <div className="flex gap-4">
                 <div className="flex-shrink-0">

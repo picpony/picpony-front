@@ -1,0 +1,203 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { api } from "@/lib/api";
+
+interface SliderCaptchaProps {
+  onVerify: (token: string) => void;
+  onClose: () => void;
+}
+
+export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps) {
+  const [bgImage, setBgImage] = useState("");
+  const [pieceImage, setPieceImage] = useState("");
+  const [pieceY, setPieceY] = useState(0);
+  const [sliderX, setSliderX] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [verifying, setVerifying] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const sliderTrackRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef(0);
+  const sliderXRef = useRef(0);
+  const sliderBtnRef = useRef<HTMLDivElement>(null);
+  const fetchedRef = useRef(false);
+  const maxSliderX = 260;
+
+  const fetchCaptcha = useCallback(async () => {
+    setLoading(true);
+    setErrorMsg("");
+    setSliderX(0);
+    try {
+      const data = await api.captchaGet();
+      if (data.success) {
+        setBgImage(data.bg);
+        setPieceImage(data.piece);
+        setPieceY(data.y);
+      } else {
+        setErrorMsg("获取验证码失败");
+      }
+    } catch {
+      setErrorMsg("网络错误，请重试");
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!fetchedRef.current) {
+      fetchedRef.current = true;
+      fetchCaptcha();
+    }
+  }, [fetchCaptcha]);
+
+  const getClientX = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent): number => {
+    if ("touches" in e) {
+      return e.touches[0].clientX;
+    }
+    return e.clientX;
+  };
+
+  const handleStart = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      if (loading || verifying || errorMsg) return;
+      e.preventDefault();
+      setIsDragging(true);
+      startXRef.current = getClientX(e);
+
+      const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
+        moveEvent.preventDefault();
+        const clientX = getClientX(moveEvent);
+        let moveX = clientX - startXRef.current;
+        if (moveX < 0) moveX = 0;
+        if (moveX > maxSliderX) moveX = maxSliderX;
+        sliderXRef.current = moveX;
+        setSliderX(moveX);
+      };
+
+      const handleEnd = async () => {
+        setIsDragging(false);
+        document.removeEventListener("mousemove", handleMove);
+        document.removeEventListener("touchmove", handleMove);
+        document.removeEventListener("mouseup", handleEnd);
+        document.removeEventListener("touchend", handleEnd);
+
+        const finalX = sliderXRef.current;
+        if (finalX < 5) return;
+
+        setVerifying(true);
+        try {
+          const data = await api.captchaVerify(finalX);
+          if (data.success && data.token) {
+            onVerify(data.token);
+          } else {
+            setSliderX(0);
+            setErrorMsg("验证失败，请重试");
+            setTimeout(() => fetchCaptcha(), 500);
+          }
+        } catch {
+          setSliderX(0);
+          setErrorMsg("网络错误，请重试");
+          setTimeout(() => fetchCaptcha(), 500);
+        }
+        setVerifying(false);
+      };
+
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("touchmove", handleMove, { passive: false });
+      document.addEventListener("mouseup", handleEnd);
+      document.addEventListener("touchend", handleEnd);
+    },
+    [loading, verifying, errorMsg, maxSliderX, onVerify, fetchCaptcha]
+  );
+
+  const trackWidth = 310;
+
+  return (
+    <div className="flex flex-col items-center gap-4 w-[340px]">
+      <div className="flex justify-between items-center w-full">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">请完成安全验证</span>
+        <button
+          onClick={onClose}
+          className="text-2xl leading-none text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          aria-label="关闭"
+        >
+          &times;
+        </button>
+      </div>
+
+      <div className="relative w-[310px]">
+        {loading && !bgImage && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-800/80 z-10 rounded-md text-sm text-slate-500">
+            加载中...
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-800/80 z-10 rounded-md text-sm text-red-500 gap-2">
+            <span>{errorMsg}</span>
+            <button
+              onClick={fetchCaptcha}
+              className="text-primary underline hover:no-underline"
+            >
+              重试
+            </button>
+          </div>
+        )}
+
+        {bgImage && (
+          <div className="relative w-[310px] h-[155px] bg-slate-200 dark:bg-slate-600 rounded-md overflow-hidden">
+            <img
+              src={bgImage}
+              alt="验证码背景"
+              className="w-full h-full block"
+              draggable={false}
+            />
+            {pieceImage && (
+              <img
+                src={pieceImage}
+                alt="滑动拼图"
+                className="absolute w-[50px] h-[50px] drop-shadow-[0_0_5px_rgba(0,0,0,0.5)] pointer-events-none"
+                style={{ top: `${pieceY}px`, left: `${sliderX}px` }}
+                draggable={false}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      {bgImage && (
+        <div
+          ref={sliderTrackRef}
+          className="relative w-[310px] h-10 bg-slate-100 dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600 mt-2"
+          style={{ touchAction: "none" }}
+        >
+          <div
+            className="h-full bg-emerald-500/20 rounded-full transition-none"
+            style={{ width: `${sliderX + 20}px` }}
+          />
+
+          <div
+            ref={sliderBtnRef}
+            className={`absolute top-[-1px] w-10 h-10 bg-white dark:bg-slate-200 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-colors ${
+              isDragging
+                ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500"
+                : "cursor-grab"
+            } ${verifying ? "pointer-events-none opacity-70" : ""}`}
+            style={{ left: `${sliderX}px` }}
+            onMouseDown={handleStart}
+            onTouchStart={handleStart}
+          >
+            &rarr;
+          </div>
+        </div>
+      )}
+
+      {verifying && (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="w-4 h-4 border-2 border-slate-300 border-t-primary rounded-full animate-spin" />
+          验证中...
+        </div>
+      )}
+    </div>
+  );
+}

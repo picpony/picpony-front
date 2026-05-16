@@ -160,7 +160,19 @@ export interface ForumPostDetailResponse {
   total_pages: number;
 }
 
-const PICPONY_API_BASE = 'https://picpony.top/api.php';
+export interface CaptchaGetResponse {
+  success: boolean;
+  bg: string;
+  piece: string;
+  y: number;
+}
+
+export interface CaptchaVerifyResponse {
+  success: boolean;
+  token: string;
+}
+
+const PICPONY_API_BASE = '/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
 export const api = {
@@ -441,6 +453,20 @@ export const api = {
     if (!res.ok) {
       throw new Error('Failed to fetch forum post detail');
     }
+    return res.json();
+  },
+
+  captchaGet: async (): Promise<CaptchaGetResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=captcha_get`);
+    return res.json();
+  },
+
+  captchaVerify: async (x: number): Promise<CaptchaVerifyResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=captcha_verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x })
+    });
     return res.json();
   },
 
