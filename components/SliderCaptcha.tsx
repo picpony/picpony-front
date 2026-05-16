@@ -23,10 +23,10 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
   const sliderBtnRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
   const maxSliderX = 260;
+  const btnWidth = 50;
 
   const fetchCaptcha = useCallback(async () => {
     setLoading(true);
-    setErrorMsg("");
     setSliderX(0);
     try {
       const data = await api.captchaGet();
@@ -34,6 +34,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
         setBgImage(data.bg);
         setPieceImage(data.piece);
         setPieceY(data.y);
+        setErrorMsg("");
       } else {
         setErrorMsg("获取验证码失败");
       }
@@ -114,38 +115,18 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
 
   return (
     <div className="flex flex-col items-center gap-4 w-[340px]">
-      <div className="flex justify-between items-center w-full">
+      <div className="flex justify-center items-center w-full">
         <span className="font-semibold text-slate-800 dark:text-slate-100">请完成安全验证</span>
-        <button
-          onClick={onClose}
-          className="text-2xl leading-none text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-          aria-label="关闭"
-        >
-          &times;
-        </button>
       </div>
-
       <div className="relative w-[310px]">
         {loading && !bgImage && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-800/80 z-10 rounded-md text-sm text-slate-500">
-            加载中...
-          </div>
-        )}
-
-        {errorMsg && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-800/80 z-10 rounded-md text-sm text-red-500 gap-2">
-            <span>{errorMsg}</span>
-            <button
-              onClick={fetchCaptcha}
-              className="text-primary underline hover:no-underline"
-            >
-              重试
-            </button>
+          <div className="w-[310px] h-[155px] flex items-center justify-center bg-white/80 dark:bg-slate-800/80 rounded-md">
+            <div className="w-8 h-8 rounded-full animate-spin" style={{ border: "3px solid rgb(148 163 184 / 0.3)", borderTopColor: "#E06C9F" }} />
           </div>
         )}
 
         {bgImage && (
-          <div className="relative w-[310px] h-[155px] bg-slate-200 dark:bg-slate-600 rounded-md overflow-hidden">
+          <div className="relative w-[310px] h-[155px] bg-slate-200 dark:bg-slate-600 rounded-md overflow-hidden animate-fade-in">
             <img
               src={bgImage}
               alt="验证码背景"
@@ -161,6 +142,20 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
                 draggable={false}
               />
             )}
+            {verifying && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-black/50 z-20 animate-fade-in">
+                <div className="w-8 h-8 rounded-full animate-spin" style={{ border: "3px solid rgb(148 163 184 / 0.3)", borderTopColor: "#E06C9F" }} />
+              </div>
+            )}
+            {errorMsg && !verifying && (
+              <div className="absolute inset-0 flex items-center justify-center bg-red-500/15 dark:bg-red-900/40 z-20 animate-fade-in">
+                <svg viewBox="0 0 24 24" className="w-12 h-12 text-red-500 drop-shadow-md" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -173,12 +168,12 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
         >
           <div
             className="h-full bg-emerald-500/20 rounded-full transition-none"
-            style={{ width: `${sliderX + 20}px` }}
+            style={{ width: `${sliderX + btnWidth}px` }}
           />
 
           <div
             ref={sliderBtnRef}
-            className={`absolute top-[-1px] w-10 h-10 bg-white dark:bg-slate-200 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-colors ${
+            className={`absolute top-[-1px] w-[50px] h-10 bg-white dark:bg-slate-200 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-colors ${
               isDragging
                 ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500"
                 : "cursor-grab"
@@ -189,13 +184,6 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
           >
             &rarr;
           </div>
-        </div>
-      )}
-
-      {verifying && (
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <div className="w-4 h-4 border-2 border-slate-300 border-t-primary rounded-full animate-spin" />
-          验证中...
         </div>
       )}
     </div>
