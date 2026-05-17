@@ -56,7 +56,7 @@ export default function ForumPage() {
     <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="space-y-4">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="bg-white dark:bg-slate-800 p-4 rounded-xl animate-pulse flex gap-4">
+            <div key={i} className="bg-white dark:bg-transparent p-4 rounded-xl animate-pulse flex gap-4">
               <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full flex-shrink-0"></div>
               <div className="flex-1 space-y-3">
                 <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
@@ -96,7 +96,7 @@ export default function ForumPage() {
 
       <div className="space-y-4 mb-8">
         {posts.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-xl">
+          <div className="text-center py-12 text-slate-500 dark:text-slate-400 bg-white dark:bg-transparent rounded-xl">
             暂无帖子
           </div>
         ) : (
@@ -104,7 +104,7 @@ export default function ForumPage() {
             <div 
               key={post.id}
               onClick={() => router.push(`/forum/${post.id}`)}
-              className="block bg-white dark:bg-slate-800 p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-200 cursor-pointer"
+              className="block bg-white dark:bg-transparent p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors duration-200 cursor-pointer"
             >
               <div className="flex gap-4">
                 <div className="flex-shrink-0">
@@ -160,7 +160,7 @@ export default function ForumPage() {
           <button
             onClick={() => handlePageChange(page - 1)}
             disabled={page === 1}
-            className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 rounded-lg bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             上一页
           </button>
@@ -185,7 +185,7 @@ export default function ForumPage() {
                     className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
                     page === pageNum
                       ? 'bg-primary text-white font-medium'
-                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                      : 'bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
                 >
                   {pageNum}
@@ -197,7 +197,7 @@ export default function ForumPage() {
           <button
             onClick={() => handlePageChange(page + 1)}
             disabled={page === totalPages}
-            className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 rounded-lg bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             下一页
           </button>

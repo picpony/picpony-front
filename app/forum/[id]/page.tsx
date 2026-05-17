@@ -107,7 +107,7 @@ export default function ForumPostPage() {
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl animate-pulse mb-6">
+        <div className="bg-white dark:bg-transparent p-6 rounded-xl animate-pulse mb-6">
           <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-4"></div>
           <div className="flex items-center gap-4 mb-6">
             <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
@@ -163,7 +163,7 @@ export default function ForumPostPage() {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl mb-8">
+      <div className="bg-white dark:bg-transparent p-6 rounded-xl mb-8">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">{post.title}</h1>
         
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4 mb-6">
@@ -216,12 +216,12 @@ export default function ForumPostPage() {
         
         <div className="space-y-4">
           {comments.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-xl">
+            <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-white dark:bg-transparent rounded-xl">
               暂无回复，快来抢沙发吧！
             </div>
           ) : (
             comments.map((comment, index) => (
-              <div key={comment.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl flex gap-4">
+              <div key={comment.id} className="bg-white dark:bg-transparent p-4 rounded-xl flex gap-4">
                 <div className="flex-shrink-0">
                   <Link href={`/user/${comment.user_id}`}>
                     <img 
@@ -260,10 +260,10 @@ export default function ForumPostPage() {
       </div>
 
       {/* Comment Input */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl mb-8">
+      <div className="bg-white dark:bg-transparent p-6 rounded-xl mb-8">
         <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">发表回复</h3>
         {!isLoggedIn ? (
-          <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="text-center py-8 bg-slate-50 dark:bg-background/50 rounded-lg border border-slate-200 dark:border-slate-700">
             <p className="text-slate-500 dark:text-slate-400 mb-4">登录后才能发表回复</p>
             <Link 
               href="/login"
@@ -314,7 +314,7 @@ export default function ForumPostPage() {
           <button
             onClick={() => handlePageChange(page - 1)}
             disabled={page === 1}
-            className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 rounded-lg bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             上一页
           </button>
@@ -339,7 +339,7 @@ export default function ForumPostPage() {
                     className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
                     page === pageNum
                       ? 'bg-primary text-white font-medium'
-                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                      : 'bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
                 >
                   {pageNum}
@@ -351,7 +351,7 @@ export default function ForumPostPage() {
           <button
             onClick={() => handlePageChange(page + 1)}
             disabled={page === totalPages}
-            className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 rounded-lg bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             下一页
           </button>

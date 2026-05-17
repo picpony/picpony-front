@@ -121,7 +121,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
       <div className="relative w-[310px]">
         {loading && !bgImage && (
           <div className="w-[310px] h-[155px] flex items-center justify-center bg-white/80 dark:bg-slate-800/80 rounded-md">
-            <div className="w-8 h-8 rounded-full animate-spin" style={{ border: "3px solid rgb(148 163 184 / 0.3)", borderTopColor: "#E06C9F" }} />
+            <div className="w-8 h-8 rounded-full animate-spin border-[3px] border-slate-300/50 dark:border-slate-600/70 border-t-[#E06C9F] dark:border-t-pink-300" />
           </div>
         )}
 
@@ -144,7 +144,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
             )}
             {verifying && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-black/50 z-20 animate-fade-in">
-                <div className="w-8 h-8 rounded-full animate-spin" style={{ border: "3px solid rgb(148 163 184 / 0.3)", borderTopColor: "#E06C9F" }} />
+                <div className="w-8 h-8 rounded-full animate-spin border-[3px] border-slate-300/50 dark:border-slate-600/70 border-t-[#E06C9F] dark:border-t-pink-300" />
               </div>
             )}
             {errorMsg && !verifying && (
@@ -173,10 +173,10 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
 
           <div
             ref={sliderBtnRef}
-            className={`absolute top-[-1px] w-[50px] h-10 bg-white dark:bg-slate-200 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-colors ${
+            className={`absolute top-[-1px] w-[50px] h-10 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-colors ${
               isDragging
-                ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500"
-                : "cursor-grab"
+                ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500 dark:bg-emerald-600 dark:border-emerald-600"
+                : "cursor-grab text-slate-600 dark:text-slate-300"
             } ${verifying ? "pointer-events-none opacity-70" : ""}`}
             style={{ left: `${sliderX}px` }}
             onMouseDown={handleStart}

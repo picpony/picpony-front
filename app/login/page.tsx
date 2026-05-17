@@ -84,7 +84,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-12 p-8 bg-white dark:bg-slate-800 rounded-xl relative">
+    <div className="max-w-md mx-auto mt-12 p-8 bg-white dark:bg-transparent rounded-xl relative">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
           登录
