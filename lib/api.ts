@@ -29,6 +29,11 @@ export interface PonyImage {
   downvotes: number;
 }
 
+export interface FeaturedImage {
+  image: PonyImage;
+  interactions: [];
+}
+
 export interface ApiResponse {
   total: number;
   images: PonyImage[];
@@ -176,6 +181,31 @@ const PICPONY_API_BASE = '/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
 export const api = {
+  getFeatured: async (key?: string): Promise<FeaturedImage | null> => {
+    try {
+      let url = `${DERPIBOORU_API_BASE}/images/featured`;
+      if (key) {
+        url += `?key=${key}`;
+      }
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'User-Agent': 'PicPony/1.0'
+        }
+      });
+
+      if (!res.ok) {
+        console.error(`Featured API Error: ${res.status} ${res.statusText}`);
+        return null;
+      }
+
+      return res.json();
+    } catch (err) {
+      console.error('Failed to fetch featured image', err);
+      return null;
+    }
+  },
+
   getImage: async (id: string): Promise<{ image: PonyImage }> => {
     const res = await fetch(`${DERPIBOORU_API_BASE}/images/${id}`, {
       cache: 'no-store',
@@ -186,9 +216,8 @@ export const api = {
 
     if (!res.ok) {
       let errorText = await res.text().catch(() => 'No error text');
-      // Trixiebooru API returns HTML for 429 errors which causes "Failed to fetch" or messy errors
       if (res.status === 429) {
-          errorText = 'Too Many Requests';
+        errorText = 'Too Many Requests';
       }
       console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
       const error = new Error(errorText || res.statusText || 'Failed to fetch');
@@ -207,7 +236,7 @@ export const api = {
 
     const res = await fetch(
       `${DERPIBOORU_API_BASE}/search/images?q=${query}&page=${page}&per_page=50&sf=created_at&sd=desc`,
-      { 
+      {
         cache: 'no-store',
         headers: {
           'User-Agent': 'PicPony/1.0'
@@ -217,9 +246,8 @@ export const api = {
 
     if (!res.ok) {
       let errorText = await res.text().catch(() => 'No error text');
-      // Trixiebooru API returns HTML for 429 errors which causes "Failed to fetch" or messy errors
       if (res.status === 429) {
-          errorText = 'Too Many Requests';
+        errorText = 'Too Many Requests';
       }
       console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
       const error = new Error(errorText || res.statusText || 'Failed to fetch');
@@ -474,7 +502,7 @@ export const api = {
     try {
       const [picponyRes, trixieRes] = await Promise.all([
         fetch(`${PICPONY_API_BASE}?action=get_comments&image_id=${imageId}`).catch(() => null),
-        fetch(`${DERPIBOORU_API_BASE}/search/comments?q=image_id:${imageId}&page=1&per_page=25&key=TVdjt-Q8qRn39rcoWYl5`).catch(() => null)
+        fetch(`${DERPIBOORU_API_BASE}/search/comments?q=image_id:${imageId}&page=1&per_page=25`).catch(() => null)
       ]);
 
       let comments: Comment[] = [];

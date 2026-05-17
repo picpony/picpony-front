@@ -5,8 +5,8 @@ import { api, ForumPostDetail, ForumComment } from '@/lib/api';
 import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdComment, MdVisibility, MdSend } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import BBCodeRenderer from '@/components/BBCodeRenderer';
-import BBCodeEditor from '@/components/BBCodeEditor';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
+import MarkdownEditor from '@/components/MarkdownEditor';
 
 export default function ForumPostPage() {
   const params = useParams();
@@ -207,7 +207,7 @@ export default function ForumPostPage() {
         </div>
 
         <div className="prose max-w-none text-slate-700 dark:text-slate-300">
-          <BBCodeRenderer content={post.content} />
+          <MarkdownRenderer content={post.content} />
         </div>
       </div>
 
@@ -250,7 +250,7 @@ export default function ForumPostPage() {
                     </div>
                   </div>
                   <div className="prose max-w-none text-slate-700 dark:text-slate-300 text-sm">
-                    <BBCodeRenderer content={comment.content} />
+                    <MarkdownRenderer content={comment.content} />
                   </div>
                 </div>
               </div>
@@ -274,10 +274,10 @@ export default function ForumPostPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <BBCodeEditor 
+            <MarkdownEditor 
               value={newComment} 
               onChange={setNewComment} 
-              placeholder="写下你的回复... 支持 BBCode 语法"
+              placeholder="写下你的回复..."
             />
             {submitError && (
               <div className="text-red-500 text-sm flex items-center gap-1">

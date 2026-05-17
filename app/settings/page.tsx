@@ -104,7 +104,13 @@ export default function SettingsPage() {
           .then(res => res.json())
           .then(data => {
             if (data.success && data.user) {
-              setCurrentApiKey(data.user.api_key || '');
+              const apiKey = data.user.api_key || '';
+              setCurrentApiKey(apiKey);
+              if (apiKey) {
+                localStorage.setItem('derpi_api_key', apiKey);
+              } else {
+                localStorage.removeItem('derpi_api_key');
+              }
               if (data.user.avatar) {
                 const fullAvatarUrl = data.user.avatar.startsWith('http') ? data.user.avatar : `https://picpony.top/${data.user.avatar}`;
                 setCurrentAvatar(fullAvatarUrl);
@@ -207,6 +213,7 @@ export default function SettingsPage() {
       if (data.success) {
         showToast('已更新 Derpibooru API Key', 'success');
         setCurrentApiKey(newApiKey.trim());
+        localStorage.setItem('derpi_api_key', newApiKey.trim());
         closeApiKeyModal();
       } else {
         showToast(data.message || '配置失败，请重试', 'error');

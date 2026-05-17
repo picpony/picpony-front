@@ -6,6 +6,7 @@ import { MdErrorOutline, MdRefresh, MdThumbUp, MdComment, MdArrowBack } from "re
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api, PonyImage } from "@/lib/api";
+import FeaturedBanner from "@/components/FeaturedBanner";
 import Tooltip from '@mui/material/Tooltip';
 
 function ImageList({ search }: { search?: string }) {
@@ -322,7 +323,10 @@ function HomeContent() {
       {customResults ? (
         <CustomImageList images={customResults} onBack={clearCustomResults} />
       ) : (
-        <ImageList search={search} />
+        <>
+          <FeaturedBanner />
+          <ImageList search={search} />
+        </>
       )}
     </div>
   );
