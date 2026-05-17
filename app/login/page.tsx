@@ -57,18 +57,35 @@ export default function LoginPage() {
       if (res.ok && data.success) {
         setSuccess(true);
         showToast("登录成功", "success");
-        localStorage.setItem(
-          "user_info",
-          JSON.stringify({
-            token: data.token,
-            username: data.username,
-            avatar: data.avatar,
-            role: data.role,
-            api_key: data.api_key,
-            derpi_user_id: data.derpi_user_id,
-            derpi_username: data.derpi_username,
-          })
-        );
+
+        const baseUserInfo = {
+          token: data.token,
+          username: data.username,
+          avatar: data.avatar,
+          role: data.role,
+          api_key: data.api_key,
+          derpi_user_id: data.derpi_user_id,
+          derpi_username: data.derpi_username,
+        };
+        localStorage.setItem("user_info", JSON.stringify(baseUserInfo));
+
+        try {
+          const userRes = await api.getUser(data.token);
+          const userData = await userRes.json();
+          if (userData.success && userData.user) {
+            const fullUserInfo = {
+              ...baseUserInfo,
+              ...userData.user,
+              token: data.token,
+              api_key: data.api_key,
+              derpi_user_id: data.derpi_user_id,
+              derpi_username: data.derpi_username,
+            };
+            localStorage.setItem("user_info", JSON.stringify(fullUserInfo));
+          }
+        } catch (err) {
+          console.error("Failed to fetch user info after login", err);
+        }
 
         setTimeout(() => {
           router.push("/");

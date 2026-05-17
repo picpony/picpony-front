@@ -81,6 +81,12 @@ export interface FavesResponse {
   message?: string;
 }
 
+export interface SharedFavesResponse {
+  success: boolean;
+  username: string;
+  faves: number[];
+}
+
 export interface Comment {
   id: number;
   body: string;
@@ -549,5 +555,40 @@ export const api = {
         comments: []
       };
     }
+  },
+
+  getSharedFaves: async (username: string): Promise<SharedFavesResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_shared_faves&username=${encodeURIComponent(username)}`);
+    if (!res.ok) {
+      throw new Error('获取收藏夹失败');
+    }
+    return res.json();
+  },
+
+  searchImagesByIds: async (ids: number[], page: number = 1, perPage: number = 12): Promise<ApiResponse> => {
+    if (ids.length === 0) {
+      return { total: 0, images: [] };
+    }
+    const idQuery = ids.map(id => `id:${id}`).join('%20OR%20');
+    const res = await fetch(
+      `${DERPIBOORU_API_BASE}/search/images?q=${idQuery}&page=${page}&per_page=${perPage}`,
+      {
+        cache: 'no-store',
+        headers: {
+          'User-Agent': 'PicPony/1.0'
+        }
+      }
+    );
+    if (!res.ok) {
+      let errorText = await res.text().catch(() => 'No error text');
+      if (res.status === 429) {
+        errorText = 'Too Many Requests';
+      }
+      console.error(`API Error: ${res.status} ${res.statusText}`, errorText);
+      const error = new Error(errorText || res.statusText || 'Failed to fetch');
+      (error as Error & { status?: number }).status = res.status;
+      throw error;
+    }
+    return res.json();
   }
 };

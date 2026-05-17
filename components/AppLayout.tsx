@@ -91,10 +91,12 @@ function SearchBar() {
 }
 
 interface UserInfo {
+  id?: number;
   username: string;
   avatar: string;
   role: string;
   token: string;
+  level?: number;
 }
 
 const sidebarButtonSx = (isActive: boolean) => ({
@@ -274,13 +276,22 @@ export default function AppLayout({
           if (parsedUser.token) {
             try {
               const res = await api.getUser(parsedUser.token);
+              
+              if (res.status === 401) {
+                localStorage.removeItem('user_info');
+                setUserInfo(null);
+                return;
+              }
+              
               const data = await res.json();
               if (data.success && data.user) {
                 const updatedUser = {
                   ...parsedUser,
-                  username: data.user.username,
-                  avatar: data.user.avatar,
-                  role: data.user.role,
+                  ...data.user,
+                  token: parsedUser.token,
+                  api_key: parsedUser.api_key,
+                  derpi_user_id: parsedUser.derpi_user_id,
+                  derpi_username: parsedUser.derpi_username,
                 };
                 localStorage.setItem('user_info', JSON.stringify(updatedUser));
                 setUserInfo(updatedUser);
@@ -463,38 +474,41 @@ export default function AppLayout({
           <div className="w-64 p-3 pb-0">
             {userInfo ? (
               <div className="relative">
-                <button 
-                  onClick={toggleUserMenu}
-                  className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left relative z-20"
-                >
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0">
-                    {userInfo.avatar ? (
-                      <div className="w-full h-full">
-                        <img 
-                          src={`https://picpony.top/${userInfo.avatar}`} 
-                          alt={userInfo.username}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
-                        <MdPerson size={24} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="ml-3 overflow-hidden flex-1">
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{userInfo.username}</p>
-                    <p className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium inline-block uppercase tracking-wider mt-0.5">
-                      {userInfo.role}
-                    </p>
-                  </div>
-                  <div className="text-slate-400 dark:text-slate-500 shrink-0 ml-2">
+                <div className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative z-20">
+                  <Link 
+                    href={`/user/${userInfo.id}`}
+                    onClick={handleMobileNavigation}
+                    className="flex items-center flex-1 overflow-hidden"
+                  >
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0">
+                      {userInfo.avatar ? (
+                        <div className="w-full h-full">
+                          <img 
+                            src={`https://picpony.top/${userInfo.avatar}`} 
+                            alt={userInfo.username}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+                          <MdPerson size={24} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-3 overflow-hidden flex-1">
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{userInfo.username}</p>
+                      <p className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium inline-block mt-0.5">
+                        Lv.{userInfo.level ?? '?'}
+                      </p>
+                    </div>
+                  </Link>
+                  <button onClick={toggleUserMenu} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 p-1 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
                     <MdExpandMore 
                       size={20} 
                       className={`transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} 
                     />
-                  </div>
-                </button>
+                  </button>
+                </div>
                 
                 <div 
                   className={`mt-1 flex flex-col space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${

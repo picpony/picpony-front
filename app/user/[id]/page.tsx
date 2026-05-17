@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, PonyImage } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
-import { MdPerson, MdCake, MdAccessTime, MdInfoOutline } from 'react-icons/md';
-import { LuSettings2 } from 'react-icons/lu';
+import { MdPerson, MdCake, MdAccessTime, MdInfoOutline, MdFavorite } from 'react-icons/md';
+import Pagination from '@mui/material/Pagination';
+import Stack from '@mui/material/Stack';
+import Box from '@mui/material/Box';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
+import { useTheme } from '@mui/material/styles';
 
 interface UserProfile {
   id: number;
@@ -31,14 +36,24 @@ interface UserProfile {
   has_api_key: boolean;
 }
 
+const PER_PAGE = 12;
+
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [faveIds, setFaveIds] = useState<number[]>([]);
+  const [faveImages, setFaveImages] = useState<PonyImage[]>([]);
+  const [isFavesLoading, setIsFavesLoading] = useState(false);
+  const [favesPage, setFavesPage] = useState(1);
+  const [totalFavePages, setTotalFavePages] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,19 +84,81 @@ export default function UserProfilePage() {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!profile) return;
+
+    let isMounted = true;
+    setIsFavesLoading(true);
+
+    api.getSharedFaves(profile.username)
+      .then((res) => {
+        if (isMounted && res.success) {
+          setFaveIds(res.faves);
+          setTotalFavePages(Math.max(1, Math.ceil(res.faves.length / PER_PAGE)));
+          setFavesPage(1);
+        }
+      })
+      .catch((err) => {
+        console.error('获取收藏夹失败', err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsFavesLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile]);
+
+  useEffect(() => {
+    if (faveIds.length === 0) return;
+
+    let isMounted = true;
+    setIsFavesLoading(true);
+
+    api.searchImagesByIds(faveIds, favesPage, PER_PAGE)
+      .then((res) => {
+        if (isMounted) {
+          setFaveImages(res.images || []);
+        }
+      })
+      .catch((err) => {
+        console.error('获取收藏图片失败', err);
+        if (isMounted) {
+          setFaveImages([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsFavesLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [faveIds, favesPage]);
+
+  const handleFavesPageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
+    setFavesPage(value);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   if (isLoading) {
     return (
-      <div className="animate-pulse bg-white min-h-screen">
-        <div className="bg-slate-200 h-48 sm:h-64 md:h-80 w-full rounded-2xl sm:rounded-3xl mt-4 sm:mt-6 mx-auto max-w-[96%] sm:max-w-[98%]"></div>
+      <div className="animate-pulse bg-white dark:bg-slate-950 min-h-screen">
+        <div className="bg-slate-200 dark:bg-slate-700 h-48 sm:h-64 md:h-80 w-full rounded-2xl sm:rounded-3xl mt-4 sm:mt-6 mx-auto max-w-[96%] sm:max-w-[98%]"></div>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="pb-8 relative pt-12 sm:pt-16">
-            <div className="absolute -top-12 sm:-top-16 left-0 w-24 h-24 sm:w-32 sm:h-32 bg-slate-300 rounded-full border-4 border-white"></div>
-            <div className="h-8 bg-slate-200 rounded w-1/3 mb-4 mt-2 sm:mt-4"></div>
-            <div className="h-4 bg-slate-200 rounded w-1/4 mb-6"></div>
+            <div className="absolute -top-12 sm:-top-16 left-0 w-24 h-24 sm:w-32 sm:h-32 bg-slate-300 dark:bg-slate-600 rounded-full border-4 border-white dark:border-slate-800"></div>
+            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mb-4 mt-2 sm:mt-4"></div>
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4 mb-6"></div>
             <div className="space-y-4">
-              <div className="h-4 bg-slate-200 rounded w-full"></div>
-              <div className="h-4 bg-slate-200 rounded w-5/6"></div>
-              <div className="h-4 bg-slate-200 rounded w-4/6"></div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-4/6"></div>
             </div>
           </div>
         </div>
@@ -92,8 +169,8 @@ export default function UserProfilePage() {
   if (error || !profile) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4">加载失败</h2>
-        <p className="text-slate-600 mb-6">{error || '用户可能不存在'}</p>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">加载失败</h2>
+        <p className="text-slate-600 dark:text-slate-400 mb-6">{error || '用户可能不存在'}</p>
         <button
           onClick={() => router.back()}
           className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
@@ -105,13 +182,13 @@ export default function UserProfilePage() {
   }
 
   const roleColors: Record<string, string> = {
-    admin: 'bg-red-100 text-red-700 border-red-200',
-    moderator: 'bg-blue-100 text-blue-700 border-blue-200',
-    user: 'bg-slate-100 text-slate-700 border-slate-200',
+    admin: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800',
+    moderator: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    user: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
   };
 
   const getRoleBadge = (role: string) => {
-    const defaultColor = 'bg-slate-100 text-slate-700 border-slate-200';
+    const defaultColor = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
     const colorClass = roleColors[role.toLowerCase()] || defaultColor;
     const displayRole = role.charAt(0).toUpperCase() + role.slice(1);
 
@@ -123,8 +200,8 @@ export default function UserProfilePage() {
   };
 
   return (
-    <div className="animate-fade-in bg-white min-h-screen">
-      <div className="h-48 sm:h-64 md:h-80 relative bg-slate-100 rounded-2xl sm:rounded-3xl overflow-hidden mt-4 sm:mt-6 mx-auto max-w-[96%] sm:max-w-[98%]">
+    <div className="animate-fade-in bg-white dark:bg-slate-950 min-h-screen">
+      <div className="h-48 sm:h-64 md:h-80 relative bg-slate-100 dark:bg-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden mt-4 sm:mt-6 mx-auto max-w-[96%] sm:max-w-[98%]">
         {profile.banner ? (
           <img
             src={`https://picpony.top/${profile.banner}`}
@@ -141,7 +218,7 @@ export default function UserProfilePage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="pb-8 relative pt-12 sm:pt-16">
           <div className="absolute -top-12 sm:-top-16 left-0">
-            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white overflow-hidden bg-white">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-800">
               {profile.avatar ? (
                 <img
                   src={`https://picpony.top/${profile.avatar}`}
@@ -161,12 +238,12 @@ export default function UserProfilePage() {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 mt-2 sm:mt-4">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 break-all">
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 break-all">
                   {profile.username}
                 </h1>
                 {getRoleBadge(profile.role)}
               </div>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500 mt-3">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-400 mt-3">
                 {profile.gender && profile.gender !== '保密' && (
                   <div className="flex items-center gap-1.5">
                     <MdPerson size={18} />
@@ -183,11 +260,11 @@ export default function UserProfilePage() {
                   <MdInfoOutline size={18} />
                   <span>
                     {profile.bio ? (
-                      <p className="text-slate-400 whitespace-pre-wrap leading-relaxed text-sm sm:text-base">
+                      <p className="text-slate-400 dark:text-slate-500 whitespace-pre-wrap leading-relaxed text-sm sm:text-base">
                         {profile.bio}
                       </p>
                     ) : (
-                      <p className="text-slate-400 italic text-sm">滚木</p>
+                      <p className="text-slate-400 dark:text-slate-500 italic text-sm">滚木</p>
                     )}
                   </span>
                 </div>
@@ -201,22 +278,98 @@ export default function UserProfilePage() {
 
           {(profile.derpi_username || profile.derpi_user_id) && (
             <div className="mb-8">
-              <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2 border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-2">
                 连接的账号
               </h3>
               <div className="flex flex-wrap gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-1 min-w-[200px]">
-                  <span className="text-xs font-semibold text-slate-500 uppercase">Derpibooru</span>
+                <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col gap-1 min-w-[200px]">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Derpibooru</span>
                   {profile.derpi_username ? (
-                    <span className="text-slate-800 font-medium">{profile.derpi_username}</span>
+                    <span className="text-slate-800 dark:text-slate-200 font-medium">{profile.derpi_username}</span>
                   ) : (
-                    <span className="text-slate-800 font-medium">ID: {profile.derpi_user_id}</span>
+                    <span className="text-slate-800 dark:text-slate-200 font-medium">ID: {profile.derpi_user_id}</span>
                   )}
                 </div>
               </div>
             </div>
           )}
 
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
+            <Tabs
+              value={0}
+              sx={{
+                '& .MuiTabs-indicator': {
+                  backgroundColor: 'var(--color-primary)',
+                },
+                '& .MuiTab-root': {
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  fontSize: '0.875rem',
+                  minWidth: 100,
+                  color: 'var(--sidebar-text)',
+                  '&.Mui-selected': {
+                    color: 'var(--color-primary)',
+                  }
+                }
+              }}
+            >
+              <Tab label="收藏夹" />
+            </Tabs>
+          </Box>
+
+          <div>
+            {isFavesLoading && faveImages.length === 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="aspect-square bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse" />
+                ))}
+              </div>
+            ) : faveImages.length > 0 ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {faveImages.map((img) => (
+                    <a
+                      key={img.id}
+                      href={`/pic/${img.id}`}
+                      className="block relative aspect-square rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-primary transition-all duration-200"
+                    >
+                      <FadeInImage
+                        src={img.representations.thumb_small || img.representations.thumb || img.representations.small}
+                        alt={img.name || `Image #${img.id}`}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                      />
+                    </a>
+                  ))}
+                </div>
+                {totalFavePages > 1 && (
+                  <Stack spacing={2} alignItems="center" className="mt-8 mb-4">
+                    <Pagination
+                      count={totalFavePages}
+                      page={favesPage}
+                      onChange={handleFavesPageChange}
+                      color="primary"
+                      size="large"
+                      showFirstButton
+                      showLastButton
+                      sx={{
+                        '& .MuiPaginationItem-root': {
+                          color: isDark ? '#e2e8f0' : undefined,
+                        },
+                      }}
+                    />
+                  </Stack>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-16">
+                <MdFavorite size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                <p className="text-slate-500 dark:text-slate-400 text-lg">暂无收藏</p>
+                <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">该用户还没有添加任何收藏</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
