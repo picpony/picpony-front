@@ -5,8 +5,8 @@ import { api, ForumPostDetail, ForumComment } from '@/lib/api';
 import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdComment, MdVisibility, MdSend } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import BBCodeRenderer from '@/components/BBCodeRenderer';
 import BBCodeEditor from '@/components/BBCodeEditor';
+import RichTextRenderer from '@/components/RichTextRenderer';
 
 export default function ForumPostPage() {
   const params = useParams();
@@ -207,7 +207,7 @@ export default function ForumPostPage() {
         </div>
 
         <div className="prose max-w-none text-slate-700 dark:text-slate-300">
-          <BBCodeRenderer content={post.content} />
+          <RichTextRenderer content={post.content} />
         </div>
       </div>
 
@@ -250,7 +250,7 @@ export default function ForumPostPage() {
                     </div>
                   </div>
                   <div className="prose max-w-none text-slate-700 dark:text-slate-300 text-sm">
-                    <BBCodeRenderer content={comment.content} />
+                    <RichTextRenderer content={comment.content} />
                   </div>
                 </div>
               </div>
