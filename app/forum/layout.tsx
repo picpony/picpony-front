@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "论坛 - PicPony",
+  title: "论坛",
 };
 
 export default function ForumLayout({
