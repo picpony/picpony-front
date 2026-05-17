@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
+import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -130,7 +130,16 @@ export default function AppLayout({
   const [isLogoutClosing, setIsLogoutClosing] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
   const [darkMode, setDarkMode] = useState(initialDark);
+  const [followSystem, setFollowSystem] = useState(true);
+  const [isDarkDropdownOpen, setIsDarkDropdownOpen] = useState(false);
+  const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+
+  const systemPrefersDark = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }, []);
 
   const applyDarkMode = useCallback((dark: boolean) => {
     document.documentElement.classList.toggle('dark', dark);
@@ -139,18 +148,72 @@ export default function AppLayout({
 
   useEffect(() => {
     const storedDark = localStorage.getItem('darkMode');
-    if (storedDark !== null) {
+    const storedFollowSystem = localStorage.getItem('followSystemPrefersColorScheme');
+    
+    let resolveFollowSystem = true;
+    if (storedFollowSystem !== null) {
+      resolveFollowSystem = storedFollowSystem === 'true';
+    }
+    setFollowSystem(resolveFollowSystem);
+
+    if (resolveFollowSystem) {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const isDark = mediaQuery.matches;
+      setDarkMode(isDark);
+      applyDarkMode(isDark);
+    } else if (storedDark !== null) {
       const isDark = storedDark === 'true';
       setDarkMode(isDark);
       applyDarkMode(isDark);
     }
   }, [applyDarkMode]);
 
+  useEffect(() => {
+    if (!followSystem) return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      setDarkMode(e.matches);
+      applyDarkMode(e.matches);
+    };
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, [followSystem, applyDarkMode]);
+
   const toggleDarkMode = () => {
     const newDark = !darkMode;
     setDarkMode(newDark);
     applyDarkMode(newDark);
     localStorage.setItem('darkMode', String(newDark));
+    if (followSystem) {
+      setFollowSystem(false);
+      localStorage.setItem('followSystemPrefersColorScheme', 'false');
+    }
+  };
+
+  const handleFollowSystemChange = (checked: boolean) => {
+    setFollowSystem(checked);
+    localStorage.setItem('followSystemPrefersColorScheme', String(checked));
+    if (checked) {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const isDark = mediaQuery.matches;
+      setDarkMode(isDark);
+      applyDarkMode(isDark);
+    }
+  };
+
+  const handleDropdownMouseEnter = () => {
+    if (dropdownTimeoutRef.current) {
+      clearTimeout(dropdownTimeoutRef.current);
+      dropdownTimeoutRef.current = null;
+    }
+    setIsDarkDropdownOpen(true);
+  };
+
+  const handleDropdownMouseLeave = () => {
+    dropdownTimeoutRef.current = setTimeout(() => {
+      setIsDarkDropdownOpen(false);
+    }, 150);
   };
 
   useEffect(() => {
@@ -314,22 +377,56 @@ export default function AppLayout({
             <SearchBar />
           </Suspense>
         </div>
-        <ButtonBase 
-          onClick={toggleDarkMode}
-          aria-label={darkMode ? '切换浅色模式' : '切换深色模式'}
-          title={darkMode ? '浅色模式' : '深色模式'}
-          sx={{ 
-            borderRadius: '6px',
-            p: '8px',
-            ml: '2px',
-            color: '#ffffff',
-            '&:hover': {
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            }
-          }}
+        <div 
+          className="relative"
+          ref={dropdownRef}
+          onMouseEnter={handleDropdownMouseEnter}
+          onMouseLeave={handleDropdownMouseLeave}
         >
-          {darkMode ? <MdLightMode size={24} /> : <MdDarkMode size={24} />}
-        </ButtonBase>
+          <ButtonBase 
+            onClick={toggleDarkMode}
+            aria-label={darkMode ? '切换浅色模式' : '切换深色模式'}
+            title={darkMode ? '浅色模式' : '深色模式'}
+            sx={{ 
+              borderRadius: '6px',
+              p: '8px',
+              ml: '2px',
+              color: '#ffffff',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              }
+            }}
+          >
+            {darkMode ? <MdLightMode size={24} /> : <MdDarkMode size={24} />}
+          </ButtonBase>
+          {isDarkDropdownOpen && (
+            <div 
+              className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-[60] animate-fade-in"
+              onMouseEnter={handleDropdownMouseEnter}
+              onMouseLeave={handleDropdownMouseLeave}
+            >
+              <label className="flex items-center px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                <div className="relative flex items-center justify-center w-5 h-5 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={followSystem}
+                    onChange={(e) => handleFollowSystemChange(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 peer-checked:bg-primary peer-checked:border-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30 transition-all duration-200" />
+                  <svg
+                    className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-200 pointer-events-none"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                  >
+                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <span className="ml-2.5 text-sm text-slate-700 dark:text-slate-300 select-none">跟随系统</span>
+              </label>
+            </div>
+          )}
+        </div>
         <ButtonBase 
           component={Link}
           href="/messages"

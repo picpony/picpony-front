@@ -403,27 +403,6 @@ export default function SettingsPage() {
         <div className="p-6 border-b border-slate-100 dark:border-slate-700">
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">偏好设置</h2>
           
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg mb-4">
-            <div>
-              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">深色模式</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                切换浅色/深色显示模式。
-              </p>
-            </div>
-            <Switch
-              checked={darkMode}
-              onChange={handleDarkModeToggle}
-              sx={{
-                '& .MuiSwitch-switchBase.Mui-checked': {
-                  color: 'var(--color-primary)',
-                },
-                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                  backgroundColor: 'var(--color-primary)',
-                },
-              }}
-            />
-          </div>
-
           <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
             <div>
               <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">启用图片 CDN 加速</p>
