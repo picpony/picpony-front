@@ -68,10 +68,25 @@ export interface MessagesResponse {
   messages: Message[];
 }
 
+export interface Notification {
+  id: number;
+  title: string;
+  content: string;
+  is_read: number;
+  created_at: string;
+}
+
+export interface InteractionNotificationsResponse {
+  success: boolean;
+  notifications: Notification[];
+  total_pages: number;
+}
+
 export interface UnreadCountsResponse {
   success: boolean;
   unread_messages: number;
   unread_notifications: number;
+  unread_interactions: number;
   total_unread: number;
 }
 
@@ -320,6 +335,16 @@ export const api = {
 
   getNotifications: async (token: string) => {
     const res = await fetch(`${PICPONY_API_BASE}?action=get_notifications`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.json();
+  },
+
+  getInteractionNotifications: async (token: string, page: number = 1): Promise<InteractionNotificationsResponse> => {
+    const timestamp = Date.now();
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_notifications&type=interaction&page=${page}&_t=${timestamp}`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

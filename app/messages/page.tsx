@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { api } from '@/lib/api';
-import { Tabs, Tab, Box, CircularProgress, ButtonBase, IconButton, Badge } from '@mui/material';
-import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack } from 'react-icons/md';
+import { api, Notification } from '@/lib/api';
+import { Tabs, Tab, Box, CircularProgress, ButtonBase, IconButton, Badge, Pagination } from '@mui/material';
+import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack, MdOutlineNotificationsActive } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
 
 interface Announcement {
@@ -14,19 +14,11 @@ interface Announcement {
   date: string;
 }
 
-interface Notification {
-  id: number;
-  title: string;
-  content: string;
-  is_read: number;
-  created_at: string;
-}
-
 import { Contact, Message } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 
 export default function MessagesPage() {
-  const [activeTab, setActiveTab] = useState<'announcement' | 'notification' | 'chat'>('announcement');
+  const [activeTab, setActiveTab] = useState<'announcement' | 'notification' | 'interaction' | 'chat'>('announcement');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -42,7 +34,10 @@ export default function MessagesPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEmojiPickerClosing, setIsEmojiPickerClosing] = useState(false);
   const [emojiList, setEmojiList] = useState<string[]>([]);
-  const [unreadCounts, setUnreadCounts] = useState({ messages: 0, notifications: 0 });
+  const [unreadCounts, setUnreadCounts] = useState({ messages: 0, notifications: 0, interactions: 0 });
+  const [interactionNotifications, setInteractionNotifications] = useState<Notification[]>([]);
+  const [interactionNotificationsPage, setInteractionNotificationsPage] = useState(1);
+  const [interactionNotificationsTotalPages, setInteractionNotificationsTotalPages] = useState(1);
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -71,7 +66,8 @@ export default function MessagesPage() {
       if (data.success) {
         setUnreadCounts({
           messages: data.unread_messages,
-          notifications: data.unread_notifications
+          notifications: data.unread_notifications,
+          interactions: data.unread_interactions
         });
         const event = new CustomEvent('unread_counts_updated');
         window.dispatchEvent(event);
@@ -124,7 +120,7 @@ export default function MessagesPage() {
     };
   }, [showEmojiPicker, isEmojiPickerClosing]);
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: 'announcement' | 'notification' | 'chat') => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: 'announcement' | 'notification' | 'interaction' | 'chat') => {
     if (newValue === activeTab) return;
     
     setIsTransitioning(true);
@@ -168,6 +164,33 @@ export default function MessagesPage() {
         fetchUnreadCounts();
       } else {
         setError('获取通知失败');
+      }
+    } catch (err) {
+      setError('网络请求失败');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchInteractionNotifications = async (page: number = 1) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) {
+        setError('请先登录');
+        return;
+      }
+      const user = JSON.parse(storedUser);
+      const data = await api.getInteractionNotifications(user.token, page);
+      if (data.success) {
+        setInteractionNotifications(data.notifications);
+        setInteractionNotificationsTotalPages(data.total_pages);
+        setInteractionNotificationsPage(page);
+        fetchUnreadCounts();
+      } else {
+        setError('获取互动通知失败');
       }
     } catch (err) {
       setError('网络请求失败');
@@ -229,6 +252,8 @@ export default function MessagesPage() {
       fetchAnnouncements();
     } else if (activeTab === 'notification') {
       fetchNotifications();
+    } else if (activeTab === 'interaction') {
+      fetchInteractionNotifications();
     } else {
       fetchContacts();
     }
@@ -341,10 +366,18 @@ export default function MessagesPage() {
           <Tab 
             label={
               <Badge color="error" badgeContent={unreadCounts.notifications} sx={{ '& .MuiBadge-badge': { right: -15, top: 5 } }}>
-                通知
+                系统
               </Badge>
             } 
             value="notification" 
+          />
+          <Tab 
+            label={
+              <Badge color="error" badgeContent={unreadCounts.interactions} sx={{ '& .MuiBadge-badge': { right: -15, top: 5 } }}>
+                互动
+              </Badge>
+            } 
+            value="interaction" 
           />
           <Tab 
             label={
@@ -637,6 +670,67 @@ export default function MessagesPage() {
               ) : (
                 <div className="text-center py-20 text-slate-500 dark:text-slate-400">
                   滚木
+                </div>
+              )}
+            </div>
+          ) : activeTab === 'interaction' ? (
+            <div>
+              {loading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="bg-slate-50 dark:bg-slate-800 h-24 rounded-xl animate-pulse"></div>
+                  ))}
+                </div>
+              ) : error ? (
+                <div className="text-center py-20 text-slate-500 dark:text-slate-400">
+                  <p>{error}</p>
+                  <button 
+                    onClick={() => fetchInteractionNotifications()}
+                    className="mt-4 text-primary hover:underline"
+                  >
+                    重试
+                  </button>
+                </div>
+              ) : interactionNotifications.length > 0 ? (
+                <div className="space-y-4">
+                  {interactionNotifications.map((item) => (
+                    <div 
+                      key={item.id} 
+                      className={`rounded-xl p-5 relative overflow-hidden transition-colors ${item.is_read === 0 ? 'bg-primary/5 border border-primary/20' : 'bg-white dark:bg-slate-800'}`}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className={`text-lg font-bold ${item.is_read === 0 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'}`}>
+                          {item.title}
+                        </h3>
+                        <span className="text-sm text-slate-400 dark:text-slate-500">{item.created_at}</span>
+                      </div>
+                      <div className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
+                        {item.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-20 text-slate-500 dark:text-slate-400">
+                  滚木
+                </div>
+              )}
+              {interactionNotificationsTotalPages > 1 && (
+                <div className="flex justify-center mt-6">
+                  <Pagination 
+                    count={interactionNotificationsTotalPages} 
+                    page={interactionNotificationsPage}
+                    onChange={(_, page) => fetchInteractionNotifications(page)}
+                    sx={{
+                      '& .MuiPaginationItem-root': {
+                        color: 'var(--sidebar-text)',
+                      },
+                      '& .Mui-selected': {
+                        backgroundColor: 'var(--color-primary) !important',
+                        color: 'white',
+                      }
+                    }}
+                  />
                 </div>
               )}
             </div>
