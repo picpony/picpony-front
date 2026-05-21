@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api, PonyImage, UserComment } from '@/lib/api';
+import { api, PonyImage, UserComment, UserPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import RichTextRenderer from '@/components/RichTextRenderer';
-import { MdPerson, MdCake, MdAccessTime, MdInfoOutline, MdFavorite, MdChatBubbleOutline, MdForum, MdImage } from 'react-icons/md';
+import { MdPerson, MdCake, MdAccessTime, MdInfoOutline, MdFavorite, MdChatBubbleOutline, MdForum, MdImage, MdArticle } from 'react-icons/md';
 import Pagination from '@mui/material/Pagination';
 import Stack from '@mui/material/Stack';
 import Box from '@mui/material/Box';
@@ -62,6 +62,11 @@ export default function UserProfilePage() {
   const [isCommentsLoading, setIsCommentsLoading] = useState(false);
   const [commentsPage, setCommentsPage] = useState(1);
   const [totalCommentPages, setTotalCommentPages] = useState(1);
+
+  const [posts, setPosts] = useState<UserPost[]>([]);
+  const [isPostsLoading, setIsPostsLoading] = useState(false);
+  const [postsPage, setPostsPage] = useState(1);
+  const [totalPostPages, setTotalPostPages] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
@@ -153,6 +158,42 @@ export default function UserProfilePage() {
     if (!profile || tabValue !== 1) return;
 
     let isMounted = true;
+    setIsPostsLoading(true);
+
+    api.getUserPosts(id, postsPage)
+      .then((res) => {
+        if (isMounted) {
+          if (res.success) {
+            setPosts(res.posts || []);
+            setTotalPostPages(res.total_pages || 1);
+          } else {
+            setPosts([]);
+            setTotalPostPages(1);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('获取用户帖子失败', err);
+        if (isMounted) {
+          setPosts([]);
+          setTotalPostPages(1);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsPostsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile, id, tabValue, postsPage]);
+
+  useEffect(() => {
+    if (!profile || tabValue !== 2) return;
+
+    let isMounted = true;
     setIsCommentsLoading(true);
 
     api.getUserComments(id, commentsPage)
@@ -191,6 +232,11 @@ export default function UserProfilePage() {
 
   const handleFavesPageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
     setFavesPage(value);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePostsPageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
+    setPostsPage(value);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -381,8 +427,9 @@ export default function UserProfilePage() {
                 }
               }}
             >
-              <Tab label="收藏夹" />
-              <Tab label="历史评论" />
+              <Tab label="收藏" />
+              <Tab label="帖子" />
+              <Tab label="评论" />
             </Tabs>
           </Box>
 
@@ -443,6 +490,94 @@ export default function UserProfilePage() {
           )}
 
           {tabValue === 1 && (
+            <div>
+              {isPostsLoading ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 animate-pulse">
+                      <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4 mb-3"></div>
+                      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full mb-2"></div>
+                      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : posts.length > 0 ? (
+                <>
+                  <div className="space-y-3">
+                    {posts.map((post) => (
+                      <a
+                        key={post.id}
+                        href={`/forum/${post.id}`}
+                        className="block bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          {post.cover_image && (
+                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                              <img
+                                src={`https://picpony.top/${post.cover_image}`}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mb-1.5 line-clamp-2">
+                              {post.title}
+                            </h3>
+                            <div className="flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500">
+                              <span>
+                                {new Date(post.created_at).toLocaleString('zh-CN', {
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MdChatBubbleOutline size={14} />
+                                {post.reply_count}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MdFavorite size={14} />
+                                {post.like_count}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                  {totalPostPages > 1 && (
+                    <Stack spacing={2} alignItems="center" className="mt-8 mb-4">
+                      <Pagination
+                        count={totalPostPages}
+                        page={postsPage}
+                        onChange={handlePostsPageChange}
+                        color="primary"
+                        size="large"
+                        showFirstButton
+                        showLastButton
+                        sx={{
+                          '& .MuiPaginationItem-root': {
+                            color: isDark ? '#e2e8f0' : undefined,
+                          },
+                        }}
+                      />
+                    </Stack>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-16">
+                  <MdArticle size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                  <p className="text-slate-500 dark:text-slate-400 text-lg">暂无帖子</p>
+                  <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">该用户还没有发表过任何帖子</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tabValue === 2 && (
             <div>
               {isCommentsLoading ? (
                 <div className="space-y-4">

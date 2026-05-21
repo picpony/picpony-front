@@ -117,6 +117,21 @@ export interface UserCommentsResponse {
   total_pages: number;
 }
 
+export interface UserPost {
+  id: number;
+  title: string;
+  cover_image: string | null;
+  created_at: string;
+  reply_count: number;
+  like_count: number;
+}
+
+export interface UserPostsResponse {
+  success: boolean;
+  posts: UserPost[];
+  total_pages: number;
+}
+
 export interface Comment {
   id: number;
   body: string;
@@ -638,6 +653,16 @@ export const api = {
     });
     if (!res.ok) {
       throw new Error('获取用户评论失败');
+    }
+    return res.json();
+  },
+
+  getUserPosts: async (userId: string, page: number = 1): Promise<UserPostsResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_user_posts&user_id=${userId}&page=${page}`, {
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      throw new Error('获取用户帖子失败');
     }
     return res.json();
   }
