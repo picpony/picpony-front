@@ -95,17 +95,21 @@ export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
       {
         open: /\[url=([^\]]+)\]/i,
         close: '[/url]',
-        render: (content, props) => (
-          <a key={getKey()} href={props.href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline">
-            {content}
-          </a>
-        )
+        render: (content, props) => {
+          if (!props.href) return <>{content}</>;
+          return (
+            <a key={getKey()} href={props.href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline">
+              {content}
+            </a>
+          );
+        }
       },
       {
         open: /\[url\]/i,
         close: '[/url]',
         render: (content) => {
           const url = typeof content[0] === 'string' ? content[0] : '';
+          if (!url) return <>{content}</>;
           return (
             <a key={getKey()} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline">
               {content}
@@ -118,6 +122,7 @@ export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
         close: '[/img]',
         render: (content) => {
           const src = typeof content[0] === 'string' ? content[0] : '';
+          if (!src) return null;
           return <img key={getKey()} src={src} alt="" className="max-w-full rounded-lg my-2" />;
         }
       },

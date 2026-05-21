@@ -21,9 +21,10 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
               {children}
             </a>
           ),
-          img: ({ src, alt }) => (
-            <img src={src} alt={alt || ''} className="max-w-full rounded-lg my-2" />
-          ),
+          img: ({ src, alt }) => {
+            if (!src) return null;
+            return <img src={src} alt={alt || ''} className="max-w-full rounded-lg my-2" />;
+          },
           code: ({ children }) => (
             <code className="bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5 text-sm">
               {children}

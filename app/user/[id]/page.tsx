@@ -457,11 +457,11 @@ export default function UserProfilePage() {
               ) : comments.length > 0 ? (
                 <>
                   <div className="space-y-3">
-                    {comments.map((comment) => {
+                    {comments.map((comment, index) => {
                       const typeInfo = getCommentTypeLabel(comment.type);
                       return (
                         <a
-                          key={comment.id}
+                          key={`${comment.type}-${comment.id}-${index}`}
                           href={getCommentTargetLink(comment)}
                           className="block bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
