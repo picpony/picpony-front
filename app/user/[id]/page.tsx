@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api, PonyImage } from '@/lib/api';
+import { api, PonyImage, UserComment } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
-import { MdPerson, MdCake, MdAccessTime, MdInfoOutline, MdFavorite } from 'react-icons/md';
+import RichTextRenderer from '@/components/RichTextRenderer';
+import { MdPerson, MdCake, MdAccessTime, MdInfoOutline, MdFavorite, MdChatBubbleOutline, MdForum, MdImage } from 'react-icons/md';
 import Pagination from '@mui/material/Pagination';
 import Stack from '@mui/material/Stack';
 import Box from '@mui/material/Box';
@@ -49,11 +50,18 @@ export default function UserProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [tabValue, setTabValue] = useState(0);
+
   const [faveIds, setFaveIds] = useState<number[]>([]);
   const [faveImages, setFaveImages] = useState<PonyImage[]>([]);
   const [isFavesLoading, setIsFavesLoading] = useState(false);
   const [favesPage, setFavesPage] = useState(1);
   const [totalFavePages, setTotalFavePages] = useState(1);
+
+  const [comments, setComments] = useState<UserComment[]>([]);
+  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+  const [commentsPage, setCommentsPage] = useState(1);
+  const [totalCommentPages, setTotalCommentPages] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
@@ -141,9 +149,68 @@ export default function UserProfilePage() {
     };
   }, [faveIds, favesPage]);
 
+  useEffect(() => {
+    if (!profile || tabValue !== 1) return;
+
+    let isMounted = true;
+    setIsCommentsLoading(true);
+
+    api.getUserComments(id, commentsPage)
+      .then((res) => {
+        if (isMounted) {
+          if (res.success) {
+            setComments(res.comments || []);
+            setTotalCommentPages(res.total_pages || 1);
+          } else {
+            setComments([]);
+            setTotalCommentPages(1);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('获取用户评论失败', err);
+        if (isMounted) {
+          setComments([]);
+          setTotalCommentPages(1);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsCommentsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile, id, tabValue, commentsPage]);
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
   const handleFavesPageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
     setFavesPage(value);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCommentsPageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
+    setCommentsPage(value);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const getCommentTargetLink = (comment: UserComment): string => {
+    if (comment.type === 'post') {
+      return `/forum/${comment.target_id}`;
+    }
+    return `/pic/${comment.target_id}`;
+  };
+
+  const getCommentTypeLabel = (type: 'post' | 'image'): { label: string; icon: React.ReactNode } => {
+    if (type === 'post') {
+      return { label: '论坛帖子', icon: <MdForum size={16} /> };
+    }
+    return { label: '图片', icon: <MdImage size={16} /> };
   };
 
   if (isLoading) {
@@ -296,7 +363,8 @@ export default function UserProfilePage() {
 
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
             <Tabs
-              value={0}
+              value={tabValue}
+              onChange={handleTabChange}
               sx={{
                 '& .MuiTabs-indicator': {
                   backgroundColor: 'var(--color-primary)',
@@ -314,62 +382,152 @@ export default function UserProfilePage() {
               }}
             >
               <Tab label="收藏夹" />
+              <Tab label="历史评论" />
             </Tabs>
           </Box>
 
-          <div>
-            {isFavesLoading && faveImages.length === 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="aspect-square bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse" />
-                ))}
-              </div>
-            ) : faveImages.length > 0 ? (
-              <>
+          {tabValue === 0 && (
+            <div>
+              {isFavesLoading && faveImages.length === 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {faveImages.map((img) => (
-                    <a
-                      key={img.id}
-                      href={`/pic/${img.id}`}
-                      className="block relative aspect-square rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-primary transition-all duration-200"
-                    >
-                      <FadeInImage
-                        src={img.representations.thumb_small || img.representations.thumb || img.representations.small}
-                        alt={img.name || `Image #${img.id}`}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
-                      />
-                    </a>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="aspect-square bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse" />
                   ))}
                 </div>
-                {totalFavePages > 1 && (
-                  <Stack spacing={2} alignItems="center" className="mt-8 mb-4">
-                    <Pagination
-                      count={totalFavePages}
-                      page={favesPage}
-                      onChange={handleFavesPageChange}
-                      color="primary"
-                      size="large"
-                      showFirstButton
-                      showLastButton
-                      sx={{
-                        '& .MuiPaginationItem-root': {
-                          color: isDark ? '#e2e8f0' : undefined,
-                        },
-                      }}
-                    />
-                  </Stack>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-16">
-                <MdFavorite size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-                <p className="text-slate-500 dark:text-slate-400 text-lg">暂无收藏</p>
-                <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">该用户还没有添加任何收藏</p>
-              </div>
-            )}
-          </div>
+              ) : faveImages.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {faveImages.map((img) => (
+                      <a
+                        key={img.id}
+                        href={`/pic/${img.id}`}
+                        className="block relative aspect-square rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-primary transition-all duration-200"
+                      >
+                        <FadeInImage
+                          src={img.representations.thumb_small || img.representations.thumb || img.representations.small}
+                          alt={img.name || `Image #${img.id}`}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                  {totalFavePages > 1 && (
+                    <Stack spacing={2} alignItems="center" className="mt-8 mb-4">
+                      <Pagination
+                        count={totalFavePages}
+                        page={favesPage}
+                        onChange={handleFavesPageChange}
+                        color="primary"
+                        size="large"
+                        showFirstButton
+                        showLastButton
+                        sx={{
+                          '& .MuiPaginationItem-root': {
+                            color: isDark ? '#e2e8f0' : undefined,
+                          },
+                        }}
+                      />
+                    </Stack>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-16">
+                  <MdFavorite size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                  <p className="text-slate-500 dark:text-slate-400 text-lg">暂无收藏</p>
+                  <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">该用户还没有添加任何收藏</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tabValue === 1 && (
+            <div>
+              {isCommentsLoading ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 animate-pulse">
+                      <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4 mb-3"></div>
+                      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full mb-2"></div>
+                      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : comments.length > 0 ? (
+                <>
+                  <div className="space-y-3">
+                    {comments.map((comment) => {
+                      const typeInfo = getCommentTypeLabel(comment.type);
+                      return (
+                        <a
+                          key={comment.id}
+                          href={getCommentTargetLink(comment)}
+                          className="block bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            {comment.cover_image && (
+                              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                                <img
+                                  src={`https://picpony.top/${comment.cover_image}`}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <span className="inline-flex items-center gap-1 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                                  {typeInfo.icon}
+                                  {typeInfo.label}
+                                </span>
+                                <span className="text-xs text-slate-400 dark:text-slate-500">
+                                  {new Date(comment.created_at).toLocaleString('zh-CN', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              <div className="text-sm text-slate-700 dark:text-slate-300 line-clamp-3 leading-relaxed">
+                                <RichTextRenderer content={comment.body} />
+                              </div>
+                            </div>
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </div>
+                  {totalCommentPages > 1 && (
+                    <Stack spacing={2} alignItems="center" className="mt-8 mb-4">
+                      <Pagination
+                        count={totalCommentPages}
+                        page={commentsPage}
+                        onChange={handleCommentsPageChange}
+                        color="primary"
+                        size="large"
+                        showFirstButton
+                        showLastButton
+                        sx={{
+                          '& .MuiPaginationItem-root': {
+                            color: isDark ? '#e2e8f0' : undefined,
+                          },
+                        }}
+                      />
+                    </Stack>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-16">
+                  <MdChatBubbleOutline size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                  <p className="text-slate-500 dark:text-slate-400 text-lg">暂无评论</p>
+                  <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">该用户还没有发表过任何评论</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

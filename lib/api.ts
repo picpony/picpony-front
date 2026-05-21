@@ -102,6 +102,21 @@ export interface SharedFavesResponse {
   faves: number[];
 }
 
+export interface UserComment {
+  id: number;
+  target_id: number;
+  body: string;
+  created_at: string;
+  type: 'post' | 'image';
+  cover_image: string | null;
+}
+
+export interface UserCommentsResponse {
+  success: boolean;
+  comments: UserComment[];
+  total_pages: number;
+}
+
 export interface Comment {
   id: number;
   body: string;
@@ -613,6 +628,16 @@ export const api = {
       const error = new Error(errorText || res.statusText || 'Failed to fetch');
       (error as Error & { status?: number }).status = res.status;
       throw error;
+    }
+    return res.json();
+  },
+
+  getUserComments: async (userId: string, page: number = 1): Promise<UserCommentsResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_user_comments&user_id=${userId}&page=${page}`, {
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      throw new Error('获取用户评论失败');
     }
     return res.json();
   }
