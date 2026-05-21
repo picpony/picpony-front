@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api, PonyImage, UserComment, UserPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
@@ -445,7 +446,7 @@ export default function UserProfilePage() {
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {faveImages.map((img) => (
-                      <a
+                      <Link
                         key={img.id}
                         href={`/pic/${img.id}`}
                         className="block relative aspect-square rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-primary transition-all duration-200"
@@ -457,7 +458,7 @@ export default function UserProfilePage() {
                           className="object-cover"
                           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         />
-                      </a>
+                      </Link>
                     ))}
                   </div>
                   {totalFavePages > 1 && (
@@ -505,7 +506,7 @@ export default function UserProfilePage() {
                 <>
                   <div className="space-y-3">
                     {posts.map((post) => (
-                      <a
+                      <Link
                         key={post.id}
                         href={`/forum/${post.id}`}
                         className="block bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -545,7 +546,7 @@ export default function UserProfilePage() {
                             </div>
                           </div>
                         </div>
-                      </a>
+                      </Link>
                     ))}
                   </div>
                   {totalPostPages > 1 && (
@@ -595,7 +596,7 @@ export default function UserProfilePage() {
                     {comments.map((comment, index) => {
                       const typeInfo = getCommentTypeLabel(comment.type);
                       return (
-                        <a
+                        <Link
                           key={`${comment.type}-${comment.id}-${index}`}
                           href={getCommentTargetLink(comment)}
                           className="block bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -631,7 +632,7 @@ export default function UserProfilePage() {
                               </div>
                             </div>
                           </div>
-                        </a>
+                        </Link>
                       );
                     })}
                   </div>
