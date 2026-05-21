@@ -588,7 +588,7 @@ export default function AppLayout({
           <div key={pathname} className="animate-page-transition p-4 sm:p-6 flex-1">
             {children}
           </div>
-          <footer className="py-6 sm:py-8 px-4 sm:px-6 border-t border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-sm">
+          <footer className="py-6 sm:py-8 px-4 sm:px-6 text-slate-500 dark:text-slate-400 text-sm">
             <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex flex-col items-center md:items-start gap-4 w-full md:w-auto">
                 <img src="/img/picpony.svg" alt="PicPony Logo" className="h-5 w-auto opacity-60 dark:hidden" />
