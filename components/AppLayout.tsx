@@ -602,8 +602,8 @@ export default function AppLayout({
           <footer className="py-6 sm:py-8 px-4 sm:px-6 text-slate-500 dark:text-slate-400 text-sm">
             <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex flex-col items-center md:items-start gap-4 w-full md:w-auto">
-                <img src="/img/picpony.svg" alt="PicPony Logo" className="h-5 w-auto opacity-60 dark:hidden" />
-                <img src="/img/picpony-w.svg" alt="PicPony Logo" className="h-5 w-auto opacity-80 hidden dark:block" />
+                <img src="/img/picpony.svg" alt="PicPony Logo" className="h-8 w-auto opacity-60 dark:hidden" />
+                <img src="/img/picpony-w.svg" alt="PicPony Logo" className="h-8 w-auto opacity-80 hidden dark:block" />
                 <div>
                   <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
                   <p>本站为 Derpibooru 第三方镜像站点</p>
