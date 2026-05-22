@@ -844,7 +844,7 @@ function GlossaryTab() {
         </td>
               <td className="px-4 py-3">
                 {tag.cn === '未翻译' ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 whitespace-nowrap">
                     <MdOutlineWarning size={14} />
                     未翻译
                   </span>
@@ -1245,7 +1245,7 @@ function GlossaryTab() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <MdEmojiEvents className="text-yellow-500" />
-            🏆 翻译贡献榜 {showFullLeaderboard ? '' : '(Top 10)'}
+            翻译贡献榜 {showFullLeaderboard ? '' : '(Top 10)'}
           </h3>
           {!showFullLeaderboard && (
             <button
@@ -1581,7 +1581,7 @@ function GlossaryTab() {
                 <button
                   onClick={executeDerpiSearch}
                   disabled={isDerpiSearching}
-                  className="px-4 py-2 text-sm font-medium text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
                 >
                   {isDerpiSearching ? '搜索中...' : '搜索'}
                 </button>
@@ -1607,7 +1607,7 @@ function GlossaryTab() {
                       </div>
                       <button
                         onClick={() => importFromDerpi(tag)}
-                        className="px-3 py-1 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded transition-colors"
+                        className="px-3 py-1 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded transition-colors shrink-0"
                       >
                         + 导入
                       </button>
