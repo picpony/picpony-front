@@ -4,7 +4,7 @@ import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useMemo 
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdAdminPanelSettings } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdDashboard } from "react-icons/md";
 import { ButtonBase, Badge } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
@@ -542,7 +542,7 @@ export default function AppLayout({
                       onClick={handleMobileNavigation}
                       sx={sidebarButtonSx(pathname.startsWith('/admin'))}
                     >
-                      <MdAdminPanelSettings size={20} className="shrink-0 mr-3" />
+                      <MdDashboard size={20} className="shrink-0 mr-3" />
                       <span>管理面板</span>
                     </ButtonBase>
                   )}
