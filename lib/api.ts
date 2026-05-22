@@ -665,5 +665,176 @@ export const api = {
       throw new Error('获取用户帖子失败');
     }
     return res.json();
+  },
+
+  getGlossaryEntries: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_glossary_entries`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.json();
+  },
+
+  createGlossaryEntry: async (token: string, data: { term: string; definition: string }) => {
+    return fetch(`${PICPONY_API_BASE}?action=create_glossary_entry`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateGlossaryEntry: async (token: string, id: number, data: { term: string; definition: string }) => {
+    return fetch(`${PICPONY_API_BASE}?action=update_glossary_entry`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, ...data })
+    });
+  },
+
+  deleteGlossaryEntry: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=delete_glossary_entry`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
+  },
+
+  getDictionary: async (token: string, params: {
+    page?: number;
+    limit?: number;
+    keyword?: string;
+    sort?: string;
+    category?: string;
+    untranslated?: number;
+    wiki_overlap?: number;
+  }) => {
+    const searchParams = new URLSearchParams();
+    searchParams.append('action', 'get_dictionary');
+    if (params.page) searchParams.append('page', params.page.toString());
+    if (params.limit) searchParams.append('limit', params.limit.toString());
+    if (params.keyword) searchParams.append('keyword', params.keyword);
+    if (params.sort) searchParams.append('sort', params.sort);
+    if (params.category) searchParams.append('category', params.category);
+    if (params.untranslated !== undefined) searchParams.append('untranslated', params.untranslated.toString());
+    if (params.wiki_overlap !== undefined) searchParams.append('wiki_overlap', params.wiki_overlap.toString());
+    searchParams.append('_t', Date.now().toString());
+
+    const res = await fetch(`${PICPONY_API_BASE}?${searchParams.toString()}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.json();
+  },
+
+  getDictionaryDuplicates: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_duplicates&_t=${Date.now()}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.json();
+  },
+
+  saveDictionaryTag: async (token: string, data: {
+    id?: number;
+    cn: string;
+    en: string;
+    aliases: string[];
+    cat: string;
+    count: number;
+    description: string;
+  }) => {
+    return fetch(`${PICPONY_API_BASE}?action=save_dictionary_tag`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteDictionaryTag: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=delete_dictionary_tag`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
+  },
+
+  getDictionaryLeaderboard: async () => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_dictionary_leaderboard&_t=${Date.now()}`);
+    return res.json();
+  },
+
+  getTagFeedback: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_tag_feedback`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.json();
+  },
+
+  handleTagFeedback: async (token: string, id: number, status: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_handle_tag_feedback`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, status })
+    });
+  },
+
+  checkTagExists: async (token: string, enTag: string) => {
+    const url = `${PICPONY_API_BASE}?action=get_dictionary&page=1&limit=50&keyword=${encodeURIComponent(enTag)}&_t=${Date.now()}`;
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const data = await res.json();
+    if (data.success && data.tags) {
+      return data.tags.some((t: { en: string }) => t.en.toLowerCase() === enTag.toLowerCase());
+    }
+    return false;
+  },
+
+  searchDerpiTags: async (query: string) => {
+    const safeName = query.replace(/"/g, '').split(/\s+/).join('* *');
+    const url = `${DERPIBOORU_API_BASE}/search/tags?q=name:*${encodeURIComponent(safeName)}*&per_page=30`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'PicPony/1.0'
+      }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  getDerpiPopularTags: async (page: number = 1) => {
+    const url = `${DERPIBOORU_API_BASE}/search/tags?q=*&sf=images&sd=desc&per_page=50&page=${page}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'PicPony/1.0'
+      }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
   }
 };

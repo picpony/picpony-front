@@ -4,7 +4,7 @@ import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useMemo 
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdAdminPanelSettings } from "react-icons/md";
 import { ButtonBase, Badge } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
@@ -513,7 +513,7 @@ export default function AppLayout({
                 <div 
                   className={`mt-1 flex flex-col space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${
                     isUserMenuOpen 
-                      ? 'max-h-40 opacity-100 mb-2' 
+                      ? 'max-h-60 opacity-100 mb-2' 
                       : 'max-h-0 opacity-0'
                   }`}
                 >
@@ -535,6 +535,17 @@ export default function AppLayout({
                     <MdSettings size={20} className="shrink-0 mr-3" />
                     <span>设置</span>
                   </ButtonBase>
+                  {userInfo && (userInfo.role === 'editor' || userInfo.role === 'admin' || userInfo.role === 'super_admin') && (
+                    <ButtonBase
+                      component={Link}
+                      href="/admin" 
+                      onClick={handleMobileNavigation}
+                      sx={sidebarButtonSx(pathname.startsWith('/admin'))}
+                    >
+                      <MdAdminPanelSettings size={20} className="shrink-0 mr-3" />
+                      <span>管理面板</span>
+                    </ButtonBase>
+                  )}
                   <ButtonBase 
                     onClick={handleLogoutClick}
                     sx={sidebarButtonSx(false)}
