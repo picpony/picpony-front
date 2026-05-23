@@ -386,10 +386,6 @@ export default function SettingsPage() {
             </ButtonBase>
           </div>
         </div>
-        
-        <div className="p-6 border-b border-slate-100 dark:border-slate-700">
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">偏好设置</h2>
-        </div>
       </div>
 
       {isModalOpen && typeof document !== 'undefined' && createPortal(
