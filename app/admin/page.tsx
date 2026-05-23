@@ -1723,6 +1723,7 @@ function GlossaryTab() {
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>('welcome');
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -1732,7 +1733,14 @@ export default function AdminPage() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  if (tab.id === activeTab) return;
+                  setIsTransitioning(true);
+                  setTimeout(() => {
+                    setActiveTab(tab.id);
+                    setIsTransitioning(false);
+                  }, 200);
+                }}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                   activeTab === tab.id
                     ? 'bg-primary/10 text-primary'
@@ -1746,9 +1754,11 @@ export default function AdminPage() {
           </nav>
         </div>
 
-        <div className="flex-1 p-6 min-h-[600px]">
-          {activeTab === 'welcome' && <WelcomeTab />}
-          {activeTab === 'glossary' && <GlossaryTab />}
+        <div className="flex-1 p-6 min-h-[600px] relative">
+          <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+            {activeTab === 'welcome' && <WelcomeTab />}
+            {activeTab === 'glossary' && <GlossaryTab />}
+          </div>
         </div>
       </div>
     </div>
