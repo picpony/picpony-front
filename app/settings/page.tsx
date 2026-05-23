@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { MdEdit, MdClose } from 'react-icons/md';
-import { ButtonBase, Switch } from '@mui/material';
+import { ButtonBase } from '@mui/material';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 
@@ -58,7 +58,6 @@ export default function SettingsPage() {
   const [newApiKey, setNewApiKey] = useState('');
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
 
-  const [cdnEnabled, setCdnEnabled] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
   const closeModal = () => {
@@ -125,11 +124,6 @@ export default function SettingsPage() {
       }
     }
     
-    const storedCdn = localStorage.getItem('cdn_enabled');
-    if (storedCdn === 'true') {
-      setCdnEnabled(true);
-    }
-
     const storedDark = localStorage.getItem('darkMode');
     setDarkMode(storedDark === 'true');
   }, []);
@@ -175,13 +169,6 @@ export default function SettingsPage() {
         fileInputRef.current.value = '';
       }
     }
-  };
-
-  const handleCdnToggle = () => {
-    const newValue = !cdnEnabled;
-    setCdnEnabled(newValue);
-    localStorage.setItem('cdn_enabled', String(newValue));
-    window.dispatchEvent(new Event('cdn_settings_updated'));
   };
 
   const handleDarkModeToggle = () => {
@@ -402,27 +389,6 @@ export default function SettingsPage() {
         
         <div className="p-6 border-b border-slate-100 dark:border-slate-700">
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">偏好设置</h2>
-          
-          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
-            <div>
-              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">启用图片 CDN 加速</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                开启后图片链接将通过 wsrv.nl 代理。
-              </p>
-            </div>
-            <Switch
-              checked={cdnEnabled}
-              onChange={handleCdnToggle}
-              sx={{
-                '& .MuiSwitch-switchBase.Mui-checked': {
-                  color: 'var(--color-primary)',
-                },
-                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                  backgroundColor: 'var(--color-primary)',
-                },
-              }}
-            />
-          </div>
         </div>
       </div>
 

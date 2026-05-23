@@ -60,7 +60,6 @@ export default function PicPage() {
   const [error, setError] = useState<Error | null>(null);
   
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const [cdnEnabled, setCdnEnabled] = useState(false);
   const [isFaved, setIsFaved] = useState(false);
   const [isFaveLoading, setIsFaveLoading] = useState(false);
 
@@ -79,17 +78,6 @@ export default function PicPage() {
       console.error('Failed to load comments:', err);
     }
   };
-
-  useEffect(() => {
-    const checkCdn = () => {
-      const storedCdn = localStorage.getItem('cdn_enabled');
-      setCdnEnabled(storedCdn === 'true');
-    };
-    
-    checkCdn();
-    window.addEventListener('cdn_settings_updated', checkCdn);
-    return () => window.removeEventListener('cdn_settings_updated', checkCdn);
-  }, []);
 
   useEffect(() => {
     const checkFaveStatus = async () => {
@@ -195,11 +183,6 @@ export default function PicPage() {
   const ocs = image.tags
     .filter(tag => tag.startsWith('oc:'))
     .map(tag => tag.replace('oc:', ''));
-
-  const getCdnUrl = (url: string) => {
-    if (!cdnEnabled || !url) return url;
-    return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
-  };
 
   const handleToggleFave = async () => {
     let token = null;
@@ -376,7 +359,7 @@ export default function PicPage() {
         <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
           {image.representations.full.endsWith('.webm') ? (
             <video
-              src={getCdnUrl(image.representations.full)}
+              src={image.representations.full}
               controls
               autoPlay
               loop
@@ -384,7 +367,7 @@ export default function PicPage() {
             />
           ) : (
             <FadeInImage
-              src={getCdnUrl(image.representations.large || image.representations.full)}
+              src={image.representations.large || image.representations.full}
               alt={image.name || `Image ${image.id}`}
               width={image.width}
               height={image.height}

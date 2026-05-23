@@ -15,7 +15,6 @@ function FavoritesList() {
   const [images, setImages] = useState<PonyImage[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [cdnEnabled, setCdnEnabled] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -37,17 +36,6 @@ function FavoritesList() {
     updateColumns();
     window.addEventListener('resize', updateColumns);
     return () => window.removeEventListener('resize', updateColumns);
-  }, []);
-
-  useEffect(() => {
-    const checkCdn = () => {
-      const storedCdn = localStorage.getItem('cdn_enabled');
-      setCdnEnabled(storedCdn === 'true');
-    };
-
-    checkCdn();
-    window.addEventListener('cdn_settings_updated', checkCdn);
-    return () => window.removeEventListener('cdn_settings_updated', checkCdn);
   }, []);
 
   useEffect(() => {
@@ -253,11 +241,6 @@ function FavoritesList() {
   const columnData: PonyImage[][] = Array.from({ length: columns }, () => []);
   const columnHeights = new Array(columns).fill(0);
 
-  const getCdnUrl = (url: string) => {
-    if (!cdnEnabled || !url) return url;
-    return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
-  };
-
   images.forEach((img) => {
     let shortestColIndex = 0;
     let minHeight = columnHeights[0];
@@ -343,14 +326,14 @@ function FavoritesList() {
                             style={{ paddingBottom: `${(image.height / image.width) * 100}%` }}
                           >
                             <video
-                              src={`${getCdnUrl(image.representations.full)}#t=0.1`}
+                              src={`${image.representations.full}#t=0.1`}
                               preload="metadata"
                               className="absolute top-0 left-0 w-full h-full object-cover transition-all duration-500"
                             />
                           </div>
                         ) : (
                           <FadeInImage
-                            src={getCdnUrl(image.representations.thumb)}
+                            src={image.representations.thumb}
                             alt={image.name || `Image ${image.id}`}
                             width={image.width}
                             height={image.height}
