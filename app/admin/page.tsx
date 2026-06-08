@@ -2,7 +2,17 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MdSettings, MdBook, MdDashboard, MdSearch, MdAdd, MdDelete, MdEdit, MdFileDownload, MdFileUpload, MdSync, MdWarning, MdCheckCircle, MdContentCopy, MdClose, MdRefresh, MdEmojiEvents, MdFeedback, MdTranslate, MdLibraryBooks, MdContentPaste, MdCloudDownload, MdOutlineWarning, MdAutoFixHigh } from 'react-icons/md';
+import { 
+  MdSettings, MdBook, MdDashboard, MdSearch, MdAdd, MdDelete, MdEdit, 
+  MdFileDownload, MdFileUpload, MdSync, MdWarning, MdCheckCircle, 
+  MdContentCopy, MdClose, MdRefresh, MdEmojiEvents, MdFeedback, 
+  MdTranslate, MdLibraryBooks, MdContentPaste, MdCloudDownload, 
+  MdOutlineWarning, MdAutoFixHigh, MdPeople, MdNotifications, 
+  MdMessage, MdReport, MdBlock, MdStore, MdAttachMoney, MdBuild,
+  MdPets, MdShield, MdCode, MdGroup, MdCampaign, MdLink,
+  MdUpload, MdToggleOn, MdToggleOff, MdSpeed, MdBarChart,
+  MdVpnKey, MdAdminPanelSettings, MdOpenInNew
+} from 'react-icons/md';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 
@@ -39,12 +49,118 @@ interface DerpiTag {
   images: number;
 }
 
-type TabId = 'welcome' | 'glossary';
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  api_key: string | null;
+  derpi_user_id: string | null;
+  derpi_username: string | null;
+  is_banned: number;
+  created_at: string;
+  experience: number;
+  coins: number;
+  badges?: Badge[];
+}
+
+interface Badge {
+  id: number;
+  badge_name: string;
+  badge_color: string;
+}
+
+interface Report {
+  id: number;
+  image_id: number;
+  username: string;
+  reason: string;
+  status: 'pending' | 'processed' | 'rejected';
+  created_at: string;
+}
+
+interface BlacklistItem {
+  image_id: number;
+  reason: string;
+  created_at: string;
+}
+
+interface ShopItem {
+  id: number;
+  name: string;
+  description: string;
+  image_url: string | null;
+  price: number;
+  stock: number;
+  active: number;
+}
+
+interface NotificationItem {
+  id: number;
+  user_id: number;
+  receiver_name?: string;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
+interface AuditMessage {
+  id: number;
+  sender_id: number;
+  sender_name: string;
+  receiver_id: number;
+  receiver_name: string;
+  content: string;
+  is_read: number;
+  created_at: string;
+}
+
+interface BadgeLink {
+  id: number;
+  token: string;
+  badge_name: string;
+  badge_color: string;
+  is_active: number;
+  badge_expires_at: string | null;
+  link_expires_at: string | null;
+}
+
+interface BlockTag {
+  id: number;
+  tag_name: string;
+}
+
+interface BlockTagsGroup {
+  [key: string]: BlockTag[];
+}
+
+interface TeamMember {
+  id: number;
+  name: string;
+  role: string;
+  category: string;
+  avatar_url: string | null;
+  link_url: string | null;
+  order_num: number;
+}
+
+interface DeveloperUser {
+  id: number;
+  username: string;
+  email: string;
+  api_key: string | null;
+  derpi_username: string | null;
+  created_at: string;
+}
+
+type TabId = 'welcome' | 'glossary' | 'users' | 'notifications' | 'messages' | 'reports' | 'blacklist' | 'shop' | 'wealth' | 'other' | 'badges' | 'blocktags' | 'developer' | 'team';
 
 interface TabConfig {
   id: TabId;
   label: string;
   icon: React.ReactNode;
+  adminOnly?: boolean;
+  superAdminOnly?: boolean;
 }
 
 const categoryMap: Record<string, { label: string; color: string }> = {
@@ -58,18 +174,1316 @@ const categoryMap: Record<string, { label: string; color: string }> = {
   error: { label: '错误', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
 };
 
-const tabs: TabConfig[] = [
-  { id: 'welcome', label: '欢迎', icon: <MdDashboard size={20} /> },
-  { id: 'glossary', label: '词库编辑', icon: <MdBook size={20} /> },
-];
+const roleBadgeMap: Record<string, { label: string; color: string }> = {
+  super_admin: { label: '超管', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+  admin: { label: '管理员', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+  editor: { label: '小编', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  user: { label: '用户', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+};
+
+const teamCategoryMap: Record<string, { label: string; color: string }> = {
+  developer: { label: '开发团队', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+  manager: { label: '管理团队', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+  editor: { label: '小编团队', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  special: { label: '特别鸣谢', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+};
+
+const filterKeyMap: Record<string, string> = {
+  safe: '安全模式 (safe) — 排除项',
+  spoilers: '剧透模式 (spoilers) — 排除项',
+  banAnthro: '屏蔽拟人 (banAnthro) — 排除项',
+  banDiscomfort: '屏蔽不适内容 (banDiscomfort) — 排除项',
+  onlyPony: '只看小马 (onlyPony) — 可选物种范围 (OR 关系)',
+};
 
 function WelcomeTab() {
   return (
     <div>
       <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">欢迎来到管理面板</h2>
       <p className="text-slate-600 dark:text-slate-400 mb-6">
-        在这里您可以管理网站的各种设置和内容
+        在这里您可以管理网站的各种设置和内容。请从左侧菜单选择要管理的功能模块。
       </p>
+    </div>
+  );
+}
+
+function UsersTab({ token, myRole }: { token: string; myRole: string }) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchKw, setSearchKw] = useState('');
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const loadUsers = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.adminGetUsers(token);
+      if (data.success) {
+        setUsers(data.users || []);
+        setFilteredUsers(data.users || []);
+      }
+    } catch (err) {
+      showToast('加载用户失败', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    if (!searchKw) {
+      setFilteredUsers(users);
+      return;
+    }
+    const kw = searchKw.toLowerCase();
+    setFilteredUsers(users.filter(u => 
+      String(u.id) === kw ||
+      u.username?.toLowerCase().includes(kw) ||
+      u.email?.toLowerCase().includes(kw)
+    ));
+  }, [searchKw, users]);
+
+  const openEditModal = (user: User) => {
+    setEditingUser(user);
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingUser(null);
+  };
+
+  const handleBan = async (userId: number, isBanned: number) => {
+    if (!confirm(isBanned ? '确认封禁该用户？' : '确认解封该用户？')) return;
+    try {
+      const res = await api.adminUpdateUser(token, { target_id: userId, is_banned: isBanned });
+      const data = await res.json();
+      if (data.success) {
+        showToast(isBanned ? '已封禁' : '已解封', 'success');
+        loadUsers();
+      } else {
+        showToast(data.error || '操作失败', 'error');
+      }
+    } catch {
+      showToast('操作失败', 'error');
+    }
+  };
+
+  const handleDelete = async (userId: number) => {
+    if (!confirm('【极度危险】确定要彻底抹除此账号及所有相关数据吗？此操作无法恢复！')) return;
+    try {
+      const res = await api.adminDeleteUser(token, userId);
+      const data = await res.json();
+      if (data.success) {
+        showToast('已删除', 'success');
+        loadUsers();
+      } else {
+        showToast(data.error || '删除失败', 'error');
+      }
+    } catch {
+      showToast('删除失败', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <MdPeople className="text-primary" size={24} />
+          用户与权限管理
+        </h2>
+        <button
+          onClick={loadUsers}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+        >
+          <MdRefresh size={18} />
+          刷新列表
+        </button>
+      </div>
+
+      <div className="relative">
+        <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <input
+          type="text"
+          value={searchKw}
+          onChange={(e) => setSearchKw(e.target.value)}
+          placeholder="搜索用户ID、用户名或邮箱..."
+          className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
+        />
+      </div>
+
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+        <table className="w-full">
+          <thead className="bg-slate-50 dark:bg-slate-800">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">ID</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">用户名</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">角色</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">邮箱</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">状态</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center">
+                  <div className="flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+                    <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    加载中...
+                  </div>
+                </td>
+              </tr>
+            ) : filteredUsers.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                  没有找到匹配的用户
+                </td>
+              </tr>
+            ) : (
+              filteredUsers.map((user) => {
+                const roleInfo = roleBadgeMap[user.role] || roleBadgeMap.user;
+                return (
+                  <tr key={user.id} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-4 py-3 text-sm">#{user.id}</td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-primary">{user.username}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${roleInfo.color}`}>
+                        {roleInfo.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{user.email || '-'}</td>
+                    <td className="px-4 py-3">
+                      {user.is_banned ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                          已封禁
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                          正常
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditModal(user)}
+                          className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                          title="编辑"
+                        >
+                          <MdEdit size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleBan(user.id, user.is_banned ? 0 : 1)}
+                          className={`p-1.5 rounded transition-colors ${user.is_banned ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30' : 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30'}`}
+                          title={user.is_banned ? '解封' : '封禁'}
+                        >
+                          {user.is_banned ? <MdCheckCircle size={18} /> : <MdBlock size={18} />}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user.id)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                          title="删除"
+                        >
+                          <MdDelete size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {isEditModalOpen && editingUser && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">编辑用户</h3>
+              <button onClick={closeEditModal} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <MdClose size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                编辑用户功能正在开发中，当前仅支持封禁/解封和删除操作。
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={closeEditModal}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+function ShopTab({ token }: { token: string }) {
+  const [items, setItems] = useState<ShopItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
+  const [form, setForm] = useState({
+    id: 0,
+    name: '',
+    description: '',
+    image_url: '',
+    price: 10,
+    stock: 100,
+    active: true,
+  });
+
+  const loadItems = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.adminGetShopItems(token);
+      if (data.success) {
+        setItems(data.items || []);
+      }
+    } catch {
+      showToast('加载商品失败', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
+
+  const resetForm = () => {
+    setForm({ id: 0, name: '', description: '', image_url: '', price: 10, stock: 100, active: true });
+    setEditingItem(null);
+    setIsEditing(false);
+  };
+
+  const startEdit = (item: ShopItem) => {
+    setEditingItem(item);
+    setForm({
+      id: item.id,
+      name: item.name,
+      description: item.description || '',
+      image_url: item.image_url || '',
+      price: item.price,
+      stock: item.stock,
+      active: item.active === 1,
+    });
+    setIsEditing(true);
+  };
+
+  const saveItem = async () => {
+    if (!form.name.trim()) {
+      showToast('请输入商品名称', 'error');
+      return;
+    }
+    try {
+      const res = await api.adminSaveShopItem(token, {
+        ...form,
+        active: form.active ? 1 : 0,
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(editingItem ? '更新成功' : '添加成功', 'success');
+        resetForm();
+        loadItems();
+      } else {
+        showToast(data.error || '保存失败', 'error');
+      }
+    } catch {
+      showToast('保存失败', 'error');
+    }
+  };
+
+  const deleteItem = async (id: number) => {
+    if (!confirm('确定要删除这个商品吗？')) return;
+    try {
+      const res = await api.adminDeleteShopItem(token, id);
+      const data = await res.json();
+      if (data.success) {
+        showToast('删除成功', 'success');
+        loadItems();
+      } else {
+        showToast(data.error || '删除失败', 'error');
+      }
+    } catch {
+      showToast('删除失败', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <MdStore className="text-primary" size={24} />
+          小商店管理
+        </h2>
+        <button
+          onClick={loadItems}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+        >
+          <MdRefresh size={18} />
+          刷新列表
+        </button>
+      </div>
+
+      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+          {isEditing ? <MdEdit size={20} /> : <MdAdd size={20} />}
+          {isEditing ? '编辑商品' : '添加新商品'}
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">商品名称</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">图片URL</label>
+            <input
+              type="text"
+              value={form.image_url}
+              onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">价格（金币）</label>
+            <input
+              type="number"
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">库存</label>
+            <input
+              type="number"
+              value={form.stock}
+              onChange={(e) => setForm({ ...form, stock: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+            />
+          </div>
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">商品简介</label>
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            rows={3}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm resize-none"
+          />
+        </div>
+        <div className="flex items-center gap-4 mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.active}
+              onChange={(e) => setForm({ ...form, active: e.target.checked })}
+              className="w-4 h-4 text-primary border-slate-300 rounded focus:ring-primary"
+            />
+            <span className="text-sm text-slate-700 dark:text-slate-300">上架展示</span>
+          </label>
+        </div>
+        <div className="flex gap-3">
+          {isEditing && (
+            <button
+              onClick={resetForm}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+          )}
+          <button
+            onClick={saveItem}
+            className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+          >
+            {isEditing ? '保存修改' : '添加商品'}
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+        <table className="w-full">
+          <thead className="bg-slate-50 dark:bg-slate-800">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">ID</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">商品</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">价格</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">库存</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">状态</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center">
+                  <div className="flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+                    <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    加载中...
+                  </div>
+                </td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                  暂无商品
+                </td>
+              </tr>
+            ) : (
+              items.map((item) => (
+                <tr key={item.id} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-4 py-3 text-sm">#{item.id}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {item.image_url && (
+                        <img src={item.image_url} alt="" className="w-10 h-10 rounded object-cover" />
+                      )}
+                      <div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">{item.description}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-amber-600">{item.price}</td>
+                  <td className="px-4 py-3 text-sm">{item.stock}</td>
+                  <td className="px-4 py-3">
+                    {item.active === 1 ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                        上架中
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        已下架
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => startEdit(item)}
+                        className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                      >
+                        <MdEdit size={18} />
+                      </button>
+                      <button
+                        onClick={() => deleteItem(item.id)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                      >
+                        <MdDelete size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ReportsTab({ token }: { token: string }) {
+  const [reports, setReports] = useState<Report[]>([]);
+  const [filteredReports, setFilteredReports] = useState<Report[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchKw, setSearchKw] = useState('');
+
+  const loadReports = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.adminGetReports(token);
+      if (data.success) {
+        setReports(data.reports || []);
+        setFilteredReports(data.reports || []);
+      }
+    } catch {
+      showToast('加载举报失败', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadReports();
+  }, [loadReports]);
+
+  useEffect(() => {
+    if (!searchKw) {
+      setFilteredReports(reports);
+      return;
+    }
+    const kw = searchKw.toLowerCase();
+    setFilteredReports(reports.filter(r => 
+      String(r.id) === kw ||
+      String(r.image_id) === kw ||
+      r.username?.toLowerCase().includes(kw)
+    ));
+  }, [searchKw, reports]);
+
+  const handleReport = async (id: number, status: string) => {
+    try {
+      const res = await api.adminHandleReport(token, id, status);
+      const data = await res.json();
+      if (data.success) {
+        showToast('处理成功', 'success');
+        loadReports();
+      } else {
+        showToast(data.error || '处理失败', 'error');
+      }
+    } catch {
+      showToast('处理失败', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <MdReport className="text-primary" size={24} />
+          违规举报处理
+        </h2>
+        <button
+          onClick={loadReports}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+        >
+          <MdRefresh size={18} />
+          刷新列表
+        </button>
+      </div>
+
+      <div className="relative">
+        <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <input
+          type="text"
+          value={searchKw}
+          onChange={(e) => setSearchKw(e.target.value)}
+          placeholder="搜索举报ID、图片ID或举报人..."
+          className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
+        />
+      </div>
+
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+        <table className="w-full">
+          <thead className="bg-slate-50 dark:bg-slate-800">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">单号</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">图片</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">举报人</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">原因</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">状态</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center">
+                  <div className="flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+                    <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    加载中...
+                  </div>
+                </td>
+              </tr>
+            ) : filteredReports.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                  暂无举报记录
+                </td>
+              </tr>
+            ) : (
+              filteredReports.map((report) => (
+                <tr key={report.id} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-4 py-3 text-sm">#{report.id}</td>
+                  <td className="px-4 py-3">
+                    <a 
+                      href={`/pic/${report.image_id}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline text-sm flex items-center gap-1"
+                    >
+                      #{report.image_id} <MdOpenInNew size={14} />
+                    </a>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{report.username}</td>
+                  <td className="px-4 py-3 text-sm max-w-xs truncate" title={report.reason}>{report.reason}</td>
+                  <td className="px-4 py-3">
+                    {report.status === 'pending' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                        待处理
+                      </span>
+                    ) : report.status === 'processed' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                        已处理
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        已驳回
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {report.status === 'pending' ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleReport(report.id, 'processed')}
+                          className="px-3 py-1 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded transition-colors"
+                        >
+                          完结
+                        </button>
+                        <button
+                          onClick={() => handleReport(report.id, 'rejected')}
+                          className="px-3 py-1 text-xs font-medium text-white bg-slate-400 hover:bg-slate-500 rounded transition-colors"
+                        >
+                          驳回
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-400">已归档</span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function BlacklistTab({ token }: { token: string }) {
+  const [blacklist, setBlacklist] = useState<BlacklistItem[]>([]);
+  const [filteredBlacklist, setFilteredBlacklist] = useState<BlacklistItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchKw, setSearchKw] = useState('');
+  const [imageId, setImageId] = useState('');
+  const [reason, setReason] = useState('');
+
+  const loadBlacklist = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.adminGetBlacklist(token);
+      if (data.success) {
+        setBlacklist(data.blacklist || []);
+        setFilteredBlacklist(data.blacklist || []);
+      }
+    } catch {
+      showToast('加载黑名单失败', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadBlacklist();
+  }, [loadBlacklist]);
+
+  useEffect(() => {
+    if (!searchKw) {
+      setFilteredBlacklist(blacklist);
+      return;
+    }
+    const kw = searchKw.toLowerCase();
+    setFilteredBlacklist(blacklist.filter(b => 
+      String(b.image_id) === kw ||
+      b.reason?.toLowerCase().includes(kw)
+    ));
+  }, [searchKw, blacklist]);
+
+  const addBlacklist = async () => {
+    if (!imageId) {
+      showToast('请输入图片ID', 'error');
+      return;
+    }
+    try {
+      const res = await api.adminAddBlacklist(token, parseInt(imageId), reason);
+      const data = await res.json();
+      if (data.success) {
+        showToast('已添加屏蔽', 'success');
+        setImageId('');
+        setReason('');
+        loadBlacklist();
+      } else {
+        showToast(data.error || '添加失败', 'error');
+      }
+    } catch {
+      showToast('添加失败', 'error');
+    }
+  };
+
+  const removeBlacklist = async (id: number) => {
+    if (!confirm(`确定要解除对图片 #${id} 的屏蔽吗？`)) return;
+    try {
+      const res = await api.adminRemoveBlacklist(token, id);
+      const data = await res.json();
+      if (data.success) {
+        showToast('已解除屏蔽', 'success');
+        loadBlacklist();
+      } else {
+        showToast(data.error || '解除失败', 'error');
+      }
+    } catch {
+      showToast('解除失败', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <MdBlock className="text-primary" size={24} />
+          全局违规图片屏蔽库
+        </h2>
+        <button
+          onClick={loadBlacklist}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+        >
+          <MdRefresh size={18} />
+          刷新列表
+        </button>
+      </div>
+
+      <div className="p-4 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-900/30">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">图片ID</label>
+            <input
+              type="number"
+              value={imageId}
+              onChange={(e) => setImageId(e.target.value)}
+              placeholder="例如: 3123456"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+            />
+          </div>
+          <div className="flex-[2]">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">屏蔽原因（仅后台可见）</label>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="例如: 严重违规、政治敏感..."
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={addBlacklist}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            >
+              <MdAdd size={18} className="inline mr-1" />
+              强制屏蔽
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative">
+        <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <input
+          type="text"
+          value={searchKw}
+          onChange={(e) => setSearchKw(e.target.value)}
+          placeholder="搜索已屏蔽图片..."
+          className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
+        />
+      </div>
+
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+        <table className="w-full">
+          <thead className="bg-slate-50 dark:bg-slate-800">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">图片ID</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">原帖</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">屏蔽原因</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">时间</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-12 text-center">
+                  <div className="flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+                    <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    加载中...
+                  </div>
+                </td>
+              </tr>
+            ) : filteredBlacklist.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                  暂无屏蔽记录
+                </td>
+              </tr>
+            ) : (
+              filteredBlacklist.map((item) => (
+                <tr key={item.image_id} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-4 py-3 text-sm font-medium">#{item.image_id}</td>
+                  <td className="px-4 py-3">
+                    <a 
+                      href={`/pic/${item.image_id}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline text-sm flex items-center gap-1"
+                    >
+                      查看原帖 <MdOpenInNew size={14} />
+                    </a>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{item.reason || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{item.created_at}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => removeBlacklist(item.image_id)}
+                      className="px-3 py-1 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded transition-colors"
+                    >
+                      解除屏蔽
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function WealthTab({ token }: { token: string }) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchKw, setSearchKw] = useState('');
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [form, setForm] = useState({
+    experience: 0,
+    coinsOp: 'add',
+    coinsValue: '',
+    reason: '',
+  });
+
+  const loadUsers = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.adminGetWealth(token);
+      if (data.success) {
+        setUsers(data.users || []);
+        setFilteredUsers(data.users || []);
+      }
+    } catch {
+      showToast('加载用户失败', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    if (!searchKw) {
+      setFilteredUsers(users);
+      return;
+    }
+    const kw = searchKw.toLowerCase();
+    setFilteredUsers(users.filter(u => 
+      String(u.id) === kw ||
+      u.username?.toLowerCase().includes(kw)
+    ));
+  }, [searchKw, users]);
+
+  const openModal = (user: User) => {
+    setEditingUser(user);
+    setForm({
+      experience: user.experience || 0,
+      coinsOp: 'add',
+      coinsValue: '',
+      reason: '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingUser(null);
+  };
+
+  const submit = async () => {
+    if (!editingUser) return;
+    if (!form.reason.trim()) {
+      showToast('请填写变动原因', 'error');
+      return;
+    }
+    try {
+      const res = await api.adminUpdateWealth(token, {
+        target_id: editingUser.id,
+        experience: form.experience,
+        coins_op: form.coinsOp,
+        coins_value: form.coinsValue,
+        reason: form.reason,
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('修改成功', 'success');
+        closeModal();
+        loadUsers();
+      } else {
+        showToast(data.error || '修改失败', 'error');
+      }
+    } catch {
+      showToast('修改失败', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <MdAttachMoney className="text-primary" size={24} />
+          经验与金币管理
+        </h2>
+        <button
+          onClick={loadUsers}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+        >
+          <MdRefresh size={18} />
+          刷新列表
+        </button>
+      </div>
+
+      <div className="relative">
+        <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <input
+          type="text"
+          value={searchKw}
+          onChange={(e) => setSearchKw(e.target.value)}
+          placeholder="搜索用户ID或用户名..."
+          className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
+        />
+      </div>
+
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+        <table className="w-full">
+          <thead className="bg-slate-50 dark:bg-slate-800">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">ID</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">用户名</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">当前经验</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">当前金币</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-12 text-center">
+                  <div className="flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+                    <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    加载中...
+                  </div>
+                </td>
+              </tr>
+            ) : filteredUsers.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                  没有找到匹配的用户
+                </td>
+              </tr>
+            ) : (
+              filteredUsers.map((user) => (
+                <tr key={user.id} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-4 py-3 text-sm">#{user.id}</td>
+                  <td className="px-4 py-3">
+                    <span className="font-medium text-primary">{user.username}</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{user.experience || 0}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-amber-600">{user.coins || 0}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => openModal(user)}
+                      className="px-3 py-1 text-xs font-medium text-white bg-primary hover:bg-primary/90 rounded transition-colors"
+                    >
+                      修改资产
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {isModalOpen && editingUser && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">修改资产 - {editingUser.username}</h3>
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <MdClose size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">经验值</label>
+                <input
+                  type="number"
+                  value={form.experience}
+                  onChange={(e) => setForm({ ...form, experience: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">金币操作</label>
+                <div className="flex gap-2">
+                  <select
+                    value={form.coinsOp}
+                    onChange={(e) => setForm({ ...form, coinsOp: e.target.value })}
+                    className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+                  >
+                    <option value="add">[+]</option>
+                    <option value="sub">[-]</option>
+                    <option value="set">[=]</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={form.coinsValue}
+                    onChange={(e) => setForm({ ...form, coinsValue: e.target.value })}
+                    placeholder="数值"
+                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">变动原因（必填）</label>
+                <input
+                  type="text"
+                  value={form.reason}
+                  onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                  placeholder="例如: 违规惩罚、特殊活动奖励..."
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={closeModal}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={submit}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+                >
+                  确认修改
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+function OtherTab({ token }: { token: string }) {
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState('');
+  const [translateEnabled, setTranslateEnabled] = useState(true);
+  const [stats, setStats] = useState({ images: 0, tags: 0, comments: 0, updated_at: '-' });
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    loadSettings();
+    loadStats();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const data = await api.getMaintenanceStatus();
+      if (data.success) {
+        setMaintenanceMode(data.maintenance_mode);
+        setMaintenanceMessage(data.maintenance_message || '');
+        setTranslateEnabled(data.translate_enabled !== false);
+      }
+    } catch {
+      showToast('加载设置失败', 'error');
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const data = await api.getSiteStats();
+      if (data.success && data.stats) {
+        setStats(data.stats);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleMaintenance = async () => {
+    const newValue = !maintenanceMode;
+    if (newValue && !confirm('开启维护模式后，所有非管理员用户将无法访问网站，确定要开启吗？')) return;
+    try {
+      const res = await api.adminToggleMaintenance(token, {
+        maintenance_mode: newValue,
+        maintenance_message: maintenanceMessage,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMaintenanceMode(newValue);
+        showToast(newValue ? '维护模式已开启' : '维护模式已关闭', 'success');
+      } else {
+        showToast(data.error || '操作失败', 'error');
+      }
+    } catch {
+      showToast('操作失败', 'error');
+    }
+  };
+
+  const toggleTranslate = async () => {
+    const newValue = !translateEnabled;
+    try {
+      const res = await api.adminToggleTranslate(token, { translate_enabled: newValue });
+      const data = await res.json();
+      if (data.success) {
+        setTranslateEnabled(newValue);
+        showToast(newValue ? '翻译功能已开启' : '翻译功能已关闭', 'success');
+      } else {
+        showToast(data.error || '操作失败', 'error');
+      }
+    } catch {
+      showToast('操作失败', 'error');
+    }
+  };
+
+  const syncStats = async () => {
+    if (!confirm('确定要从原站同步最新的数据统计吗？')) return;
+    setIsLoading(true);
+    try {
+      showToast('同步功能需要后端支持', 'warning');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+        <MdBuild className="text-primary" size={24} />
+        其他功能
+      </h2>
+
+      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <MdWarning size={20} />
+              维护模式
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              开启后，所有非管理员用户访问前台将看到全屏维护提示
+            </p>
+          </div>
+          <button
+            onClick={toggleMaintenance}
+            className={`p-2 rounded-lg transition-colors ${maintenanceMode ? 'text-red-500 bg-red-50 dark:bg-red-950/30' : 'text-slate-400 bg-slate-100 dark:bg-slate-700'}`}
+          >
+            {maintenanceMode ? <MdToggleOn size={32} /> : <MdToggleOff size={32} />}
+          </button>
+        </div>
+        {maintenanceMode && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">维护提示文字</label>
+            <textarea
+              value={maintenanceMessage}
+              onChange={(e) => setMaintenanceMessage(e.target.value)}
+              placeholder="例如：服务器正在升级维护..."
+              rows={2}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm resize-none"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <MdTranslate size={20} />
+              图片翻译功能
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              控制前台大图模态框中是否展示"一键图片翻译"按钮
+            </p>
+          </div>
+          <button
+            onClick={toggleTranslate}
+            className={`p-2 rounded-lg transition-colors ${translateEnabled ? 'text-green-500 bg-green-50 dark:bg-green-950/30' : 'text-slate-400 bg-slate-100 dark:bg-slate-700'}`}
+          >
+            {translateEnabled ? <MdToggleOn size={32} /> : <MdToggleOff size={32} />}
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
+          <MdBarChart size={20} />
+          全站数据统计
+        </h3>
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="text-center p-3 bg-white dark:bg-slate-700 rounded-lg">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">图片总数</div>
+            <div className="text-xl font-bold text-primary">{stats.images?.toLocaleString() || 0}</div>
+          </div>
+          <div className="text-center p-3 bg-white dark:bg-slate-700 rounded-lg">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">标签总数</div>
+            <div className="text-xl font-bold text-primary">{stats.tags?.toLocaleString() || 0}</div>
+          </div>
+          <div className="text-center p-3 bg-white dark:bg-slate-700 rounded-lg">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">评论总数</div>
+            <div className="text-xl font-bold text-primary">{stats.comments?.toLocaleString() || 0}</div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            上次同步: <span className="font-medium">{stats.updated_at || '未同步'}</span>
+          </span>
+          <button
+            onClick={syncStats}
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <MdSync size={18} className={isLoading ? 'animate-spin' : ''} />
+            立即同步
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -90,7 +1504,6 @@ function GlossaryTab() {
   const [sortMode, setSortMode] = useState('count_desc');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [showUntranslatedOnly, setShowUntranslatedOnly] = useState(false);
-  const [showWikiOverlapOnly, setShowWikiOverlapOnly] = useState(false);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditModalClosing, setIsEditModalClosing] = useState(false);
@@ -177,7 +1590,6 @@ function GlossaryTab() {
         sort: sortMode,
         category: categoryFilter,
         untranslated: showUntranslatedOnly ? 1 : 0,
-        wiki_overlap: showWikiOverlapOnly ? 1 : 0,
       });
 
       if (data.success) {
@@ -196,7 +1608,7 @@ function GlossaryTab() {
     } finally {
       setIsLoading(false);
     }
-  }, [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly, showWikiOverlapOnly]);
+  }, [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly]);
 
   useEffect(() => {
     if (token) {
@@ -219,7 +1631,7 @@ function GlossaryTab() {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchKeyword, sortMode, categoryFilter, showUntranslatedOnly, showWikiOverlapOnly, loadTags, isDuplicateMode]);
+  }, [searchKeyword, sortMode, categoryFilter, showUntranslatedOnly, loadTags, isDuplicateMode]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -265,47 +1677,6 @@ function GlossaryTab() {
       loadDuplicates();
     } else {
       loadTags(1);
-    }
-  };
-
-  const selectUntranslatedDuplicates = () => {
-    if (!isDuplicateMode || duplicateTags.length === 0) return;
-
-    const groups: Record<string, Tag[]> = {};
-    duplicateTags.forEach((tag) => {
-      const key = tag.en.toLowerCase();
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(tag);
-    });
-
-    const newSelected = new Set(selectedIds);
-
-    Object.values(groups).forEach((group) => {
-      if (group.length <= 1) return;
-
-      group.sort((a, b) => {
-        const aTrans = a.cn !== '未翻译' ? 1 : 0;
-        const bTrans = b.cn !== '未翻译' ? 1 : 0;
-        if (aTrans !== bTrans) return bTrans - aTrans;
-        if ((b.count || 0) !== (a.count || 0)) return (b.count || 0) - (a.count || 0);
-        return a.id - b.id;
-      });
-
-      for (let i = 1; i < group.length; i++) {
-        const tag = group[i];
-        if (tag.cn === '未翻译') {
-          newSelected.add(tag.id);
-        }
-      }
-    });
-
-    setSelectedIds(newSelected);
-
-    const checkedCount = newSelected.size - selectedIds.size;
-    if (checkedCount > 0) {
-      showToast(`已为您自动选中 ${checkedCount} 个多余的未翻译重复标签`, 'success');
-    } else {
-      showToast('没有找到可以安全删除的未翻译冗余项', 'warning');
     }
   };
 
@@ -369,7 +1740,7 @@ function GlossaryTab() {
         setShowSuggestions(false);
       }
     } catch {
-      // 滚木
+      // ignore
     }
   };
 
@@ -399,7 +1770,7 @@ function GlossaryTab() {
       if (!id) {
         const exists = await api.checkTagExists(token, en);
         if (exists) {
-          showToast('词库中已存在此标签，请勿重复添加', 'error');
+          showToast('词库中已存在此标签', 'error');
           setIsSaving(false);
           return;
         }
@@ -449,7 +1820,7 @@ function GlossaryTab() {
   const deleteTag = async (id: number) => {
     if (!isAdmin || !token) return;
 
-    if (!confirm('确定要永久删除这个词条吗？操作不可恢复。')) return;
+    if (!confirm('确定要永久删除这个词条吗？')) return;
 
     try {
       const res = await api.deleteDictionaryTag(token, id);
@@ -478,7 +1849,7 @@ function GlossaryTab() {
   const batchDelete = async () => {
     if (!isAdmin || !token || selectedIds.size === 0) return;
 
-    if (!confirm(`危险操作警告\n\n您确定要永久删除选中的 ${selectedIds.size} 个标签吗？\n此操作不可恢复！`)) {
+    if (!confirm(`确定要永久删除选中的 ${selectedIds.size} 个标签吗？`)) {
       return;
     }
 
@@ -498,7 +1869,7 @@ function GlossaryTab() {
       await new Promise((r) => setTimeout(r, 60));
     }
 
-    showToast(`批量删除完成`, 'success');
+    showToast(`批量删除完成: ${success}成功, ${fail}失败`, 'success');
 
     setSelectedIds(new Set());
     if (isDuplicateMode) {
@@ -566,11 +1937,11 @@ function GlossaryTab() {
     }
 
     if (tasks.length === 0) {
-      showToast('没有解析到有效的新数据。请检查格式。', 'error');
+      showToast('没有解析到有效数据', 'error');
       return;
     }
 
-    if (!confirm(`成功解析到 ${tasks.length} 个新标签。\n准备开始向服务器注入数据，可能需要几十秒，期间请勿关闭页面！`)) {
+    if (!confirm(`成功解析到 ${tasks.length} 个新标签，开始导入？`)) {
       return;
     }
 
@@ -598,25 +1969,12 @@ function GlossaryTab() {
       await new Promise((r) => setTimeout(r, 60));
     }
 
-    showToast(`批量导入完成！`, 'success');
+    showToast(`批量导入完成: ${success}成功, ${skipped}跳过, ${fail}失败`, 'success');
 
     setIsBatchImporting(false);
-    closeBatchModal();
+    setIsBatchModalOpen(false);
     setBatchInput('');
     loadTags(1);
-  };
-
-  const openBatchModal = () => {
-    setIsBatchModalOpen(true);
-    setIsBatchModalClosing(false);
-  };
-
-  const closeBatchModal = () => {
-    setIsBatchModalClosing(true);
-    setTimeout(() => {
-      setIsBatchModalOpen(false);
-      setIsBatchModalClosing(false);
-    }, 200);
   };
 
   const executeSync = async () => {
@@ -624,7 +1982,7 @@ function GlossaryTab() {
 
     const totalPagesToFetch = syncEndPage - syncStartPage + 1;
     if (totalPagesToFetch > 100) {
-      showToast('为了防止您的IP被原站拉黑，一次最多允许拉取 100 页区间。', 'error');
+      showToast('一次最多允许拉取 100 页', 'error');
       return;
     }
 
@@ -668,23 +2026,9 @@ function GlossaryTab() {
     }
 
     setIsSyncing(false);
-    showToast(`同步完成！`, 'success');
-    closeSyncModal();
+    showToast(`同步完成: ${newTagsCount}新增, ${skippedCount}跳过`, 'success');
+    setIsSyncModalOpen(false);
     loadTags(1);
-  };
-
-  const openSyncModal = () => {
-    setIsSyncModalOpen(true);
-    setIsSyncModalClosing(false);
-  };
-
-  const closeSyncModal = () => {
-    if (isSyncing) return;
-    setIsSyncModalClosing(true);
-    setTimeout(() => {
-      setIsSyncModalOpen(false);
-      setIsSyncModalClosing(false);
-    }, 200);
   };
 
   const executeDerpiSearch = async () => {
@@ -695,14 +2039,14 @@ function GlossaryTab() {
       const data = await api.searchDerpiTags(derpiSearchQuery);
       setDerpiResults(data.tags || []);
     } catch (err) {
-      showToast('搜索失败: ' + (err instanceof Error ? err.message : '未知错误'), 'error');
+      showToast('搜索失败', 'error');
     } finally {
       setIsDerpiSearching(false);
     }
   };
 
   const importFromDerpi = (tag: DerpiTag) => {
-    closeDerpiModal();
+    setIsDerpiModalOpen(false);
     openEditModal({
       id: 0,
       en: tag.name,
@@ -714,19 +2058,6 @@ function GlossaryTab() {
     });
   };
 
-  const openDerpiModal = () => {
-    setIsDerpiModalOpen(true);
-    setIsDerpiModalClosing(false);
-  };
-
-  const closeDerpiModal = () => {
-    setIsDerpiModalClosing(true);
-    setTimeout(() => {
-      setIsDerpiModalOpen(false);
-      setIsDerpiModalClosing(false);
-    }, 200);
-  };
-
   const loadFeedbacks = async () => {
     if (!token || !isAdmin) return;
 
@@ -736,29 +2067,11 @@ function GlossaryTab() {
       if (data.success) {
         setFeedbacks(data.feedbacks || []);
       }
-    } catch (err) {
-      showToast('加载反馈失败: ' + (err instanceof Error ? err.message : '未知错误'), 'error');
+    } catch {
+      showToast('加载反馈失败', 'error');
     } finally {
       setIsLoadingFeedback(false);
     }
-  };
-
-  const openFeedbackModal = () => {
-    if (!isAdmin) {
-      showToast('无权限', 'error');
-      return;
-    }
-    setIsFeedbackModalOpen(true);
-    setIsFeedbackModalClosing(false);
-    loadFeedbacks();
-  };
-
-  const closeFeedbackModal = () => {
-    setIsFeedbackModalClosing(true);
-    setTimeout(() => {
-      setIsFeedbackModalOpen(false);
-      setIsFeedbackModalClosing(false);
-    }, 200);
   };
 
   const handleFeedback = async (id: number, status: string) => {
@@ -767,8 +2080,8 @@ function GlossaryTab() {
     try {
       await api.handleTagFeedback(token, id, status);
       loadFeedbacks();
-    } catch (err) {
-      showToast('操作失败: ' + (err instanceof Error ? err.message : '未知错误'), 'error');
+    } catch {
+      showToast('操作失败', 'error');
     }
   };
 
@@ -808,7 +2121,7 @@ function GlossaryTab() {
         setStats((prev) => ({ ...prev, leaderboard: data.leaderboard }));
         setShowFullLeaderboard(true);
       }
-    } catch (err) {
+    } catch {
       showToast('加载排行榜失败', 'error');
     }
   };
@@ -1008,17 +2321,6 @@ function GlossaryTab() {
             {showUntranslatedOnly ? <MdClose size={16} /> : <MdTranslate size={16} />}
             {showUntranslatedOnly ? '取消未翻译过滤' : '只看未翻译'}
           </button>
-          <button
-            onClick={() => setShowWikiOverlapOnly(!showWikiOverlapOnly)}
-            className={`inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors shrink-0 ${
-              showWikiOverlapOnly
-                ? 'bg-primary text-white hover:bg-primary/90'
-                : 'bg-primary/10 text-primary hover:bg-primary/20'
-            }`}
-          >
-            {showWikiOverlapOnly ? <MdClose size={16} /> : <MdLibraryBooks size={16} />}
-            {showWikiOverlapOnly ? '取消维基校对' : '批量校对维基词库'}
-          </button>
           {selectedIds.size > 0 && (
             <button
               onClick={batchDelete}
@@ -1039,17 +2341,8 @@ function GlossaryTab() {
             <MdContentCopy size={16} />
             {isDuplicateMode ? '退出查重' : '查重模式'}
           </button>
-          {isDuplicateMode && (
-            <button
-              onClick={selectUntranslatedDuplicates}
-              className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors shrink-0"
-            >
-              <MdAutoFixHigh size={16} />
-              智能勾选多余未翻译
-            </button>
-          )}
           <button
-            onClick={openFeedbackModal}
+            onClick={() => setIsFeedbackModalOpen(true)}
             className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
           >
             <MdFeedback size={16} />
@@ -1063,21 +2356,21 @@ function GlossaryTab() {
             导出当前页
           </button>
           <button
-            onClick={openBatchModal}
+            onClick={() => setIsBatchModalOpen(true)}
             className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
           >
             <MdFileUpload size={16} />
             批量导入
           </button>
           <button
-            onClick={openSyncModal}
+            onClick={() => setIsSyncModalOpen(true)}
             className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
           >
             <MdCloudDownload size={16} />
             同步热门
           </button>
           <button
-            onClick={openDerpiModal}
+            onClick={() => setIsDerpiModalOpen(true)}
             className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
           >
             <MdSearch size={16} />
@@ -1192,36 +2485,6 @@ function GlossaryTab() {
               下一页
             </button>
           </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              placeholder="页码"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const val = parseInt((e.target as HTMLInputElement).value);
-                  if (val >= 1 && val <= totalPages) {
-                    loadTags(val);
-                  }
-                }
-              }}
-              className="w-16 px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-            />
-            <button
-              onClick={() => {
-                const input = document.querySelector('input[placeholder="页码"]') as HTMLInputElement;
-                const val = parseInt(input?.value);
-                if (val >= 1 && val <= totalPages) {
-                  loadTags(val);
-                }
-              }}
-              className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-            >
-              跳转
-            </button>
-          </div>
         </div>
       )}
 
@@ -1241,41 +2504,7 @@ function GlossaryTab() {
         </div>
       </div>
 
-      <div className="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <MdEmojiEvents className="text-yellow-500" />
-            翻译贡献榜 {showFullLeaderboard ? '' : '(Top 10)'}
-          </h3>
-          {!showFullLeaderboard && (
-            <button
-              onClick={loadFullLeaderboard}
-              className="text-sm text-primary hover:underline"
-            >
-              查看全部
-            </button>
-          )}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {stats.leaderboard?.slice(0, showFullLeaderboard ? undefined : 10).map((item, index) => {
-            const rankColors = ['text-yellow-500', 'text-gray-400', 'text-amber-600'];
-            const rankIcon = index < 3 ? ['🥇', '🥈', '🥉'][index] : `${index + 1}`;
-            return (
-              <div
-                key={item.username}
-                className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg"
-              >
-                <div className="flex items-center gap-2">
-                  <span className={`font-bold ${rankColors[index] || 'text-slate-500'}`}>{rankIcon}</span>
-                  <span className="font-medium text-slate-700 dark:text-slate-300 truncate">{item.username}</span>
-                </div>
-                <span className="text-sm text-green-600 dark:text-green-400 font-semibold">{item.count} 个</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
+      {/* Modals */}
       {isEditModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
           className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 ${isEditModalClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
@@ -1370,7 +2599,7 @@ function GlossaryTab() {
                 <textarea
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  placeholder="例如：该角色首次登场于第X季，主要特征为..."
+                  placeholder="例如：该角色首次登场于第X季..."
                   rows={3}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm resize-none"
                 />
@@ -1400,7 +2629,7 @@ function GlossaryTab() {
       {isBatchModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
           className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 ${isBatchModalClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closeBatchModal}
+          onClick={() => setIsBatchModalOpen(false)}
         >
           <div 
             className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl overflow-hidden ${isBatchModalClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
@@ -1411,7 +2640,7 @@ function GlossaryTab() {
                 批量导入标签
               </h3>
               <button
-                onClick={closeBatchModal}
+                onClick={() => setIsBatchModalOpen(false)}
                 className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
                 <MdClose size={24} />
@@ -1419,21 +2648,18 @@ function GlossaryTab() {
             </div>
             <div className="px-6 pb-6">
               <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-                请将提取好的内容粘贴在下方。每行一个标签。
-                <br />
-                <strong>格式要求：</strong>
-                <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">英文标签 = 主中文名, 别名1, 别名2</code>
+                格式要求：<code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">英文标签 = 主中文名, 别名1, 别名2</code>
               </p>
               <textarea
                 value={batchInput}
                 onChange={(e) => setBatchInput(e.target.value)}
-                placeholder="例如：&#10;twilight sparkle = 紫悦, 暮光闪闪, ts&#10;rainbow dash = 云宝, 云宝黛茜, rd"
+                placeholder="例如：&#10;twilight sparkle = 紫悦, 暮光闪闪, ts"
                 rows={12}
                 className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm font-mono resize-none"
               />
               <div className="flex justify-end gap-3 pt-4">
                 <button
-                  onClick={closeBatchModal}
+                  onClick={() => setIsBatchModalOpen(false)}
                   className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
                   取消
@@ -1455,7 +2681,7 @@ function GlossaryTab() {
       {isSyncModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
           className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 ${isSyncModalClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closeSyncModal}
+          onClick={() => !isSyncing && setIsSyncModalOpen(false)}
         >
           <div 
             className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isSyncModalClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
@@ -1466,7 +2692,7 @@ function GlossaryTab() {
                 拉取原站热门标签
               </h3>
               <button
-                onClick={closeSyncModal}
+                onClick={() => !isSyncing && setIsSyncModalOpen(false)}
                 disabled={isSyncing}
                 className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors disabled:opacity-50"
               >
@@ -1476,8 +2702,6 @@ function GlossaryTab() {
             <div className="px-6 pb-6 space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-400">
                 系统将按原站<strong>图片总数</strong>从高到低自动拉取标签。
-                <br />
-                为了防止浏览器卡死或IP被拉黑，建议一次最多拉取 100 页（每页50个）。
                 <br />
                 <span className="text-red-500">新拉取的标签会被标记为【未翻译】</span>
               </p>
@@ -1525,7 +2749,7 @@ function GlossaryTab() {
               <div className="flex justify-end gap-3 pt-2">
                 {!isSyncing && (
                   <button
-                    onClick={closeSyncModal}
+                    onClick={() => setIsSyncModalOpen(false)}
                     className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                   >
                     取消
@@ -1551,7 +2775,7 @@ function GlossaryTab() {
       {isDerpiModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
           className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 ${isDerpiModalClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closeDerpiModal}
+          onClick={() => setIsDerpiModalOpen(false)}
         >
           <div 
             className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg overflow-hidden ${isDerpiModalClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
@@ -1562,7 +2786,7 @@ function GlossaryTab() {
                 搜索 Trixiebooru 原站标签
               </h3>
               <button
-                onClick={closeDerpiModal}
+                onClick={() => setIsDerpiModalOpen(false)}
                 className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
                 <MdClose size={24} />
@@ -1624,7 +2848,7 @@ function GlossaryTab() {
       {isFeedbackModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
           className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 ${isFeedbackModalClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closeFeedbackModal}
+          onClick={() => setIsFeedbackModalOpen(false)}
         >
           <div 
             className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col ${isFeedbackModalClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
@@ -1635,7 +2859,7 @@ function GlossaryTab() {
                 用户反馈与翻译申请
               </h3>
               <button
-                onClick={closeFeedbackModal}
+                onClick={() => setIsFeedbackModalOpen(false)}
                 className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
                 <MdClose size={24} />
@@ -1724,23 +2948,78 @@ function GlossaryTab() {
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>('welcome');
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [userRole, setUserRole] = useState<string>('user');
+  const [token, setToken] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user_info');
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        setToken(user.token);
+        setUserRole(user.role || 'user');
+      } catch {
+        // ignore
+      }
+    }
+    setIsLoading(false);
+  }, []);
+
+  const tabs: TabConfig[] = [
+    { id: 'welcome', label: '欢迎', icon: <MdDashboard size={20} /> },
+    { id: 'glossary', label: '词库编辑', icon: <MdBook size={20} /> },
+    { id: 'users', label: '用户管理', icon: <MdPeople size={20} />, adminOnly: true },
+    { id: 'shop', label: '商店管理', icon: <MdStore size={20} />, adminOnly: true },
+    { id: 'reports', label: '举报处理', icon: <MdReport size={20} />, adminOnly: true },
+    { id: 'blacklist', label: '屏蔽图库', icon: <MdBlock size={20} />, adminOnly: true },
+    { id: 'wealth', label: '经验金币', icon: <MdAttachMoney size={20} />, superAdminOnly: true },
+    { id: 'other', label: '其他功能', icon: <MdBuild size={20} />, adminOnly: true },
+  ];
+
+  const handleTabChange = (tabId: TabId) => {
+    if (tabId === activeTab) return;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setActiveTab(tabId);
+      setIsTransitioning(false);
+    }, 200);
+  };
+
+  const isAdmin = ['super_admin', 'admin', 'editor'].includes(userRole);
+  const isSuperAdmin = userRole === 'super_admin';
+
+  const visibleTabs = tabs.filter(tab => {
+    if (tab.superAdminOnly) return isSuperAdmin;
+    if (tab.adminOnly) return isAdmin;
+    return true;
+  });
+
+  if (isLoading) {
+    return (
+      <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[400px]">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="max-w-6xl mx-auto text-center py-12">
+        <p className="text-slate-500 dark:text-slate-400">您没有权限访问此页面</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white dark:bg-slate-950 rounded-xl overflow-hidden flex flex-col md:flex-row">
-        <div className="md:w-48 shrink-0">
+        <div className="md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800">
           <nav className="flex md:flex-col p-2 gap-1 overflow-x-auto">
-            {tabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => {
-                  if (tab.id === activeTab) return;
-                  setIsTransitioning(true);
-                  setTimeout(() => {
-                    setActiveTab(tab.id);
-                    setIsTransitioning(false);
-                  }, 200);
-                }}
+                onClick={() => handleTabChange(tab.id)}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                   activeTab === tab.id
                     ? 'bg-primary/10 text-primary'
@@ -1758,6 +3037,12 @@ export default function AdminPage() {
           <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
             {activeTab === 'welcome' && <WelcomeTab />}
             {activeTab === 'glossary' && <GlossaryTab />}
+            {activeTab === 'users' && <UsersTab token={token} myRole={userRole} />}
+            {activeTab === 'shop' && <ShopTab token={token} />}
+            {activeTab === 'reports' && <ReportsTab token={token} />}
+            {activeTab === 'blacklist' && <BlacklistTab token={token} />}
+            {activeTab === 'wealth' && <WealthTab token={token} />}
+            {activeTab === 'other' && <OtherTab token={token} />}
           </div>
         </div>
       </div>

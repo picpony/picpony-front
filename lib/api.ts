@@ -836,5 +836,441 @@ export const api = {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
+  },
+
+  adminGetUsers: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_users&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminUpdateUser: async (token: string, data: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_update_user`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminDeleteUser: async (token: string, targetId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_delete_user`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ target_id: targetId })
+    });
+  },
+
+  adminGetWealth: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_users&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminUpdateWealth: async (token: string, data: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_update_wealth`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminGetShopItems: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_shop_items&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminSaveShopItem: async (token: string, data: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_save_shop_item`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminDeleteShopItem: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_delete_shop_item`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
+  },
+
+  adminGetReports: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_reports&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminHandleReport: async (token: string, reportId: number, status: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_handle_report`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ report_id: reportId, status })
+    });
+  },
+
+  adminGetBlacklist: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_blacklist&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminAddBlacklist: async (token: string, imageId: number, reason: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_add_blacklist`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image_id: imageId, reason })
+    });
+  },
+
+  adminRemoveBlacklist: async (token: string, imageId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_remove_blacklist`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image_id: imageId })
+    });
+  },
+
+  saveAnnouncement: async (token: string, data: { version: string; title: string; content: string }) => {
+    return fetch(`${PICPONY_API_BASE}?action=save_announcement`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminDeleteAnnouncement: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_delete_announcement`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
+  },
+
+  adminGetAllMessages: async (token: string, userId?: number) => {
+    let url = `${PICPONY_API_BASE}?action=admin_get_all_messages&_t=${Date.now()}`;
+    if (userId) url += `&user_id=${userId}`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminSendNotification: async (token: string, data: { user_id: number; title: string; content: string }) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_send_notification`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminGetNotifications: async (token: string, filter: string = 'all') => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_notifications&filter=${filter}&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminDeleteNotification: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_delete_notification`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
+  },
+
+  adminGrantBadge: async (token: string, data: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_grant_badge`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminGetBadgeLinks: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_list_badge_links&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminCreateBadgeLink: async (token: string, data: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_create_badge_link`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminToggleBadgeLink: async (token: string, id: number, isActive: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_toggle_badge_link`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, is_active: isActive })
+    });
+  },
+
+  adminDeleteBadge: async (token: string, badgeId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_delete_badge`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ badge_id: badgeId })
+    });
+  },
+
+  adminEditBadge: async (token: string, data: { badge_id: number; badge_name: string; badge_color: string }) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_edit_badge`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  getMaintenanceStatus: async () => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`);
+    return res.json();
+  },
+
+  adminToggleMaintenance: async (token: string, data: { maintenance_mode: boolean; maintenance_message: string }) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_toggle_maintenance`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminToggleTranslate: async (token: string, data: { translate_enabled: boolean }) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_toggle_translate`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  getSiteStats: async () => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_site_stats&_t=${Date.now()}`);
+    return res.json();
+  },
+
+  adminSyncSiteStats: async (token: string, data: { images: number; tags: number; comments: number }) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_sync_site_stats`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminGetMascotConfig: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_mascot_config&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminSaveMascotConfig: async (token: string, data: { enabled: boolean; tips: string[] }) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_save_mascot_config`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminUploadMascotImage: async (token: string, file: File) => {
+    const formData = new FormData();
+    formData.append('mascot_file', file);
+    return fetch(`${PICPONY_API_BASE}?action=admin_upload_mascot_image`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+  },
+
+  adminDeleteMascotImage: async (token: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_delete_mascot_image`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+  },
+
+  getBlockTags: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_block_tags&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminAddBlockTag: async (token: string, data: { filter_key: string; tag_name: string }) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_add_block_tag`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  adminRemoveBlockTag: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_remove_block_tag`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
+  },
+
+  adminGetDeveloperPassword: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_developer_password&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminRefreshDeveloperPassword: async (token: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_refresh_developer_password`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+  },
+
+  adminGetDeveloperUsers: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_developer_users&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  adminRevokeDeveloper: async (token: string, targetId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_revoke_developer`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ target_id: targetId })
+    });
+  },
+
+  adminEnableDeveloper: async (token: string, targetId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=admin_enable_developer`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ target_id: targetId })
+    });
+  },
+
+  getTeamMembers: async () => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_team_members&_t=${Date.now()}`);
+    return res.json();
+  },
+
+  addTeamMember: async (token: string, data: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=add_team_member`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateTeamMember: async (token: string, data: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=update_team_member`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteTeamMember: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=delete_team_member`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
   }
 };
