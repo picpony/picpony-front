@@ -110,6 +110,15 @@
     }
   }
 
+  @keyframes modalOverlay {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
   @keyframes modalContent {
     from {
       opacity: 0;

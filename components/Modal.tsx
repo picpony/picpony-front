@@ -28,37 +28,46 @@ export default function Modal({
 }: ModalProps) {
   const [isClosing, setIsClosing] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [shouldRender, setShouldRender] = useState(isOpen);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const handleClose = useCallback(() => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-      setIsClosing(false);
-    }, 200);
-  }, [onClose]);
-
   useEffect(() => {
     if (isOpen) {
+      setShouldRender(true);
+      setIsClosing(false);
       document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      if (isOpen) {
+    } else if (shouldRender) {
+      setIsClosing(true);
+      const timer = setTimeout(() => {
+        setShouldRender(false);
+        setIsClosing(false);
         document.body.style.overflow = 'unset';
-      }
-    };
-  }, [isOpen]);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, shouldRender]);
 
-  if (!mounted || (!isOpen && !isClosing)) return null;
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  const handleClose = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  if (!mounted || !shouldRender) return null;
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[${zIndex}] flex items-center justify-center p-4 sm:p-6 bg-black/50 ${
+      className={`fixed inset-0 flex items-center justify-center p-4 sm:p-6 bg-black/50 ${
         isClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'
       }`}
+      style={{ zIndex }}
       onClick={closeOnOverlayClick ? handleClose : undefined}
     >
       <div
@@ -77,7 +86,7 @@ export default function Modal({
             {!hideCloseButton && (
               <button
                 onClick={handleClose}
-                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors ml-auto"
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors ml-auto cursor-pointer"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
