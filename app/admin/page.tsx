@@ -215,6 +215,23 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
+  const [usersConfirmModalOpen, setUsersConfirmModalOpen] = useState(false);
+  const [usersConfirmTitle, setUsersConfirmTitle] = useState('');
+  const [usersConfirmMessage, setUsersConfirmMessage] = useState('');
+  const usersConfirmActionRef = useRef<(() => void) | null>(null);
+
+  const showUsersConfirm = (title: string, message: string, action: () => void) => {
+    setUsersConfirmTitle(title);
+    setUsersConfirmMessage(message);
+    usersConfirmActionRef.current = action;
+    setUsersConfirmModalOpen(true);
+  };
+
+  const handleUsersConfirmAction = () => {
+    usersConfirmActionRef.current?.();
+    setUsersConfirmModalOpen(false);
+  };
+
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -258,35 +275,45 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
   };
 
   const handleBan = async (userId: number, isBanned: number) => {
-    if (!confirm(isBanned ? '确认封禁该用户？' : '确认解封该用户？')) return;
-    try {
-      const res = await api.adminUpdateUser(token, { target_id: userId, is_banned: isBanned });
-      const data = await res.json();
-      if (data.success) {
-        showToast(isBanned ? '已封禁' : '已解封', 'success');
-        loadUsers();
-      } else {
-        showToast(data.error || '操作失败', 'error');
+    showUsersConfirm(
+      isBanned ? '确认封禁' : '确认解封',
+      isBanned ? '确认封禁该用户？' : '确认解封该用户？',
+      async () => {
+        try {
+          const res = await api.adminUpdateUser(token, { target_id: userId, is_banned: isBanned });
+          const data = await res.json();
+          if (data.success) {
+            showToast(isBanned ? '已封禁' : '已解封', 'success');
+            loadUsers();
+          } else {
+            showToast(data.error || '操作失败', 'error');
+          }
+        } catch {
+          showToast('操作失败', 'error');
+        }
       }
-    } catch {
-      showToast('操作失败', 'error');
-    }
+    );
   };
 
   const handleDelete = async (userId: number) => {
-    if (!confirm('【极度危险】确定要彻底抹除此账号及所有相关数据吗？此操作无法恢复！')) return;
-    try {
-      const res = await api.adminDeleteUser(token, userId);
-      const data = await res.json();
-      if (data.success) {
-        showToast('已删除', 'success');
-        loadUsers();
-      } else {
-        showToast(data.error || '删除失败', 'error');
+    showUsersConfirm(
+      '【极度危险】删除确认',
+      '确定要彻底抹除此账号及所有相关数据吗？此操作无法恢复！',
+      async () => {
+        try {
+          const res = await api.adminDeleteUser(token, userId);
+          const data = await res.json();
+          if (data.success) {
+            showToast('已删除', 'success');
+            loadUsers();
+          } else {
+            showToast(data.error || '删除失败', 'error');
+          }
+        } catch {
+          showToast('删除失败', 'error');
+        }
       }
-    } catch {
-      showToast('删除失败', 'error');
-    }
+    );
   };
 
   return (
@@ -389,6 +416,31 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
           编辑用户功能正在开发中，当前仅支持封禁/解封和删除操作。
         </p>
       </Modal>
+
+      <Modal
+        isOpen={usersConfirmModalOpen}
+        onClose={() => setUsersConfirmModalOpen(false)}
+        title={usersConfirmTitle}
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <button
+              onClick={() => setUsersConfirmModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleUsersConfirmAction}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            >
+              确认
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-400">{usersConfirmMessage}</p>
+      </Modal>
     </div>
   );
 }
@@ -407,6 +459,23 @@ function ShopTab({ token }: { token: string }) {
     stock: 100,
     active: true,
   });
+
+  const [shopConfirmModalOpen, setShopConfirmModalOpen] = useState(false);
+  const [shopConfirmTitle, setShopConfirmTitle] = useState('');
+  const [shopConfirmMessage, setShopConfirmMessage] = useState('');
+  const shopConfirmActionRef = useRef<(() => void) | null>(null);
+
+  const showShopConfirm = (title: string, message: string, action: () => void) => {
+    setShopConfirmTitle(title);
+    setShopConfirmMessage(message);
+    shopConfirmActionRef.current = action;
+    setShopConfirmModalOpen(true);
+  };
+
+  const handleShopConfirmAction = () => {
+    shopConfirmActionRef.current?.();
+    setShopConfirmModalOpen(false);
+  };
 
   const loadItems = useCallback(async () => {
     setIsLoading(true);
@@ -470,19 +539,24 @@ function ShopTab({ token }: { token: string }) {
   };
 
   const deleteItem = async (id: number) => {
-    if (!confirm('确定要删除这个商品吗？')) return;
-    try {
-      const res = await api.adminDeleteShopItem(token, id);
-      const data = await res.json();
-      if (data.success) {
-        showToast('删除成功', 'success');
-        loadItems();
-      } else {
-        showToast(data.error || '删除失败', 'error');
+    showShopConfirm(
+      '确认删除',
+      '确定要删除这个商品吗？',
+      async () => {
+        try {
+          const res = await api.adminDeleteShopItem(token, id);
+          const data = await res.json();
+          if (data.success) {
+            showToast('删除成功', 'success');
+            loadItems();
+          } else {
+            showToast(data.error || '删除失败', 'error');
+          }
+        } catch {
+          showToast('删除失败', 'error');
+        }
       }
-    } catch {
-      showToast('删除失败', 'error');
-    }
+    );
   };
 
   return (
@@ -641,6 +715,31 @@ function ShopTab({ token }: { token: string }) {
           </tbody>
         </table>
       </div>
+
+      <Modal
+        isOpen={shopConfirmModalOpen}
+        onClose={() => setShopConfirmModalOpen(false)}
+        title={shopConfirmTitle}
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <button
+              onClick={() => setShopConfirmModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleShopConfirmAction}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            >
+              确认
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-400">{shopConfirmMessage}</p>
+      </Modal>
     </div>
   );
 }
@@ -798,6 +897,23 @@ function BlacklistTab({ token }: { token: string }) {
   const [imageId, setImageId] = useState('');
   const [reason, setReason] = useState('');
 
+  const [blacklistConfirmModalOpen, setBlacklistConfirmModalOpen] = useState(false);
+  const [blacklistConfirmTitle, setBlacklistConfirmTitle] = useState('');
+  const [blacklistConfirmMessage, setBlacklistConfirmMessage] = useState('');
+  const blacklistConfirmActionRef = useRef<(() => void) | null>(null);
+
+  const showBlacklistConfirm = (title: string, message: string, action: () => void) => {
+    setBlacklistConfirmTitle(title);
+    setBlacklistConfirmMessage(message);
+    blacklistConfirmActionRef.current = action;
+    setBlacklistConfirmModalOpen(true);
+  };
+
+  const handleBlacklistConfirmAction = () => {
+    blacklistConfirmActionRef.current?.();
+    setBlacklistConfirmModalOpen(false);
+  };
+
   const loadBlacklist = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -851,19 +967,24 @@ function BlacklistTab({ token }: { token: string }) {
   };
 
   const removeBlacklist = async (id: number) => {
-    if (!confirm(`确定要解除对图片 #${id} 的屏蔽吗？`)) return;
-    try {
-      const res = await api.adminRemoveBlacklist(token, id);
-      const data = await res.json();
-      if (data.success) {
-        showToast('已解除屏蔽', 'success');
-        loadBlacklist();
-      } else {
-        showToast(data.error || '解除失败', 'error');
+    showBlacklistConfirm(
+      '确认解除屏蔽',
+      `确定要解除对图片 #${id} 的屏蔽吗？`,
+      async () => {
+        try {
+          const res = await api.adminRemoveBlacklist(token, id);
+          const data = await res.json();
+          if (data.success) {
+            showToast('已解除屏蔽', 'success');
+            loadBlacklist();
+          } else {
+            showToast(data.error || '解除失败', 'error');
+          }
+        } catch {
+          showToast('解除失败', 'error');
+        }
       }
-    } catch {
-      showToast('解除失败', 'error');
-    }
+    );
   };
 
   return (
@@ -960,6 +1081,31 @@ function BlacklistTab({ token }: { token: string }) {
           </tbody>
         </table>
       </div>
+
+      <Modal
+        isOpen={blacklistConfirmModalOpen}
+        onClose={() => setBlacklistConfirmModalOpen(false)}
+        title={blacklistConfirmTitle}
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <button
+              onClick={() => setBlacklistConfirmModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleBlacklistConfirmAction}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            >
+              确认
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-400">{blacklistConfirmMessage}</p>
+      </Modal>
     </div>
   );
 }
@@ -1182,6 +1328,23 @@ function OtherTab({ token }: { token: string }) {
   const [stats, setStats] = useState({ images: 0, tags: 0, comments: 0, updated_at: '-' });
   const [isLoading, setIsLoading] = useState(false);
 
+  const [otherConfirmModalOpen, setOtherConfirmModalOpen] = useState(false);
+  const [otherConfirmTitle, setOtherConfirmTitle] = useState('');
+  const [otherConfirmMessage, setOtherConfirmMessage] = useState('');
+  const otherConfirmActionRef = useRef<(() => void) | null>(null);
+
+  const showOtherConfirm = (title: string, message: string, action: () => void) => {
+    setOtherConfirmTitle(title);
+    setOtherConfirmMessage(message);
+    otherConfirmActionRef.current = action;
+    setOtherConfirmModalOpen(true);
+  };
+
+  const handleOtherConfirmAction = () => {
+    otherConfirmActionRef.current?.();
+    setOtherConfirmModalOpen(false);
+  };
+
   useEffect(() => {
     loadSettings();
     loadStats();
@@ -1213,21 +1376,44 @@ function OtherTab({ token }: { token: string }) {
 
   const toggleMaintenance = async () => {
     const newValue = !maintenanceMode;
-    if (newValue && !confirm('开启维护模式后，所有非管理员用户将无法访问网站，确定要开启吗？')) return;
-    try {
-      const res = await api.adminToggleMaintenance(token, {
-        maintenance_mode: newValue,
-        maintenance_message: maintenanceMessage,
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMaintenanceMode(newValue);
-        showToast(newValue ? '维护模式已开启' : '维护模式已关闭', 'success');
-      } else {
-        showToast(data.error || '操作失败', 'error');
+    if (newValue) {
+      showOtherConfirm(
+        '确认开启维护模式',
+        '开启维护模式后，所有非管理员用户将无法访问网站，确定要开启吗？',
+        async () => {
+          try {
+            const res = await api.adminToggleMaintenance(token, {
+              maintenance_mode: newValue,
+              maintenance_message: maintenanceMessage,
+            });
+            const data = await res.json();
+            if (data.success) {
+              setMaintenanceMode(newValue);
+              showToast(newValue ? '维护模式已开启' : '维护模式已关闭', 'success');
+            } else {
+              showToast(data.error || '操作失败', 'error');
+            }
+          } catch {
+            showToast('操作失败', 'error');
+          }
+        }
+      );
+    } else {
+      try {
+        const res = await api.adminToggleMaintenance(token, {
+          maintenance_mode: newValue,
+          maintenance_message: maintenanceMessage,
+        });
+        const data = await res.json();
+        if (data.success) {
+          setMaintenanceMode(newValue);
+          showToast(newValue ? '维护模式已开启' : '维护模式已关闭', 'success');
+        } else {
+          showToast(data.error || '操作失败', 'error');
+        }
+      } catch {
+        showToast('操作失败', 'error');
       }
-    } catch {
-      showToast('操作失败', 'error');
     }
   };
 
@@ -1248,13 +1434,18 @@ function OtherTab({ token }: { token: string }) {
   };
 
   const syncStats = async () => {
-    if (!confirm('确定要从原站同步最新的数据统计吗？')) return;
-    setIsLoading(true);
-    try {
-      showToast('同步功能需要后端支持', 'warning');
-    } finally {
-      setIsLoading(false);
-    }
+    showOtherConfirm(
+      '确认同步',
+      '确定要从原站同步最新的数据统计吗？',
+      async () => {
+        setIsLoading(true);
+        try {
+          showToast('同步功能需要后端支持', 'warning');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    );
   };
 
   return (
@@ -1349,6 +1540,31 @@ function OtherTab({ token }: { token: string }) {
           </button>
         </div>
       </div>
+
+      <Modal
+        isOpen={otherConfirmModalOpen}
+        onClose={() => setOtherConfirmModalOpen(false)}
+        title={otherConfirmTitle}
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <button
+              onClick={() => setOtherConfirmModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleOtherConfirmAction}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            >
+              确认
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-400">{otherConfirmMessage}</p>
+      </Modal>
     </div>
   );
 }
@@ -1415,6 +1631,23 @@ function GlossaryTab() {
 
   const [stats, setStats] = useState<TagStats>({ total: 0, translated: 0, leaderboard: [] });
   const [showFullLeaderboard, setShowFullLeaderboard] = useState(false);
+
+  const [glossaryConfirmModalOpen, setGlossaryConfirmModalOpen] = useState(false);
+  const [glossaryConfirmTitle, setGlossaryConfirmTitle] = useState('');
+  const [glossaryConfirmMessage, setGlossaryConfirmMessage] = useState('');
+  const glossaryConfirmActionRef = useRef<(() => void) | null>(null);
+
+  const showGlossaryConfirm = (title: string, message: string, action: () => void) => {
+    setGlossaryConfirmTitle(title);
+    setGlossaryConfirmMessage(message);
+    glossaryConfirmActionRef.current = action;
+    setGlossaryConfirmModalOpen(true);
+  };
+
+  const handleGlossaryConfirmAction = () => {
+    glossaryConfirmActionRef.current?.();
+    setGlossaryConfirmModalOpen(false);
+  };
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -1685,63 +1918,69 @@ function GlossaryTab() {
   const deleteTag = async (id: number) => {
     if (!isAdmin || !token) return;
 
-    if (!confirm('确定要永久删除这个词条吗？')) return;
+    showGlossaryConfirm(
+      '确认删除',
+      '确定要永久删除这个词条吗？',
+      async () => {
+        try {
+          const res = await api.deleteDictionaryTag(token, id);
+          const data = await res.json();
 
-    try {
-      const res = await api.deleteDictionaryTag(token, id);
-      const data = await res.json();
-
-      if (data.success) {
-        showToast('删除成功', 'success');
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-        if (isDuplicateMode) {
-          loadDuplicates();
-        } else {
-          loadTags(currentPage);
+          if (data.success) {
+            showToast('删除成功', 'success');
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+            if (isDuplicateMode) {
+              loadDuplicates();
+            } else {
+              loadTags(currentPage);
+            }
+          } else {
+            showToast(data.error || '删除失败', 'error');
+          }
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : '网络错误', 'error');
         }
-      } else {
-        showToast(data.error || '删除失败', 'error');
       }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
-    }
+    );
   };
 
   const batchDelete = async () => {
     if (!isAdmin || !token || selectedIds.size === 0) return;
 
-    if (!confirm(`确定要永久删除选中的 ${selectedIds.size} 个标签吗？`)) {
-      return;
-    }
+    showGlossaryConfirm(
+      '确认批量删除',
+      `确定要永久删除选中的 ${selectedIds.size} 个标签吗？`,
+      async () => {
+        const idsArray = Array.from(selectedIds);
+        let success = 0;
+        let fail = 0;
 
-    const idsArray = Array.from(selectedIds);
-    let success = 0;
-    let fail = 0;
+        for (let i = 0; i < idsArray.length; i++) {
+          try {
+            const res = await api.deleteDictionaryTag(token, idsArray[i]);
+            const data = await res.json();
+            if (data.success) success++;
+            else fail++;
+          } catch {
+            fail++;
+          }
+          await new Promise((r) => setTimeout(r, 60));
+        }
 
-    for (let i = 0; i < idsArray.length; i++) {
-      try {
-        const res = await api.deleteDictionaryTag(token, idsArray[i]);
-        const data = await res.json();
-        if (data.success) success++;
-        else fail++;
-      } catch {
-        fail++;
+        showToast(`批量删除完成: ${success}成功, ${fail}失败`, 'success');
+
+        setSelectedIds(new Set());
+        if (isDuplicateMode) {
+          loadDuplicates();
+        } else {
+          loadTags(currentPage);
+        }
       }
-      await new Promise((r) => setTimeout(r, 60));
-    }
-
-    showToast(`批量删除完成: ${success}成功, ${fail}失败`, 'success');
-
-    setSelectedIds(new Set());
-    if (isDuplicateMode) {
-      loadDuplicates();
-    } else {
-      loadTags(currentPage);
-    }
+    );
   };
 
   const toggleSelectAll = () => {
@@ -1806,40 +2045,42 @@ function GlossaryTab() {
       return;
     }
 
-    if (!confirm(`成功解析到 ${tasks.length} 个新标签，开始导入？`)) {
-      return;
-    }
+    showGlossaryConfirm(
+      '确认批量导入',
+      `成功解析到 ${tasks.length} 个新标签，开始导入？`,
+      async () => {
+        setIsBatchImporting(true);
+        let success = 0;
+        let fail = 0;
+        let skipped = 0;
 
-    setIsBatchImporting(true);
-    let success = 0;
-    let fail = 0;
-    let skipped = 0;
+        for (let i = 0; i < tasks.length; i++) {
+          const task = tasks[i];
+          try {
+            const exists = await api.checkTagExists(token, task.en);
+            if (exists) {
+              skipped++;
+              continue;
+            }
 
-    for (let i = 0; i < tasks.length; i++) {
-      const task = tasks[i];
-      try {
-        const exists = await api.checkTagExists(token, task.en);
-        if (exists) {
-          skipped++;
-          continue;
+            const res = await api.saveDictionaryTag(token, task);
+            const data = await res.json();
+            if (data.success) success++;
+            else fail++;
+          } catch {
+            fail++;
+          }
+          await new Promise((r) => setTimeout(r, 60));
         }
 
-        const res = await api.saveDictionaryTag(token, task);
-        const data = await res.json();
-        if (data.success) success++;
-        else fail++;
-      } catch {
-        fail++;
+        showToast(`批量导入完成: ${success}成功, ${skipped}跳过, ${fail}失败`, 'success');
+
+        setIsBatchImporting(false);
+        setIsBatchModalOpen(false);
+        setBatchInput('');
+        loadTags(1);
       }
-      await new Promise((r) => setTimeout(r, 60));
-    }
-
-    showToast(`批量导入完成: ${success}成功, ${skipped}跳过, ${fail}失败`, 'success');
-
-    setIsBatchImporting(false);
-    setIsBatchModalOpen(false);
-    setBatchInput('');
-    loadTags(1);
+    );
   };
 
   const executeSync = async () => {
@@ -2715,6 +2956,31 @@ function GlossaryTab() {
             </div>
           )}
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={glossaryConfirmModalOpen}
+        onClose={() => setGlossaryConfirmModalOpen(false)}
+        title={glossaryConfirmTitle}
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <button
+              onClick={() => setGlossaryConfirmModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleGlossaryConfirmAction}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            >
+              确认
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-400">{glossaryConfirmMessage}</p>
       </Modal>
     </div>
   );
