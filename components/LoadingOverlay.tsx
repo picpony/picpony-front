@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Logo from './Logo';
 
 export default function LoadingOverlay() {
   const [isVisible, setIsVisible] = useState(true);
@@ -24,19 +25,12 @@ export default function LoadingOverlay() {
   if (!isMounted) return null;
 
   return (
-    <div 
+    <div
       className={`fixed inset-0 z-[9999] bg-white dark:bg-slate-900 flex items-center justify-center transition-opacity duration-500 ease-in-out ${
         isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
     >
-      <img 
-        src="/img/picpony.svg"
-        className="w-32 h-auto opacity-10 dark:hidden" 
-      />
-      <img 
-        src="/img/picpony-w.svg"
-        className="w-32 h-auto opacity-10 hidden dark:block" 
-      />
+      <Logo className="w-32 h-auto opacity-10" />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { useRef } from 'react';
 import { MdFormatBold, MdFormatItalic, MdFormatUnderlined, MdTitle, MdFormatListBulleted, MdFormatListNumbered, MdFormatQuote, MdCode, MdLink, MdImage } from 'react-icons/md';
+import { useTextInsertion } from '@/lib/hooks';
 
 interface MarkdownEditorProps {
   value: string;
@@ -12,8 +13,13 @@ interface MarkdownEditorProps {
 
 export default function MarkdownEditor({ value, onChange, placeholder, disabled }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { insertText } = useTextInsertion(textareaRef, onChange);
 
-  const insertMarkdown = (template: string, selectionPlaceholder: string = '') => {
+  const insertBlock = (prefix: string, suffix: string = '') => {
+    insertText(prefix, suffix, '');
+  };
+
+  const insertTemplate = (template: string, placeholder: string = '') => {
     if (!textareaRef.current) return;
 
     const start = textareaRef.current.selectionStart;
@@ -22,10 +28,10 @@ export default function MarkdownEditor({ value, onChange, placeholder, disabled 
 
     const before = text.substring(0, start);
     const selected = text.substring(start, end);
-    const after = text.substring(end, text.length);
+    const after = text.substring(end);
 
     const [prefix, suffix] = template.split('{{selected}}');
-    const insertText = selected ? `${prefix}${selected}${suffix}` : `${prefix}${selectionPlaceholder}${suffix}`;
+    const insertText = selected ? `${prefix}${selected}${suffix}` : `${prefix}${placeholder}${suffix}`;
     const newText = `${before}${insertText}${after}`;
     onChange(newText);
 
@@ -34,7 +40,7 @@ export default function MarkdownEditor({ value, onChange, placeholder, disabled 
         textareaRef.current.focus();
         if (!selected) {
           const cursorPos = start + prefix.length;
-          textareaRef.current.setSelectionRange(cursorPos, cursorPos + selectionPlaceholder.length);
+          textareaRef.current.setSelectionRange(cursorPos, cursorPos + placeholder.length);
         } else {
           const cursorPos = start + insertText.length;
           textareaRef.current.setSelectionRange(cursorPos, cursorPos);
@@ -43,21 +49,17 @@ export default function MarkdownEditor({ value, onChange, placeholder, disabled 
     }, 0);
   };
 
-  const insertBlock = (prefix: string, suffix: string = '') => {
-    insertMarkdown(`${prefix}{{selected}}${suffix}`);
-  };
-
   const tools = [
     { icon: <MdFormatBold size={20} />, title: '加粗', action: () => insertBlock('**', '**') },
     { icon: <MdFormatItalic size={20} />, title: '斜体', action: () => insertBlock('*', '*') },
     { icon: <MdFormatUnderlined size={20} />, title: '下划线', action: () => insertBlock('<u>', '</u>') },
-    { icon: <MdTitle size={20} />, title: '标题', action: () => insertMarkdown('## {{selected}}', '标题') },
-    { icon: <MdFormatListBulleted size={20} />, title: '无序列表', action: () => insertMarkdown('- {{selected}}', '列表项') },
-    { icon: <MdFormatListNumbered size={20} />, title: '有序列表', action: () => insertMarkdown('1. {{selected}}', '列表项') },
-    { icon: <MdFormatQuote size={20} />, title: '引用', action: () => insertMarkdown('> {{selected}}', '引用内容') },
-    { icon: <MdCode size={20} />, title: '代码', action: () => insertMarkdown('`{{selected}}`', '代码') },
-    { icon: <MdLink size={20} />, title: '链接', action: () => insertMarkdown('[{{selected}}](url)', '链接文字') },
-    { icon: <MdImage size={20} />, title: '图片', action: () => insertMarkdown('![{{selected}}](url)', '图片描述') },
+    { icon: <MdTitle size={20} />, title: '标题', action: () => insertTemplate('## {{selected}}', '标题') },
+    { icon: <MdFormatListBulleted size={20} />, title: '无序列表', action: () => insertTemplate('- {{selected}}', '列表项') },
+    { icon: <MdFormatListNumbered size={20} />, title: '有序列表', action: () => insertTemplate('1. {{selected}}', '列表项') },
+    { icon: <MdFormatQuote size={20} />, title: '引用', action: () => insertTemplate('> {{selected}}', '引用内容') },
+    { icon: <MdCode size={20} />, title: '代码', action: () => insertTemplate('`{{selected}}`', '代码') },
+    { icon: <MdLink size={20} />, title: '链接', action: () => insertTemplate('[{{selected}}](url)', '链接文字') },
+    { icon: <MdImage size={20} />, title: '图片', action: () => insertTemplate('![{{selected}}](url)', '图片描述') },
   ];
 
   return (

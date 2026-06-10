@@ -96,7 +96,7 @@ export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
         open: /\[url=([^\]]+)\]/i,
         close: '[/url]',
         render: (content, props) => {
-          if (!props.href) return <>{content}</>;
+          if (!props.href || props.href.toLowerCase().startsWith('javascript:')) return <>{content}</>;
           return (
             <a key={getKey()} href={props.href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline">
               {content}
@@ -109,7 +109,7 @@ export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
         close: '[/url]',
         render: (content) => {
           const url = typeof content[0] === 'string' ? content[0] : '';
-          if (!url) return <>{content}</>;
+          if (!url || url.toLowerCase().startsWith('javascript:')) return <>{content}</>;
           return (
             <a key={getKey()} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline">
               {content}
@@ -253,9 +253,9 @@ export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
 
     const renderText = (str: string): React.ReactNode => {
       const escaped = str
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>');
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 
       const lines = escaped.split('\n');
       if (lines.length === 1) return lines[0];

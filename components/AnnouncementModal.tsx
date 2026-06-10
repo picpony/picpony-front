@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
+import Modal from './Modal';
 
 interface Announcement {
   version: string;
@@ -14,26 +14,17 @@ interface Announcement {
 export default function AnnouncementModal() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setMounted(true);
-    }, 0);
-  }, []);
 
   useEffect(() => {
     const fetchAnnouncement = async () => {
       try {
         const data = await api.getAnnouncement();
-        
+
         if (data.success && data.announcement) {
           const savedVersion = localStorage.getItem('read_announcement_version');
           if (savedVersion !== data.announcement.version) {
             setAnnouncement(data.announcement);
             setIsVisible(true);
-            document.body.style.overflow = 'hidden';
           }
         }
       } catch (error) {
@@ -45,46 +36,37 @@ export default function AnnouncementModal() {
   }, []);
 
   const handleClose = () => {
-    setIsClosing(true);
     if (announcement) {
       localStorage.setItem('read_announcement_version', announcement.version);
     }
-    setTimeout(() => {
-      setIsVisible(false);
-      setIsClosing(false);
-      document.body.style.overflow = 'unset';
-    }, 200);
+    setIsVisible(false);
   };
 
-  if (!mounted || !isVisible || !announcement) return null;
-
-  const modalContent = (
-    <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/50 ${!isClosing ? 'animate-modal-overlay' : 'animate-modal-overlay-out'}`}>
-      <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col ${!isClosing ? 'animate-modal-content' : 'animate-modal-content-out'}`}>
-        <div className="bg-white dark:bg-slate-800 px-5 py-4 flex items-center text-slate-800 dark:text-slate-100">
-          <h2 className="text-lg font-bold truncate pr-4">系统公告</h2>
-        </div>
-        
-        <div className="p-5 sm:p-6 overflow-y-auto max-h-[60vh] bg-white dark:bg-slate-800">
+  return (
+    <Modal
+      isOpen={isVisible}
+      onClose={handleClose}
+      title="系统公告"
+      maxWidth="max-w-lg"
+      footer={
+        <button
+          onClick={handleClose}
+          className="px-4 py-2 text-primary font-medium hover:bg-primary/10 rounded-lg transition-colors active:scale-95 cursor-pointer"
+        >
+          我已知悉
+        </button>
+      }
+    >
+      {announcement && (
+        <>
           <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">{announcement.title}</h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 font-medium pb-3">发布日期：{announcement.date}</p>
-          <div 
+          <div
             className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed space-y-2"
             dangerouslySetInnerHTML={{ __html: announcement.content }}
           />
-        </div>
-        
-        <div className="px-5 py-4 sm:px-6 bg-white dark:bg-slate-800 flex justify-end border-t border-slate-100 dark:border-slate-700">
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 text-primary font-medium hover:bg-primary/10 rounded-lg transition-colors active:scale-95 cursor-pointer"
-          >
-            我已知悉
-          </button>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </Modal>
   );
-
-  return createPortal(modalContent, document.body);
 }

@@ -24,40 +24,49 @@
   color: var(--sidebar-text);
 }
 
-.bbcode-content {
+.bbcode-content,
+.rich-text-content {
   color: inherit;
 }
 
-.bbcode-content a {
+.bbcode-content a,
+.rich-text-content a {
   color: #2563eb;
 }
 
-.bbcode-content a:hover {
+.bbcode-content a:hover,
+.rich-text-content a:hover {
   color: #1d4ed8;
 }
 
-.dark .bbcode-content a {
+.dark .bbcode-content a,
+.dark .rich-text-content a {
   color: #60a5fa;
 }
 
-.dark .bbcode-content a:hover {
+.dark .bbcode-content a:hover,
+.dark .rich-text-content a:hover {
   color: #93c5fd;
 }
 
-.bbcode-content blockquote {
+.bbcode-content blockquote,
+.rich-text-content blockquote {
   border-left: 3px solid #cbd5e1;
   padding-left: 0.75rem;
   margin: 0.5rem 0;
   color: #64748b;
 }
 
-.dark .bbcode-content blockquote {
+.dark .bbcode-content blockquote,
+.dark .rich-text-content blockquote {
   border-left-color: #475569;
   color: #94a3b8;
 }
 
 .bbcode-content pre,
-.bbcode-content code {
+.bbcode-content code,
+.rich-text-content pre,
+.rich-text-content code {
   background-color: #f1f5f9;
   border-radius: 0.375rem;
   padding: 0.125rem 0.375rem;
@@ -65,12 +74,15 @@
 }
 
 .dark .bbcode-content pre,
-.dark .bbcode-content code {
+.dark .bbcode-content code,
+.dark .rich-text-content pre,
+.dark .rich-text-content code {
   background-color: #1e293b;
   color: #e2e8f0;
 }
 
-.bbcode-content pre {
+.bbcode-content pre,
+.rich-text-content pre {
   padding: 0.75rem;
   overflow-x: auto;
 }
@@ -83,40 +95,13 @@
   --font-mono: var(--font-geist-mono);
   
   --animate-fade-in: fadeIn 0.3s ease-out forwards;
-  --animate-page-transition: pageTransition 0.3s ease-in-out forwards;
+  --animate-page-transition: fadeIn 0.3s ease-in-out forwards;
   --animate-modal-overlay: modalOverlay 0.2s ease-out forwards;
   --animate-modal-content: modalContent 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-modal-overlay-out: modalOverlayOut 0.2s ease-in forwards;
   --animate-modal-content-out: modalContentOut 0.2s ease-in forwards;
-  
+
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes fadeOut {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
-  }
-
-  @keyframes pageTransition {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes modalOverlay {
     from {
       opacity: 0;
     }

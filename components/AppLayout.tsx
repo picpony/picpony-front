@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useMemo } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdClose, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdDashboard } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdDashboard } from "react-icons/md";
 import { ButtonBase, Badge } from "@mui/material";
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
+import Modal from "./Modal";
+import Logo from "./Logo";
 import { api } from "@/lib/api";
 
 function SearchBar() {
@@ -129,7 +130,6 @@ export default function AppLayout({
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-  const [isLogoutClosing, setIsLogoutClosing] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
   const [darkMode, setDarkMode] = useState(initialDark);
   const [followSystem, setFollowSystem] = useState(true);
@@ -343,23 +343,15 @@ export default function AppLayout({
   };
 
   const handleLogoutConfirm = () => {
-    setIsLogoutClosing(true);
-    setTimeout(() => {
-      localStorage.removeItem('user_info');
-      setUserInfo(null);
-      setIsUserMenuOpen(false);
-      setIsLogoutDialogOpen(false);
-      setIsLogoutClosing(false);
-      router.push('/');
-    }, 200);
+    localStorage.removeItem('user_info');
+    setUserInfo(null);
+    setIsUserMenuOpen(false);
+    setIsLogoutDialogOpen(false);
+    router.push('/');
   };
 
   const handleLogoutCancel = () => {
-    setIsLogoutClosing(true);
-    setTimeout(() => {
-      setIsLogoutDialogOpen(false);
-      setIsLogoutClosing(false);
-    }, 200);
+    setIsLogoutDialogOpen(false);
   };
 
   return (
@@ -602,8 +594,7 @@ export default function AppLayout({
           <footer className="py-6 sm:py-8 px-4 sm:px-6 text-slate-500 dark:text-slate-400 text-sm">
             <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex flex-col items-center md:items-start gap-4 w-full md:w-auto">
-                <img src="/img/picpony.svg" alt="PicPony Logo" className="h-8 w-auto opacity-60 dark:hidden" />
-                <img src="/img/picpony-w.svg" alt="PicPony Logo" className="h-8 w-auto opacity-80 hidden dark:block" />
+              <Logo className="h-8 w-auto opacity-60" />
                 <div>
                   <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
                   <p>本站为 Derpibooru 第三方镜像站点</p>
@@ -615,50 +606,32 @@ export default function AppLayout({
       </div>
       <AnnouncementModal />
       
-      {isLogoutDialogOpen && typeof document !== 'undefined' && createPortal(
-        <div 
-          className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 ${isLogoutClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={handleLogoutCancel}
-        >
-          <div 
-            className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isLogoutClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">登出</h3>
-              <button 
-                onClick={handleLogoutCancel}
-                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-              >
-                <MdClose size={24} />
-              </button>
-            </div>
-            
-            <div className="px-6 pb-6">
-              <p className="text-slate-600 dark:text-slate-300 mb-6">
-                确定要登出当前账号吗？
-              </p>
-
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleLogoutCancel}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleLogoutConfirm}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-                >
-                  确认登出
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <Modal
+        isOpen={isLogoutDialogOpen}
+        onClose={handleLogoutCancel}
+        title="登出"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleLogoutCancel}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleLogoutConfirm}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            >
+              确认登出
+            </button>
+          </>
+        }
+      >
+        <p className="text-slate-600 dark:text-slate-300">
+          确定要登出当前账号吗？
+        </p>
+      </Modal>
     </div>
   );
 }

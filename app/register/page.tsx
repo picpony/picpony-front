@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
-import SliderCaptcha from "@/components/SliderCaptcha";
+import CaptchaModal from "@/components/CaptchaModal";
 import { api } from "@/lib/api";
 
 export default function RegisterPage() {
@@ -15,13 +14,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
-  const [isClosingCaptcha, setIsClosingCaptcha] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const router = useRouter();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,16 +33,8 @@ export default function RegisterPage() {
     setShowCaptchaModal(true);
   };
 
-  const closeCaptchaModal = () => {
-    setIsClosingCaptcha(true);
-    setTimeout(() => {
-      setShowCaptchaModal(false);
-      setIsClosingCaptcha(false);
-    }, 200);
-  };
-
   const onCaptchaVerify = async (token: string) => {
-    closeCaptchaModal();
+    setShowCaptchaModal(false);
     setIsLoading(true);
 
     try {
@@ -128,31 +113,11 @@ export default function RegisterPage() {
           />
         </div>
 
-        {showCaptchaModal &&
-          mounted &&
-          createPortal(
-            <div
-              className={`fixed top-0 left-0 w-screen h-screen bg-black/50 flex items-center justify-center z-[9999] ${
-                isClosingCaptcha
-                  ? "animate-modal-overlay-out"
-                  : "animate-modal-overlay"
-              }`}
-            >
-              <div
-                className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-xl w-fit mx-4 relative ${
-                  isClosingCaptcha
-                    ? "animate-modal-content-out"
-                    : "animate-modal-content"
-                }`}
-              >
-                <SliderCaptcha
-                  onVerify={onCaptchaVerify}
-                  onClose={closeCaptchaModal}
-                />
-              </div>
-            </div>,
-            document.body
-          )}
+        <CaptchaModal
+          isOpen={showCaptchaModal}
+          onClose={() => setShowCaptchaModal(false)}
+          onVerify={onCaptchaVerify}
+        />
 
         <button
           type="submit"

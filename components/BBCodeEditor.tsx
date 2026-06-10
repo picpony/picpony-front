@@ -1,18 +1,19 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { 
-  MdFormatBold, 
-  MdFormatItalic, 
-  MdFormatUnderlined, 
+import {
+  MdFormatBold,
+  MdFormatItalic,
+  MdFormatUnderlined,
   MdFormatStrikethrough,
-  MdFormatQuote, 
-  MdCode, 
-  MdLink, 
+  MdFormatQuote,
+  MdCode,
+  MdLink,
   MdImage,
   MdFormatListBulleted,
   MdFormatColorText
 } from 'react-icons/md';
+import { useTextInsertion } from '@/lib/hooks';
 
 interface BBCodeEditorProps {
   value: string;
@@ -23,37 +24,7 @@ interface BBCodeEditorProps {
 
 export default function BBCodeEditor({ value, onChange, placeholder, disabled }: BBCodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const insertBBCode = (openTag: string, closeTag: string, placeholder: string = '') => {
-    if (!textareaRef.current) return;
-
-    const start = textareaRef.current.selectionStart;
-    const end = textareaRef.current.selectionEnd;
-    const text = textareaRef.current.value;
-
-    const before = text.substring(0, start);
-    const selected = text.substring(start, end);
-    const after = text.substring(end, text.length);
-
-    const insertText = selected 
-      ? `${openTag}${selected}${closeTag}` 
-      : `${openTag}${placeholder}${closeTag}`;
-    const newText = `${before}${insertText}${after}`;
-    onChange(newText);
-
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        if (!selected) {
-          const cursorPos = start + openTag.length;
-          textareaRef.current.setSelectionRange(cursorPos, cursorPos + placeholder.length);
-        } else {
-          const cursorPos = start + insertText.length;
-          textareaRef.current.setSelectionRange(cursorPos, cursorPos);
-        }
-      }
-    }, 0);
-  };
+  const { insertText } = useTextInsertion(textareaRef, onChange);
 
   const insertUrl = () => {
     if (!textareaRef.current) return;
@@ -64,7 +35,7 @@ export default function BBCodeEditor({ value, onChange, placeholder, disabled }:
 
     const before = text.substring(0, start);
     const selected = text.substring(start, end);
-    const after = text.substring(end, text.length);
+    const after = text.substring(end);
 
     let insertText: string;
     if (selected) {
@@ -72,7 +43,7 @@ export default function BBCodeEditor({ value, onChange, placeholder, disabled }:
     } else {
       insertText = `[url=https://]链接文字[/url]`;
     }
-    
+
     const newText = `${before}${insertText}${after}`;
     onChange(newText);
 
@@ -90,21 +61,17 @@ export default function BBCodeEditor({ value, onChange, placeholder, disabled }:
     }, 0);
   };
 
-  const insertImage = () => {
-    insertBBCode('[img]', '[/img]', 'https://example.com/image.jpg');
-  };
-
   const tools = [
-    { icon: <MdFormatBold size={20} />, title: '粗体', action: () => insertBBCode('[b]', '[/b]', '粗体文字') },
-    { icon: <MdFormatItalic size={20} />, title: '斜体', action: () => insertBBCode('[i]', '[/i]', '斜体文字') },
-    { icon: <MdFormatUnderlined size={20} />, title: '下划线', action: () => insertBBCode('[u]', '[/u]', '下划线文字') },
-    { icon: <MdFormatStrikethrough size={20} />, title: '删除线', action: () => insertBBCode('[s]', '[/s]', '删除线文字') },
-    { icon: <MdFormatColorText size={20} />, title: '颜色', action: () => insertBBCode('[color=red]', '[/color]', '红色文字') },
-    { icon: <MdFormatListBulleted size={20} />, title: '列表', action: () => insertBBCode('[list]\n[*]', '\n[*]项目2\n[/list]', '项目1') },
-    { icon: <MdFormatQuote size={20} />, title: '引用', action: () => insertBBCode('[quote]', '[/quote]', '引用内容') },
-    { icon: <MdCode size={20} />, title: '代码', action: () => insertBBCode('[code]', '[/code]', '代码内容') },
+    { icon: <MdFormatBold size={20} />, title: '粗体', action: () => insertText('[b]', '[/b]', '粗体文字') },
+    { icon: <MdFormatItalic size={20} />, title: '斜体', action: () => insertText('[i]', '[/i]', '斜体文字') },
+    { icon: <MdFormatUnderlined size={20} />, title: '下划线', action: () => insertText('[u]', '[/u]', '下划线文字') },
+    { icon: <MdFormatStrikethrough size={20} />, title: '删除线', action: () => insertText('[s]', '[/s]', '删除线文字') },
+    { icon: <MdFormatColorText size={20} />, title: '颜色', action: () => insertText('[color=red]', '[/color]', '红色文字') },
+    { icon: <MdFormatListBulleted size={20} />, title: '列表', action: () => insertText('[list]\n[*]', '\n[*]项目2\n[/list]', '项目1') },
+    { icon: <MdFormatQuote size={20} />, title: '引用', action: () => insertText('[quote]', '[/quote]', '引用内容') },
+    { icon: <MdCode size={20} />, title: '代码', action: () => insertText('[code]', '[/code]', '代码内容') },
     { icon: <MdLink size={20} />, title: '链接', action: insertUrl },
-    { icon: <MdImage size={20} />, title: '图片', action: insertImage },
+    { icon: <MdImage size={20} />, title: '图片', action: () => insertText('[img]', '[/img]', 'https://example.com/image.jpg') },
   ];
 
   return (
