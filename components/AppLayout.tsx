@@ -356,6 +356,9 @@ export default function AppLayout({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      <div className="bg-amber-400 text-amber-900 text-center text-xs sm:text-sm py-1 px-4 font-medium shrink-0">
+        网站处于开发阶段，不代表最终品质
+      </div>
       <header className="h-16 bg-primary dark:bg-slate-900 text-white flex items-center px-4 sm:px-26 shrink-0 relative z-50">
         <ButtonBase 
           onClick={toggleSidebar}
