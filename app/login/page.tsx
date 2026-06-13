@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
-import CaptchaModal from "@/components/CaptchaModal";
+import Turnstile from "@/components/Turnstile";
 import { api } from "@/lib/api";
 
 export default function LoginPage() {
@@ -12,10 +12,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
+  const [cfToken, setCfToken] = useState<string | null>(null);
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!username || !password) {
@@ -23,18 +23,18 @@ export default function LoginPage() {
       return;
     }
 
-    setShowCaptchaModal(true);
-  };
+    if (!cfToken) {
+      showToast("请完成人机验证", "error");
+      return;
+    }
 
-  const onCaptchaVerify = async (token: string) => {
-    setShowCaptchaModal(false);
     setIsLoading(true);
 
     try {
       const res = await api.login({
         username,
         password,
-        cf_token: token,
+        cf_token: cfToken,
       });
 
       const data = await res.json();
@@ -77,9 +77,11 @@ export default function LoginPage() {
         }, 1000);
       } else {
         showToast(data.message || "登录失败，请检查用户名和密码", "error");
+        setCfToken(null);
       }
     } catch {
       showToast("网络错误，请稍后再试", "error");
+      setCfToken(null);
     } finally {
       setIsLoading(false);
     }
@@ -121,17 +123,18 @@ export default function LoginPage() {
           />
         </div>
 
-        <CaptchaModal
-          isOpen={showCaptchaModal}
-          onClose={() => setShowCaptchaModal(false)}
-          onVerify={onCaptchaVerify}
+        <Turnstile
+          onVerify={setCfToken}
+          onExpire={() => setCfToken(null)}
+          onError={() => setCfToken(null)}
+          className="pt-1"
         />
 
         <button
           type="submit"
-          disabled={isLoading || success}
+          disabled={isLoading || success || !cfToken}
           className={`w-full py-3 bg-primary text-white rounded-lg font-semibold transition-colors shadow-sm flex items-center justify-center ${
-            isLoading || success
+            isLoading || success || !cfToken
               ? "opacity-70 cursor-not-allowed"
               : "hover:bg-primary/90"
           }`}
