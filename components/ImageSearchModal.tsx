@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { MdCloudUpload } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
-import Slider from '@mui/material/Slider';
 import { showToast } from './Toast';
 import { api } from '../lib/api';
 import { processImageFile } from '../lib/utils';
@@ -167,23 +166,14 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
           <label className="text-sm font-medium text-slate-700 dark:text-slate-300">容差</label>
           <span className="text-sm font-bold text-primary">{distance.toFixed(2)}</span>
         </div>
-        <Slider
-          value={distance}
+        <input
+          type="range"
           min={0.01}
           max={1.00}
           step={0.01}
-          onChange={(_, newValue) => setDistance(newValue as number)}
-          sx={{
-            color: 'var(--color-primary)',
-            '& .MuiSlider-thumb': {
-              '&:hover, &.Mui-focusVisible': {
-                boxShadow: '0px 0px 0px 8px rgba(var(--color-primary-rgb), 0.16)',
-              },
-              '&.Mui-active': {
-                boxShadow: '0px 0px 0px 14px rgba(var(--color-primary-rgb), 0.16)',
-              },
-            },
-          }}
+          value={distance}
+          onChange={(e) => setDistance(parseFloat(e.target.value))}
+          className="range-slider w-full"
         />
         <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mt-1">
           <span>精确匹配</span>

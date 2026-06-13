@@ -5,49 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
-import Tooltip from '@mui/material/Tooltip';
 import BBCodeEditor from '@/components/BBCodeEditor';
 import RichTextRenderer from '@/components/RichTextRenderer';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import CircularProgress from '@mui/material/CircularProgress';
 import { showToast } from '@/components/Toast';
-
-const buttonBaseSx = {
-  flex: 1,
-  px: 2,
-  py: 1.5,
-  borderRadius: '0.75rem',
-  textTransform: 'none',
-  fontWeight: 500,
-  fontSize: '1rem',
-  lineHeight: 1.5,
-};
-
-const downloadBtnSx = {
-  ...buttonBaseSx,
-  bgcolor: 'var(--color-primary)',
-  color: 'white',
-  boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-  '&:hover': {
-    bgcolor: '#555555',
-    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-  },
-};
-
-const viewBtnSx = {
-  ...buttonBaseSx,
-  bgcolor: 'var(--sidebar-hover)',
-  color: 'var(--sidebar-text)',
-  border: '1px solid',
-  borderColor: 'rgba(128, 128, 128, 0.2)',
-  boxShadow: 'none',
-  '&:hover': {
-    bgcolor: 'var(--sidebar-hover)',
-    opacity: 0.8,
-    boxShadow: 'none',
-  },
-};
 
 export default function PicPage() {
   const params = useParams();
@@ -291,56 +251,41 @@ export default function PicPage() {
             <h1 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100 break-all text-left">
               {image.name || `Image #${image.id}`}
             </h1>
-            <Tooltip title={isFaved ? '取消收藏' : '收藏'} placement="top">
-              <IconButton 
-                onClick={handleToggleFave}
-                disabled={isFaveLoading}
-                sx={{ 
-                  color: isFaved ? '#eab308' : '#94a3b8',
-                  transition: 'color 0.2s',
-                  '&:hover': {
-                    color: isFaved ? '#ca8a04' : '#eab308',
-                    backgroundColor: 'rgba(234, 179, 8, 0.08)'
-                  }
-                }}
-              >
-                {isFaveLoading ? (
-                  <CircularProgress size={28} thickness={5} sx={{ color: 'inherit' }} />
-                ) : isFaved ? (
-                  <MdStar size={28} />
-                ) : (
-                  <MdStarBorder size={28} />
-                )}
-              </IconButton>
-            </Tooltip>
+            <button
+              onClick={handleToggleFave}
+              disabled={isFaveLoading}
+              title={isFaved ? '取消收藏' : '收藏'}
+              className={`p-2 rounded-full transition-colors duration-200 ${
+                isFaved ? 'text-yellow-500 hover:text-yellow-600 hover:bg-yellow-500/10' : 'text-slate-400 hover:text-yellow-500 hover:bg-yellow-500/10'
+              } disabled:opacity-50`}
+            >
+              {isFaveLoading ? (
+                <div className="w-7 h-7 border-[3px] border-current/30 border-t-current rounded-full animate-spin" />
+              ) : isFaved ? (
+                <MdStar size={28} />
+              ) : (
+                <MdStarBorder size={28} />
+              )}
+            </button>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-slate-300">
-            <Tooltip title="尺寸" placement="top" arrow>
-              <div className="flex items-center gap-1.5 cursor-pointer">
+            <div title="尺寸" className="flex items-center gap-1.5 cursor-pointer">
                 <MdImage size={18} className="text-slate-400" />
                 <span>{image.width} × {image.height} px</span>
               </div>
-            </Tooltip>
-            <Tooltip title="大小" placement="top" arrow>
-              <div className="flex items-center gap-1.5 cursor-pointer">
+            <div title="大小" className="flex items-center gap-1.5 cursor-pointer">
                 <MdSdStorage size={18} className="text-slate-400" />
                 <span>{(image.size / 1024 / 1024).toFixed(2)} MB</span>
               </div>
-            </Tooltip>
-            <Tooltip title="上传者" placement="top" arrow>
-              <div className="flex items-center gap-1.5 cursor-pointer">
+            <div title="上传者" className="flex items-center gap-1.5 cursor-pointer">
                 <MdPerson size={18} className="text-slate-400" />
                 <span className="truncate max-w-[150px]">{image.uploader || '匿名用户'}</span>
               </div>
-            </Tooltip>
-            <Tooltip title="评分" placement="top" arrow>
-              <div className="flex items-center gap-1.5 cursor-pointer">
+            <div title="评分" className="flex items-center gap-1.5 cursor-pointer">
                 <MdStar size={18} className="text-slate-400" />
                 <span>{image.score}</span>
               </div>
-            </Tooltip>
-            <Tooltip title="上传日期" placement="top" arrow>
-              <div className="flex items-center gap-1.5 cursor-pointer">
+            <div title="上传日期" className="flex items-center gap-1.5 cursor-pointer">
                 <MdAccessTime size={18} className="text-slate-400" />
                 <span>
                   {new Date(image.created_at).toLocaleString('zh-CN', {
@@ -352,7 +297,6 @@ export default function PicPage() {
                   })}
                 </span>
               </div>
-            </Tooltip>
           </div>
         </div>
 
@@ -495,23 +439,22 @@ export default function PicPage() {
             </div>
 
             <div className="pt-6 flex flex-col sm:flex-row gap-3">
-              <Button 
+              <button
                 onClick={handleDownload}
-                sx={downloadBtnSx}
-                startIcon={<MdDownload size={22} />}
+                className="flex-1 px-2 py-1.5 rounded-xl font-medium text-base leading-relaxed bg-primary text-white shadow-sm hover:bg-[#555555] hover:shadow-md transition-all flex items-center justify-center gap-2"
               >
+                <MdDownload size={22} />
                 下载原图
-              </Button>
-              <Button 
-                component="a"
+              </button>
+              <a
                 href={`https://trixiebooru.org/${image.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                sx={viewBtnSx}
-                startIcon={<MdOpenInNew size={20} />}
+                className="flex-1 px-2 py-1.5 rounded-xl font-medium text-base leading-relaxed bg-[var(--sidebar-hover)] text-[var(--sidebar-text)] border border-gray-500/20 hover:opacity-80 transition-all flex items-center justify-center gap-2"
               >
+                <MdOpenInNew size={20} />
                 在 Derpibooru 查看
-              </Button>
+              </a>
             </div>
 
             <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-700">
@@ -529,38 +472,30 @@ export default function PicPage() {
                     disabled={isSubmittingComment}
                   />
                   <div className="mt-2 flex justify-end">
-                    <Button
+                    <button
                       onClick={handlePostComment}
                       disabled={isSubmittingComment || !newComment.trim()}
-                      variant="contained"
-                      sx={{
-                        bgcolor: 'var(--color-primary, #063DA1)',
-                        color: 'white',
-                        borderRadius: '0.5rem',
-                        textTransform: 'none',
-                        px: 3,
-                        py: 1,
-                        boxShadow: 'none',
-                        '&:hover': {
-                          bgcolor: 'rgba(6, 61, 161, 0.9)',
-                          boxShadow: '0 2px 4px rgb(0 0 0 / 0.1)',
-                        },
-                        '&.Mui-disabled': {
-                          bgcolor: 'rgba(128, 128, 128, 0.12)',
-                          color: 'rgba(128, 128, 128, 0.4)',
-                        }
-                      }}
-                      endIcon={isSubmittingComment ? <CircularProgress size={16} color="inherit" /> : <MdSend size={18} />}
+                      className="px-3 py-1 rounded-lg text-sm font-medium bg-primary text-white shadow-none hover:bg-primary/90 hover:shadow-sm transition-all disabled:bg-gray-500/10 disabled:text-gray-500/40 flex items-center gap-1.5"
                     >
-                      {isSubmittingComment ? '发送中...' : '发送评论'}
-                    </Button>
+                      {isSubmittingComment ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                          发送中...
+                        </>
+                      ) : (
+                        <>
+                          发送评论
+                          <MdSend size={18} />
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
 
               {isLoadingComments ? (
                 <div className="flex justify-center py-8">
-                  <CircularProgress size={32} />
+                  <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
                 </div>
               ) : comments.length > 0 ? (
                 <div className="space-y-4">

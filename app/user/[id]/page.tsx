@@ -7,12 +7,6 @@ import { api, PonyImage, UserComment, UserPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import RichTextRenderer from '@/components/RichTextRenderer';
 import { MdPerson, MdCake, MdAccessTime, MdInfoOutline, MdFavorite, MdChatBubbleOutline, MdForum, MdImage, MdArticle } from 'react-icons/md';
-import Pagination from '@mui/material/Pagination';
-import Stack from '@mui/material/Stack';
-import Box from '@mui/material/Box';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
-import { useTheme } from '@mui/material/styles';
 
 interface UserProfile {
   id: number;
@@ -44,8 +38,6 @@ export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
-  const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -227,25 +219,6 @@ export default function UserProfilePage() {
     };
   }, [profile, id, tabValue, commentsPage]);
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
-  const handleFavesPageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
-    setFavesPage(value);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handlePostsPageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
-    setPostsPage(value);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleCommentsPageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
-    setCommentsPage(value);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   const getCommentTargetLink = (comment: UserComment): string => {
     if (comment.type === 'post') {
       return `/forum/${comment.target_id}`;
@@ -408,31 +381,30 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
-            <Tabs
-              value={tabValue}
-              onChange={handleTabChange}
-              sx={{
-                '& .MuiTabs-indicator': {
-                  backgroundColor: 'var(--color-primary)',
-                },
-                '& .MuiTab-root': {
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  fontSize: '0.875rem',
-                  minWidth: 100,
-                  color: 'var(--sidebar-text)',
-                  '&.Mui-selected': {
-                    color: 'var(--color-primary)',
-                  }
-                }
-              }}
-            >
-              <Tab label="收藏" />
-              <Tab label="帖子" />
-              <Tab label="评论" />
-            </Tabs>
-          </Box>
+          <div className="border-b border-slate-200 dark:border-slate-700 mb-4">
+            <div className="flex gap-0">
+              {[
+                { label: '收藏', value: 0 },
+                { label: '帖子', value: 1 },
+                { label: '评论', value: 2 },
+              ].map(tab => (
+                <button
+                  key={tab.value}
+                  onClick={() => setTabValue(tab.value)}
+                  className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${
+                    tabValue === tab.value
+                      ? 'text-primary'
+                      : 'text-[var(--sidebar-text)] hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {tab.label}
+                  {tabValue === tab.value && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {tabValue === 0 && (
             <div>
@@ -462,22 +434,39 @@ export default function UserProfilePage() {
                     ))}
                   </div>
                   {totalFavePages > 1 && (
-                    <Stack spacing={2} alignItems="center" className="mt-8 mb-4">
-                      <Pagination
-                        count={totalFavePages}
-                        page={favesPage}
-                        onChange={handleFavesPageChange}
-                        color="primary"
-                        size="large"
-                        showFirstButton
-                        showLastButton
-                        sx={{
-                          '& .MuiPaginationItem-root': {
-                            color: isDark ? '#e2e8f0' : undefined,
-                          },
-                        }}
-                      />
-                    </Stack>
+                    <div className="flex justify-center items-center gap-2 mt-8 mb-4">
+                      <button
+                        onClick={() => { setFavesPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={favesPage === 1}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        首页
+                      </button>
+                      <button
+                        onClick={() => { setFavesPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={favesPage === 1}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        上一页
+                      </button>
+                      <span className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                        {favesPage} / {totalFavePages}
+                      </span>
+                      <button
+                        onClick={() => { setFavesPage(p => Math.min(totalFavePages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={favesPage === totalFavePages}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        下一页
+                      </button>
+                      <button
+                        onClick={() => { setFavesPage(totalFavePages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={favesPage === totalFavePages}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        末页
+                      </button>
+                    </div>
                   )}
                 </>
               ) : (
@@ -550,22 +539,39 @@ export default function UserProfilePage() {
                     ))}
                   </div>
                   {totalPostPages > 1 && (
-                    <Stack spacing={2} alignItems="center" className="mt-8 mb-4">
-                      <Pagination
-                        count={totalPostPages}
-                        page={postsPage}
-                        onChange={handlePostsPageChange}
-                        color="primary"
-                        size="large"
-                        showFirstButton
-                        showLastButton
-                        sx={{
-                          '& .MuiPaginationItem-root': {
-                            color: isDark ? '#e2e8f0' : undefined,
-                          },
-                        }}
-                      />
-                    </Stack>
+                    <div className="flex justify-center items-center gap-2 mt-8 mb-4">
+                      <button
+                        onClick={() => { setPostsPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={postsPage === 1}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        首页
+                      </button>
+                      <button
+                        onClick={() => { setPostsPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={postsPage === 1}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        上一页
+                      </button>
+                      <span className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                        {postsPage} / {totalPostPages}
+                      </span>
+                      <button
+                        onClick={() => { setPostsPage(p => Math.min(totalPostPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={postsPage === totalPostPages}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        下一页
+                      </button>
+                      <button
+                        onClick={() => { setPostsPage(totalPostPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={postsPage === totalPostPages}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        末页
+                      </button>
+                    </div>
                   )}
                 </>
               ) : (
@@ -637,22 +643,39 @@ export default function UserProfilePage() {
                     })}
                   </div>
                   {totalCommentPages > 1 && (
-                    <Stack spacing={2} alignItems="center" className="mt-8 mb-4">
-                      <Pagination
-                        count={totalCommentPages}
-                        page={commentsPage}
-                        onChange={handleCommentsPageChange}
-                        color="primary"
-                        size="large"
-                        showFirstButton
-                        showLastButton
-                        sx={{
-                          '& .MuiPaginationItem-root': {
-                            color: isDark ? '#e2e8f0' : undefined,
-                          },
-                        }}
-                      />
-                    </Stack>
+                    <div className="flex justify-center items-center gap-2 mt-8 mb-4">
+                      <button
+                        onClick={() => { setCommentsPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={commentsPage === 1}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        首页
+                      </button>
+                      <button
+                        onClick={() => { setCommentsPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={commentsPage === 1}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        上一页
+                      </button>
+                      <span className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                        {commentsPage} / {totalCommentPages}
+                      </span>
+                      <button
+                        onClick={() => { setCommentsPage(p => Math.min(totalCommentPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={commentsPage === totalCommentPages}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        下一页
+                      </button>
+                      <button
+                        onClick={() => { setCommentsPage(totalCommentPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        disabled={commentsPage === totalCommentPages}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        末页
+                      </button>
+                    </div>
                   )}
                 </>
               ) : (

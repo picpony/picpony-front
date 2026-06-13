@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { api, Notification } from '@/lib/api';
-import { Tabs, Tab, Box, CircularProgress, ButtonBase, IconButton, Badge, Pagination } from '@mui/material';
 import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack, MdOutlineNotificationsActive } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
 
@@ -119,16 +118,6 @@ export default function MessagesPage() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showEmojiPicker, isEmojiPickerClosing]);
-
-  const handleTabChange = (_: React.SyntheticEvent, newValue: 'announcement' | 'notification' | 'interaction' | 'chat') => {
-    if (newValue === activeTab) return;
-    
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setActiveTab(newValue);
-      setIsTransitioning(false);
-    }, 200);
-  };
 
   const fetchAnnouncements = async () => {
     setLoading(true);
@@ -342,53 +331,43 @@ export default function MessagesPage() {
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">消息</h1>
       
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs 
-          value={activeTab} 
-          onChange={handleTabChange}
-          sx={{
-            '& .MuiTab-root': {
-              fontSize: '1rem',
-              fontWeight: 500,
-              textTransform: 'none',
-              minWidth: 100,
-              color: 'var(--sidebar-text)',
-            },
-            '& .Mui-selected': {
-              color: 'var(--color-primary) !important',
-            },
-            '& .MuiTabs-indicator': {
-              backgroundColor: 'var(--color-primary)',
-            }
-          }}
-        >
-          <Tab label="公告" value="announcement" />
-          <Tab 
-            label={
-              <Badge color="error" badgeContent={unreadCounts.notifications} sx={{ '& .MuiBadge-badge': { right: -15, top: 5 } }}>
-                系统
-              </Badge>
-            } 
-            value="notification" 
-          />
-          <Tab 
-            label={
-              <Badge color="error" badgeContent={unreadCounts.interactions} sx={{ '& .MuiBadge-badge': { right: -15, top: 5 } }}>
-                互动
-              </Badge>
-            } 
-            value="interaction" 
-          />
-          <Tab 
-            label={
-              <Badge color="error" badgeContent={unreadCounts.messages} sx={{ '& .MuiBadge-badge': { right: -15, top: 5 } }}>
-                私信
-              </Badge>
-            } 
-            value="chat" 
-          />
-        </Tabs>
-      </Box>
+      <div className="border-b border-slate-200 dark:border-slate-700 mb-3">
+        <div className="flex gap-0">
+          {[
+            { label: '公告', value: 'announcement', badge: 0 },
+            { label: '系统', value: 'notification', badge: unreadCounts.notifications },
+            { label: '互动', value: 'interaction', badge: unreadCounts.interactions },
+            { label: '私信', value: 'chat', badge: unreadCounts.messages },
+          ].map(tab => (
+            <button
+              key={tab.value}
+              onClick={() => {
+                if (tab.value === activeTab) return;
+                setIsTransitioning(true);
+                setTimeout(() => {
+                  setActiveTab(tab.value as typeof activeTab);
+                  setIsTransitioning(false);
+                }, 200);
+              }}
+              className={`px-4 py-2.5 text-base font-medium transition-colors relative flex items-center gap-1 ${
+                activeTab === tab.value
+                  ? 'text-primary'
+                  : 'text-[var(--sidebar-text)] hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              {tab.label}
+              {tab.badge > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
+                  {tab.badge > 99 ? '99+' : tab.badge}
+                </span>
+              )}
+              {activeTab === tab.value && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="min-h-[400px] relative">
         <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
@@ -414,23 +393,12 @@ export default function MessagesPage() {
                     </div>
                   ) : contacts.length > 0 ? (
                     contacts.map(contact => (
-                      <ButtonBase 
+                      <button
                         key={contact.id}
                         onClick={() => setSelectedContact(contact)}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'flex-start',
-                          textAlign: 'left',
-                          width: '100%',
-                          p: 2,
-                          gap: 1.5,
-                          transition: 'background-color 0.2s',
-                          backgroundColor: selectedContact?.id === contact.id ? 'var(--sidebar-hover)' : 'transparent',
-                          '&:hover': {
-                            backgroundColor: 'var(--sidebar-hover)',
-                          }
-                        }}
+                        className={`flex items-center justify-start text-left w-full p-2 gap-1.5 transition-colors duration-200 ${
+                          selectedContact?.id === contact.id ? 'bg-[var(--sidebar-hover)]' : 'hover:bg-[var(--sidebar-hover)]'
+                        }`}
                       >
                         <div className="relative">
                           <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-700 border border-slate-100 dark:border-slate-600">
@@ -462,7 +430,7 @@ export default function MessagesPage() {
                             {contact.last_msg_time}
                           </p>
                         </div>
-                      </ButtonBase>
+                      </button>
                     ))
                   ) : (
                     <div className="p-10 text-center text-slate-400 dark:text-slate-500 text-sm">
@@ -477,20 +445,19 @@ export default function MessagesPage() {
                   <>
                     <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <IconButton 
+                        <button
                           onClick={() => setSelectedContact(null)}
-                          className="md:!hidden -ml-2"
-                          size="small"
+                          className="md:hidden -ml-2 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-[var(--sidebar-text)]"
                         >
-                          <MdArrowBack />
-                        </IconButton>
+                          <MdArrowBack size={20} />
+                        </button>
                         <span className="font-bold text-slate-800 dark:text-slate-200">{selectedContact.username}</span>
                       </div>
                     </div>
                     <div ref={messagesContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col space-y-4">
                       {loadingMessages ? (
                         <div className="flex-1 flex items-center justify-center">
-                          <CircularProgress size={30} sx={{ color: 'var(--color-primary)' }} />
+                          <div className="w-[30px] h-[30px] border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
                         </div>
                       ) : messages.length > 0 ? (
                         messages.map((msg) => {
@@ -538,13 +505,12 @@ export default function MessagesPage() {
                     <div className="px-4 pb-4 pt-1 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 relative">
                       <div className="flex items-center justify-between mb-1">
                         <div className="relative" ref={emojiPickerRef}>
-                          <IconButton 
-                            size="small" 
+                          <button
                             onClick={toggleEmojiPicker}
-                            sx={{ color: showEmojiPicker ? 'var(--color-primary)' : 'var(--sidebar-text)' }}
+                            className={`p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${showEmojiPicker ? 'text-primary' : 'text-[var(--sidebar-text)]'}`}
                           >
                             <MdOutlineEmojiEmotions size={24} />
-                          </IconButton>
+                          </button>
                           
                           {(showEmojiPicker || isEmojiPickerClosing) && (
                             <div className={`absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}>
@@ -569,14 +535,13 @@ export default function MessagesPage() {
                             </div>
                           )}
                         </div>
-                        <IconButton 
-                          size="small" 
+                        <button
                           onClick={() => fetchMessages(selectedContact.id)}
                           disabled={loadingMessages}
-                          sx={{ color: 'var(--sidebar-text)' }}
+                          className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-[var(--sidebar-text)] disabled:opacity-50"
                         >
                           <MdRefresh size={24} className={loadingMessages ? 'animate-spin' : ''} />
-                        </IconButton>
+                        </button>
                       </div>
                       <div className="flex space-x-2">
                         <input 
@@ -589,32 +554,13 @@ export default function MessagesPage() {
                           className="flex-1 bg-slate-100 dark:bg-slate-700 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none text-slate-800 dark:text-slate-200"
                           disabled={sending}
                         />
-                        <ButtonBase 
+                        <button
                           onClick={handleSendMessage}
                           disabled={!newMessage.trim() || sending}
-                          sx={{
-                            backgroundColor: 'var(--color-primary)',
-                            color: 'white',
-                            px: 2,
-                            py: 1,
-                            borderRadius: '9999px',
-                            fontSize: '0.875rem',
-                            fontWeight: 'bold',
-                            transition: 'background-color 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            minWidth: '64px',
-                            opacity: !newMessage.trim() || sending ? 0.5 : 1,
-                            cursor: !newMessage.trim() || sending ? 'not-allowed' : 'pointer',
-                            '&.Mui-disabled': {
-                              color: 'white',
-                              opacity: 0.5,
-                            }
-                          }}
+                          className="bg-primary text-white px-2 py-1 rounded-full text-sm font-bold transition-colors duration-200 flex items-center justify-center min-w-[64px] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {sending ? <CircularProgress size={20} sx={{ color: 'white' }} /> : '发送'}
-                        </ButtonBase>
+                          {sending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : '发送'}
+                        </button>
                       </div>
                     </div>
                   </>
@@ -716,21 +662,24 @@ export default function MessagesPage() {
                 </div>
               )}
               {interactionNotificationsTotalPages > 1 && (
-                <div className="flex justify-center mt-6">
-                  <Pagination 
-                    count={interactionNotificationsTotalPages} 
-                    page={interactionNotificationsPage}
-                    onChange={(_, page) => fetchInteractionNotifications(page)}
-                    sx={{
-                      '& .MuiPaginationItem-root': {
-                        color: 'var(--sidebar-text)',
-                      },
-                      '& .Mui-selected': {
-                        backgroundColor: 'var(--color-primary) !important',
-                        color: 'white',
-                      }
-                    }}
-                  />
+                <div className="flex justify-center items-center gap-2 mt-6">
+                  <button
+                    onClick={() => fetchInteractionNotifications(interactionNotificationsPage - 1)}
+                    disabled={interactionNotificationsPage === 1}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    上一页
+                  </button>
+                  <span className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
+                    {interactionNotificationsPage} / {interactionNotificationsTotalPages}
+                  </span>
+                  <button
+                    onClick={() => fetchInteractionNotifications(interactionNotificationsPage + 1)}
+                    disabled={interactionNotificationsPage === interactionNotificationsTotalPages}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    下一页
+                  </button>
                 </div>
               )}
             </div>

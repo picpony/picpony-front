@@ -4,35 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { MdEdit, MdClose } from 'react-icons/md';
-import { ButtonBase } from '@mui/material';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 
-const buttonSx = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: { xs: '36px', sm: 'auto' },
-  minHeight: { xs: '36px', sm: 'auto' },
-  px: { xs: 0, sm: 2 },
-  py: { xs: 0, sm: 1 },
-  backgroundColor: 'var(--card-bg)',
-  border: '1px solid',
-  borderColor: 'var(--card-border)',
-  borderRadius: '0.375rem',
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  color: 'var(--sidebar-text)',
-  transition: 'all 0.2s',
-  '&:hover': {
-    backgroundColor: 'var(--sidebar-hover)',
-    color: 'var(--color-primary)',
-  },
-  '&.Mui-disabled': {
-    opacity: 0.5,
-    cursor: 'not-allowed',
-  }
-};
+const buttonClass = (disabled: boolean) =>
+  `flex items-center justify-center min-w-[36px] sm:min-w-auto min-h-[36px] sm:min-h-auto px-0 sm:px-2 py-0 sm:py-1 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-md text-sm font-medium text-[var(--sidebar-text)] transition-all duration-200 hover:bg-[var(--sidebar-hover)] hover:text-primary ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -326,14 +302,14 @@ export default function SettingsPage() {
               accept="image/*"
               className="hidden"
             />
-            <ButtonBase
+            <button
               onClick={() => fileInputRef.current?.click()}
               disabled={!currentUsername || isAvatarUploading}
-              sx={buttonSx}
+              className={buttonClass(!currentUsername || isAvatarUploading)}
             >
               <MdEdit size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">修改头像</span>
-            </ButtonBase>
+            </button>
           </div>
 
           <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
@@ -341,14 +317,14 @@ export default function SettingsPage() {
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">当前用户名</p>
               <p className="font-medium text-slate-800 dark:text-slate-200">{currentUsername || '未登录'}</p>
             </div>
-            <ButtonBase
+            <button
               onClick={() => setIsModalOpen(true)}
               disabled={!currentUsername}
-              sx={buttonSx}
+              className={buttonClass(!currentUsername)}
             >
               <MdEdit size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">修改用户名</span>
-            </ButtonBase>
+            </button>
           </div>
 
           <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg mt-4">
@@ -356,14 +332,14 @@ export default function SettingsPage() {
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">账号密码</p>
               <p className="font-medium text-slate-800 dark:text-slate-200">********</p>
             </div>
-            <ButtonBase
+            <button
               onClick={() => setIsPasswordModalOpen(true)}
               disabled={!currentUsername}
-              sx={buttonSx}
+              className={buttonClass(!currentUsername)}
             >
               <MdEdit size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">修改密码</span>
-            </ButtonBase>
+            </button>
           </div>
 
           <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg mt-4">
@@ -373,17 +349,17 @@ export default function SettingsPage() {
                 {currentApiKey ? `${currentApiKey.substring(0, 4)}...${currentApiKey.substring(currentApiKey.length - 4)}` : '未配置'}
               </p>
             </div>
-            <ButtonBase
+            <button
               onClick={() => {
                 setNewApiKey(currentApiKey);
                 setIsApiKeyModalOpen(true);
               }}
               disabled={!currentUsername}
-              sx={buttonSx}
+              className={buttonClass(!currentUsername)}
             >
               <MdEdit size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">{currentApiKey ? '修改配置' : '去配置'}</span>
-            </ButtonBase>
+            </button>
           </div>
         </div>
       </div>

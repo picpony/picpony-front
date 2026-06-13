@@ -4,7 +4,7 @@ import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useMemo 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdDashboard } from "react-icons/md";
-import { ButtonBase, Badge } from "@mui/material";
+
 import AnnouncementModal from "./AnnouncementModal";
 import ImageSearchModal from "./ImageSearchModal";
 import Modal from "./Modal";
@@ -100,22 +100,12 @@ interface UserInfo {
   level?: number;
 }
 
-const sidebarButtonSx = (isActive: boolean) => ({
-  display: 'flex',
-  alignItems: 'center',
-  px: 1.5,
-  py: 1.5,
-  fontWeight: 500,
-  transition: 'all 0.2s',
-  borderRadius: '8px',
-  width: '100%',
-  justifyContent: 'flex-start',
-  color: isActive ? 'var(--color-primary)' : 'var(--sidebar-text, rgb(51, 65, 85))',
-  backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-  '&:hover': {
-    backgroundColor: isActive ? 'rgba(59, 130, 246, 0.15)' : 'var(--sidebar-hover, rgb(241, 245, 249))',
-  }
-});
+const sidebarButtonClass = (isActive: boolean) =>
+  `flex items-center px-1.5 py-1.5 font-medium transition-all duration-200 rounded-lg w-full justify-start ${
+    isActive
+      ? 'text-primary bg-primary/10 hover:bg-primary/15'
+      : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
+  }`;
 
 export default function AppLayout({ 
   children, 
@@ -360,21 +350,13 @@ export default function AppLayout({
         网站处于开发阶段，不代表最终品质
       </div>
       <header className="h-16 bg-primary dark:bg-slate-900 text-white flex items-center px-4 sm:px-26 shrink-0 relative z-50">
-        <ButtonBase 
+        <button
           onClick={toggleSidebar}
           aria-label={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
-          sx={{ 
-            borderRadius: '6px',
-            p: '8px',
-            mr: { xs: '8px', sm: '16px' },
-            color: '#ffffff',
-            '&:hover': {
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            }
-          }}
+          className="rounded-md p-2 mr-2 sm:mr-4 text-white hover:bg-white/10 transition-colors"
         >
           <MdMenu size={24} />
-        </ButtonBase>
+        </button>
         <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex">
           <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
         </Link>
@@ -389,22 +371,14 @@ export default function AppLayout({
           onMouseEnter={handleDropdownMouseEnter}
           onMouseLeave={handleDropdownMouseLeave}
         >
-          <ButtonBase 
+          <button
             onClick={toggleDarkMode}
             aria-label={darkMode ? '切换浅色模式' : '切换深色模式'}
             title={darkMode ? '浅色模式' : '深色模式'}
-            sx={{ 
-              borderRadius: '6px',
-              p: '8px',
-              ml: '2px',
-              color: '#ffffff',
-              '&:hover': {
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              }
-            }}
+            className="rounded-md p-2 ml-0.5 text-white hover:bg-white/10 transition-colors"
           >
             {darkMode ? <MdLightMode size={24} /> : <MdDarkMode size={24} />}
-          </ButtonBase>
+          </button>
           {isDarkDropdownOpen && (
             <div 
               className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-[60] animate-fade-in"
@@ -433,24 +407,18 @@ export default function AppLayout({
             </div>
           )}
         </div>
-        <ButtonBase 
-          component={Link}
+        <Link
           href="/messages"
           aria-label="消息"
-          sx={{ 
-            borderRadius: '6px',
-            p: '8px',
-            ml: '2px',
-            color: '#ffffff',
-            '&:hover': {
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            }
-          }}
+          className="relative rounded-md p-2 ml-0.5 text-white hover:bg-white/10 transition-colors inline-flex"
         >
-          <Badge color="error" badgeContent={totalUnread} sx={{ '& .MuiBadge-badge': { right: -3, top: 3 } }}>
-            <MdNotifications size={24} />
-          </Badge>
-        </ButtonBase>
+          <MdNotifications size={24} />
+          {totalUnread > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
+              {totalUnread > 99 ? '99+' : totalUnread}
+            </span>
+          )}
+        </Link>
       </header>
       
       <div className="flex flex-1 overflow-hidden relative">
@@ -512,42 +480,39 @@ export default function AppLayout({
                       : 'max-h-0 opacity-0'
                   }`}
                 >
-                  <ButtonBase
-                    component={Link}
-                    href="/favorites" 
+                  <Link
+                    href="/favorites"
                     onClick={handleMobileNavigation}
-                    sx={sidebarButtonSx(pathname === '/favorites')}
+                    className={sidebarButtonClass(pathname === '/favorites')}
                   >
                     <MdCollectionsBookmark size={20} className="shrink-0 mr-3" />
                     <span>我的收藏</span>
-                  </ButtonBase>
-                  <ButtonBase
-                    component={Link}
+                  </Link>
+                  <Link
                     href="/settings"
                     onClick={handleMobileNavigation}
-                    sx={sidebarButtonSx(pathname === '/settings')}
+                    className={sidebarButtonClass(pathname === '/settings')}
                   >
                     <MdSettings size={20} className="shrink-0 mr-3" />
                     <span>设置</span>
-                  </ButtonBase>
+                  </Link>
                   {userInfo && (userInfo.role === 'editor' || userInfo.role === 'admin' || userInfo.role === 'super_admin') && (
-                    <ButtonBase
-                      component={Link}
-                      href="/admin" 
+                    <Link
+                      href="/admin"
                       onClick={handleMobileNavigation}
-                      sx={sidebarButtonSx(pathname.startsWith('/admin'))}
+                      className={sidebarButtonClass(pathname.startsWith('/admin'))}
                     >
                       <MdDashboard size={20} className="shrink-0 mr-3" />
                       <span>管理面板</span>
-                    </ButtonBase>
+                    </Link>
                   )}
-                  <ButtonBase 
+                  <button
                     onClick={handleLogoutClick}
-                    sx={sidebarButtonSx(false)}
+                    className={sidebarButtonClass(false)}
                   >
                     <MdLogout size={20} className="shrink-0 mr-3" />
                     <span>登出</span>
-                  </ButtonBase>
+                  </button>
                 </div>
                 <div className="h-px bg-slate-200 dark:bg-slate-700 mt-2 mx-2"></div>
               </div>
@@ -569,24 +534,22 @@ export default function AppLayout({
             {!userInfo && <div className="h-px bg-slate-200 dark:bg-slate-700 mt-2 mx-2"></div>}
           </div>
           <nav className="flex-1 py-3 w-64 px-3 space-y-1">
-            <ButtonBase
-              component={Link}
-              href="/" 
+            <Link
+              href="/"
               onClick={handleMobileNavigation}
-              sx={sidebarButtonSx(pathname === '/')}
+              className={sidebarButtonClass(pathname === '/')}
             >
               <MdHome size={20} className="shrink-0 mr-3" />
               <span>主页</span>
-            </ButtonBase>
-            <ButtonBase
-              component={Link}
-              href="/forum" 
+            </Link>
+            <Link
+              href="/forum"
               onClick={handleMobileNavigation}
-              sx={sidebarButtonSx(pathname.startsWith('/forum'))}
+              className={sidebarButtonClass(pathname.startsWith('/forum'))}
             >
               <MdForum size={20} className="shrink-0 mr-3" />
               <span>论坛</span>
-            </ButtonBase>
+            </Link>
           </nav>
         </aside>
         

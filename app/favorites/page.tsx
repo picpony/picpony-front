@@ -9,26 +9,7 @@ import MasonryGrid from "@/components/MasonryGrid";
 import ImageGridSkeleton from "@/components/ImageGridSkeleton";
 import ErrorRetry from "@/components/ErrorRetry";
 import { LoadMoreButton } from "@/components/Pagination";
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
-import Box from '@mui/material/Box';
 import { useRouter } from "next/navigation";
-
-const MUI_TABS_SX = {
-  '& .MuiTabs-indicator': {
-    backgroundColor: 'var(--color-primary)',
-  },
-  '& .MuiTab-root': {
-    textTransform: 'none' as const,
-    fontWeight: 500,
-    fontSize: '0.875rem',
-    minWidth: 100,
-    color: 'var(--sidebar-text)',
-    '&.Mui-selected': {
-      color: 'var(--color-primary)',
-    }
-  }
-};
 
 function FavoritesList() {
   const [images, setImages] = useState<PonyImage[]>([]);
@@ -186,16 +167,29 @@ function FavoritesList() {
   };
 
   const tabsComponent = (
-    <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
-      <Tabs
-        value={activeTab}
-        onChange={(_, newValue) => setActiveTab(newValue)}
-        sx={MUI_TABS_SX}
-      >
-        <Tab label="PicPony" value="picpony" />
-        <Tab label="Derpibooru" value="derpibooru" />
-      </Tabs>
-    </Box>
+    <div className="border-b border-slate-200 dark:border-slate-700 mb-4">
+      <div className="flex gap-0">
+        {[
+          { label: 'PicPony', value: 'picpony' as const },
+          { label: 'Derpibooru', value: 'derpibooru' as const },
+        ].map(tab => (
+          <button
+            key={tab.value}
+            onClick={() => setActiveTab(tab.value)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors relative min-w-[100px] ${
+              activeTab === tab.value
+                ? 'text-primary'
+                : 'text-[var(--sidebar-text)] hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            {tab.label}
+            {activeTab === tab.value && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 
   if (isLoading) {
