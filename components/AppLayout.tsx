@@ -101,7 +101,7 @@ interface UserInfo {
 }
 
 const sidebarButtonClass = (isActive: boolean) =>
-  `flex items-center px-1.5 py-1.5 font-medium transition-all duration-200 rounded-lg w-full justify-start ${
+  `flex items-center px-3 py-2 font-medium transition-all duration-200 rounded-lg w-full justify-start ${
     isActive
       ? 'text-primary bg-primary/10 hover:bg-primary/15'
       : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
