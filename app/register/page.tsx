@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
-import Turnstile from "@/components/Turnstile";
+import CaptchaModal from "@/components/CaptchaModal";
 import { api } from "@/lib/api";
 
 export default function RegisterPage() {
@@ -13,10 +13,10 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [cfToken, setCfToken] = useState<string | null>(null);
+  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!username || !email || !password) {
@@ -30,11 +30,11 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!cfToken) {
-      showToast("请完成人机验证", "error");
-      return;
-    }
+    setShowCaptchaModal(true);
+  };
 
+  const onCaptchaVerify = async (token: string) => {
+    setShowCaptchaModal(false);
     setIsLoading(true);
 
     try {
@@ -42,7 +42,7 @@ export default function RegisterPage() {
         username,
         email,
         password,
-        cf_token: cfToken,
+        cf_token: token,
       });
 
       const data = await res.json();
@@ -56,11 +56,9 @@ export default function RegisterPage() {
         }, 1500);
       } else {
         showToast(data.message || "注册失败，请检查输入", "error");
-        setCfToken(null);
       }
     } catch {
       showToast("网络错误，请稍后再试", "error");
-      setCfToken(null);
     } finally {
       setIsLoading(false);
     }
@@ -115,18 +113,17 @@ export default function RegisterPage() {
           />
         </div>
 
-        <Turnstile
-          onVerify={setCfToken}
-          onExpire={() => setCfToken(null)}
-          onError={() => setCfToken(null)}
-          className="pt-1"
+        <CaptchaModal
+          isOpen={showCaptchaModal}
+          onClose={() => setShowCaptchaModal(false)}
+          onVerify={onCaptchaVerify}
         />
 
         <button
           type="submit"
-          disabled={isLoading || success || !cfToken}
+          disabled={isLoading || success}
           className={`w-full py-3 bg-primary text-white rounded-lg font-semibold transition-colors shadow-sm flex items-center justify-center ${
-            isLoading || success || !cfToken
+            isLoading || success
               ? "opacity-70 cursor-not-allowed"
               : "hover:bg-primary/90"
           }`}
