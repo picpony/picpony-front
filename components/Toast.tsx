@@ -45,8 +45,10 @@ const severityStyles: Record<ToastType, { bg: string; icon: React.ReactNode }> =
 
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const listener = (toast: ToastMessage) => {
       setToasts(prev => [...prev, toast]);
     };
@@ -61,7 +63,7 @@ export function ToastContainer() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  if (typeof document === 'undefined') return null;
+  if (!mounted) return null;
 
   return createPortal(
     <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-3 pointer-events-none items-center">
