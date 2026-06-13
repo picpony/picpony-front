@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import FadeInImage from './FadeInImage';
-import Tooltip from '@mui/material/Tooltip';
 import { MdThumbUp, MdComment } from 'react-icons/md';
 import { PonyImage } from '@/lib/api';
 
@@ -47,18 +46,14 @@ export default function ImageCard({ image }: ImageCardProps) {
         <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none">
           {format}
         </div>
-        <Tooltip title="点赞数" placement="top" arrow>
-          <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm flex items-center gap-1">
-            <MdThumbUp size={12} />
-            <span>{image.score}</span>
-          </div>
-        </Tooltip>
-        <Tooltip title="评论数" placement="top" arrow>
-          <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm flex items-center gap-1">
-            <MdComment size={12} />
-            <span>{image.comment_count}</span>
-          </div>
-        </Tooltip>
+        <div title="点赞数" className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm flex items-center gap-1">
+          <MdThumbUp size={12} />
+          <span>{image.score}</span>
+        </div>
+        <div title="评论数" className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm flex items-center gap-1">
+          <MdComment size={12} />
+          <span>{image.comment_count}</span>
+        </div>
       </Link>
     </div>
   );

@@ -20,10 +20,6 @@
   --card-border: #334155;
 }
 
-.dark aside .MuiButtonBase-root {
-  color: var(--sidebar-text);
-}
-
 .bbcode-content,
 .rich-text-content {
   color: inherit;
@@ -149,6 +145,71 @@
       transform: scale(0.95);
     }
   }
+}
+
+/* Range slider styling */
+.range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
+  outline: none;
+  cursor: pointer;
+}
+
+.dark .range-slider {
+  background: #334155;
+}
+
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.2s ease;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 8px rgba(224, 108, 159, 0.16), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.range-slider::-webkit-slider-thumb:active {
+  box-shadow: 0 0 0 14px rgba(224, 108, 159, 0.16), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.range-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.2s ease;
+}
+
+.range-slider::-moz-range-thumb:hover {
+  box-shadow: 0 0 0 8px rgba(224, 108, 159, 0.16), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.range-slider::-moz-range-thumb:active {
+  box-shadow: 0 0 0 14px rgba(224, 108, 159, 0.16), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.range-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
+}
+
+.dark .range-slider::-moz-range-track {
+  background: #334155;
 }
 
 body {
