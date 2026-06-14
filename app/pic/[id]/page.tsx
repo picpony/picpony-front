@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend, MdShare, MdContentCopy } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
-import BBCodeEditor from '@/components/BBCodeEditor';
+import dynamic from 'next/dynamic';
+const BBCodeEditor = dynamic(() => import('@/components/BBCodeEditor'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
 import { showToast } from '@/components/Toast';
 
@@ -66,25 +67,22 @@ export default function PicPage() {
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
-    
-    if (id) {
-      api.getImage(id)
-        .then((res) => {
-          if (isMounted) {
-            setImage(res.image);
-            setIsLoading(false);
-          }
-        })
-        .catch((err) => {
-          if (isMounted) {
-            setError(err);
-            setIsLoading(false);
-          }
-        });
+    setIsLoadingComments(true);
 
-      setIsLoadingComments(true);
-      fetchComments().finally(() => {
+    if (id) {
+      Promise.all([
+        api.getImage(id),
+        fetchComments()
+      ]).then(([imageRes, _]) => {
         if (isMounted) {
+          setImage(imageRes.image);
+          setIsLoading(false);
+          setIsLoadingComments(false);
+        }
+      }).catch((err) => {
+        if (isMounted) {
+          setError(err);
+          setIsLoading(false);
           setIsLoadingComments(false);
         }
       });

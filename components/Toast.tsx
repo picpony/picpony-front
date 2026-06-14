@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose, MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
 
@@ -59,9 +59,9 @@ export function ToastContainer() {
     };
   }, []);
 
-  const handleClose = (id: number) => {
+  const handleClose = useCallback((id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  }, []);
 
   if (!mounted) return null;
 
