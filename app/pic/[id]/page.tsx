@@ -337,39 +337,37 @@ export default function PicPage() {
               </div>
             )}
 
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center justify-center gap-3 mb-2">
               <button
                 onClick={handleToggleFave}
                 disabled={isFaveLoading}
                 title={isFaved ? '取消收藏' : '收藏'}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-200 border ${
+                className={`p-2.5 rounded-full transition-colors duration-200 border ${
                   isFaved
                     ? 'text-yellow-600 border-yellow-300 bg-yellow-50 hover:bg-yellow-100 dark:text-yellow-400 dark:border-yellow-700 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30'
                     : 'text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700'
                 } disabled:opacity-50`}
               >
                 {isFaveLoading ? (
-                  <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
                 ) : isFaved ? (
-                  <MdStar size={18} />
+                  <MdStar size={20} />
                 ) : (
-                  <MdStarBorder size={18} />
+                  <MdStarBorder size={20} />
                 )}
-                {isFaved ? '已收藏' : '收藏'}
               </button>
               <div className="relative">
                 <button
                   onClick={() => setIsShareOpen(!isShareOpen)}
                   title="分享"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-200 border text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+                  className="p-2.5 rounded-full transition-colors duration-200 border text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
                 >
-                  <MdShare size={18} />
-                  分享
+                  <MdShare size={20} />
                 </button>
                 {isShareOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setIsShareOpen(false)} />
-                    <div className="absolute left-0 top-full mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-20 animate-fade-in">
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-20 animate-fade-in">
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(window.location.href);
