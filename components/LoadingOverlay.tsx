@@ -1,20 +1,36 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Logo from './Logo';
 
 export default function LoadingOverlay() {
+  const [isVisible, setIsVisible] = useState(true);
+  const [isMounted, setIsMounted] = useState(true);
+
+  useEffect(() => {
+    const fadeOutTimer = setTimeout(() => {
+      setIsVisible(false);
+    }, 500);
+
+    const unmountTimer = setTimeout(() => {
+      setIsMounted(false);
+    }, 1000);
+
+    return () => {
+      clearTimeout(fadeOutTimer);
+      clearTimeout(unmountTimer);
+    };
+  }, []);
+
+  if (!isMounted) return null;
+
   return (
     <div
-      id="loading-overlay"
-      className="fixed inset-0 z-[9999] bg-white dark:bg-slate-900 flex items-center justify-center animate-[fadeOut_0.5s_ease-in-out_0.5s_forwards]"
+      className={`fixed inset-0 z-[9999] bg-white dark:bg-slate-900 flex items-center justify-center transition-opacity duration-500 ease-in-out ${
+        isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+      }`}
     >
       <Logo className="w-32 h-auto opacity-10" />
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes fadeOut {
-          from { opacity: 1; pointer-events: auto; }
-          to { opacity: 0; pointer-events: none; }
-        }
-      `}} />
     </div>
   );
 }
