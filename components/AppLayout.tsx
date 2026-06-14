@@ -101,7 +101,7 @@ interface UserInfo {
 }
 
 const sidebarButtonClass = (isActive: boolean) =>
-  `flex items-center px-1.5 py-1.5 font-medium transition-all duration-200 rounded-lg w-full justify-start ${
+  `flex items-center px-3 py-2 font-medium transition-all duration-200 rounded-lg w-full justify-start ${
     isActive
       ? 'text-primary bg-primary/10 hover:bg-primary/15'
       : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
@@ -410,7 +410,7 @@ export default function AppLayout({
         <Link
           href="/messages"
           aria-label="消息"
-          className="relative rounded-md p-2 ml-0.5 text-white hover:bg-white/10 transition-colors inline-flex"
+          className="relative rounded-md p-2 ml-3 text-white hover:bg-white/10 transition-colors inline-flex"
         >
           <MdNotifications size={24} />
           {totalUnread > 0 && (
