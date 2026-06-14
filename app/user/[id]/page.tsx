@@ -331,18 +331,18 @@ export default function UserProfilePage() {
                 {getRoleBadge(profile.role)}
               </div>
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-400 mt-3">
-                {profile.gender && profile.gender !== '保密' && (
+                {profile.gender && profile.gender !== '保密' ? (
                   <div className="flex items-center gap-1.5">
                     <MdPerson size={18} />
                     <span>{profile.gender}</span>
                   </div>
-                )}
-                {profile.birthday && (
+                ) : null}
+                {profile.birthday ? (
                   <div className="flex items-center gap-1.5">
                     <MdCake size={18} />
                     <span>{profile.birthday}</span>
                   </div>
-                )}
+                ) : null}
                 <div className="flex items-center gap-1.5">
                   <MdInfoOutline size={18} />
                   <span>
@@ -363,7 +363,7 @@ export default function UserProfilePage() {
             </div>
           </div>
 
-          {(profile.derpi_username || profile.derpi_user_id) && (
+          {(profile.derpi_username || profile.derpi_user_id) ? (
             <div className="mb-8">
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-2">
                 连接的账号
@@ -379,7 +379,7 @@ export default function UserProfilePage() {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           <div className="border-b border-slate-200 dark:border-slate-700 mb-4">
             <div className="flex gap-0">
@@ -501,7 +501,7 @@ export default function UserProfilePage() {
                         className="block bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                       >
                         <div className="flex items-start gap-3">
-                          {post.cover_image && (
+                          {post.cover_image ? (
                             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
                               <img
                                 src={`https://picpony.top/${post.cover_image}`}
@@ -509,7 +509,7 @@ export default function UserProfilePage() {
                                 className="w-full h-full object-cover"
                               />
                             </div>
-                          )}
+                          ) : null}
                           <div className="flex-1 min-w-0">
                             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mb-1.5 line-clamp-2">
                               {post.title}
@@ -608,7 +608,7 @@ export default function UserProfilePage() {
                           className="block bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
                           <div className="flex items-start gap-3">
-                            {comment.cover_image && (
+                            {comment.cover_image ? (
                               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
                                 <img
                                   src={`https://picpony.top/${comment.cover_image}`}
@@ -616,7 +616,7 @@ export default function UserProfilePage() {
                                   className="w-full h-full object-cover"
                                 />
                               </div>
-                            )}
+                            ) : null}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1.5">
                                 <span className="inline-flex items-center gap-1 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">

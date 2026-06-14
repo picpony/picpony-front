@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  experimental: {
+    optimizePackageImports: ['react-icons/md'],
+  },
   allowedDevOrigins: [
     '127.0.0.1',
     '.trae.cn',

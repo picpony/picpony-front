@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdDashboard } from "react-icons/md";
 
-import AnnouncementModal from "./AnnouncementModal";
-import ImageSearchModal from "./ImageSearchModal";
-import Modal from "./Modal";
+import dynamic from 'next/dynamic';
+const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
+const ImageSearchModal = dynamic(() => import("./ImageSearchModal"), { ssr: false });
+const Modal = dynamic(() => import("./Modal"), { ssr: false });
 import Logo from "./Logo";
 import { api } from "@/lib/api";
 
@@ -116,49 +117,48 @@ export default function AppLayout({
   initialCollapsed: boolean;
   initialDark: boolean;
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return initialCollapsed;
+    if (window.innerWidth < 768) return true;
+    const saved = localStorage.getItem('sidebar_collapsed');
+    return saved !== null ? saved === 'true' : initialCollapsed;
+  });
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem('user_menu_open');
+    return saved === 'true';
+  });
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
-  const [darkMode, setDarkMode] = useState(initialDark);
-  const [followSystem, setFollowSystem] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window === 'undefined') return initialDark;
+    const storedFollowSystem = localStorage.getItem('followSystemPrefersColorScheme');
+    if (storedFollowSystem === null || storedFollowSystem === 'true') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    const storedDark = localStorage.getItem('darkMode');
+    return storedDark === 'true';
+  });
+
+  const [followSystem, setFollowSystem] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem('followSystemPrefersColorScheme');
+    return stored === null ? true : stored === 'true';
+  });
   const [isDarkDropdownOpen, setIsDarkDropdownOpen] = useState(false);
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
-  const systemPrefersDark = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }, []);
+  const systemPrefersDark = typeof window !== 'undefined' 
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches 
+    : false;
 
   const applyDarkMode = useCallback((dark: boolean) => {
     document.documentElement.classList.toggle('dark', dark);
     document.cookie = `darkMode=${dark};path=/;max-age=${365 * 24 * 60 * 60}`;
   }, []);
-
-  useEffect(() => {
-    const storedDark = localStorage.getItem('darkMode');
-    const storedFollowSystem = localStorage.getItem('followSystemPrefersColorScheme');
-    
-    let resolveFollowSystem = true;
-    if (storedFollowSystem !== null) {
-      resolveFollowSystem = storedFollowSystem === 'true';
-    }
-    setFollowSystem(resolveFollowSystem);
-
-    if (resolveFollowSystem) {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const isDark = mediaQuery.matches;
-      setDarkMode(isDark);
-      applyDarkMode(isDark);
-    } else if (storedDark !== null) {
-      const isDark = storedDark === 'true';
-      setDarkMode(isDark);
-      applyDarkMode(isDark);
-    }
-  }, [applyDarkMode]);
 
   useEffect(() => {
     if (!followSystem) return;
@@ -230,28 +230,12 @@ export default function AppLayout({
     return () => window.removeEventListener('unread_counts_updated', fetchUnreadCounts);
   }, [userInfo]);
 
-  useEffect(() => {
-    const savedMenuState = localStorage.getItem('user_menu_open');
-    if (savedMenuState !== null) {
-      requestAnimationFrame(() => {
-        setIsUserMenuOpen(savedMenuState === 'true');
-      });
-    }
-    
-    if (window.innerWidth >= 768) {
-      const savedSidebarState = localStorage.getItem('sidebar_collapsed');
-      if (savedSidebarState !== null) {
-        requestAnimationFrame(() => {
-          setIsCollapsed(savedSidebarState === 'true');
-        });
-      }
-    }
-  }, []);
-
   const toggleUserMenu = () => {
-    const newState = !isUserMenuOpen;
-    setIsUserMenuOpen(newState);
-    localStorage.setItem('user_menu_open', String(newState));
+    setIsUserMenuOpen(prev => {
+      const newState = !prev;
+      localStorage.setItem('user_menu_open', String(newState));
+      return newState;
+    });
   };
   const router = useRouter();
 
@@ -317,9 +301,11 @@ export default function AppLayout({
   }, []);
 
   const toggleSidebar = () => {
-    const newState = !isCollapsed;
-    setIsCollapsed(newState);
-    localStorage.setItem('sidebar_collapsed', String(newState));
+    setIsCollapsed(prev => {
+      const newState = !prev;
+      localStorage.setItem('sidebar_collapsed', String(newState));
+      return newState;
+    });
   };
 
   const handleMobileNavigation = () => {
