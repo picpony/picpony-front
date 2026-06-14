@@ -410,7 +410,7 @@ export default function AppLayout({
         <Link
           href="/messages"
           aria-label="消息"
-          className="relative rounded-md p-2 ml-0.5 text-white hover:bg-white/10 transition-colors inline-flex"
+          className="relative rounded-md p-2 ml-3 text-white hover:bg-white/10 transition-colors inline-flex"
         >
           <MdNotifications size={24} />
           {totalUnread > 0 && (
