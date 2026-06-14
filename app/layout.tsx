@@ -45,6 +45,11 @@ export default async function RootLayout({
             __html: `window.recaptchaOptions = { useRecaptchaNet: true };`,
           }}
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `setTimeout(function(){var o=document.getElementById('loading-overlay');if(o){o.style.opacity='0';o.style.pointerEvents='none';setTimeout(function(){o.remove()},600)}},2000)`,
+          }}
+        />
       </head>
       <body className="h-full flex flex-col overflow-hidden">
         <LoadingOverlay />
