@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
+import { encodeTrack } from "@/lib/utils";
 
 interface SliderCaptchaProps {
   onVerify: (token: string) => void;
@@ -17,24 +18,40 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
   const [verifying, setVerifying] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const sliderTrackRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef(0);
   const sliderXRef = useRef(0);
   const sliderBtnRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
+
+  const trackRef = useRef<[number, number, number][]>([]);
+  const dragStartTimeRef = useRef(0);
+  const lastSampleTimeRef = useRef(0);
+
   const maxSliderX = 260;
   const btnWidth = 50;
+
+  const getClientX = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent): number => {
+    if ("touches" in e) return e.touches[0].clientX;
+    return e.clientX;
+  };
+
+  const getClientY = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent): number => {
+    if ("touches" in e) return e.touches[0].clientY;
+    return e.clientY;
+  };
 
   const fetchCaptcha = useCallback(async () => {
     setLoading(true);
     setSliderX(0);
+    setErrorMsg("");
+    sliderXRef.current = 0;
+    trackRef.current = [];
     try {
       const data = await api.captchaGet();
       if (data.success) {
         setBgImage(data.bg);
         setPieceImage(data.piece);
         setPieceY(data.y);
-        setErrorMsg("");
       } else {
         setErrorMsg("获取验证码失败");
       }
@@ -51,28 +68,36 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
     }
   }, [fetchCaptcha]);
 
-  const getClientX = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent): number => {
-    if ("touches" in e) {
-      return e.touches[0].clientX;
-    }
-    return e.clientX;
-  };
-
   const handleStart = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       if (loading || verifying || errorMsg) return;
       e.preventDefault();
+      const refX = getClientX(e);
+      const refY = getClientY(e);
       setIsDragging(true);
-      startXRef.current = getClientX(e);
+      startXRef.current = refX;
+
+      const now = Date.now();
+      dragStartTimeRef.current = now;
+      lastSampleTimeRef.current = now;
+      trackRef.current = [[0, refY, 0]];
 
       const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
         moveEvent.preventDefault();
-        const clientX = getClientX(moveEvent);
-        let moveX = clientX - startXRef.current;
+        const currentClientX = getClientX(moveEvent);
+        const currentClientY = getClientY(moveEvent);
+        let moveX = currentClientX - refX;
         if (moveX < 0) moveX = 0;
         if (moveX > maxSliderX) moveX = maxSliderX;
         sliderXRef.current = moveX;
         setSliderX(moveX);
+
+        const nowMove = Date.now();
+        const elapsed = nowMove - dragStartTimeRef.current;
+        if (nowMove - lastSampleTimeRef.current < 16) return;
+        lastSampleTimeRef.current = nowMove;
+
+        trackRef.current.push([moveX, currentClientY, elapsed]);
       };
 
       const handleEnd = async () => {
@@ -85,9 +110,23 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
         const finalX = sliderXRef.current;
         if (finalX < 5) return;
 
+        const endTime = Date.now();
+        const totalElapsed = endTime - dragStartTimeRef.current;
+        const lastY = trackRef.current.length > 0
+          ? trackRef.current[trackRef.current.length - 1][1]
+          : 0;
+        trackRef.current.push([finalX, lastY, totalElapsed]);
+
+        if (trackRef.current.length < 5) {
+          setSliderX(0);
+          setErrorMsg("请从起点开始完整滑动");
+          return;
+        }
+
         setVerifying(true);
         try {
-          const data = await api.captchaVerify(finalX);
+          const encodedTrack = encodeTrack(trackRef.current);
+          const data = await api.captchaVerify(finalX, encodedTrack);
           if (data.success && data.token) {
             onVerify(data.token);
           } else {
@@ -110,8 +149,6 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
     },
     [loading, verifying, errorMsg, maxSliderX, onVerify, fetchCaptcha]
   );
-
-  const trackWidth = 310;
 
   return (
     <div className="flex flex-col items-center gap-4 w-[340px]">
@@ -162,7 +199,6 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
 
       {bgImage && (
         <div
-          ref={sliderTrackRef}
           className="relative w-[310px] h-10 bg-slate-100 dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600 mt-2"
           style={{ touchAction: "none" }}
         >

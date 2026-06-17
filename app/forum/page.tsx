@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api, ForumPost } from '@/lib/api';
-import { MdErrorOutline, MdRefresh, MdComment, MdVisibility, MdThumbUp } from 'react-icons/md';
+import { MdErrorOutline, MdRefresh, MdComment, MdVisibility, MdThumbUp, MdAdd } from 'react-icons/md';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 export default function ForumPage() {
@@ -92,6 +92,13 @@ export default function ForumPage() {
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">论坛</h1>
+        <button
+          onClick={() => router.push('/forum/create')}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+        >
+          <MdAdd size={18} />
+          发帖
+        </button>
       </div>
 
       <div className="space-y-4 mb-8">

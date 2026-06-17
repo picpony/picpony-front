@@ -462,7 +462,7 @@ export default function AppLayout({
                 <div 
                   className={`mt-1 flex flex-col space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${
                     isUserMenuOpen 
-                      ? 'max-h-60 opacity-100 mb-2' 
+                      ? 'max-h-80 opacity-100 mb-2' 
                       : 'max-h-0 opacity-0'
                   }`}
                 >
@@ -473,6 +473,27 @@ export default function AppLayout({
                   >
                     <MdCollectionsBookmark size={20} className="shrink-0 mr-3" />
                     <span>我的收藏</span>
+                  </Link>
+                  <Link
+                    href="/messages"
+                    onClick={handleMobileNavigation}
+                    className={sidebarButtonClass(pathname === '/messages')}
+                  >
+                    <MdNotifications size={20} className="shrink-0 mr-3" />
+                    <span>消息</span>
+                    {totalUnread > 0 && (
+                      <span className="ml-auto bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
+                        {totalUnread > 99 ? '99+' : totalUnread}
+                      </span>
+                    )}
+                  </Link>
+                  <Link
+                    href="/history"
+                    onClick={handleMobileNavigation}
+                    className={sidebarButtonClass(pathname === '/history')}
+                  >
+                    <MdImageSearch size={20} className="shrink-0 mr-3" />
+                    <span>浏览历史</span>
                   </Link>
                   <Link
                     href="/settings"

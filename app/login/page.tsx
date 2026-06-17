@@ -144,7 +144,7 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <div className="mt-6 text-center">
+      <div className="mt-6 text-center space-y-2">
         <p className="text-sm text-slate-500 dark:text-slate-400">
           还没有账号？{" "}
           <Link
@@ -152,6 +152,11 @@ export default function LoginPage() {
             className="text-primary cursor-pointer hover:underline"
           >
             立即注册
+          </Link>
+        </p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          <Link href="/reset-password" className="text-primary hover:underline">
+            忘记密码？
           </Link>
         </p>
       </div>

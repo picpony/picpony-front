@@ -69,3 +69,23 @@ export function distributeToMasonryColumns<T extends { height?: number; width?: 
 
   return columnData;
 }
+
+/**
+ * Encrypt track data using XOR with key 0x5A, then base64 encode.
+ * Matches backend validation in api.php captcha_verify.
+ * Track format: array of [x, y, elapsedMs] points.
+ * Uses Uint8Array for safe binary encoding.
+ */
+export function encodeTrack(track: [number, number, number][]): string {
+  const jsonStr = JSON.stringify(track);
+  const key = 0x5a;
+  const bytes = new Uint8Array(jsonStr.length);
+  for (let i = 0; i < jsonStr.length; i++) {
+    bytes[i] = jsonStr.charCodeAt(i) ^ key;
+  }
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}

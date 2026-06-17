@@ -550,11 +550,13 @@ export const api = {
     return res.json();
   },
 
-  captchaVerify: async (x: number): Promise<CaptchaVerifyResponse> => {
+  captchaVerify: async (x: number, track?: string): Promise<CaptchaVerifyResponse> => {
+    const body: Record<string, unknown> = { x };
+    if (track) body.track = track;
     const res = await fetch(`${PICPONY_API_BASE}?action=captcha_verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ x })
+      body: JSON.stringify(body)
     });
     return res.json();
   },
@@ -1272,5 +1274,343 @@ export const api = {
       },
       body: JSON.stringify({ id })
     });
-  }
+  },
+
+  createForumPost: async (token: string, data: {
+    title: string;
+    content: string;
+    cover_image?: string;
+    category?: string;
+  }) => {
+    return fetch(`${PICPONY_API_BASE}?action=create_forum_post`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  toggleForumPostLike: async (token: string, postId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=toggle_forum_post_like`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ post_id: postId })
+    });
+  },
+
+  uploadForumImage: async (token: string, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    return fetch(`${PICPONY_API_BASE}?action=upload_forum_image`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+  },
+
+  saveProfile: async (token: string, data: {
+    bio?: string;
+    gender?: string;
+    birthday?: string;
+    race?: string;
+  }) => {
+    return fetch(`${PICPONY_API_BASE}?action=save_profile`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  uploadBanner: async (token: string, file: File) => {
+    const formData = new FormData();
+    formData.append('banner', file);
+    return fetch(`${PICPONY_API_BASE}?action=upload_banner`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+  },
+
+  updateEmail: async (token: string, email: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=update_email`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email })
+    });
+  },
+
+  verifyEmail: async (token: string, code: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=verify_email`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ code })
+    });
+  },
+
+  resendVerifyCode: async (token: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=resend_verify_code`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
+    });
+  },
+
+  updateSettings: async (token: string, data: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=update_settings`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  reportImage: async (token: string, imageId: number, reason: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=report_image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image_id: imageId, reason })
+    });
+  },
+
+  resetPasswordRequest: async (email: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=reset_password_request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+  },
+
+  resetPassword: async (data: { email: string; code: string; new_password: string }) => {
+    return fetch(`${PICPONY_API_BASE}?action=reset_password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+
+  getTagGroups: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_tag_groups&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  saveTagGroup: async (token: string, data: { id?: number; name: string; tags: string[] }) => {
+    return fetch(`${PICPONY_API_BASE}?action=save_tag_group`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteTagGroup: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=delete_tag_group`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
+  },
+
+  getBrowsingHistory: async (token: string, page: number = 1) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_browsing_history&page=${page}&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  clearBrowsingHistory: async (token: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=clear_browsing_history`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+  },
+
+  deleteBrowsingHistoryItem: async (token: string, imageId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=delete_browsing_history_item`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image_id: imageId })
+    });
+  },
+
+  checkHasPrivacyPassword: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=check_has_privacy_password&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  setPrivacyPassword: async (token: string, password: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=set_privacy_password`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ password })
+    });
+  },
+
+  verifyPrivacyPassword: async (token: string, password: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=verify_privacy_password`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ password })
+    });
+  },
+
+  getPrivacyFaves: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_privacy_faves&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  addPrivacyFave: async (token: string, imageId: number, imageData: Record<string, unknown>) => {
+    return fetch(`${PICPONY_API_BASE}?action=add_privacy_fave`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image_id: imageId, image_data: imageData })
+    });
+  },
+
+  removePrivacyFave: async (token: string, imageId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=remove_privacy_fave`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image_id: imageId })
+    });
+  },
+
+  getMyBadges: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_my_badges&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  equipBadge: async (token: string, badgeName: string | null) => {
+    return fetch(`${PICPONY_API_BASE}?action=equip_badge`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ badge_name: badgeName })
+    });
+  },
+
+  getTasks: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_tasks&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  claimTask: async (token: string, taskType: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=claim_task`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ task_type: taskType })
+    });
+  },
+
+  getCoinTransactions: async (token: string, page: number = 1) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_coin_transactions&page=${page}&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  getBlockGroups: async (token: string) => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_block_groups&_t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  saveBlockGroup: async (token: string, data: {
+    id?: number; name: string; tags: string[];
+    hidden_tags?: string; spoilered_tags?: string;
+  }) => {
+    return fetch(`${PICPONY_API_BASE}?action=save_block_group`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteBlockGroup: async (token: string, id: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=delete_block_group`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id })
+    });
+  },
+
+  toggleBlockGroup: async (token: string, id: number, isActive: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=toggle_block_group`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, is_active: isActive })
+    });
+  },
+
+  getSharedFavesByUsername: async (username: string): Promise<SharedFavesResponse> => {
+    const res = await fetch(`${PICPONY_API_BASE}?action=get_shared_faves&username=${encodeURIComponent(username)}`);
+    if (!res.ok) throw new Error('获取收藏夹失败');
+    return res.json();
+  },
 };

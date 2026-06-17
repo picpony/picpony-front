@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend, MdShare, MdContentCopy } from 'react-icons/md';
+import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend, MdShare, MdContentCopy, MdFlag, MdClose } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
@@ -29,6 +29,9 @@ export default function PicPage() {
   const [newComment, setNewComment] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
 
   const fetchComments = async () => {
     try {
@@ -241,6 +244,39 @@ export default function PicPage() {
     }
   };
 
+  const handleReport = async () => {
+    if (!reportReason.trim()) {
+      showToast('请填写举报原因', 'error');
+      return;
+    }
+    let token = null;
+    try {
+      const userInfoStr = localStorage.getItem('user_info');
+      if (userInfoStr) token = JSON.parse(userInfoStr).token;
+    } catch {}
+    if (!token) {
+      showToast('请先登录', 'error');
+      router.push('/login');
+      return;
+    }
+    setIsReporting(true);
+    try {
+      const res = await api.reportImage(token, Number(id), reportReason);
+      const data = await res.json();
+      if (data.success) {
+        showToast('举报已提交，感谢您的反馈', 'success');
+        setIsReportModalOpen(false);
+        setReportReason('');
+      } else {
+        showToast(data.message || '提交失败', 'error');
+      }
+    } catch {
+      showToast('提交失败', 'error');
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-fade-in">
       <div className="bg-transparent flex flex-col rounded-xl">
@@ -381,6 +417,13 @@ export default function PicPage() {
                   </>
                 )}
               </div>
+              <button
+                onClick={() => setIsReportModalOpen(true)}
+                title="举报"
+                className="p-2.5 rounded-full transition-colors duration-200 border text-red-400 border-red-200 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:border-red-900/30 dark:bg-red-950/20 dark:hover:bg-red-950/40"
+              >
+                <MdFlag size={20} />
+              </button>
             </div>
 
             <div>
@@ -587,6 +630,42 @@ export default function PicPage() {
           </div>
         </div>
       </div>
+
+      {/* Report Modal */}
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => { if (!isReporting) { setIsReportModalOpen(false); setReportReason(''); } }}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-6">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">举报图片</h3>
+              <button onClick={() => { setIsReportModalOpen(false); setReportReason(''); }} disabled={isReporting}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                <MdClose size={24} />
+              </button>
+            </div>
+            <div className="px-6 pb-6">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                请描述违规原因，管理员将会审核处理。
+              </p>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="请详细描述违规原因..."
+                rows={4}
+                disabled={isReporting}
+                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none text-sm"
+              />
+              <div className="flex justify-end gap-3 mt-4">
+                <button onClick={() => { setIsReportModalOpen(false); setReportReason(''); }} disabled={isReporting}
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+                <button onClick={handleReport} disabled={isReporting || !reportReason.trim()}
+                  className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg disabled:opacity-50">
+                  {isReporting ? '提交中...' : '提交举报'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

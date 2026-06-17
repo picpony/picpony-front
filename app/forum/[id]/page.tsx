@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api, ForumPostDetail, ForumComment } from '@/lib/api';
-import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdComment, MdVisibility, MdSend } from 'react-icons/md';
+import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import BBCodeEditor from '@/components/BBCodeEditor';
@@ -27,6 +27,9 @@ export default function ForumPostPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [isLikeLoading, setIsLikeLoading] = useState(false);
 
   useEffect(() => {
     const checkLoginStatus = () => {
@@ -50,6 +53,8 @@ export default function ForumPostPage() {
           setPost(res.post);
           setComments(res.comments);
           setTotalPages(res.total_pages);
+          setIsLiked(res.post.is_liked === 1);
+          setLikeCount(res.post.like_count);
           setIsLoading(false);
         }
       })
@@ -64,6 +69,28 @@ export default function ForumPostPage() {
       isMounted = false;
     };
   }, [id, page, retryCount]);
+
+  const handleToggleLike = async () => {
+    const userInfoStr = localStorage.getItem('user_info');
+    if (!userInfoStr) {
+      setSubmitError('请先登录');
+      return;
+    }
+    setIsLikeLoading(true);
+    try {
+      const userInfo = JSON.parse(userInfoStr);
+      const res = await api.toggleForumPostLike(userInfo.token, parseInt(id));
+      const data = await res.json();
+      if (data.success) {
+        setIsLiked(data.is_liked === 1);
+        setLikeCount(data.like_count);
+      }
+    } catch (err) {
+      console.error('Toggle like error:', err);
+    } finally {
+      setIsLikeLoading(false);
+    }
+  };
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -200,9 +227,23 @@ export default function ForumPostPage() {
             <span className="flex items-center gap-1" title="回复数">
               <MdComment size={16} /> {post.reply_count}
             </span>
-            <span className="flex items-center gap-1" title="点赞数">
-              <MdThumbUp size={16} /> {post.like_count}
-            </span>
+            <button
+              onClick={handleToggleLike}
+              disabled={isLikeLoading}
+              className={`flex items-center gap-1 transition-colors ${
+                isLiked ? 'text-primary' : 'hover:text-primary'
+              }`}
+              title={isLiked ? '取消点赞' : '点赞'}
+            >
+              {isLikeLoading ? (
+                <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+              ) : isLiked ? (
+                <MdThumbUp size={16} />
+              ) : (
+                <MdOutlineThumbUp size={16} />
+              )}
+              {likeCount}
+            </button>
           </div>
         </div>
 
