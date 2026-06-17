@@ -55,7 +55,7 @@ export default async function RootLayout({
           height={3}
           crawl={true}
           showSpinner={false}
-          easing="ease"
+          easing="ease-in-out"
           speed={200}
         />
         <AppLayout initialCollapsed={sidebarCollapsed} initialDark={darkMode}>
