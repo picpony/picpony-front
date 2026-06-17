@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { MdHistory, MdDelete, MdDeleteSweep, MdImage, MdPerson } from 'react-icons/md';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
+import Modal from '@/components/Modal';
 
 interface HistoryItem {
-  image_id: number;
+  id: number;
   preview_url: string | null;
   uploader: string | null;
   last_view_time: string;
@@ -28,6 +29,7 @@ export default function HistoryPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
   const fetchHistory = async (targetPage: number) => {
     setIsLoading(true);
@@ -59,7 +61,11 @@ export default function HistoryPage() {
   }, []);
 
   const handleClear = async () => {
-    if (!confirm('确定清空所有浏览历史吗？')) return;
+    setIsClearModalOpen(true);
+  };
+
+  const handleClearConfirm = async () => {
+    setIsClearModalOpen(false);
     try {
       const storedUser = localStorage.getItem('user_info');
       if (!storedUser) return;
@@ -81,15 +87,25 @@ export default function HistoryPage() {
   const handleDeleteItem = async (imageId: number) => {
     try {
       const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
+      if (!storedUser) {
+        showToast('请先登录', 'error');
+        return;
+      }
       const user = JSON.parse(storedUser);
+      if (!user.token) {
+        showToast('登录已过期，请重新登录', 'error');
+        return;
+      }
       const res = await api.deleteBrowsingHistoryItem(user.token, imageId);
       const data = await res.json();
       if (data.success) {
-        setHistory((prev) => prev.filter((item) => item.image_id !== imageId));
+        setHistory((prev) => prev.filter((item) => item.id !== imageId));
         showToast('已移除', 'success');
+      } else {
+        showToast(data.error || '删除失败', 'error');
       }
-    } catch {
+    } catch (err) {
+      console.error('Delete history item error:', err);
       showToast('操作失败', 'error');
     }
   };
@@ -114,6 +130,7 @@ export default function HistoryPage() {
   }
 
   return (
+    <>
     <div className="max-w-4xl mx-auto px-4 py-8 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -146,10 +163,10 @@ export default function HistoryPage() {
           <div className="space-y-2">
             {history.map((item) => (
               <div
-                key={item.image_id}
+                key={item.id}
                 className="flex items-center gap-4 p-3 bg-white dark:bg-slate-800/50 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group"
               >
-                <Link href={`/pic/${item.image_id}`} className="flex items-center gap-4 flex-1 min-w-0">
+                <Link href={`/pic/${item.id}`} className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="w-20 h-16 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-700 flex-shrink-0">
                     {item.preview_url ? (
                       <img src={item.preview_url} alt="" className="w-full h-full object-cover" />
@@ -161,7 +178,7 @@ export default function HistoryPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      #{item.image_id}
+                      #{item.id}
                       {item.uploader && (
                         <span className="text-xs text-slate-400 flex items-center gap-1">
                           <MdPerson size={12} />
@@ -177,9 +194,10 @@ export default function HistoryPage() {
                   </div>
                 </Link>
                 <button
-                  onClick={() => handleDeleteItem(item.image_id)}
-                  className="p-2 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                  onClick={() => handleDeleteItem(item.id)}
+                  className="p-2 text-slate-400 hover:text-red-500 opacity-40 group-hover:opacity-100 transition-all"
                   title="移除此记录"
+                  aria-label="删除浏览记录"
                 >
                   <MdDelete size={18} />
                 </button>
@@ -211,5 +229,32 @@ export default function HistoryPage() {
         </>
       )}
     </div>
+
+      <Modal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        title="清空浏览历史"
+        footer={
+          <>
+            <button
+              onClick={() => setIsClearModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleClearConfirm}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+            >
+              确认清空
+            </button>
+          </>
+        }
+      >
+        <p className="text-slate-600 dark:text-slate-300">
+          确定要清空所有浏览历史吗？此操作不可撤销。
+        </p>
+      </Modal>
+    </>
   );
 }

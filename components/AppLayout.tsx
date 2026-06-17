@@ -3,7 +3,7 @@
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdDashboard } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdDashboard, MdHistory } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
 const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
@@ -492,7 +492,7 @@ export default function AppLayout({
                     onClick={handleMobileNavigation}
                     className={sidebarButtonClass(pathname === '/history')}
                   >
-                    <MdImageSearch size={20} className="shrink-0 mr-3" />
+                    <MdHistory size={20} className="shrink-0 mr-3" />
                     <span>浏览历史</span>
                   </Link>
                   <Link
