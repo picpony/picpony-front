@@ -214,6 +214,74 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
   const [searchKw, setSearchKw] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [editForm, setEditForm] = useState({
+    username: '',
+    email: '',
+    password: '',
+    role: 'user',
+    bio: '',
+    gender: '',
+    birthday: '',
+    is_banned: 0,
+  });
+
+  useEffect(() => {
+    if (editingUser) {
+      setEditForm({
+        username: editingUser.username || '',
+        email: editingUser.email || '',
+        password: '',
+        role: editingUser.role || 'user',
+        bio: '',
+        gender: '',
+        birthday: '',
+        is_banned: editingUser.is_banned || 0,
+      });
+    }
+  }, [editingUser]);
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+    setIsSavingUser(true);
+    try {
+      const payload: Record<string, unknown> = { target_id: editingUser.id };
+
+      if (editForm.username !== editingUser.username) {
+        payload.username = editForm.username;
+      }
+      if (editForm.email !== editingUser.email) {
+        payload.email = editForm.email;
+      }
+      if (editForm.password) {
+        payload.password = editForm.password;
+      }
+      if (editForm.role !== editingUser.role) {
+        payload.role = editForm.role;
+      }
+      if (editForm.is_banned !== editingUser.is_banned) {
+        payload.is_banned = editForm.is_banned;
+      }
+      payload.bio = editForm.bio || '';
+      payload.gender = editForm.gender || '';
+      payload.birthday = editForm.birthday || '';
+
+      const res = await api.adminUpdateUser(token, payload);
+      const data = await res.json();
+
+      if (data.success) {
+        showToast('用户信息更新成功', 'success');
+        closeEditModal();
+        loadUsers();
+      } else {
+        showToast(data.error || '保存失败', 'error');
+      }
+    } catch {
+      showToast('保存失败，请检查网络连接', 'error');
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
 
   const [usersConfirmModalOpen, setUsersConfirmModalOpen] = useState(false);
   const [usersConfirmTitle, setUsersConfirmTitle] = useState('');
@@ -409,12 +477,158 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
       <Modal
         isOpen={isEditModalOpen}
         onClose={closeEditModal}
-        title="编辑用户"
-        maxWidth="max-w-lg"
+        title={editingUser ? `编辑用户 #${editingUser.id} - ${editingUser.username}` : '编辑用户'}
+        maxWidth="max-w-xl"
+        footer={
+          <>
+            <button
+              onClick={closeEditModal}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSaveUser}
+              disabled={isSavingUser}
+              className="px-4 py-2 text-sm font-medium text-white bg-primary hover:opacity-90 disabled:opacity-50 rounded-lg transition-all cursor-pointer flex items-center gap-2"
+            >
+              {isSavingUser && (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {isSavingUser ? '保存中...' : '保存修改'}
+            </button>
+          </>
+        }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          编辑用户功能正在开发中，当前仅支持封禁/解封和删除操作。
-        </p>
+        {editingUser && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  用户名
+                </label>
+                <input
+                  type="text"
+                  value={editForm.username}
+                  onChange={(e) => setEditForm(f => ({ ...f, username: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  placeholder="留空则不修改"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  邮箱
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  placeholder="留空则不修改，填空字符串清空"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  密码
+                </label>
+                <input
+                  type="password"
+                  value={editForm.password}
+                  onChange={(e) => setEditForm(f => ({ ...f, password: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  placeholder="留空则不修改密码"
+                />
+                <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">修改密码将踢下线该用户的所有设备</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  角色
+                </label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm(f => ({ ...f, role: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                >
+                  <option value="user">用户</option>
+                  <option value="editor">小编</option>
+                  <option value="admin">管理员</option>
+                </select>
+                {myRole !== 'super_admin' && (
+                  <p className="mt-0.5 text-xs text-slate-500">仅超管可提升至管理员</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                个人简介 (Bio)
+              </label>
+              <textarea
+                value={editForm.bio}
+                onChange={(e) => setEditForm(f => ({ ...f, bio: e.target.value }))}
+                rows={2}
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none"
+                placeholder="留空则不修改"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  性别
+                </label>
+                <select
+                  value={editForm.gender}
+                  onChange={(e) => setEditForm(f => ({ ...f, gender: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                >
+                  <option value="">-- 不修改 --</option>
+                  <option value="male">男</option>
+                  <option value="female">女</option>
+                  <option value="other">其他</option>
+                  <option value="secret">保密</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  生日
+                </label>
+                <input
+                  type="date"
+                  value={editForm.birthday}
+                  onChange={(e) => setEditForm(f => ({ ...f, birthday: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-6 pt-2 border-t border-slate-200 dark:border-slate-700">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.is_banned === 1}
+                  onChange={(e) => setEditForm(f => ({ ...f, is_banned: e.target.checked ? 1 : 0 }))}
+                  className="rounded border-slate-300 dark:border-slate-600 text-red-500 focus:ring-red-500"
+                />
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  封禁此用户
+                </span>
+              </label>
+              {editForm.is_banned === 1 && (
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  封禁后将踢下线该用户的所有设备
+                </span>
+              )}
+            </div>
+
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              注册时间：{editingUser.created_at || '未知'}
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal
