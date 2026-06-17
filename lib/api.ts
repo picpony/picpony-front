@@ -1372,6 +1372,22 @@ export const api = {
     });
   },
 
+  verifyEmailById: async (userId: number, code: string) => {
+    return fetch(`${PICPONY_API_BASE}?action=verify_email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, code })
+    });
+  },
+
+  resendVerifyCodeById: async (userId: number) => {
+    return fetch(`${PICPONY_API_BASE}?action=resend_verify_code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId })
+    });
+  },
+
   updateSettings: async (token: string, data: Record<string, unknown>) => {
     return fetch(`${PICPONY_API_BASE}?action=update_settings`, {
       method: 'POST',
