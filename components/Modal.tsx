@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useSyncExternalStore } from 'react';
+import { useEffect, useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ModalProps {
@@ -15,6 +15,8 @@ interface ModalProps {
   closeOnOverlayClick?: boolean;
 }
 
+const CLOSE_ANIM_DURATION = 200;
+
 export default function Modal({
   isOpen,
   onClose,
@@ -27,6 +29,20 @@ export default function Modal({
   closeOnOverlayClick = true,
 }: ModalProps) {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
+  const [rendering, setRendering] = useState(isOpen);
+  const everOpened = useRef(isOpen);
+
+  useEffect(() => {
+    if (isOpen) {
+      everOpened.current = true;
+      setRendering(true);
+    } else if (everOpened.current) {
+      const timer = setTimeout(() => {
+        setRendering(false);
+      }, CLOSE_ANIM_DURATION);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -47,7 +63,7 @@ export default function Modal({
     onClose();
   }, [onClose]);
 
-  if (!mounted) return null;
+  if (!mounted || !rendering) return null;
 
   return createPortal(
     <div

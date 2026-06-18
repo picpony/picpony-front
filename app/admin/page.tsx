@@ -9,12 +9,18 @@ import {
   MdOutlineWarning, MdPeople, 
   MdReport, MdBlock, MdStore, MdAttachMoney, MdBuild,
   MdToggleOn, MdToggleOff, MdBarChart,
-  MdOpenInNew
+  MdOpenInNew, MdNotifications, MdMessage, MdShield, MdPersonAdd
 } from 'react-icons/md';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { Spinner, SearchInput, SectionHeader, EmptyState } from '@/components/admin';
+import NotificationsTab from '@/components/admin/NotificationsTab';
+import MessagesAuditTab from '@/components/admin/MessagesAuditTab';
+import BadgesTab from '@/components/admin/BadgesTab';
+import BlockTagsTab from '@/components/admin/BlockTagsTab';
+import DeveloperTab from '@/components/admin/DeveloperTab';
+import TeamTab from '@/components/admin/TeamTab';
 
 interface Tag {
   id: number;
@@ -1873,6 +1879,9 @@ function GlossaryTab() {
   const [token, setToken] = useState<string>(initial.token);
   const [error, setError] = useState<string | null>(initial.initError);
   const [itemsPerPage, setItemsPerPage] = useState<number>(initial.itemsPerPage);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalMatches, setTotalMatches] = useState(0);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [sortMode, setSortMode] = useState('count_desc');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -3305,6 +3314,12 @@ export default function AdminPage() {
     { id: 'welcome', label: '欢迎', icon: <MdDashboard size={20} /> },
     { id: 'glossary', label: '词库编辑', icon: <MdBook size={20} /> },
     { id: 'users', label: '用户管理', icon: <MdPeople size={20} />, adminOnly: true },
+    { id: 'notifications', label: '通知管理', icon: <MdNotifications size={20} />, adminOnly: true },
+    { id: 'messages', label: '私信审计', icon: <MdMessage size={20} />, adminOnly: true },
+    { id: 'badges', label: '徽章管理', icon: <MdEmojiEvents size={20} />, adminOnly: true },
+    { id: 'blocktags', label: '屏蔽标签', icon: <MdShield size={20} />, adminOnly: true },
+    { id: 'developer', label: '开发者', icon: <MdBuild size={20} />, adminOnly: true },
+    { id: 'team', label: '团队管理', icon: <MdPeople size={20} />, adminOnly: true },
     { id: 'shop', label: '商店管理', icon: <MdStore size={20} />, adminOnly: true },
     { id: 'reports', label: '举报处理', icon: <MdReport size={20} />, adminOnly: true },
     { id: 'blacklist', label: '屏蔽图库', icon: <MdBlock size={20} />, adminOnly: true },
@@ -3373,6 +3388,12 @@ export default function AdminPage() {
             {activeTab === 'welcome' && <WelcomeTab />}
             {activeTab === 'glossary' && <GlossaryTab />}
             {activeTab === 'users' && <UsersTab token={token} myRole={userRole} />}
+            {activeTab === 'notifications' && <NotificationsTab token={token} />}
+            {activeTab === 'messages' && <MessagesAuditTab token={token} />}
+            {activeTab === 'badges' && <BadgesTab token={token} />}
+            {activeTab === 'blocktags' && <BlockTagsTab token={token} />}
+            {activeTab === 'developer' && <DeveloperTab token={token} />}
+            {activeTab === 'team' && <TeamTab token={token} />}
             {activeTab === 'shop' && <ShopTab token={token} />}
             {activeTab === 'reports' && <ReportsTab token={token} />}
             {activeTab === 'blacklist' && <BlacklistTab token={token} />}
