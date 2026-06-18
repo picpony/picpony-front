@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ModalProps {
@@ -26,29 +26,16 @@ export default function Modal({
   footer,
   closeOnOverlayClick = true,
 }: ModalProps) {
-  const [isClosing, setIsClosing] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [shouldRender, setShouldRender] = useState(isOpen);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 
   useEffect(() => {
     if (isOpen) {
-      setShouldRender(true);
-      setIsClosing(false);
       document.body.style.overflow = 'hidden';
-    } else if (shouldRender) {
-      setIsClosing(true);
-      const timer = setTimeout(() => {
-        setShouldRender(false);
-        setIsClosing(false);
-        document.body.style.overflow = 'unset';
-      }, 200);
-      return () => clearTimeout(timer);
     }
-  }, [isOpen, shouldRender]);
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     return () => {
@@ -60,19 +47,19 @@ export default function Modal({
     onClose();
   }, [onClose]);
 
-  if (!mounted || !shouldRender) return null;
+  if (!mounted) return null;
 
   return createPortal(
     <div
       className={`fixed inset-0 flex items-center justify-center p-4 sm:p-6 bg-black/50 ${
-        isClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'
+        isOpen ? 'animate-modal-overlay' : 'animate-modal-overlay-out'
       }`}
-      style={{ zIndex }}
+      style={{ zIndex, pointerEvents: isOpen ? 'auto' : 'none' }}
       onClick={closeOnOverlayClick ? handleClose : undefined}
     >
       <div
         className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full ${maxWidth} overflow-hidden ${
-          isClosing ? 'animate-modal-content-out' : 'animate-modal-content'
+          isOpen ? 'animate-modal-content' : 'animate-modal-content-out'
         }`}
         onClick={(e) => e.stopPropagation()}
       >

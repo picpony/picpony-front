@@ -21,8 +21,6 @@ function ImageList({ search }: { search?: string }) {
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
-    setError(null);
 
     api.getImages(search, page)
       .then((res) => {
@@ -65,6 +63,8 @@ function ImageList({ search }: { search?: string }) {
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1) {
+      setIsLoading(true);
+      setError(null);
       setPage(newPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }

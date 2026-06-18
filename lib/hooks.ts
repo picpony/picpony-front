@@ -3,7 +3,15 @@
 import { useEffect, useState } from 'react';
 
 export function useMasonryColumns() {
-  const [columns, setColumns] = useState(4);
+  const getInitialColumns = () => {
+    if (typeof window === 'undefined') return 4;
+    if (window.innerWidth < 640) return 2;
+    if (window.innerWidth < 768) return 2;
+    if (window.innerWidth < 1024) return 3;
+    return 4;
+  };
+
+  const [columns, setColumns] = useState(getInitialColumns);
 
   useEffect(() => {
     const updateColumns = () => {
@@ -13,7 +21,6 @@ export function useMasonryColumns() {
       else setColumns(4);
     };
 
-    updateColumns();
     window.addEventListener('resize', updateColumns);
     return () => window.removeEventListener('resize', updateColumns);
   }, []);

@@ -226,21 +226,6 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
     is_banned: 0,
   });
 
-  useEffect(() => {
-    if (editingUser) {
-      setEditForm({
-        username: editingUser.username || '',
-        email: editingUser.email || '',
-        password: '',
-        role: editingUser.role || 'user',
-        bio: '',
-        gender: '',
-        birthday: '',
-        is_banned: editingUser.is_banned || 0,
-      });
-    }
-  }, [editingUser]);
-
   const handleSaveUser = async () => {
     if (!editingUser) return;
     setIsSavingUser(true);
@@ -316,8 +301,17 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
   }, [token]);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    if (!token) return;
+    api.adminGetUsers(token)
+      .then((data) => {
+        if (data.success) {
+          setUsers(data.users || []);
+          setFilteredUsers(data.users || []);
+        }
+      })
+      .catch(() => showToast('加载用户失败', 'error'))
+      .finally(() => setIsLoading(false));
+  }, [token]);
 
   useEffect(() => {
     if (!searchKw) {
@@ -334,6 +328,16 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
 
   const openEditModal = (user: User) => {
     setEditingUser(user);
+    setEditForm({
+      username: user.username || '',
+      email: user.email || '',
+      password: '',
+      role: user.role || 'user',
+      bio: '',
+      gender: '',
+      birthday: '',
+      is_banned: user.is_banned || 0,
+    });
     setIsEditModalOpen(true);
   };
 
@@ -706,8 +710,16 @@ function ShopTab({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+    if (!token) return;
+    api.adminGetShopItems(token)
+      .then((data) => {
+        if (data.success) {
+          setItems(data.items || []);
+        }
+      })
+      .catch(() => showToast('加载商品失败', 'error'))
+      .finally(() => setIsLoading(false));
+  }, [token]);
 
   const resetForm = () => {
     setForm({ id: 0, name: '', description: '', image_url: '', price: 10, stock: 100, active: true });
@@ -980,8 +992,17 @@ function ReportsTab({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
-    loadReports();
-  }, [loadReports]);
+    if (!token) return;
+    api.adminGetReports(token)
+      .then((data) => {
+        if (data.success) {
+          setReports(data.reports || []);
+          setFilteredReports(data.reports || []);
+        }
+      })
+      .catch(() => showToast('加载举报失败', 'error'))
+      .finally(() => setIsLoading(false));
+  }, [token]);
 
   useEffect(() => {
     if (!searchKw) {
@@ -1144,8 +1165,17 @@ function BlacklistTab({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
-    loadBlacklist();
-  }, [loadBlacklist]);
+    if (!token) return;
+    api.adminGetBlacklist(token)
+      .then((data) => {
+        if (data.success) {
+          setBlacklist(data.blacklist || []);
+          setFilteredBlacklist(data.blacklist || []);
+        }
+      })
+      .catch(() => showToast('加载黑名单失败', 'error'))
+      .finally(() => setIsLoading(false));
+  }, [token]);
 
   useEffect(() => {
     if (!searchKw) {
@@ -1354,8 +1384,17 @@ function WealthTab({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    if (!token) return;
+    api.adminGetWealth(token)
+      .then((data) => {
+        if (data.success) {
+          setUsers(data.users || []);
+          setFilteredUsers(data.users || []);
+        }
+      })
+      .catch(() => showToast('加载用户失败', 'error'))
+      .finally(() => setIsLoading(false));
+  }, [token]);
 
   useEffect(() => {
     if (!searchKw) {
@@ -1560,8 +1599,28 @@ function OtherTab({ token }: { token: string }) {
   };
 
   useEffect(() => {
-    loadSettings();
-    loadStats();
+    const doLoad = async () => {
+      try {
+        const data = await api.getMaintenanceStatus();
+        if (data.success) {
+          setMaintenanceMode(data.maintenance_mode);
+          setMaintenanceMessage(data.maintenance_message || '');
+          setTranslateEnabled(data.translate_enabled !== false);
+        }
+      } catch {
+        showToast('加载设置失败', 'error');
+      }
+
+      try {
+        const statsData = await api.getSiteStats();
+        if (statsData.success && statsData.stats) {
+          setStats(statsData.stats);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    doLoad();
   }, []);
 
   const loadSettings = async () => {
@@ -1709,7 +1768,7 @@ function OtherTab({ token }: { token: string }) {
               图片翻译功能
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              控制前台大图模态框中是否展示"一键图片翻译"按钮
+              控制前台大图模态框中是否展示&ldquo;一键图片翻译&rdquo;按钮
             </p>
           </div>
           <button
@@ -1786,15 +1845,34 @@ function OtherTab({ token }: { token: string }) {
 function GlossaryTab() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string>('user');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [token, setToken] = useState<string>('');
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalMatches, setTotalMatches] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState(100);
+  const initFromStorage = () => {
+    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
+    let token = '';
+    let role = 'user';
+    let admin = false;
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        token = user.token || '';
+        role = user.role || 'user';
+        const allowedRoles = ['super_admin', 'admin', 'editor'];
+        admin = allowedRoles.includes(user.role);
+      } catch {
+        // ignore
+      }
+    }
+    const savedItemsPerPage = typeof window !== 'undefined' ? localStorage.getItem('picpony_items_per_page') : null;
+    const itemsPerPage = savedItemsPerPage ? parseInt(savedItemsPerPage, 10) : 100;
+    return { token, userRole: role, isAdmin: admin, itemsPerPage, initError: storedUser ? null : '请先登录' };
+  };
+
+  const initial = initFromStorage();
+  const [userRole, setUserRole] = useState<string>(initial.userRole);
+  const [isAdmin, setIsAdmin] = useState(initial.isAdmin);
+  const [token, setToken] = useState<string>(initial.token);
+  const [error, setError] = useState<string | null>(initial.initError);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(initial.itemsPerPage);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [sortMode, setSortMode] = useState('count_desc');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -1866,28 +1944,6 @@ function GlossaryTab() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user_info');
-    if (storedUser) {
-      try {
-        const user = JSON.parse(storedUser);
-        setToken(user.token);
-        setUserRole(user.role || 'user');
-        const allowedRoles = ['super_admin', 'admin', 'editor'];
-        setIsAdmin(allowedRoles.includes(user.role));
-      } catch {
-        setError('请先登录');
-      }
-    } else {
-      setError('请先登录');
-    }
-
-    const savedItemsPerPage = localStorage.getItem('picpony_items_per_page');
-    if (savedItemsPerPage) {
-      setItemsPerPage(parseInt(savedItemsPerPage, 10));
-    }
-  }, []);
-
   const loadTags = useCallback(async (page = 1, preserveScroll = false) => {
     if (!token) return;
 
@@ -1923,10 +1979,33 @@ function GlossaryTab() {
   }, [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly]);
 
   useEffect(() => {
-    if (token) {
-      loadTags(1);
-    }
-  }, [token, loadTags]);
+    if (!token) return;
+    api.getDictionary(token, {
+      page: 1,
+      limit: itemsPerPage,
+      keyword: searchKeyword,
+      sort: sortMode,
+      category: categoryFilter,
+      untranslated: showUntranslatedOnly ? 1 : 0,
+    })
+      .then((data) => {
+        if (data.success) {
+          setTags(data.tags || []);
+          setTotalMatches(data.total_matches || 0);
+          setTotalPages(Math.ceil((data.total_matches || 0) / itemsPerPage) || 1);
+          setCurrentPage(1);
+          if (data.stats) {
+            setStats(data.stats);
+          }
+        } else {
+          setError(data.error || '加载失败');
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : '网络错误');
+      })
+      .finally(() => setIsLoading(false));
+  }, [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly]);
 
   useEffect(() => {
     if (searchTimeoutRef.current) {
@@ -3203,23 +3282,24 @@ function GlossaryTab() {
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>('welcome');
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [userRole, setUserRole] = useState<string>('user');
-  const [token, setToken] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user_info');
+  const initAdmin = () => {
+    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
-        setToken(user.token);
-        setUserRole(user.role || 'user');
+        return { userRole: user.role || 'user', token: user.token || '' };
       } catch {
         // ignore
       }
     }
-    setIsLoading(false);
-  }, []);
+    return { userRole: 'user', token: '' };
+  };
+
+  const initialAdmin = initAdmin();
+  const [userRole, setUserRole] = useState<string>(initialAdmin.userRole);
+  const [token, setToken] = useState<string>(initialAdmin.token);
+  const [isLoading, setIsLoading] = useState(false);
 
   const tabs: TabConfig[] = [
     { id: 'welcome', label: '欢迎', icon: <MdDashboard size={20} /> },

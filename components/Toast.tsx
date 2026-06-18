@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose, MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
 
@@ -45,10 +45,9 @@ const severityStyles: Record<ToastType, { bg: string; icon: React.ReactNode }> =
 
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 
   useEffect(() => {
-    setMounted(true);
     const listener = (toast: ToastMessage) => {
       setToasts(prev => [...prev, toast]);
     };

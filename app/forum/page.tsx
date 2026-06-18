@@ -20,8 +20,6 @@ export default function ForumPage() {
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
-    setError(null);
 
     api.getForumPosts(page)
       .then((res) => {
@@ -45,6 +43,8 @@ export default function ForumPage() {
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
+      setIsLoading(true);
+      setError(null);
       setPage(newPage);
       router.push(`/forum?page=${newPage}`);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -78,7 +78,7 @@ export default function ForumPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">{error.message}</p>
         </div>
         <button 
-          onClick={() => setRetryCount(c => c + 1)}
+          onClick={() => { setIsLoading(true); setError(null); setRetryCount(c => c + 1); }}
           className="flex items-center px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors cursor-pointer"
         >
           <MdRefresh size={20} className="mr-2" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useSyncExternalStore } from 'react';
 import Modal from './Modal';
 import SliderCaptcha from './SliderCaptcha';
 
@@ -11,11 +11,7 @@ interface CaptchaModalProps {
 }
 
 export default function CaptchaModal({ isOpen, onClose, onVerify }: CaptchaModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 
   if (!mounted) return null;
 

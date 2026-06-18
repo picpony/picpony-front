@@ -47,23 +47,22 @@ export default function UserProfilePage() {
 
   const [faveIds, setFaveIds] = useState<number[]>([]);
   const [faveImages, setFaveImages] = useState<PonyImage[]>([]);
-  const [isFavesLoading, setIsFavesLoading] = useState(false);
+  const [isFavesLoading, setIsFavesLoading] = useState(true);
   const [favesPage, setFavesPage] = useState(1);
   const [totalFavePages, setTotalFavePages] = useState(1);
 
   const [comments, setComments] = useState<UserComment[]>([]);
-  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+  const [isCommentsLoading, setIsCommentsLoading] = useState(true);
   const [commentsPage, setCommentsPage] = useState(1);
   const [totalCommentPages, setTotalCommentPages] = useState(1);
 
   const [posts, setPosts] = useState<UserPost[]>([]);
-  const [isPostsLoading, setIsPostsLoading] = useState(false);
+  const [isPostsLoading, setIsPostsLoading] = useState(true);
   const [postsPage, setPostsPage] = useState(1);
   const [totalPostPages, setTotalPostPages] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
 
     if (id) {
       api.getUserProfile(id)
@@ -94,7 +93,6 @@ export default function UserProfilePage() {
     if (!profile) return;
 
     let isMounted = true;
-    setIsFavesLoading(true);
 
     api.getSharedFaves(profile.username)
       .then((res) => {
@@ -106,8 +104,6 @@ export default function UserProfilePage() {
       })
       .catch((err) => {
         console.error('获取收藏夹失败', err);
-      })
-      .finally(() => {
         if (isMounted) {
           setIsFavesLoading(false);
         }
@@ -122,7 +118,6 @@ export default function UserProfilePage() {
     if (faveIds.length === 0) return;
 
     let isMounted = true;
-    setIsFavesLoading(true);
 
     api.searchImagesByIds(faveIds, favesPage, PER_PAGE)
       .then((res) => {
@@ -151,7 +146,6 @@ export default function UserProfilePage() {
     if (!profile || tabValue !== 1) return;
 
     let isMounted = true;
-    setIsPostsLoading(true);
 
     api.getUserPosts(id, postsPage)
       .then((res) => {
@@ -187,7 +181,6 @@ export default function UserProfilePage() {
     if (!profile || tabValue !== 2) return;
 
     let isMounted = true;
-    setIsCommentsLoading(true);
 
     api.getUserComments(id, commentsPage)
       .then((res) => {
@@ -436,14 +429,14 @@ export default function UserProfilePage() {
                   {totalFavePages > 1 && (
                     <div className="flex justify-center items-center gap-2 mt-8 mb-4">
                       <button
-                        onClick={() => { setFavesPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsFavesLoading(true); setFavesPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={favesPage === 1}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         首页
                       </button>
                       <button
-                        onClick={() => { setFavesPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsFavesLoading(true); setFavesPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={favesPage === 1}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
@@ -453,14 +446,14 @@ export default function UserProfilePage() {
                         {favesPage} / {totalFavePages}
                       </span>
                       <button
-                        onClick={() => { setFavesPage(p => Math.min(totalFavePages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsFavesLoading(true); setFavesPage(p => Math.min(totalFavePages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={favesPage === totalFavePages}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         下一页
                       </button>
                       <button
-                        onClick={() => { setFavesPage(totalFavePages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsFavesLoading(true); setFavesPage(totalFavePages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={favesPage === totalFavePages}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
@@ -541,14 +534,14 @@ export default function UserProfilePage() {
                   {totalPostPages > 1 && (
                     <div className="flex justify-center items-center gap-2 mt-8 mb-4">
                       <button
-                        onClick={() => { setPostsPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsPostsLoading(true); setPostsPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={postsPage === 1}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         首页
                       </button>
                       <button
-                        onClick={() => { setPostsPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsPostsLoading(true); setPostsPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={postsPage === 1}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
@@ -558,14 +551,14 @@ export default function UserProfilePage() {
                         {postsPage} / {totalPostPages}
                       </span>
                       <button
-                        onClick={() => { setPostsPage(p => Math.min(totalPostPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsPostsLoading(true); setPostsPage(p => Math.min(totalPostPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={postsPage === totalPostPages}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         下一页
                       </button>
                       <button
-                        onClick={() => { setPostsPage(totalPostPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsPostsLoading(true); setPostsPage(totalPostPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={postsPage === totalPostPages}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
@@ -645,14 +638,14 @@ export default function UserProfilePage() {
                   {totalCommentPages > 1 && (
                     <div className="flex justify-center items-center gap-2 mt-8 mb-4">
                       <button
-                        onClick={() => { setCommentsPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsCommentsLoading(true); setCommentsPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={commentsPage === 1}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         首页
                       </button>
                       <button
-                        onClick={() => { setCommentsPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsCommentsLoading(true); setCommentsPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={commentsPage === 1}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
@@ -662,14 +655,14 @@ export default function UserProfilePage() {
                         {commentsPage} / {totalCommentPages}
                       </span>
                       <button
-                        onClick={() => { setCommentsPage(p => Math.min(totalCommentPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsCommentsLoading(true); setCommentsPage(p => Math.min(totalCommentPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={commentsPage === totalCommentPages}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         下一页
                       </button>
                       <button
-                        onClick={() => { setCommentsPage(totalCommentPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        onClick={() => { setIsCommentsLoading(true); setCommentsPage(totalCommentPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                         disabled={commentsPage === totalCommentPages}
                         className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >

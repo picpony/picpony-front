@@ -64,9 +64,20 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
   useEffect(() => {
     if (!fetchedRef.current) {
       fetchedRef.current = true;
-      fetchCaptcha();
+      api.captchaGet()
+        .then((data) => {
+          if (data.success) {
+            setBgImage(data.bg);
+            setPieceImage(data.piece);
+            setPieceY(data.y);
+          } else {
+            setErrorMsg("获取验证码失败");
+          }
+        })
+        .catch(() => setErrorMsg("网络错误，请重试"))
+        .finally(() => setLoading(false));
     }
-  }, [fetchCaptcha]);
+  }, []);
 
   const handleStart = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
