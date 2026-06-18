@@ -1,14 +1,43 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend, MdShare, MdContentCopy, MdFlag, MdClose } from 'react-icons/md';
+import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend, MdShare, MdContentCopy, MdFlag, MdClose, MdFullscreen, MdChevronLeft, MdChevronRight, MdReply } from 'react-icons/md';
+import Modal from '@/components/Modal';
+import Lightbox from 'yet-another-react-lightbox';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
+import Counter from 'yet-another-react-lightbox/plugins/counter';
+import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen';
+import Download from 'yet-another-react-lightbox/plugins/download';
+import Video from 'yet-another-react-lightbox/plugins/video';
+import 'yet-another-react-lightbox/styles.css';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
 const BBCodeEditor = dynamic(() => import('@/components/BBCodeEditor'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
 import { showToast } from '@/components/Toast';
+
+interface DictionaryEntry {
+  id: number;
+  en: string;
+  cn: string;
+  cat: string;
+  count: number;
+  description: string;
+  aliases: string[];
+}
+
+interface UserProfile {
+  id: number;
+  username: string;
+  avatar: string | null;
+  role: string;
+  experience: number;
+  created_at: string;
+  bio: string;
+  banner: string | null;
+}
 
 export default function PicPage() {
   const params = useParams();
@@ -17,7 +46,6 @@ export default function PicPage() {
 
   const [image, setImage] = useState<PonyImage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
   const [error, setError] = useState<Error | null>(null);
   
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
@@ -32,6 +60,93 @@ export default function PicPage() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [isReporting, setIsReporting] = useState(false);
+
+  // --- Lightbox state ---
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+
+  // --- Image navigation state ---
+  const [navHistory, setNavHistory] = useState<number[]>([]);
+  const [currentNavIndex, setCurrentNavIndex] = useState(-1);
+
+  // --- Tag info modal state ---
+  const [tagInfoModal, setTagInfoModal] = useState<{ open: boolean; tag: string; data: DictionaryEntry | null; loading: boolean }>({
+    open: false, tag: '', data: null, loading: false
+  });
+
+  // --- Uploader profile popover state ---
+  const [profilePreview, setProfilePreview] = useState<{ open: boolean; loading: boolean; user: UserProfile | null }>({
+    open: false, loading: false, user: null
+  });
+
+  // --- Comment reply state ---
+  const [replyTo, setReplyTo] = useState<{ id: number; username: string; body: string } | null>(null);
+
+  const tokenRef = useRef<string | null>(null);
+
+  // Load token once
+  useEffect(() => {
+    try {
+      const userInfoStr = localStorage.getItem('user_info');
+      if (userInfoStr) {
+        const userInfo = JSON.parse(userInfoStr);
+        tokenRef.current = userInfo.token || null;
+      }
+    } catch {}
+  }, []);
+
+  // Track navigation context from sessionStorage
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('picpony_nav_history');
+      if (stored) {
+        const ids: number[] = JSON.parse(stored);
+        const currentIdNum = Number(id);
+        const idx = ids.indexOf(currentIdNum);
+        if (idx !== -1) {
+          setNavHistory(ids);
+          setCurrentNavIndex(idx);
+        }
+      }
+    } catch {}
+  }, [id]);
+
+  // Save current image ID to navigation history
+  useEffect(() => {
+    if (image) {
+      try {
+        const stored = sessionStorage.getItem('picpony_nav_history');
+        let ids: number[] = stored ? JSON.parse(stored) : [];
+        const currentIdNum = image.id;
+        if (!ids.includes(currentIdNum)) {
+          ids.push(currentIdNum);
+          if (ids.length > 200) ids = ids.slice(-200);
+          sessionStorage.setItem('picpony_nav_history', JSON.stringify(ids));
+        }
+        const idx = ids.indexOf(currentIdNum);
+        setCurrentNavIndex(idx);
+        setNavHistory(ids);
+      } catch {}
+    }
+  }, [image?.id]);
+
+  // Keyboard shortcuts (for detail page only - YARL handles its own)
+  useEffect(() => {
+    if (isLightboxOpen) return;
+    if (tagInfoModal.open) return;
+    if (isReportModalOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isShareOpen) setIsShareOpen(false);
+        if (profilePreview.open) setProfilePreview({ open: false, loading: false, user: null });
+        if (replyTo) setReplyTo(null);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLightboxOpen, tagInfoModal.open, isReportModalOpen, isShareOpen, profilePreview.open, replyTo]);
 
   const fetchComments = async () => {
     try {
@@ -96,56 +211,80 @@ export default function PicPage() {
     };
   }, [id]);
 
-  if (isLoading) {
-    return (
-    <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-pulse">
-      <div className="flex flex-col">
-          <div className="p-4 sm:p-6 bg-transparent">
-            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-4"></div>
-            <div className="flex gap-4">
-              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
-              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
-              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
-            </div>
-          </div>
-          <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
-            <div className="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-lg absolute inset-4"></div>
-          </div>
-          <div className="p-4 sm:p-6 flex flex-col bg-transparent">
-            <div className="max-w-5xl mx-auto w-full space-y-6">
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
-              <div className="h-4 bg-slate-200 rounded w-full"></div>
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // --- Lightbox handlers ---
+  const handleOpenLightbox = useCallback(() => {
+    setIsLightboxOpen(true);
+  }, []);
 
-  if (error || !image) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-16 text-center">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">加载失败</h2>
-        <p className="text-slate-600 dark:text-slate-400 mb-6">图片可能不存在</p>
-        <button 
-          onClick={() => router.back()}
-          className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          返回上一页
-        </button>
-      </div>
-    );
-  }
+  const handleCloseLightbox = useCallback(() => {
+    setIsLightboxOpen(false);
+  }, []);
 
-  const artists = image.tags
-    .filter(tag => tag.startsWith('artist:'))
-    .map(tag => tag.replace('artist:', ''));
+  // --- Navigation handlers ---
+  const handleNavigate = useCallback((direction: number) => {
+    const newIndex = currentNavIndex + direction;
+    if (newIndex >= 0 && newIndex < navHistory.length) {
+      const targetId = navHistory[newIndex];
+      if (targetId !== Number(id)) {
+        router.push(`/pic/${targetId}`);
+      }
+    } else {
+      showToast(direction > 0 ? '已是最后一张' : '已是第一张', 'info');
+    }
+  }, [currentNavIndex, navHistory, id, router]);
 
-  const ocs = image.tags
-    .filter(tag => tag.startsWith('oc:'))
-    .map(tag => tag.replace('oc:', ''));
+  // --- Tag info modal ---
+  const handleTagClick = async (tag: string) => {
+    setTagInfoModal({ open: true, tag, data: null, loading: true });
+    try {
+      const token = tokenRef.current;
+      if (token) {
+        const res = await api.getDictionary(token, {
+          keyword: tag,
+          limit: 5
+        });
+        if (res.success && res.tags) {
+          const match = res.tags.find((t: DictionaryEntry) => t.en.toLowerCase() === tag.toLowerCase());
+          setTagInfoModal(prev => ({ ...prev, data: match || null, loading: false }));
+        } else {
+          setTagInfoModal(prev => ({ ...prev, data: null, loading: false }));
+        }
+      } else {
+        setTagInfoModal(prev => ({ ...prev, data: null, loading: false }));
+      }
+    } catch {
+      setTagInfoModal(prev => ({ ...prev, data: null, loading: false }));
+    }
+  };
 
+  // --- Uploader profile ---
+  const handleUploaderClick = async () => {
+    if (!image?.uploader || image.uploader === '匿名用户') return;
+    setProfilePreview({ open: true, loading: true, user: null });
+    try {
+      const res = await fetch(`https://picpony.top/api.php?action=get_user_profile&username=${encodeURIComponent(image.uploader)}`);
+      const data = await res.json();
+      if (data.success && data.profile) {
+        setProfilePreview({ open: true, loading: false, user: data.profile });
+      } else {
+        setProfilePreview({ open: true, loading: false, user: null });
+      }
+    } catch {
+      setProfilePreview({ open: true, loading: false, user: null });
+    }
+  };
+
+  // --- Comment reply ---
+  const handleReply = (comment: Comment) => {
+    setReplyTo({ id: comment.id, username: comment.username, body: comment.body });
+    window.scrollTo({ top: document.getElementById('comment-editor-area')?.offsetTop || 0, behavior: 'smooth' });
+  };
+
+  const handleCancelReply = () => {
+    setReplyTo(null);
+  };
+
+  // --- Fave toggle ---
   const handleToggleFave = async () => {
     let token = null;
     try {
@@ -185,6 +324,7 @@ export default function PicPage() {
     }
   };
 
+  // --- Post comment ---
   const handlePostComment = async () => {
     if (!newComment.trim()) return;
 
@@ -206,12 +346,14 @@ export default function PicPage() {
 
     setIsSubmittingComment(true);
     try {
-      const res = await api.postComment(token, Number(id), newComment);
+      const replyPrefix = replyTo ? `@${replyTo.username} ` : '';
+      const res = await api.postComment(token, Number(id), replyPrefix + newComment);
       const data = await res.json();
       
       if (data.success) {
         showToast('评论发送成功', 'success');
         setNewComment('');
+        setReplyTo(null);
         await fetchComments();
       } else {
         showToast(data.message || '发送失败', 'error');
@@ -224,15 +366,16 @@ export default function PicPage() {
     }
   };
 
+  // --- Download ---
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(image.representations.full);
+      const response = await fetch(image!.representations.full);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const fileName = image.representations.full.split('/').pop() || `image-${image.id}`;
+      const fileName = image!.representations.full.split('/').pop() || `image-${image!.id}`;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
@@ -240,10 +383,11 @@ export default function PicPage() {
       document.body.removeChild(a);
     } catch (error) {
       console.error('Download failed:', error);
-      window.open(image.representations.full, '_blank');
+      window.open(image!.representations.full, '_blank');
     }
   };
 
+  // --- Report ---
   const handleReport = async () => {
     if (!reportReason.trim()) {
       showToast('请填写举报原因', 'error');
@@ -277,10 +421,119 @@ export default function PicPage() {
     }
   };
 
+  // --- Helpers ---
+  const getImageFormat = (url: string): string => {
+    const lower = url.toLowerCase();
+    if (lower.endsWith('.webm')) return 'WEBM';
+    if (lower.endsWith('.png')) return 'PNG';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'JPEG';
+    if (lower.endsWith('.gif')) return 'GIF';
+    if (lower.endsWith('.webp')) return 'WEBP';
+    if (lower.endsWith('.svg')) return 'SVG';
+    return '未知';
+  };
+
+  // Build YARL slides array
+  const yarlSlides = image
+    ? (image.representations.full.endsWith('.webm')
+        ? [{
+            type: 'video' as const,
+            sources: [{ src: image.representations.full, type: 'video/webm' }],
+            autoPlay: true,
+            controls: true,
+            loop: true,
+          }]
+        : [{
+            src: image.representations.full,
+            alt: image.name || `Image ${image.id}`,
+            width: image.width,
+            height: image.height,
+            download: {
+              url: image.representations.full,
+              filename: `image-${image.id}.${getImageFormat(image.representations.full).toLowerCase()}`,
+            },
+          }])
+    : [];
+
+  const zoomPlugin = Zoom;
+  const counterPlugin = Counter;
+  const fullscreenPlugin = Fullscreen;
+  const downloadPlugin = Download;
+  const videoPlugin = Video;
+
+  // --- Loading skeleton ---
+  if (isLoading) {
+    return (
+    <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-pulse">
+      <div className="flex flex-col">
+          <div className="p-4 sm:p-6 bg-transparent">
+            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-4"></div>
+            <div className="flex gap-4">
+              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+            </div>
+          </div>
+          <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
+            <div className="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-lg absolute inset-4"></div>
+          </div>
+          <div className="p-4 sm:p-6 flex flex-col bg-transparent">
+            <div className="max-w-5xl mx-auto w-full space-y-6">
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+              <div className="h-4 bg-slate-200 rounded w-full"></div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Error state ---
+  if (error || !image) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center">
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">加载失败</h2>
+        <p className="text-slate-600 dark:text-slate-400 mb-6">图片可能不存在或已被删除</p>
+        <div className="flex gap-4 justify-center">
+          <button 
+            onClick={() => router.back()}
+            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            返回上一页
+          </button>
+          {navHistory.length > 0 && currentNavIndex > 0 && (
+            <button
+              onClick={() => handleNavigate(-1)}
+              className="px-6 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+            >
+              上一张
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const artists = image.tags
+    .filter(tag => tag.startsWith('artist:'))
+    .map(tag => tag.replace('artist:', ''));
+
+  const ocs = image.tags
+    .filter(tag => tag.startsWith('oc:'))
+    .map(tag => tag.replace('oc:', ''));
+
+  const regularTags = image.tags
+    .filter(tag => !tag.startsWith('artist:') && !tag.startsWith('oc:'))
+    .filter(tag => !tag.startsWith('spoiler:') && !tag.startsWith('suggestion:'));
+
+  const imageFormat = getImageFormat(image.representations.full);
+
   return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-fade-in">
       <div className="bg-transparent flex flex-col rounded-xl">
         
+        {/* === Title & Meta === */}
         <div className="p-4 sm:p-6 bg-transparent">
           <div className="flex items-start justify-between gap-4 mb-4">
             <h1 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100 break-all text-left">
@@ -296,9 +549,18 @@ export default function PicPage() {
                 <MdSdStorage size={18} className="text-slate-400" />
                 <span>{(image.size / 1024 / 1024).toFixed(2)} MB</span>
               </div>
-            <div title="上传者" className="flex items-center gap-1.5 cursor-pointer">
+            <div title="格式" className="flex items-center gap-1.5 cursor-pointer">
+                <span className="px-1.5 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded border border-slate-200 dark:border-slate-700">
+                  {imageFormat}
+                </span>
+              </div>
+            <div 
+              title="上传者" 
+              className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors relative"
+              onClick={handleUploaderClick}
+            >
                 <MdPerson size={18} className="text-slate-400" />
-                <span className="truncate max-w-[150px]">{image.uploader || '匿名用户'}</span>
+                <span className="truncate max-w-[150px] underline decoration-dotted underline-offset-2">{image.uploader || '匿名用户'}</span>
               </div>
             <div title="评分" className="flex items-center gap-1.5 cursor-pointer">
                 <MdStar size={18} className="text-slate-400" />
@@ -319,6 +581,7 @@ export default function PicPage() {
           </div>
         </div>
 
+        {/* === Image Display (clickable to open lightbox) === */}
         <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
           {image.representations.full.endsWith('.webm') ? (
             <video
@@ -326,22 +589,30 @@ export default function PicPage() {
               controls
               autoPlay
               loop
-              className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              className="max-w-full max-h-[80vh] object-contain rounded-lg cursor-pointer"
+              onClick={() => handleOpenLightbox()}
             />
           ) : (
-            <FadeInImage
-              src={image.representations.large || image.representations.full}
-              alt={image.name || `Image ${image.id}`}
-              width={image.width}
-              height={image.height}
-              className="max-w-full max-h-[80vh] object-contain rounded-lg"
-            />
+            <div className="relative group cursor-pointer" onClick={() => handleOpenLightbox()}>
+              <FadeInImage
+                src={image.representations.large || image.representations.full}
+                alt={image.name || `Image ${image.id}`}
+                width={image.width}
+                height={image.height}
+                className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg flex items-center justify-center">
+                <MdFullscreen size={32} className="text-white/0 group-hover:text-white/70 transition-all" />
+              </div>
+            </div>
           )}
         </div>
 
+        {/* === Detail Info === */}
         <div className="p-4 sm:p-6 flex flex-col bg-transparent">
           <div className="max-w-5xl mx-auto w-full space-y-6">
             
+            {/* Votes */}
             {image.upvotes !== undefined && image.downvotes !== undefined && (
               <div className="mb-6">
                 <div className="flex justify-between text-sm font-medium mb-1.5">
@@ -371,7 +642,32 @@ export default function PicPage() {
               </div>
             )}
 
+            {/* Action buttons */}
             <div className="flex items-center justify-center gap-3 mb-2">
+              {/* Navigation */}
+              {navHistory.length > 0 && (
+                <>
+                  <button
+                    onClick={() => handleNavigate(-1)}
+                    disabled={currentNavIndex <= 0}
+                    title="上一张 (←)"
+                    className="p-2.5 rounded-full transition-colors duration-200 border text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <MdChevronLeft size={20} />
+                  </button>
+                  <button
+                    onClick={() => handleNavigate(1)}
+                    disabled={currentNavIndex >= navHistory.length - 1}
+                    title="下一张 (→)"
+                    className="p-2.5 rounded-full transition-colors duration-200 border text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <MdChevronRight size={20} />
+                  </button>
+                </>
+              )}
+
+              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
+
               <button
                 onClick={handleToggleFave}
                 disabled={isFaveLoading}
@@ -426,6 +722,7 @@ export default function PicPage() {
               </button>
             </div>
 
+            {/* Description */}
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">简介</h3>
               {image.description ? (
@@ -451,6 +748,7 @@ export default function PicPage() {
               )}
             </div>
 
+            {/* Source URL */}
             {image.source_url && (
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">来源</h3>
@@ -465,6 +763,7 @@ export default function PicPage() {
               </div>
             )}
 
+            {/* Artists */}
             {artists.length > 0 && (
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">艺术家</h3>
@@ -472,7 +771,8 @@ export default function PicPage() {
                   {artists.map((artist, index) => (
                     <span 
                       key={index}
-                      className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-medium rounded-lg border border-blue-100 dark:border-blue-800/30"
+                      onClick={() => router.push(`/?search=${encodeURIComponent(`artist:${artist}`)}`)}
+                      className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-medium rounded-lg border border-blue-100 dark:border-blue-800/30 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                     >
                       {artist}
                     </span>
@@ -481,6 +781,7 @@ export default function PicPage() {
               </div>
             )}
 
+            {/* OCs */}
             {ocs.length > 0 && (
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">图中包含的 OC</h3>
@@ -488,7 +789,8 @@ export default function PicPage() {
                   {ocs.map((oc, index) => (
                     <span 
                       key={index}
-                      className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-sm font-medium rounded-lg border border-purple-100 dark:border-purple-800/30"
+                      onClick={() => router.push(`/?search=${encodeURIComponent(`oc:${oc}`)}`)}
+                      className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-sm font-medium rounded-lg border border-purple-100 dark:border-purple-800/30 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
                     >
                       {oc}
                     </span>
@@ -497,14 +799,16 @@ export default function PicPage() {
               </div>
             )}
 
+            {/* Tags */}
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">标签 (Tag)</h3>
               <div className="flex flex-wrap gap-2">
-                {image.tags.map((tag: string, index: number) => (
+                {regularTags.map((tag: string, index: number) => (
                   <span 
                     key={index}
-                    onClick={() => router.push(`/?search=${encodeURIComponent(tag)}`)}
-                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    onClick={() => handleTagClick(tag)}
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer border border-transparent hover:border-primary/30"
+                    title="点击查看词库信息"
                   >
                     {tag}
                   </span>
@@ -512,6 +816,7 @@ export default function PicPage() {
               </div>
             </div>
 
+            {/* Action buttons */}
             <div className="pt-6 flex flex-col sm:flex-row gap-3">
               <button
                 onClick={handleDownload}
@@ -531,18 +836,34 @@ export default function PicPage() {
               </a>
             </div>
 
+            {/* === Comments Section === */}
             <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-700">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
                 <MdChatBubbleOutline className="text-primary" size={24} />
                 评论 ({comments.length})
               </h3>
               
-              <div className="mb-8 flex gap-3">
+              {/* Comment editor */}
+              <div className="mb-8 flex gap-3" id="comment-editor-area">
                 <div className="flex-1">
+                  {/* Reply indicator */}
+                  {replyTo && (
+                    <div className="mb-2 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <MdReply size={14} />
+                      <span>回复 <strong className="text-primary">{replyTo.username}</strong>：</span>
+                      <span className="truncate flex-1 text-xs opacity-70">{replyTo.body.slice(0, 80)}{replyTo.body.length > 80 ? '...' : ''}</span>
+                      <button
+                        onClick={handleCancelReply}
+                        className="text-red-400 hover:text-red-600 ml-auto"
+                      >
+                        <MdClose size={16} />
+                      </button>
+                    </div>
+                  )}
                   <BBCodeEditor
                     value={newComment}
                     onChange={setNewComment}
-                    placeholder="写下你的评论..."
+                    placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论..."}
                     disabled={isSubmittingComment}
                   />
                   <div className="mt-2 flex justify-end">
@@ -558,7 +879,7 @@ export default function PicPage() {
                         </>
                       ) : (
                         <>
-                          发送评论
+                          {replyTo ? '发送回复' : '发送评论'}
                           <MdSend size={18} />
                         </>
                       )}
@@ -567,6 +888,7 @@ export default function PicPage() {
                 </div>
               </div>
 
+              {/* Comments list */}
               {isLoadingComments ? (
                 <div className="flex justify-center py-8">
                   <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -603,15 +925,24 @@ export default function PicPage() {
                               </span>
                             )}
                           </div>
-                          <span className="text-xs text-slate-500">
-                            {new Date(comment.created_at).toLocaleString('zh-CN', {
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleReply(comment)}
+                              title="回复"
+                              className="text-slate-400 hover:text-primary transition-colors p-1 rounded"
+                            >
+                              <MdReply size={14} />
+                            </button>
+                            <span className="text-xs text-slate-500">
+                              {new Date(comment.created_at).toLocaleString('zh-CN', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
                         </div>
                         <div className="text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap break-words">
                           <RichTextRenderer content={comment.body} />
@@ -631,41 +962,181 @@ export default function PicPage() {
         </div>
       </div>
 
-      {/* Report Modal */}
-      {isReportModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => { if (!isReporting) { setIsReportModalOpen(false); setReportReason(''); } }}>
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">举报图片</h3>
-              <button onClick={() => { setIsReportModalOpen(false); setReportReason(''); }} disabled={isReporting}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                <MdClose size={24} />
-              </button>
-            </div>
-            <div className="px-6 pb-6">
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                请描述违规原因，管理员将会审核处理。
-              </p>
-              <textarea
-                value={reportReason}
-                onChange={(e) => setReportReason(e.target.value)}
-                placeholder="请详细描述违规原因..."
-                rows={4}
-                disabled={isReporting}
-                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none text-sm"
-              />
-              <div className="flex justify-end gap-3 mt-4">
-                <button onClick={() => { setIsReportModalOpen(false); setReportReason(''); }} disabled={isReporting}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
-                <button onClick={handleReport} disabled={isReporting || !reportReason.trim()}
-                  className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg disabled:opacity-50">
-                  {isReporting ? '提交中...' : '提交举报'}
-                </button>
+      {/* ========== YARL Fullscreen Lightbox (replaces custom lightbox) ========== */}
+      <Lightbox
+        open={isLightboxOpen}
+        close={handleCloseLightbox}
+        slides={yarlSlides}
+        plugins={[zoomPlugin, counterPlugin, fullscreenPlugin, downloadPlugin, videoPlugin]}
+        zoom={{
+          maxZoomPixelRatio: 3,
+          scrollToZoom: true,
+        }}
+        counter={{ separator: ' / ' }}
+        labels={{
+          'Close': '关闭 (Esc)',
+          'Download': '下载',
+          'Zoom in': '放大',
+          'Zoom out': '缩小',
+          'Enter Fullscreen': '全屏',
+          'Exit Fullscreen': '退出全屏',
+        }}
+        carousel={{
+          finite: true,
+        }}
+        download={{
+          download: ({ slide, saveAs }) => {
+            const s = slide as unknown as Record<string, unknown>;
+            const dl = s.download;
+            if (dl && typeof dl === 'object' && 'url' in dl) {
+              saveAs((dl as { url: string; filename?: string }).url, (dl as { url: string; filename?: string }).filename);
+            } else if (typeof s.src === 'string') {
+              saveAs(s.src);
+            }
+          }
+        }}
+      />
+
+      {/* ========== Tag Info Modal ========== */}
+      <Modal
+        isOpen={tagInfoModal.open}
+        onClose={() => setTagInfoModal({ open: false, tag: '', data: null, loading: false })}
+        title={tagInfoModal.tag}
+        maxWidth="max-w-md"
+        zIndex={9998}
+      >
+        {tagInfoModal.loading ? (
+          <div className="flex items-center justify-center py-8 gap-2 text-slate-500">
+            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <span>查询词库中...</span>
+          </div>
+        ) : tagInfoModal.data ? (
+          <div className="space-y-3">
+            {tagInfoModal.data.cn && (
+              <div>
+                <span className="text-xs text-slate-400 uppercase tracking-wider">中文翻译</span>
+                <p className="text-slate-700 dark:text-slate-300 mt-1 font-medium">{tagInfoModal.data.cn}</p>
+              </div>
+            )}
+            {tagInfoModal.data.description && (
+              <div>
+                <span className="text-xs text-slate-400 uppercase tracking-wider">标签简介</span>
+                <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm">{tagInfoModal.data.description}</p>
+              </div>
+            )}
+            {tagInfoModal.data.cat && (
+              <div>
+                <span className="text-xs text-slate-400 uppercase tracking-wider">分类</span>
+                <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm">{tagInfoModal.data.cat}</p>
+              </div>
+            )}
+            {tagInfoModal.data.aliases && tagInfoModal.data.aliases.length > 0 && (
+              <div>
+                <span className="text-xs text-slate-400 uppercase tracking-wider">别名</span>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {tagInfoModal.data.aliases.map((alias, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs rounded">{alias}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-slate-500 dark:text-slate-400">
+            <p>词库中暂无此标签的详细信息</p>
+            <p className="text-xs mt-2">登录后可以查询更多标签信息</p>
+          </div>
+        )}
+        <div className="flex gap-3 mt-4">
+          <button
+            onClick={() => { router.push(`/?search=${encodeURIComponent(tagInfoModal.tag)}`); setTagInfoModal(prev => ({ ...prev, open: false })); }}
+            className="flex-1 px-3 py-2 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+          >
+            搜索此标签
+          </button>
+        </div>
+      </Modal>
+
+      {/* ========== Uploader Profile Modal ========== */}
+      <Modal
+        isOpen={profilePreview.open}
+        onClose={() => setProfilePreview({ open: false, loading: false, user: null })}
+        title="上传者信息"
+        maxWidth="max-w-sm"
+        zIndex={100}
+      >
+        {profilePreview.loading ? (
+          <div className="flex items-center justify-center py-8 gap-2 text-slate-500">
+            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <span>加载中...</span>
+          </div>
+        ) : profilePreview.user ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              {profilePreview.user.avatar ? (
+                <img src={`https://picpony.top/${profilePreview.user.avatar}`} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-slate-200 dark:border-slate-600" />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                  {profilePreview.user.username.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <p className="font-semibold text-slate-800 dark:text-slate-200">{profilePreview.user.username}</p>
+                <p className="text-xs text-slate-500">
+                  {profilePreview.user.role === 'admin' ? '管理员' : profilePreview.user.role === 'moderator' ? '版主' : '用户'}
+                  {' · '}Lv.{Math.floor(profilePreview.user.experience / 100) + 1}
+                </p>
               </div>
             </div>
+            {profilePreview.user.bio && (
+              <p className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg">
+                {profilePreview.user.bio}
+              </p>
+            )}
+            {profilePreview.user.id && (
+              <button
+                onClick={() => { router.push(`/user/${profilePreview.user!.id}`); setProfilePreview({ open: false, loading: false, user: null }); }}
+                className="w-full px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                查看完整主页
+              </button>
+            )}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-slate-500 text-center py-4">无法加载用户信息</p>
+        )}
+      </Modal>
+
+      {/* ========== Report Modal ========== */}
+      <Modal
+        isOpen={isReportModalOpen}
+        onClose={() => { if (!isReporting) { setIsReportModalOpen(false); setReportReason(''); } }}
+        title="举报图片"
+        zIndex={100}
+        closeOnOverlayClick={!isReporting}
+        footer={
+          <>
+            <button onClick={() => { setIsReportModalOpen(false); setReportReason(''); }} disabled={isReporting}
+              className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+            <button onClick={handleReport} disabled={isReporting || !reportReason.trim()}
+              className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg disabled:opacity-50">
+              {isReporting ? '提交中...' : '提交举报'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+          请描述违规原因，管理员将会审核处理。
+        </p>
+        <textarea
+          value={reportReason}
+          onChange={(e) => setReportReason(e.target.value)}
+          placeholder="请详细描述违规原因..."
+          rows={4}
+          disabled={isReporting}
+          className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none text-sm"
+        />
+      </Modal>
     </div>
   );
 }
