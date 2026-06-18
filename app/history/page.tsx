@@ -134,7 +134,6 @@ export default function HistoryPage() {
     <div className="max-w-4xl mx-auto px-4 py-8 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-          <MdHistory size={28} className="text-primary" />
           浏览历史
         </h1>
         {history.length > 0 && (
