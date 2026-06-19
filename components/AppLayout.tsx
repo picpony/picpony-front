@@ -129,7 +129,7 @@ function TabNavBar() {
 
   return (
     <div className="sticky bottom-0 left-0 right-0 z-50 flex items-center justify-center py-3">
-      <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl shadow-lg">
+      <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl shadow-lg shadow-black/10 dark:shadow-black/30">
         <button
           onClick={() => switchTab('gallery')}
           className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -619,9 +619,11 @@ export default function AppLayout({
               </div>
             </div>
           </footer>
-          <Suspense fallback={null}>
-            <TabNavBar />
-          </Suspense>
+          {pathname === '/' && (
+            <Suspense fallback={null}>
+              <TabNavBar />
+            </Suspense>
+          )}
         </main>
       </div>
       <AnnouncementModal />

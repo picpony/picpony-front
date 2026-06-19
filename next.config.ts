@@ -18,6 +18,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: '/forum',
+        destination: '/?tab=forum',
+        permanent: false,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

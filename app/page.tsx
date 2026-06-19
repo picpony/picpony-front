@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useRef } from "react";
 import {
-  MdErrorOutline, MdArrowBack, MdRefresh, MdComment, MdVisibility, MdThumbUp, MdAdd,
+  MdErrorOutline, MdArrowBack, MdAdd,
 } from "react-icons/md";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api, PonyImage, applyCdn, ForumPost } from "@/lib/api";
@@ -11,6 +11,7 @@ import MasonryGrid from "@/components/MasonryGrid";
 import ImageGridSkeleton from "@/components/ImageGridSkeleton";
 import Pagination from "@/components/Pagination";
 import ErrorRetry from "@/components/ErrorRetry";
+import ForumPostList from "@/components/ForumPostList";
 
 type HomeTab = 'gallery' | 'forum';
 
@@ -118,35 +119,6 @@ function ForumTab() {
     return () => { isMounted = false; };
   }, [page, retryCount]);
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3, 4, 5].map(i => (
-          <div key={i} className="bg-white dark:bg-transparent p-4 rounded-xl animate-pulse flex gap-4">
-            <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full flex-shrink-0"></div>
-            <div className="flex-1 space-y-3">
-              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[30vh] text-slate-500 dark:text-slate-400 px-4 text-center">
-        <MdErrorOutline size={40} className="mb-3" />
-        <p className="text-sm mb-4">{error.message}</p>
-        <button onClick={() => { setIsLoading(true); setError(null); setRetryCount(c => c + 1); }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors cursor-pointer text-sm">
-          <MdRefresh size={18} /> 重试
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
@@ -156,49 +128,23 @@ function ForumTab() {
           <MdAdd size={16} /> 发帖
         </button>
       </div>
-
-      <div className="space-y-3 mb-6">
-        {posts.length === 0 ? (
-          <div className="text-center py-10 text-slate-500 dark:text-slate-400 bg-white dark:bg-transparent rounded-xl text-sm">暂无帖子</div>
-        ) : (
-          posts.map(post => (
-            <div key={post.id}
-              onClick={() => router.push(`/forum/${post.id}`)}
-              className="bg-white dark:bg-transparent p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors duration-200 cursor-pointer">
-              <div className="flex gap-3">
-                <img src={post.avatar ? `https://picpony.top/${post.avatar}` : '/img/default-avatar.png'}
-                  alt={post.username} className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600 flex-shrink-0 mt-0.5"
-                  onError={(e) => { (e.target as HTMLImageElement).src = '/img/default-avatar.png'; }} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    {post.is_pinned === 1 && <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-xs font-medium rounded">置顶</span>}
-                    <h3 className="font-semibold text-slate-800 dark:text-slate-100 truncate text-sm">{post.title}</h3>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{post.username}</span>
-                    <span>{new Date(post.created_at).toLocaleDateString()}</span>
-                    <span className="flex items-center gap-0.5"><MdVisibility size={13} />{post.views}</span>
-                    <span className="flex items-center gap-0.5"><MdComment size={13} />{post.reply_count}</span>
-                    <span className="flex items-center gap-0.5"><MdThumbUp size={13} />{post.like_count}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2">
-          <button onClick={() => { if (page > 1) { setIsLoading(true); setError(null); setPage(page - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); } }}
-            disabled={page === 1}
-            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">上一页</button>
-          <span className="text-sm text-slate-500 px-2">{page} / {totalPages}</span>
-          <button onClick={() => { if (page < totalPages) { setIsLoading(true); setError(null); setPage(page + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); } }}
-            disabled={page === totalPages}
-            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">下一页</button>
-        </div>
-      )}
+      <ForumPostList
+        posts={posts}
+        page={page}
+        totalPages={totalPages}
+        isLoading={isLoading}
+        error={error}
+        onRetry={() => { setIsLoading(true); setError(null); setRetryCount(c => c + 1); }}
+        onPageChange={(newPage) => {
+          if (newPage >= 1 && newPage <= totalPages) {
+            setIsLoading(true);
+            setError(null);
+            setPage(newPage);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }}
+        onPostClick={(postId) => router.push(`/forum/${postId}`)}
+      />
     </div>
   );
 }
