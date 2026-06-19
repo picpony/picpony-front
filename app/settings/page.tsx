@@ -33,13 +33,18 @@ function calcAge(birthday: string): number {
   return age;
 }
 
-function lsGet(key: string, def: string): string { return localStorage.getItem(key) ?? def; }
+function lsGet(key: string, def: string): string {
+  if (typeof window === 'undefined') return def;
+  return localStorage.getItem(key) ?? def;
+}
 function lsBool(key: string, def: boolean): boolean {
+  if (typeof window === 'undefined') return def;
   const v = localStorage.getItem(key);
   if (v === null) return def;
   return v === 'true';
 }
 function lsSet(key: string, val: string | boolean) {
+  if (typeof window === 'undefined') return;
   localStorage.setItem(key, String(val));
 }
 
@@ -122,6 +127,9 @@ export default function SettingsPage() {
 
   const [userToken, setUserToken] = useState('');
   const [isDeveloper, setIsDeveloper] = useState(false);
+
+  const [avatarLoaded, setAvatarLoaded] = useState(false);
+  const [bannerLoaded, setBannerLoaded] = useState(false);
 
   const closeModal = () => {
     if (isLoading) return;
@@ -623,7 +631,21 @@ export default function SettingsPage() {
             <div className="flex items-center gap-4">
               <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
                 {currentAvatar ? (
-                  <img src={currentAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                  <>
+                    {!avatarLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
+                        <MdPerson size={24} />
+                      </div>
+                    )}
+                    <img
+                      key={currentAvatar}
+                      src={currentAvatar}
+                      alt="Avatar"
+                      className={`w-full h-full object-cover ${avatarLoaded ? '' : 'opacity-0'}`}
+                      onLoad={() => setAvatarLoaded(true)}
+                      onError={() => setAvatarLoaded(false)}
+                    />
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-400 text-2xl font-bold">
                     {currentUsername ? currentUsername.charAt(0).toUpperCase() : '?'}
@@ -652,7 +674,21 @@ export default function SettingsPage() {
             <div className="flex items-center gap-4">
               <div className="relative w-24 h-14 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
                 {currentBanner ? (
-                  <img src={currentBanner.startsWith('http') ? currentBanner : `https://picpony.top/${currentBanner}`} alt="Banner" className="w-full h-full object-cover" />
+                  <>
+                    {!bannerLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
+                        <MdImage size={20} />
+                      </div>
+                    )}
+                    <img
+                      key={currentBanner}
+                      src={currentBanner.startsWith('http') ? currentBanner : `https://picpony.top/${currentBanner}`}
+                      alt="Banner"
+                      className={`w-full h-full object-cover ${bannerLoaded ? '' : 'opacity-0'}`}
+                      onLoad={() => setBannerLoaded(true)}
+                      onError={() => setBannerLoaded(true)}
+                    />
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-400">
                     <MdImage size={20} />

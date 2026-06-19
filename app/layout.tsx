@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { cookies } from "next/headers";
+import Script from "next/script";
 import AppLayout from "@/components/AppLayout";
 import NextTopLoader from 'nextjs-toploader';
 import { ToastContainer } from "@/components/Toast";
@@ -40,11 +41,9 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `window.recaptchaOptions = { useRecaptchaNet: true };`,
-          }}
-        />
+        <Script id="recaptcha-options" strategy="beforeInteractive">
+          {`window.recaptchaOptions = { useRecaptchaNet: true };`}
+        </Script>
       </head>
       <body className="h-full flex flex-col overflow-hidden">
         <LoadingOverlay />
