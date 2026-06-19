@@ -72,6 +72,8 @@ export default function FeaturedBanner() {
   }
 
   const fullUrl = featured.representations?.full || featured.view_url || '';
+  const imgFormat = (featured.format || '').toLowerCase();
+  const isVideo = imgFormat === 'webm' || imgFormat === 'mp4';
   const aspectRatio = (featured.width || 1) / (featured.height || 1);
   const isWideAspect = aspectRatio > 1.5;
   const paddingBottom = isWideAspect ? 'min(45vh, 420px)' : 'min(55vh, 500px)';
@@ -86,14 +88,25 @@ export default function FeaturedBanner() {
 
       <div className="relative w-full overflow-hidden rounded-xl" style={{ paddingBottom }}>
         <div className="absolute inset-0">
-          <FadeInImage
-            src={fullUrl}
-            alt={featured.name || `Featured Image ${featured.id}`}
-            width={featured.width || 0}
-            height={featured.height || 0}
-            className="w-full h-full object-cover"
-            sizes="100vw"
-          />
+          {isVideo ? (
+            <video
+              src={fullUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <FadeInImage
+              src={fullUrl}
+              alt={featured.name || `Featured Image ${featured.id}`}
+              width={featured.width || 0}
+              height={featured.height || 0}
+              className="w-full h-full object-cover"
+              sizes="100vw"
+            />
+          )}
         </div>
       </div>
 

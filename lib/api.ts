@@ -15,6 +15,7 @@ export interface PonyImage {
   height: number;
   aspect_ratio: number;
   representations: ImageRepresentation;
+  format?: string;
   name: string;
   view_url: string;
   source_url: string | null;
