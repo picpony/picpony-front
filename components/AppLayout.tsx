@@ -3,7 +3,7 @@
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdImageSearch, MdCollectionsBookmark, MdForum, MdDarkMode, MdLightMode, MdDashboard, MdHistory } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdImageSearch, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
 const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
@@ -107,6 +107,55 @@ const sidebarButtonClass = (isActive: boolean) =>
       ? 'text-primary bg-primary/10 hover:bg-primary/15'
       : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
   }`;
+
+function TabNavBar() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const currentTab = searchParams.get('tab') || 'gallery';
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+
+  const switchTab = (tab: string) => {
+    if (tab === (currentTab === 'forum' ? 'forum' : 'gallery')) return;
+    setPendingTab(tab);
+    setTimeout(() => {
+      setPendingTab(null);
+      const params = new URLSearchParams(searchParams.toString());
+      if (tab === 'gallery') params.delete('tab');
+      else params.set('tab', tab);
+      const qs = params.toString();
+      router.push(qs ? `/?${qs}` : '/');
+    }, 200);
+  };
+
+  return (
+    <div className="sticky bottom-0 left-0 right-0 z-50 flex items-center justify-center py-3">
+      <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl shadow-lg">
+        <button
+          onClick={() => switchTab('gallery')}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+            currentTab !== 'forum'
+              ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <MdPhotoLibrary size={18} />
+          <span>图库</span>
+        </button>
+        <button
+          onClick={() => switchTab('forum')}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+            currentTab === 'forum'
+              ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <MdForum size={18} />
+          <span>论坛</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function AppLayout({ 
   children, 
@@ -552,14 +601,6 @@ export default function AppLayout({
               <MdHome size={20} className="shrink-0 mr-3" />
               <span>主页</span>
             </Link>
-            <Link
-              href="/forum"
-              onClick={handleMobileNavigation}
-              className={sidebarButtonClass(pathname.startsWith('/forum'))}
-            >
-              <MdForum size={20} className="shrink-0 mr-3" />
-              <span>论坛</span>
-            </Link>
           </nav>
         </aside>
         
@@ -578,6 +619,9 @@ export default function AppLayout({
               </div>
             </div>
           </footer>
+          <Suspense fallback={null}>
+            <TabNavBar />
+          </Suspense>
         </main>
       </div>
       <AnnouncementModal />
