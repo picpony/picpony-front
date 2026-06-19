@@ -41,6 +41,11 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var d=localStorage.getItem('followSystemPrefersColorScheme'),t;t=d===null||d==='true'?window.matchMedia('(prefers-color-scheme:dark)').matches:localStorage.getItem('darkMode')==='true';t?document.documentElement.classList.add('dark'):document.documentElement.classList.remove('dark')}catch(e){}})();`,
+          }}
+        />
         <Script id="recaptcha-options" strategy="beforeInteractive">
           {`window.recaptchaOptions = { useRecaptchaNet: true };`}
         </Script>
