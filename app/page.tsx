@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect } from "react";
 import {
-  MdErrorOutline, MdArrowBack, MdAdd,
+  MdAdd,
 } from "react-icons/md";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api, PonyImage, applyCdn, ForumPost } from "@/lib/api";
@@ -151,94 +151,26 @@ function ForumTab() {
 
 function HomeContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const search = searchParams.get('search') || undefined;
   const tabParam = searchParams.get('tab');
   const tab: HomeTab = tabParam === 'forum' ? 'forum' : 'gallery';
-  const [customResults, setCustomResults] = useState<PonyImage[] | null>(null);
-
-  useEffect(() => {
-    const handleImageSearchResults = (e: CustomEvent<PonyImage[]>) => setCustomResults(e.detail);
-    window.addEventListener('image_search_results', handleImageSearchResults as EventListener);
-    return () => window.removeEventListener('image_search_results', handleImageSearchResults as EventListener);
-  }, []);
-
-  useEffect(() => {
-    const pendingResults = sessionStorage.getItem('pending_image_search_results');
-    if (pendingResults) {
-      try {
-        const parsedResults = JSON.parse(pendingResults);
-        setTimeout(() => setCustomResults(parsedResults), 0);
-        sessionStorage.removeItem('pending_image_search_results');
-      } catch (e) { console.error('Failed to parse pending search results', e); }
-    }
-  }, []);
-
-  const prevSearchRef = useRef(search);
-  useEffect(() => {
-    if (prevSearchRef.current !== search) {
-      setTimeout(() => setCustomResults(null), 0);
-      prevSearchRef.current = search;
-    }
-  }, [search]);
 
   useEffect(() => { document.title = "主页 - PicPony"; }, []);
-
-  const clearCustomResults = () => setCustomResults(null);
 
   return (
     <>
       <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8">
-        {customResults ? (
-          <CustomImageList images={customResults} onBack={clearCustomResults} />
-        ) : (
-          <div key={tab} className="animate-fade-in">
-            {tab === 'gallery' ? (
-              <>
-                <FeaturedBanner />
-                <ImageList search={search} />
-              </>
-            ) : (
-              <ForumTab />
-            )}
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () => void }) {
-  if (images.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
-        <MdErrorOutline size={48} className="mb-4 text-slate-400 dark:text-slate-500" />
-        <h2 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">没有找到匹配的图片</h2>
-        <button onClick={onBack}
-          className="mt-6 flex items-center px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors cursor-pointer">
-          <MdArrowBack size={20} className="mr-2" />
-          <span>返回主页</span>
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <div className="mb-6 flex items-center justify-between p-4 rounded-xl">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack}
-            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
-            title="返回主页">
-            <MdArrowBack size={20} />
-          </button>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">以图搜图</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">找到 {images.length} 张相似图片</p>
-          </div>
+        <div key={tab} className="animate-fade-in">
+          {tab === 'gallery' ? (
+            <>
+              <FeaturedBanner />
+              <ImageList search={search} />
+            </>
+          ) : (
+            <ForumTab />
+          )}
         </div>
       </div>
-      <MasonryGrid images={images} />
     </>
   );
 }

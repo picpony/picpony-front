@@ -3,11 +3,10 @@
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdImageSearch, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
 const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
-const ImageSearchModal = dynamic(() => import("./ImageSearchModal"), { ssr: false });
 const Modal = dynamic(() => import("./Modal"), { ssr: false });
 import Logo from "./Logo";
 import FadeInImage from "./FadeInImage";
@@ -16,81 +15,23 @@ import { api } from "@/lib/api";
 
 function SearchBar() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
-  const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      const formattedQuery = searchQuery.trim().replace(/，/g, ',');
-      router.push(`/?search=${encodeURIComponent(formattedQuery)}`);
-    } else {
-      router.push('/');
-    }
+    router.push('/search');
   };
 
-  const isExpanded = isFocused || searchQuery.length > 0;
-
   return (
-    <>
-      <form 
-        onSubmit={handleSearch} 
-        className={`flex items-center rounded-md transition-all duration-300 focus-within:bg-white/20
-          ${isExpanded ? 'bg-white/20 px-2 py-1.5 ml-2' : 'bg-transparent p-1.5 ml-0'} 
-          sm:bg-white/10 sm:px-3 sm:py-1.5 sm:ml-4`}
+    <form onSubmit={handleSearch}>
+      <button
+        type="submit"
+        title="搜索"
+        aria-label="搜索"
+        className="rounded-md p-2 text-white hover:bg-white/10 transition-colors cursor-pointer"
       >
-        <label 
-          htmlFor="mobile-search" 
-          className="cursor-pointer sm:cursor-text flex items-center justify-center shrink-0"
-          onClick={() => {
-            if (!isExpanded && window.innerWidth < 640) {
-              setTimeout(() => inputRef.current?.focus(), 10);
-            }
-          }}
-        >
-          <MdSearch size={20} className={`text-white/70 transition-all ${isExpanded ? 'mr-2' : 'mr-0'} sm:mr-2`} />
-        </label>
-        <input
-          id="mobile-search"
-          ref={inputRef}
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholder="搜索..."
-          className={`bg-transparent border-none outline-none text-white placeholder:text-white/50 text-sm transition-all duration-300
-            ${isExpanded ? 'w-32 xs:w-40 opacity-100' : 'w-0 opacity-0'} 
-            sm:w-48 sm:focus:w-64 sm:opacity-100`}
-        />
-        <button
-          type="button"
-          onClick={() => setIsImageSearchOpen(true)}
-          className={`text-white/70 hover:text-white transition-all flex items-center justify-center overflow-hidden shrink-0
-            ${isExpanded ? 'ml-2 w-5 opacity-100' : 'w-0 opacity-0'} 
-            sm:w-5 sm:opacity-100 sm:ml-2`}
-          title="以图搜图"
-        >
-          <MdImageSearch size={20} />
-        </button>
-      </form>
-      <ImageSearchModal 
-        isOpen={isImageSearchOpen} 
-        onClose={() => setIsImageSearchOpen(false)} 
-        onSearchSuccess={(results) => {
-          if (window.location.pathname !== '/') {
-            sessionStorage.setItem('pending_image_search_results', JSON.stringify(results));
-            router.push('/');
-          } else {
-            const event = new CustomEvent('image_search_results', { detail: results });
-            window.dispatchEvent(event);
-          }
-        }}
-      />
-    </>
+        <MdSearch size={24} />
+      </button>
+    </form>
   );
 }
 
@@ -394,14 +335,9 @@ export default function AppLayout({
         >
           <MdMenu size={24} />
         </button>
-        <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex">
+        <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex mr-2">
           <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
         </Link>
-        <div className="flex-1 flex justify-start sm:ml-4 pl-1 sm:pl-0">
-          <Suspense fallback={<div className="w-full max-w-[200px] h-8 bg-white/10 rounded-md animate-pulse"></div>}>
-            <SearchBar />
-          </Suspense>
-        </div>
         <div 
           className="relative"
           ref={dropdownRef}
@@ -412,13 +348,13 @@ export default function AppLayout({
             onClick={toggleDarkMode}
             aria-label={darkMode ? '切换浅色模式' : '切换深色模式'}
             title={darkMode ? '浅色模式' : '深色模式'}
-            className="rounded-md p-2 ml-0.5 text-white hover:bg-white/10 transition-colors"
+            className="rounded-md p-2 ml-2 mr-0.5 text-white hover:bg-white/10 transition-colors"
           >
             {darkMode ? <MdLightMode size={24} /> : <MdDarkMode size={24} />}
           </button>
           {isDarkDropdownOpen && (
             <div 
-              className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-[60] animate-fade-in"
+              className="absolute left-0 top-full mt-1 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-[60] animate-fade-in"
               onMouseEnter={handleDropdownMouseEnter}
               onMouseLeave={handleDropdownMouseLeave}
             >
@@ -429,6 +365,10 @@ export default function AppLayout({
             </div>
           )}
         </div>
+        <div className="flex-1" />
+        <Suspense fallback={<div className="w-8 h-8 bg-white/10 rounded-md animate-pulse"></div>}>
+          <SearchBar />
+        </Suspense>
         <Link
           href="/messages"
           aria-label="消息"
