@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
@@ -20,12 +20,11 @@ export default function RegisterPage() {
   const registeredUsername = useRef<string>('');
   const router = useRouter();
 
-  // 验证码输入
-  const [verifyCode, setVerifyCode] = useState("");
+  const [codeDigits, setCodeDigits] = useState<string[]>(Array(6).fill(''));
+  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  // ---- 客户端验证 (与后端规则对齐) ----
 
   const validateForm = (): string | null => {
     if (!username.trim()) return "请输入用户名";
@@ -83,20 +82,19 @@ export default function RegisterPage() {
     }
   };
 
-  // ---- 邮箱验证 ----
 
   const handleVerify = async () => {
-    if (!verifyCode.trim()) {
-      showToast("请输入验证码", "error");
+    const code = codeDigits.join('');
+    if (code.length !== 6) {
+      showToast("请输入完整的 6 位验证码", "error");
       return;
     }
     setIsVerifying(true);
     try {
-      const res = await api.verifyEmailById(registeredUserId.current, verifyCode.trim());
+      const res = await api.verifyEmailById(registeredUserId.current, code);
       const data = await res.json();
 
       if (data.success) {
-        // 验证成功 → 自动登录
         const baseUserInfo = {
           token: data.token,
           username: data.username,
@@ -136,8 +134,6 @@ export default function RegisterPage() {
       setIsResending(false);
     }
   };
-
-  // ---- 渲染 ----
 
   const inputClass =
     "w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all";
@@ -234,52 +230,67 @@ export default function RegisterPage() {
         </>
       ) : (
         <>
-          <div className="mb-6 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
+          <div className="space-y-6">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+                验证邮箱
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                验证码已发送至 <span className="font-medium text-slate-700 dark:text-slate-300">{email}</span>
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                有效期为 10 分钟，请及时查收
+              </p>
             </div>
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">
-              验证邮箱
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              验证码已发送至 <span className="font-medium text-slate-700 dark:text-slate-300">{email}</span>
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              有效期为 10 分钟，请及时查收
-            </p>
-          </div>
 
-          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 text-center">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 text-center">
                 请输入 6 位验证码
               </label>
-              <input
-                type="text"
-                value={verifyCode}
-                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                className={`${inputClass} text-center text-2xl tracking-[0.5em] font-mono`}
-                placeholder="000000"
-                maxLength={6}
-                autoFocus
-              />
+              <div className="flex items-center justify-center gap-2 sm:gap-3">
+                {codeDigits.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => { codeInputRefs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    value={digit}
+                    maxLength={1}
+                    autoFocus={i === 0}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      const newDigits = [...codeDigits];
+                      newDigits[i] = val.slice(0, 1);
+                      setCodeDigits(newDigits);
+                      if (val && i < 5) codeInputRefs.current[i + 1]?.focus();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Backspace' && !digit && i > 0) {
+                        codeInputRefs.current[i - 1]?.focus();
+                        const newDigits = [...codeDigits];
+                        newDigits[i - 1] = '';
+                        setCodeDigits(newDigits);
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+                      const newDigits = Array(6).fill('');
+                      for (let j = 0; j < text.length; j++) newDigits[j] = text[j];
+                      setCodeDigits(newDigits);
+                      const nextIndex = Math.min(text.length, 5);
+                      codeInputRefs.current[nextIndex]?.focus();
+                    }}
+                    className="w-11 h-12 sm:w-12 sm:h-13 text-center text-xl font-semibold rounded-lg border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                ))}
+              </div>
             </div>
 
             <button
               onClick={handleVerify}
-              disabled={isVerifying || verifyCode.length !== 6}
+              disabled={isVerifying || codeDigits.join('').length !== 6}
               className={btnClass}
             >
               {isVerifying ? (

@@ -168,6 +168,7 @@ interface TabConfig {
   icon: React.ReactNode;
   adminOnly?: boolean;
   superAdminOnly?: boolean;
+  editorOnly?: boolean;
 }
 
 const categoryMap: Record<string, { label: string; color: string }> = {
@@ -3308,8 +3309,8 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const tabs: TabConfig[] = [
-    { id: 'welcome', label: '欢迎', icon: <MdDashboard size={20} /> },
-    { id: 'glossary', label: '词库编辑', icon: <MdBook size={20} /> },
+    { id: 'welcome', label: '欢迎', icon: <MdDashboard size={20} />, editorOnly: true },
+    { id: 'glossary', label: '词库编辑', icon: <MdBook size={20} />, editorOnly: true },
     { id: 'users', label: '用户管理', icon: <MdPeople size={20} />, adminOnly: true },
     { id: 'notifications', label: '通知管理', icon: <MdNotifications size={20} />, adminOnly: true },
     { id: 'messages', label: '私信审计', icon: <MdMessage size={20} />, adminOnly: true },
@@ -3333,10 +3334,13 @@ export default function AdminPage() {
     }, 200);
   };
 
-  const isAdmin = ['super_admin', 'admin', 'editor'].includes(userRole);
+  const isEditor = userRole === 'editor';
+  const isAdmin = ['super_admin', 'admin'].includes(userRole);
   const isSuperAdmin = userRole === 'super_admin';
+  const hasAccess = isAdmin || isEditor;
 
   const visibleTabs = tabs.filter(tab => {
+    if (isEditor) return tab.editorOnly;
     if (tab.superAdminOnly) return isSuperAdmin;
     if (tab.adminOnly) return isAdmin;
     return true;
@@ -3350,7 +3354,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !isEditor) {
     return (
       <div className="max-w-6xl mx-auto text-center py-12">
         <p className="text-slate-500 dark:text-slate-400">您没有权限访问此页面</p>
