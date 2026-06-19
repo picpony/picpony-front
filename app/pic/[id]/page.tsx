@@ -369,13 +369,18 @@ export default function PicPage() {
   // --- Download ---
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault();
+    if (!image?.representations?.full && !image?.view_url) {
+      showToast('无法下载：图片地址缺失', 'error');
+      return;
+    }
+    const downloadUrl = image.representations?.full || image.view_url || '';
     try {
-      const response = await fetch(image!.representations.full);
+      const response = await fetch(downloadUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const fileName = image!.representations.full.split('/').pop() || `image-${image!.id}`;
+      const fileName = downloadUrl.split('/').pop() || `image-${image!.id}`;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
@@ -383,7 +388,7 @@ export default function PicPage() {
       document.body.removeChild(a);
     } catch (error) {
       console.error('Download failed:', error);
-      window.open(image!.representations.full, '_blank');
+      window.open(downloadUrl, '_blank');
     }
   };
 
@@ -434,23 +439,24 @@ export default function PicPage() {
   };
 
   // Build YARL slides array
-  const yarlSlides = image
-    ? (image.representations.full.endsWith('.webm')
+  const imageSrc = image?.representations?.full || image?.view_url || '';
+  const yarlSlides = image && imageSrc
+    ? (imageSrc.endsWith('.webm')
         ? [{
             type: 'video' as const,
-            sources: [{ src: image.representations.full, type: 'video/webm' }],
+            sources: [{ src: imageSrc, type: 'video/webm' }],
             autoPlay: true,
             controls: true,
             loop: true,
           }]
         : [{
-            src: image.representations.full,
+            src: imageSrc,
             alt: image.name || `Image ${image.id}`,
-            width: image.width,
-            height: image.height,
+            width: image.width ?? undefined,
+            height: image.height ?? undefined,
             download: {
-              url: image.representations.full,
-              filename: `image-${image.id}.${getImageFormat(image.representations.full).toLowerCase()}`,
+              url: imageSrc,
+              filename: `image-${image.id}.${getImageFormat(imageSrc).toLowerCase()}`,
             },
           }])
     : [];
@@ -476,13 +482,6 @@ export default function PicPage() {
           </div>
           <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
             <div className="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-lg absolute inset-4"></div>
-          </div>
-          <div className="p-4 sm:p-6 flex flex-col bg-transparent">
-            <div className="max-w-5xl mx-auto w-full space-y-6">
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
-              <div className="h-4 bg-slate-200 rounded w-full"></div>
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-            </div>
           </div>
         </div>
       </div>
@@ -515,19 +514,21 @@ export default function PicPage() {
     );
   }
 
-  const artists = image.tags
+  const tags = image.tags ?? [];
+
+  const artists = tags
     .filter(tag => tag.startsWith('artist:'))
     .map(tag => tag.replace('artist:', ''));
 
-  const ocs = image.tags
+  const ocs = tags
     .filter(tag => tag.startsWith('oc:'))
     .map(tag => tag.replace('oc:', ''));
 
-  const regularTags = image.tags
+  const regularTags = tags
     .filter(tag => !tag.startsWith('artist:') && !tag.startsWith('oc:'))
     .filter(tag => !tag.startsWith('spoiler:') && !tag.startsWith('suggestion:'));
 
-  const imageFormat = getImageFormat(image.representations.full);
+  const imageFormat = getImageFormat(image.representations?.full || image.view_url || '');
 
   return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-fade-in">
@@ -583,9 +584,9 @@ export default function PicPage() {
 
         {/* === Image Display (clickable to open lightbox) === */}
         <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
-          {image.representations.full.endsWith('.webm') ? (
+          {(image.representations?.full || image.view_url || '').endsWith('.webm') ? (
             <video
-              src={image.representations.full}
+              src={image.representations?.full || image.view_url || ''}
               controls
               autoPlay
               loop
@@ -595,7 +596,7 @@ export default function PicPage() {
           ) : (
             <div className="relative group cursor-pointer" onClick={() => handleOpenLightbox()}>
               <FadeInImage
-                src={image.representations.large || image.representations.full}
+                src={image.representations?.large || image.representations?.full || image.view_url || ''}
                 alt={image.name || `Image ${image.id}`}
                 width={image.width}
                 height={image.height}
