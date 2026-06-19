@@ -7,6 +7,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import BBCodeEditor from '@/components/BBCodeEditor';
 import RichTextRenderer from '@/components/RichTextRenderer';
+import FadeInImage from '@/components/FadeInImage';
 
 export default function ForumPostPage() {
   const params = useParams();
@@ -196,10 +197,12 @@ export default function ForumPostPage() {
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4 mb-6">
           <div className="flex items-center gap-3">
             <Link href={`/user/${post.user_id}`}>
-              <img 
+              <FadeInImage 
                 src={post.avatar ? `https://picpony.top/${post.avatar}` : '/img/default-avatar.png'} 
                 alt={post.username}
-                className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
+                width={40}
+                height={40}
+                className="rounded-full object-cover border border-slate-200 dark:border-slate-600"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = '/img/default-avatar.png';
                 }}
@@ -265,10 +268,12 @@ export default function ForumPostPage() {
               <div key={comment.id} className="bg-white dark:bg-transparent p-4 rounded-xl flex gap-4">
                 <div className="flex-shrink-0">
                   <Link href={`/user/${comment.user_id}`}>
-                    <img 
+                    <FadeInImage 
                       src={comment.avatar ? `https://picpony.top/${comment.avatar}` : '/img/default-avatar.png'} 
                       alt={comment.username}
-                      className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
+                      width={40}
+                      height={40}
+                      className="rounded-full object-cover border border-slate-200 dark:border-slate-600"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/img/default-avatar.png';
                       }}

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { MdArrowBack, MdSend, MdImage, MdAdd, MdClose } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
+import FadeInImage from '@/components/FadeInImage';
 import BBCodeEditor from '@/components/BBCodeEditor';
 
 const categories = [
@@ -172,10 +173,12 @@ export default function CreateForumPostPage() {
           </label>
           {coverPreview ? (
             <div className="relative inline-block">
-              <img
+              <FadeInImage
                 src={coverPreview}
                 alt="封面预览"
-                className="w-48 h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                width={192}
+                height={128}
+                className="object-cover rounded-xl border border-slate-200 dark:border-slate-700"
               />
               <button
                 type="button"

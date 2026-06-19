@@ -2,6 +2,7 @@
 
 import { MdErrorOutline, MdRefresh, MdComment, MdVisibility, MdThumbUp } from 'react-icons/md';
 import { ForumPost } from '@/lib/api';
+import FadeInImage from '@/components/FadeInImage';
 
 interface ForumPostListProps {
   posts: ForumPost[];
@@ -77,10 +78,12 @@ export default function ForumPostList({
             >
               <div className="flex gap-4">
                 <div className="flex-shrink-0">
-                  <img
+                  <FadeInImage
                     src={post.avatar ? `https://picpony.top/${post.avatar}` : '/img/default-avatar.png'}
                     alt={post.username}
-                    className="w-12 h-12 rounded-full object-cover border border-slate-200 dark:border-slate-600"
+                    width={48}
+                    height={48}
+                    className="rounded-full object-cover border border-slate-200 dark:border-slate-600"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = '/img/default-avatar.png';
                     }}
@@ -111,10 +114,12 @@ export default function ForumPostList({
                 </div>
                 {post.cover_image && (
                   <div className="flex-shrink-0 hidden sm:block">
-                    <img
+                    <FadeInImage
                       src={`https://picpony.top${post.cover_image}`}
                       alt="Cover"
-                      className="w-20 h-20 object-cover rounded-lg"
+                      width={80}
+                      height={80}
+                      className="object-cover rounded-lg"
                     />
                   </div>
                 )}

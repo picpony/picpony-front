@@ -13,6 +13,7 @@ import {
 } from 'react-icons/md';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
+import FadeInImage from '@/components/FadeInImage';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import Modal from '@/components/Modal';
 import { Spinner, SearchInput, SectionHeader, EmptyState } from '@/components/admin';
@@ -905,8 +906,8 @@ function ShopTab({ token }: { token: string }) {
                   <td className="px-4 py-3 text-sm">#{item.id}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      {item.image_url && (
-                        <img src={item.image_url} alt="" className="w-10 h-10 rounded object-cover" />
+                        {item.image_url && (
+                        <FadeInImage src={item.image_url} alt="" width={40} height={40} className="w-10 h-10 rounded object-cover" />
                       )}
                       <div>
                         <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>

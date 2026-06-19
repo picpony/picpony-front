@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MdHistory, MdDelete, MdDeleteSweep, MdImage, MdPerson } from 'react-icons/md';
+import FadeInImage from '@/components/FadeInImage';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
@@ -168,7 +169,7 @@ export default function HistoryPage() {
                 <Link href={`/pic/${item.id}`} className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="w-20 h-16 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-700 flex-shrink-0">
                     {item.preview_url ? (
-                      <img src={item.preview_url} alt="" className="w-full h-full object-cover" />
+                      <FadeInImage src={item.preview_url} alt="" fill className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-slate-400">
                         <MdImage size={24} />

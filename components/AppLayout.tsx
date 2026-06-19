@@ -10,6 +10,7 @@ const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: fa
 const ImageSearchModal = dynamic(() => import("./ImageSearchModal"), { ssr: false });
 const Modal = dynamic(() => import("./Modal"), { ssr: false });
 import Logo from "./Logo";
+import FadeInImage from "./FadeInImage";
 import { api } from "@/lib/api";
 
 function SearchBar() {
@@ -484,10 +485,11 @@ export default function AppLayout({
                           <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-slate-400">
                             <MdPerson size={24} />
                           </div>
-                          <img
+                          <FadeInImage
                             src={userInfo.avatar.startsWith('http') ? userInfo.avatar : `https://picpony.top/${userInfo.avatar}`}
                             alt={userInfo.username}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            fill
+                            className="object-cover"
                           />
                         </div>
                       ) : (

@@ -10,6 +10,7 @@ import {
   MdShield, MdHome,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
+import FadeInImage from '@/components/FadeInImage';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { api } from '@/lib/api';
 
@@ -637,13 +638,13 @@ export default function SettingsPage() {
                         <MdPerson size={24} />
                       </div>
                     )}
-                    <img
+                    <FadeInImage
                       key={currentAvatar}
                       src={currentAvatar}
                       alt="Avatar"
-                      className={`w-full h-full object-cover ${avatarLoaded ? '' : 'opacity-0'}`}
+                      fill
+                      className="object-cover"
                       onLoad={() => setAvatarLoaded(true)}
-                      onError={() => setAvatarLoaded(false)}
                     />
                   </>
                 ) : (
@@ -680,13 +681,13 @@ export default function SettingsPage() {
                         <MdImage size={20} />
                       </div>
                     )}
-                    <img
+                    <FadeInImage
                       key={currentBanner}
                       src={currentBanner.startsWith('http') ? currentBanner : `https://picpony.top/${currentBanner}`}
                       alt="Banner"
-                      className={`w-full h-full object-cover ${bannerLoaded ? '' : 'opacity-0'}`}
+                      fill
+                      className="object-cover"
                       onLoad={() => setBannerLoaded(true)}
-                      onError={() => setBannerLoaded(true)}
                     />
                   </>
                 ) : (

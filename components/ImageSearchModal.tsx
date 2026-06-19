@@ -7,6 +7,7 @@ import { showToast } from './Toast';
 import { api } from '../lib/api';
 import { processImageFile } from '../lib/utils';
 import { PonyImage } from '../lib/api';
+import FadeInImage from './FadeInImage';
 import Modal from './Modal';
 import Spinner from './Spinner';
 
@@ -144,10 +145,11 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
 
         {selectedImage ? (
           <div className="relative w-full h-48 flex items-center justify-center">
-            <img
+            <FadeInImage
               src={selectedImage}
               alt="Selected"
-              className="max-w-full max-h-full object-contain rounded-xl shadow-sm"
+              fill
+              className="object-contain rounded-xl shadow-sm"
             />
             <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
               <span className="text-white font-medium">更换图片</span>

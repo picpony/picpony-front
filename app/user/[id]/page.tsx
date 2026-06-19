@@ -283,10 +283,11 @@ export default function UserProfilePage() {
     <div className="animate-fade-in bg-white dark:bg-slate-950 min-h-screen">
       <div className="h-48 sm:h-64 md:h-80 relative bg-slate-100 dark:bg-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden mt-4 sm:mt-6 mx-auto max-w-[96%] sm:max-w-[98%]">
         {profile.banner ? (
-          <img
+          <FadeInImage
             src={`https://picpony.top/${profile.banner}`}
             alt={`${profile.username}'s banner`}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-r from-primary/20 to-primary/40 flex items-center justify-center">
@@ -300,10 +301,11 @@ export default function UserProfilePage() {
           <div className="absolute -top-12 sm:-top-16 left-0">
             <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-800">
               {profile.avatar ? (
-                <img
+                <FadeInImage
                   src={`https://picpony.top/${profile.avatar}`}
                   alt={`${profile.username}'s avatar`}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
                 />
               ) : (
                 <div className="w-full h-full bg-primary/10 flex items-center justify-center">
@@ -496,10 +498,11 @@ export default function UserProfilePage() {
                         <div className="flex items-start gap-3">
                           {post.cover_image ? (
                             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
-                              <img
+                              <FadeInImage
                                 src={`https://picpony.top/${post.cover_image}`}
                                 alt=""
-                                className="w-full h-full object-cover"
+                                fill
+                                className="object-cover"
                               />
                             </div>
                           ) : null}
@@ -603,10 +606,11 @@ export default function UserProfilePage() {
                           <div className="flex items-start gap-3">
                             {comment.cover_image ? (
                               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
-                                <img
+                                <FadeInImage
                                   src={`https://picpony.top/${comment.cover_image}`}
                                   alt=""
-                                  className="w-full h-full object-cover"
+                                  fill
+                                  className="object-cover"
                                 />
                               </div>
                             ) : null}

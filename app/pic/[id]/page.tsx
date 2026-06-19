@@ -1075,7 +1075,7 @@ export default function PicPage() {
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               {profilePreview.user.avatar ? (
-                <img src={`https://picpony.top/${profilePreview.user.avatar}`} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-slate-200 dark:border-slate-600" />
+                <FadeInImage src={`https://picpony.top/${profilePreview.user.avatar}`} alt="" width={48} height={48} className="w-12 h-12 rounded-full object-cover border-2 border-slate-200 dark:border-slate-600" />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
                   {profilePreview.user.username.charAt(0).toUpperCase()}
