@@ -8,11 +8,12 @@ import {
   MdTranslate, MdLibraryBooks, MdCloudDownload, 
   MdOutlineWarning, MdPeople, 
   MdReport, MdBlock, MdStore, MdAttachMoney, MdBuild,
-  MdToggleOn, MdToggleOff, MdBarChart,
+  MdBarChart,
   MdOpenInNew, MdNotifications, MdMessage, MdShield, MdPersonAdd
 } from 'react-icons/md';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
+import ToggleSwitch from '@/components/ToggleSwitch';
 import Modal from '@/components/Modal';
 import { Spinner, SearchInput, SectionHeader, EmptyState } from '@/components/admin';
 import NotificationsTab from '@/components/admin/NotificationsTab';
@@ -1745,12 +1746,10 @@ function OtherTab({ token }: { token: string }) {
               开启后，所有非管理员用户访问前台将看到全屏维护提示
             </p>
           </div>
-          <button
-            onClick={toggleMaintenance}
-            className={`p-2 rounded-lg transition-colors ${maintenanceMode ? 'text-red-500 bg-red-50 dark:bg-red-950/30' : 'text-slate-400 bg-slate-100 dark:bg-slate-700'}`}
-          >
-            {maintenanceMode ? <MdToggleOn size={32} /> : <MdToggleOff size={32} />}
-          </button>
+          <ToggleSwitch
+            checked={maintenanceMode}
+            onChange={toggleMaintenance}
+          />
         </div>
         {maintenanceMode && (
           <div className="mt-4">
@@ -1777,12 +1776,10 @@ function OtherTab({ token }: { token: string }) {
               控制前台大图模态框中是否展示&ldquo;一键图片翻译&rdquo;按钮
             </p>
           </div>
-          <button
-            onClick={toggleTranslate}
-            className={`p-2 rounded-lg transition-colors ${translateEnabled ? 'text-green-500 bg-green-50 dark:bg-green-950/30' : 'text-slate-400 bg-slate-100 dark:bg-slate-700'}`}
-          >
-            {translateEnabled ? <MdToggleOn size={32} /> : <MdToggleOff size={32} />}
-          </button>
+          <ToggleSwitch
+            checked={translateEnabled}
+            onChange={toggleTranslate}
+          />
         </div>
       </div>
 
