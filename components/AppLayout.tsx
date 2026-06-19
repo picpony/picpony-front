@@ -11,6 +11,7 @@ const ImageSearchModal = dynamic(() => import("./ImageSearchModal"), { ssr: fals
 const Modal = dynamic(() => import("./Modal"), { ssr: false });
 import Logo from "./Logo";
 import FadeInImage from "./FadeInImage";
+import Checkbox from "./Checkbox";
 import { api } from "@/lib/api";
 
 function SearchBar() {
@@ -135,7 +136,7 @@ function TabNavBar() {
           onClick={() => switchTab('gallery')}
           className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             currentTab !== 'forum'
-              ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+              ? 'bg-white dark:bg-slate-700 text-primary'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
           }`}
         >
@@ -146,7 +147,7 @@ function TabNavBar() {
           onClick={() => switchTab('forum')}
           className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             currentTab === 'forum'
-              ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+              ? 'bg-white dark:bg-slate-700 text-primary'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
           }`}
         >
@@ -421,25 +422,10 @@ export default function AppLayout({
               onMouseEnter={handleDropdownMouseEnter}
               onMouseLeave={handleDropdownMouseLeave}
             >
-              <label className="flex items-center px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                <div className="relative flex items-center justify-center w-5 h-5 shrink-0">
-                  <input
-                    type="checkbox"
-                    checked={followSystem}
-                    onChange={(e) => handleFollowSystemChange(e.target.checked)}
-                    className="peer sr-only"
-                  />
-                  <div className="w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 peer-checked:bg-primary peer-checked:border-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30 transition-all duration-200" />
-                  <svg
-                    className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-200 pointer-events-none"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                  >
-                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
+              <div className="flex items-center px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                <Checkbox checked={followSystem} onChange={handleFollowSystemChange} />
                 <span className="ml-2.5 text-sm text-slate-700 dark:text-slate-300 select-none">跟随系统</span>
-              </label>
+              </div>
             </div>
           )}
         </div>

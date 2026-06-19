@@ -14,6 +14,7 @@ import {
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import FadeInImage from '@/components/FadeInImage';
+import Checkbox from '@/components/Checkbox';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import Modal from '@/components/Modal';
 import { Spinner, SearchInput, SectionHeader, EmptyState } from '@/components/admin';
@@ -619,17 +620,12 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
             </div>
 
             <div className="flex items-center gap-6 pt-2 border-t border-slate-200 dark:border-slate-700">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editForm.is_banned === 1}
-                  onChange={(e) => setEditForm(f => ({ ...f, is_banned: e.target.checked ? 1 : 0 }))}
-                  className="rounded border-slate-300 dark:border-slate-600 text-red-500 focus:ring-red-500"
-                />
+              <div className="flex items-center gap-2 cursor-pointer">
+                <Checkbox checked={editForm.is_banned === 1} onChange={(checked) => setEditForm(f => ({ ...f, is_banned: checked ? 1 : 0 }))} />
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   封禁此用户
                 </span>
-              </label>
+              </div>
               {editForm.is_banned === 1 && (
                 <span className="text-xs text-amber-600 dark:text-amber-400">
                   封禁后将踢下线该用户的所有设备
@@ -855,15 +851,10 @@ function ShopTab({ token }: { token: string }) {
           />
         </div>
         <div className="flex items-center gap-4 mb-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.active}
-              onChange={(e) => setForm({ ...form, active: e.target.checked })}
-              className="w-4 h-4 text-primary border-slate-300 rounded focus:ring-primary"
-            />
+          <div className="flex items-center gap-2 cursor-pointer">
+            <Checkbox checked={form.active} onChange={(checked) => setForm({ ...form, active: checked })} />
             <span className="text-sm text-slate-700 dark:text-slate-300">上架展示</span>
-          </label>
+          </div>
         </div>
         <div className="flex gap-3">
           {isEditing && (
@@ -2544,22 +2535,7 @@ function GlossaryTab() {
       >
         <td className="px-4 py-3 text-center">
             {isAdmin && (
-              <label className="relative flex items-center justify-center w-5 h-5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => toggleRowSelection(tag.id)}
-                  className="peer sr-only"
-                />
-                <div className="w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 peer-checked:bg-primary peer-checked:border-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30 transition-all duration-200" />
-                <svg
-                  className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-200 pointer-events-none"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                >
-                  <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </label>
+              <Checkbox checked={isSelected} onChange={() => toggleRowSelection(tag.id)} />
             )}
         </td>
               <td className="px-4 py-3">
@@ -2792,25 +2768,13 @@ function GlossaryTab() {
             <tr>
               <th className="px-4 py-3 text-center w-12">
               {isAdmin && (
-                  <label className="relative flex items-center justify-center w-5 h-5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      onChange={toggleSelectAll}
-                      checked={
-                        (isDuplicateMode ? duplicateTags : tags).length > 0 &&
-                        (isDuplicateMode ? duplicateTags : tags).every((t) => selectedIds.has(t.id))
-                      }
-                      className="peer sr-only"
-                    />
-                    <div className="w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 peer-checked:bg-primary peer-checked:border-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30 transition-all duration-200" />
-                    <svg
-                      className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-200 pointer-events-none"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                    >
-                      <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </label>
+                  <Checkbox
+                    checked={
+                      (isDuplicateMode ? duplicateTags : tags).length > 0 &&
+                      (isDuplicateMode ? duplicateTags : tags).every((t) => selectedIds.has(t.id))
+                    }
+                    onChange={toggleSelectAll}
+                  />
                 )}
               </th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">中文翻译</th>
