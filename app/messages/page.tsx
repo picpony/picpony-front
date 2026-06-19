@@ -374,9 +374,9 @@ export default function MessagesPage() {
           {activeTab === 'chat' ? (
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden flex h-[calc(100vh-200px)] md:h-[600px]">
               <div className={`w-full md:w-80 border-r border-slate-100 dark:border-slate-700 flex-col ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto p-4">
                   {loading && contacts.length === 0 ? (
-                    <div className="p-4 space-y-4">
+                    <div className="space-y-4">
                       {[1, 2, 3, 4].map(i => (
                         <div key={i} className="flex items-center space-x-3 animate-pulse">
                           <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-full"></div>
@@ -388,7 +388,7 @@ export default function MessagesPage() {
                       ))}
                     </div>
                   ) : error ? (
-                    <div className="p-10 text-center text-slate-400 dark:text-slate-500 text-sm">
+                    <div className="text-center text-slate-400 dark:text-slate-500 text-sm pt-6">
                       {error}
                     </div>
                   ) : contacts.length > 0 ? (
@@ -396,7 +396,7 @@ export default function MessagesPage() {
                       <button
                         key={contact.id}
                         onClick={() => setSelectedContact(contact)}
-                        className={`flex items-center justify-start text-left w-full p-2 gap-1.5 transition-colors duration-200 ${
+                        className={`flex items-center justify-start text-left w-full p-2 gap-1.5 mb-1 transition-colors duration-200 ${
                           selectedContact?.id === contact.id ? 'bg-[var(--sidebar-hover)]' : 'hover:bg-[var(--sidebar-hover)]'
                         }`}
                       >
@@ -433,7 +433,7 @@ export default function MessagesPage() {
                       </button>
                     ))
                   ) : (
-                    <div className="p-10 text-center text-slate-400 dark:text-slate-500 text-sm">
+                    <div className="text-center text-slate-400 dark:text-slate-500 text-sm pt-6">
                       滚木
                     </div>
                   )}

@@ -124,7 +124,6 @@ export default function AppLayout({
     return saved !== null ? saved === 'true' : initialCollapsed;
   });
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [sidebarAvatarLoaded, setSidebarAvatarLoaded] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem('user_menu_open');
@@ -247,7 +246,6 @@ export default function AppLayout({
         try {
           const parsedUser = JSON.parse(storedUser);
           setUserInfo(parsedUser);
-          setSidebarAvatarLoaded(false);
           
           if (parsedUser.token) {
             try {
@@ -434,18 +432,13 @@ export default function AppLayout({
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0">
                       {userInfo.avatar ? (
                         <div className="relative w-full h-full">
-                          {!sidebarAvatarLoaded && (
-                            <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-slate-400 z-10">
-                              <MdPerson size={24} />
-                            </div>
-                          )}
-                          <img 
-                            key={userInfo.avatar}
-                            src={userInfo.avatar.startsWith('http') ? userInfo.avatar : `https://picpony.top/${userInfo.avatar}`} 
+                          <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                            <MdPerson size={24} />
+                          </div>
+                          <img
+                            src={userInfo.avatar.startsWith('http') ? userInfo.avatar : `https://picpony.top/${userInfo.avatar}`}
                             alt={userInfo.username}
-                            className={`w-full h-full object-cover ${sidebarAvatarLoaded ? '' : 'opacity-0'}`}
-                            onLoad={() => setSidebarAvatarLoaded(true)}
-                            onError={() => setSidebarAvatarLoaded(true)}
+                            className="absolute inset-0 w-full h-full object-cover"
                           />
                         </div>
                       ) : (

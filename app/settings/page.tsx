@@ -820,7 +820,6 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting('banAnthro', v, 'trixie_ban_anthro', setBanAnthro)}
               label="禁止类人生物 (马头人)"
               description="隐藏 anthropomorphic 标签的图片"
-              colorClass="text-red-500"
             />
           </div>
 
@@ -830,7 +829,6 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting('banDiscomfort', v, 'trixie_ban_discomfort', setBanDiscomfort)}
               label="屏蔽可能令您不适的内容"
               description="隐藏血腥、恐怖等内容"
-              colorClass="text-orange-500"
             />
           </div>
 
@@ -840,7 +838,6 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting('onlyPony', v, 'trixie_only_pony', setOnlyPony)}
               label="只看小马 (含类马)"
               description="仅显示 pony 相关标签的图片"
-              colorClass="text-purple-500"
             />
           </div>
         </div>
@@ -856,7 +853,6 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting('showTagCounts', v, 'trixie_show_tag_counts', setShowTagCounts)}
               label="显示各标签数量"
               description="在标签列表旁显示图片计数"
-              colorClass="text-green-500"
             />
           </div>
 
@@ -866,7 +862,6 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting('showChineseTags', v, 'picpony_show_chinese_tags', setShowChineseTags)}
               label="显示中文标签 (beta)"
               description="启用中文标签名翻译"
-              colorClass="text-sky-500"
             />
           </div>
 
@@ -928,7 +923,6 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting('useCdn', v, 'trixie_use_cdn', setUseCdn)}
               label="启用图片 CDN 加速"
               description="通过 wsrv.nl 加速图片加载"
-              colorClass="text-amber-500"
             />
           </div>
 
@@ -938,7 +932,6 @@ export default function SettingsPage() {
               onChange={handleUsePicponyProxyChange}
               label="启用 PicPony 加速服务器 (beta)"
               description="使用 picpony 代理服务器加速请求，开启后自动启用 CDN"
-              colorClass="text-emerald-500"
             />
           </div>
 
@@ -949,10 +942,9 @@ export default function SettingsPage() {
               disabled={!currentApiKey}
               label="启用 API 加速"
               description={currentApiKey ? '通过备用 API 代理提升请求稳定性' : '需要先配置 Derpibooru API Key'}
-              colorClass="text-primary"
             />
             {!currentApiKey && (
-              <span className="text-xs text-amber-500 ml-2">需先配置 API Key</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">需先配置 API Key</span>
             )}
           </div>
         </div>
