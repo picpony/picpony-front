@@ -230,15 +230,143 @@ export interface CaptchaVerifyResponse {
 
 const PICPONY_API_BASE = '/api.php';
 const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
+const PROXY_API_BASE = 'https://picponyapi.147052.xyz/?url=';
+
+const LS_KEYS = {
+  contentFilter: 'trixie_content_filter',
+  banAnthro: 'trixie_ban_anthro',
+  banDiscomfort: 'trixie_ban_discomfort',
+  onlyPony: 'trixie_only_pony',
+  useCdn: 'trixie_use_cdn',
+  usePicponyProxy: 'picpony_use_proxy',
+  useApiAccel: 'picpony_api_accel',
+  homeSort: 'picpony_default_home_sort',
+  searchSort: 'picpony_default_search_sort',
+};
+
+function getBrowsingSettings() {
+  const ls = (k: string, def: string) => localStorage.getItem(k) ?? def;
+  return {
+    contentFilter: ls('trixie_content_filter', 'safe') as 'safe' | 'spoilers' | 'developer',
+    banAnthro: ls('trixie_ban_anthro', 'false') === 'true',
+    banDiscomfort: ls('trixie_ban_discomfort', 'true') !== 'false',
+    onlyPony: ls('trixie_only_pony', 'false') === 'true',
+    useCdn: ls('trixie_use_cdn', 'false') === 'true',
+    usePicponyProxy: ls('picpony_use_proxy', 'true') !== 'false',
+    useApiAccel: ls('picpony_api_accel', 'true') !== 'false',
+    homeSort: ls('picpony_default_home_sort', 'created_at'),
+    searchSort: ls('picpony_default_search_sort', 'created_at'),
+  };
+}
+
+function buildProxyUrl(originalUrl: string): string {
+  const derpiUrl = originalUrl.replace('trixiebooru.org', 'derpibooru.org');
+  return PROXY_API_BASE + encodeURIComponent(derpiUrl);
+}
+
+interface ProxyFetchOptions extends RequestInit {
+  directOnly?: boolean;
+}
+
+async function proxyFetch(url: string, options?: ProxyFetchOptions): Promise<Response> {
+  const s = getBrowsingSettings();
+
+  if (options?.directOnly) {
+    return fetch(url, options);
+  }
+
+  if (s.usePicponyProxy) {
+    const proxyUrl = buildProxyUrl(url);
+    try {
+      const res = await fetch(proxyUrl, options);
+      if (res.ok) return res;
+      console.warn('[Proxy] 加速服务器响应异常', res.status, '回退直连');
+    } catch {
+      console.warn('[Proxy] 加速服务器请求失败，回退直连');
+    }
+  }
+
+  let directError: Error | null = null;
+  try {
+    const res = await fetch(url, options);
+    if (res.ok) return res;
+    directError = new Error(`HTTP ${res.status}`);
+    (directError as any).status = res.status;
+  } catch (err) {
+    directError = err as Error;
+  }
+
+  if (s.useApiAccel && !s.usePicponyProxy) {
+    const proxyUrl = buildProxyUrl(url);
+    try {
+      const res = await fetch(proxyUrl, options);
+      if (res.ok) return res;
+    } catch {
+      // ignore
+    }
+  }
+
+  throw directError;
+}
+
+function buildSearchQuery(search?: string): string {
+  const s = getBrowsingSettings();
+  let tags = '';
+
+  if (s.contentFilter !== 'developer') {
+    switch (s.contentFilter) {
+      case 'safe':
+        tags = '-explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler';
+        break;
+      case 'spoilers':
+        tags = '-explicit, -questionable, -grotesque, -grimdark';
+        break;
+    }
+  }
+
+  if (s.banAnthro) {
+    tags = tags ? `${tags}, -anthro, -humanized` : '-anthro, -humanized';
+  }
+
+  if (s.onlyPony) {
+    tags = tags ? `${tags}, pony` : 'pony';
+  }
+
+  if (!tags && s.contentFilter !== 'developer') {
+    tags = '-explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, pony';
+  }
+
+  if (search) {
+    tags = tags ? `${search}, ${tags}` : search;
+  }
+
+  return encodeURIComponent(tags);
+}
+
+function getSortParams(isSearch: boolean): string {
+  const s = getBrowsingSettings();
+  const sort = isSearch ? s.searchSort : s.homeSort;
+  const dir = sort === 'random' ? '' : '&sd=desc';
+  return `sf=${sort}${dir}`;
+}
+
+export function applyCdn(url: string): string {
+  if (getBrowsingSettings().useCdn && url) {
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
 
 export const api = {
   getFeatured: async (key?: string): Promise<FeaturedImage | null> => {
     try {
       let url = `${DERPIBOORU_API_BASE}/images/featured`;
-      if (key) {
-        url += `?key=${key}`;
-      }
-      const res = await fetch(url, {
+      const params: string[] = [];
+      if (key) params.push(`key=${key}`);
+      const s = getBrowsingSettings();
+      if (s.contentFilter === 'developer') params.push('filter_id=56027');
+      if (params.length > 0) url += '?' + params.join('&');
+      const res = await proxyFetch(url, {
         cache: 'no-store',
         headers: {
           'User-Agent': 'PicPony/1.0'
@@ -258,7 +386,7 @@ export const api = {
   },
 
   getImage: async (id: string): Promise<{ image: PonyImage }> => {
-    const res = await fetch(`${DERPIBOORU_API_BASE}/images/${id}`, {
+    const res = await proxyFetch(`${DERPIBOORU_API_BASE}/images/${id}`, {
       cache: 'no-store',
       headers: {
         'User-Agent': 'PicPony/1.0'
@@ -280,13 +408,11 @@ export const api = {
   },
 
   getImages: async (search?: string, page: number = 1): Promise<ApiResponse> => {
-    let query = "-explicit%2C%20-questionable%2C%20-suggestive%2C%20-grotesque%2C%20-grimdark%2C%20-spoiler%2C%20pony";
-    if (search) {
-      query = `${encodeURIComponent(search)}%2C%20${query}`;
-    }
+    const query = buildSearchQuery(search);
+    const sort = getSortParams(!!search);
 
-    const res = await fetch(
-      `${DERPIBOORU_API_BASE}/search/images?q=${query}&page=${page}&per_page=50&sf=created_at&sd=desc`,
+    const res = await proxyFetch(
+      `${DERPIBOORU_API_BASE}/search/images?q=${query}&page=${page}&per_page=50&${sort}`,
       {
         cache: 'no-store',
         headers: {
@@ -565,7 +691,7 @@ export const api = {
     try {
       const [picponyRes, trixieRes] = await Promise.all([
         fetch(`${PICPONY_API_BASE}?action=get_comments&image_id=${imageId}`).catch(() => null),
-        fetch(`${DERPIBOORU_API_BASE}/search/comments?q=image_id:${imageId}&page=1&per_page=25`).catch(() => null)
+        proxyFetch(`${DERPIBOORU_API_BASE}/search/comments?q=image_id:${imageId}&page=1&per_page=25`).catch(() => null)
       ]);
 
       let comments: Comment[] = [];
@@ -627,7 +753,7 @@ export const api = {
       return { total: 0, images: [] };
     }
     const idQuery = ids.map(id => `id:${id}`).join('%20OR%20');
-    const res = await fetch(
+    const res = await proxyFetch(
       `${DERPIBOORU_API_BASE}/search/images?q=${idQuery}&page=${page}&per_page=${perPage}`,
       {
         cache: 'no-store',
@@ -820,7 +946,7 @@ export const api = {
   searchDerpiTags: async (query: string) => {
     const safeName = query.replace(/"/g, '').split(/\s+/).join('* *');
     const url = `${DERPIBOORU_API_BASE}/search/tags?q=name:*${encodeURIComponent(safeName)}*&per_page=30`;
-    const res = await fetch(url, {
+    const res = await proxyFetch(url, {
       headers: {
         'User-Agent': 'PicPony/1.0'
       }
@@ -831,7 +957,7 @@ export const api = {
 
   getDerpiPopularTags: async (page: number = 1) => {
     const url = `${DERPIBOORU_API_BASE}/search/tags?q=*&sf=images&sd=desc&per_page=50&page=${page}`;
-    const res = await fetch(url, {
+    const res = await proxyFetch(url, {
       headers: {
         'User-Agent': 'PicPony/1.0'
       }

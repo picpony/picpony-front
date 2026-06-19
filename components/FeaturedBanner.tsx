@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { api, PonyImage } from "@/lib/api";
+import { api, PonyImage, applyCdn } from "@/lib/api";
 import { MdThumbUp, MdComment, MdErrorOutline, MdPerson } from "react-icons/md";
 import FadeInImage from "@/components/FadeInImage";
 
@@ -29,7 +29,18 @@ export default function FeaturedBanner() {
       .then((data) => {
         if (isMounted) {
           if (data && data.image) {
-            setFeatured(data.image);
+            let img = data.image;
+            // 应用 CDN
+            if (localStorage.getItem('trixie_use_cdn') === 'true') {
+              img = {
+                ...img,
+                representations: Object.fromEntries(
+                  Object.entries(img.representations).map(([k, v]) => [k, applyCdn(v)])
+                ) as unknown as PonyImage['representations'],
+                view_url: applyCdn(img.view_url),
+              };
+            }
+            setFeatured(img);
           }
           setLoading(false);
         }

@@ -197,6 +197,7 @@ export default function SettingsPage() {
     } catch (err) {
       console.warn('云端同步设置失败:', err);
     }
+    typeof window !== 'undefined' && window.dispatchEvent(new Event('settings_updated'));
   }, [userToken, contentFilter, showTagCounts, banAnthro, banDiscomfort, onlyPony, showChineseTags, useCdn, usePicponyProxy, useApiAccel, showUploads, showFaves, showPosts, showComments, emailNotifMessage, emailNotifReply, defaultHomeSort, defaultSearchSort]);
 
   const updateSetting = useCallback(<K extends keyof CloudSettings>(

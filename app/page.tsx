@@ -1,9 +1,12 @@
 'use client';
 
 import { Suspense, useState, useEffect, useRef } from "react";
-import { MdErrorOutline, MdArrowBack } from "react-icons/md";
+import {
+  MdErrorOutline, MdArrowBack, MdShield, MdVisibilityOff, MdBlock, MdPets,
+  MdSpeed, MdCloud,
+} from "react-icons/md";
 import { useSearchParams } from "next/navigation";
-import { api, PonyImage } from "@/lib/api";
+import { api, PonyImage, applyCdn } from "@/lib/api";
 import FeaturedBanner from "@/components/FeaturedBanner";
 import MasonryGrid from "@/components/MasonryGrid";
 import ImageGridSkeleton from "@/components/ImageGridSkeleton";
@@ -25,8 +28,19 @@ function ImageList({ search }: { search?: string }) {
     api.getImages(search, page)
       .then((res) => {
         if (isMounted) {
-          setImages(res.images);
-          setHasMore(res.images.length === 50);
+          let imgs = res.images;
+          // 应用 CDN
+          if (localStorage.getItem('trixie_use_cdn') === 'true') {
+            imgs = imgs.map(img => ({
+              ...img,
+              representations: Object.fromEntries(
+                Object.entries(img.representations).map(([k, v]) => [k, applyCdn(v)])
+              ) as unknown as PonyImage['representations'],
+              view_url: applyCdn(img.view_url),
+            }));
+          }
+          setImages(imgs);
+          setHasMore(imgs.length === 50);
           setIsLoading(false);
         }
       })
