@@ -78,7 +78,7 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
         showToast(`找到 ${data.total} 张相似图片`, 'success');
         onClose();
       } else if (data && data.searchQuery) {
-        router.push(`/?search=${encodeURIComponent(data.searchQuery)}`);
+        router.push(`/search?q=${encodeURIComponent(data.searchQuery)}`);
         onClose();
       } else {
         showToast('未能找到相似图片', 'info');

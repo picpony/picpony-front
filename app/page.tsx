@@ -15,7 +15,7 @@ import ForumPostList from "@/components/ForumPostList";
 
 type HomeTab = 'gallery' | 'forum';
 
-function ImageList({ search }: { search?: string }) {
+function ImageList() {
   const [images, setImages] = useState<PonyImage[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -27,7 +27,7 @@ function ImageList({ search }: { search?: string }) {
   useEffect(() => {
     let isMounted = true;
 
-    api.getImages(search, page)
+    api.getImages(undefined, page)
       .then((res) => {
         if (isMounted) {
           let imgs = res.images;
@@ -53,7 +53,7 @@ function ImageList({ search }: { search?: string }) {
       });
 
     return () => { isMounted = false; };
-  }, [search, page, retryCount]);
+  }, [page, retryCount]);
 
   if (isLoading) return <ImageGridSkeleton />;
 
@@ -151,7 +151,6 @@ function ForumTab() {
 
 function HomeContent() {
   const searchParams = useSearchParams();
-  const search = searchParams.get('search') || undefined;
   const tabParam = searchParams.get('tab');
   const tab: HomeTab = tabParam === 'forum' ? 'forum' : 'gallery';
 
@@ -164,7 +163,7 @@ function HomeContent() {
           {tab === 'gallery' ? (
             <>
               <FeaturedBanner />
-              <ImageList search={search} />
+              <ImageList />
             </>
           ) : (
             <ForumTab />

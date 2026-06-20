@@ -772,7 +772,7 @@ export default function PicPage() {
                   {artists.map((artist, index) => (
                     <span 
                       key={index}
-                      onClick={() => router.push(`/?search=${encodeURIComponent(`artist:${artist}`)}`)}
+                      onClick={() => router.push(`/search?q=${encodeURIComponent(`artist:${artist}`)}`)}
                       className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-medium rounded-lg border border-blue-100 dark:border-blue-800/30 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                     >
                       {artist}
@@ -790,7 +790,7 @@ export default function PicPage() {
                   {ocs.map((oc, index) => (
                     <span 
                       key={index}
-                      onClick={() => router.push(`/?search=${encodeURIComponent(`oc:${oc}`)}`)}
+                      onClick={() => router.push(`/search?q=${encodeURIComponent(`oc:${oc}`)}`)}
                       className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-sm font-medium rounded-lg border border-purple-100 dark:border-purple-800/30 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
                     >
                       {oc}
@@ -1050,7 +1050,7 @@ export default function PicPage() {
         )}
         <div className="flex gap-3 mt-4">
           <button
-            onClick={() => { router.push(`/?search=${encodeURIComponent(tagInfoModal.tag)}`); setTagInfoModal(prev => ({ ...prev, open: false })); }}
+            onClick={() => { router.push(`/search?q=${encodeURIComponent(tagInfoModal.tag)}`); setTagInfoModal(prev => ({ ...prev, open: false })); }}
             className="flex-1 px-3 py-2 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
           >
             搜索此标签
