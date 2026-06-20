@@ -38,13 +38,17 @@ export default function RichTextEditor({
   const { getToken: getTokenFromAuth } = useAuth();
 
   const destroyEditor = useCallback(() => {
-    if (toolbarRef.current) {
-      toolbarRef.current.destroy();
-      toolbarRef.current = null;
-    }
-    if (editorRef.current) {
-      editorRef.current.destroy();
-      editorRef.current = null;
+    try {
+      if (editorRef.current) {
+        editorRef.current.destroy();
+        editorRef.current = null;
+      }
+      if (toolbarRef.current) {
+        toolbarRef.current.destroy();
+        toolbarRef.current = null;
+      }
+    } catch (err) {
+      console.error('销毁编辑器失败:', err);
     }
     initializedRef.current = false;
   }, []);
@@ -87,6 +91,10 @@ export default function RichTextEditor({
             });
             const data = await res.json();
             if (data.success) {
+              if (!editorRef.current) {
+                showToast('编辑器已关闭，图片无法插入', 'warning');
+                return;
+              }
               const imageUrl = getAssetUrl(data.url);
               insertFn(imageUrl, '', imageUrl);
             } else {
@@ -155,7 +163,7 @@ export default function RichTextEditor({
   }, [placeholder, onChange, enableImageUpload, imageUploadUrl, getToken, getTokenFromAuth, destroyEditor, value]);
 
   useEffect(() => {
-    initEditor();
+    initEditor().catch(err => console.error('编辑器初始化异常:', err));
 
     return () => {
       destroyEditor();
