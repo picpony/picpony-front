@@ -532,7 +532,7 @@ export default function AppLayout({
           </nav>
         </aside>
         
-        <main className="flex-1 overflow-y-scroll bg-white dark:bg-slate-950 relative flex flex-col w-full main-scrollbar mr-2 sm:mr-4 mb-2 sm:mb-4 rounded-xl shadow-sm">
+        <main className="flex-1 overflow-y-scroll bg-white dark:bg-slate-950 relative flex flex-col w-full main-scrollbar sm:m-3 sm:rounded-xl">
           <div key={pathname} className="animate-page-transition p-4 sm:p-6 flex-1">
             {children}
           </div>
