@@ -11,6 +11,16 @@ import ErrorRetry from '@/components/ErrorRetry';
 import ImageSearchModal from '@/components/ImageSearchModal';
 import { showToast } from '@/components/Toast';
 
+interface DictionaryEntry {
+  id: number;
+  en: string;
+  cn: string;
+  cat: string;
+  count: number;
+  description: string;
+  aliases: string[];
+}
+
 function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () => void }) {
   if (images.length === 0) {
     return (
@@ -61,9 +71,24 @@ function SearchPageContent() {
   const [customResults, setCustomResults] = useState<PonyImage[] | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
+  const tokenRef = useRef<string | null>(null);
+  const [tagInfo, setTagInfo] = useState<{ data: DictionaryEntry | null; loading: boolean }>({
+    data: null, loading: false
+  });
+
   useEffect(() => {
     setInputValue(q);
   }, [q]);
+
+  useEffect(() => {
+    try {
+      const userInfoStr = localStorage.getItem('user_info');
+      if (userInfoStr) {
+        const userInfo = JSON.parse(userInfoStr);
+        tokenRef.current = userInfo.token || null;
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (customResults) return;
@@ -102,6 +127,41 @@ function SearchPageContent() {
 
     return () => { isMounted = false; };
   }, [q, page, retryCount, customResults]);
+
+  useEffect(() => {
+    const isSingleTag = !!q && !/[ ,:*?]/.test(q) && !q.startsWith('-');
+
+    if (!isSingleTag) {
+      setTagInfo({ data: null, loading: false });
+      return;
+    }
+
+    setTagInfo({ data: null, loading: true });
+
+    const token = tokenRef.current;
+    if (!token) {
+      setTagInfo({ data: null, loading: false });
+      return;
+    }
+
+    let cancelled = false;
+
+    api.getDictionary(token, { keyword: q, limit: 5 })
+      .then(res => {
+        if (cancelled) return;
+        if (res.success && res.tags) {
+          const match = res.tags.find((t: DictionaryEntry) => t.en.toLowerCase() === q.toLowerCase());
+          setTagInfo({ data: match || null, loading: false });
+        } else {
+          setTagInfo({ data: null, loading: false });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTagInfo({ data: null, loading: false });
+      });
+
+    return () => { cancelled = true; };
+  }, [q]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,6 +223,45 @@ function SearchPageContent() {
           </button>
         </form>
       </div>
+
+      {tagInfo.data ? (
+        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
+          {tagInfo.data.cn && (
+            <div>
+              <span className="text-xs text-slate-400">中文翻译</span>
+              <p className="text-slate-700 dark:text-slate-300 font-medium">{tagInfo.data.cn}</p>
+            </div>
+          )}
+          {tagInfo.data.count > 0 && (
+            <div>
+              <span className="text-xs text-slate-400">使用量</span>
+              <p className="text-slate-700 dark:text-slate-300 font-medium">{tagInfo.data.count.toLocaleString()}</p>
+            </div>
+          )}
+          {tagInfo.data.cat && (
+            <div>
+              <span className="text-xs text-slate-400">分类</span>
+              <p className="text-slate-700 dark:text-slate-300">{tagInfo.data.cat}</p>
+            </div>
+          )}
+          {tagInfo.data.aliases && tagInfo.data.aliases.length > 0 && (
+            <div>
+              <span className="text-xs text-slate-400">别名</span>
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {tagInfo.data.aliases.map((alias, i) => (
+                  <span key={i} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs rounded">{alias}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {tagInfo.data.description && (
+            <div className="sm:col-span-2">
+              <span className="text-xs text-slate-400">标签简介</span>
+              <p className="text-slate-600 dark:text-slate-400 mt-0.5">{tagInfo.data.description}</p>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {customResults ? (
         <CustomImageList images={customResults} onBack={clearCustomResults} />
