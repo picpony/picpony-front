@@ -383,7 +383,7 @@ export default function AppLayout({
         </Link>
       </header>
       
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative bg-slate-50 dark:bg-slate-900">
         <div 
           className={`fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 ease-in-out ${
             isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
@@ -532,7 +532,7 @@ export default function AppLayout({
           </nav>
         </aside>
         
-        <main className="flex-1 overflow-y-scroll bg-white dark:bg-slate-950 relative flex flex-col w-full main-scrollbar">
+        <main className="flex-1 overflow-y-scroll bg-white dark:bg-slate-950 relative flex flex-col w-full main-scrollbar mr-2 sm:mr-4 mb-2 sm:mb-4 rounded-xl shadow-sm">
           <div key={pathname} className="animate-page-transition p-4 sm:p-6 flex-1">
             {children}
           </div>
