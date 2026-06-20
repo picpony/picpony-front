@@ -2,6 +2,9 @@
 
 import React, { useEffect, useRef, useCallback } from 'react';
 import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
+import { useAuth } from '@/lib/hooks';
+import { showToast } from '@/components/Toast';
+import { getAssetUrl } from '@/lib/utils';
 import '@wangeditor/editor/dist/css/style.css';
 
 import type { IDomEditor, Toolbar, IEditorConfig, IToolbarConfig } from '@wangeditor/editor';
@@ -21,7 +24,7 @@ export default function RichTextEditor({
   onChange,
   placeholder = '请输入内容...',
   disabled = false,
-  enableImageUpload = false,
+  enableImageUpload = true,
   imageUploadUrl,
   getToken,
 }: RichTextEditorProps) {
@@ -31,6 +34,8 @@ export default function RichTextEditor({
   const toolbarContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingRef = useRef(false);
   const initializedRef = useRef(false);
+
+  const { getToken: getTokenFromAuth } = useAuth();
 
   const destroyEditor = useCallback(() => {
     if (toolbarRef.current) {
@@ -69,11 +74,11 @@ export default function RichTextEditor({
           const formData = new FormData();
           formData.append('image', file);
 
-          const url = imageUploadUrl || '/api.php?action=upload_forum_image';
-          const token = getToken ? getToken() : (typeof window !== 'undefined' ? localStorage.getItem('user_info') ? JSON.parse(localStorage.getItem('user_info') || '{}').token : null : null);
+          const uploadUrl = imageUploadUrl || '/api.php?action=upload_forum_image';
+          const token = getToken ? getToken() : getTokenFromAuth();
 
           try {
-            const res = await fetch(url, {
+            const res = await fetch(uploadUrl, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${token || ''}`,
@@ -82,12 +87,15 @@ export default function RichTextEditor({
             });
             const data = await res.json();
             if (data.success) {
-              insertFn(data.url, '', data.url);
+              const imageUrl = getAssetUrl(data.url);
+              insertFn(imageUrl, '', imageUrl);
             } else {
               console.error('上传图片失败:', data.error);
+              showToast(data.error || '上传图片失败', 'error');
             }
           } catch (err) {
             console.error('上传图片异常:', err);
+            showToast('上传图片发生异常', 'error');
           }
         },
         maxFileSize: 5 * 1024 * 1024,
@@ -144,7 +152,7 @@ export default function RichTextEditor({
     } catch (err) {
       console.error('初始化编辑器失败:', err);
     }
-  }, [placeholder, onChange, enableImageUpload, imageUploadUrl, getToken, destroyEditor, value]);
+  }, [placeholder, onChange, enableImageUpload, imageUploadUrl, getToken, getTokenFromAuth, destroyEditor, value]);
 
   useEffect(() => {
     initEditor();
