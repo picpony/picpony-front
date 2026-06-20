@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api, Notification } from '@/lib/api';
-import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack, MdOutlineNotificationsActive } from 'react-icons/md';
+import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack, MdOutlineNotificationsActive, MdSearch } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
 
 interface Announcement {
@@ -17,6 +18,7 @@ import { Contact, Message } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 
 export default function MessagesPage() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'announcement' | 'notification' | 'interaction' | 'chat'>('announcement');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -87,6 +89,50 @@ export default function MessagesPage() {
     };
     loadEmojis();
   }, []);
+
+  useEffect(() => {
+    const toUserId = searchParams.get('to');
+    if (!toUserId) return;
+
+    const targetId = parseInt(toUserId, 10);
+    if (isNaN(targetId)) return;
+
+    setActiveTab('chat');
+
+    const timer = setTimeout(async () => {
+      const existing = contacts.find(c => c.id === targetId);
+      if (existing) {
+        setSelectedContact(existing);
+        return;
+      }
+
+      try {
+        const storedUser = localStorage.getItem('user_info');
+        if (!storedUser) return;
+        const user = JSON.parse(storedUser);
+
+        const res = await api.getUserProfile(String(targetId));
+        if (res.success && res.user) {
+          const tempContact = {
+            id: targetId,
+            username: res.user.username,
+            avatar: res.user.avatar,
+            last_msg_time: '',
+            unread_count: 0,
+          };
+          setContacts(prev => {
+            if (prev.some(c => c.id === targetId)) return prev;
+            return [tempContact, ...prev];
+          });
+          setSelectedContact(tempContact);
+        }
+      } catch (err) {
+        console.error('获取用户信息失败', err);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchParams.get('to')]);
 
   const handleCloseEmojiPicker = () => {
     setIsEmojiPickerClosing(true);
@@ -374,6 +420,16 @@ export default function MessagesPage() {
           {activeTab === 'chat' ? (
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden flex h-[calc(100vh-200px)] md:h-[600px]">
               <div className={`w-full md:w-80 border-r border-slate-100 dark:border-slate-700 flex-col ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
+                <div className="p-3 border-b border-slate-100 dark:border-slate-700">
+                  <div className="relative">
+                    <MdSearch size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="搜索昵称发起私信..."
+                      className="w-full pl-9 pr-3 py-2 bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/20 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
                 <div className="flex-1 overflow-y-auto p-4">
                   {loading && contacts.length === 0 ? (
                     <div className="space-y-4">

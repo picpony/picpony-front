@@ -314,8 +314,8 @@ export default function UserProfilePage() {
             className="object-cover"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-r from-primary/20 to-primary/40 flex items-center justify-center">
-            <MdPerson size={64} className="text-white/50" />
+          <div className="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+            <MdPerson size={64} className="text-slate-300 dark:text-slate-500" />
           </div>
         )}
 
