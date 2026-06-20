@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@wangeditor/editor": "^5.1.23",
     "next": "16.2.1",
     "nextjs-toploader": "^3.9.17",
     "react": "19.2.4",

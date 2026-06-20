@@ -5,7 +5,8 @@ import { api, ForumPostDetail, ForumComment } from '@/lib/api';
 import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import BBCodeEditor from '@/components/BBCodeEditor';
+import dynamic from 'next/dynamic';
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
 import FadeInImage from '@/components/FadeInImage';
 
@@ -320,7 +321,7 @@ export default function ForumPostPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <BBCodeEditor 
+            <RichTextEditor 
               value={newComment} 
               onChange={setNewComment} 
               placeholder="写下你的回复..."

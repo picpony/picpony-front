@@ -14,7 +14,7 @@ import 'yet-another-react-lightbox/styles.css';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
-const BBCodeEditor = dynamic(() => import('@/components/BBCodeEditor'), { ssr: false });
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
 import { showToast } from '@/components/Toast';
 
@@ -861,7 +861,7 @@ export default function PicPage() {
                       </button>
                     </div>
                   )}
-                  <BBCodeEditor
+                  <RichTextEditor
                     value={newComment}
                     onChange={setNewComment}
                     placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论..."}

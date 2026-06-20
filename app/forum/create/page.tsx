@@ -7,7 +7,8 @@ import { MdArrowBack, MdSend, MdImage, MdAdd, MdClose } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
-import BBCodeEditor from '@/components/BBCodeEditor';
+import dynamic from 'next/dynamic';
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 
 const categories = [
   { value: 'discussion', label: '综合讨论' },
@@ -211,10 +212,10 @@ export default function CreateForumPostPage() {
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             内容
           </label>
-          <BBCodeEditor
+          <RichTextEditor
             value={content}
             onChange={setContent}
-            placeholder="写下你的帖子内容，支持 BBCode 语法..."
+            placeholder="写下你的帖子内容..."
           />
         </div>
 
