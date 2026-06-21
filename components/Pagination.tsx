@@ -11,16 +11,16 @@ interface PaginationProps {
 
 export default function Pagination({ currentPage, hasMore, onPageChange, disabled }: PaginationProps) {
   return (
-    <div className="mt-12 flex justify-center items-center gap-2">
+    <div className="mt-12 flex justify-center items-center gap-1.5 sm:gap-2">
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1 || disabled}
-        className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         上一页
       </button>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         {Array.from({ length: 5 }, (_, i) => {
           let pageNum;
           if (currentPage <= 3) {
@@ -34,7 +34,7 @@ export default function Pagination({ currentPage, hasMore, onPageChange, disable
               key={pageNum}
               onClick={() => onPageChange(pageNum)}
               disabled={disabled}
-              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+              className={`w-8 sm:w-10 h-8 sm:h-10 rounded-lg flex items-center justify-center transition-colors text-xs sm:text-sm ${
                 currentPage === pageNum
                   ? 'bg-primary text-white font-medium'
                   : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
@@ -49,7 +49,7 @@ export default function Pagination({ currentPage, hasMore, onPageChange, disable
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={!hasMore || disabled}
-        className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         下一页
       </button>

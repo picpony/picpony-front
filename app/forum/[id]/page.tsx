@@ -192,8 +192,8 @@ export default function ForumPostPage() {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-transparent p-6 rounded-xl mb-8">
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">{post.title}</h1>
+      <div className="bg-white dark:bg-transparent p-4 sm:p-6 rounded-xl mb-8">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">{post.title}</h1>
         
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4 mb-6">
           <div className="flex items-center gap-3">
@@ -224,7 +224,7 @@ export default function ForumPostPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-2 sm:gap-4 text-sm text-slate-500 dark:text-slate-400">
             <span className="flex items-center gap-1" title="浏览量">
               <MdVisibility size={16} /> {post.views}
             </span>
@@ -307,7 +307,7 @@ export default function ForumPostPage() {
       </div>
 
       {/* Comment Input */}
-      <div className="bg-white dark:bg-transparent p-6 rounded-xl mb-8">
+      <div className="bg-white dark:bg-transparent p-4 sm:p-6 rounded-xl mb-8">
         <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">发表回复</h3>
         {!isLoggedIn ? (
           <div className="text-center py-8 bg-slate-50 dark:bg-background/50 rounded-lg border border-slate-200 dark:border-slate-700">

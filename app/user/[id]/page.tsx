@@ -305,7 +305,7 @@ export default function UserProfilePage() {
 
   return (
     <div className="animate-fade-in bg-white dark:bg-slate-950 min-h-screen">
-      <div className="h-48 sm:h-64 md:h-80 relative bg-slate-100 dark:bg-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden mt-4 sm:mt-6 mx-auto max-w-[96%] sm:max-w-[98%]">
+      <div className="h-48 sm:h-64 md:h-80 relative bg-slate-100 dark:bg-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden mt-4 sm:mt-6 mx-auto max-w-full sm:max-w-[98%] px-2 sm:px-0">
         {profile.banner ? (
           <FadeInImage
             src={`https://picpony.top/${profile.banner}`}

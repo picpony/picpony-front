@@ -18,7 +18,7 @@ const buttonClass = (disabled: boolean) =>
   `flex items-center justify-center min-w-[36px] sm:min-w-auto min-h-[36px] sm:min-h-auto px-0 sm:px-2 py-0 sm:py-1 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-md text-sm font-medium text-[var(--sidebar-text)] transition-all duration-200 hover:bg-[var(--sidebar-hover)] hover:text-primary ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
 
 const sectionTitle = "text-base font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2";
-const rowClass = "flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg";
+const rowClass = "flex items-center justify-between p-3 sm:p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg gap-2 sm:gap-4";
 const labelClass = "text-sm text-slate-500 dark:text-slate-400 mb-1";
 const valueClass = "font-medium text-slate-800 dark:text-slate-200";
 

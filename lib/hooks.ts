@@ -2,6 +2,43 @@
 
 import { useEffect, useState } from 'react';
 
+interface DisplayInfo {
+  /** < 640px — 手机 */
+  mobile: boolean;
+  /** 640px ~ 1023px — 平板/小屏 */
+  tablet: boolean;
+  /** >= 1024px — 桌面 */
+  desktop: boolean;
+  /** 当前精确宽度 */
+  width: number;
+}
+
+export function useDisplay(): DisplayInfo {
+  const getDisplay = (): DisplayInfo => {
+    if (typeof window === 'undefined') {
+      return { mobile: false, tablet: false, desktop: true, width: 1200 };
+    }
+    const w = window.innerWidth;
+    return {
+      mobile: w < 640,
+      tablet: w >= 640 && w < 1024,
+      desktop: w >= 1024,
+      width: w,
+    };
+  };
+
+  const [display, setDisplay] = useState(getDisplay);
+
+  useEffect(() => {
+    const update = () => setDisplay(getDisplay());
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  return display;
+}
+
 export function useMasonryColumns() {
   const getInitialColumns = () => {
     if (typeof window === 'undefined') return 4;

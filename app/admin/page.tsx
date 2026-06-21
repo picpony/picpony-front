@@ -1781,7 +1781,7 @@ function OtherTab({ token }: { token: string }) {
           <MdBarChart size={20} />
           全站数据统计
         </h3>
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
           <div className="text-center p-3 bg-white dark:bg-slate-700 rounded-lg">
             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">图片总数</div>
             <div className="text-xl font-bold text-primary">{stats.images?.toLocaleString() || 0}</div>
@@ -2978,7 +2978,7 @@ function GlossaryTab() {
         isOpen={isBatchModalOpen}
         onClose={() => !isBatchImporting && setIsBatchModalOpen(false)}
         title="批量导入标签"
-        maxWidth="max-w-2xl"
+        maxWidth="max-w-xl"
         footer={
           <>
             <button
@@ -3147,7 +3147,7 @@ function GlossaryTab() {
         isOpen={isFeedbackModalOpen}
         onClose={() => setIsFeedbackModalOpen(false)}
         title="用户反馈与翻译申请"
-        maxWidth="max-w-2xl"
+        maxWidth="max-w-xl"
       >
         <div className="max-h-[60vh] overflow-y-auto">
           {isLoadingFeedback ? (
@@ -3331,7 +3331,7 @@ export default function AdminPage() {
     <div className="max-w-6xl mx-auto">
       <div className="bg-white dark:bg-slate-950 rounded-xl overflow-hidden flex flex-col md:flex-row">
         <div className="md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800">
-          <nav className="flex md:flex-col p-2 gap-1 overflow-x-auto">
+          <nav className="flex md:flex-col p-2 gap-1 overflow-x-auto scrollbar-hide">
             {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
@@ -3349,7 +3349,7 @@ export default function AdminPage() {
           </nav>
         </div>
 
-        <div className="flex-1 p-6 min-h-[600px] relative">
+        <div className="flex-1 p-4 sm:p-6 min-h-[400px] md:min-h-[600px] relative">
           <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
             {activeTab === 'welcome' && <WelcomeTab />}
             {activeTab === 'glossary' && <GlossaryTab />}

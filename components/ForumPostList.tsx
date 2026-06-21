@@ -92,34 +92,34 @@ export default function ForumPostList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     {post.is_pinned === 1 && (
-                      <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-medium rounded">置顶</span>
+                      <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-medium rounded flex-shrink-0">置顶</span>
                     )}
-                    <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 truncate">{post.title}</h2>
+                    <h2 className="text-base sm:text-lg font-semibold text-slate-800 dark:text-slate-100 truncate">{post.title}</h2>
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                     <span className="font-medium text-slate-700 dark:text-slate-300">{post.username}</span>
                     <span>{new Date(post.created_at).toLocaleDateString()}</span>
-                    <div className="flex items-center gap-3 ml-auto">
-                      <span className="flex items-center gap-1" title="浏览量">
-                        <MdVisibility size={16} /> {post.views}
+                    <div className="flex items-center gap-2 sm:gap-3 ml-auto sm:ml-auto">
+                      <span className="flex items-center gap-0.5 sm:gap-1 whitespace-nowrap" title="浏览量">
+                        <MdVisibility size={14} className="sm:size-[16px]" /> {post.views}
                       </span>
-                      <span className="flex items-center gap-1" title="回复数">
-                        <MdComment size={16} /> {post.reply_count}
+                      <span className="flex items-center gap-0.5 sm:gap-1 whitespace-nowrap" title="回复数">
+                        <MdComment size={14} className="sm:size-[16px]" /> {post.reply_count}
                       </span>
-                      <span className="flex items-center gap-1" title="点赞数">
-                        <MdThumbUp size={16} /> {post.like_count}
+                      <span className="flex items-center gap-0.5 sm:gap-1 whitespace-nowrap" title="点赞数">
+                        <MdThumbUp size={14} className="sm:size-[16px]" /> {post.like_count}
                       </span>
                     </div>
                   </div>
                 </div>
                 {post.cover_image && (
-                  <div className="flex-shrink-0 hidden sm:block">
+                  <div className="flex-shrink-0">
                     <FadeInImage
                       src={`https://picpony.top${post.cover_image}`}
                       alt="Cover"
                       width={80}
                       height={80}
-                      className="object-cover rounded-lg"
+                      className="object-cover rounded-lg w-12 h-12 sm:w-20 sm:h-20"
                     />
                   </div>
                 )}
@@ -130,17 +130,17 @@ export default function ForumPostList({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2">
+        <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => onPageChange(page - 1)}
             disabled={page === 1}
-            className="px-4 py-2 rounded-lg bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             上一页
           </button>
 
           <div className="flex items-center gap-1">
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            {Array.from({ length: Math.min(page <= 3 || totalPages <= 5 ? 5 : totalPages >= 7 ? 3 : 5, totalPages) }, (_, i) => {
               let pageNum;
               if (totalPages <= 5) {
                 pageNum = i + 1;
@@ -148,6 +148,9 @@ export default function ForumPostList({
                 pageNum = i + 1;
               } else if (page >= totalPages - 2) {
                 pageNum = totalPages - 4 + i;
+              } else if (totalPages >= 7) {
+                // 大页数：移动端只显示 3 个紧凑按钮
+                pageNum = page - 1 + i;
               } else {
                 pageNum = page - 2 + i;
               }
@@ -156,7 +159,7 @@ export default function ForumPostList({
                 <button
                   key={pageNum}
                   onClick={() => onPageChange(pageNum)}
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                  className={`w-8 sm:w-10 h-8 sm:h-10 rounded-lg flex items-center justify-center transition-colors text-xs sm:text-sm ${
                     page === pageNum
                       ? 'bg-primary text-white font-medium'
                       : 'bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
@@ -171,7 +174,7 @@ export default function ForumPostList({
           <button
             onClick={() => onPageChange(page + 1)}
             disabled={page === totalPages}
-            className="px-4 py-2 rounded-lg bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             下一页
           </button>

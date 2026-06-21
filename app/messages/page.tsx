@@ -570,7 +570,7 @@ export default function MessagesPage() {
                           
                           {(showEmojiPicker || isEmojiPickerClosing) && (
                             <div className={`absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}>
-                              <div className="grid grid-cols-6 gap-2 max-h-60 overflow-y-auto p-1">
+                              <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 max-h-60 overflow-y-auto p-1">
                                 {emojiList.map(emoji => (
                                   <button
                                     key={emoji}

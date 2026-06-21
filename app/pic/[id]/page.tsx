@@ -808,7 +808,7 @@ export default function PicPage() {
                   <span 
                     key={index}
                     onClick={() => handleTagClick(tag)}
-                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer border border-transparent hover:border-primary/30"
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer border border-transparent hover:border-primary/30 max-w-full truncate"
                     title="点击查看词库信息"
                   >
                     {tag}

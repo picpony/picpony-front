@@ -68,7 +68,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-12 p-8 animate-fade-in">
+    <div className="max-w-md mx-auto mt-8 sm:mt-12 p-6 sm:p-8 animate-fade-in">
       <Link
         href="/login"
         className="flex items-center text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-8 transition-colors"
