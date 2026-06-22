@@ -2566,7 +2566,7 @@ function GlossaryTab() {
                     {tag.cat}
                   </span>
                   <a
-                    href={`/#q=${encodeURIComponent(tag.en)}`}
+                    href={`/search?q=${encodeURIComponent(tag.en)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-sm text-primary hover:underline flex items-center gap-1"
