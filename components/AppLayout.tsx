@@ -3,7 +3,7 @@
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
 const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
@@ -474,6 +474,14 @@ export default function AppLayout({
                   >
                     <MdHistory size={20} className="shrink-0 mr-3" />
                     <span>浏览历史</span>
+                  </Link>
+                  <Link
+                    href="/upload"
+                    onClick={handleMobileNavigation}
+                    className={sidebarButtonClass(pathname === '/upload')}
+                  >
+                    <MdCloudUpload size={20} className="shrink-0 mr-3" />
+                    <span>发布图片</span>
                   </Link>
                   <Link
                     href="/settings"

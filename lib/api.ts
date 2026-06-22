@@ -597,6 +597,18 @@ export const api = {
     });
   },
 
+  uploadImageToDerpi: async (file: File, tags: string, apiKey: string, source?: string, description?: string) => {
+    const formData = new FormData();
+    formData.append('image[image]', file);
+    formData.append('image[tag_input]', tags);
+    if (source) formData.append('image[source_url]', source);
+    if (description) formData.append('image[description]', description);
+    return fetch(`${DERPIBOORU_API_BASE}/images?key=${encodeURIComponent(apiKey)}`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
   saveApikey: async (token: string, data: {api_key: string, derpi_user_id: string, derpi_username: string}) => {
     return fetch(`${PICPONY_API_BASE}?action=save_apikey`, {
       method: 'POST',
