@@ -737,19 +737,16 @@ export default function SettingsPage() {
           </div>
 
           <div className={rowClass + ' mb-4'}>
-            <div className="flex items-center gap-2">
-              <MdEmail size={20} className="text-slate-400" />
-              <div>
-                <p className={labelClass}>邮箱</p>
-                <p className={valueClass}>
-                  {currentEmail || '未设置'}
-                  {currentEmail && (
-                    <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${isEmailVerified ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                      {isEmailVerified ? '已验证' : '未验证'}
-                    </span>
-                  )}
-                </p>
-              </div>
+            <div>
+              <p className={labelClass}>邮箱</p>
+              <p className={valueClass}>
+                {currentEmail || '未设置'}
+                {currentEmail && (
+                  <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${isEmailVerified ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                    {isEmailVerified ? '已验证' : '未验证'}
+                  </span>
+                )}
+              </p>
             </div>
             <button onClick={() => { setNewEmail(currentEmail); setIsEmailModalOpen(true); }} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
               <MdEdit size={16} className="sm:mr-2" />
@@ -758,14 +755,11 @@ export default function SettingsPage() {
           </div>
 
           <div className={rowClass + ' mb-4'}>
-            <div className="flex items-center gap-2">
-              <MdPerson size={20} className="text-slate-400" />
-              <div>
-                <p className={labelClass}>个人资料</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">
-                  {profileBio ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '...' : '') : '点击编辑个人简介、性别、生日'}
-                </p>
-              </div>
+            <div>
+              <p className={labelClass}>个人资料</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {profileBio ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '...' : '') : '点击编辑个人简介、性别、生日'}
+              </p>
             </div>
             <button onClick={() => setIsProfileModalOpen(true)} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
               <MdEdit size={16} className="sm:mr-2" />
@@ -793,16 +787,13 @@ export default function SettingsPage() {
           <h2 className={sectionTitle}><MdFilterList size={20} /> 内容筛选</h2>
 
           <div className={rowClass + ' mb-4'}>
-            <div className="flex items-center gap-2">
-              <MdShield size={20} className="text-slate-400" />
-              <div>
-                <p className={labelClass}>内容分级过滤器</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  {contentFilter === 'safe' && '仅显示安全内容'}
-                  {contentFilter === 'spoilers' && '拦截限制级内容（需 16 岁以上）'}
-                  {contentFilter === 'developer' && '开发者模式，显示所有内容'}
-                </p>
-              </div>
+            <div>
+              <p className={labelClass}>内容分级过滤器</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                {contentFilter === 'safe' && '仅显示安全内容'}
+                {contentFilter === 'spoilers' && '拦截限制级内容（需 16 岁以上）'}
+                {contentFilter === 'developer' && '开发者模式，显示所有内容'}
+              </p>
             </div>
             <select
               value={contentFilter}
