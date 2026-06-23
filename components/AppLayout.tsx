@@ -220,6 +220,15 @@ export default function AppLayout({
     return () => window.removeEventListener('unread_counts_updated', fetchUnreadCounts);
   }, [userInfo]);
 
+  const prevUserRef = useRef(userInfo);
+  useEffect(() => {
+    const prev = prevUserRef.current;
+    prevUserRef.current = userInfo;
+    if (!prev && userInfo) {
+      setIsUserMenuOpen(true);
+    }
+  }, [userInfo]);
+
   const toggleUserMenu = () => {
     setIsUserMenuOpen(prev => {
       const newState = !prev;
@@ -310,6 +319,7 @@ export default function AppLayout({
 
   const handleLogoutConfirm = () => {
     localStorage.removeItem('user_info');
+    localStorage.removeItem('user_menu_open');
     setUserInfo(null);
     setIsUserMenuOpen(false);
     setIsLogoutDialogOpen(false);
