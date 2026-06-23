@@ -45,10 +45,9 @@ interface UserInfo {
 }
 
 const sidebarButtonClass = (isActive: boolean) =>
-  `flex items-center px-3 py-2 font-medium transition-all duration-200 rounded-lg w-full justify-start ${
-    isActive
-      ? 'text-primary bg-primary/10 hover:bg-primary/15'
-      : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
+  `flex items-center px-3 py-2 font-medium transition-all duration-200 rounded-lg w-full justify-start ${isActive
+    ? 'text-primary bg-primary/10 hover:bg-primary/15'
+    : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
   }`;
 
 function TabNavBar() {
@@ -75,22 +74,20 @@ function TabNavBar() {
       <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl shadow-lg shadow-black/10 dark:shadow-black/30">
         <button
           onClick={() => switchTab('gallery')}
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-            currentTab !== 'forum'
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${currentTab !== 'forum'
               ? 'bg-white dark:bg-slate-700 text-primary'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
+            }`}
         >
           <MdPhotoLibrary size={18} />
           <span>图库</span>
         </button>
         <button
           onClick={() => switchTab('forum')}
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-            currentTab === 'forum'
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${currentTab === 'forum'
               ? 'bg-white dark:bg-slate-700 text-primary'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
+            }`}
         >
           <MdForum size={18} />
           <span>论坛</span>
@@ -100,11 +97,11 @@ function TabNavBar() {
   );
 }
 
-export default function AppLayout({ 
-  children, 
+export default function AppLayout({
+  children,
   initialCollapsed,
   initialDark
-}: { 
+}: {
   children: React.ReactNode;
   initialCollapsed: boolean;
   initialDark: boolean;
@@ -119,7 +116,8 @@ export default function AppLayout({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem('user_menu_open');
-    return saved === 'true';
+    if (saved !== null) return saved === 'true';
+    return !!localStorage.getItem('user_info');
   });
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
@@ -143,8 +141,8 @@ export default function AppLayout({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
-  const systemPrefersDark = typeof window !== 'undefined' 
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches 
+  const systemPrefersDark = typeof window !== 'undefined'
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches
     : false;
 
   const applyDarkMode = useCallback((dark: boolean) => {
@@ -238,17 +236,17 @@ export default function AppLayout({
         try {
           const parsedUser = JSON.parse(storedUser);
           setUserInfo(parsedUser);
-          
+
           if (parsedUser.token) {
             try {
               const res = await api.getUser(parsedUser.token);
-              
+
               if (res.status === 401) {
                 localStorage.removeItem('user_info');
                 setUserInfo(null);
                 return;
               }
-              
+
               const data = await res.json();
               if (data.success && data.user) {
                 const updatedUser = {
@@ -275,7 +273,7 @@ export default function AppLayout({
     };
 
     updateUserInfo();
-    
+
     window.addEventListener('user_info_updated', updateUserInfo);
     return () => window.removeEventListener('user_info_updated', updateUserInfo);
   }, [pathname]);
@@ -338,7 +336,7 @@ export default function AppLayout({
         <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex mr-2">
           <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
         </Link>
-        <div 
+        <div
           className="relative"
           ref={dropdownRef}
           onMouseEnter={handleDropdownMouseEnter}
@@ -353,7 +351,7 @@ export default function AppLayout({
             {darkMode ? <MdLightMode size={24} /> : <MdDarkMode size={24} />}
           </button>
           {isDarkDropdownOpen && (
-            <div 
+            <div
               className="absolute left-0 top-full mt-1 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-[60] animate-fade-in"
               onMouseEnter={handleDropdownMouseEnter}
               onMouseLeave={handleDropdownMouseLeave}
@@ -382,25 +380,23 @@ export default function AppLayout({
           )}
         </Link>
       </header>
-      
+
       <div className="flex flex-1 overflow-hidden relative bg-slate-50 dark:bg-slate-900">
-        <div 
-          className={`fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 ease-in-out ${
-            isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
-          }`}
+        <div
+          className={`fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 ease-in-out ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}
           onClick={() => setIsCollapsed(true)}
         />
-        
-        <aside 
-          className={`bg-slate-50 dark:bg-slate-900 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden absolute md:relative h-full z-50 md:z-auto ${
-            isCollapsed ? '-translate-x-full md:translate-x-0 md:w-0' : 'translate-x-0 w-64'
-          }`}
+
+        <aside
+          className={`bg-slate-50 dark:bg-slate-900 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden absolute md:relative h-full z-50 md:z-auto ${isCollapsed ? '-translate-x-full md:translate-x-0 md:w-0' : 'translate-x-0 w-64'
+            }`}
         >
           <div className="w-64 p-3 pb-0">
             {userInfo ? (
               <div className="relative">
                 <div className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative z-20">
-                  <Link 
+                  <Link
                     href={`/user/${userInfo.id}`}
                     onClick={handleMobileNavigation}
                     className="flex items-center flex-1 overflow-hidden"
@@ -432,19 +428,18 @@ export default function AppLayout({
                     </div>
                   </Link>
                   <button onClick={toggleUserMenu} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 p-1 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-                    <MdExpandMore 
-                      size={20} 
-                      className={`transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} 
+                    <MdExpandMore
+                      size={20}
+                      className={`transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`}
                     />
                   </button>
                 </div>
-                
-                <div 
-                  className={`mt-1 flex flex-col space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${
-                    isUserMenuOpen 
-                      ? 'max-h-80 opacity-100 mb-2' 
+
+                <div
+                  className={`mt-1 flex flex-col space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isUserMenuOpen
+                      ? 'max-h-80 opacity-100 mb-2'
                       : 'max-h-0 opacity-0'
-                  }`}
+                    }`}
                 >
                   <Link
                     href="/favorites"
@@ -512,7 +507,7 @@ export default function AppLayout({
                 <div className="h-px bg-slate-200 dark:bg-slate-700 mt-2 mx-2"></div>
               </div>
             ) : (
-              <Link 
+              <Link
                 href="/login"
                 onClick={handleMobileNavigation}
                 className="flex items-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
@@ -539,7 +534,7 @@ export default function AppLayout({
             </Link>
           </nav>
         </aside>
-        
+
         <main className="flex-1 overflow-y-scroll bg-white dark:bg-slate-950 relative flex flex-col w-full main-scrollbar sm:m-3 sm:rounded-xl">
           <div key={pathname} className="animate-page-transition p-4 sm:p-6 flex-1">
             {children}
@@ -547,7 +542,7 @@ export default function AppLayout({
           <footer className="py-6 sm:py-8 px-4 sm:px-6 text-slate-500 dark:text-slate-400 text-sm">
             <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex flex-col items-center md:items-start gap-4 w-full md:w-auto">
-              <Logo className="h-8 w-auto opacity-60" />
+                <Logo className="h-8 w-auto opacity-60" />
                 <div>
                   <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
                   <p>本站为 Derpibooru 第三方镜像站点</p>
@@ -563,7 +558,7 @@ export default function AppLayout({
         </main>
       </div>
       <AnnouncementModal />
-      
+
       <Modal
         isOpen={isLogoutDialogOpen}
         onClose={handleLogoutCancel}
