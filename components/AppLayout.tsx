@@ -3,7 +3,7 @@
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
 const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
@@ -446,8 +446,8 @@ export default function AppLayout({
                 </div>
 
                 <div
-                  className={`mt-1 flex flex-col space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isUserMenuOpen
-                      ? 'max-h-80 opacity-100 mb-2'
+                  className={`mt-1 flex flex-col space-y-1 overflow-y-auto transition-all duration-300 ease-in-out ${isUserMenuOpen
+                      ? 'max-h-96 opacity-100 mb-2'
                       : 'max-h-0 opacity-0'
                     }`}
                 >
@@ -487,6 +487,14 @@ export default function AppLayout({
                   >
                     <MdCloudUpload size={20} className="shrink-0 mr-3" />
                     <span>发布图片</span>
+                  </Link>
+                  <Link
+                    href="/block-groups"
+                    onClick={handleMobileNavigation}
+                    className={sidebarButtonClass(pathname === '/block-groups')}
+                  >
+                    <MdShield size={20} className="shrink-0 mr-3" />
+                    <span>屏蔽组</span>
                   </Link>
                   <Link
                     href="/settings"

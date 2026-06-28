@@ -333,6 +333,16 @@ function buildSearchQuery(search?: string): string {
     tags = tags ? `${tags}, pony` : 'pony';
   }
 
+  try {
+    const activeHidden: string[] = JSON.parse(localStorage.getItem('trixie_active_hidden_tags') || '[]');
+    const blockNegations = activeHidden
+      .filter(t => t && typeof t === 'string')
+      .map(t => `-${t.trim().toLowerCase()}`);
+    if (blockNegations.length > 0) {
+      tags = tags ? `${tags}, ${blockNegations.join(', ')}` : blockNegations.join(', ');
+    }
+  } catch { /* ignore */ }
+
   if (!tags && s.contentFilter !== 'developer') {
     tags = '-explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, pony';
   }
@@ -1729,7 +1739,7 @@ export const api = {
 
   saveBlockGroup: async (token: string, data: {
     id?: number; name: string; tags: string[];
-    hidden_tags?: string; spoilered_tags?: string;
+    hidden_tags?: string | string[]; spoilered_tags?: string | string[];
   }) => {
     return fetch(`${PICPONY_API_BASE}?action=save_block_group`, {
       method: 'POST',
