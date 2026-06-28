@@ -67,44 +67,54 @@ export function ToastContainer() {
   return createPortal(
     <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-3 pointer-events-none items-center">
       {toasts.map(toast => (
-        <ToastItem key={toast.id} toast={toast} onClose={() => handleClose(toast.id)} />
+        <ToastItem key={toast.id} toast={toast} onClose={handleClose} />
       ))}
     </div>,
     document.body
   );
 }
 
-function ToastItem({ toast, onClose }: { toast: ToastMessage, onClose: () => void }) {
-  const [state, setState] = useState<'entering' | 'entered' | 'exiting'>('entering');
+function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: number) => void }) {
+  const [phase, setPhase] = useState<'enter' | 'visible' | 'exit'>('enter');
 
   useEffect(() => {
-    const enterTimer = requestAnimationFrame(() => {
-      setState('entered');
+    // Enter animation: enter → visible after one frame
+    const raf = requestAnimationFrame(() => {
+      setPhase('visible');
     });
 
-    const exitTimer = setTimeout(() => {
-      setState('exiting');
-      setTimeout(onClose, 300);
+    // Schedule exit after toast duration
+    const timer = setTimeout(() => {
+      setPhase('exit');
     }, toast.duration);
 
     return () => {
-      cancelAnimationFrame(enterTimer);
-      clearTimeout(exitTimer);
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
     };
-  }, [toast.duration, onClose]);
+  }, [toast.duration]);
+
+  // Phase 'exit' → fade out over 300ms, then remove from DOM
+  useEffect(() => {
+    if (phase === 'exit') {
+      const timer = setTimeout(() => {
+        onClose(toast.id);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, toast.id, onClose]);
 
   const handleManualClose = () => {
-    if (state === 'exiting') return;
-    setState('exiting');
-    setTimeout(onClose, 300);
+    if (phase === 'exit') return;
+    setPhase('exit');
   };
 
   let containerClasses = "pointer-events-auto transition-all duration-300 ease-in-out ";
-  if (state === 'entering') {
+  if (phase === 'enter') {
     containerClasses += "opacity-0 translate-y-4 scale-95";
-  } else if (state === 'entered') {
+  } else if (phase === 'visible') {
     containerClasses += "opacity-100 translate-y-0 scale-100";
-  } else if (state === 'exiting') {
+  } else if (phase === 'exit') {
     containerClasses += "opacity-0 -translate-y-4 scale-95";
   }
 
