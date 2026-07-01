@@ -435,7 +435,7 @@ export default function MessagesPage() {
                   {loading && contacts.length === 0 ? (
                     <div className="space-y-1">
                       {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="flex items-center justify-start w-full p-2 gap-1.5 mb-1 animate-pulse">
+                        <div key={i} className="flex items-center justify-start w-full p-2 gap-1.5 mb-4 animate-pulse">
                           <div className="relative">
                             <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700" />
                           </div>
@@ -455,7 +455,7 @@ export default function MessagesPage() {
                       <button
                         key={contact.id}
                         onClick={() => setSelectedContact(contact)}
-                        className={`flex items-center justify-start text-left w-full p-2 gap-1.5 mb-1 transition-colors duration-200 ${
+                        className={`flex items-center justify-start text-left w-full p-2 gap-1.5 mb-4 transition-colors duration-200 ${
                           selectedContact?.id === contact.id ? 'bg-[var(--sidebar-hover)]' : 'hover:bg-[var(--sidebar-hover)]'
                         }`}
                       >
