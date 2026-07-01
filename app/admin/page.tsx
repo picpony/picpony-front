@@ -17,13 +17,18 @@ import FadeInImage from '@/components/FadeInImage';
 import Checkbox from '@/components/Checkbox';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import Modal from '@/components/Modal';
-import { Spinner, SearchInput, SectionHeader, EmptyState } from '@/components/admin';
-import NotificationsTab from '@/components/admin/NotificationsTab';
-import MessagesAuditTab from '@/components/admin/MessagesAuditTab';
-import BadgesTab from '@/components/admin/BadgesTab';
-import BlockTagsTab from '@/components/admin/BlockTagsTab';
-import DeveloperTab from '@/components/admin/DeveloperTab';
-import TeamTab from '@/components/admin/TeamTab';
+import Spinner from '@/components/Spinner';
+import SearchInput from '@/components/admin/SearchInput';
+import SectionHeader from '@/components/admin/SectionHeader';
+import EmptyState from '@/components/admin/EmptyState';
+import dynamic from 'next/dynamic';
+
+const NotificationsTab = dynamic(() => import('@/components/admin/NotificationsTab'), { ssr: false });
+const MessagesAuditTab = dynamic(() => import('@/components/admin/MessagesAuditTab'), { ssr: false });
+const BadgesTab = dynamic(() => import('@/components/admin/BadgesTab'), { ssr: false });
+const BlockTagsTab = dynamic(() => import('@/components/admin/BlockTagsTab'), { ssr: false });
+const DeveloperTab = dynamic(() => import('@/components/admin/DeveloperTab'), { ssr: false });
+const TeamTab = dynamic(() => import('@/components/admin/TeamTab'), { ssr: false });
 
 interface Tag {
   id: number;
@@ -1596,23 +1601,24 @@ function OtherTab({ token }: { token: string }) {
   useEffect(() => {
     const doLoad = async () => {
       try {
-        const data = await api.getMaintenanceStatus();
-        if (data.success) {
-          setMaintenanceMode(data.maintenance_mode);
-          setMaintenanceMessage(data.maintenance_message || '');
-          setTranslateEnabled(data.translate_enabled !== false);
+        const [dataResult, statsResult] = await Promise.all([
+          api.getMaintenanceStatus().catch(() => null),
+          api.getSiteStats().catch(() => null),
+        ]);
+
+        if (dataResult?.success) {
+          setMaintenanceMode(dataResult.maintenance_mode);
+          setMaintenanceMessage(dataResult.maintenance_message || '');
+          setTranslateEnabled(dataResult.translate_enabled !== false);
+        } else {
+          showToast('加载设置失败', 'error');
+        }
+
+        if (statsResult?.success && statsResult.stats) {
+          setStats(statsResult.stats);
         }
       } catch {
         showToast('加载设置失败', 'error');
-      }
-
-      try {
-        const statsData = await api.getSiteStats();
-        if (statsData.success && statsData.stats) {
-          setStats(statsData.stats);
-        }
-      } catch {
-        // ignore
       }
     };
     doLoad();
@@ -3285,14 +3291,14 @@ export default function AdminPage() {
     { id: 'other', label: '其他功能', icon: <MdBuild size={20} />, adminOnly: true },
   ];
 
-  const handleTabChange = (tabId: TabId) => {
+  const handleTabChange = useCallback((tabId: TabId) => {
     if (tabId === activeTab) return;
     setIsTransitioning(true);
     setTimeout(() => {
       setActiveTab(tabId);
       setIsTransitioning(false);
     }, 200);
-  };
+  }, [activeTab]);
 
   const isEditor = userRole === 'editor';
   const isAdmin = ['super_admin', 'admin'].includes(userRole);

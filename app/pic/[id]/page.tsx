@@ -4,17 +4,16 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend, MdShare, MdContentCopy, MdFlag, MdClose, MdFullscreen, MdChevronLeft, MdChevronRight, MdReply } from 'react-icons/md';
 import Modal from '@/components/Modal';
-import Lightbox from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
 import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen';
 import Download from 'yet-another-react-lightbox/plugins/download';
 import Video from 'yet-another-react-lightbox/plugins/video';
-import 'yet-another-react-lightbox/styles.css';
 import FadeInImage from '@/components/FadeInImage';
 import { api, PonyImage, Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
+const Lightbox = dynamic(() => import('yet-another-react-lightbox'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
@@ -93,6 +92,11 @@ export default function PicPage() {
         tokenRef.current = userInfo.token || null;
       }
     } catch {}
+  }, []);
+
+  // Dynamically import lightbox CSS
+  useEffect(() => {
+    import('yet-another-react-lightbox/styles.css');
   }, []);
 
   // Track navigation context from sessionStorage

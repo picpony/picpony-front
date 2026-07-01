@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { PonyImage } from '@/lib/api';
 import { distributeToMasonryColumns } from '@/lib/utils';
 import { useMasonryColumns } from '@/lib/hooks';
@@ -9,7 +10,7 @@ interface MasonryGridProps {
   images: PonyImage[];
 }
 
-export default function MasonryGrid({ images }: MasonryGridProps) {
+export default memo(function MasonryGrid({ images }: MasonryGridProps) {
   const columns = useMasonryColumns();
   const columnData = distributeToMasonryColumns(images, columns);
 
@@ -24,4 +25,4 @@ export default function MasonryGrid({ images }: MasonryGridProps) {
       ))}
     </div>
   );
-}
+});

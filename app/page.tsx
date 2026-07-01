@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import {
   MdAdd,
 } from "react-icons/md";
@@ -55,6 +55,16 @@ function ImageList() {
     return () => { isMounted = false; };
   }, [page, retryCount]);
 
+  const handleRetry = useCallback(() => setRetryCount(c => c + 1), []);
+  const handlePageChange = useCallback((newPage: number) => {
+    if (newPage >= 1) {
+      setIsLoading(true);
+      setError(null);
+      setPage(newPage);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
   if (isLoading) return <ImageGridSkeleton />;
 
   if (error) {
@@ -67,19 +77,10 @@ function ImageList() {
             ? '你的请求次数过快，超出原站限制'
             : `${status ? `HTTP Error ${status}: ` : ''}${error.message}`
         }
-        onRetry={() => setRetryCount(c => c + 1)}
+        onRetry={handleRetry}
       />
     );
   }
-
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1) {
-      setIsLoading(true);
-      setError(null);
-      setPage(newPage);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
 
   return (
     <>
@@ -119,6 +120,25 @@ function ForumTab() {
     return () => { isMounted = false; };
   }, [page, retryCount]);
 
+  const handleRetry = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
+    setRetryCount(c => c + 1);
+  }, []);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setIsLoading(true);
+      setError(null);
+      setPage(newPage);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [totalPages]);
+
+  const handlePostClick = useCallback((postId: number) => {
+    router.push(`/forum/${postId}`);
+  }, [router]);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
@@ -134,16 +154,9 @@ function ForumTab() {
         totalPages={totalPages}
         isLoading={isLoading}
         error={error}
-        onRetry={() => { setIsLoading(true); setError(null); setRetryCount(c => c + 1); }}
-        onPageChange={(newPage) => {
-          if (newPage >= 1 && newPage <= totalPages) {
-            setIsLoading(true);
-            setError(null);
-            setPage(newPage);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }
-        }}
-        onPostClick={(postId) => router.push(`/forum/${postId}`)}
+        onRetry={handleRetry}
+        onPageChange={handlePageChange}
+        onPostClick={handlePostClick}
       />
     </div>
   );

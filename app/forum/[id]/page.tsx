@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api, ForumPostDetail, ForumComment } from '@/lib/api';
 import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -73,7 +73,7 @@ export default function ForumPostPage() {
     };
   }, [id, page, retryCount]);
 
-  const handleToggleLike = async () => {
+  const handleToggleLike = useCallback(async () => {
     const userInfoStr = localStorage.getItem('user_info');
     if (!userInfoStr) {
       setSubmitError('请先登录');
@@ -93,17 +93,17 @@ export default function ForumPostPage() {
     } finally {
       setIsLikeLoading(false);
     }
-  };
+  }, [id]);
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
       router.push(`/forum/${id}?page=${newPage}`);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  };
+  }, [id, totalPages, router]);
 
-  const handleSubmitComment = async () => {
+  const handleSubmitComment = useCallback(async () => {
     if (!newComment.trim() || isSubmitting) return;
 
     const userInfoStr = localStorage.getItem('user_info');
@@ -132,7 +132,7 @@ export default function ForumPostPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [id, newComment, isSubmitting]);
 
   if (isLoading) {
     return (

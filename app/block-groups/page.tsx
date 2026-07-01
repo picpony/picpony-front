@@ -132,7 +132,7 @@ export default function BlockGroupsPage() {
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  function addTag(tagName: string) {
+  const addTag = useCallback((tagName: string) => {
     const currentTotal = hiddenTags.length + spoileredTags.length;
     if (currentTotal >= MAX_TAGS_PER_GROUP) {
       showToast(`每个屏蔽组最多只能添加 ${MAX_TAGS_PER_GROUP} 个标签`, 'warning');
@@ -147,15 +147,15 @@ export default function BlockGroupsPage() {
     }
     setSearchQuery('');
     setShowSuggestions(false);
-  }
+  }, []);
 
-  function removeTag(tagName: string, type: 'hide' | 'spoiler') {
+  const removeTag = useCallback((tagName: string, type: 'hide' | 'spoiler') => {
     if (type === 'hide') setHiddenTags(prev => prev.filter(t => t !== tagName));
     else setSpoileredTags(prev => prev.filter(t => t !== tagName));
-  }
+  }, []);
 
   // ================= Edit / Create =================
-  function openEditModal(group?: BlockGroup) {
+  const openEditModal = useCallback((group?: BlockGroup) => {
     if (!group && groups.length >= MAX_GROUPS) {
       showToast(`最多只能创建 ${MAX_GROUPS} 个屏蔽组`, 'warning');
       return;
@@ -167,9 +167,9 @@ export default function BlockGroupsPage() {
     setSearchQuery('');
     setShowSuggestions(false);
     setEditModalOpen(true);
-  }
+  }, [groups]);
 
-  async function handleSaveGroup() {
+  const handleSaveGroup = useCallback(async () => {
     if (!groupName.trim()) { showToast('请输入屏蔽组名称', 'warning'); return; }
     if (hiddenTags.length === 0 && spoileredTags.length === 0) { showToast('请至少添加一个标签', 'warning'); return; }
     if (!userInfo?.token) return;
@@ -194,9 +194,9 @@ export default function BlockGroupsPage() {
     } catch {
       showToast('网络错误', 'error');
     }
-  }
+  }, [editGroupId, groupName, hiddenTags, spoileredTags, userInfo?.token, loadGroups]);
 
-  async function handleToggleGroup(id: number, isActive: boolean) {
+  const handleToggleGroup = useCallback(async (id: number, isActive: boolean) => {
     if (!userInfo?.token) return;
     // Optimistic update
     setGroups(prev => {
@@ -215,14 +215,14 @@ export default function BlockGroupsPage() {
       showToast('网络错误', 'error');
       loadGroups();
     }
-  }
+  }, [userInfo?.token, loadGroups]);
 
-  function confirmDeleteGroup(id: number) {
+  const confirmDeleteGroup = useCallback((id: number) => {
     deleteTargetRef.current = id;
     setDeleteConfirmOpen(true);
-  }
+  }, []);
 
-  async function handleDeleteGroup() {
+  const handleDeleteGroup = useCallback(async () => {
     const id = deleteTargetRef.current;
     if (!id || !userInfo?.token) return;
     setDeleteConfirmOpen(false);
@@ -238,10 +238,10 @@ export default function BlockGroupsPage() {
     } catch {
       showToast('网络错误', 'error');
     }
-  }
+  }, [userInfo?.token, loadGroups]);
 
   // ================= Derpibooru Import =================
-  async function openImportModal() {
+  const openImportModal = useCallback(async () => {
     const stored = localStorage.getItem('user_info');
     if (!stored) { showToast('请先登录', 'warning'); return; }
     const u = JSON.parse(stored);
@@ -267,9 +267,9 @@ export default function BlockGroupsPage() {
     } finally {
       setImportLoading(false);
     }
-  }
+  }, []);
 
-  async function importSingleFilter(filter: typeof importFilters[0]) {
+  const importSingleFilter = useCallback(async (filter: typeof importFilters[0]) => {
     if (groups.length >= MAX_GROUPS) { showToast(`最多只能创建 ${MAX_GROUPS} 个屏蔽组`, 'warning'); return; }
 
     // Parse hidden tags from complex and simple
@@ -342,7 +342,7 @@ export default function BlockGroupsPage() {
     } catch {
       showToast('网络错误', 'error');
     }
-  }
+  }, [groups.length, userInfo?.token, loadGroups]);
 
   const sectionTitle = "text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2";
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MdArrowBack, MdSend, MdImage, MdAdd, MdClose } from 'react-icons/md';
@@ -37,7 +37,7 @@ export default function CreateForumPostPage() {
     setIsLoggedIn(true);
   }, [router]);
 
-  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -54,15 +54,15 @@ export default function CreateForumPostPage() {
     const reader = new FileReader();
     reader.onload = () => setCoverPreview(reader.result as string);
     reader.readAsDataURL(file);
-  };
+  }, []);
 
-  const removeCover = () => {
+  const removeCover = useCallback(() => {
     setCoverPreview(null);
     setSelectedCoverFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!title.trim()) {
@@ -113,7 +113,7 @@ export default function CreateForumPostPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [title, content, category, selectedCoverFile, isSubmitting, router]);
 
   if (!isLoggedIn) return null;
 

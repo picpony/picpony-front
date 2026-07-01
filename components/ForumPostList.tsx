@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { MdErrorOutline, MdRefresh, MdComment, MdVisibility, MdThumbUp } from 'react-icons/md';
 import { ForumPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
@@ -16,7 +17,7 @@ interface ForumPostListProps {
   className?: string;
 }
 
-export default function ForumPostList({
+export default memo(function ForumPostList({
   posts,
   page,
   totalPages,
@@ -182,4 +183,4 @@ export default function ForumPostList({
       )}
     </div>
   );
-}
+});

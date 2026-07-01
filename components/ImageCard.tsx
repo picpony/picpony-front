@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import Link from 'next/link';
 import FadeInImage from './FadeInImage';
 import { MdThumbUp, MdComment, MdVisibility } from 'react-icons/md';
@@ -10,7 +10,7 @@ interface ImageCardProps {
   image: PonyImage;
 }
 
-export default function ImageCard({ image }: ImageCardProps) {
+export default memo(function ImageCard({ image }: ImageCardProps) {
   const fullUrl = image.representations?.full || image.view_url || '';
   const thumbUrl = image.representations?.thumb || image.representations?.full || image.view_url || '';
   const isWebm = fullUrl.endsWith('.webm');
@@ -90,4 +90,4 @@ export default function ImageCard({ image }: ImageCardProps) {
       </Link>
     </div>
   );
-}
+});

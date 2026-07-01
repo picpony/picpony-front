@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { MdSearch, MdImageSearch, MdErrorOutline, MdArrowBack } from 'react-icons/md';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { api, PonyImage, applyCdn } from '@/lib/api';
@@ -163,7 +163,7 @@ function SearchPageContent() {
     return () => { cancelled = true; };
   }, [q]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (inputValue.trim()) {
       const formattedQuery = inputValue.trim().replace(/，/g, ',');
@@ -173,16 +173,16 @@ function SearchPageContent() {
     } else {
       router.push('/');
     }
-  };
+  }, []);
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1) {
       setIsLoading(true);
       setError(null);
       setPage(newPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  };
+  }, [q]);
 
   const handleImageSearchSuccess = (results: PonyImage[]) => {
     setCustomResults(results);
@@ -192,6 +192,10 @@ function SearchPageContent() {
   const clearCustomResults = () => {
     setCustomResults(null);
   };
+
+  const handleRetry = useCallback(() => {
+    setRetryCount(c => c + 1);
+  }, []);
 
   return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8 animate-fade-in">
@@ -280,7 +284,7 @@ function SearchPageContent() {
               ? '请求次数过快，超出原站限制'
               : `${(error as { status?: number }).status ? `HTTP Error ${(error as { status?: number }).status}: ` : ''}${error.message}`
           }
-          onRetry={() => setRetryCount(c => c + 1)}
+          onRetry={handleRetry}
         />
       ) : images.length === 0 ? (
         <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-400 dark:text-slate-500 animate-fade-in">
