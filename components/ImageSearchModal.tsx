@@ -117,7 +117,7 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
           >
             {isUploading ? (
               <>
-                <Spinner size="sm" className="mr-2 border-white/30 border-t-white" />
+                <Spinner size="sm" white />
                 请稍后
               </>
             ) : (

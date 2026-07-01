@@ -8,6 +8,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
+import Spinner from '@/components/Spinner';
 import FadeInImage from '@/components/FadeInImage';
 
 export default function ForumPostPage() {
@@ -240,7 +241,7 @@ export default function ForumPostPage() {
               title={isLiked ? '取消点赞' : '点赞'}
             >
               {isLikeLoading ? (
-                <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                <Spinner size="sm" />
               ) : isLiked ? (
                 <MdThumbUp size={16} />
               ) : (
@@ -339,10 +340,8 @@ export default function ForumPostPage() {
                 className="flex items-center px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
                 {isSubmitting ? (
-                  <div className="flex gap-1 items-center">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  <div className="flex items-center gap-1">
+                    <Spinner size="sm" white />
                   </div>
                 ) : (
                   <>

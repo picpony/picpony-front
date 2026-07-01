@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
+import Spinner from '@/components/Spinner';
 import { MdAdd, MdClose, MdShield, MdSearch, MdEdit, MdDelete, MdBlock, MdVisibility, MdSync, MdErrorOutline } from 'react-icons/md';
 
 const TRIXIE_SEARCH = 'https://trixiebooru.org/api/v1/json/search/tags';
@@ -371,9 +372,9 @@ export default function BlockGroupsPage() {
 
       {/* Loading */}
       {loading ? (
-        <div className="text-center py-20 text-slate-400">
-          <MdShield size={48} className="mx-auto mb-4 opacity-30" />
-          <p>加载中...</p>
+        <div className="flex flex-col items-center justify-center py-20">
+          <Spinner size="lg" />
+          <p className="mt-4 text-sm text-slate-400">加载中...</p>
         </div>
       ) : groups.length === 0 ? (
         /* Empty state */

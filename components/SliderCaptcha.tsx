@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
 import { encodeTrack } from "@/lib/utils";
+import Spinner from "./Spinner";
 
 interface SliderCaptchaProps {
   onVerify: (token: string) => void;
@@ -169,7 +170,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
       <div className="relative w-[310px]">
         {loading && !bgImage && (
           <div className="w-[310px] h-[155px] flex items-center justify-center bg-white/80 dark:bg-slate-800/80 rounded-md">
-            <div className="w-8 h-8 rounded-full animate-spin border-[3px] border-slate-300/50 dark:border-slate-600/70 border-t-[#E06C9F] dark:border-t-pink-300" />
+            <Spinner size="lg" className="border-t-[#E06C9F] dark:border-t-pink-300" />
           </div>
         )}
 
@@ -192,7 +193,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
             )}
             {verifying && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-black/50 z-20 animate-fade-in">
-                <div className="w-8 h-8 rounded-full animate-spin border-[3px] border-slate-300/50 dark:border-slate-600/70 border-t-[#E06C9F] dark:border-t-pink-300" />
+                <Spinner size="lg" className="border-t-[#E06C9F] dark:border-t-pink-300" />
               </div>
             )}
             {errorMsg && !verifying && (

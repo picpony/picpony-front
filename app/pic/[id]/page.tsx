@@ -17,6 +17,7 @@ import dynamic from 'next/dynamic';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
 import { showToast } from '@/components/Toast';
+import Spinner from '@/components/Spinner';
 
 interface DictionaryEntry {
   id: number;
@@ -680,7 +681,7 @@ export default function PicPage() {
                 } disabled:opacity-50`}
               >
                 {isFaveLoading ? (
-                  <div className="w-5 h-5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                  <Spinner size="sm" />
                 ) : isFaved ? (
                   <MdStar size={20} />
                 ) : (
@@ -875,7 +876,7 @@ export default function PicPage() {
                     >
                       {isSubmittingComment ? (
                         <>
-                          <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                          <Spinner size="sm" />
                           发送中...
                         </>
                       ) : (
@@ -892,7 +893,7 @@ export default function PicPage() {
               {/* Comments list */}
               {isLoadingComments ? (
                 <div className="flex justify-center py-8">
-                  <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+                  <Spinner size="lg" />
                 </div>
               ) : comments.length > 0 ? (
                 <div className="space-y-4">
@@ -1007,10 +1008,7 @@ export default function PicPage() {
         zIndex={9998}
       >
         {tagInfoModal.loading ? (
-          <div className="flex items-center justify-center py-8 gap-2 text-slate-500">
-            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <span>查询词库中...</span>
-          </div>
+          <Spinner label="查询词库中..." className="py-8" />
         ) : tagInfoModal.data ? (
           <div className="space-y-3">
             {tagInfoModal.data.cn && (
@@ -1067,10 +1065,7 @@ export default function PicPage() {
         zIndex={100}
       >
         {profilePreview.loading ? (
-          <div className="flex items-center justify-center py-8 gap-2 text-slate-500">
-            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <span>加载中...</span>
-          </div>
+          <Spinner label="加载中..." className="py-8" />
         ) : profilePreview.user ? (
           <div className="space-y-3">
             <div className="flex items-center gap-3">

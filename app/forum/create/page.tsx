@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MdArrowBack, MdSend, MdImage, MdAdd, MdClose } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
+import Spinner from '@/components/Spinner';
 import { api } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import dynamic from 'next/dynamic';
@@ -239,7 +240,7 @@ export default function CreateForumPostPage() {
           >
             {isSubmitting ? (
               <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <Spinner size="sm" white />
                 发布中...
               </>
             ) : (

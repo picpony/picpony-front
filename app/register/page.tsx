@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import CaptchaModal from "@/components/CaptchaModal";
+import Spinner from "@/components/Spinner";
 import { api } from "@/lib/api";
 
 type RegisterStep = 'form' | 'verify';
@@ -208,11 +209,7 @@ export default function RegisterPage() {
             />
 
             <button type="submit" disabled={isLoading} className={btnClass}>
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                "注册"
-              )}
+              {isLoading ? <Spinner size="sm" white /> : "注册"}
             </button>
           </form>
 
@@ -293,11 +290,7 @@ export default function RegisterPage() {
               disabled={isVerifying || codeDigits.join('').length !== 6}
               className={btnClass}
             >
-              {isVerifying ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                "验证并登录"
-              )}
+              {isVerifying ? <Spinner size="sm" white /> : "验证并登录"}
             </button>
 
             <div className="text-center">

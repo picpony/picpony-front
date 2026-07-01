@@ -10,6 +10,7 @@ import {
   MdShield, MdHome,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
+import Spinner from '@/components/Spinner';
 import FadeInImage from '@/components/FadeInImage';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { api } from '@/lib/api';
@@ -654,7 +655,7 @@ export default function SettingsPage() {
                 )}
                 {isAvatarUploading && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <Spinner white />
                   </div>
                 )}
               </div>
@@ -697,7 +698,7 @@ export default function SettingsPage() {
                 )}
                 {isBannerUploading && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <Spinner white />
                   </div>
                 )}
               </div>
@@ -1013,7 +1014,7 @@ export default function SettingsPage() {
                   className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
                 <button type="submit" disabled={isLoading || !newUsername.trim()}
                   className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50 flex items-center">
-                  {isLoading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />提交中...</> : '确认修改'}
+                  {isLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认修改'}
                 </button>
               </div>
             </form>
@@ -1048,7 +1049,7 @@ export default function SettingsPage() {
                   className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
                 <button type="submit" disabled={passwordLoading || !oldPassword.trim() || !newPassword.trim()}
                   className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50 flex items-center">
-                  {passwordLoading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />提交中...</> : '确认修改'}
+                  {passwordLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认修改'}
                 </button>
               </div>
             </form>
@@ -1081,7 +1082,7 @@ export default function SettingsPage() {
                   className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
                 <button type="submit" disabled={apiKeyLoading}
                   className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50 flex items-center">
-                  {apiKeyLoading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />提交中...</> : '确认保存'}
+                  {apiKeyLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认保存'}
                 </button>
               </div>
             </form>

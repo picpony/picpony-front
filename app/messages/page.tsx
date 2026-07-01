@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { api, Notification } from '@/lib/api';
 import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack, MdOutlineNotificationsActive, MdSearch } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
+import Spinner from '@/components/Spinner';
 
 interface Announcement {
   id: number;
@@ -513,7 +514,7 @@ export default function MessagesPage() {
                     <div ref={messagesContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col space-y-4">
                       {loadingMessages ? (
                         <div className="flex-1 flex items-center justify-center">
-                          <div className="w-[30px] h-[30px] border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+                          <Spinner size="lg" />
                         </div>
                       ) : messages.length > 0 ? (
                         messages.map((msg) => {
@@ -615,7 +616,7 @@ export default function MessagesPage() {
                           disabled={!newMessage.trim() || sending}
                           className="bg-primary text-white px-2 py-1 rounded-full text-sm font-bold transition-colors duration-200 flex items-center justify-center min-w-[64px] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {sending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : '发送'}
+                          {sending ? <Spinner size="sm" white /> : '发送'}
                         </button>
                       </div>
                     </div>

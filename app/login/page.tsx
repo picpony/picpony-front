@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import CaptchaModal from "@/components/CaptchaModal";
+import Spinner from "@/components/Spinner";
 import { api } from "@/lib/api";
 
 export default function LoginPage() {
@@ -137,7 +138,7 @@ export default function LoginPage() {
           }`}
         >
           {isLoading ? (
-            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <Spinner size="sm" white />
           ) : (
             "登录"
           )}

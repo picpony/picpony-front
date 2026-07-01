@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MdEmail, MdLock, MdSend, MdArrowBack } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
+import Spinner from '@/components/Spinner';
 import { api } from '@/lib/api';
 
 export default function ResetPasswordPage() {
@@ -107,9 +108,7 @@ export default function ResetPasswordPage() {
             disabled={isLoading || !email.trim()}
             className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {isLoading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
+            {isLoading ? <Spinner size="sm" white /> : (
               <>
                 <MdSend size={18} />
                 发送验证码
@@ -167,11 +166,7 @@ export default function ResetPasswordPage() {
             disabled={isLoading || !code.trim() || !newPassword.trim()}
             className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {isLoading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              '重置密码'
-            )}
+            {isLoading ? <Spinner size="sm" white /> : '重置密码'}
           </button>
           <div className="text-center">
             <button

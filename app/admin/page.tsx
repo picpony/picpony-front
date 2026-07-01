@@ -506,12 +506,7 @@ function UsersTab({ token, myRole }: { token: string; myRole: string }) {
               disabled={isSavingUser}
               className="px-4 py-2 text-sm font-medium text-white bg-primary hover:opacity-90 disabled:opacity-50 rounded-lg transition-all cursor-pointer flex items-center gap-2"
             >
-              {isSavingUser && (
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              )}
+              {isSavingUser && <Spinner size="sm" white />}
               {isSavingUser ? '保存中...' : '保存修改'}
             </button>
           </>
