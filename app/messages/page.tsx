@@ -433,13 +433,15 @@ export default function MessagesPage() {
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
                   {loading && contacts.length === 0 ? (
-                    <div className="space-y-4">
+                    <div className="space-y-1">
                       {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="flex items-center space-x-3 animate-pulse">
-                          <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-full"></div>
-                          <div className="flex-1 space-y-2">
-                            <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded w-3/4"></div>
-                            <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-1/2"></div>
+                        <div key={i} className="flex items-center justify-start w-full p-2 gap-1.5 mb-1 animate-pulse">
+                          <div className="relative">
+                            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700" />
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded w-3/4" />
+                            <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-1/2" />
                           </div>
                         </div>
                       ))}
