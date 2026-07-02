@@ -9,7 +9,6 @@ import { processImageFile } from '../lib/utils';
 import { PonyImage } from '../lib/api';
 import FadeInImage from './FadeInImage';
 import Modal from './Modal';
-import Spinner from './Spinner';
 
 interface ImageSearchModalProps {
   isOpen: boolean;
@@ -115,14 +114,7 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
                 : 'bg-primary hover:bg-primary-dark'
             }`}
           >
-            {isUploading ? (
-              <>
-                <Spinner size="sm" white />
-                请稍后
-              </>
-            ) : (
-              '开始搜索'
-            )}
+            {isUploading ? '请稍后' : '开始搜索'}
           </button>
         </>
       }
