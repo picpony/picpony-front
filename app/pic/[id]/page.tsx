@@ -657,7 +657,7 @@ export default function PicPage() {
                     onClick={() => handleNavigate(-1)}
                     disabled={currentNavIndex <= 0}
                     title="上一张 (←)"
-                    className="p-2.5 rounded-full transition-colors duration-200 border text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="p-2.5 rounded-full transition-colors duration-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <MdChevronLeft size={20} />
                   </button>
@@ -665,7 +665,7 @@ export default function PicPage() {
                     onClick={() => handleNavigate(1)}
                     disabled={currentNavIndex >= navHistory.length - 1}
                     title="下一张 (→)"
-                    className="p-2.5 rounded-full transition-colors duration-200 border text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="p-2.5 rounded-full transition-colors duration-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <MdChevronRight size={20} />
                   </button>
@@ -678,10 +678,10 @@ export default function PicPage() {
                 onClick={handleToggleFave}
                 disabled={isFaveLoading}
                 title={isFaved ? '取消收藏' : '收藏'}
-                className={`p-2.5 rounded-full transition-colors duration-200 border ${
+                className={`p-2.5 rounded-full transition-colors duration-200 ${
                   isFaved
-                    ? 'text-yellow-600 border-yellow-300 bg-yellow-50 hover:bg-yellow-100 dark:text-yellow-400 dark:border-yellow-700 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30'
-                    : 'text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700'
+                    ? 'text-yellow-600 border border-yellow-300 bg-yellow-50 hover:bg-yellow-100 dark:text-yellow-400 dark:border-yellow-700 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:bg-slate-700'
                 } disabled:opacity-50`}
               >
                 {isFaveLoading ? (
@@ -696,7 +696,7 @@ export default function PicPage() {
                 <button
                   onClick={() => setIsShareOpen(!isShareOpen)}
                   title="分享"
-                  className="p-2.5 rounded-full transition-colors duration-200 border text-slate-500 border-slate-200 bg-white hover:bg-slate-50 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+                  className="p-2.5 rounded-full transition-colors duration-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:bg-slate-700"
                 >
                   <MdShare size={20} />
                 </button>
@@ -722,7 +722,7 @@ export default function PicPage() {
               <button
                 onClick={() => setIsReportModalOpen(true)}
                 title="举报"
-                className="p-2.5 rounded-full transition-colors duration-200 border text-red-400 border-red-200 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:border-red-900/30 dark:bg-red-950/20 dark:hover:bg-red-950/40"
+                className="p-2.5 rounded-full transition-colors duration-200 text-red-400 hover:text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
               >
                 <MdFlag size={20} />
               </button>
