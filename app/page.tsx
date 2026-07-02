@@ -26,6 +26,8 @@ function ImageList() {
 
   useEffect(() => {
     let isMounted = true;
+    setIsLoading(true);
+    setError(null);
 
     api.getImages(undefined, page)
       .then((res) => {
