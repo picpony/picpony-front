@@ -170,7 +170,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
       <div className="relative w-[310px]">
         {loading && !bgImage && (
           <div className="w-[310px] h-[155px] flex items-center justify-center bg-white/80 dark:bg-slate-800/80 rounded-md">
-            <Spinner size="lg" className="border-t-[#E06C9F] dark:border-t-pink-300" />
+            <Spinner size="lg" />
           </div>
         )}
 
@@ -193,7 +193,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
             )}
             {verifying && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-black/50 z-20 animate-fade-in">
-                <Spinner size="lg" className="border-t-[#E06C9F] dark:border-t-pink-300" />
+                <Spinner size="lg" />
               </div>
             )}
             {errorMsg && !verifying && (

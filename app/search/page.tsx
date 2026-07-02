@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { MdSearch, MdImageSearch, MdErrorOutline, MdArrowBack } from 'react-icons/md';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Spinner from '@/components/Spinner';
 import { api, PonyImage, applyCdn } from '@/lib/api';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
@@ -173,7 +174,7 @@ function SearchPageContent() {
     } else {
       router.push('/');
     }
-  }, []);
+  }, [inputValue, router]);
 
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1) {
@@ -228,7 +229,12 @@ function SearchPageContent() {
         </form>
       </div>
 
-      {tagInfo.data ? (
+      {tagInfo.loading ? (
+        <div className="mb-6 flex items-center gap-2 text-sm text-slate-400">
+          <Spinner size="sm" />
+          <span>查询中...</span>
+        </div>
+      ) : tagInfo.data ? (
         <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
           {tagInfo.data.cn && (
             <div>

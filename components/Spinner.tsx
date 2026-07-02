@@ -4,25 +4,35 @@ interface SpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   label?: string;
   className?: string;
-  /** For buttons on dark/brand backgrounds — uses white border */
+  /** For buttons on dark/brand backgrounds — uses white color */
   white?: boolean;
 }
 
-const sizeMap: Record<NonNullable<SpinnerProps['size']>, string> = {
-  sm: 'w-4 h-4 border-2',
-  md: 'w-5 h-5 border-2',
-  lg: 'w-8 h-8 border-[3px]',
-  xl: 'w-12 h-12 border-[4px]',
+const sizeConfig = {
+  sm: { width: 20, ring: 3 },
+  md: { width: 24, ring: 4 },
+  lg: { width: 36, ring: 6 },
+  xl: { width: 50, ring: 8 },
 };
 
 export default function Spinner({ size = 'md', label, className = '', white = false }: SpinnerProps) {
+  const cfg = sizeConfig[size];
+  const color = white ? '#ffffff' : 'var(--color-primary)';
+
   const circle = (
     <div
-      className={`rounded-full animate-spin ${
-        white
-          ? 'border-white/30 border-t-white'
-          : 'border-slate-300/50 dark:border-white/30 border-t-primary dark:border-t-pink-300'
-      } ${sizeMap[size]} ${className}`}
+      className={`animate-spin ${className}`}
+      style={{
+        width: cfg.width,
+        height: cfg.width,
+        borderRadius: '50%',
+        background: `
+          radial-gradient(farthest-side, ${color} 94%, transparent) top/${cfg.ring}px ${cfg.ring}px no-repeat,
+          conic-gradient(transparent 30%, ${color})
+        `,
+        WebkitMask: `radial-gradient(farthest-side, transparent calc(100% - ${cfg.ring}px), #000 0)`,
+        mask: `radial-gradient(farthest-side, transparent calc(100% - ${cfg.ring}px), #000 0)`,
+      }}
     />
   );
 
