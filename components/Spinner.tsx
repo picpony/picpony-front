@@ -21,7 +21,7 @@ export default function Spinner({ size = 'md', label, className = '', white = fa
 
   const circle = (
     <div
-      className={`animate-spin ${className}`}
+      className="animate-spin"
       style={{
         width: cfg.width,
         height: cfg.width,

@@ -7,6 +7,7 @@ import Spinner from '@/components/Spinner';
 import { api, PonyImage, applyCdn } from '@/lib/api';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
 import Pagination from '@/components/Pagination';
 import ErrorRetry from '@/components/ErrorRetry';
 import ImageSearchModal from '@/components/ImageSearchModal';
@@ -267,7 +268,7 @@ function SearchPageContent() {
           {tagInfo.data.description && (
             <div className="sm:col-span-2">
               <span className="text-xs text-slate-400">标签简介</span>
-              <p className="text-slate-600 dark:text-slate-400 mt-0.5">{tagInfo.data.description}</p>
+              <MarkdownRenderer content={tagInfo.data.description} />
             </div>
           )}
         </div>
