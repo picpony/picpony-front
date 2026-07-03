@@ -94,6 +94,39 @@ export default function PicPage() {
     } catch {}
   }, []);
 
+  // Tag count map: tag name → image count
+  const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!image?.tags || image.tags.length === 0) return;
+    const token = tokenRef.current;
+    if (!token) return;
+    const uniqueTags = [...new Set(image.tags)];
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.allSettled(
+        uniqueTags.map(tag =>
+          api.getDictionary(token, { keyword: tag, limit: 1 })
+            .then(res => {
+              if (res.success && res.tags?.length > 0) {
+                const match = res.tags.find((t: DictionaryEntry) => t.en === tag);
+                if (match) return { tag, count: match.count };
+              }
+              return { tag, count: undefined as number | undefined };
+            })
+        )
+      );
+      if (cancelled) return;
+      const map: Record<string, number> = {};
+      results.forEach(r => {
+        if (r.status === 'fulfilled' && r.value.count !== undefined) {
+          map[r.value.tag] = r.value.count;
+        }
+      });
+      setTagCounts(map);
+    })();
+    return () => { cancelled = true; };
+  }, [image]);
+
   // Dynamically import lightbox CSS
   useEffect(() => {
     import('yet-another-react-lightbox/styles.css');
@@ -817,6 +850,11 @@ export default function PicPage() {
                     title="点击查看词库信息"
                   >
                     {tag}
+                  {tagCounts[tag] !== undefined && (
+                    <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-500 font-normal">
+                      {tagCounts[tag].toLocaleString()}
+                    </span>
+                  )}
                   </span>
                 ))}
               </div>

@@ -130,6 +130,24 @@ export default function FeaturedBanner() {
           </p>
         )}
 
+        {featured.tags && featured.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2 sm:mb-3 max-w-2xl">
+            {featured.tags.slice(0, 6).map((tag) => (
+              <span
+                key={tag}
+                className="px-2 py-0.5 bg-black/40 backdrop-blur-sm text-white/85 text-xs rounded-full truncate max-w-[140px]"
+              >
+                {tag}
+              </span>
+            ))}
+            {featured.tags.length > 6 && (
+              <span className="px-2 py-0.5 text-white/60 text-xs">
+                +{featured.tags.length - 6}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-3 sm:gap-4 text-white/80 text-xs sm:text-sm pointer-events-none">
           <div className="flex items-center gap-1">
             <MdThumbUp size={14} />
