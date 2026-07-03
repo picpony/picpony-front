@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+
   const [step, setStep] = useState<'request' | 'reset'>('request');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');

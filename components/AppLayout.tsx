@@ -3,7 +3,7 @@
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
 const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
@@ -446,8 +446,8 @@ export default function AppLayout({
                 </div>
 
                 <div
-                  className={`mt-1 flex flex-col space-y-1 overflow-y-auto transition-all duration-300 ease-in-out ${isUserMenuOpen
-                      ? 'max-h-96 opacity-100 mb-2'
+                  className={`mt-1 flex flex-col space-y-1 transition-all duration-300 ease-in-out overflow-hidden ${isUserMenuOpen
+                      ? 'max-h-[1000px] opacity-100 mb-2'
                       : 'max-h-0 opacity-0'
                     }`}
                 >
@@ -495,6 +495,14 @@ export default function AppLayout({
                   >
                     <MdShield size={20} className="shrink-0 mr-3" />
                     <span>屏蔽组</span>
+                  </Link>
+                  <Link
+                    href="/tasks"
+                    onClick={handleMobileNavigation}
+                    className={sidebarButtonClass(pathname === '/tasks')}
+                  >
+                    <MdEmojiEvents size={20} className="shrink-0 mr-3" />
+                    <span>任务</span>
                   </Link>
                   <Link
                     href="/settings"
