@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MdSearch, MdImageSearch, MdErrorOutline, MdArrowBack } from 'react-icons/md';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
@@ -77,6 +77,124 @@ function SearchPageContent() {
   const [tagInfo, setTagInfo] = useState<{ data: DictionaryEntry | null; loading: boolean }>({
     data: null, loading: false
   });
+
+  const inputWrapRef = useRef<HTMLDivElement>(null);
+  const [suggestions, setSuggestions] = useState<DictionaryEntry[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [acCursor, setAcCursor] = useState(0);
+  const acChunkRef = useRef<{ start: number; end: number; prefix: string }>({ start: 0, end: 0, prefix: '' });
+  const acTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const acReqIdRef = useRef(0);
+
+  const catColors: Record<string, string> = useMemo(() => ({
+    default: 'bg-slate-400',
+    artist: 'bg-red-500',
+    oc: 'bg-orange-400',
+    character: 'bg-purple-500',
+    species: 'bg-green-500',
+    rating: 'bg-pink-400',
+    content_official: 'bg-yellow-500',
+  }), []);
+
+  const getCatColor = useCallback((cat: string) => {
+    return catColors[cat] || catColors.default;
+  }, [catColors]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputValue(val);
+
+    const cursorPos = e.target.selectionStart || 0;
+    const separators = /(?:,|，| OR | AND |\|\||&&|\n)/gi;
+    let match;
+    let start = 0;
+    separators.lastIndex = 0;
+    while ((match = separators.exec(val)) !== null) {
+      if (match.index < cursorPos) {
+        start = match.index + match[0].length;
+      } else break;
+    }
+    separators.lastIndex = cursorPos;
+    const afterMatch = separators.exec(val);
+    const end = afterMatch ? afterMatch.index : val.length;
+    const rawChunk = val.substring(start, end);
+    const prefixMatch = rawChunk.match(/^([\s\-!~]*)(.*)$/);
+    const prefix = prefixMatch ? prefixMatch[1] : '';
+    const currentTag = prefixMatch ? prefixMatch[2].trim() : rawChunk.trim();
+    acChunkRef.current = { start, end, prefix };
+
+    if (currentTag.length < 2 && !/[\u4e00-\u9fff]/.test(currentTag)) {
+      setShowSuggestions(false);
+      return;
+    }
+
+    clearTimeout(acTimerRef.current);
+    acTimerRef.current = setTimeout(async () => {
+      const reqId = Date.now();
+      acReqIdRef.current = reqId;
+      const cleanTag = currentTag.replace(/["()[\]{}*]/g, '');
+      const token = tokenRef.current;
+      if (!token) return;
+
+      try {
+        const res = await api.getDictionary(token, { keyword: cleanTag, limit: 10 });
+        if (reqId !== acReqIdRef.current) return;
+        if (res.success && res.tags) {
+          setSuggestions(res.tags);
+          setShowSuggestions(res.tags.length > 0);
+          setAcCursor(0);
+        } else {
+          setShowSuggestions(false);
+        }
+      } catch {
+        if (reqId === acReqIdRef.current) setShowSuggestions(false);
+      }
+    }, 300);
+  }, []);
+
+  const selectSuggestion = useCallback((tag: DictionaryEntry) => {
+    const { start, end, prefix } = acChunkRef.current;
+    const before = inputValue.substring(0, start);
+    const after = inputValue.substring(end);
+    const replacement = prefix + tag.en;
+    const insertComma = after.trim() === '' ? ',' : '';
+    const newVal = before + replacement + insertComma + after;
+    setInputValue(newVal);
+    setShowSuggestions(false);
+  }, [inputValue]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (inputWrapRef.current && !inputWrapRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowSuggestions(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
+
+  const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setAcCursor(prev => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setAcCursor(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (acCursor >= 0 && acCursor < suggestions.length) {
+        e.preventDefault();
+        selectSuggestion(suggestions[acCursor]);
+      }
+    }
+  }, [showSuggestions, suggestions, acCursor, selectSuggestion]);
 
   useEffect(() => {
     setInputValue(q);
@@ -168,7 +286,7 @@ function SearchPageContent() {
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (inputValue.trim()) {
-      const formattedQuery = inputValue.trim().replace(/，/g, ',');
+      const formattedQuery = inputValue.trim().replace(/，/g, ',').replace(/[,，]+$/g, '');
       setCustomResults(null);
       setPage(1);
       router.push(`/search?q=${encodeURIComponent(formattedQuery)}`);
@@ -203,15 +321,52 @@ function SearchPageContent() {
     <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8 animate-fade-in">
       <div className="mb-6 max-w-3xl mx-auto">
         <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <div className="flex-1 relative">
+          <div className="flex-1 relative" ref={inputWrapRef}>
             <input
               type="text"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="搜索图片..."
+              onChange={handleInputChange}
+              onKeyDown={handleInputKeyDown}
+              placeholder="搜索图片（支持多标签，用逗号分隔）..."
               className="w-full px-4 py-3 pl-12 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-base"
             />
             <MdSearch size={22} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+                <div className="max-h-64 overflow-y-auto">
+                  {suggestions.map((tag, i) => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); selectSuggestion(tag); }}
+                      onMouseEnter={() => setAcCursor(i)}
+                      className={`flex items-center justify-between w-full px-3 py-2 text-left transition-colors ${
+                        i === acCursor
+                          ? 'bg-primary/10 dark:bg-primary/20'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getCatColor(tag.cat)}`} />
+                        <div className="min-w-0">
+                          {tag.cn ? (
+                            <span className="text-sm text-slate-800 dark:text-slate-200">
+                              <span className="text-primary font-medium">{tag.cn}</span>
+                              <span className="ml-1.5 opacity-50">{tag.en}</span>
+                            </span>
+                          ) : (
+                            <span className="text-sm text-slate-800 dark:text-slate-200">{tag.en}</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0 ml-2">
+                        {tag.count?.toLocaleString()}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <button
             type="submit"
