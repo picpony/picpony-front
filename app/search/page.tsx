@@ -62,6 +62,9 @@ function SearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const q = searchParams.get('q') || '';
+  const sortParam = searchParams.get('sort') || '';
+  const dirParam = searchParams.get('dir') || '';
+  const defaultSort = typeof localStorage !== 'undefined' ? (localStorage.getItem('picpony_default_search_sort') || 'created_at') : 'created_at';
 
   const [inputValue, setInputValue] = useState(q);
   const [images, setImages] = useState<PonyImage[]>([]);
@@ -72,6 +75,46 @@ function SearchPageContent() {
   const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
   const [customResults, setCustomResults] = useState<PonyImage[] | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [sortBy, setSortBy] = useState(sortParam || defaultSort);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>((dirParam as 'asc' | 'desc') || 'desc');
+
+  // Advanced search panel state
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advUpvoteOp, setAdvUpvoteOp] = useState('gte');
+  const [advUpvoteVal, setAdvUpvoteVal] = useState('');
+  const [advScoreOp, setAdvScoreOp] = useState('gte');
+  const [advScoreVal, setAdvScoreVal] = useState('');
+  const [advAspect, setAdvAspect] = useState('');
+  const [advMedia, setAdvMedia] = useState('');
+  const [advTime, setAdvTime] = useState('');
+
+  const clearAdvancedFilters = useCallback(() => {
+    setAdvUpvoteOp('gte');
+    setAdvUpvoteVal('');
+    setAdvScoreOp('gte');
+    setAdvScoreVal('');
+    setAdvAspect('');
+    setAdvMedia('');
+    setAdvTime('');
+  }, []);
+
+  const applyAdvancedFilters = useCallback(() => {
+    const filters: string[] = [];
+    if (advUpvoteVal) filters.push(`upvotes.${advUpvoteOp}:${advUpvoteVal}`);
+    if (advScoreVal) filters.push(`score.${advScoreOp}:${advScoreVal}`);
+    if (advAspect) filters.push(advAspect);
+    if (advMedia) filters.push(advMedia);
+    if (advTime) filters.push(advTime);
+
+    let newQuery = inputValue.trim().replace(/，/g, ',').replace(/[,，]+$/g, '');
+    if (filters.length > 0) {
+      newQuery = newQuery ? `${newQuery}, ${filters.join(', ')}` : filters.join(', ');
+    }
+    setInputValue(newQuery);
+    setCustomResults(null);
+    setPage(1);
+    router.push(`/search?q=${encodeURIComponent(newQuery)}`);
+  }, [advUpvoteOp, advUpvoteVal, advScoreOp, advScoreVal, advAspect, advMedia, advTime, inputValue, router]);
 
   const tokenRef = useRef<string | null>(null);
   const [tagInfo, setTagInfo] = useState<{ data: DictionaryEntry | null; loading: boolean }>({
@@ -223,7 +266,7 @@ function SearchPageContent() {
       return;
     }
 
-    api.getImages(q, page)
+    api.getImages(q, page, sortBy === 'random' ? undefined : sortBy, sortDir)
       .then((res) => {
         if (isMounted) {
           let imgs = res.images;
@@ -246,7 +289,7 @@ function SearchPageContent() {
       });
 
     return () => { isMounted = false; };
-  }, [q, page, retryCount, customResults]);
+  }, [q, page, retryCount, customResults, sortBy, sortDir]);
 
   useEffect(() => {
     const isSingleTag = !!q && !/[ ,:*?]/.test(q) && !q.startsWith('-');
@@ -289,11 +332,12 @@ function SearchPageContent() {
       const formattedQuery = inputValue.trim().replace(/，/g, ',').replace(/[,，]+$/g, '');
       setCustomResults(null);
       setPage(1);
-      router.push(`/search?q=${encodeURIComponent(formattedQuery)}`);
+      const sortParam = sortBy !== 'created_at' || sortDir !== 'desc' ? `&sort=${sortBy}&dir=${sortDir}` : '';
+      router.push(`/search?q=${encodeURIComponent(formattedQuery)}${sortParam}`);
     } else {
       router.push('/');
     }
-  }, [inputValue, router]);
+  }, [inputValue, router, sortBy, sortDir]);
 
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1) {
@@ -464,6 +508,165 @@ function SearchPageContent() {
             hasMore={hasMore}
             onPageChange={handlePageChange}
           />
+          {/* Bottom sort controls */}
+          {q && (
+            <div className="flex items-center justify-center gap-2 mt-6 flex-wrap">
+              <select
+                value={sortBy}
+                onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+                className="px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-primary/30"
+              >
+                <option value="created_at">上传时间</option>
+                <option value="score">评分高低</option>
+                <option value="relevance">相关性</option>
+                <option value="wilson_score">Wilson 评分</option>
+                <option value="hotness">热度</option>
+                <option value="width">像素宽</option>
+                <option value="height">像素高</option>
+                <option value="size">文件大小</option>
+                <option value="random">随机</option>
+              </select>
+              {sortBy !== 'random' && (
+                <button
+                  onClick={() => setSortDir(prev => prev === 'desc' ? 'asc' : 'desc')}
+                  className="px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  {sortDir === 'desc' ? '↓ 降序' : '↑ 升序'}
+                </button>
+              )}
+              {(sortParam || sortBy !== defaultSort || sortDir !== 'desc') && (
+                <button
+                  onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }}
+                  className="px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  重置排序
+                </button>
+              )}
+              <button
+                onClick={() => setShowAdvanced(prev => !prev)}
+                className={`px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${
+                  showAdvanced
+                    ? 'border-primary text-primary bg-primary/10'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                高级排序
+              </button>
+            </div>
+          )}
+
+          {/* Advanced search panel */}
+          {q && showAdvanced && (
+            <div className="mt-4 p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 max-w-3xl mx-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Upvotes */}
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">点赞数</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={advUpvoteOp}
+                      onChange={(e) => setAdvUpvoteOp(e.target.value)}
+                      className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
+                    >
+                      <option value="gte">≥</option>
+                      <option value="lt">&lt;</option>
+                    </select>
+                    <input
+                      type="number"
+                      value={advUpvoteVal}
+                      onChange={(e) => setAdvUpvoteVal(e.target.value)}
+                      placeholder="例如 100"
+                      className="flex-1 px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none w-20"
+                    />
+                  </div>
+                </div>
+                {/* Score */}
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">净得分</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={advScoreOp}
+                      onChange={(e) => setAdvScoreOp(e.target.value)}
+                      className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
+                    >
+                      <option value="gte">≥</option>
+                      <option value="lt">&lt;</option>
+                    </select>
+                    <input
+                      type="number"
+                      value={advScoreVal}
+                      onChange={(e) => setAdvScoreVal(e.target.value)}
+                      placeholder="例如 50"
+                      className="flex-1 px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none w-20"
+                    />
+                  </div>
+                </div>
+                {/* Aspect ratio */}
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">宽高比</label>
+                  <select
+                    value={advAspect}
+                    onChange={(e) => setAdvAspect(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
+                  >
+                    <option value="">不限比例</option>
+                    <option value="aspect_ratio.lt:1">竖图 (宽 &lt; 高)</option>
+                    <option value="aspect_ratio:1">正方形 (宽 = 高)</option>
+                    <option value="aspect_ratio.gt:1">横图 (宽 &gt; 高)</option>
+                    <option value="aspect_ratio.gt:1.5">超宽屏壁纸</option>
+                  </select>
+                </div>
+                {/* Media type */}
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">媒体类型</label>
+                  <select
+                    value={advMedia}
+                    onChange={(e) => setAdvMedia(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
+                  >
+                    <option value="">所有类型</option>
+                    <option value="animated:true">动态内容 (GIF/视频)</option>
+                    <option value="animated:false">静态图片 (PNG/JPG)</option>
+                    <option value="(mime_type:video/webm OR mime_type:video/mp4)">仅限视频</option>
+                  </select>
+                </div>
+                {/* Upload time */}
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">上传时间</label>
+                  <select
+                    value={advTime}
+                    onChange={(e) => setAdvTime(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
+                  >
+                    <option value="">不限时间</option>
+                    <option value="created_at.gte:1 days ago">过去 24 小时</option>
+                    <option value="created_at.gte:1 weeks ago">过去 1 周</option>
+                    <option value="created_at.gte:1 months ago">过去 1 个月</option>
+                    <option value="created_at.gte:1 years ago">过去 1 年</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                  点击"应用"后，筛选条件会拼接到搜索框并执行搜索。
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={clearAdvancedFilters}
+                    className="px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    重置
+                  </button>
+                  <button
+                    onClick={applyAdvancedFilters}
+                    className="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    应用并搜索
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

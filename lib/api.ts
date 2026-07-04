@@ -418,12 +418,17 @@ export const api = {
     return res.json();
   },
 
-  getImages: async (search?: string, page: number = 1): Promise<ApiResponse> => {
+  getImages: async (search?: string, page: number = 1, sortField?: string, sortDir: 'desc' | 'asc' = 'desc'): Promise<ApiResponse> => {
     const query = buildSearchQuery(search);
-    const sort = getSortParams(!!search);
+    let sortStr;
+    if (sortField) {
+      sortStr = `sf=${sortField}&sd=${sortDir}`;
+    } else {
+      sortStr = getSortParams(!!search);
+    }
 
     const res = await proxyFetch(
-      `${DERPIBOORU_API_BASE}/search/images?q=${query}&page=${page}&per_page=50&${sort}`,
+      `${DERPIBOORU_API_BASE}/search/images?q=${query}&page=${page}&per_page=50&${sortStr}`,
       {
         cache: 'no-store',
         headers: {
