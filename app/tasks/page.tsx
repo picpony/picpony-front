@@ -244,7 +244,7 @@ export default function TasksPage() {
 
       {loading && (
         <div className="flex justify-center py-16">
-          <Spinner label="加载任务数据..." />
+          <Spinner />
         </div>
       )}
 

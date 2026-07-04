@@ -373,8 +373,7 @@ export default function BlockGroupsPage() {
       {/* Loading */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20">
-          <Spinner size="lg" />
-          <p className="mt-4 text-sm text-slate-400">加载中...</p>
+          <Spinner />
         </div>
       ) : groups.length === 0 ? (
         /* Empty state */
