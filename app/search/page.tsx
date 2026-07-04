@@ -327,7 +327,7 @@ function SearchPageContent() {
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleInputKeyDown}
-              placeholder="搜索图片（支持多标签，用逗号分隔）..."
+              placeholder="搜索图片..."
               className="w-full px-4 py-3 pl-12 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-base"
             />
             <MdSearch size={22} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />

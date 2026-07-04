@@ -42,6 +42,7 @@ interface UserInfo {
   role: string;
   token: string;
   level?: number;
+  derpi_username?: string;
 }
 
 const sidebarButtonClass = (isActive: boolean) =>
@@ -432,9 +433,16 @@ export default function AppLayout({
                     </div>
                     <div className="ml-3 overflow-hidden flex-1">
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{userInfo.username}</p>
-                      <p className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium inline-block mt-0.5">
-                        Lv.{userInfo.level ?? '?'}
-                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <p className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium inline-block">
+                          Lv.{userInfo.level ?? '?'}
+                        </p>
+                        {userInfo.derpi_username && (
+                          <span className="text-[10px] text-green-600 dark:text-green-400 truncate max-w-[100px]" title={userInfo.derpi_username}>
+                            ✓ {userInfo.derpi_username}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </Link>
                   <button onClick={toggleUserMenu} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 p-1 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">

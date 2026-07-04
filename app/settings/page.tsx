@@ -13,6 +13,7 @@ import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
 import FadeInImage from '@/components/FadeInImage';
 import ToggleSwitch from '@/components/ToggleSwitch';
+import Modal from '@/components/Modal';
 import { api } from '@/lib/api';
 
 const buttonClass = (disabled: boolean) =>
@@ -82,10 +83,14 @@ export default function SettingsPage() {
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   const [currentApiKey, setCurrentApiKey] = useState('');
+  const [derpiUserId, setDerpiUserId] = useState('');
+  const [derpiUsername, setDerpiUsername] = useState('');
+  const [isVerifyLoading, setIsVerifyLoading] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isApiKeyClosing, setIsApiKeyClosing] = useState(false);
   const [newApiKey, setNewApiKey] = useState('');
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [isClearApiKeyModalOpen, setIsClearApiKeyModalOpen] = useState(false);
 
   const [currentEmail, setCurrentEmail] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
@@ -272,6 +277,8 @@ export default function SettingsPage() {
           if (data.success && data.user) {
             const u = data.user;
             setCurrentApiKey(u.api_key || '');
+            setDerpiUserId(u.derpi_user_id || '');
+            setDerpiUsername(u.derpi_username || '');
             if (u.api_key) localStorage.setItem('derpi_api_key', u.api_key);
             else localStorage.removeItem('derpi_api_key');
 
@@ -387,20 +394,29 @@ export default function SettingsPage() {
 
   const handleApiKeySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const key = newApiKey.trim();
+    if (key) {
+      const keyRegex = /^\S{20}$/;
+      if (!keyRegex.test(key)) {
+        showToast('API Key 格式不正确！请检查是否漏选或多复制了空格。Derpibooru 的 API Key 为 20 位字符', 'error');
+        return;
+      }
+    }
     setApiKeyLoading(true);
     try {
       const storedUser = localStorage.getItem('user_info');
       if (!storedUser) throw new Error('未登录');
       const user = JSON.parse(storedUser);
       const res = await api.saveApikey(user.token, {
-        api_key: newApiKey.trim(), derpi_user_id: "", derpi_username: ""
+        api_key: key, derpi_user_id: derpiUserId, derpi_username: derpiUsername
       });
       const data = await res.json();
       if (data.success) {
-        showToast('已更新 Derpibooru API Key', 'success');
-        setCurrentApiKey(newApiKey.trim());
-        localStorage.setItem('derpi_api_key', newApiKey.trim());
+        showToast('Derpibooru API Key 已保存', 'success');
+        setCurrentApiKey(key);
+        localStorage.setItem('derpi_api_key', key);
         closeApiKeyModal();
+        window.dispatchEvent(new Event('user_info_updated'));
       } else {
         showToast(data.message || '配置失败', 'error');
       }
@@ -408,6 +424,97 @@ export default function SettingsPage() {
       showToast(err instanceof Error ? err.message : '网络错误', 'error');
     } finally {
       setApiKeyLoading(false);
+    }
+  };
+
+  // Detect user identity from Derpibooru API
+  const detectRealIdentity = useCallback(async (apiKey: string) => {
+    const base = 'https://trixiebooru.org/api/v1/json';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+      try {
+        // 1. Try my:uploads
+        const uploadsRes = await fetch(`${base}/search/images?q=my:uploads&per_page=1&key=${encodeURIComponent(apiKey)}`);
+        if (uploadsRes.status === 401 || uploadsRes.status === 403) return null;
+        if (uploadsRes.ok) {
+          const data = await uploadsRes.json();
+          if (data.images && data.images.length > 0) {
+            return { id: data.images[0].uploader_id, name: data.images[0].uploader };
+          }
+        } else {
+          throw new Error(`HTTP ${uploadsRes.status}`);
+        }
+        // 2. Try my:comments
+        const commentsRes = await fetch(`${base}/search/comments?q=my:comments&per_page=1&key=${encodeURIComponent(apiKey)}`);
+        if (commentsRes.status === 401 || commentsRes.status === 403) return null;
+        if (commentsRes.ok) {
+          const data = await commentsRes.json();
+          if (data.comments && data.comments.length > 0) {
+            return { id: data.comments[0].user_id, name: data.comments[0].author };
+          }
+        } else {
+          throw new Error(`HTTP ${commentsRes.status}`);
+        }
+        // 3. Fallback: key is valid but user has no uploads/comments
+        return { id: 'new_user', name: 'PicPony 绑定账号' };
+      } catch (e) {
+        if (attempt === 2) throw e;
+      }
+    }
+    return null;
+  }, []);
+
+  const handleVerifyIdentity = async () => {
+    if (!currentApiKey) return;
+    setIsVerifyLoading(true);
+    try {
+      const identity = await detectRealIdentity(currentApiKey);
+      if (!identity) {
+        showToast('身份核验失败：无法通过该 API Key 找到您的身份，请确认 Key 是否正确', 'error');
+        return;
+      }
+      setDerpiUserId(identity.id);
+      setDerpiUsername(identity.name);
+      const storedUser = localStorage.getItem('user_info');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        await api.saveApikey(user.token, {
+          api_key: currentApiKey, derpi_user_id: identity.id, derpi_username: identity.name
+        });
+        localStorage.setItem('derpi_api_key', currentApiKey);
+        window.dispatchEvent(new Event('user_info_updated'));
+      }
+      showToast(`核验成功！已确认您的身份：${identity.name}`, 'success');
+      window.dispatchEvent(new Event('user_info_updated'));
+    } catch {
+      showToast('核验请求失败（API 限流/网络问题），请稍后再试', 'error');
+    } finally {
+      setIsVerifyLoading(false);
+    }
+  };
+
+  const handleClearApiKey = () => {
+    if (!currentApiKey) return;
+    setIsClearApiKeyModalOpen(true);
+  };
+
+  const handleClearApiKeyConfirm = async () => {
+    setIsClearApiKeyModalOpen(false);
+    try {
+      const storedUser = localStorage.getItem('user_info');
+      if (!storedUser) return;
+      const user = JSON.parse(storedUser);
+      await api.saveApikey(user.token, {
+        api_key: '', derpi_user_id: '', derpi_username: ''
+      });
+      setCurrentApiKey('');
+      setDerpiUserId('');
+      setDerpiUsername('');
+      localStorage.removeItem('derpi_api_key');
+      window.dispatchEvent(new Event('user_info_updated'));
+      showToast('API Key 已解除绑定', 'success');
+    } catch {
+      showToast('操作失败', 'error');
     }
   };
 
@@ -774,11 +881,28 @@ export default function SettingsPage() {
               <p className={valueClass}>
                 {currentApiKey ? `${currentApiKey.substring(0, 4)}...${currentApiKey.substring(currentApiKey.length - 4)}` : '未配置'}
               </p>
+              {derpiUsername && (
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                  已验证身份：{derpiUsername}
+                </p>
+              )}
             </div>
-            <button onClick={() => { setNewApiKey(currentApiKey); setIsApiKeyModalOpen(true); }} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
-              <MdEdit size={16} className="sm:mr-2" />
-              <span className="hidden sm:inline">{currentApiKey ? '修改配置' : '去配置'}</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {currentApiKey && (
+                <>
+                  <button onClick={handleVerifyIdentity} disabled={isVerifyLoading || !currentUsername} className={buttonClass(!currentUsername)} title="核验身份">
+                    {isVerifyLoading ? <Spinner size="sm" /> : <span className="hidden sm:inline">去核验</span>}
+                  </button>
+                  <button onClick={handleClearApiKey} disabled={!currentUsername} className={buttonClass(!currentUsername)} title="解除绑定">
+                    <span className="hidden sm:inline text-red-500">解除绑定</span>
+                  </button>
+                </>
+              )}
+              <button onClick={() => { setNewApiKey(currentApiKey); setIsApiKeyModalOpen(true); }} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
+                <MdEdit size={16} className="sm:mr-2" />
+                <span className="hidden sm:inline">{currentApiKey ? '修改配置' : '去配置'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1089,6 +1213,24 @@ export default function SettingsPage() {
           </div>
         </div>, document.body
       )}
+
+      <Modal
+        isOpen={isClearApiKeyModalOpen}
+        onClose={() => setIsClearApiKeyModalOpen(false)}
+        title="解除绑定 API Key"
+        footer={
+          <>
+            <button onClick={() => setIsClearApiKeyModalOpen(false)}
+              className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+            <button onClick={handleClearApiKeyConfirm}
+              className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg">确认解除</button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          确定要解除 Derpibooru API Key 的绑定吗？解除后部分功能（如黑名单过滤同步）将无法使用。
+        </p>
+      </Modal>
 
       {isEmailModalOpen && typeof document !== 'undefined' && createPortal(
         <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isEmailClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
