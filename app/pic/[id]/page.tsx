@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { MdDownload, MdOpenInNew, MdImage, MdSdStorage, MdPerson, MdStar, MdAccessTime, MdStarBorder, MdChatBubbleOutline, MdSend, MdShare, MdContentCopy, MdFlag, MdClose, MdFullscreen, MdChevronLeft, MdChevronRight, MdReply } from 'react-icons/md';
 import Modal from '@/components/Modal';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
@@ -275,13 +276,6 @@ export default function PicPage() {
       }
     } catch {
       setTagInfoModal(prev => ({ ...prev, data: null, loading: false }));
-    }
-  };
-
-  // --- Uploader profile ---
-  const handleUploaderClick = () => {
-    if (image?.uploader && image.uploader !== '匿名用户' && image.uploader_id) {
-      router.push(`/derpi/user/${image.uploader_id}`);
     }
   };
 
@@ -566,14 +560,18 @@ export default function PicPage() {
                   {imageFormat}
                 </span>
               </div>
-            <div 
+            <Link 
+              href={image?.uploader && image.uploader !== '匿名用户' && image.uploader_id ? `/derpi/user/${image.uploader_id}` : '#'}
+              onClick={(e) => {
+                if (!image?.uploader || image.uploader === '匿名用户' || !image.uploader_id) e.preventDefault();
+              }}
+              scroll={false}
               title="上传者" 
               className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors relative"
-              onClick={handleUploaderClick}
             >
                 <MdPerson size={18} className="text-slate-400" />
                 <span className="truncate max-w-[150px] underline decoration-dotted underline-offset-2">{image.uploader || '匿名用户'}</span>
-              </div>
+              </Link>
             <div title="评分" className="flex items-center gap-1.5 cursor-pointer">
                 <MdStar size={18} className="text-slate-400" />
                 <span>{image.score}</span>
