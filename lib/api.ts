@@ -20,6 +20,7 @@ export interface PonyImage {
   view_url: string;
   source_url: string | null;
   uploader: string;
+  uploader_id?: number;
   created_at: string;
   size: number;
   score: number;
@@ -28,6 +29,31 @@ export interface PonyImage {
   description: string;
   upvotes: number;
   downvotes: number;
+}
+
+export interface DerpiProfileAward {
+  image_url?: string;
+  badge_url?: string;
+  url?: string;
+  image?: string;
+  title?: string;
+}
+
+export interface DerpiProfileUser {
+  id: number;
+  name: string;
+  avatar: string | null;
+  avatar_url: string | null;
+  description: string;
+  created_at: string;
+  uploads_count: number;
+  comments_count: number;
+  posts_count: number;
+  awards: DerpiProfileAward[];
+}
+
+export interface DerpiProfileResponse {
+  user: DerpiProfileUser;
 }
 
 export interface FeaturedImage {
@@ -416,6 +442,20 @@ export const api = {
     }
 
     return res.json();
+  },
+
+  getDerpiProfile: async (userId: number): Promise<DerpiProfileResponse | null> => {
+    try {
+      const res = await fetch(`${DERPIBOORU_API_BASE}/profiles/${userId}`, {
+        headers: {
+          'User-Agent': 'PicPony/1.0'
+        }
+      });
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
+    }
   },
 
   getImages: async (search?: string, page: number = 1, sortField?: string, sortDir: 'desc' | 'asc' = 'desc'): Promise<ApiResponse> => {

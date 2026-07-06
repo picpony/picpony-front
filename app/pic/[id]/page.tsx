@@ -10,7 +10,7 @@ import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen';
 import Download from 'yet-another-react-lightbox/plugins/download';
 import Video from 'yet-another-react-lightbox/plugins/video';
 import FadeInImage from '@/components/FadeInImage';
-import { api, PonyImage, Comment } from '@/lib/api';
+import { api, PonyImage, Comment, DerpiProfileUser } from '@/lib/api';
 import dynamic from 'next/dynamic';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 const Lightbox = dynamic(() => import('yet-another-react-lightbox'), { ssr: false });
@@ -26,17 +26,6 @@ interface DictionaryEntry {
   count: number;
   description: string;
   aliases: string[];
-}
-
-interface UserProfile {
-  id: number;
-  username: string;
-  avatar: string | null;
-  role: string;
-  experience: number;
-  created_at: string;
-  bio: string;
-  banner: string | null;
 }
 
 export default function PicPage() {
@@ -74,9 +63,11 @@ export default function PicPage() {
   });
 
   // --- Uploader profile popover state ---
-  const [profilePreview, setProfilePreview] = useState<{ open: boolean; loading: boolean; user: UserProfile | null }>({
+  const [profilePreview, setProfilePreview] = useState<{ open: boolean; loading: boolean; user: DerpiProfileUser | null }>({
     open: false, loading: false, user: null
   });
+  const [profileRecentUploads, setProfileRecentUploads] = useState<PonyImage[]>([]);
+  const [profileRecentLoading, setProfileRecentLoading] = useState(false);
 
   // --- Comment reply state ---
   const [replyTo, setReplyTo] = useState<{ id: number; username: string; body: string } | null>(null);
@@ -176,7 +167,7 @@ export default function PicPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (isShareOpen) setIsShareOpen(false);
-        if (profilePreview.open) setProfilePreview({ open: false, loading: false, user: null });
+        if (profilePreview.open) { setProfilePreview({ open: false, loading: false, user: null }); setProfileRecentUploads([]); }
         if (replyTo) setReplyTo(null);
         return;
       }
@@ -297,18 +288,44 @@ export default function PicPage() {
 
   // --- Uploader profile ---
   const handleUploaderClick = async () => {
+    const uploaderId = (image as PonyImage & { uploader_id?: number }).uploader_id;
     if (!image?.uploader || image.uploader === '匿名用户') return;
+    if (!uploaderId) {
+      showToast('无法获取上传者信息（缺少 uploader_id）', 'error');
+      return;
+    }
     setProfilePreview({ open: true, loading: true, user: null });
+    setProfileRecentUploads([]);
+
+    // Fetch Derpibooru profile
     try {
-      const res = await fetch(`https://picpony.top/api.php?action=get_user_profile&username=${encodeURIComponent(image.uploader)}`);
-      const data = await res.json();
-      if (data.success && data.profile) {
-        setProfilePreview({ open: true, loading: false, user: data.profile });
+      const profileData = await api.getDerpiProfile(uploaderId);
+      if (profileData?.user) {
+        setProfilePreview({ open: true, loading: false, user: profileData.user });
       } else {
         setProfilePreview({ open: true, loading: false, user: null });
       }
     } catch {
       setProfilePreview({ open: true, loading: false, user: null });
+    }
+
+    // Fetch recent uploads in parallel
+    setProfileRecentLoading(true);
+    try {
+      const res = await fetch(
+        `https://trixiebooru.org/api/v1/json/search/images?q=uploader_id:${uploaderId}&per_page=3&sf=created_at&sd=desc`,
+        { headers: { 'User-Agent': 'PicPony/1.0' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.images) {
+          setProfileRecentUploads(data.images);
+        }
+      }
+    } catch {
+      // ignore recent uploads errors
+    } finally {
+      setProfileRecentLoading(false);
     }
   };
 
@@ -1098,10 +1115,10 @@ export default function PicPage() {
         </div>
       </Modal>
 
-      {/* ========== Uploader Profile Modal ========== */}
+      {/* ========== Uploader Profile Modal (Derpibooru) ========== */}
       <Modal
         isOpen={profilePreview.open}
-        onClose={() => setProfilePreview({ open: false, loading: false, user: null })}
+        onClose={() => { setProfilePreview({ open: false, loading: false, user: null }); setProfileRecentUploads([]); }}
         title="上传者信息"
         maxWidth="max-w-sm"
         zIndex={100}
@@ -1109,39 +1126,166 @@ export default function PicPage() {
         {profilePreview.loading ? (
           <Spinner label="加载中..." className="py-8" />
         ) : profilePreview.user ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              {profilePreview.user.avatar ? (
-                <FadeInImage src={`https://picpony.top/${profilePreview.user.avatar}`} alt="" width={48} height={48} className="w-12 h-12 rounded-full object-cover border-2 border-slate-200 dark:border-slate-600" />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                  {profilePreview.user.username.charAt(0).toUpperCase()}
+          <div className="space-y-4">
+            {/* Avatar + Username */}
+            <div className="flex flex-col items-center text-center">
+              {profilePreview.user.avatar_url ? (
+                <img
+                  src={profilePreview.user.avatar_url}
+                  alt=""
+                  className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 dark:border-slate-600"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.querySelector('.avatar-fallback')?.classList.remove('hidden'); }}
+                />
+              ) : null}
+              <div className={`w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl avatar-fallback ${profilePreview.user.avatar_url ? 'hidden' : ''}`}>
+                {(profilePreview.user.name || '?').charAt(0).toUpperCase()}
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-2">
+                {profilePreview.user.name}
+              </h3>
+            </div>
+
+            {/* Badges (awards) */}
+            {profilePreview.user.awards && profilePreview.user.awards.length > 0 && (
+              <div className="flex justify-center gap-2 flex-wrap">
+                {profilePreview.user.awards.map((award, i) => {
+                  const badgeUrl = award.image_url || award.badge_url || award.url || award.image;
+                  return badgeUrl ? (
+                    <img
+                      key={i}
+                      src={badgeUrl}
+                      title={award.title || '勋章'}
+                      className="h-6 rounded shadow-sm"
+                      alt=""
+                    />
+                  ) : null;
+                })}
+              </div>
+            )}
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 text-xs text-slate-600 dark:text-slate-400">
+              <div
+                className="text-center cursor-pointer hover:text-primary transition-colors"
+                title="点击搜索 TA 的上传"
+                onClick={() => {
+                  const uploaderId = (image as PonyImage & { uploader_id?: number }).uploader_id;
+                  if (uploaderId) {
+                    setProfilePreview({ open: false, loading: false, user: null });
+                    setProfileRecentUploads([]);
+                    router.push(`/search?q=uploader_id:${uploaderId}`);
+                  }
+                }}
+              >
+                <div className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                  {(profilePreview.user.uploads_count ?? 0).toLocaleString()}
                 </div>
-              )}
-              <div>
-                <p className="font-semibold text-slate-800 dark:text-slate-200">{profilePreview.user.username}</p>
-                <p className="text-xs text-slate-500">
-                  {profilePreview.user.role === 'admin' ? '管理员' : profilePreview.user.role === 'moderator' ? '版主' : '用户'}
-                  {' · '}Lv.{Math.floor(profilePreview.user.experience / 100) + 1}
-                </p>
+                <div>上传</div>
+              </div>
+              <div
+                className="text-center cursor-pointer hover:text-primary transition-colors"
+                title="点击搜索 TA 的评论"
+                onClick={() => {
+                  // Only close the modal, comments search is on Derpibooru
+                  setProfilePreview({ open: false, loading: false, user: null });
+                  setProfileRecentUploads([]);
+                }}
+              >
+                <div className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                  {(profilePreview.user.comments_count ?? 0).toLocaleString()}
+                </div>
+                <div>评论</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                  {(profilePreview.user.posts_count ?? 0).toLocaleString()}
+                </div>
+                <div>发帖</div>
               </div>
             </div>
-            {profilePreview.user.bio && (
-              <p className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg">
-                {profilePreview.user.bio}
-              </p>
+
+            {/* Description */}
+            {profilePreview.user.description && (
+              <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg max-h-24 overflow-y-auto leading-relaxed whitespace-pre-wrap">
+                {profilePreview.user.description}
+              </div>
             )}
-            {profilePreview.user.id && (
+
+            {/* Recent Uploads */}
+            <div>
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">TA 的最近上传</h4>
+              {profileRecentLoading ? (
+                <div className="text-xs text-slate-400 text-center py-4">加载中...</div>
+              ) : profileRecentUploads.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {profileRecentUploads.map((img) => {
+                    const thumbUrl = img.representations?.thumb || img.representations?.small || img.view_url;
+                    return (
+                      <div
+                        key={img.id}
+                        className="aspect-square rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          setProfilePreview({ open: false, loading: false, user: null });
+                          setProfileRecentUploads([]);
+                          router.push(`/pic/${img.id}`);
+                        }}
+                      >
+                        <img
+                          src={thumbUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 text-center py-4">暂无最近上传</div>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-col gap-2">
               <button
-                onClick={() => { router.push(`/user/${profilePreview.user!.id}`); setProfilePreview({ open: false, loading: false, user: null }); }}
-                className="w-full px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                onClick={() => {
+                  const uploaderId = (image as PonyImage & { uploader_id?: number }).uploader_id;
+                  if (uploaderId) {
+                    setProfilePreview({ open: false, loading: false, user: null });
+                    setProfileRecentUploads([]);
+                    router.push(`/search?q=uploader_id:${uploaderId}`);
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5"
               >
-                查看完整主页
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                搜搜 TA 的所有作品
               </button>
-            )}
+              <a
+                href={`https://derpibooru.org/profiles/${profilePreview.user.name}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                在 Derpibooru 查看主页
+              </a>
+            </div>
           </div>
         ) : (
-          <p className="text-slate-500 text-center py-4">无法加载用户信息</p>
+          <div className="space-y-3 text-center">
+            <p className="text-slate-500">无法加载 Derpibooru 用户信息</p>
+            {image?.uploader && (
+              <a
+                href={`https://derpibooru.org/profiles/${image.uploader}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                在 Derpibooru 查看
+              </a>
+            )}
+          </div>
         )}
       </Modal>
 
