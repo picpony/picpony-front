@@ -444,13 +444,28 @@ export const api = {
     return res.json();
   },
 
-  getDerpiProfile: async (userId: number): Promise<DerpiProfileResponse | null> => {
+  getDerpiProfile: async (userId: string | number): Promise<DerpiProfileResponse | null> => {
     try {
       const res = await fetch(`${DERPIBOORU_API_BASE}/profiles/${userId}`, {
         headers: {
           'User-Agent': 'PicPony/1.0'
         }
       });
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  searchDerpiImages: async (query: string, page: number = 1, perPage: number = 24): Promise<ApiResponse | null> => {
+    try {
+      const res = await fetch(
+        `${DERPIBOORU_API_BASE}/search/images?q=${encodeURIComponent(query)}&page=${page}&per_page=${perPage}&sf=created_at&sd=desc`,
+        {
+          headers: { 'User-Agent': 'PicPony/1.0' },
+        }
+      );
       if (!res.ok) return null;
       return res.json();
     } catch {
