@@ -163,7 +163,7 @@ export interface Comment {
   id: number;
   body: string;
   created_at: string;
-  user_id: number;
+  user_id: number | null;
   username: string;
   avatar: string | null;
   source?: 'picpony' | 'trixiebooru';

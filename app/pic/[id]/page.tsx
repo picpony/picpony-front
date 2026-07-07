@@ -913,18 +913,41 @@ export default function PicPage() {
                   {comments.map((comment) => (
                     <div key={`${comment.source}-${comment.id}`} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 flex gap-4">
                       <div className="flex-shrink-0">
-                        {comment.avatar ? (
-                          <FadeInImage 
-                            src={comment.source === 'trixiebooru' ? comment.avatar : `https://picpony.top/${comment.avatar}`} 
-                            alt={`${comment.username}`}
-                            width={40}
-                            height={40}
-                            className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
-                          />
+                        {comment.user_id ? (
+                          <Link
+                            href={comment.source === 'trixiebooru' ? `/derpi/user/${comment.user_id}` : `/user/${comment.user_id}`}
+                            title={`查看 ${comment.username} 的个人资料`}
+                            scroll={false}
+                            className="block rounded-full ring-2 ring-transparent hover:ring-primary/40 transition-all"
+                          >
+                            {comment.avatar ? (
+                              <FadeInImage 
+                                src={comment.source === 'trixiebooru' ? comment.avatar : `https://picpony.top/${comment.avatar}`} 
+                                alt={`${comment.username}`}
+                                width={40}
+                                height={40}
+                                className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20">
+                                {comment.username.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </Link>
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20">
-                            {comment.username.charAt(0).toUpperCase()}
-                          </div>
+                          comment.avatar ? (
+                            <FadeInImage 
+                              src={comment.source === 'trixiebooru' ? comment.avatar : `https://picpony.top/${comment.avatar}`} 
+                              alt={`${comment.username}`}
+                              width={40}
+                              height={40}
+                              className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20">
+                              {comment.username.charAt(0).toUpperCase()}
+                            </div>
+                          )
                         )}
                       </div>
                       
