@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { MdClose, MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
+import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -83,33 +83,24 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
       setPhase('visible');
     });
 
-    // Schedule exit after toast duration
-    const timer = setTimeout(() => {
+    // Start exit animation 500ms before the full duration ends
+    const exitTimer = setTimeout(() => {
       setPhase('exit');
+    }, toast.duration - 500);
+
+    // Remove from DOM at the full duration
+    const removeTimer = setTimeout(() => {
+      onClose(toast.id);
     }, toast.duration);
 
     return () => {
       cancelAnimationFrame(raf);
-      clearTimeout(timer);
+      clearTimeout(exitTimer);
+      clearTimeout(removeTimer);
     };
-  }, [toast.duration]);
+  }, [toast.duration, onClose, toast.id]);
 
-  // Phase 'exit' → fade out over 300ms, then remove from DOM
-  useEffect(() => {
-    if (phase === 'exit') {
-      const timer = setTimeout(() => {
-        onClose(toast.id);
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [phase, toast.id, onClose]);
-
-  const handleManualClose = () => {
-    if (phase === 'exit') return;
-    setPhase('exit');
-  };
-
-  let containerClasses = "pointer-events-auto transition-all duration-300 ease-in-out ";
+  let containerClasses = "pointer-events-auto transition-all duration-500 ease-in-out ";
   if (phase === 'enter') {
     containerClasses += "opacity-0 translate-y-4 scale-95";
   } else if (phase === 'visible') {
@@ -125,12 +116,6 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
       <div className={`${style.bg} text-white rounded-xl shadow-lg px-5 py-2.5 flex items-center gap-3`}>
         <span className="shrink-0">{style.icon}</span>
         <span className="font-medium text-sm">{toast.message}</span>
-        <button
-          onClick={handleManualClose}
-          className="shrink-0 ml-2 hover:opacity-80 transition-opacity"
-        >
-          <MdClose size={18} />
-        </button>
       </div>
     </div>
   );
