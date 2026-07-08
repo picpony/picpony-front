@@ -79,9 +79,19 @@ export default function PicPage() {
     } catch {}
   }, []);
 
+  // Read "显示各标签数量" setting from localStorage
+  const [showTagCounts, setShowTagCounts] = useState(false);
+  useEffect(() => {
+    const read = () => setShowTagCounts(localStorage.getItem('trixie_show_tag_counts') === 'true');
+    read();
+    window.addEventListener('settings_updated', read);
+    return () => window.removeEventListener('settings_updated', read);
+  }, []);
+
   // Tag count map: tag name → image count
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
   useEffect(() => {
+    if (!showTagCounts) { setTagCounts({}); return; }
     if (!image?.tags || image.tags.length === 0) return;
     const token = tokenRef.current;
     if (!token) return;
@@ -110,7 +120,7 @@ export default function PicPage() {
       setTagCounts(map);
     })();
     return () => { cancelled = true; };
-  }, [image]);
+  }, [image, showTagCounts]);
 
   // Dynamically import lightbox CSS
   useEffect(() => {
@@ -821,7 +831,7 @@ export default function PicPage() {
                     title="点击查看词库信息"
                   >
                     {tag}
-                  {tagCounts[tag] !== undefined && (
+                  {showTagCounts && tagCounts[tag] !== undefined && (
                     <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-500 font-normal">
                       {tagCounts[tag].toLocaleString()}
                     </span>
