@@ -58,6 +58,12 @@ export default function RichTextEditor({
     if (!toolbarContainerRef.current || !editorContainerRef.current) return;
 
     const wangEditor = await import('@wangeditor/editor');
+
+    // Guard: after async import, re-check since StrictMode double-mount may
+    // have already initialized the editor while we were awaiting
+    if (initializedRef.current) return;
+    if (!toolbarContainerRef.current || !editorContainerRef.current) return;
+
     const { createEditor, createToolbar } = wangEditor;
 
     const editorConfig: Partial<IEditorConfig> = {
@@ -175,7 +181,13 @@ export default function RichTextEditor({
     if (!editor || !value) return;
     if (isUpdatingRef.current) return;
 
-    const currentHtml = editor.getHtml();
+    let currentHtml: string;
+    try {
+      currentHtml = editor.getHtml();
+    } catch {
+      // Editor instance was destroyed (WeakMap entry cleared); skip update
+      return;
+    }
     const expectedHtml = bbcodeToHtml(value);
     if (currentHtml !== expectedHtml) {
       isUpdatingRef.current = true;
@@ -197,10 +209,14 @@ export default function RichTextEditor({
     const editor = editorRef.current;
     if (!editor) return;
 
-    if (disabled) {
-      editor.disable();
-    } else {
-      editor.enable();
+    try {
+      if (disabled) {
+        editor.disable();
+      } else {
+        editor.enable();
+      }
+    } catch {
+      // Editor instance was destroyed; ignore
     }
   }, [disabled]);
 
