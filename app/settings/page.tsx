@@ -1315,8 +1315,7 @@ export default function SettingsPage() {
                   <option value="保密">保密</option>
                   <option value="男">男</option>
                   <option value="女">女</option>
-                  <option value="其他">其他</option>
-                  <option value="武装直升机">武装直升机</option>
+                  <option value="武装直升机">其他</option>
                 </select>
               </div>
               <div>
