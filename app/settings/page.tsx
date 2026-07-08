@@ -1313,9 +1313,10 @@ export default function SettingsPage() {
                 <select value={profileGender} onChange={(e) => setProfileGender(e.target.value)}
                   className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
                   <option value="保密">保密</option>
-                  <option value="雄性">雄性</option>
-                  <option value="雌性">雌性</option>
+                  <option value="男">男</option>
+                  <option value="女">女</option>
                   <option value="其他">其他</option>
+                  <option value="武装直升机">武装直升机</option>
                 </select>
               </div>
               <div>
