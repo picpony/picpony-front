@@ -24,10 +24,16 @@ function bbcodeToSafeHtml(bbcode: string): string {
 
   // Step 2: convert BBCode tags to HTML (order matters: more specific first)
 
-  // Images
+  // Images — handle multiline URLs and resolve relative paths
   html = html.replace(
-    /\[img\](.*?)\[\/img\]/gi,
-    '<img src="$1" alt="" style="max-width:100%;border-radius:8px;margin:8px 0;" />'
+    /\[img\]([\s\S]*?)\[\/img\]/gi,
+    (match, url: string) => {
+      const src = url.trim();
+      if (!src) return '';
+      // Resolve relative paths
+      const resolved = src.startsWith('/') ? `https://picpony.top${src}` : src;
+      return `<img src="${resolved}" alt="" style="max-width:100%;border-radius:8px;margin:8px 0;" />`;
+    }
   );
 
   // Bold

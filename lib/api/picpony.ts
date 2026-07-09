@@ -251,7 +251,7 @@ export async function toggleForumPostLike(token: string, postId: number) {
   return fetch(`${PICPONY_API_BASE}?action=toggle_forum_post_like`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ post_id: postId }),
+    body: JSON.stringify({ id: postId }),
   });
 }
 

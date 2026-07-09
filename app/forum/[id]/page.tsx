@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api, ForumPostDetail, ForumComment } from '@/lib/api';
-import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend } from 'react-icons/md';
+import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend, MdLink, MdContentCopy } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -10,6 +10,7 @@ const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ss
 import RichTextRenderer from '@/components/RichTextRenderer';
 import Spinner from '@/components/Spinner';
 import FadeInImage from '@/components/FadeInImage';
+import { showToast } from '@/components/Toast';
 
 export default function ForumPostPage() {
   const params = useParams();
@@ -93,6 +94,22 @@ export default function ForumPostPage() {
     } finally {
       setIsLikeLoading(false);
     }
+  }, [id]);
+
+  const handleCopyLink = useCallback(() => {
+    const shareUrl = `${window.location.origin}/forum/${id}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      showToast('分享链接已复制到剪贴板！', 'success');
+    }).catch(() => {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = shareUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      showToast('分享链接已复制到剪贴板！', 'success');
+    });
   }, [id]);
 
   const handlePageChange = useCallback((newPage: number) => {
@@ -268,6 +285,37 @@ export default function ForumPostPage() {
 
         <div className="prose max-w-none text-slate-700 dark:text-slate-300">
           <RichTextRenderer content={post.content} />
+        </div>
+
+        {/* Action bar: like + share */}
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            onClick={handleToggleLike}
+            disabled={isLikeLoading}
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm border transition-colors ${
+              isLiked
+                ? 'bg-primary/10 border-primary text-primary'
+                : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-primary hover:text-primary'
+            }`}
+            title={isLiked ? '取消点赞' : '点赞'}
+          >
+            {isLikeLoading ? (
+              <Spinner size="sm" />
+            ) : isLiked ? (
+              <MdThumbUp size={16} />
+            ) : (
+              <MdOutlineThumbUp size={16} />
+            )}
+            <span>{likeCount}</span>
+          </button>
+          <button
+            onClick={handleCopyLink}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-primary hover:text-primary transition-colors"
+            title="复制分享链接"
+          >
+            <MdContentCopy size={16} />
+            <span>分享</span>
+          </button>
         </div>
       </div>
 
