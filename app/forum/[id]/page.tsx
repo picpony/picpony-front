@@ -252,6 +252,20 @@ export default function ForumPostPage() {
           </div>
         </div>
 
+        {post.cover_image && (
+          <div className="mb-6 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800">
+            <div className="relative w-full aspect-video sm:aspect-[2/1]">
+              <FadeInImage
+                src={`https://picpony.top${post.cover_image}`}
+                alt={post.title}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 896px"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="prose max-w-none text-slate-700 dark:text-slate-300">
           <RichTextRenderer content={post.content} />
         </div>

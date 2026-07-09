@@ -17,6 +17,7 @@ interface Announcement {
 
 import { Contact, Message } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
+import RichTextRenderer from '@/components/RichTextRenderer';
 
 export default function MessagesPage() {
   const searchParams = useSearchParams();
@@ -354,24 +355,46 @@ export default function MessagesPage() {
   };
 
   const renderMessageContent = (content: string) => {
+    if (!content) return null;
+
+    // Check if content has emoji markers
+    const emojiRegex = /\$emoji_[a-zA-Z0-9_]+\$/g;
+    if (!emojiRegex.test(content)) {
+      // No emoji — just use RichTextRenderer directly
+      return <RichTextRenderer content={content} />;
+    }
+
+    // Reset regex state after .test()
+    emojiRegex.lastIndex = 0;
+
+    // Has emoji — split and render each part
     const parts = content.split(/(\$emoji_[a-zA-Z0-9_]+\$)/g);
-    return parts.map((part, index) => {
+    const elements: React.ReactNode[] = [];
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
       const match = part.match(/^\$emoji_([a-zA-Z0-9_]+)\$$/);
       if (match) {
-        const emojiName = match[1];
-        return (
+        elements.push(
           <FadeInImage 
-            key={index} 
-            src={`/img/emoji/${emojiName}.png`} 
-            alt={emojiName} 
+            key={`e${i}`} 
+            src={`/img/emoji/${match[1]}.png`} 
+            alt={match[1]} 
             width={24}
             height={24}
             className="inline-block w-6 h-6 align-middle mx-0.5" 
           />
         );
+      } else if (part) {
+        elements.push(
+          <span key={`t${i}`} className="inline">
+            <RichTextRenderer content={part} />
+          </span>
+        );
       }
-      return <span key={index}>{part}</span>;
-    });
+    }
+
+    return <>{elements}</>;
   };
 
   return (
