@@ -372,7 +372,7 @@ export default function ForumPostPage() {
           ) : (
             comments.map((comment, index) => (
               <div key={comment.id} className="bg-white dark:bg-transparent p-4 rounded-xl flex gap-4">
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 self-start">
                   <Link href={`/user/${comment.user_id}`}>
                     <FadeInImage 
                       src={comment.avatar ? `https://picpony.top/${comment.avatar}` : '/img/default-avatar.png'} 
