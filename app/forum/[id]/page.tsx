@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api, ForumPostDetail, ForumComment } from '@/lib/api';
-import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend, MdLink, MdContentCopy } from 'react-icons/md';
+import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend, MdLink, MdContentCopy, MdReply, MdClose } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -34,6 +34,14 @@ export default function ForumPostPage() {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
+
+  // Reply state
+  const [replyTo, setReplyTo] = useState<{
+    userId: number;
+    username: string;
+    commentId: number;
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     const checkLoginStatus = () => {
@@ -112,6 +120,22 @@ export default function ForumPostPage() {
     });
   }, [id]);
 
+  const handleReplyTo = useCallback((userId: number, username: string, commentId: number, text: string) => {
+    if (!isLoggedIn) {
+      setSubmitError('请先登录');
+      return;
+    }
+    setReplyTo({ userId, username, commentId, text });
+    // Scroll to comment input
+    setTimeout(() => {
+      document.getElementById('comment-input-area')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  }, [isLoggedIn]);
+
+  const handleCancelReply = useCallback(() => {
+    setReplyTo(null);
+  }, []);
+
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
@@ -133,12 +157,30 @@ export default function ForumPostPage() {
       setIsSubmitting(true);
       setSubmitError(null);
       const userInfo = JSON.parse(userInfoStr);
+
+      // Build final content with reply quote prefix
+      let finalContent = newComment;
+      if (replyTo) {
+        const cleanText = replyTo.text
+          .replace(/\[quote=.*?\][\s\S]*?\[\/quote\]/gi, '')
+          .replace(/<[^>]+>/g, '')
+          .trim()
+          .substring(0, 100);
+        finalContent = `[quote="${replyTo.username}"]\n${cleanText}\n[/quote]\n\n${newComment}`;
+      }
       
-      const res = await api.createForumComment(userInfo.token, parseInt(id), newComment);
+      const res = await api.createForumComment(
+        userInfo.token,
+        parseInt(id),
+        finalContent,
+        replyTo?.userId,
+        replyTo?.commentId,
+      );
       const data = await res.json();
 
       if (data.success) {
         setNewComment('');
+        setReplyTo(null); // Clear reply state
         setRetryCount(c => c + 1); // Reload comments
       } else {
         setSubmitError(data.message || '发送评论失败');
@@ -149,7 +191,7 @@ export default function ForumPostPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [id, newComment, isSubmitting]);
+  }, [id, newComment, isSubmitting, replyTo]);
 
   if (isLoading) {
     return (
@@ -362,6 +404,18 @@ export default function ForumPostPage() {
                   <div className="prose max-w-none text-slate-700 dark:text-slate-300 text-sm">
                     <RichTextRenderer content={comment.content} />
                   </div>
+                  {/* Reply button */}
+                  <div className="mt-2 flex items-center gap-3">
+                    {isLoggedIn && (
+                      <button
+                        onClick={() => handleReplyTo(comment.user_id, comment.username, comment.id, comment.content)}
+                        className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-primary transition-colors"
+                      >
+                        <MdReply size={14} />
+                        <span>回复</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
@@ -370,7 +424,7 @@ export default function ForumPostPage() {
       </div>
 
       {/* Comment Input */}
-      <div className="bg-white dark:bg-transparent p-4 sm:p-6 rounded-xl mb-8">
+      <div id="comment-input-area" className="bg-white dark:bg-transparent p-4 sm:p-6 rounded-xl mb-8">
         <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">发表回复</h3>
         {!isLoggedIn ? (
           <div className="text-center py-8 bg-slate-50 dark:bg-background/50 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -384,10 +438,35 @@ export default function ForumPostPage() {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Reply hint bar */}
+            {replyTo && (
+              <div className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg bg-primary/5 border border-primary/20 text-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <MdReply size={16} className="text-primary flex-shrink-0" />
+                  <span className="text-slate-600 dark:text-slate-300 truncate">
+                    回复 <strong className="text-primary">{replyTo.username}</strong>：
+                    <span className="text-slate-400 dark:text-slate-500 ml-1">
+                      {replyTo.text
+                        .replace(/\[quote=.*?\][\s\S]*?\[\/quote\]/gi, '')
+                        .replace(/<[^>]+>/g, '')
+                        .trim()
+                        .substring(0, 80)}
+                    </span>
+                  </span>
+                </div>
+                <button
+                  onClick={handleCancelReply}
+                  className="flex-shrink-0 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  title="取消回复"
+                >
+                  <MdClose size={16} />
+                </button>
+              </div>
+            )}
             <RichTextEditor 
               value={newComment} 
               onChange={setNewComment} 
-              placeholder="写下你的回复..."
+              placeholder={replyTo ? `回复 ${replyTo.username}...` : "写下你的回复..."}
             />
             {submitError && (
               <div className="text-red-500 text-sm flex items-center gap-1">

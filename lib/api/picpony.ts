@@ -239,11 +239,14 @@ export async function createForumPost(token: string, data: {
   });
 }
 
-export async function createForumComment(token: string, postId: number, content: string) {
+export async function createForumComment(token: string, postId: number, content: string, replyToUserId?: number, replyToCommentId?: number) {
+  const body: Record<string, unknown> = { post_id: postId, content };
+  if (replyToUserId) body.reply_to_user_id = replyToUserId;
+  if (replyToCommentId) body.reply_to_comment_id = replyToCommentId;
   return fetch(`${PICPONY_API_BASE}?action=create_forum_comment`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ post_id: postId, content }),
+    body: JSON.stringify(body),
   });
 }
 

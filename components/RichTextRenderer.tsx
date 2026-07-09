@@ -15,7 +15,7 @@ export default function RichTextRenderer({ content }: RichTextRendererProps) {
       /\[\/?i\]/i,           // [i] [/i]
       /\[\/?u\]/i,           // [u] [/u]
       /\[\/?s\]/i,           // [s] [/s]
-      /\[\/?quote\]/i,       // [quote] [/quote]
+      /\[\/?quote\b/i,       // [quote] [/quote] [quote=]
       /\[\/?code\]/i,        // [code] [/code]
       /\[\/?list\b/i,        // [list] [/list] [list=1]
       /\[\*\]/i,             // [*]
