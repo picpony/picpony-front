@@ -82,9 +82,8 @@ function bbcodeToSafeHtml(bbcode: string): string {
     (match, username: string, text: string) => {
       const name = username.trim();
       const content = text.trim();
-      return `<blockquote style="border-left:4px solid #e06c9f;padding:8px 16px;margin:8px 0;background:rgba(224,108,159,0.04);border-radius:8px;">
-        <div style="font-size:0.75rem;font-weight:600;color:#e06c9f;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+      return `<blockquote style="background:rgba(224,108,159,0.04);border-radius:8px;border:none;padding:4px 16px;">
+        <div style="font-size:0.75rem;font-weight:600;color:#e06c9f;margin-bottom:-10px;margin-top:-20px;display:flex;align-items:center;gap:3px;">
           ${name}：
         </div>
         <div style="font-size:0.875rem;color:#64748b;line-height:1.6;">${content}</div>
