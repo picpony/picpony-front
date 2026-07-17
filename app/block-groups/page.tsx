@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Spinner from '@/components/Spinner';
-import { MdAdd, MdClose, MdShield, MdSearch, MdEdit, MdDelete, MdBlock, MdVisibility, MdSync, MdErrorOutline } from 'react-icons/md';
+import { MdAdd, MdClose, MdShield, MdSearch, MdEdit, MdDelete, MdBlock, MdVisibility } from 'react-icons/md';
 
 const TRIXIE_SEARCH = 'https://trixiebooru.org/api/v1/json/search/tags';
 const MAX_GROUPS = 50;
@@ -46,12 +46,6 @@ export default function BlockGroupsPage() {
   // Confirm delete
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const deleteTargetRef = useRef<number | null>(null);
-
-  // Import modal
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [importFilters, setImportFilters] = useState<{ id: number; name: string; description: string; hidden_tags: string; spoilered_tags: string; hidden_complex: string; spoilered_complex: string; hidden_tag_ids: number[]; spoilered_tag_ids: number[] }[]>([]);
-  const [importLoading, setImportLoading] = useState(false);
-  const [importError, setImportError] = useState('');
 
   useEffect(() => {
     const stored = localStorage.getItem('user_info');
@@ -240,110 +234,6 @@ export default function BlockGroupsPage() {
     }
   }, [userInfo?.token, loadGroups]);
 
-  // ================= Derpibooru Import =================
-  const openImportModal = useCallback(async () => {
-    const stored = localStorage.getItem('user_info');
-    if (!stored) { showToast('请先登录', 'warning'); return; }
-    const u = JSON.parse(stored);
-    const apiKey = u.derpi_username ? u.api_key : null;
-    if (!apiKey) {
-      showToast('请在设置中绑定 Derpibooru API Key', 'warning');
-      return;
-    }
-    setImportModalOpen(true);
-    setImportLoading(true);
-    setImportError('');
-    try {
-      const res = await fetch(`https://trixiebooru.org/api/v1/json/filters/user?key=${apiKey}`);
-      if (!res.ok) throw new Error(`API Key 无效 (HTTP ${res.status})`);
-      const data = await res.json();
-      if (data.filters?.length > 0) {
-        setImportFilters(data.filters);
-      } else {
-        setImportError('您的账号下没有可导入的过滤器');
-      }
-    } catch (err: unknown) {
-      setImportError(`获取失败: ${err instanceof Error ? err.message : '未知错误'}`);
-    } finally {
-      setImportLoading(false);
-    }
-  }, []);
-
-  const importSingleFilter = useCallback(async (filter: typeof importFilters[0]) => {
-    if (groups.length >= MAX_GROUPS) { showToast(`最多只能创建 ${MAX_GROUPS} 个屏蔽组`, 'warning'); return; }
-
-    // Parse hidden tags from complex and simple
-    const hComplex = filter.hidden_complex
-      ? filter.hidden_complex.split(/,| OR /i).map(t => t.trim().replace(/^"|"$/g, '')).filter(Boolean)
-      : [];
-    const hTags = filter.hidden_tags
-      ? filter.hidden_tags.split(',').map(t => t.trim()).filter(Boolean)
-      : [];
-    const hSet = [...new Set([...hComplex, ...hTags].filter(t => t && !t.includes(':') && !t.includes('!')))];
-    const hiddenTagNames: string[] = [];
-
-    // Resolve hidden_tag_ids to tag names
-    if (filter.hidden_tag_ids?.length > 0) {
-      for (const id of filter.hidden_tag_ids.slice(0, 50)) {
-        try {
-          const r = await fetch(`https://trixiebooru.org/api/v1/json/tags/${id}`);
-          if (r.ok) {
-            const d = await r.json();
-            if (d.tag?.name) hiddenTagNames.push(d.tag.name);
-          }
-        } catch { /* skip */ }
-      }
-    }
-    const finalHidden = [...new Set([...hSet, ...hiddenTagNames])];
-
-    // Parse spoilered tags
-    const sComplex = filter.spoilered_complex
-      ? filter.spoilered_complex.split(/,| OR /i).map(t => t.trim().replace(/^"|"$/g, '')).filter(Boolean)
-      : [];
-    const sTags = filter.spoilered_tags
-      ? filter.spoilered_tags.split(',').map(t => t.trim()).filter(Boolean)
-      : [];
-    const sSet = [...new Set([...sComplex, ...sTags].filter(t => t && !t.includes(':') && !t.includes('!')))];
-    const spoileredTagNames: string[] = [];
-
-    if (filter.spoilered_tag_ids?.length > 0) {
-      for (const id of filter.spoilered_tag_ids.slice(0, 50)) {
-        try {
-          const r = await fetch(`https://trixiebooru.org/api/v1/json/tags/${id}`);
-          if (r.ok) {
-            const d = await r.json();
-            if (d.tag?.name) spoileredTagNames.push(d.tag.name);
-          }
-        } catch { /* skip */ }
-      }
-    }
-    const finalSpoilered = [...new Set([...sSet, ...spoileredTagNames])];
-
-    if (finalHidden.length === 0 && finalSpoilered.length === 0) {
-      showToast('该过滤器没有可导入的标签', 'warning');
-      return;
-    }
-
-    if (!userInfo?.token) return;
-    try {
-      const res = await api.saveBlockGroup(userInfo.token, {
-        name: filter.name.length > 30 ? filter.name.slice(0, 30) : filter.name,
-        tags: [...finalHidden, ...finalSpoilered],
-        hidden_tags: finalHidden,
-        spoilered_tags: finalSpoilered,
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast('导入成功', 'success');
-        loadGroups();
-      } else {
-        showToast(data.error || '导入失败', 'error');
-      }
-    } catch {
-      showToast('网络错误', 'error');
-    }
-  }, [groups.length, userInfo?.token, loadGroups]);
-
   const sectionTitle = "text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2";
 
   if (!userInfo) return null;
@@ -354,10 +244,6 @@ export default function BlockGroupsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <h2 className={sectionTitle}>屏蔽组</h2>
         <div className="flex items-center gap-2">
-          <button onClick={openImportModal}
-            className="px-3 py-1.5 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">
-            从 Derpibooru 导入
-          </button>
           <button onClick={() => openEditModal()}
             className="px-3 py-1.5 text-xs font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors flex items-center gap-1">
             <MdAdd size={14} /> 新建
@@ -553,49 +439,6 @@ export default function BlockGroupsPage() {
           </>
         }>
         <p className="text-sm text-slate-600 dark:text-slate-400">确定要删除这个屏蔽组吗？</p>
-      </Modal>
-
-      {/* ================= Import Modal ================= */}
-      <Modal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)}
-        title="从 Derpibooru 导入" maxWidth="max-w-lg">
-        <div className="space-y-3">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            系统已自动读取您绑定的 API Key。请选择要导入的云端过滤器：
-          </p>
-
-          {importLoading ? (
-            <div className="text-center py-8 text-purple-500 text-sm">
-              <MdSync size={16} className="inline animate-spin mr-1" /> 正在连接 Derpibooru 拉取数据...
-            </div>
-          ) : importError ? (
-            <div className="text-center py-8 text-red-500 text-sm">
-              <MdErrorOutline size={16} className="inline mr-1" /> {importError}
-            </div>
-          ) : importFilters.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-sm">
-              <p>您的账号下没有任何过滤器</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {importFilters.map(filter => (
-                <div key={filter.id}
-                  className="flex items-center justify-between gap-3 p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{filter.name}</div>
-                    {filter.description && (
-                      <div className="text-xs text-slate-400 truncate mt-0.5">{filter.description}</div>
-                    )}
-                  </div>
-                  <button onClick={() => importSingleFilter(filter)}
-                    disabled={groups.length >= MAX_GROUPS}
-                    className="shrink-0 px-3 py-1.5 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    导入
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </Modal>
     </div>
   );
