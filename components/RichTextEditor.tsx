@@ -67,6 +67,7 @@ export default function RichTextEditor({
     const { createEditor, createToolbar } = wangEditor;
 
     const editorConfig: Partial<IEditorConfig> = {
+      autoFocus: false,
       placeholder,
       MENU_CONF: {},
       onChange(editor: IDomEditor) {
@@ -172,7 +173,11 @@ export default function RichTextEditor({
     initEditor().catch(err => console.error('编辑器初始化异常:', err));
 
     return () => {
-      destroyEditor();
+      if (document.documentElement.dataset.imageHeroTransition) {
+        window.setTimeout(destroyEditor, 450);
+      } else {
+        destroyEditor();
+      }
     };
   }, []);
 

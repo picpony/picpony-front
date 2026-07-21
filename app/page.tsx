@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useCallback } from "react";
 import {
   MdAdd,
 } from "react-icons/md";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { api, PonyImage, applyCdn, ForumPost } from "@/lib/api";
 import FeaturedBanner from "@/components/FeaturedBanner";
 import MasonryGrid from "@/components/MasonryGrid";
@@ -12,6 +12,7 @@ import ImageGridSkeleton from "@/components/ImageGridSkeleton";
 import Pagination from "@/components/Pagination";
 import ErrorRetry from "@/components/ErrorRetry";
 import ForumPostList from "@/components/ForumPostList";
+import { useBackgroundSearchParams } from "@/components/BackgroundLocation";
 
 type HomeTab = 'gallery' | 'forum';
 
@@ -165,7 +166,7 @@ function ForumTab() {
 }
 
 function HomeContent() {
-  const searchParams = useSearchParams();
+  const searchParams = useBackgroundSearchParams();
   const tabParam = searchParams.get('tab');
   const tab: HomeTab = tabParam === 'forum' ? 'forum' : 'gallery';
 

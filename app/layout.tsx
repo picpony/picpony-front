@@ -27,8 +27,10 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({
   children,
+  imageDetail,
 }: Readonly<{
   children: React.ReactNode;
+  imageDetail: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
   const sidebarCollapsed = cookieStore.get('sidebarCollapsed')?.value === 'true';
@@ -62,7 +64,11 @@ export default async function RootLayout({
           easing="ease-in-out"
           speed={200}
         />
-        <AppLayout initialCollapsed={sidebarCollapsed} initialDark={darkMode}>
+        <AppLayout
+          initialCollapsed={sidebarCollapsed}
+          initialDark={darkMode}
+          overlay={imageDetail}
+        >
           {children}
         </AppLayout>
         <ToastContainer />

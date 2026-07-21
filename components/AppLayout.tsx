@@ -2,7 +2,7 @@
 
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSelectedLayoutSegment } from "next/navigation";
 import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
@@ -11,7 +11,16 @@ const Modal = dynamic(() => import("./Modal"), { ssr: false });
 import Logo from "./Logo";
 import FadeInImage from "./FadeInImage";
 import Checkbox from "./Checkbox";
+import {
+  BackgroundLocationProvider,
+  useBackgroundSearchParams,
+} from "./BackgroundLocation";
 import { api } from "@/lib/api";
+import {
+  getImageHeroBackgroundLocation,
+  initializeImageHeroHistory,
+} from "@/lib/hero";
+import HeroStage from '@/components/HeroStage';
 
 function SearchBar() {
   const router = useRouter();
@@ -52,7 +61,7 @@ const sidebarButtonClass = (isActive: boolean) =>
   }`;
 
 function TabNavBar() {
-  const searchParams = useSearchParams();
+  const searchParams = useBackgroundSearchParams();
   const router = useRouter();
   const currentTab = searchParams.get('tab') || 'gallery';
   const [pendingTab, setPendingTab] = useState<string | null>(null);
@@ -71,8 +80,11 @@ function TabNavBar() {
   };
 
   return (
-    <div className="sticky bottom-0 left-0 right-0 z-50 flex items-center justify-center py-3">
-      <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl shadow-lg shadow-black/10 dark:shadow-black/30">
+    <div
+      data-image-detail-chrome
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-50 flex items-center justify-center py-3"
+    >
+      <div className="pointer-events-auto flex items-center gap-1 rounded-xl bg-slate-100 p-1 shadow-lg shadow-black/10 dark:bg-slate-800 dark:shadow-black/30">
         <button
           onClick={() => switchTab('gallery')}
           className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${currentTab !== 'forum'
@@ -100,10 +112,12 @@ function TabNavBar() {
 
 export default function AppLayout({
   children,
+  overlay,
   initialCollapsed,
   initialDark
 }: {
   children: React.ReactNode;
+  overlay: React.ReactNode;
   initialCollapsed: boolean;
   initialDark: boolean;
 }) {
@@ -141,6 +155,24 @@ export default function AppLayout({
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const imageDetailSegment = useSelectedLayoutSegment('imageDetail');
+  const imageDetailId = pathname.match(/^\/pic\/([^/]+)$/)?.[1];
+  const isImageDetailOpen = Boolean(
+    imageDetailId && imageDetailSegment === imageDetailId
+  );
+  const imageHeroBackground = isImageDetailOpen
+    ? getImageHeroBackgroundLocation()
+    : null;
+  const backgroundPathname = isImageDetailOpen
+    ? imageHeroBackground?.pathname ?? '/'
+    : pathname;
+  const frozenBackgroundSearch = isImageDetailOpen
+    ? imageHeroBackground?.search ?? ''
+    : null;
+
+  useEffect(() => {
+    initializeImageHeroHistory();
+  }, []);
 
   const systemPrefersDark = typeof window !== 'undefined'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -286,7 +318,7 @@ export default function AppLayout({
 
     window.addEventListener('user_info_updated', updateUserInfo);
     return () => window.removeEventListener('user_info_updated', updateUserInfo);
-  }, [pathname]);
+  }, [backgroundPathname]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -332,6 +364,7 @@ export default function AppLayout({
   };
 
   return (
+    <BackgroundLocationProvider frozenSearch={frozenBackgroundSearch}>
     <div className="h-full flex flex-col overflow-hidden">
       <div className="bg-amber-400 text-amber-900 text-center text-xs sm:text-sm py-1 px-4 font-medium shrink-0">
         网站处于开发阶段，不代表最终品质
@@ -462,7 +495,7 @@ export default function AppLayout({
                   <Link
                     href="/favorites"
                     onClick={handleMobileNavigation}
-                    className={sidebarButtonClass(pathname === '/favorites')}
+                    className={sidebarButtonClass(backgroundPathname === '/favorites')}
                   >
                     <MdCollectionsBookmark size={20} className="shrink-0 mr-3" />
                     <span>我的收藏</span>
@@ -470,7 +503,7 @@ export default function AppLayout({
                   <Link
                     href="/messages"
                     onClick={handleMobileNavigation}
-                    className={sidebarButtonClass(pathname === '/messages')}
+                    className={sidebarButtonClass(backgroundPathname === '/messages')}
                   >
                     <MdNotifications size={20} className="shrink-0 mr-3" />
                     <span>消息</span>
@@ -483,7 +516,7 @@ export default function AppLayout({
                   <Link
                     href="/history"
                     onClick={handleMobileNavigation}
-                    className={sidebarButtonClass(pathname === '/history')}
+                    className={sidebarButtonClass(backgroundPathname === '/history')}
                   >
                     <MdHistory size={20} className="shrink-0 mr-3" />
                     <span>浏览历史</span>
@@ -491,7 +524,7 @@ export default function AppLayout({
                   <Link
                     href="/upload"
                     onClick={handleMobileNavigation}
-                    className={sidebarButtonClass(pathname === '/upload')}
+                    className={sidebarButtonClass(backgroundPathname === '/upload')}
                   >
                     <MdCloudUpload size={20} className="shrink-0 mr-3" />
                     <span>发布图片</span>
@@ -499,7 +532,7 @@ export default function AppLayout({
                   <Link
                     href="/block-groups"
                     onClick={handleMobileNavigation}
-                    className={sidebarButtonClass(pathname === '/block-groups')}
+                    className={sidebarButtonClass(backgroundPathname === '/block-groups')}
                   >
                     <MdShield size={20} className="shrink-0 mr-3" />
                     <span>屏蔽组</span>
@@ -507,7 +540,7 @@ export default function AppLayout({
                   <Link
                     href="/tasks"
                     onClick={handleMobileNavigation}
-                    className={sidebarButtonClass(pathname === '/tasks')}
+                    className={sidebarButtonClass(backgroundPathname === '/tasks')}
                   >
                     <MdEmojiEvents size={20} className="shrink-0 mr-3" />
                     <span>任务</span>
@@ -515,7 +548,7 @@ export default function AppLayout({
                   <Link
                     href="/settings"
                     onClick={handleMobileNavigation}
-                    className={sidebarButtonClass(pathname === '/settings')}
+                    className={sidebarButtonClass(backgroundPathname === '/settings')}
                   >
                     <MdSettings size={20} className="shrink-0 mr-3" />
                     <span>设置</span>
@@ -524,7 +557,7 @@ export default function AppLayout({
                     <Link
                       href="/admin"
                       onClick={handleMobileNavigation}
-                      className={sidebarButtonClass(pathname.startsWith('/admin'))}
+                      className={sidebarButtonClass(backgroundPathname.startsWith('/admin'))}
                     >
                       <MdDashboard size={20} className="shrink-0 mr-3" />
                       <span>管理面板</span>
@@ -561,7 +594,7 @@ export default function AppLayout({
             <Link
               href="/"
               onClick={handleMobileNavigation}
-              className={sidebarButtonClass(pathname === '/')}
+              className={sidebarButtonClass(backgroundPathname === '/')}
             >
               <MdHome size={20} className="shrink-0 mr-3" />
               <span>主页</span>
@@ -569,27 +602,61 @@ export default function AppLayout({
           </nav>
         </aside>
 
-        <main className="flex-1 overflow-y-scroll bg-white dark:bg-slate-950 relative flex flex-col w-full main-scrollbar sm:m-3 sm:rounded-xl">
-          <div key={pathname} className="animate-page-transition p-4 sm:p-6 flex-1">
-            {children}
-          </div>
-          <footer className="py-6 sm:py-8 px-4 sm:px-6 text-slate-500 dark:text-slate-400 text-sm">
-            <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex flex-col items-center md:items-start gap-4 w-full md:w-auto">
-                <Logo className="h-8 w-auto opacity-60" />
-                <div>
-                  <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
-                  <p>本站为 Derpibooru 第三方镜像站点</p>
+        <section
+          data-image-detail-host
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-slate-950 sm:m-3 sm:rounded-xl"
+        >
+          <div className="relative min-h-0 flex-1">
+            <main
+              data-image-detail-background
+              className="main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-white dark:bg-slate-950"
+            >
+              <div
+                data-image-detail-background-visual
+                className="flex min-h-full w-full flex-col"
+              >
+                <div
+                  key={backgroundPathname}
+                  className="animate-page-transition flex-1 p-4 sm:p-6"
+                >
+                  {children}
                 </div>
+                <footer className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 sm:px-6 sm:py-8">
+                  <div className="mx-auto flex max-w-screen-xl flex-col items-center justify-between gap-4 md:flex-row">
+                    <div className="flex w-full flex-col items-center gap-4 md:w-auto md:items-start">
+                      <Logo className="h-8 w-auto opacity-60" />
+                      <div>
+                        <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
+                        <p>本站为 Derpibooru 第三方镜像站点</p>
+                      </div>
+                    </div>
+                  </div>
+                </footer>
+              </div>
+            </main>
+            <div
+              data-image-hero-destination
+              aria-hidden="true"
+              className="image-hero-destination pointer-events-none absolute inset-x-0 z-0 opacity-0"
+            >
+              <div className="mx-auto flex w-full max-w-7xl justify-center pl-6 pr-8 sm:pl-8 sm:pr-10">
+                <div
+                  data-image-hero-destination-box
+                  className="flex-none overflow-hidden rounded-lg"
+                />
               </div>
             </div>
-          </footer>
-          {pathname === '/' && (
+            <Suspense fallback={null}>
+              <HeroStage />
+            </Suspense>
+            {overlay}
+          </div>
+          {backgroundPathname === '/' && (
             <Suspense fallback={null}>
               <TabNavBar />
             </Suspense>
           )}
-        </main>
+        </section>
       </div>
       <AnnouncementModal />
 
@@ -620,5 +687,6 @@ export default function AppLayout({
         </p>
       </Modal>
     </div>
+    </BackgroundLocationProvider>
   );
 }

@@ -251,7 +251,7 @@ export default function DerpiUserPage() {
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                   {uploads.map((img) => {
-                    const thumbUrl = img.representations?.thumb || img.representations?.small || img.view_url;
+                    const thumbUrl = img.representations?.small || img.representations?.thumb || img.view_url;
                     return (
                       <div
                         key={img.id}

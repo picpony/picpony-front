@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MdSearch, MdImageSearch, MdErrorOutline, MdArrowBack } from 'react-icons/md';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import { api, PonyImage, applyCdn } from '@/lib/api';
 import MasonryGrid from '@/components/MasonryGrid';
@@ -12,6 +12,7 @@ import Pagination from '@/components/Pagination';
 import ErrorRetry from '@/components/ErrorRetry';
 import ImageSearchModal from '@/components/ImageSearchModal';
 import { showToast } from '@/components/Toast';
+import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 
 interface DictionaryEntry {
   id: number;
@@ -59,12 +60,14 @@ function CustomImageList({ images, onBack }: { images: PonyImage[], onBack: () =
 }
 
 function SearchPageContent() {
-  const searchParams = useSearchParams();
+  const searchParams = useBackgroundSearchParams();
   const router = useRouter();
   const q = searchParams.get('q') || '';
   const sortParam = searchParams.get('sort') || '';
   const dirParam = searchParams.get('dir') || '';
-  const defaultSort = typeof localStorage !== 'undefined' ? (localStorage.getItem('picpony_default_search_sort') || 'created_at') : 'created_at';
+  const defaultSort = typeof window !== 'undefined'
+    ? (window.localStorage.getItem('picpony_default_search_sort') || 'created_at')
+    : 'created_at';
 
   const [inputValue, setInputValue] = useState(q);
   const [images, setImages] = useState<PonyImage[]>([]);

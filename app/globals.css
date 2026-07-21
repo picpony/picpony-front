@@ -218,6 +218,138 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+/* Shared image transition: a single flyer stays inside the app content area. */
+[data-image-detail-host] {
+  --image-detail-overlay-offset: 2rem;
+  --image-detail-page-padding: 1rem;
+  --image-detail-header-height: 9rem;
+  --image-detail-stage-padding: 1rem;
+  --image-hero-target-top: calc(
+    var(--image-detail-overlay-offset) +
+    var(--image-detail-page-padding) +
+    var(--image-detail-header-height) +
+    var(--image-detail-stage-padding)
+  );
+}
+
+@media (min-width: 640px) {
+  [data-image-detail-host] {
+    --image-detail-overlay-offset: 2rem;
+    --image-detail-page-padding: 1.5rem;
+    --image-detail-header-height: 10rem;
+  }
+}
+
+.image-detail-overlay-content {
+  padding-top: var(--image-detail-overlay-offset);
+}
+
+.image-detail-page {
+  padding-top: var(--image-detail-page-padding);
+  padding-bottom: var(--image-detail-page-padding);
+}
+
+.image-detail-header-stage {
+  height: var(--image-detail-header-height);
+}
+
+.image-hero-destination {
+  top: var(--image-hero-target-top);
+}
+
+.image-detail-meta {
+  scrollbar-width: none;
+}
+
+.image-detail-meta::-webkit-scrollbar {
+  display: none;
+}
+
+.image-detail-deferred {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1200px;
+}
+
+html[data-image-hero-transition] #nprogress {
+  opacity: 0 !important;
+  transition: none !important;
+}
+
+.image-detail-route {
+  animation: none;
+}
+
+html[data-image-hero-transition='forward'] [data-image-detail-surface] {
+  opacity: 0;
+}
+
+html[data-image-hero-transition='forward'] [data-image-detail-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+}
+
+html[data-image-hero-transition='forward'] [data-image-hero-role='detail'] {
+  opacity: 0;
+}
+
+html[data-image-hero-interrupted='true'] [data-image-detail-overlay]:not([data-image-hero-stage]),
+html[data-image-hero-interrupted='true'] [data-image-detail-floating-back='route'] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+html[data-image-hero-interrupted='true'] [data-image-hero-stage],
+html[data-image-hero-interrupted='true'] [data-image-hero-stage-foreground] {
+  pointer-events: none !important;
+}
+
+.image-hero-flight-layer {
+  position: fixed;
+  z-index: 45;
+  overflow: hidden;
+  pointer-events: none;
+  contain: layout paint style;
+}
+
+.image-hero-flyer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  transform-origin: top left;
+  backface-visibility: hidden;
+  will-change: transform, border-radius;
+  background: transparent;
+}
+
+.image-hero-flyer img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+}
+
+.image-hero-flight-compensator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.image-detail-overlay-scroll {
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image-detail-route {
+    animation-duration: 1ms !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

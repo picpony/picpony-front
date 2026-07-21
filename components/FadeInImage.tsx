@@ -5,15 +5,21 @@ import { useState, useEffect, useRef } from 'react';
 
 interface FadeInImageProps extends ImageProps {
   fallbackSrc?: string;
+  eager?: boolean;
 }
 
-export default function FadeInImage({ className, onLoad, ...props }: FadeInImageProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isInView, setIsInView] = useState(false);
+export default function FadeInImage({ className, onLoad, eager = false, ...props }: FadeInImageProps) {
+  const [isLoaded, setIsLoaded] = useState(eager);
+  const [isInView, setIsInView] = useState(eager);
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
+    if (eager) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const root = container.closest<HTMLElement>('[data-image-detail-background]');
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -22,16 +28,15 @@ export default function FadeInImage({ className, onLoad, ...props }: FadeInImage
         }
       },
       {
-        rootMargin: '200px',
+        root,
+        rootMargin: '300px',
       }
     );
 
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
+    observer.observe(container);
 
     return () => observer.disconnect();
-  }, []);
+  }, [eager]);
 
   useEffect(() => {
     if (imgRef.current?.complete) {
@@ -62,7 +67,7 @@ export default function FadeInImage({ className, onLoad, ...props }: FadeInImage
               onLoad(e);
             }
           }}
-          loading="lazy"
+          loading={props.loading ?? 'eager'}
         />
       )}
     </div>

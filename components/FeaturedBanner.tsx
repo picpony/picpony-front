@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { api, PonyImage, applyCdn } from "@/lib/api";
-import { MdThumbUp, MdComment, MdErrorOutline, MdPerson } from "react-icons/md";
+import { MdThumbUp, MdComment, MdPerson } from "react-icons/md";
 import FadeInImage from "@/components/FadeInImage";
+import { useHeroLink } from "@/lib/useHero";
 
 export default function FeaturedBanner() {
+  const heroElementRef = useRef<HTMLDivElement>(null);
   const [featured, setFeatured] = useState<PonyImage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -57,6 +59,29 @@ export default function FeaturedBanner() {
     };
   }, []);
 
+  const fullUrl = featured?.representations?.full || featured?.view_url || '';
+  const imgFormat = (featured?.format || fullUrl.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
+  const isVideo = imgFormat === 'webm' || imgFormat === 'mp4';
+  const displayImageUrl =
+    featured?.representations?.large ||
+    featured?.representations?.medium ||
+    featured?.representations?.small ||
+    featured?.representations?.thumb_small ||
+    fullUrl;
+  const displayVideoUrl =
+    featured?.representations?.medium ||
+    featured?.representations?.small ||
+    featured?.representations?.thumb_small ||
+    featured?.representations?.thumb ||
+    fullUrl;
+  const { sourceKey: heroSourceKey, warmFrame, ...heroLinkProps } = useHeroLink({
+    image: featured,
+    sourceRef: heroElementRef,
+    previewSrc: isVideo ? displayVideoUrl : displayImageUrl,
+    canAnimate: true,
+    kind: 'featured',
+  });
+
   if (loading) {
     return (
       <div className="mb-6 sm:mb-8 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 animate-pulse">
@@ -71,43 +96,58 @@ export default function FeaturedBanner() {
     return null;
   }
 
-  const fullUrl = featured.representations?.full || featured.view_url || '';
-  const imgFormat = (featured.format || '').toLowerCase();
-  const isVideo = imgFormat === 'webm' || imgFormat === 'mp4';
   const aspectRatio = (featured.width || 1) / (featured.height || 1);
   const isWideAspect = aspectRatio > 1.5;
   const paddingBottom = isWideAspect ? 'min(45vh, 420px)' : 'min(55vh, 500px)';
-
   return (
     <Link
-      href={`/pic/${featured.id}`}
-      className="mb-6 sm:mb-8 rounded-xl overflow-hidden relative group block animate-fade-in"
+      {...heroLinkProps}
+      className="mb-6 sm:mb-8 rounded-xl overflow-hidden relative group block"
     >
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-10 rounded-xl" />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent z-10 rounded-xl" />
-
-      <div className="relative w-full overflow-hidden rounded-xl" style={{ paddingBottom }}>
+      <div
+        ref={heroElementRef}
+        data-image-hero-role="thumbnail"
+        data-image-hero-id={featured.id}
+        data-image-hero-source-key={heroSourceKey}
+        className="relative w-full overflow-hidden rounded-xl"
+        style={{ paddingBottom }}
+      >
         <div className="absolute inset-0">
           {isVideo ? (
             <video
-              src={fullUrl}
+              src={displayVideoUrl}
               autoPlay
               loop
               muted
               playsInline
+              preload="auto"
+              onLoadedData={warmFrame}
               className="w-full h-full object-cover"
             />
           ) : (
             <FadeInImage
-              src={fullUrl}
+              src={displayImageUrl}
               alt={featured.name || `Featured Image ${featured.id}`}
               width={featured.width || 0}
               height={featured.height || 0}
+              quality={88}
+              onLoad={warmFrame}
               className="w-full h-full object-cover"
-              sizes="100vw"
+              sizes="(min-width: 1536px) 1216px, calc(100vw - 2rem)"
             />
           )}
         </div>
+        <div
+          data-image-hero-shade
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 rounded-xl"
+          style={{
+            backgroundImage: [
+              'linear-gradient(to right, rgba(0, 0, 0, 0.3), transparent)',
+              'linear-gradient(to top, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.2), transparent)',
+            ].join(', '),
+          }}
+        />
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-20 p-4 sm:p-6 md:p-8">

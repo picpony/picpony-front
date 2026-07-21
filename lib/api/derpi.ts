@@ -12,10 +12,14 @@ import {
 // 图片详情
 // ---------------------------------------------------------------------------
 
-export async function getImage(id: string): Promise<{ image: PonyImage }> {
+export async function getImage(
+  id: string,
+  signal?: AbortSignal,
+): Promise<{ image: PonyImage }> {
   const res = await proxyFetch(`${DERPIBOORU_API_BASE}/images/${id}`, {
     cache: 'no-store',
     headers: { 'User-Agent': 'PicPony/1.0' },
+    signal,
   });
 
   if (!res.ok) await handleDerpiError(res);

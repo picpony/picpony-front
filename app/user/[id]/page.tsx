@@ -535,10 +535,12 @@ export default function UserProfilePage() {
                         className="block relative aspect-square rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-primary transition-all duration-200 group"
                       >
                         <FadeInImage
-                          src={item.representations?.thumb_small || item.representations?.small || item.view_url}
+                          src={item.representations?.small || item.representations?.thumb || item.representations?.thumb_small || item.view_url}
                           alt={item.name || `Upload #${item.id}`}
                           fill
+                          quality={82}
                           className="object-cover"
+                          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         />
                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <p className="text-white text-xs truncate">{item.name || `#${item.id}`}</p>
@@ -610,9 +612,10 @@ export default function UserProfilePage() {
                         className="block relative aspect-square rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-primary transition-all duration-200"
                       >
                         <FadeInImage
-                          src={img.representations.thumb_small || img.representations.thumb || img.representations.small}
+                          src={img.representations.small || img.representations.thumb || img.representations.thumb_small}
                           alt={img.name || `Image #${img.id}`}
                           fill
+                          quality={82}
                           className="object-cover"
                           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         />
