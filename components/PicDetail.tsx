@@ -810,19 +810,20 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           </div>
         )}
         <DetailHeader
+          key={image.id}
           image={image}
-          compact={presentation === 'overlay'}
+          layout={presentation}
           metadataReady={Boolean(prefetchedDetail)}
         />
 
         {/* === Image Display (clickable to open lightbox) === */}
-        <div className="relative flex min-h-[40vh] w-full items-start justify-center p-4 md:min-h-[60vh]">
+        <div className="relative flex min-h-[32vh] w-full items-start justify-center px-4 pb-4 pt-2 md:min-h-[48vh]">
           {isVideo ? (
             <DetailVideo
               key={`${image.id}:${heroSeed?.createdAt ?? 0}`}
               imageId={image.id}
-              previewFrame={heroSeed?.previewFrame}
               previewSrc={heroSeed?.previewSrc}
+              previewKind={heroSeed?.mediaType}
               finalSrc={detailVideoSrc}
               alt={image.name || `Video ${image.id}`}
               style={detailHeroStyle}
@@ -834,7 +835,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               key={`${image.id}:${heroSeed?.createdAt ?? 0}`}
               imageId={image.id}
               previewSrc={heroSeed?.previewSrc}
-              previewFrame={heroSeed?.previewFrame}
               finalSrc={detailImageSrc}
               alt={image.name || `Image ${image.id}`}
               width={image.width}

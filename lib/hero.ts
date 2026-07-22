@@ -4,6 +4,7 @@ import type { PonyImage } from '@/lib/types/image';
 import {
   peekImageDetail,
   prefetchImageDetail,
+  type DetailRequestPriority,
 } from '@/lib/detail';
 import type {
   HeroDirection,
@@ -33,8 +34,8 @@ export type {
 const SNAPSHOT_TTL = 2 * 60 * 1000;
 const ROUTE_TIMEOUT = 4000;
 const DURATIONS: Record<HeroDirection, number> = {
-  forward: 315,
-  back: 260,
+  forward: 300,
+  back: 245,
 };
 const HOST_SELECTOR = '[data-image-detail-host]';
 const BACKGROUND_SELECTOR = '[data-image-detail-background]';
@@ -50,8 +51,11 @@ const MOTION_RESPONSE: Record<HeroDirection, {
   rate: number;
   initialVelocity: number;
 }> = {
-  forward: { rate: 7.2, initialVelocity: 0.9 },
-  back: { rate: 7.6, initialVelocity: 1.2 },
+  // A critically damped response keeps the flight lively without overshooting
+  // its exact landing geometry. These rates still leave visible motion in the
+  // final third, so the animation finishes decisively instead of coasting.
+  forward: { rate: 5.6, initialVelocity: 1 },
+  back: { rate: 5.9, initialVelocity: 1 },
 };
 
 let phase: HeroPhase = 'idle';
@@ -73,9 +77,13 @@ let requestOpeningInterrupt: ((navigationHandled: boolean) => void) | null = nul
 let openingExpectedDetailHref: string | null = null;
 let openingObservedExpectedRoute = false;
 let stopTransitionScroll: (() => void) | null = null;
+let preserveInterruptedRoute = false;
+let releaseInterruptedRouteHold: (() => void) | null = null;
 let historyNavigationListenerInstalled = false;
 let imageHeroHistoryRecord: ImageHeroHistoryRecord | null = null;
 let imageHeroHistoryPosition: ImageHeroHistoryPosition = 'unknown';
+let closingHistoryRestoreRequested = false;
+let notifyClosingHistoryRestore: (() => void) | null = null;
 
 function readImageHeroHistoryMarker(state: unknown): ImageHeroHistoryMarker | null {
   if (!state || typeof state !== 'object') return null;
@@ -184,6 +192,7 @@ function commitImageHeroBack(fallback: () => void) {
 }
 
 function resolveClosingHistoryOutcome(imageId: number, popStateCount: number): ClosingHistoryOutcome {
+  if (closingHistoryRestoreRequested) return 'restore-detail';
   if (popStateCount === 0) return 'commit';
   const marker = currentImageHeroHistoryMarker();
   if (isCurrentImageHeroHistoryMarker(marker, 'base')) return 'commit';
@@ -245,6 +254,19 @@ function handleImageHeroHistoryNavigation(event: PopStateEvent) {
       imageHeroHistoryPosition = 'background';
       window.history.back();
     }
+    return;
+  }
+
+  // A close can already have committed its two-step history return when the
+  // user immediately presses Forward. Keep that base entry instead of letting
+  // the still-running close tear down the remounting detail route.
+  if (
+    phase === 'closing' &&
+    previousPosition === 'background' &&
+    marker.kind === 'base'
+  ) {
+    closingHistoryRestoreRequested = true;
+    notifyClosingHistoryRestore?.();
     return;
   }
 
@@ -348,7 +370,6 @@ function createTransitionScrollNodes(): TransitionScrollNodes {
       '[data-image-hero-stage] .image-detail-overlay-scroll',
     ),
     routeScroller: getRouteScroller(),
-    targetWrap: document.querySelector<HTMLElement>('[data-image-hero-stage-target-wrap]'),
   };
 }
 
@@ -357,18 +378,16 @@ function syncStageScroll(
   scrollTop: number,
   source?: HTMLElement | null,
   nodes = createTransitionScrollNodes(),
+  mirrorRoute = true,
 ) {
-  const { stageScroller, routeScroller, targetWrap } = nodes;
+  const { stageScroller, routeScroller } = nodes;
   if (stageScroller && stageScroller !== source) {
     stageScroller.scrollLeft = scrollLeft;
     stageScroller.scrollTop = scrollTop;
   }
-  if (routeScroller && routeScroller !== source) {
+  if (mirrorRoute && routeScroller && routeScroller !== source) {
     routeScroller.scrollLeft = scrollLeft;
     routeScroller.scrollTop = scrollTop;
-  }
-  if (targetWrap) {
-    targetWrap.style.transform = `translate3d(${-scrollLeft}px, ${-scrollTop}px, 0)`;
   }
 }
 
@@ -544,10 +563,17 @@ function getHost(): Host | null {
 }
 
 const HERO_FRAME_CACHE_LIMIT = 4;
-const heroFrameCache = new Map<VisualMedia, {
+const HERO_FRAME_MAX_DIMENSION = 1280;
+const HERO_FRAME_MAX_DPR = 2;
+const HERO_FRAME_CACHE_MAX_PIXELS = HERO_FRAME_MAX_DIMENSION * HERO_FRAME_MAX_DIMENSION * 2;
+
+type HeroFrameCacheEntry = {
   src: string;
   frame: HTMLCanvasElement;
-}>();
+  dimension: number;
+};
+
+const heroFrameCache = new Map<VisualMedia, HeroFrameCacheEntry>();
 
 function getVisualMedia(element: HTMLElement | null) {
   return element?.querySelector<VisualMedia>('img, video') ?? null;
@@ -557,49 +583,89 @@ function getVisualMediaSrc(media: VisualMedia) {
   return normalizeSrc(media.currentSrc || media.getAttribute('src') || '');
 }
 
-function getCachedHeroFrame(media: VisualMedia) {
+function isAnimatedVisualSource(src: string) {
+  return /(?:\.gif|\.apng)(?:[?#]|$)|[?&](?:format|ext)=(?:gif|apng)(?:&|$)/i.test(src);
+}
+
+function isVolatileVisualMedia(media: VisualMedia) {
+  return media instanceof HTMLVideoElement || isAnimatedVisualSource(getVisualMediaSrc(media));
+}
+
+function getMediaSize(media: VisualMedia) {
+  const isVideo = media instanceof HTMLVideoElement;
+  const width = isVideo ? media.videoWidth : media.naturalWidth;
+  const height = isVideo ? media.videoHeight : media.naturalHeight;
+  if (isVideo && media.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
+  if (!isVideo && !media.complete) return null;
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+function getHeroFrameDimension(width: number, height: number) {
+  const ratio = width / height;
+  const maxHeight = Math.min(window.innerHeight * 0.8, height, window.innerWidth / ratio);
+  const maxWidth = Math.min(window.innerWidth, width, window.innerHeight * 0.8 * ratio);
+  const dpr = Math.min(HERO_FRAME_MAX_DPR, Math.max(1, window.devicePixelRatio || 1));
+  return Math.min(
+    HERO_FRAME_MAX_DIMENSION,
+    Math.max(1, Math.ceil(Math.max(maxWidth, maxHeight) * dpr)),
+  );
+}
+
+function getCachedHeroFrame(media: VisualMedia, requiredDimension = 0) {
   const cached = heroFrameCache.get(media);
   if (!cached || cached.src !== getVisualMediaSrc(media)) {
     if (cached) heroFrameCache.delete(media);
     return null;
   }
+  if (cached.dimension < requiredDimension) return null;
   heroFrameCache.delete(media);
   heroFrameCache.set(media, cached);
   return cached.frame;
 }
 
+function trimHeroFrameCache() {
+  let pixels = 0;
+  heroFrameCache.forEach(({ frame }) => {
+    pixels += frame.width * frame.height;
+  });
+  while (heroFrameCache.size > HERO_FRAME_CACHE_LIMIT || pixels > HERO_FRAME_CACHE_MAX_PIXELS) {
+    const oldest = heroFrameCache.keys().next().value;
+    if (!oldest) break;
+    const entry = heroFrameCache.get(oldest);
+    heroFrameCache.delete(oldest);
+    if (entry) pixels -= entry.frame.width * entry.frame.height;
+  }
+}
+
 function captureHeroFrame(media: VisualMedia | null) {
   if (!media) return null;
-  const cached = getCachedHeroFrame(media);
-  if (cached) return cached;
-  const isVideo = media instanceof HTMLVideoElement;
-  const sourceWidth = isVideo ? media.videoWidth : media.naturalWidth;
-  const sourceHeight = isVideo ? media.videoHeight : media.naturalHeight;
-  if (isVideo) {
-    if (media.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || sourceWidth <= 0 || sourceHeight <= 0) {
-      return null;
-    }
-  } else if (!media.complete || sourceWidth <= 0 || sourceHeight <= 0) {
-    return null;
-  }
-
-  const maxDimension = 1280;
+  const size = getMediaSize(media);
+  if (!size) return null;
+  const { width: sourceWidth, height: sourceHeight } = size;
+  const maxDimension = getHeroFrameDimension(sourceWidth, sourceHeight);
+  const volatile = isVolatileVisualMedia(media);
+  const cached = getCachedHeroFrame(media, maxDimension);
+  if (cached && !volatile) return cached;
   const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
-  const frame = document.createElement('canvas');
-  frame.width = Math.max(1, Math.round(sourceWidth * scale));
-  frame.height = Math.max(1, Math.round(sourceHeight * scale));
+  const frame = cached ?? document.createElement('canvas');
+  const frameWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const frameHeight = Math.max(1, Math.round(sourceHeight * scale));
+  if (frame.width !== frameWidth || frame.height !== frameHeight) {
+    frame.width = frameWidth;
+    frame.height = frameHeight;
+  }
   const context = frame.getContext('2d');
   if (!context) return null;
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
   try {
     context.drawImage(media, 0, 0, frame.width, frame.height);
-    heroFrameCache.set(media, { src: getVisualMediaSrc(media), frame });
-    while (heroFrameCache.size > HERO_FRAME_CACHE_LIMIT) {
-      const oldest = heroFrameCache.keys().next().value;
-      if (!oldest) break;
-      heroFrameCache.delete(oldest);
-    }
+    heroFrameCache.set(media, {
+      src: getVisualMediaSrc(media),
+      frame,
+      dimension: Math.max(frame.width, frame.height),
+    });
+    trimHeroFrameCache();
     return frame;
   } catch {
     return null;
@@ -609,7 +675,11 @@ function captureHeroFrame(media: VisualMedia | null) {
 export function warmImageHeroFrame(source: HTMLElement | null) {
   if (!source || typeof window === 'undefined') return () => {};
   const media = getVisualMedia(source);
-  if (!media || getCachedHeroFrame(media)) return () => {};
+  const size = media ? getMediaSize(media) : null;
+  if (!media || (size && !isVolatileVisualMedia(media) &&
+      getCachedHeroFrame(media, getHeroFrameDimension(size.width, size.height)))) {
+    return () => {};
+  }
 
   const rect = source.getBoundingClientRect();
   if (rect.bottom < -200 || rect.top > window.innerHeight + 200) return () => {};
@@ -619,7 +689,7 @@ export function warmImageHeroFrame(source: HTMLElement | null) {
     if (!cancelled && source.isConnected) captureHeroFrame(media);
   };
   if ('requestIdleCallback' in window) {
-    const idleId = window.requestIdleCallback(capture);
+    const idleId = window.requestIdleCallback(capture, { timeout: 160 });
     return () => {
       cancelled = true;
       window.cancelIdleCallback(idleId);
@@ -663,13 +733,7 @@ const SUSPENDED_IMAGE_SRC =
   'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
 function isAnimatedDetailImage(element: HTMLImageElement) {
-  const src = element.currentSrc || element.getAttribute('src') || '';
-  try {
-    const pathname = new URL(src, window.location.href).pathname.toLowerCase();
-    return pathname.endsWith('.gif') || pathname.endsWith('.apng');
-  } catch {
-    return false;
-  }
+  return isAnimatedVisualSource(element.currentSrc || element.getAttribute('src') || '');
 }
 
 function suspendHeavyDetailMedia(source: HTMLElement) {
@@ -724,62 +788,121 @@ function suspendHeavyDetailMedia(source: HTMLElement) {
   };
 }
 
-function waitForElement(
-  selector: string,
-  timeout = ROUTE_TIMEOUT,
-  signal?: AbortSignal,
-) {
-  return new Promise<HTMLElement | null>((resolve) => {
-    let settled = false;
-    const observer = new MutationObserver(() => {
-      const element = document.querySelector<HTMLElement>(selector);
-      if (element) finish(element);
-    });
-    const timer = timeout > 0
-      ? window.setTimeout(() => finish(null), timeout)
-      : null;
-    const finish = (element: HTMLElement | null) => {
-      if (settled) return;
-      settled = true;
-      observer.disconnect();
-      if (timer !== null) window.clearTimeout(timer);
-      signal?.removeEventListener('abort', handleAbort);
-      resolve(element);
-    };
-    const handleAbort = () => finish(null);
+type PendingElementWait = {
+  selector: string;
+  resolve: (element: HTMLElement | null) => void;
+  timer: number | null;
+};
 
-    const existing = document.querySelector<HTMLElement>(selector);
-    if (existing) {
-      finish(existing);
-      return;
+function createElementWaiter(signal?: AbortSignal) {
+  const waits = new Set<PendingElementWait>();
+  let observer: MutationObserver | null = null;
+  let disposed = false;
+
+  const finish = (wait: PendingElementWait, element: HTMLElement | null) => {
+    if (!waits.delete(wait)) return;
+    if (wait.timer !== null) window.clearTimeout(wait.timer);
+    wait.resolve(element);
+    if (waits.size === 0) {
+      observer?.disconnect();
+      observer = null;
     }
-    if (signal?.aborted) {
-      finish(null);
-      return;
-    }
-    signal?.addEventListener('abort', handleAbort, { once: true });
+  };
+  const check = () => {
+    if (disposed || waits.size === 0) return;
+    const selectors = [...new Set([...waits].map((wait) => wait.selector))].join(',');
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>(selectors));
+    [...waits].forEach((wait) => {
+      const element = candidates.find((candidate) => candidate.matches(wait.selector)) ?? null;
+      if (element) finish(wait, element);
+    });
+  };
+  const ensureObserver = () => {
+    if (observer || disposed) return;
+    observer = new MutationObserver(check);
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
       attributeFilter: ['data-image-hero-ready', 'data-image-hero-stage-ready'],
     });
-  });
+  };
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    observer?.disconnect();
+    observer = null;
+    signal?.removeEventListener('abort', dispose);
+    [...waits].forEach((wait) => finish(wait, null));
+  };
+
+  signal?.addEventListener('abort', dispose, { once: true });
+  return {
+    wait(selector: string, timeout = ROUTE_TIMEOUT) {
+      if (disposed || signal?.aborted) return Promise.resolve<HTMLElement | null>(null);
+      const existing = document.querySelector<HTMLElement>(selector);
+      if (existing) return Promise.resolve(existing);
+      return new Promise<HTMLElement | null>((resolve) => {
+        const wait: PendingElementWait = { selector, resolve, timer: null };
+        if (timeout > 0) {
+          wait.timer = window.setTimeout(() => finish(wait, null), timeout);
+        }
+        waits.add(wait);
+        ensureObserver();
+        check();
+      });
+    },
+    dispose,
+  };
 }
 
-function waitForRouteOverlayGone(timeout = 1200) {
-  return new Promise<void>((resolve) => {
+function holdInterruptedRouteUntilGone() {
+  if (releaseInterruptedRouteHold) return;
+  preserveInterruptedRoute = true;
+  const selector = `${DETAIL_OVERLAY_SELECTOR}:not([data-image-hero-stage])`;
+  let frame = 0;
+  const finish = () => {
+    if (frame) cancelAnimationFrame(frame);
+    observer.disconnect();
+    window.removeEventListener('popstate', check);
+    if (releaseInterruptedRouteHold === finish) releaseInterruptedRouteHold = null;
+    preserveInterruptedRoute = false;
+    delete document.documentElement.dataset.imageHeroInterrupted;
+  };
+  const check = () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      if (!/^\/pic\/[^/]+\/?$/.test(window.location.pathname) &&
+          !document.querySelector(selector)) {
+        finish();
+      }
+    });
+  };
+  const observer = new MutationObserver(check);
+  releaseInterruptedRouteHold = finish;
+  window.addEventListener('popstate', check);
+  observer.observe(document.body, { childList: true, subtree: true });
+  check();
+}
+
+function waitForRouteOverlayGone(timeout = 1200, signal?: AbortSignal) {
+  return new Promise<boolean>((resolve) => {
     const selector = `${DETAIL_OVERLAY_SELECTOR}:not([data-image-hero-stage])`;
     let settled = false;
     let settling = false;
-    const finish = () => {
+    let observer: MutationObserver | null = null;
+    let timer = 0;
+    const finish = (gone: boolean) => {
       if (settled) return;
       settled = true;
-      observer.disconnect();
+      observer?.disconnect();
       window.clearTimeout(timer);
       window.removeEventListener('popstate', check);
-      resolve();
+      signal?.removeEventListener('abort', handleAbort);
+      resolve(gone);
     };
+    const handleAbort = () => finish(false);
     const check = () => {
       if (settled || settling || /^\/pic\/[^/]+\/?$/.test(window.location.pathname) ||
           document.querySelector(selector)) {
@@ -790,22 +913,29 @@ function waitForRouteOverlayGone(timeout = 1200) {
         settling = false;
         if (!/^\/pic\/[^/]+\/?$/.test(window.location.pathname) &&
             !document.querySelector(selector)) {
-          finish();
+          finish(true);
         }
       }));
     };
-    const observer = new MutationObserver(check);
-    const timer = window.setTimeout(finish, timeout);
+    if (signal?.aborted) {
+      finish(false);
+      return;
+    }
+    observer = new MutationObserver(check);
+    timer = window.setTimeout(() => finish(false), timeout);
     window.addEventListener('popstate', check);
+    signal?.addEventListener('abort', handleAbort, { once: true });
     check();
     observer.observe(document.body, { childList: true, subtree: true });
   });
 }
 
-function bindOpeningScroll(motion: FlightMotion): ScrollSync {
+function bindOpeningScroll(
+  motion: FlightMotion,
+  waitForElement: (selector: string, timeout?: number) => Promise<HTMLElement | null>,
+): ScrollSync {
   let disposed = false;
   let frame = 0;
-  let nativeFrame = 0;
   let initialized = false;
   let currentX = 0;
   let currentY = 0;
@@ -813,11 +943,17 @@ function bindOpeningScroll(motion: FlightMotion): ScrollSync {
   let targetY = wheelCapture?.direction === 'forward' ? wheelCapture.deltaY : 0;
   let lastTime = now();
   let stageScroller: HTMLElement | null = null;
+  const backgroundScroller = document.querySelector<HTMLElement>(BACKGROUND_SELECTOR);
+  const backgroundOriginX = backgroundScroller?.scrollLeft ?? 0;
+  const backgroundOriginY = backgroundScroller?.scrollTop ?? 0;
+  let backgroundX = backgroundOriginX;
+  let backgroundY = backgroundOriginY;
+  let backgroundBridge = false;
   let touchActive = false;
+  let touchOwner: 'stage' | 'background' | null = null;
   let lastNativeScroll = Number.NEGATIVE_INFINITY;
   let releaseTimer = 0;
   const releaseWaiters = new Set<() => void>();
-  const waitController = new AbortController();
   const nodes = createTransitionScrollNodes();
   stopWheelCapture(false);
 
@@ -831,19 +967,34 @@ function bindOpeningScroll(motion: FlightMotion): ScrollSync {
     releaseWaiters.forEach((resolve) => resolve());
     releaseWaiters.clear();
   };
+  const restoreBackgroundScroll = () => {
+    if (!backgroundBridge || !backgroundScroller) return;
+    backgroundBridge = false;
+    backgroundX = backgroundOriginX;
+    backgroundY = backgroundOriginY;
+    backgroundScroller.scrollLeft = backgroundOriginX;
+    backgroundScroller.scrollTop = backgroundOriginY;
+  };
+  const isReleaseReady = () =>
+    !touchActive && !frame && now() - lastNativeScroll >= 72;
   const scheduleReleaseCheck = () => {
     if (releaseTimer) window.clearTimeout(releaseTimer);
     releaseTimer = 0;
-    if (touchActive) return;
-    const remaining = Math.max(0, 72 - (now() - lastNativeScroll));
-    if (remaining === 0) {
+    if (isReleaseReady()) {
+      restoreBackgroundScroll();
+      touchOwner = null;
       resolveReleaseWaiters();
       return;
     }
-    releaseTimer = window.setTimeout(scheduleReleaseCheck, remaining);
+    const remaining = touchActive
+      ? 16
+      : frame
+        ? 16
+        : Math.max(0, 72 - (now() - lastNativeScroll));
+    releaseTimer = window.setTimeout(scheduleReleaseCheck, Math.max(1, remaining));
   };
   const waitForRelease = () => {
-    if (!touchActive && now() - lastNativeScroll >= 72) return Promise.resolve();
+    if (isReleaseReady()) return Promise.resolve();
     return new Promise<void>((resolve) => {
       releaseWaiters.add(resolve);
       scheduleReleaseCheck();
@@ -875,6 +1026,8 @@ function bindOpeningScroll(motion: FlightMotion): ScrollSync {
     sync();
     if (Math.abs(desiredX - currentX) >= 0.15 || Math.abs(desiredY - currentY) >= 0.15) {
       frame = requestAnimationFrame(tick);
+    } else {
+      scheduleReleaseCheck();
     }
   };
   const scheduleSync = () => {
@@ -896,7 +1049,6 @@ function bindOpeningScroll(motion: FlightMotion): ScrollSync {
     scheduleSync();
   };
   const syncNativeScroll = () => {
-    nativeFrame = 0;
     if (disposed || !stageScroller) return;
     const nextX = stageScroller.scrollLeft;
     const nextY = stageScroller.scrollTop;
@@ -908,41 +1060,99 @@ function bindOpeningScroll(motion: FlightMotion): ScrollSync {
     targetX = nextX;
     targetY = nextY;
     lastNativeScroll = now();
-    syncStageScroll(currentX, currentY, stageScroller, nodes);
+    // The routed detail is hidden until handoff and gets an exact final
+    // position during `flush()`. Avoid re-scrolling that offscreen surface on
+    // every native touch event: on mobile it adds work to the scroll frame
+    // without contributing to the visible result.
     motion.retarget(-currentX, -currentY, 'to');
     scheduleReleaseCheck();
   };
   const handleNativeScroll = () => {
-    if (!nativeFrame) nativeFrame = requestAnimationFrame(syncNativeScroll);
+    // Native touch scrolling already advances on the compositor. Queueing this
+    // transform compensation through another rAF makes the fixed Hero target
+    // visibly trail the finger by one frame on coarse pointers. This path only
+    // reads scroll offsets and writes composited transforms, so synchronizing
+    // in the scroll callback avoids that latency without forcing layout.
+    syncNativeScroll();
   };
-  const handleTouchStart = () => {
+  const handleBackgroundScroll = () => {
+    if (disposed || !backgroundScroller ||
+        (touchOwner !== 'background' && !backgroundBridge)) {
+      return;
+    }
+    const nextX = backgroundScroller.scrollLeft;
+    const nextY = backgroundScroller.scrollTop;
+    const deltaX = nextX - backgroundX;
+    const deltaY = nextY - backgroundY;
+    backgroundX = nextX;
+    backgroundY = nextY;
+    if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) return;
+
+    backgroundBridge = true;
+    lastNativeScroll = now();
+    if (stageScroller) {
+      const nextStageX = clamp(
+        stageScroller.scrollLeft + deltaX,
+        stageScroller.scrollWidth - stageScroller.clientWidth,
+      );
+      const nextStageY = clamp(
+        stageScroller.scrollTop + deltaY,
+        stageScroller.scrollHeight - stageScroller.clientHeight,
+      );
+      stageScroller.scrollLeft = nextStageX;
+      stageScroller.scrollTop = nextStageY;
+      syncNativeScroll();
+    } else {
+      currentX = Math.max(0, currentX + deltaX);
+      currentY = Math.max(0, currentY + deltaY);
+      targetX = currentX;
+      targetY = currentY;
+      motion.retarget(-currentX, -currentY, 'to');
+      scheduleReleaseCheck();
+    }
+  };
+  const handleTouchStart = (event: TouchEvent) => {
     touchActive = true;
+    const path = event.composedPath();
+    touchOwner = stageScroller && path.includes(stageScroller)
+      ? 'stage'
+      : backgroundScroller && path.includes(backgroundScroller)
+        ? 'background'
+        : stageScroller
+          ? 'stage'
+          : 'background';
     if (releaseTimer) window.clearTimeout(releaseTimer);
     releaseTimer = 0;
   };
   const handleTouchEnd = (event: TouchEvent) => {
     touchActive = event.touches.length > 0;
+    if (!touchActive) lastNativeScroll = now();
     scheduleReleaseCheck();
   };
   window.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+  window.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
+  window.addEventListener('touchend', handleTouchEnd, { capture: true, passive: true });
+  window.addEventListener('touchcancel', handleTouchEnd, { capture: true, passive: true });
+  backgroundScroller?.addEventListener('scroll', handleBackgroundScroll, { passive: true });
   void waitForElement(
     '[data-image-hero-stage] .image-detail-overlay-scroll',
     ROUTE_TIMEOUT,
-    waitController.signal,
   ).then((element) => {
     if (disposed || !element) return;
     stageScroller = element;
     nodes.stageScroller = element;
-    nodes.targetWrap = element.closest<HTMLElement>('[data-image-hero-stage]')
-      ?.querySelector<HTMLElement>('[data-image-hero-stage-target-wrap]') ?? null;
     stageScroller.addEventListener('scroll', handleNativeScroll, { passive: true });
-    stageScroller.addEventListener('touchstart', handleTouchStart, { passive: true });
-    stageScroller.addEventListener('touchend', handleTouchEnd, { passive: true });
-    stageScroller.addEventListener('touchcancel', handleTouchEnd, { passive: true });
-    currentX = stageScroller.scrollLeft;
-    currentY = stageScroller.scrollTop;
-    targetX += currentX;
-    targetY += currentY;
+    if (backgroundBridge) {
+      currentX = clamp(currentX, stageScroller.scrollWidth - stageScroller.clientWidth);
+      currentY = clamp(currentY, stageScroller.scrollHeight - stageScroller.clientHeight);
+      targetX = currentX;
+      targetY = currentY;
+    } else {
+      currentX = stageScroller.scrollLeft;
+      currentY = stageScroller.scrollTop;
+      targetX += currentX;
+      targetY += currentY;
+    }
     initialized = true;
     sync();
     scheduleSync();
@@ -951,15 +1161,15 @@ function bindOpeningScroll(motion: FlightMotion): ScrollSync {
   const stop = () => {
     if (disposed) return;
     disposed = true;
-    waitController.abort();
     if (frame) cancelAnimationFrame(frame);
-    if (nativeFrame) cancelAnimationFrame(nativeFrame);
     if (releaseTimer) window.clearTimeout(releaseTimer);
     window.removeEventListener('wheel', handleWheel, true);
+    window.removeEventListener('touchstart', handleTouchStart, true);
+    window.removeEventListener('touchend', handleTouchEnd, true);
+    window.removeEventListener('touchcancel', handleTouchEnd, true);
+    backgroundScroller?.removeEventListener('scroll', handleBackgroundScroll);
     stageScroller?.removeEventListener('scroll', handleNativeScroll);
-    stageScroller?.removeEventListener('touchstart', handleTouchStart);
-    stageScroller?.removeEventListener('touchend', handleTouchEnd);
-    stageScroller?.removeEventListener('touchcancel', handleTouchEnd);
+    if (phase !== 'closing') restoreBackgroundScroll();
     resolveReleaseWaiters();
   };
   const flush = (preferRoute = false) => {
@@ -989,13 +1199,21 @@ function bindClosingScroll(
   const overlays = Array.from(
     document.querySelectorAll<HTMLElement>(DETAIL_OVERLAY_SELECTOR),
   );
+  const stageOverlay = stageScroller?.closest<HTMLElement>(
+    '[data-image-hero-stage]',
+  ) ?? null;
   const interactionLayers = Array.from(new Set<HTMLElement>([
-    ...overlays,
+    // Keep the Stage scroll surface alive on touch devices. A swipe that
+    // starts while the opening transition is being interrupted remains bound
+    // to that surface; `handleResidualStageScroll` below transfers its native
+    // delta to the background gallery. Disabling the whole Stage makes that
+    // continuation impossible and drops the gesture mid-flight.
+    ...overlays.filter((overlay) => overlay !== stageOverlay),
     ...overlays.flatMap((overlay) => Array.from(
       overlay.querySelectorAll<HTMLElement>(
         '[data-image-hero-stage-foreground], [data-image-detail-back-button]',
       ),
-    )),
+    ).filter((element) => element !== stageScroller)),
     ...document.querySelectorAll<HTMLElement>('[data-image-detail-floating-back]'),
   ]));
   const pointerEvents = interactionLayers.map((element) => ({
@@ -1009,7 +1227,6 @@ function bindClosingScroll(
 
   let stopped = false;
   let frame = 0;
-  let nativeFrame = 0;
   let syncing = false;
   const nativeScroll = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   const scroller = document.querySelector<HTMLElement>(BACKGROUND_SELECTOR);
@@ -1034,13 +1251,6 @@ function bindClosingScroll(
       return;
     }
     motion.retarget(initialX - currentX, initialY - currentY, endpoint);
-  };
-  const scheduleNativeSync = () => {
-    if (nativeFrame) return;
-    nativeFrame = requestAnimationFrame(() => {
-      nativeFrame = 0;
-      sync();
-    });
   };
   const scheduleTick = () => {
     if (!frame) {
@@ -1070,7 +1280,10 @@ function bindClosingScroll(
     currentY = scroller.scrollTop;
     targetX = currentX;
     targetY = currentY;
-    scheduleNativeSync();
+    // Match native touch scrolling in the same event turn. The transform is
+    // compositor-only, while a deferred rAF consistently made the return
+    // flight lag behind a mobile swipe.
+    sync();
   };
   const handleResidualStageScroll = () => {
     if (!nativeScroll || !stageScroller || !scroller) return;
@@ -1118,13 +1331,13 @@ function bindClosingScroll(
   window.addEventListener('wheel', handleWheel, { capture: true, passive: false });
   scroller?.addEventListener('scroll', handleScroll, { passive: true });
   stageScroller?.addEventListener('scroll', handleResidualStageScroll, { passive: true });
+  sync(true);
 
   const stop = () => {
     if (stopped) return;
     sync(true);
     stopped = true;
     if (frame) cancelAnimationFrame(frame);
-    if (nativeFrame) cancelAnimationFrame(nativeFrame);
     window.removeEventListener('wheel', handleWheel, true);
     scroller?.removeEventListener('scroll', handleScroll);
     stageScroller?.removeEventListener('scroll', handleResidualStageScroll);
@@ -1162,6 +1375,7 @@ function bindClosingScroll(
 
 function begin(direction: HeroDirection) {
   phase = direction === 'forward' ? 'opening' : 'closing';
+  closingHistoryRestoreRequested = false;
   stopActiveTransitionScroll();
   document.documentElement.dataset.imageHeroTransition = direction;
   if (direction === 'forward') startWheelCapture(direction);
@@ -1178,10 +1392,13 @@ function begin(direction: HeroDirection) {
 
 function end() {
   phase = 'idle';
+  closingHistoryRestoreRequested = false;
   openingExpectedDetailHref = null;
   openingObservedExpectedRoute = false;
   delete document.documentElement.dataset.imageHeroTransition;
-  delete document.documentElement.dataset.imageHeroInterrupted;
+  if (!preserveInterruptedRoute) {
+    delete document.documentElement.dataset.imageHeroInterrupted;
+  }
   publishStage({ phase: 'idle', snapshot: null });
   resolveTransition?.();
   resolveTransition = null;
@@ -1446,8 +1663,10 @@ function animateFlight(
     from: { x: 0, y: 0 },
     to: { x: 0, y: 0 },
   };
+  const transient = { x: 0, y: 0, progress: 0 };
   let compensationFrame = 0;
   let endpoint: 'from' | 'to' = 'to';
+  let reversing = false;
   let animationsCancelled = false;
   const currentProgress = () => {
     const time = Math.min(
@@ -1456,9 +1675,26 @@ function animateFlight(
     );
     return physicalProgress(time, direction);
   };
+  const compensationAt = (progress: number) => {
+    const baseX = interpolate(offsets.from.x, offsets.to.x, progress);
+    const baseY = interpolate(offsets.from.y, offsets.to.y, progress);
+    const denominator = reversing ? transient.progress : 1 - transient.progress;
+    const distance = reversing ? progress : 1 - progress;
+    const transientAmount = denominator <= 0.0001
+      ? 0
+      : Math.min(1, Math.max(0, distance / denominator));
+    return {
+      x: baseX + transient.x * transientAmount,
+      y: baseY + transient.y * transientAmount,
+    };
+  };
+  const rebaseTransient = (progress: number, x: number, y: number) => {
+    transient.progress = progress;
+    transient.x = x - interpolate(offsets.from.x, offsets.to.x, progress);
+    transient.y = y - interpolate(offsets.from.y, offsets.to.y, progress);
+  };
   const syncCompensation = (progress = currentProgress()) => {
-    const x = interpolate(offsets.from.x, offsets.to.x, progress);
-    const y = interpolate(offsets.from.y, offsets.to.y, progress);
+    const { x, y } = compensationAt(progress);
     flight.compensator.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   };
   const keepCompensationSynced = () => {
@@ -1499,6 +1735,10 @@ function animateFlight(
     reverse() {
       endpoint = 'from';
       const currentTime = Math.min(duration, Math.max(0, Number(geometry.currentTime ?? 0)));
+      const progress = physicalProgress(currentTime / duration, direction);
+      const currentOffset = compensationAt(progress);
+      reversing = true;
+      rebaseTransient(progress, currentOffset.x, currentOffset.y);
       if (currentTime <= 0.5) {
         animations.forEach((animation) => {
           animation.pause();
@@ -1538,6 +1778,7 @@ function animateFlight(
       }
       offsets[targetEndpoint].x = x;
       offsets[targetEndpoint].y = y;
+      rebaseTransient(currentProgress(), x, y);
       syncCompensation();
       startCompensationSync();
     },
@@ -1812,14 +2053,17 @@ export function waitForImageHeroTransition() {
   return transitionFinished;
 }
 
-export function warmImageHero(imageId?: number) {
+export function warmImageHero(
+  imageId?: number,
+  priority: DetailRequestPriority = 'immediate',
+) {
   componentWarmup ??= import('@/components/PicDetail').catch(() => {
     componentWarmup = null;
   });
   if (imageId === undefined) return componentWarmup;
   return Promise.all([
     componentWarmup,
-    prefetchImageDetail(imageId).catch(() => undefined),
+    prefetchImageDetail(imageId, { priority }).catch(() => undefined),
   ]);
 }
 
@@ -1842,12 +2086,12 @@ export function prepareImageHero(
     pathname: window.location.pathname,
     search: window.location.search,
   };
-  void warmImageHero(image.id);
-
   const visual = getVisualMedia(source);
   const previewFrame = captureHeroFrame(visual);
   const mediaType = visual instanceof HTMLVideoElement ? 'video' : 'image';
   const previewSrc = normalizeSrc(
+    visual?.currentSrc ||
+    visual?.getAttribute('src') ||
     previewSrcOverride ||
     (mediaType === 'video'
       ? image.representations?.thumb ||
@@ -1855,7 +2099,7 @@ export function prepareImageHero(
         image.representations?.thumb_tiny ||
         image.representations?.small ||
         image.representations?.full
-      : visual?.currentSrc || visual?.src) ||
+      : image.representations?.small) ||
     image.representations?.thumb ||
     image.representations?.small ||
     image.representations?.full ||
@@ -1921,6 +2165,7 @@ async function handoffStage(
     await settleRevealAnimations(routeOverlay);
     await beforeCommit?.();
     const routeScroller = routeOverlay.querySelector<HTMLElement>('.image-detail-overlay-scroll');
+    const routeScrollerWillChange = routeScroller?.style.willChange;
     if (routeScroller) routeScroller.style.willChange = 'opacity, transform';
     const routeElements = new Set<HTMLElement>([
       ...routeOverlay.querySelectorAll<HTMLElement>(
@@ -1962,6 +2207,14 @@ async function handoffStage(
       element.style.visibility = visibility;
     });
     if (target) restore(target, targetOpacity);
+    // Keep the composited handoff for the frame that swaps Stage for the
+    // routed detail, then release it. Leaving `will-change` here keeps an
+    // otherwise static scroll surface promoted for the rest of the detail view.
+    if (routeScroller) {
+      requestAnimationFrame(() => {
+        if (routeScroller.isConnected) routeScroller.style.willChange = routeScrollerWillChange ?? '';
+      });
+    }
     return;
   }
 
@@ -2007,7 +2260,7 @@ async function reverseOpeningFlight(
   // A browser/Android back can arrive while the reverse animation is already
   // running. Read the flag at commit time so we do not issue a second back.
   navigateBack(wasNavigationHandled());
-  await waitForRouteOverlayGone();
+  if (!await waitForRouteOverlayGone()) holdInterruptedRouteUntilGone();
   scrollSync.flush();
   return false;
 }
@@ -2047,7 +2300,7 @@ async function reverseLandedOpeningFlight(
   }
   detailExit.finish();
   navigateBack(wasNavigationHandled());
-  await waitForRouteOverlayGone();
+  if (!await waitForRouteOverlayGone()) holdInterruptedRouteUntilGone();
   scrollSync.flush();
   finishBackground(backgroundMotion);
   finishBackground(background);
@@ -2110,31 +2363,28 @@ export async function navigateToImageWithHero(
   let lateBack = false;
   const startedAt = now();
   const waitController = new AbortController();
+  const elementWaiter = createElementWaiter(waitController.signal);
 
   begin('forward');
   const interruption = createOpeningInterrupt();
   const background = animateBackground('forward');
-  const revealPromise = waitForElement(
+  const revealPromise = elementWaiter.wait(
     '[data-image-hero-stage]',
     ROUTE_TIMEOUT,
-    waitController.signal,
   ).then((overlay) => overlay ? revealOverlay(overlay, startedAt) : undefined);
   void revealPromise.catch(() => undefined);
-  const routeRevealPromise = waitForElement(
+  const routeRevealPromise = elementWaiter.wait(
     `${DETAIL_OVERLAY_SELECTOR}:not([data-image-hero-stage])`,
     ROUTE_TIMEOUT,
-    waitController.signal,
   ).then((overlay) => overlay ? revealRouteOverlay(overlay, startedAt) : undefined);
   void routeRevealPromise.catch(() => undefined);
-  const stageTargetPromise = waitForElement(
+  const stageTargetPromise = elementWaiter.wait(
     STAGE_READY_TARGET_SELECTOR,
     ROUTE_TIMEOUT,
-    waitController.signal,
   );
-  const targetPromise = waitForElement(
+  const targetPromise = elementWaiter.wait(
     `[data-image-hero-role="detail"][data-image-hero-id="${value.image.id}"][data-image-hero-ready="true"]`,
     ROUTE_TIMEOUT,
-    waitController.signal,
   ).then((element) => {
     if (element) targetOpacity = hide(element);
     target = element;
@@ -2153,7 +2403,7 @@ export async function navigateToImageWithHero(
   ]).then(() => {
     flightLanded = true;
   });
-  const openingScroll = bindOpeningScroll(flightMotion);
+  const openingScroll = bindOpeningScroll(flightMotion, elementWaiter.wait);
   stopTransitionScroll = openingScroll.stop;
 
   try {
@@ -2263,6 +2513,7 @@ export async function navigateToImageWithHero(
     if (!navigated) navigate();
   } finally {
     waitController.abort();
+    elementWaiter.dispose();
     interruption.dispose();
     finishBackground(background);
     restore(source, sourceOpacity);
@@ -2320,7 +2571,11 @@ export async function navigateBackWithImageHero(
   }
 
   const layer = createLayer(host);
-  const flight = createFlight(layer, source, value.previewFrame, host, target, 'back');
+  const currentMedia = getVisualMedia(source);
+  const closingFrame = currentMedia && isVolatileVisualMedia(currentMedia)
+    ? captureHeroFrame(currentMedia) ?? value.previewFrame
+    : value.previewFrame;
+  const flight = createFlight(layer, source, closingFrame, host, target, 'back');
   const resumeHeavyMedia = suspendHeavyDetailMedia(source);
   const sourceOpacity = hide(source);
   const targetOpacity = hide(target);
@@ -2332,6 +2587,11 @@ export async function navigateBackWithImageHero(
   let mediaResumed = false;
 
   begin('back');
+  let resolveHistoryRestore!: () => void;
+  const historyRestoreRequested = new Promise<void>((resolve) => {
+    resolveHistoryRestore = resolve;
+    notifyClosingHistoryRestore = resolve;
+  });
   let popStateCount = 0;
   const handlePopState = () => { popStateCount += 1; };
   // Re-read the final history position after the flight. A rapid Back then Forward
@@ -2342,6 +2602,21 @@ export async function navigateBackWithImageHero(
   let motion: FlightMotion | null = null;
   let scrollSync: ScrollSync | null = null;
   let detailExit: ReturnType<typeof animateDetailExit> | null = null;
+  const restoreClosingDetail = () => {
+    detailExit?.restore();
+    if (!mediaResumed) {
+      void resumeHeavyMedia();
+      mediaResumed = true;
+    }
+    restore(source, sourceOpacity);
+    restoredDetail = true;
+  };
+  const restoreClosingHistoryBounce = () => {
+    if (!closingHistoryRestoreRequested) return false;
+    restoreClosingDetail();
+    if (imageHeroHistoryRecord) restoreImageHeroHistoryGuard(imageHeroHistoryRecord);
+    return true;
+  };
 
   try {
     motion = animateFlight(
@@ -2365,13 +2640,9 @@ export async function navigateBackWithImageHero(
     motion.finish();
     finishBackground(background);
     background = null;
-    const historyOutcome = resolveClosingHistoryOutcome(imageId, popStateCount);
+    let historyOutcome = resolveClosingHistoryOutcome(imageId, popStateCount);
     if (historyOutcome === 'restore-detail') {
-      detailExit.restore();
-      void resumeHeavyMedia();
-      mediaResumed = true;
-      restore(source, sourceOpacity);
-      restoredDetail = true;
+      restoreClosingDetail();
     } else {
       detailExit.finish();
     }
@@ -2379,7 +2650,17 @@ export async function navigateBackWithImageHero(
       navigated = true;
       commitImageHeroBack(navigate);
     }
-    if (historyOutcome !== 'restore-detail') await waitForRouteOverlayGone();
+    if (historyOutcome !== 'restore-detail') {
+      const routeWaitController = new AbortController();
+      const waitOutcome = await Promise.race([
+        waitForRouteOverlayGone(1200, routeWaitController.signal).then(() => 'route' as const),
+        historyRestoreRequested.then(() => 'restore-detail' as const),
+      ]);
+      routeWaitController.abort();
+      if (waitOutcome === 'restore-detail' || restoreClosingHistoryBounce()) {
+        historyOutcome = 'restore-detail';
+      }
+    }
     restore(target, targetOpacity);
     targetRestored = true;
     layer.remove();
@@ -2387,15 +2668,14 @@ export async function navigateBackWithImageHero(
   } catch {
     const historyOutcome = resolveClosingHistoryOutcome(imageId, popStateCount);
     if (historyOutcome === 'restore-detail') {
-      detailExit?.restore();
-      void resumeHeavyMedia();
-      mediaResumed = true;
-      restore(source, sourceOpacity);
-      restoredDetail = true;
+      restoreClosingDetail();
     } else if (!navigated && historyOutcome === 'commit') {
       commitImageHeroBack(navigate);
     }
   } finally {
+    if (notifyClosingHistoryRestore === resolveHistoryRestore) {
+      notifyClosingHistoryRestore = null;
+    }
     window.removeEventListener('popstate', handlePopState, true);
     scrollSync?.flush();
     finishBackground(background);

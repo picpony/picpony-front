@@ -68,9 +68,23 @@ function createAbortError() {
   return new DOMException('Image detail prefetch was cancelled', 'AbortError');
 }
 
+function removeQueuedId(queue: number[], imageId: number) {
+  const index = queue.indexOf(imageId);
+  if (index !== -1) queue.splice(index, 1);
+}
+
+function enqueueImmediate(imageId: number) {
+  removeQueuedId(immediateQueue, imageId);
+  removeQueuedId(backgroundQueue, imageId);
+  // A real activation should own the next available slot, ahead of stale
+  // focus or hover intent that may already be queued.
+  immediateQueue.unshift(imageId);
+}
+
 function cancelQueuedEntry(imageId: number, entry: DetailEntry) {
   if (entry.status !== 'queued' || entry.priority !== 'background') return false;
   if (detailCache.get(imageId) !== entry || detailListeners.has(imageId)) return false;
+  removeQueuedId(backgroundQueue, imageId);
   detailCache.delete(imageId);
   entry.reject(createAbortError());
   notifyImageDetail(imageId);
@@ -164,7 +178,7 @@ function dropOldestBackgroundRequest() {
 
 function enqueueDetail(imageId: number, entry: DetailEntry) {
   if (entry.priority === 'immediate') {
-    immediateQueue.push(imageId);
+    enqueueImmediate(imageId);
   } else {
     let queuedBackgroundCount = 0;
     for (const candidate of detailCache.values()) {
@@ -204,7 +218,7 @@ export function prefetchImageDetail(
     if (priority === 'immediate' && cached.status !== 'resolved' && cached.priority === 'background') {
       cached.priority = 'immediate';
       if (cached.status === 'queued') {
-        immediateQueue.push(imageId);
+        enqueueImmediate(imageId);
         runDetailQueue();
       }
     }

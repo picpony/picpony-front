@@ -220,10 +220,13 @@ body {
 
 /* Shared image transition: a single flyer stays inside the app content area. */
 [data-image-detail-host] {
-  --image-detail-overlay-offset: 2rem;
+  /* Keep the title visually paired with the floating back action. This is
+     shared by the stage and the real route, so the hero landing geometry
+     moves as one piece instead of compensating after the flight. */
+  --image-detail-overlay-offset: 1.5rem;
   --image-detail-page-padding: 1rem;
-  --image-detail-header-height: 9rem;
-  --image-detail-stage-padding: 1rem;
+  --image-detail-header-height: 7.25rem;
+  --image-detail-stage-padding: 0.5rem;
   --image-hero-target-top: calc(
     var(--image-detail-overlay-offset) +
     var(--image-detail-page-padding) +
@@ -234,9 +237,9 @@ body {
 
 @media (min-width: 640px) {
   [data-image-detail-host] {
-    --image-detail-overlay-offset: 2rem;
+    --image-detail-overlay-offset: 1.5rem;
     --image-detail-page-padding: 1.5rem;
-    --image-detail-header-height: 10rem;
+    --image-detail-header-height: 8.25rem;
   }
 }
 
@@ -251,6 +254,10 @@ body {
 
 .image-detail-header-stage {
   height: var(--image-detail-header-height);
+}
+
+.image-detail-header-route {
+  min-height: var(--image-detail-header-height);
 }
 
 .image-hero-destination {
@@ -268,6 +275,29 @@ body {
 .image-detail-deferred {
   content-visibility: auto;
   contain-intrinsic-size: auto 1200px;
+}
+
+/* The Canvas owns only the Hero flight. Once the native preview has decoded,
+   the routed image becomes an ordinary in-flow element before the next paint;
+   the full-resolution image then replaces it atomically after decode. */
+.image-detail-preview-native {
+  opacity: 1;
+}
+
+.image-detail-final {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-image-detail-hero-active='false'][data-image-detail-final-ready='true']
+  > .image-detail-final {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+[data-image-detail-hero-active='false'][data-image-detail-final-ready='true']
+  > .image-detail-preview-native {
+  opacity: 0;
 }
 
 html[data-image-hero-transition] #nprogress {
@@ -295,11 +325,6 @@ html[data-image-hero-transition='forward'] [data-image-hero-role='detail'] {
 html[data-image-hero-interrupted='true'] [data-image-detail-overlay]:not([data-image-hero-stage]),
 html[data-image-hero-interrupted='true'] [data-image-detail-floating-back='route'] {
   opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-html[data-image-hero-interrupted='true'] [data-image-hero-stage],
-html[data-image-hero-interrupted='true'] [data-image-hero-stage-foreground] {
   pointer-events: none !important;
 }
 

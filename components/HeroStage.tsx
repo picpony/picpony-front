@@ -1,16 +1,14 @@
 'use client';
 
 import {
-  useCallback,
   useEffect,
-  useState,
+  useRef,
   useSyncExternalStore,
 } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import HeroFrame from '@/components/HeroFrame';
-import { peekImageDetail, subscribeImageDetail } from '@/lib/detail';
 import {
   getImageHeroStage,
   interruptImageHero,
@@ -37,10 +35,6 @@ function getServerStage() {
   return EMPTY_STAGE;
 }
 
-function getServerDetail() {
-  return null;
-}
-
 export default function HeroStage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -50,29 +44,21 @@ export default function HeroStage() {
     getImageHeroStage,
     getServerStage,
   );
-  const imageId = state.snapshot?.image.id ?? 0;
-  const subscribeDetail = useCallback(
-    (listener: () => void) => imageId > 0
-      ? subscribeImageDetail(imageId, listener)
-      : () => {},
-    [imageId],
-  );
-  const readDetail = useCallback(
-    () => imageId > 0 ? peekImageDetail(imageId) : null,
-    [imageId],
-  );
-  const detail = useSyncExternalStore(subscribeDetail, readDetail, getServerDetail);
-  const [drawnFrame, setDrawnFrame] = useState<HTMLCanvasElement | null>(null);
-  const handleFrameDrawn = useCallback(() => {
-    setDrawnFrame(state.snapshot?.previewFrame ?? null);
-  }, [state.snapshot]);
+  const targetRef = useRef<HTMLDivElement>(null);
+  const handleFrameDrawn = () => {
+    targetRef.current?.setAttribute('data-image-hero-stage-ready', 'true');
+  };
 
   useEffect(() => {
     observeImageHeroClientNavigation(`${pathname}${search ? `?${search}` : ''}`);
   }, [pathname, search]);
 
   const layoutImage = state.snapshot?.image;
-  const image = detail?.image ?? layoutImage;
+  // The stage is the geometry contract for the flight. Keep it bound to the
+  // click-time snapshot while the detail request resolves: a late title or
+  // metadata update must not move the destination below the flyer. The real
+  // route receives the richer image after the atomic handoff.
+  const image = layoutImage;
   if (state.phase === 'idle' || !image || !layoutImage || !state.snapshot) return null;
 
   return (
@@ -94,8 +80,29 @@ export default function HeroStage() {
         >
           <div className="image-detail-page mx-auto max-w-7xl px-2 sm:px-4">
             <div className="flex flex-col rounded-xl bg-transparent">
-              <DetailHeader image={image} compact metadataReady={Boolean(detail)} />
-              <div className="relative flex min-h-[40vh] w-full items-start justify-center p-4 md:min-h-[60vh]">
+              <DetailHeader key={image.id} image={image} layout="stage" metadataReady={false} />
+              <div className="relative flex min-h-[32vh] w-full items-start justify-center px-4 pb-4 pt-2 md:min-h-[48vh]">
+                <div
+                  className="pointer-events-none absolute inset-x-4 top-2 z-20 flex justify-center"
+                >
+                  <div
+                    ref={targetRef}
+                    data-image-hero-stage-target
+                    data-image-hero-stage-id={image.id}
+                    className="relative flex-none overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-900"
+                    style={{
+                      ...getImageStyle(layoutImage),
+                      opacity: state.phase === 'landed' ? 1 : 0,
+                    }}
+                  >
+                    <HeroFrame
+                      frame={state.snapshot.previewFrame}
+                      onDrawn={handleFrameDrawn}
+                      aria-hidden="true"
+                      className="block h-full w-full object-contain"
+                    />
+                  </div>
+                </div>
                 <div
                   aria-hidden="true"
                   className="invisible flex-none"
@@ -107,60 +114,16 @@ export default function HeroStage() {
                 className="min-h-[80vh] bg-transparent p-4 sm:p-6"
               >
                 <div className="mx-auto w-full max-w-5xl">
-                  {detail ? (
-                    <div className="mb-6">
-                      <div className="mb-1.5 flex justify-between text-sm font-medium">
-                        <span className="text-green-600">{detail.image.upvotes}</span>
-                        <span className="text-red-500">{detail.image.downvotes}</span>
-                      </div>
-                      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                        <div
-                          className="h-full bg-green-500"
-                          style={{
-                            width: `${detail.image.upvotes + detail.image.downvotes > 0
-                              ? detail.image.upvotes / (detail.image.upvotes + detail.image.downvotes) * 100
-                              : 0}%`,
-                          }}
-                        />
-                        <div className="h-full flex-1 bg-red-500" />
-                      </div>
+                  <div aria-hidden="true" className="mb-6 animate-pulse">
+                    <div className="mb-2 flex justify-between">
+                      <span className="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700" />
+                      <span className="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
-                  ) : (
-                    <div aria-hidden="true" className="mb-6 animate-pulse">
-                      <div className="mb-2 flex justify-between">
-                        <span className="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700" />
-                        <span className="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700" />
-                      </div>
-                      <div className="h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-700" />
-                    </div>
-                  )}
+                    <div className="h-2.5 w-full rounded bg-slate-200 dark:bg-slate-700" />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-      <div
-        data-image-hero-stage-target-wrap
-        className="image-hero-destination pointer-events-none absolute inset-x-0 z-20 will-change-transform"
-      >
-        <div className="mx-auto flex w-full max-w-7xl justify-center pl-6 pr-8 sm:pl-8 sm:pr-10">
-          <div
-            data-image-hero-stage-target
-            data-image-hero-stage-id={image.id}
-            data-image-hero-stage-ready={drawnFrame === state.snapshot.previewFrame ? 'true' : undefined}
-            className="relative flex-none overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-900"
-            style={{
-              ...getImageStyle(layoutImage),
-              opacity: state.phase === 'landed' ? 1 : 0,
-            }}
-          >
-            <HeroFrame
-              frame={state.snapshot.previewFrame}
-              onDrawn={handleFrameDrawn}
-              aria-hidden="true"
-              className="block h-full w-full object-contain"
-            />
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   type ComponentProps,
+  type MouseEvent,
   type PointerEvent,
   type RefObject,
 } from 'react';
@@ -13,7 +14,6 @@ import { useRouter } from 'next/navigation';
 import type { PonyImage } from '@/lib/types/image';
 import {
   cancelImageDetailPrefetch,
-  prefetchImageDetail,
 } from '@/lib/detail';
 import {
   canUseImageHeroTransition,
@@ -28,6 +28,7 @@ import {
 type HeroLinkKind = 'card' | 'featured';
 type NavigateHandler = NonNullable<ComponentProps<typeof Link>['onNavigate']>;
 const HOVER_INTENT_DELAY = 70;
+const FOCUS_INTENT_DELAY = 120;
 
 export function useHeroLink<T extends HTMLElement>({
   image,
@@ -44,6 +45,7 @@ export function useHeroLink<T extends HTMLElement>({
 }) {
   const router = useRouter();
   const preparedRef = useRef<ImageHeroSnapshot | null>(null);
+  const lastActivationRef = useRef<{ imageId: number; at: number } | null>(null);
   const expiryTimerRef = useRef<number | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
   const cancelFrameWarmRef = useRef<(() => void) | null>(null);
@@ -74,20 +76,23 @@ export function useHeroLink<T extends HTMLElement>({
 
   const warmImmediately = useCallback(() => {
     if (!image) return;
+    const lastActivation = lastActivationRef.current;
+    const timestamp = Date.now();
+    if (lastActivation?.imageId === image.id && timestamp - lastActivation.at < 1500) return;
+    lastActivationRef.current = { imageId: image.id, at: timestamp };
     cancelHoverIntent();
     router.prefetch(href);
     void warmImageHero(image.id);
   }, [cancelHoverIntent, href, image, router]);
 
-  const scheduleHoverWarm = useCallback(() => {
+  const scheduleIntentWarm = useCallback((delay = HOVER_INTENT_DELAY) => {
     if (!image || hoverTimerRef.current !== null) return;
     hoverTimerRef.current = window.setTimeout(() => {
       hoverTimerRef.current = null;
       router.prefetch(href);
-      void warmImageHero();
-      void prefetchImageDetail(image.id, { priority: 'background' }).catch(() => undefined);
+      void warmImageHero(image.id, 'background');
       warmFrame();
-    }, HOVER_INTENT_DELAY);
+    }, delay);
   }, [href, image, router, warmFrame]);
 
   const prepare = useCallback(() => {
@@ -166,17 +171,22 @@ export function useHeroLink<T extends HTMLElement>({
     warmFrame,
     prefetch: false as const,
     scroll: false as const,
-    onPointerEnter: scheduleHoverWarm,
+    onPointerEnter: () => scheduleIntentWarm(),
     onPointerLeave: () => cancelHoverIntent(true),
     onPointerDown: (event: PointerEvent<HTMLAnchorElement>) => {
-      warmImmediately();
-      if (event.button === 0) prepare();
-    },
-    onClick: () => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        scheduleIntentWarm();
+        return;
+      }
       warmImmediately();
       prepare();
     },
-    onFocus: warmImmediately,
+    onClick: (event: MouseEvent<HTMLAnchorElement>) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      warmImmediately();
+      prepare();
+    },
+    onFocus: () => scheduleIntentWarm(FOCUS_INTENT_DELAY),
     onBlur: () => cancelHoverIntent(true),
     onNavigate: handleNavigate,
   };
