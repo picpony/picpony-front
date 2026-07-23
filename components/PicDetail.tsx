@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useEffect, useState, useCallback, useRef, useSyncExternalStore } from 'react';
+import { startTransition, useEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { MdDownload, MdOpenInNew, MdStar, MdStarBorder, MdShare, MdContentCopy, MdFlag, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import Modal from '@/components/Modal';
@@ -22,6 +22,11 @@ import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
 import TagList, { groupTags, EMPTY_TAG_GROUPS } from '@/components/TagList';
 import CommentSection from '@/components/CommentSection';
+import CommentComposer from '@/components/CommentComposer';
+import { getHeroMediaStyle } from '@/lib/hero/geometry';
+import {
+  bindImageHeroDismissGesture,
+} from '@/lib/hero/dismissGesture';
 
 const INITIAL_TAG_LIMIT = 80;
 const INITIAL_RELATION_TAG_LIMIT = 32;
@@ -31,7 +36,6 @@ import {
   subscribeImageDetail,
 } from '@/lib/detail';
 import {
-  consumeImageHeroSeed,
   getImageHeroOrigin,
   interruptImageHero,
   isImageHeroTransitionRunning,
@@ -122,7 +126,12 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const router = useRouter();
   const id = params.id as string;
   const imageId = Number(id);
-  const heroSeed = consumeImageHeroSeed(imageId);
+  // Latch the seed for this route id. A live read on every render would flip
+  // to null when the module snapshot expires and remount the media mid-view.
+  const heroSeed = useMemo(
+    () => getImageHeroOrigin(imageId),
+    [imageId],
+  );
   const subscribeDetail = useCallback(
     (listener: () => void) => subscribeImageDetail(imageId, listener),
     [imageId],
@@ -188,6 +197,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const [commentEditorMountId, setCommentEditorMountId] = useState<number | null>(null);
   const commentEditorMountRef = useRef<HTMLDivElement>(null);
   const commentsSectionRef = useRef<HTMLDivElement>(null);
+  const overlayScrollerRef = useRef<HTMLDivElement>(null);
+  const overlayContentRef = useRef<HTMLDivElement>(null);
+  const overlaySurfaceRef = useRef<HTMLDivElement>(null);
   const shouldLoadComments = commentsViewport.imageId === imageId && commentsViewport.ready;
   const shouldMountCommentEditor = commentEditorMountId === imageId;
 
@@ -439,6 +451,13 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   // --- Lightbox handlers ---
   const handleOpenLightbox = useCallback(() => {
+    if (
+      isImageHeroTransitionRunning() ||
+      document.documentElement.dataset.imageHeroDismissGesture ||
+      document.documentElement.dataset.imageHeroTransition
+    ) {
+      return;
+    }
     setIsLightboxOpen(true);
   }, []);
 
@@ -480,6 +499,40 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       router.push('/');
     }
   }, [id, presentation, router]);
+
+  useEffect(() => {
+    if (presentation !== 'overlay') return;
+    const scroller = overlayScrollerRef.current;
+    const content = overlayContentRef.current;
+    const surface = overlaySurfaceRef.current;
+    if (!scroller || !content || !surface) return;
+
+    return bindImageHeroDismissGesture({
+      scroller,
+      content,
+      surface,
+      canStart: () => (
+        !isImageHeroTransitionRunning() &&
+        !isLightboxOpen &&
+        !tagInfoModal.open &&
+        !isReportModalOpen &&
+        !isShareOpen
+      ),
+      dismiss: () => navigateBackWithImageHero(
+        imageId,
+        () => router.back(),
+        { background: 'continue' },
+      ),
+    });
+  }, [
+    imageId,
+    isLightboxOpen,
+    isReportModalOpen,
+    isShareOpen,
+    presentation,
+    router,
+    tagInfoModal.open,
+  ]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -537,7 +590,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Comment reply ---
   const handleReply = (comment: Comment) => {
     setReplyTo({ id: comment.id, username: comment.username, body: comment.body });
-    window.scrollTo({ top: document.getElementById('comment-editor-area')?.offsetTop || 0, behavior: 'smooth' });
+    commentEditorMountRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleCancelReply = () => {
@@ -702,9 +755,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         aria-label="图片详情"
         className="image-detail-route absolute inset-0 z-40 overflow-hidden"
       >
-        <div data-image-detail-surface className="absolute inset-0 bg-white dark:bg-slate-950" />
-        <div className="image-detail-overlay-scroll absolute inset-0 z-10 overflow-y-auto overscroll-contain">
-          <div className="image-detail-overlay-content relative min-h-full w-full">
+        <div ref={overlaySurfaceRef} data-image-detail-surface className="absolute inset-0 bg-white dark:bg-slate-950" />
+        <div ref={overlayScrollerRef} className="image-detail-overlay-scroll absolute inset-0 z-10 overflow-y-auto overscroll-contain">
+          <div ref={overlayContentRef} className="image-detail-overlay-content relative min-h-full w-full">
             {content}
           </div>
         </div>
@@ -786,15 +839,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     image.representations?.full ||
     image.view_url ||
     '';
-  const heroImageWidth = Math.max(heroSeed?.image.width || image.width || 1, 1);
-  const heroImageHeight = Math.max(heroSeed?.image.height || image.height || 1, 1);
-  const heroAspectRatio = heroImageWidth / heroImageHeight;
-  const detailHeroStyle = {
-    aspectRatio: `${heroImageWidth} / ${heroImageHeight}`,
-    width: `min(100%, ${heroImageWidth}px, calc(80dvh * ${heroAspectRatio}))`,
-    maxWidth: '100%',
-    maxHeight: '80dvh',
-  };
+  const detailHeroStyle = getHeroMediaStyle({
+    width: heroSeed?.image.width || image.width,
+    height: heroSeed?.image.height || image.height,
+  });
 
   return renderDetailShell(
     <div className={`image-detail-page max-w-7xl mx-auto px-2 sm:px-4 ${presentation === 'page' ? 'animate-fade-in' : ''}`}>

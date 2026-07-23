@@ -74,7 +74,7 @@ export default function FeaturedBanner() {
     featured?.representations?.thumb_small ||
     featured?.representations?.thumb ||
     fullUrl;
-  const { sourceKey: heroSourceKey, warmFrame, ...heroLinkProps } = useHeroLink({
+  const { sourceKey: heroSourceKey, ...heroLinkProps } = useHeroLink({
     image: featured,
     sourceRef: heroElementRef,
     previewSrc: isVideo ? displayVideoUrl : displayImageUrl,
@@ -121,17 +121,16 @@ export default function FeaturedBanner() {
               muted
               playsInline
               preload="auto"
-              onLoadedData={warmFrame}
               className="w-full h-full object-cover"
             />
           ) : (
             <FadeInImage
               src={displayImageUrl}
               alt={featured.name || `Featured Image ${featured.id}`}
+              eager
               width={featured.width || 0}
               height={featured.height || 0}
               quality={88}
-              onLoad={warmFrame}
               className="w-full h-full object-cover"
               sizes="(min-width: 1536px) 1216px, calc(100vw - 2rem)"
             />

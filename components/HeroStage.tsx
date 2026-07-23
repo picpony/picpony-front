@@ -1,14 +1,10 @@
 'use client';
 
-import {
-  useEffect,
-  useRef,
-  useSyncExternalStore,
-} from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
-import HeroFrame from '@/components/HeroFrame';
+import { getHeroMediaStyle } from '@/lib/hero/geometry';
 import {
   getImageHeroStage,
   interruptImageHero,
@@ -18,18 +14,6 @@ import {
 } from '@/lib/hero';
 
 const EMPTY_STAGE: ImageHeroStageState = { phase: 'idle', snapshot: null };
-
-function getImageStyle(image: NonNullable<ImageHeroStageState['snapshot']>['image']) {
-  const width = Math.max(1, image.width || 1);
-  const height = Math.max(1, image.height || 1);
-  const ratio = width / height;
-  return {
-    aspectRatio: `${width} / ${height}`,
-    width: `min(100%, ${width}px, calc(80dvh * ${ratio}))`,
-    maxWidth: '100%',
-    maxHeight: '80dvh',
-  };
-}
 
 function getServerStage() {
   return EMPTY_STAGE;
@@ -44,35 +28,31 @@ export default function HeroStage() {
     getImageHeroStage,
     getServerStage,
   );
-  const targetRef = useRef<HTMLDivElement>(null);
-  const handleFrameDrawn = () => {
-    targetRef.current?.setAttribute('data-image-hero-stage-ready', 'true');
-  };
 
   useEffect(() => {
     observeImageHeroClientNavigation(`${pathname}${search ? `?${search}` : ''}`);
   }, [pathname, search]);
 
-  const layoutImage = state.snapshot?.image;
-  // The stage is the geometry contract for the flight. Keep it bound to the
-  // click-time snapshot while the detail request resolves: a late title or
-  // metadata update must not move the destination below the flyer. The real
-  // route receives the richer image after the atomic handoff.
-  const image = layoutImage;
-  if (state.phase === 'idle' || !image || !layoutImage || !state.snapshot) return null;
+  const snapshot = state.snapshot;
+  if (state.phase === 'idle' || !snapshot) return null;
+  // The stage is the geometry contract for the flight: it stays bound to the
+  // click-time snapshot so a late title or metadata update cannot move the
+  // landing target below the flyer. The real route receives the richer image
+  // after the atomic handoff.
+  const image = snapshot.image;
 
   return (
     <>
     <section
       data-image-detail-overlay
       data-image-hero-stage
-      className="pointer-events-auto absolute inset-0 z-[44] overflow-hidden"
+      className="pointer-events-none absolute inset-0 z-[44] overflow-hidden"
     >
       <div data-image-detail-surface className="absolute inset-0 bg-white dark:bg-slate-950" />
       <div
         data-image-hero-stage-foreground
         aria-hidden="true"
-        className="image-detail-overlay-scroll pointer-events-auto absolute inset-0 z-10 overflow-y-auto overscroll-contain touch-pan-y"
+        className="image-detail-overlay-scroll pointer-events-none absolute inset-0 z-10 overflow-y-auto overscroll-contain touch-pan-y"
       >
         <div
           inert
@@ -86,27 +66,20 @@ export default function HeroStage() {
                   className="pointer-events-none absolute inset-x-4 top-2 z-20 flex justify-center"
                 >
                   <div
-                    ref={targetRef}
                     data-image-hero-stage-target
                     data-image-hero-stage-id={image.id}
                     className="relative flex-none overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-900"
                     style={{
-                      ...getImageStyle(layoutImage),
+                      ...getHeroMediaStyle(image),
                       opacity: state.phase === 'landed' ? 1 : 0,
                     }}
                   >
-                    <HeroFrame
-                      frame={state.snapshot.previewFrame}
-                      onDrawn={handleFrameDrawn}
-                      aria-hidden="true"
-                      className="block h-full w-full object-contain"
-                    />
                   </div>
                 </div>
                 <div
                   aria-hidden="true"
                   className="invisible flex-none"
-                  style={getImageStyle(layoutImage)}
+                  style={getHeroMediaStyle(image)}
                 />
               </div>
               <div

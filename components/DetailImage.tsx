@@ -10,6 +10,10 @@ import {
   type SyntheticEvent,
 } from 'react';
 import { MdFullscreen } from 'react-icons/md';
+import {
+  getHeroMediaRenderedWidth,
+  getHeroMediaResponsiveSizes,
+} from '@/lib/hero/geometry';
 
 type DetailImageProps = {
   imageId: number;
@@ -31,13 +35,9 @@ function shouldBypassImageOptimization(src: string) {
 function getPrefetchCandidate(srcSet: string | undefined, fallback: string, width: number, height: number) {
   if (!srcSet || typeof window === 'undefined') return fallback;
 
-  const aspectRatio = Math.max(1, width) / Math.max(1, height);
-  const horizontalPadding = window.innerWidth < 640 ? 48 : 128;
-  const renderedWidth = Math.min(
-    Math.max(1, width),
-    1248,
-    Math.max(1, window.innerWidth - horizontalPadding),
-    Math.max(1, window.innerHeight * 0.8 * aspectRatio),
+  const renderedWidth = getHeroMediaRenderedWidth(
+    { width, height },
+    { width: window.innerWidth, height: window.innerHeight },
   );
   const targetWidth = renderedWidth * Math.max(1, window.devicePixelRatio || 1);
   const candidates = srcSet
@@ -71,9 +71,7 @@ export default function DetailImage({
   const shouldPrefetchFinal = heroActive;
   const hasPreview = Boolean(previewSrc);
   const mountFinal = !heroActive || !hasPreview;
-  const aspectRatio = Math.max(1, width) / Math.max(1, height);
-  const intrinsicWidth = Math.max(1, width);
-  const responsiveSizes = `(max-width: 639px) min(calc(100vw - 3rem), ${intrinsicWidth}px, calc(80dvh * ${aspectRatio})), min(calc(100vw - 8rem), 1248px, ${intrinsicWidth}px, calc(80dvh * ${aspectRatio}))`;
+  const responsiveSizes = getHeroMediaResponsiveSizes({ width, height });
 
   useLayoutEffect(() => {
     const target = targetRef.current;

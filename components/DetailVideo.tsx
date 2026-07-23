@@ -9,6 +9,9 @@ import {
   type CSSProperties,
   type SyntheticEvent,
 } from 'react';
+import { getHeroMediaPreviewSizes } from '@/lib/hero/geometry';
+
+const HERO_MEDIA_PREVIEW_SIZES = getHeroMediaPreviewSizes();
 
 type DetailVideoProps = {
   imageId: number;
@@ -178,7 +181,7 @@ export default function DetailVideo({
           alt=""
           aria-hidden="true"
           fill
-          sizes="(max-width: 639px) 100vw, 1248px"
+          sizes={HERO_MEDIA_PREVIEW_SIZES}
           loading="eager"
           fetchPriority={heroActive ? 'low' : 'high'}
           unoptimized

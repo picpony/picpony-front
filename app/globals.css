@@ -218,21 +218,20 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+/* Isolate each gallery tile's paint invalidation while its image decodes or
+   its metadata chips change. This preserves the masonry geometry but keeps a
+   tile update from invalidating the entire scrolling surface. */
+.image-card {
+  contain: layout paint style;
+}
+
 /* Shared image transition: a single flyer stays inside the app content area. */
 [data-image-detail-host] {
-  /* Keep the title visually paired with the floating back action. This is
-     shared by the stage and the real route, so the hero landing geometry
-     moves as one piece instead of compensating after the flight. */
+  /* Shared by the stage and the real route so both render the identical
+     header/page stack and the hero handoff cannot shift. */
   --image-detail-overlay-offset: 1.5rem;
   --image-detail-page-padding: 1rem;
   --image-detail-header-height: 7.25rem;
-  --image-detail-stage-padding: 0.5rem;
-  --image-hero-target-top: calc(
-    var(--image-detail-overlay-offset) +
-    var(--image-detail-page-padding) +
-    var(--image-detail-header-height) +
-    var(--image-detail-stage-padding)
-  );
 }
 
 @media (min-width: 640px) {
@@ -258,10 +257,6 @@ body {
 
 .image-detail-header-route {
   min-height: var(--image-detail-header-height);
-}
-
-.image-hero-destination {
-  top: var(--image-hero-target-top);
 }
 
 .image-detail-meta {
@@ -322,8 +317,48 @@ html[data-image-hero-transition='forward'] [data-image-hero-role='detail'] {
   opacity: 0;
 }
 
+/* A delayed mobile click can be synthesized after Back/pull-to-dismiss has
+   already started. Keep the original zoom target inert for the whole close so
+   the lightbox cannot flash above the fading route. */
+html[data-image-hero-transition='back'] [data-image-hero-role='detail'],
+html[data-image-hero-dismiss-gesture] [data-image-hero-role='detail'] {
+  pointer-events: none !important;
+}
+
+/* Some decoded media layers explicitly restore pointer-events:auto. Parent
+   pointer transparency alone does not prevent those descendants from becoming
+   hit targets, which can steal a touch stream from the gallery during Back.
+   Make the whole outgoing route inert until it unmounts or is restored. */
+html[data-image-hero-transition='back']
+  [data-image-detail-overlay]:not([data-image-hero-stage]),
+html[data-image-hero-transition='back']
+  [data-image-detail-overlay]:not([data-image-hero-stage]) *,
+html[data-image-hero-transition='back']
+  [data-image-detail-floating-back='route'] {
+  pointer-events: none !important;
+}
+
+/* The Stage is a visual/scroll mirror during opening, not an interaction
+   shield. Let clicks and new touch gestures reach the frozen gallery; the
+   opening scroll bridge mirrors gallery movement back into the Stage. The
+   standalone Stage back button remains interactive above these layers. */
+html[data-image-hero-transition='forward']
+  [data-image-detail-overlay]:not([data-image-hero-stage]),
+html[data-image-hero-transition='forward']
+  [data-image-detail-floating-back='route'] {
+  pointer-events: none !important;
+}
+
 html[data-image-hero-interrupted='true'] [data-image-detail-overlay]:not([data-image-hero-stage]),
 html[data-image-hero-interrupted='true'] [data-image-detail-floating-back='route'] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* After an interrupt settles we may still be waiting for one specific route
+   overlay to unmount. It is stamped individually so a freshly opened detail is
+   never blanked by the global flag above. */
+[data-image-hero-hidden='true'] {
   opacity: 0 !important;
   pointer-events: none !important;
 }
@@ -345,13 +380,6 @@ html[data-image-hero-interrupted='true'] [data-image-detail-floating-back='route
   backface-visibility: hidden;
   will-change: transform, border-radius;
   background: transparent;
-}
-
-.image-hero-flyer img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  backface-visibility: hidden;
 }
 
 .image-hero-flight-compensator {

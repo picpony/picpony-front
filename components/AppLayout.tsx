@@ -634,18 +634,6 @@ export default function AppLayout({
                 </footer>
               </div>
             </main>
-            <div
-              data-image-hero-destination
-              aria-hidden="true"
-              className="image-hero-destination pointer-events-none absolute inset-x-0 z-0 opacity-0"
-            >
-              <div className="mx-auto flex w-full max-w-7xl justify-center pl-6 pr-8 sm:pl-8 sm:pr-10">
-                <div
-                  data-image-hero-destination-box
-                  className="flex-none overflow-hidden rounded-lg"
-                />
-              </div>
-            </div>
             <Suspense fallback={null}>
               <HeroStage />
             </Suspense>

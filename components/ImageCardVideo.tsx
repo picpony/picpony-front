@@ -4,10 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 
 type ImageCardVideoProps = {
   src: string;
-  onLoadedData?: () => void;
 };
 
-export default function ImageCardVideo({ src, onLoadedData }: ImageCardVideoProps) {
+export default function ImageCardVideo({ src }: ImageCardVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameReadyRef = useRef(false);
   const [preload, setPreload] = useState<'metadata' | 'auto'>('metadata');
@@ -34,7 +33,6 @@ export default function ImageCardVideo({ src, onLoadedData }: ImageCardVideoProp
   const handleLoadedData = () => {
     frameReadyRef.current = true;
     setPreload('metadata');
-    onLoadedData?.();
   };
 
   return (
@@ -50,7 +48,7 @@ export default function ImageCardVideo({ src, onLoadedData }: ImageCardVideoProp
       onPointerLeave={coolVideo}
       onFocus={warmVideo}
       onBlur={coolVideo}
-      className="absolute left-0 top-0 h-full w-full object-cover transition-all duration-500"
+      className="absolute left-0 top-0 h-full w-full object-cover"
     />
   );
 }

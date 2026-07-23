@@ -39,27 +39,38 @@ export function useDisplay(): DisplayInfo {
   return display;
 }
 
-export function useMasonryColumns() {
-  const getInitialColumns = () => {
-    if (typeof window === 'undefined') return 4;
-    if (window.innerWidth < 640) return 2;
-    if (window.innerWidth < 768) return 2;
-    if (window.innerWidth < 1024) return 3;
-    return 4;
-  };
+function getMasonryColumnCount() {
+  if (typeof window === 'undefined') return 4;
+  if (window.innerWidth < 768) return 2;
+  if (window.innerWidth < 1024) return 3;
+  return 4;
+}
 
-  const [columns, setColumns] = useState(getInitialColumns);
+export function useMasonryColumns() {
+
+  const [columns, setColumns] = useState(getMasonryColumnCount);
 
   useEffect(() => {
     const updateColumns = () => {
-      if (window.innerWidth < 640) setColumns(2);
-      else if (window.innerWidth < 768) setColumns(2);
-      else if (window.innerWidth < 1024) setColumns(3);
-      else setColumns(4);
+      const next = getMasonryColumnCount();
+      setColumns((current) => current === next ? current : next);
     };
+    const queries = [
+      window.matchMedia('(min-width: 768px)'),
+      window.matchMedia('(min-width: 1024px)'),
+    ];
 
-    window.addEventListener('resize', updateColumns);
-    return () => window.removeEventListener('resize', updateColumns);
+    updateColumns();
+    queries.forEach((query) => {
+      if (typeof query.addEventListener === 'function') query.addEventListener('change', updateColumns);
+      else query.addListener(updateColumns);
+    });
+    return () => {
+      queries.forEach((query) => {
+        if (typeof query.removeEventListener === 'function') query.removeEventListener('change', updateColumns);
+        else query.removeListener(updateColumns);
+      });
+    };
   }, []);
 
   return columns;

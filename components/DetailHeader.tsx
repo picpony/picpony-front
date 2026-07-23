@@ -29,6 +29,8 @@ type TitleMetrics = {
   overflowing: boolean;
 };
 
+const TITLE_COLLAPSED_LINES = 1;
+
 function getImageFormat(image: PonyImage) {
   const source = image.format || image.representations?.full || image.view_url || '';
   return source.split('.').pop()?.toUpperCase() || 'UNKNOWN';
@@ -64,7 +66,7 @@ export default function DetailHeader({
   const isTitleOverflowing = !isStage && Boolean(titleMetrics?.overflowing);
   const titleHeight = titleMetrics
     ? (isTitleExpanded ? titleMetrics.expanded : titleMetrics.collapsed)
-    : undefined;
+    : null;
 
   useLayoutEffect(() => {
     const heading = titleRef.current;
@@ -78,9 +80,21 @@ export default function DetailHeader({
     let cancelled = false;
     const measure = () => {
       frame = 0;
-      const lineHeight = Number.parseFloat(window.getComputedStyle(heading).lineHeight);
-      const collapsed = Math.max(1, Math.ceil(lineHeight || heading.getBoundingClientRect().height));
+      const lineHeight = Number.parseFloat(window.getComputedStyle(heading).lineHeight)
+        || heading.getBoundingClientRect().height;
+      const collapsed = Math.max(1, Math.ceil(lineHeight * TITLE_COLLAPSED_LINES));
+      // The first paint stays single-line. Temporarily remove that clamp only
+      // for this synchronous measurement so expanded height remains accurate.
+      const previousHeight = heading.style.height;
+      const previousMaxHeight = heading.style.maxHeight;
+      const previousWhiteSpace = heading.style.whiteSpace;
+      heading.style.height = 'auto';
+      heading.style.maxHeight = 'none';
+      heading.style.whiteSpace = 'normal';
       const expanded = Math.max(collapsed, Math.ceil(heading.scrollHeight));
+      heading.style.height = previousHeight;
+      heading.style.maxHeight = previousMaxHeight;
+      heading.style.whiteSpace = previousWhiteSpace;
       const next = {
         collapsed,
         expanded,
@@ -132,10 +146,13 @@ export default function DetailHeader({
           ref={titleRef}
           id={`image-title-${image.id}`}
           title={isTitleOverflowing && !isTitleExpanded ? title : undefined}
-          style={titleHeight ? { height: `${titleHeight}px` } : undefined}
-          className={`min-w-0 flex-1 overflow-hidden text-left text-2xl font-bold leading-8 text-slate-800 transition-[height] duration-[220ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] [overflow-wrap:anywhere] motion-reduce:transition-none dark:text-slate-100 md:text-3xl md:leading-9 ${
-            titleHeight ? '' : 'h-8 md:h-9'
-          }`}
+          style={{
+            height: titleHeight ? `${titleHeight}px` : `${TITLE_COLLAPSED_LINES}lh`,
+            maxHeight: titleHeight ? `${titleHeight}px` : `${TITLE_COLLAPSED_LINES}lh`,
+            whiteSpace: isTitleExpanded ? 'normal' : 'nowrap',
+            textOverflow: isTitleExpanded ? 'clip' : 'ellipsis',
+          }}
+          className="min-w-0 flex-1 overflow-hidden text-left text-2xl font-bold leading-8 text-slate-800 transition-[height] duration-[260ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] [overflow-wrap:anywhere] motion-reduce:transition-none dark:text-slate-100 md:text-3xl md:leading-9"
         >
           {title}
         </h1>
@@ -146,13 +163,14 @@ export default function DetailHeader({
             aria-expanded={isTitleExpanded}
             onClick={() => setExpandedTitle((current) => current === title ? null : title)}
             aria-label={isTitleExpanded ? '收起完整标题' : '展开完整标题'}
-            className="mt-0.5 inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 shadow-sm transition-[background-color,border-color,color,transform] duration-[180ms] ease-out hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white"
+            title={isTitleExpanded ? '收起完整标题' : '展开完整标题'}
+            data-image-detail-title-toggle
+            className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors duration-[180ms] ease-out hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1 focus-visible:ring-offset-white motion-reduce:transition-none dark:text-slate-500 dark:hover:text-primary dark:focus-visible:ring-offset-slate-950"
           >
-            <span>{isTitleExpanded ? '收起' : '展开'}</span>
             <MdKeyboardArrowDown
-              size={17}
+              size={20}
               aria-hidden="true"
-              className={`transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none ${isTitleExpanded ? 'rotate-180' : ''}`}
+              className={`transition-transform duration-[260ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] motion-reduce:transition-none ${isTitleExpanded ? 'rotate-180' : ''}`}
             />
           </button>
         )}
