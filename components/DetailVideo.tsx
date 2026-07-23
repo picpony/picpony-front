@@ -56,9 +56,8 @@ export default function DetailVideo({
       data-image-hero-role="detail"
       data-image-hero-id={imageId}
       data-image-hero-ready={previewReady || (!heroActive && videoReady) ? 'true' : undefined}
-      className="group relative flex-none cursor-zoom-in overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-900"
+      className="group relative flex-none cursor-default overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-900"
       style={style}
-      onClick={onOpen}
     >
       {finalSrc && (
         <video
