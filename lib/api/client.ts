@@ -62,7 +62,7 @@ export function buildSearchQuery(search?: string): string {
   if (s.contentFilter !== 'developer') {
     switch (s.contentFilter) {
       case 'safe':
-        tags = '-explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler';
+        tags = '-suggestive, -explicit, -questionable, -grotesque, -grimdark';
         break;
       case 'spoilers':
         tags = '-explicit, -questionable, -grotesque, -grimdark';
@@ -89,7 +89,7 @@ export function buildSearchQuery(search?: string): string {
   } catch { /* ignore */ }
 
   if (!tags && s.contentFilter !== 'developer') {
-    tags = '-explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, pony';
+    tags = '-suggestive, -explicit, -questionable, -grotesque, -grimdark, pony';
   }
 
   if (search) {
