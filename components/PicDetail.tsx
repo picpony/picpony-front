@@ -2,8 +2,7 @@
 
 import { startTransition, useEffect, useState, useCallback, useRef, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { MdDownload, MdOpenInNew, MdStar, MdStarBorder, MdChatBubbleOutline, MdShare, MdContentCopy, MdFlag, MdChevronLeft, MdChevronRight, MdReply } from 'react-icons/md';
+import { MdDownload, MdOpenInNew, MdStar, MdStarBorder, MdShare, MdContentCopy, MdFlag, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import Modal from '@/components/Modal';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
@@ -21,7 +20,11 @@ import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
-import CommentComposer from '@/components/CommentComposer';
+import TagList, { groupTags, EMPTY_TAG_GROUPS } from '@/components/TagList';
+import CommentSection from '@/components/CommentSection';
+
+const INITIAL_TAG_LIMIT = 80;
+const INITIAL_RELATION_TAG_LIMIT = 32;
 import {
   peekImageDetail,
   prefetchImageDetail,
@@ -54,32 +57,8 @@ function getServerDetail() {
   return null;
 }
 
-const INITIAL_TAG_LIMIT = 80;
-const TAG_BATCH_SIZE = 120;
-const INITIAL_RELATION_TAG_LIMIT = 32;
-const RELATION_TAG_BATCH_SIZE = 64;
 const commentsInFlight = new Map<string, Promise<Comment[]>>();
 const tagCountInFlight = new Map<string, Promise<{ tag: string; count: number | null }>>();
-type TagGroups = { artists: string[]; ocs: string[]; regularTags: string[] };
-const EMPTY_TAG_GROUPS: TagGroups = { artists: [], ocs: [], regularTags: [] };
-const tagGroupsCache = new WeakMap<string[], TagGroups>();
-
-function groupTags(tags: string[] | undefined) {
-  if (!tags?.length) return EMPTY_TAG_GROUPS;
-  const cached = tagGroupsCache.get(tags);
-  if (cached) return cached;
-
-  const groups: TagGroups = { artists: [], ocs: [], regularTags: [] };
-  tags.forEach((tag) => {
-    if (tag.startsWith('artist:')) groups.artists.push(tag.slice(7));
-    else if (tag.startsWith('oc:')) groups.ocs.push(tag.slice(3));
-    else if (!tag.startsWith('spoiler:') && !tag.startsWith('suggestion:')) {
-      groups.regularTags.push(tag);
-    }
-  });
-  tagGroupsCache.set(tags, groups);
-  return groups;
-}
 
 function getCommentsOnce(imageId: string) {
   const existing = commentsInFlight.get(imageId);
@@ -791,9 +770,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const { artists, ocs, regularTags } = deferredBodyReady
     ? groupTags(image.tags)
     : EMPTY_TAG_GROUPS;
-  const visibleArtists = artists.slice(0, visibleTagLimits.artists);
-  const visibleOcs = ocs.slice(0, visibleTagLimits.ocs);
-  const visibleRegularTags = regularTags.slice(0, visibleTagLimits.regular);
 
   const preferMediumDetail = (image.size || 0) > 16 * 1024 * 1024 ||
     (image.width || 0) * (image.height || 0) > 40_000_000;
@@ -1039,102 +1015,15 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               </div>
             )}
 
-            {/* Artists */}
-            {artists.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">艺术家</h3>
-                <div className="flex flex-wrap gap-2">
-                  {visibleArtists.map((artist, index) => (
-                    <span
-                      key={index}
-                      onClick={() => router.push(`/search?q=${encodeURIComponent(`artist:${artist}`)}`)}
-                      className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-medium rounded-lg border border-blue-100 dark:border-blue-800/30 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                    >
-                      {artist}
-                    </span>
-                  ))}
-                </div>
-                {visibleArtists.length < artists.length && (
-                  <button
-                    type="button"
-                    onClick={() => setVisibleTags({
-                      ...visibleTagLimits,
-                      imageId,
-                      artists: visibleTagLimits.artists + RELATION_TAG_BATCH_SIZE,
-                    })}
-                    className="mt-3 rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-                  >
-                    显示更多艺术家标签（剩余 {(artists.length - visibleArtists.length).toLocaleString()}）
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* OCs */}
-            {ocs.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">图中包含的 OC</h3>
-                <div className="flex flex-wrap gap-2">
-                  {visibleOcs.map((oc, index) => (
-                    <span
-                      key={index}
-                      onClick={() => router.push(`/search?q=${encodeURIComponent(`oc:${oc}`)}`)}
-                      className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-sm font-medium rounded-lg border border-purple-100 dark:border-purple-800/30 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-                    >
-                      {oc}
-                    </span>
-                  ))}
-                </div>
-                {visibleOcs.length < ocs.length && (
-                  <button
-                    type="button"
-                    onClick={() => setVisibleTags({
-                      ...visibleTagLimits,
-                      imageId,
-                      ocs: visibleTagLimits.ocs + RELATION_TAG_BATCH_SIZE,
-                    })}
-                    className="mt-3 rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-                  >
-                    显示更多 OC 标签（剩余 {(ocs.length - visibleOcs.length).toLocaleString()}）
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Tags */}
-            <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">标签 (Tag)</h3>
-              <div className="flex flex-wrap gap-2">
-                {visibleRegularTags.map((tag: string, index: number) => (
-                  <span
-                    key={index}
-                    onClick={() => handleTagClick(tag)}
-                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer border border-transparent hover:border-primary/30 max-w-full truncate"
-                    title="点击查看词库信息"
-                  >
-                    {tag}
-                  {showTagCounts && typeof tagCounts[tag] === 'number' && (
-                    <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-500 font-normal">
-                      {tagCounts[tag].toLocaleString()}
-                    </span>
-                  )}
-                  </span>
-                ))}
-              </div>
-              {visibleRegularTags.length < regularTags.length && (
-                <button
-                  type="button"
-                  onClick={() => setVisibleTags({
-                    ...visibleTagLimits,
-                    imageId,
-                    regular: visibleTagLimits.regular + TAG_BATCH_SIZE,
-                  })}
-                  className="mt-3 rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-                >
-                  显示更多标签（剩余 {(regularTags.length - visibleRegularTags.length).toLocaleString()}）
-                </button>
-              )}
-            </div>
+            <TagList
+              tags={image.tags}
+              visibleTagLimits={visibleTagLimits}
+              showTagCounts={showTagCounts}
+              tagCounts={tagCounts}
+              imageId={imageId}
+              onTagClick={handleTagClick}
+              onShowMore={setVisibleTags}
+            />
 
             {/* Action buttons */}
             <div className="pt-6 flex flex-col sm:flex-row gap-3">
@@ -1156,122 +1045,19 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               </a>
             </div>
 
-            {/* === Comments Section === */}
-            <div
-              ref={commentsSectionRef}
-              className="mt-8 border-t border-slate-100 pt-8 dark:border-slate-700"
-            >
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
-                <MdChatBubbleOutline className="text-primary" size={24} />
-                评论 ({comments.length})
-              </h3>
-              {/* Comment editor */}
-              <div className="mb-8 flex gap-3" id="comment-editor-area">
-                <div ref={commentEditorMountRef} className="flex-1">
-                  <CommentComposer
-                    key={imageId}
-                    imageId={imageId}
-                    mounted={shouldMountCommentEditor}
-                    replyTo={replyTo}
-                    loadComments={fetchComments}
-                    onCancelReply={handleCancelReply}
-                    onCommentsLoaded={setComments}
-                  />
-                </div>
-              </div>
-
-              {/* Comments list */}
-              {isLoadingComments ? (
-                <div className="flex justify-center py-8">
-                  <Spinner size="lg" />
-                </div>
-              ) : comments.length > 0 ? (
-                <div className="space-y-4">
-                  {comments.map((comment) => (
-                    <div key={`${comment.source}-${comment.id}`} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 flex gap-4">
-                      <div className="flex-shrink-0">
-                        {comment.user_id ? (
-                          <Link
-                            href={comment.source === 'trixiebooru' ? `/derpi/user/${comment.user_id}` : `/user/${comment.user_id}`}
-                            title={`查看 ${comment.username} 的个人资料`}
-                            scroll={false}
-                            className="block rounded-full ring-2 ring-transparent hover:ring-primary/40 transition-all"
-                          >
-                            {comment.avatar ? (
-                              <FadeInImage
-                                src={comment.source === 'trixiebooru' ? comment.avatar : `https://picpony.top/${comment.avatar}`}
-                                alt={`${comment.username}`}
-                                width={40}
-                                height={40}
-                                className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20">
-                                {comment.username.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                          </Link>
-                        ) : (
-                          comment.avatar ? (
-                            <FadeInImage
-                              src={comment.source === 'trixiebooru' ? comment.avatar : `https://picpony.top/${comment.avatar}`}
-                              alt={`${comment.username}`}
-                              width={40}
-                              height={40}
-                              className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-600"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20">
-                              {comment.username.charAt(0).toUpperCase()}
-                            </div>
-                          )
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
-                              {comment.username}
-                            </span>
-                            {comment.source === 'trixiebooru' && (
-                              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded border border-blue-200">
-                                Derpibooru
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleReply(comment)}
-                              title="回复"
-                              className="text-slate-400 hover:text-primary transition-colors p-1 rounded"
-                            >
-                              <MdReply size={14} />
-                            </button>
-                            <span className="text-xs text-slate-500">
-                              {new Date(comment.created_at).toLocaleString('zh-CN', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap break-words">
-                          <RichTextRenderer content={comment.body} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
-                  滚木
-                </div>
-              )}
-            </div>
+            <CommentSection
+              comments={comments}
+              isLoadingComments={isLoadingComments}
+              imageId={imageId}
+              replyTo={replyTo}
+              commentsSectionRef={commentsSectionRef}
+              commentEditorMountRef={commentEditorMountRef}
+              shouldMountCommentEditor={shouldMountCommentEditor}
+              fetchComments={fetchComments}
+              handleReply={handleReply}
+              handleCancelReply={handleCancelReply}
+              setComments={setComments}
+            />
 
             </>
             )}

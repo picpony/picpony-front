@@ -5,109 +5,30 @@ import {
   peekImageDetail,
   prefetchImageDetail,
 } from '@/lib/detail';
-
-type HeroDirection = 'forward' | 'back';
-type HeroPhase = 'idle' | 'opening' | 'closing';
-
-export interface ImageHeroSnapshot {
-  image: PonyImage;
-  previewSrc: string;
-  previewFrame: HTMLCanvasElement;
-  sourceKey: string | null;
-  mediaType: 'image' | 'video';
-  canAnimate: boolean;
-  createdAt: number;
-}
-
-export interface ImageHeroBackgroundLocation {
-  pathname: string;
-  search: string;
-}
-
-export interface ImageHeroStageState {
-  phase: 'idle' | 'opening' | 'landed';
-  snapshot: ImageHeroSnapshot | null;
-}
-
-type Rect = {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-};
-
-type Host = Rect & { element: HTMLElement };
-
-type ShadeLayer = {
-  element: HTMLElement;
-};
-
-type Flight = {
-  layer: HTMLElement;
-  compensator: HTMLElement;
-  flyer: HTMLElement;
-  image: HTMLCanvasElement;
-  shade: ShadeLayer | null;
-  startRect: Rect;
-  radius: string;
-  host: Host;
-};
-
-type FlightMotion = {
-  finished: Promise<void>;
-  reverse: () => Promise<void>;
-  finish: () => void;
-  retarget: (x: number, y: number, endpoint?: 'from' | 'to') => void;
-  cancel: () => void;
-};
-
-type ScrollSync = {
-  sync: () => void;
-  flush: (preferRoute?: boolean) => void;
-  waitForRelease: () => Promise<void>;
-  stop: () => void;
-};
-
-type TransitionScrollNodes = {
-  stageScroller: HTMLElement | null;
-  routeScroller: HTMLElement | null;
-  targetWrap: HTMLElement | null;
-};
-
-type OpeningInterrupt = {
-  promise: Promise<void>;
-  requested: boolean;
-  navigationHandled: boolean;
-  replayNavigation: (() => void) | null;
-  request: (navigationHandled: boolean) => void;
-  dispose: () => void;
-};
-
-type ImageHeroNavigationOptions = {
-  backgroundLocation?: ImageHeroBackgroundLocation;
-  detailHref?: string;
-  historyMode?: 'create' | 'restore' | 'none';
-};
-
-type ImageHeroHistoryMarker = {
-  version: 1;
-  token: string;
-  kind: 'base' | 'guard';
-  imageId: number;
-  detailHref: string;
-  background: ImageHeroBackgroundLocation;
-};
-
-type ImageHeroHistoryRecord = {
-  token: string;
-  imageId: number;
-  detailHref: string;
-  background: ImageHeroBackgroundLocation;
-  snapshot: ImageHeroSnapshot;
-};
-
-type ImageHeroHistoryPosition = 'unknown' | 'background' | 'base' | 'guard';
-type ClosingHistoryOutcome = 'commit' | 'handled' | 'restore-detail';
+import type {
+  HeroDirection,
+  HeroPhase,
+  ImageHeroSnapshot,
+  ImageHeroBackgroundLocation,
+  ImageHeroStageState,
+  Rect,
+  Host,
+  Flight,
+  FlightMotion,
+  ScrollSync,
+  OpeningInterrupt,
+  ImageHeroNavigationOptions,
+  ImageHeroHistoryMarker,
+  ImageHeroHistoryRecord,
+  ImageHeroHistoryPosition,
+  ClosingHistoryOutcome,
+  VisualMedia,
+} from './hero/types';
+export type {
+  ImageHeroSnapshot,
+  ImageHeroBackgroundLocation,
+  ImageHeroStageState,
+} from './hero/types';
 
 const SNAPSHOT_TTL = 2 * 60 * 1000;
 const ROUTE_TIMEOUT = 4000;
@@ -621,8 +542,6 @@ function getHost(): Host | null {
   const element = document.querySelector<HTMLElement>(HOST_SELECTOR);
   return element ? { element, ...getRect(element) } : null;
 }
-
-type VisualMedia = HTMLImageElement | HTMLVideoElement;
 
 const HERO_FRAME_CACHE_LIMIT = 4;
 const heroFrameCache = new Map<VisualMedia, {
