@@ -28,6 +28,17 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
   const dragStartTimeRef = useRef(0);
   const lastSampleTimeRef = useRef(0);
 
+  // 用原生 touchstart（非被动模式）确保触屏上 preventDefault 生效
+  useEffect(() => {
+    const btn = sliderBtnRef.current;
+    if (!btn) return;
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault(); // { passive: false } 确保此行生效，阻止浏览器拦截手势
+      handleStart(e as unknown as React.TouchEvent);
+    };
+    btn.addEventListener('touchstart', onTouchStart, { passive: false });
+    return () => btn.removeEventListener('touchstart', onTouchStart);
+  }, [handleStart]);
   const maxSliderX = 260;
   const btnWidth = 50;
 
@@ -226,9 +237,8 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
                 ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500 dark:bg-emerald-600 dark:border-emerald-600"
                 : "cursor-grab text-slate-600 dark:text-slate-300"
             } ${verifying ? "pointer-events-none opacity-70" : ""}`}
-            style={{ left: `${sliderX}px` }}
+            style={{ left: `${sliderX}px`, touchAction: "none" }}
             onMouseDown={handleStart}
-            onTouchStart={handleStart}
           >
             &rarr;
           </div>
