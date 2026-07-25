@@ -2,21 +2,30 @@
 
 import type { CSSProperties } from 'react';
 import type { PonyImage } from '@/lib/types/image';
-import type { HeroDirection } from './state';
+import type { HeroDirection } from './types';
+import {
+  HERO_BACKGROUND_SINK_SCALE_DELTA,
+  HERO_BACKGROUND_SINK_Y_PX,
+  HERO_DURATIONS,
+  HERO_KEYFRAME_SAMPLES,
+  HERO_MAX_HEIGHT_DVH,
+  HERO_MEDIA_BREAKPOINT_PX,
+  HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX,
+  HERO_MEDIA_MAX_WIDTH_PX,
+  HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX,
+  MOTION_RESPONSE,
+} from './constants';
 
-// The detail media box is capped at this fraction of the dynamic viewport
-// height. The same cap bounds captured hero frame dimensions.
-export const HERO_MAX_HEIGHT_DVH = 80;
-export const HERO_MEDIA_BREAKPOINT_PX = 640;
-export const HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX = 48;
-export const HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX = 128;
-export const HERO_MEDIA_MAX_WIDTH_PX = 1248;
-export const HERO_DURATIONS: Record<HeroDirection, number> = {
-  forward: 300,
-  back: 245,
+export {
+  HERO_MAX_HEIGHT_DVH,
+  HERO_MEDIA_BREAKPOINT_PX,
+  HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX,
+  HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX,
+  HERO_MEDIA_MAX_WIDTH_PX,
+  HERO_DURATIONS,
+  HERO_BACKGROUND_SINK_Y_PX,
+  HERO_BACKGROUND_SINK_SCALE_DELTA,
 };
-export const HERO_BACKGROUND_SINK_Y_PX = 10;
-export const HERO_BACKGROUND_SINK_SCALE_DELTA = 0.015;
 
 export type HeroRect = {
   top: number;
@@ -26,17 +35,6 @@ export type HeroRect = {
 };
 
 export type HeroHost = HeroRect & { element: HTMLElement };
-
-const MOTION_RESPONSE: Record<HeroDirection, {
-  rate: number;
-  initialVelocity: number;
-}> = {
-  // A critically damped response keeps the flight lively without overshooting
-  // its exact landing geometry. These rates still leave visible motion in the
-  // final third, so the animation finishes decisively instead of coasting.
-  forward: { rate: 5.6, initialVelocity: 1 },
-  back: { rate: 5.9, initialVelocity: 1 },
-};
 
 type HeroMediaDimensions = Pick<PonyImage, 'width' | 'height'>;
 
@@ -96,19 +94,35 @@ export function heroPhysicalProgress(time: number, direction: HeroDirection) {
   return time === 1 ? 1 : response(time) / end;
 }
 
-export function heroMotionFrames(direction: HeroDirection, count = 32) {
-  return Array.from({ length: count }, (_, index) => {
+type HeroProgressFrame = { offset: number; progress: number };
+
+// Progress tables are pure functions of direction + sample count. Cache them so
+// open/close/reverse flights reuse the same arrays instead of reallocating and
+// re-evaluating the spring at every transition.
+const progressFrameCache = new Map<string, readonly HeroProgressFrame[]>();
+
+function getHeroProgressFrames(direction: HeroDirection, count: number) {
+  const key = `${direction}:${count}`;
+  const cached = progressFrameCache.get(key);
+  if (cached) return cached;
+
+  const frames = Array.from({ length: count }, (_, index) => {
     const offset = index / (count - 1);
     return { offset, progress: heroPhysicalProgress(offset, direction) };
   });
+  progressFrameCache.set(key, frames);
+  return frames;
+}
+
+export function heroMotionFrames(direction: HeroDirection, count = 32) {
+  return getHeroProgressFrames(direction, count);
 }
 
 export function heroGeometryFrames(direction: HeroDirection) {
-  const count = Math.ceil((HERO_DURATIONS[direction] / 1000) * 120) + 1;
-  return Array.from({ length: count }, (_, index) => {
-    const offset = index / (count - 1);
-    return { offset, progress: heroPhysicalProgress(offset, direction) };
-  });
+  // Fixed sample counts (not device-scaled). 32/28 points track the spring
+  // closely while WAAPI interpolates between them — denser than needed for
+  // visual fidelity and far cheaper than a 120fps table rebuild every reverse.
+  return getHeroProgressFrames(direction, HERO_KEYFRAME_SAMPLES[direction]);
 }
 
 export function interpolateHeroValue(start: number, end: number, progress: number) {
@@ -177,6 +191,43 @@ export function getHeroFlyerFrame(
   };
 }
 
+/** Write flyer outer transform into an existing keyframe object (no alloc). */
+export function writeHeroFlyerFrame(
+  base: HeroRect,
+  displayTop: number,
+  displayLeft: number,
+  displayWidth: number,
+  displayHeight: number,
+  host: HeroHost,
+  radius: number,
+  out: { borderRadius: string; transform: string },
+) {
+  const localTop = displayTop - host.top;
+  const localLeft = displayLeft - host.left;
+  const scaleX = displayWidth / base.width;
+  const scaleY = displayHeight / base.height;
+  // Radius is applied on the unscaled clip child (see writeHeroClipRadius).
+  out.borderRadius = `${radius / scaleX}px / ${radius / scaleY}px`;
+  out.transform = `translate3d(${localLeft}px, ${localTop}px, 0) scale(${scaleX}, ${scaleY})`;
+}
+
+/** Local-space radius for the clip child (parent carries scale). */
+export function writeHeroClipRadius(
+  base: HeroRect,
+  displayWidth: number,
+  displayHeight: number,
+  radius: number,
+  out: { borderRadius: string },
+) {
+  const scaleX = displayWidth / base.width;
+  const scaleY = displayHeight / base.height;
+  out.borderRadius = `${radius / scaleX}px / ${radius / scaleY}px`;
+}
+
 export function getHeroBackgroundSinkTransform(amount: number) {
-  return `translate3d(0, ${HERO_BACKGROUND_SINK_Y_PX * amount}px, 0) scale(${1 - HERO_BACKGROUND_SINK_SCALE_DELTA * amount})`;
+  // Keep the original translate + scale sink. The visual is isolated in its
+  // own compositor layer, so the depth cue does not require any layout work.
+  if (amount <= 0.001) return 'none';
+  const clamped = Math.min(1, Math.max(0, amount));
+  return `translate3d(0, ${HERO_BACKGROUND_SINK_Y_PX * clamped}px, 0) scale(${1 - HERO_BACKGROUND_SINK_SCALE_DELTA * clamped})`;
 }

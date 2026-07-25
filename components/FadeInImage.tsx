@@ -8,40 +8,32 @@ interface FadeInImageProps extends ImageProps {
   eager?: boolean;
 }
 
+/**
+ * Lightweight fade-in. Avoids per-image rAF + long CSS transitions that thrash
+ * the gallery scroll frame on low-end devices when many thumbs decode at once.
+ */
 export default function FadeInImage({ className, onLoad, eager = false, ...props }: FadeInImageProps) {
   const [isLoaded, setIsLoaded] = useState(eager);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
+    // Synchronous complete check — no rAF (rAF during fling = jank).
     if (imgRef.current?.complete) {
-      requestAnimationFrame(() => {
-        setIsLoaded(true);
-      });
+      setIsLoaded(true);
     }
   }, [props.src]);
 
   return (
-    <div 
-      className="relative w-full h-full flex items-center justify-center overflow-hidden"
-    >
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden contain-paint">
       <Image
         {...props}
-        alt={props.alt || ""}
+        alt={props.alt || ''}
         ref={imgRef}
-        className={`
-          ${className || ''}
-          transition-opacity duration-500 ease-in-out
-          ${isLoaded ? 'opacity-100' : 'opacity-0'}
-        `}
+        className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-150 ease-out`}
         onLoad={(e) => {
           setIsLoaded(true);
-          if (onLoad) {
-            onLoad(e);
-          }
+          onLoad?.(e);
         }}
-        // Keep the explicit `eager` escape hatch, but let the browser schedule
-        // all ordinary thumbnails natively instead of mounting them during a
-        // scroll when a per-image IntersectionObserver fires.
         loading={props.loading ?? (eager ? 'eager' : 'lazy')}
         decoding={props.decoding ?? 'async'}
       />

@@ -2,6 +2,7 @@
 
 import { getImage } from '@/lib/api/derpi';
 import type { PonyImage } from '@/lib/types/image';
+import { imageHeroController } from './hero/controller';
 
 const CACHE_TTL = 2 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 48;
@@ -21,6 +22,7 @@ type DetailEntry = {
   status: 'queued' | 'loading' | 'resolved';
   controller?: AbortController;
   value?: DetailResult;
+  publishedValue?: DetailResult;
 };
 
 const detailCache = new Map<number, DetailEntry>();
@@ -29,6 +31,10 @@ const immediateQueue: number[] = [];
 const backgroundQueue: number[] = [];
 let activeRequests = 0;
 let activeBackgroundRequests = 0;
+const pendingNotifications = new Set<number>();
+let notificationFrame = 0;
+let notificationVisibleFrames = 0;
+let notificationVisibilityListenerInstalled = false;
 
 function isExpired(entry: DetailEntry, timestamp = Date.now()) {
   return entry.status === 'resolved' && timestamp - entry.createdAt >= CACHE_TTL;
@@ -36,7 +42,9 @@ function isExpired(entry: DetailEntry, timestamp = Date.now()) {
 
 function deleteExpiredEntries(timestamp = Date.now()) {
   detailCache.forEach((entry, imageId) => {
-    if (isExpired(entry, timestamp)) detailCache.delete(imageId);
+    if (isExpired(entry, timestamp) && !detailListeners.has(imageId)) {
+      detailCache.delete(imageId);
+    }
   });
 }
 
@@ -60,8 +68,58 @@ function normalizeId(id: number | string) {
   return typeof id === 'number' ? id : Number.parseInt(id, 10);
 }
 
+function flushDetailNotifications() {
+  notificationFrame = 0;
+  if (document.visibilityState !== 'visible') return;
+  if (notificationVisibleFrames > 0) {
+    notificationVisibleFrames -= 1;
+    scheduleDetailNotifications();
+    return;
+  }
+  const imageIds = Array.from(pendingNotifications).filter((imageId) => (
+    imageHeroController.isDetailDataPublishable(imageId)
+  ));
+  imageIds.forEach((imageId) => {
+    pendingNotifications.delete(imageId);
+    const entry = detailCache.get(imageId);
+    if (entry?.status === 'resolved' && entry.value) {
+      entry.publishedValue = entry.value;
+    }
+    detailListeners.get(imageId)?.forEach((listener) => listener());
+  });
+}
+
+function ensureNotificationVisibilityListener() {
+  if (notificationVisibilityListenerInstalled || typeof document === 'undefined') return;
+  notificationVisibilityListenerInstalled = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') notificationVisibleFrames = 2;
+    if (pendingNotifications.size > 0) scheduleDetailNotifications();
+  });
+  // Publication is a controller milestone rather than a DOM/data-attribute
+  // convention. The active opening route can receive its data while input is
+  // still moving; unrelated responses remain queued until their owner is safe.
+  imageHeroController.subscribeRuntime(() => {
+    if (pendingNotifications.size > 0) scheduleDetailNotifications();
+  });
+}
+
+function scheduleDetailNotifications() {
+  ensureNotificationVisibilityListener();
+  if (notificationFrame || typeof window === 'undefined' || pendingNotifications.size === 0) return;
+  // A single paint-bound dispatch keeps cache updates out of the flight's
+  // geometry frame. Hidden documents are resumed by visibilitychange, not a
+  // polling timeout that can wake a background tab.
+  notificationFrame = window.requestAnimationFrame(flushDetailNotifications);
+}
+
 function notifyImageDetail(imageId: number) {
-  detailListeners.get(imageId)?.forEach((listener) => listener());
+  if (typeof window === 'undefined') {
+    detailListeners.get(imageId)?.forEach((listener) => listener());
+    return;
+  }
+  pendingNotifications.add(imageId);
+  scheduleDetailNotifications();
 }
 
 function createAbortError() {
@@ -255,13 +313,32 @@ export function cancelImageDetailPrefetch(id: number | string) {
     : false;
 }
 
+/**
+ * Cancel background detail work for every image except `preserveId`.
+ * Immediate/activated targets and entries with live UI subscribers are kept.
+ * Call when a real open starts so mid-flight network slots stay on the flyer id.
+ */
+export function cancelOtherBackgroundImageDetailPrefetch(preserveId: number | string) {
+  const keepId = normalizeId(preserveId);
+  let cancelled = 0;
+  const imageIds = Array.from(detailCache.keys());
+  for (const imageId of imageIds) {
+    if (imageId === keepId) continue;
+    const entry = detailCache.get(imageId);
+    if (!entry) continue;
+    if (cancelQueuedEntry(imageId, entry) || cancelLoadingEntry(imageId, entry)) {
+      cancelled += 1;
+    }
+  }
+  if (cancelled > 0) runDetailQueue();
+  return cancelled;
+}
+
 export function peekImageDetail(id: number | string) {
   const imageId = normalizeId(id);
   const cached = detailCache.get(imageId);
   if (!cached) return null;
-  if (isExpired(cached)) {
-    detailCache.delete(imageId);
-    return null;
-  }
-  return cached.value ?? null;
+  // useSyncExternalStore snapshots must be pure. TTL eviction happens on
+  // request/trim paths, never during render.
+  return cached.publishedValue ?? null;
 }

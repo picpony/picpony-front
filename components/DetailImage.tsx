@@ -14,6 +14,17 @@ import {
   getHeroMediaRenderedWidth,
   getHeroMediaResponsiveSizes,
 } from '@/lib/hero/geometry';
+import { warmImageHeroFrame } from '@/lib/hero';
+
+type DetailMediaTargetCallback = (
+  surfaceId: string,
+  target: HTMLDivElement | null,
+) => void;
+
+type DetailMediaReadyCallback = (
+  surfaceId: string,
+  target: HTMLDivElement,
+) => void;
 
 type DetailImageProps = {
   imageId: number;
@@ -23,8 +34,23 @@ type DetailImageProps = {
   width: number;
   height: number;
   style: CSSProperties;
+  /** Preview stays on top until swap (heroActive true). */
   heroActive: boolean;
+  /**
+   * Mount the full-resolution layer under the preview while still heroActive.
+   * Lets decode finish without a mid-scroll mount when preview is cleared.
+   */
+  preloadFinal?: boolean;
+  surfaceId?: string;
+  onTargetChange?: DetailMediaTargetCallback;
+  onPreviewReady?: DetailMediaReadyCallback;
+  onFinalReady?: DetailMediaReadyCallback;
   onOpen: () => void;
+};
+
+type ImagePrefetchLease = {
+  source: string;
+  release: () => void;
 };
 
 function shouldBypassImageOptimization(src: string) {
@@ -54,6 +80,25 @@ function getPrefetchCandidate(srcSet: string | undefined, fallback: string, widt
     ?? fallback;
 }
 
+function createImagePrefetchLease(source: string, href: string): ImagePrefetchLease {
+  const link = document.createElement('link');
+  link.rel = 'prefetch';
+  link.as = 'image';
+  link.fetchPriority = 'low';
+  link.href = href;
+  document.head.appendChild(link);
+
+  let released = false;
+  return {
+    source,
+    release() {
+      if (released) return;
+      released = true;
+      link.remove();
+    },
+  };
+}
+
 export default function DetailImage({
   imageId,
   previewSrc,
@@ -63,15 +108,66 @@ export default function DetailImage({
   height,
   style,
   heroActive,
+  preloadFinal = false,
+  surfaceId,
+  onTargetChange,
+  onPreviewReady,
+  onFinalReady,
   onOpen,
 }: DetailImageProps) {
   const targetRef = useRef<HTMLDivElement>(null);
-  const prefetchLinkRef = useRef<HTMLLinkElement | null>(null);
+  const prefetchLeaseRef = useRef<ImagePrefetchLease | null>(null);
   const sourceRef = useRef({ previewSrc, finalSrc });
-  const shouldPrefetchFinal = heroActive;
+  const surfaceIdRef = useRef(surfaceId);
+  const onPreviewReadyRef = useRef(onPreviewReady);
+  const onFinalReadyRef = useRef(onFinalReady);
+  const previewReadyRef = useRef(false);
+  const finalReadyRef = useRef(false);
+  const publishedPreviewSurfaceRef = useRef<string | null>(null);
+  const publishedFinalSurfaceRef = useRef<string | null>(null);
   const hasPreview = Boolean(previewSrc);
-  const mountFinal = !heroActive || !hasPreview;
+  // Always keep a stable preview on top while heroActive. Optionally preload
+  // final underneath so clearing heroActive is only a CSS swap (no mount jank).
+  const mountFinal = Boolean(finalSrc) && (!heroActive || !hasPreview || preloadFinal);
   const responsiveSizes = getHeroMediaResponsiveSizes({ width, height });
+
+  const publishPreviewReady = useCallback(() => {
+    const readySurfaceId = surfaceIdRef.current;
+    const target = targetRef.current;
+    const callback = onPreviewReadyRef.current;
+    if (!readySurfaceId || !target || !callback ||
+        publishedPreviewSurfaceRef.current === readySurfaceId) {
+      return;
+    }
+    publishedPreviewSurfaceRef.current = readySurfaceId;
+    callback(readySurfaceId, target);
+  }, []);
+
+  const publishFinalReady = useCallback(() => {
+    const readySurfaceId = surfaceIdRef.current;
+    const target = targetRef.current;
+    const callback = onFinalReadyRef.current;
+    if (!readySurfaceId || !target || !callback ||
+        publishedFinalSurfaceRef.current === readySurfaceId) {
+      return;
+    }
+    publishedFinalSurfaceRef.current = readySurfaceId;
+    callback(readySurfaceId, target);
+  }, []);
+
+  const markPreviewReady = useCallback(() => {
+    previewReadyRef.current = true;
+    publishPreviewReady();
+  }, [publishPreviewReady]);
+
+  const markFinalReady = useCallback(() => {
+    const target = targetRef.current;
+    if (!target) return;
+    finalReadyRef.current = true;
+    target.setAttribute('data-image-detail-final-ready', 'true');
+    publishFinalReady();
+    if (!sourceRef.current.previewSrc) markPreviewReady();
+  }, [markPreviewReady, publishFinalReady]);
 
   useLayoutEffect(() => {
     const target = targetRef.current;
@@ -79,18 +175,65 @@ export default function DetailImage({
     if (!target) return;
 
     if (previous.previewSrc !== previewSrc) {
-      target.removeAttribute('data-image-detail-preview-ready');
-      target.removeAttribute('data-image-hero-ready');
+      previewReadyRef.current = false;
+      publishedPreviewSurfaceRef.current = null;
     }
     if (previous.finalSrc !== finalSrc) {
+      finalReadyRef.current = false;
+      publishedFinalSurfaceRef.current = null;
       target.removeAttribute('data-image-detail-final-ready');
-      if (!hasPreview) target.removeAttribute('data-image-hero-ready');
+      if (!previewSrc) {
+        previewReadyRef.current = false;
+        publishedPreviewSurfaceRef.current = null;
+      }
     }
     sourceRef.current = { previewSrc, finalSrc };
-  }, [finalSrc, hasPreview, previewSrc]);
+    if (!previewSrc && finalReadyRef.current) previewReadyRef.current = true;
+  }, [finalSrc, previewSrc]);
+
+  useLayoutEffect(() => {
+    if (mountFinal) return;
+    finalReadyRef.current = false;
+    publishedFinalSurfaceRef.current = null;
+    targetRef.current?.removeAttribute('data-image-detail-final-ready');
+  }, [mountFinal]);
+
+  useLayoutEffect(() => {
+    onPreviewReadyRef.current = onPreviewReady;
+    onFinalReadyRef.current = onFinalReady;
+    surfaceIdRef.current = surfaceId;
+    if (!surfaceId) {
+      publishedPreviewSurfaceRef.current = null;
+      publishedFinalSurfaceRef.current = null;
+      return;
+    }
+    if (previewReadyRef.current) publishPreviewReady();
+    if (finalReadyRef.current) publishFinalReady();
+  }, [
+    finalSrc,
+    onFinalReady,
+    onPreviewReady,
+    previewSrc,
+    publishFinalReady,
+    publishPreviewReady,
+    surfaceId,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!surfaceId || !onTargetChange) return;
+    onTargetChange(surfaceId, targetRef.current);
+    return () => onTargetChange(surfaceId, null);
+  }, [onTargetChange, surfaceId]);
 
   useEffect(() => {
-    if (!shouldPrefetchFinal || !finalSrc) return;
+    if (heroActive || !finalReadyRef.current) return;
+    // Capture a static final frame away from the close intent. GIF/APNG media
+    // is intentionally ignored by the warmer and is captured live on return.
+    return warmImageHeroFrame(targetRef.current);
+  }, [finalSrc, heroActive]);
+
+  useEffect(() => {
+    if ((!heroActive && !preloadFinal) || !finalSrc || mountFinal) return;
 
     const { props } = getImageProps({
       src: finalSrc,
@@ -102,19 +245,17 @@ export default function DetailImage({
       loading: 'eager',
       unoptimized: shouldBypassImageOptimization(finalSrc),
     });
-    const link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.as = 'image';
-    link.fetchPriority = 'low';
-    link.href = getPrefetchCandidate(props.srcSet, props.src, width, height);
-    document.head.appendChild(link);
-    prefetchLinkRef.current = link;
+    const lease = createImagePrefetchLease(
+      finalSrc,
+      getPrefetchCandidate(props.srcSet, props.src, width, height),
+    );
+    prefetchLeaseRef.current = lease;
 
     return () => {
-      link.remove();
-      if (prefetchLinkRef.current === link) prefetchLinkRef.current = null;
+      lease.release();
+      if (prefetchLeaseRef.current === lease) prefetchLeaseRef.current = null;
     };
-  }, [alt, finalSrc, height, responsiveSizes, shouldPrefetchFinal, width]);
+  }, [alt, finalSrc, height, heroActive, mountFinal, preloadFinal, responsiveSizes, width]);
 
   const markFinalDecoded = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
     const element = event.currentTarget;
@@ -126,16 +267,17 @@ export default function DetailImage({
         if (!element.complete || element.naturalWidth === 0) return;
       }
       requestAnimationFrame(() => {
-        if (!element.isConnected || element.currentSrc !== loadedSrc) return;
-        const target = targetRef.current;
-        if (!target) return;
-        target.setAttribute('data-image-detail-final-ready', 'true');
-        if (!hasPreview) target.setAttribute('data-image-hero-ready', 'true');
-        prefetchLinkRef.current?.remove();
-        prefetchLinkRef.current = null;
+        if (sourceRef.current.finalSrc !== finalSrc ||
+            !element.isConnected || element.currentSrc !== loadedSrc) return;
+        const lease = prefetchLeaseRef.current;
+        if (lease?.source === finalSrc) {
+          prefetchLeaseRef.current = null;
+          lease.release();
+        }
+        markFinalReady();
       });
     })();
-  }, [hasPreview]);
+  }, [finalSrc, markFinalReady]);
 
   const markPreviewDecoded = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
     if (!previewSrc) return;
@@ -145,19 +287,15 @@ export default function DetailImage({
       try {
         await element.decode();
       } catch {
-        // `load` already guarantees a paintable thumbnail in browsers that do
-        // not implement decode reliably for every image format.
         if (!element.complete || element.naturalWidth === 0) return;
       }
       requestAnimationFrame(() => {
-        if (!element.isConnected || element.currentSrc !== loadedSrc) return;
-        const target = targetRef.current;
-        if (!target) return;
-        target.setAttribute('data-image-detail-preview-ready', 'true');
-        target.setAttribute('data-image-hero-ready', 'true');
+        if (sourceRef.current.previewSrc !== previewSrc ||
+            !element.isConnected || element.currentSrc !== loadedSrc) return;
+        markPreviewReady();
       });
     })();
-  }, [previewSrc]);
+  }, [markPreviewReady, previewSrc]);
 
   return (
     <div
@@ -178,7 +316,10 @@ export default function DetailImage({
           sizes={responsiveSizes}
           quality={82}
           loading="eager"
-          fetchPriority={heroActive ? 'low' : 'high'}
+          // A confirmed detail route owns the final image request even while
+          // its preview is still the visual authority. Deferring this behind
+          // input activity made a held touch/wheel appear to stop loading.
+          fetchPriority="high"
           unoptimized={shouldBypassImageOptimization(finalSrc)}
           onLoad={markFinalDecoded}
           data-image-detail-layer="final"
@@ -193,11 +334,12 @@ export default function DetailImage({
           width={Math.max(1, width)}
           height={Math.max(1, height)}
           loading="eager"
-          fetchPriority={heroActive ? 'low' : 'high'}
+          fetchPriority="high"
           unoptimized
           onLoad={markPreviewDecoded}
           data-image-detail-layer="preview"
-          className="image-detail-preview-native pointer-events-none block h-full w-full object-contain"
+          // Absolute so preloading final never shifts the box.
+          className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
         />
       )}
       <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/10">

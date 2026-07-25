@@ -5,6 +5,10 @@ import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
 import { useAuth } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
 import { getAssetUrl } from '@/lib/utils';
+import {
+  isImageHeroTransitionRunning,
+  waitForImageHeroTransition,
+} from '@/lib/hero';
 import '@wangeditor/editor/dist/css/style.css';
 
 import type { IDomEditor, Toolbar, IEditorConfig, IToolbarConfig } from '@wangeditor/editor';
@@ -173,11 +177,11 @@ export default function RichTextEditor({
     initEditor().catch(err => console.error('编辑器初始化异常:', err));
 
     return () => {
-      if (document.documentElement.dataset.imageHeroTransition) {
-        window.setTimeout(destroyEditor, 450);
-      } else {
+      if (!isImageHeroTransitionRunning()) {
         destroyEditor();
+        return;
       }
+      void waitForImageHeroTransition().then(destroyEditor);
     };
   }, []);
 

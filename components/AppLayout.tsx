@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
+import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSelectedLayoutSegment } from "next/navigation";
+import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from "next/navigation";
 import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
@@ -17,8 +17,10 @@ import {
 } from "./BackgroundLocation";
 import { api } from "@/lib/api";
 import {
+  getImageHeroRuntime,
   getImageHeroBackgroundLocation,
   initializeImageHeroHistory,
+  subscribeImageHeroRuntime,
 } from "@/lib/hero";
 import HeroStage from '@/components/HeroStage';
 
@@ -155,24 +157,60 @@ export default function AppLayout({
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
+  const liveSearchParams = useSearchParams();
+  const liveSearch = liveSearchParams.toString();
   const imageDetailSegment = useSelectedLayoutSegment('imageDetail');
   const imageDetailId = pathname.match(/^\/pic\/([^/]+)$/)?.[1];
   const isImageDetailOpen = Boolean(
     imageDetailId && imageDetailSegment === imageDetailId
   );
-  const imageHeroBackground = isImageDetailOpen
-    ? getImageHeroBackgroundLocation()
-    : null;
-  const backgroundPathname = isImageDetailOpen
-    ? imageHeroBackground?.pathname ?? '/'
-    : pathname;
-  const frozenBackgroundSearch = isImageDetailOpen
-    ? imageHeroBackground?.search ?? ''
-    : null;
+  const imageHeroRuntime = useSyncExternalStore(
+    subscribeImageHeroRuntime,
+    getImageHeroRuntime,
+    getImageHeroRuntime,
+  );
+  const retainedHeroBackground = getImageHeroBackgroundLocation();
+  const activeHeroBackground = imageHeroRuntime.background ?? retainedHeroBackground;
+  const activeBackgroundSearch = activeHeroBackground
+    ? new URLSearchParams(activeHeroBackground.search).toString()
+    : '';
+  const reactRouteAtBackground = Boolean(
+    activeHeroBackground &&
+    pathname === activeHeroBackground.pathname &&
+    liveSearch === activeBackgroundSearch,
+  );
+  const browserAtBackground = Boolean(
+    activeHeroBackground &&
+    typeof window !== 'undefined' &&
+    window.location.pathname === activeHeroBackground.pathname &&
+    new URLSearchParams(window.location.search).toString() === activeBackgroundSearch,
+  );
+  // History reaches the background before App Router publishes pathname,
+  // parallel-slot and search snapshots together. Keep the controller's exact
+  // background location through that one-way lag so query pages never observe
+  // a transient empty search and refetch themselves.
+  const bridgeRouteCommit = Boolean(
+    activeHeroBackground &&
+    browserAtBackground &&
+    !reactRouteAtBackground,
+  );
+  const imageHeroBackground = imageHeroRuntime.background ?? (
+    bridgeRouteCommit ? retainedHeroBackground : null
+  );
+  const backgroundPathname = imageHeroBackground?.pathname ?? (
+    isImageDetailOpen ? '/' : pathname
+  );
+  const frozenBackgroundSearch = imageHeroBackground?.search ?? (
+    isImageDetailOpen ? '' : null
+  );
 
   useEffect(() => {
-    initializeImageHeroHistory();
-  }, []);
+    initializeImageHeroHistory({
+      push: (href) => router.push(href, { scroll: false }),
+      replace: (href) => router.replace(href, { scroll: false }),
+    });
+  }, [router]);
 
   const systemPrefersDark = typeof window !== 'undefined'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -269,8 +307,6 @@ export default function AppLayout({
       return newState;
     });
   };
-  const router = useRouter();
-
   useEffect(() => {
     const updateUserInfo = async () => {
       const storedUser = localStorage.getItem('user_info');
@@ -609,6 +645,7 @@ export default function AppLayout({
           <div className="relative min-h-0 flex-1">
             <main
               data-image-detail-background
+              data-image-hero-gallery-scroll
               className="main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-white dark:bg-slate-950"
             >
               <div
@@ -633,6 +670,11 @@ export default function AppLayout({
                   </div>
                 </footer>
               </div>
+              <div
+                data-image-hero-gallery-anchor
+                aria-hidden="true"
+                className="image-hero-gallery-anchor"
+              />
             </main>
             <Suspense fallback={null}>
               <HeroStage />

@@ -1,6 +1,11 @@
 'use client';
 
-import { HERO_MAX_HEIGHT_DVH } from './geometry';
+import {
+  HERO_FRAME_CACHE_LIMIT,
+  HERO_FRAME_MAX_DIMENSION,
+  HERO_FRAME_MAX_DPR,
+  HERO_MAX_HEIGHT_DVH,
+} from './constants';
 import {
   getMediaSize,
   getVisualMedia,
@@ -8,19 +13,36 @@ import {
   isVolatileVisualMedia,
   type VisualMedia,
 } from './dom';
+import {
+  initializeHeroFrameRuntime,
+  isHeroInteractionQuiet,
+  subscribeHeroInteraction,
+} from './anchor';
 
-const HERO_FRAME_CACHE_LIMIT = 4;
-const HERO_FRAME_MAX_DIMENSION = 1280;
-const HERO_FRAME_MAX_DPR = 2;
 const HERO_FRAME_CACHE_MAX_PIXELS = HERO_FRAME_MAX_DIMENSION * HERO_FRAME_MAX_DIMENSION * 2;
 
-type HeroFrameCacheEntry = {
-  src: string;
-  frame: HTMLCanvasElement;
-  dimension: number;
+export type FrameLease = {
+  canvas: HTMLCanvasElement;
+  release: () => void;
 };
 
-const heroFrameCache = new Map<VisualMedia, HeroFrameCacheEntry>();
+export type FrameAsset = {
+  readonly source: string;
+  readonly width: number;
+  readonly height: number;
+  readonly pixels: number;
+  acquire: () => FrameLease;
+};
+
+type HeroFrameCapture = {
+  source: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  width: number;
+  height: number;
+};
+
+const heroFrameCache = new Map<string, FrameAsset>();
 
 function getHeroFrameDimension(width: number, height: number) {
   const ratio = width / height;
@@ -34,101 +56,227 @@ function getHeroFrameDimension(width: number, height: number) {
   );
 }
 
-function getCachedHeroFrame(media: VisualMedia, requiredDimension = 0) {
-  const cached = heroFrameCache.get(media);
-  if (!cached || cached.src !== getVisualMediaSrc(media)) {
-    if (cached) heroFrameCache.delete(media);
-    return null;
-  }
-  if (cached.dimension < requiredDimension) return null;
-  heroFrameCache.delete(media);
-  heroFrameCache.set(media, cached);
-  return cached.frame;
-}
-
-function trimHeroFrameCache() {
-  let pixels = 0;
-  heroFrameCache.forEach(({ frame }) => {
-    pixels += frame.width * frame.height;
-  });
-  while (heroFrameCache.size > HERO_FRAME_CACHE_LIMIT || pixels > HERO_FRAME_CACHE_MAX_PIXELS) {
-    const oldest = heroFrameCache.keys().next().value;
-    if (!oldest) break;
-    const entry = heroFrameCache.get(oldest);
-    heroFrameCache.delete(oldest);
-    if (entry) pixels -= entry.frame.width * entry.frame.height;
-  }
-}
-
-export function captureHeroFrame(media: VisualMedia | null) {
-  if (!media) return null;
+function getHeroFrameCapture(media: VisualMedia): HeroFrameCapture | null {
   const size = getMediaSize(media);
   if (!size) return null;
   const { width: sourceWidth, height: sourceHeight } = size;
   const maxDimension = getHeroFrameDimension(sourceWidth, sourceHeight);
-  const volatile = isVolatileVisualMedia(media);
-  const cached = getCachedHeroFrame(media, maxDimension);
-  if (cached && !volatile) return cached;
   const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
-  const frame = cached ?? document.createElement('canvas');
-  const frameWidth = Math.max(1, Math.round(sourceWidth * scale));
-  const frameHeight = Math.max(1, Math.round(sourceHeight * scale));
-  if (frame.width !== frameWidth || frame.height !== frameHeight) {
-    frame.width = frameWidth;
-    frame.height = frameHeight;
+  return {
+    source: getVisualMediaSrc(media),
+    sourceWidth,
+    sourceHeight,
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  };
+}
+
+function getHeroFrameCacheKey(capture: HeroFrameCapture) {
+  return [
+    capture.source,
+    `${capture.sourceWidth}x${capture.sourceHeight}`,
+    `${capture.width}x${capture.height}`,
+  ].join('\n');
+}
+
+function getCachedHeroFrame(key: string) {
+  const cached = heroFrameCache.get(key);
+  if (!cached) return null;
+  // LRU touch.
+  heroFrameCache.delete(key);
+  heroFrameCache.set(key, cached);
+  return cached;
+}
+
+function trimHeroFrameCache() {
+  let pixels = 0;
+  heroFrameCache.forEach((asset) => {
+    pixels += asset.pixels;
+  });
+  while (heroFrameCache.size > HERO_FRAME_CACHE_LIMIT || pixels > HERO_FRAME_CACHE_MAX_PIXELS) {
+    const oldest = heroFrameCache.entries().next();
+    if (oldest.done) break;
+    const [key, asset] = oldest.value;
+    heroFrameCache.delete(key);
+    pixels -= asset.pixels;
   }
+}
+
+function clearCanvasPresentation(canvas: HTMLCanvasElement) {
+  canvas.getAnimations?.().forEach((animation) => {
+    try {
+      animation.cancel();
+    } catch {
+      // The flight may already have settled and canceled this animation.
+    }
+  });
+  canvas.remove();
+  canvas.removeAttribute('style');
+  canvas.removeAttribute('class');
+  canvas.removeAttribute('aria-hidden');
+}
+
+function copyCanvas(source: HTMLCanvasElement) {
+  const copy = document.createElement('canvas');
+  copy.width = source.width;
+  copy.height = source.height;
+  const context = copy.getContext('2d');
+  if (!context) return null;
+  try {
+    context.drawImage(source, 0, 0);
+  } catch {
+    return null;
+  }
+  return copy;
+}
+
+function createFrameAsset(source: string, primary: HTMLCanvasElement): FrameAsset {
+  let primaryLeased = false;
+
+  return {
+    source,
+    width: primary.width,
+    height: primary.height,
+    pixels: primary.width * primary.height,
+    acquire() {
+      const ownsPrimary = !primaryLeased;
+      const concurrentCopy = ownsPrimary ? null : copyCanvas(primary);
+      if (!ownsPrimary && !concurrentCopy) {
+        throw new Error('Unable to copy a concurrently leased Hero frame');
+      }
+      const canvas = ownsPrimary ? primary : concurrentCopy!;
+      if (ownsPrimary) primaryLeased = true;
+
+      let released = false;
+      return {
+        canvas,
+        release() {
+          if (released) return;
+          released = true;
+          clearCanvasPresentation(canvas);
+          if (ownsPrimary) primaryLeased = false;
+        },
+      };
+    },
+  };
+}
+
+export function captureHeroFrame(media: VisualMedia | null): FrameAsset | null {
+  if (!media) return null;
+  const capture = getHeroFrameCapture(media);
+  if (!capture) return null;
+
+  const volatile = isVolatileVisualMedia(media);
+  const cacheKey = getHeroFrameCacheKey(capture);
+  if (!volatile) {
+    const cached = getCachedHeroFrame(cacheKey);
+    if (cached) return cached;
+  }
+
+  const frame = document.createElement('canvas');
+  frame.width = capture.width;
+  frame.height = capture.height;
   const context = frame.getContext('2d');
   if (!context) return null;
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
   try {
     context.drawImage(media, 0, 0, frame.width, frame.height);
-    heroFrameCache.set(media, {
-      src: getVisualMediaSrc(media),
-      frame,
-      dimension: Math.max(frame.width, frame.height),
-    });
-    trimHeroFrameCache();
-    return frame;
   } catch {
     return null;
   }
+
+  const asset = createFrameAsset(capture.source, frame);
+  if (!volatile) {
+    heroFrameCache.set(cacheKey, asset);
+    trimHeroFrameCache();
+  }
+  return asset;
 }
 
 export function warmImageHeroFrame(source: HTMLElement | null) {
   if (!source || typeof window === 'undefined') return () => {};
-  const media = getVisualMedia(source);
-  const size = media ? getMediaSize(media) : null;
-  if (!media || (size && !isVolatileVisualMedia(media) &&
-      getCachedHeroFrame(media, getHeroFrameDimension(size.width, size.height)))) {
+  initializeHeroFrameRuntime();
+  const initialMedia = getVisualMedia(source);
+  const initialCapture = initialMedia ? getHeroFrameCapture(initialMedia) : null;
+  // Animated media must be captured at activation so the flyer starts on the
+  // frame the user actually saw. A warm capture cannot be reused correctly.
+  if (initialMedia && isVolatileVisualMedia(initialMedia)) return () => {};
+  if (initialMedia && initialCapture && !isVolatileVisualMedia(initialMedia) &&
+      getCachedHeroFrame(getHeroFrameCacheKey(initialCapture))) {
     return () => {};
   }
 
   let cancelled = false;
-  const capture = () => {
-    if (cancelled || !source.isConnected) return;
-    // Image decode callbacks can be queued while a swipe is in progress. Do
-    // the viewport check at execution time so an image that has already moved
-    // away does not force layout and spend a frame on a canvas capture.
-    const rect = source.getBoundingClientRect();
-    if (rect.bottom < -200 || rect.top > window.innerHeight + 200) return;
-    captureHeroFrame(media);
-  };
-  if ('requestIdleCallback' in window) {
-    // Do not force a high-resolution draw while the user is actively scrolling.
-    // `prepareImageHero` still captures synchronously on an actual activation;
-    // this path only warms likely future activations when the main thread is
-    // genuinely idle.
-    const idleId = window.requestIdleCallback(capture);
-    return () => {
-      cancelled = true;
-      window.cancelIdleCallback(idleId);
-    };
-  }
+  let finished = false;
+  let idleId = 0;
+  let firstFrame = 0;
+  let secondFrame = 0;
 
-  const timer = setTimeout(capture, 120);
+  const clearScheduled = () => {
+    if (idleId) window.cancelIdleCallback(idleId);
+    if (firstFrame) cancelAnimationFrame(firstFrame);
+    if (secondFrame) cancelAnimationFrame(secondFrame);
+    idleId = 0;
+    firstFrame = 0;
+    secondFrame = 0;
+  };
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearScheduled();
+    source.removeEventListener('load', schedule, true);
+    source.removeEventListener('loadeddata', schedule, true);
+    releaseInteraction();
+  };
+
+  const captureFrame = () => {
+    idleId = 0;
+    if (cancelled || finished) return;
+    if (!source.isConnected) {
+      finish();
+      return;
+    }
+    if (!isHeroInteractionQuiet()) return;
+    const media = getVisualMedia(source);
+    if (!media) return;
+    if (isVolatileVisualMedia(media)) {
+      finish();
+      return;
+    }
+    const rect = source.getBoundingClientRect();
+    if (rect.bottom >= -200 && rect.top <= window.innerHeight + 200) {
+      captureHeroFrame(media);
+    }
+    finish();
+  };
+
+  const schedule = () => {
+    clearScheduled();
+    if (cancelled || finished || !isHeroInteractionQuiet()) return;
+    if ('requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(captureFrame, { timeout: 400 });
+    } else {
+      firstFrame = requestAnimationFrame(() => {
+        firstFrame = 0;
+        secondFrame = requestAnimationFrame(() => {
+          secondFrame = 0;
+          captureFrame();
+        });
+      });
+    }
+  };
+
+  const releaseInteraction = subscribeHeroInteraction(schedule);
+  source.addEventListener('load', schedule, true);
+  source.addEventListener('loadeddata', schedule, true);
+  schedule();
   return () => {
     cancelled = true;
-    clearTimeout(timer);
+    clearScheduled();
+    source.removeEventListener('load', schedule, true);
+    source.removeEventListener('loadeddata', schedule, true);
+    releaseInteraction();
   };
 }

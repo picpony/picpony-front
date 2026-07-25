@@ -1,13 +1,13 @@
 'use client';
 
-import type { ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { MdArrowBack } from 'react-icons/md';
 
 type DetailBackProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   passive?: boolean;
 };
 
-export default function DetailBack({
+const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function DetailBack({
   passive = false,
   className = '',
   type = 'button',
@@ -16,9 +16,10 @@ export default function DetailBack({
   'aria-label': ariaLabel = '返回图片列表',
   'aria-hidden': ariaHidden,
   ...props
-}: DetailBackProps) {
+}, ref) {
   return (
     <button
+      ref={ref}
       {...props}
       type={type}
       title={title}
@@ -31,4 +32,8 @@ export default function DetailBack({
       <span>返回图库</span>
     </button>
   );
-}
+});
+
+DetailBack.displayName = 'DetailBack';
+
+export default DetailBack;

@@ -1,106 +1,113 @@
+'use client';
+
 import type { PonyImage } from '@/lib/types/image';
+import type { FrameAsset } from './frameCache';
 
 export type HeroDirection = 'forward' | 'back';
-export type HeroPhase = 'idle' | 'opening' | 'closing';
 
-export interface ImageHeroSnapshot {
+export type HeroControllerPhase =
+  | 'gallery-idle'
+  | 'opening.flight'
+  | 'opening.landed'
+  | 'opening.handoff'
+  | 'detail-idle'
+  | 'closing.flight'
+  | 'reversing'
+  | 'recovering';
+
+export type ImageHeroBackgroundLocation = {
+  pathname: string;
+  search: string;
+};
+
+export type ImageHeroSnapshot = {
   image: PonyImage;
   previewSrc: string;
-  previewFrame: HTMLCanvasElement;
+  previewFrame: FrameAsset;
   sourceKey: string | null;
   mediaType: 'image' | 'video';
   canAnimate: boolean;
   createdAt: number;
-}
+};
 
-export interface ImageHeroBackgroundLocation {
-  pathname: string;
-  search: string;
-}
-
-export interface ImageHeroStageState {
+export type ImageHeroStageState = {
   phase: 'idle' | 'opening' | 'landed';
   snapshot: ImageHeroSnapshot | null;
-}
-
-export type Rect = {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
+  sessionId: number | null;
 };
 
-export type Host = Rect & { element: HTMLElement };
-
-export type ShadeLayer = {
-  element: HTMLElement;
+export type ImageHeroRuntimeState = {
+  phase: HeroControllerPhase;
+  sessionId: number | null;
+  imageId: number | null;
+  stage: ImageHeroStageState;
+  interactionQuiet: boolean;
+  background: ImageHeroBackgroundLocation | null;
 };
 
-export type Flight = {
-  layer: HTMLElement;
-  compensator: HTMLElement;
-  flyer: HTMLElement;
-  image: HTMLCanvasElement;
-  shade: ShadeLayer | null;
-  startRect: Rect;
-  radius: string;
-  host: Host;
+export type ImageHeroCloseOutcome = 'closed' | 'handled' | 'restored';
+
+export type HeroRouteNodes = {
+  overlay: HTMLElement;
+  scroller: HTMLElement;
+  content: HTMLElement;
+  surface: HTMLElement;
+  target: HTMLElement | null;
+  floatingBack: HTMLElement | null;
 };
 
-export type FlightMotion = {
-  finished: Promise<void>;
-  reverse: () => Promise<void>;
-  finish: () => void;
-  retarget: (x: number, y: number, endpoint?: 'from' | 'to') => void;
-  cancel: () => void;
-};
-
-export type ScrollSync = {
-  sync: () => void;
-  flush: (preferRoute?: boolean) => void;
-  waitForRelease: () => Promise<void>;
-  stop: () => void;
-};
-
-export type TransitionScrollNodes = {
-  stageScroller: HTMLElement | null;
-  routeScroller: HTMLElement | null;
-  targetWrap: HTMLElement | null;
-};
-
-export type OpeningInterrupt = {
-  promise: Promise<void>;
-  requested: boolean;
-  navigationHandled: boolean;
-  replayNavigation: (() => void) | null;
-  request: (navigationHandled: boolean) => void;
-  dispose: () => void;
-};
-
-export type ImageHeroNavigationOptions = {
-  backgroundLocation?: ImageHeroBackgroundLocation;
-  detailHref?: string;
-  historyMode?: 'create' | 'restore' | 'none';
-};
-
-export type ImageHeroHistoryMarker = {
-  version: 1;
-  token: string;
-  kind: 'base' | 'guard';
+export type HeroRouteRegistration = HeroRouteNodes & {
+  surfaceId: string;
   imageId: number;
-  detailHref: string;
-  background: ImageHeroBackgroundLocation;
+  previewPaintable: boolean;
 };
 
-export type ImageHeroHistoryRecord = {
-  token: string;
-  imageId: number;
-  detailHref: string;
-  background: ImageHeroBackgroundLocation;
+export type HeroStageNodes = {
+  overlay: HTMLElement;
+  scroller: HTMLElement;
+  content: HTMLElement;
+  surface: HTMLElement;
+  target: HTMLElement;
+  anchor: HTMLElement;
+  floatingBack: HTMLElement | null;
+};
+
+export type HeroOpenNavigation = {
+  push: (href: string) => void;
+  replace: (href: string) => void;
+};
+
+export type HeroCloseNavigation = {
+  replace: (href: string) => void;
+  push: (href: string) => void;
+};
+
+export type HeroOpenIntent = {
   snapshot: ImageHeroSnapshot;
+  source: HTMLElement;
+  detailHref: string;
+  background?: ImageHeroBackgroundLocation;
+  navigation: HeroOpenNavigation;
+  historyRestore?: boolean;
 };
 
-export type ImageHeroHistoryPosition = 'unknown' | 'background' | 'base' | 'guard';
-export type ClosingHistoryOutcome = 'commit' | 'handled' | 'restore-detail';
+export type HeroCloseIntent = {
+  imageId: number;
+  navigation: HeroCloseNavigation;
+  backgroundMode?: 'fresh' | 'continue';
+  cause?: 'button' | 'history' | 'dismiss' | 'interrupt';
+};
 
-export type VisualMedia = HTMLImageElement | HTMLVideoElement;
+export type HeroDetailRouteChangeIntent = {
+  imageId: number;
+  detailHref: string;
+  navigation: HeroOpenNavigation & HeroCloseNavigation;
+};
+
+export type HeroMilestone =
+  | 'route-registered'
+  | 'preview-paintable'
+  | 'landed'
+  | 'handoff-complete'
+  | 'interaction-quiet'
+  | 'idle';

@@ -1,46 +1,52 @@
 'use client';
 
+import {
+  HERO_HOST_SELECTOR,
+} from './constants';
 import type { HeroHost, HeroRect } from './geometry';
-
-export const HERO_ROUTE_TIMEOUT_MS = 4000;
-const INTERRUPT_HOLD_TIMEOUT_MS = 4000;
-const RESUME_DECODE_TIMEOUT_MS = 250;
-
-export const HERO_HOST_SELECTOR = '[data-image-detail-host]';
-export const HERO_BACKGROUND_SELECTOR = '[data-image-detail-background]';
-export const HERO_BACKGROUND_VISUAL_SELECTOR = '[data-image-detail-background-visual]';
-export const HERO_DETAIL_OVERLAY_SELECTOR = '[data-image-detail-overlay]';
-export const HERO_STAGE_TARGET_SELECTOR = '[data-image-hero-stage-target]';
 
 export type VisualMedia = HTMLImageElement | HTMLVideoElement;
 
-export type TransitionScrollNodes = {
-  stageScroller: HTMLElement | null;
-  routeScroller: HTMLElement | null;
+export type DomLease = {
+  release: () => void;
 };
 
-type PendingElementWait = {
-  selector: string;
-  resolve: (element: HTMLElement | null) => void;
-  timer: number | null;
+type LeasedStyleProperty =
+  | 'opacity'
+  | 'visibility'
+  | 'pointerEvents'
+  | 'transform'
+  | 'transformOrigin'
+  | 'willChange'
+  | 'minHeight'
+  | 'touchAction';
+
+type InlineStyleLeaseEntry = {
+  id: symbol;
+  value: string;
 };
 
-export function normalizePathSearch(href: string) {
-  try {
-    const url = new URL(href, window.location.href);
-    return `${url.pathname}${url.search}`;
-  } catch {
-    return href;
+type InlineStyleLeaseState = {
+  baseline: string;
+  entries: InlineStyleLeaseEntry[];
+};
+
+const inlineStyleLeases = new WeakMap<
+  HTMLElement,
+  Map<LeasedStyleProperty, InlineStyleLeaseState>
+>();
+
+function escapeSelector(value: string) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
   }
+  return value.replace(/["\\]/g, '\\$&');
 }
 
 export function normalizeHeroSrc(src: string) {
-  if (!src || typeof window === 'undefined') return src;
+  if (!src) return '';
   try {
-    const url = new URL(src, window.location.href);
-    return url.origin === window.location.origin
-      ? `${url.pathname}${url.search}${url.hash}`
-      : url.href;
+    return new URL(src, window.location.href).href;
   } catch {
     return src;
   }
@@ -51,26 +57,115 @@ export function getHeroRect(element: HTMLElement): HeroRect {
   return {
     top: rect.top,
     left: rect.left,
-    width: Math.max(1, rect.width),
-    height: Math.max(1, rect.height),
+    width: rect.width,
+    height: rect.height,
   };
+}
+
+export function getHeroRectWithoutAncestorTransform(
+  element: HTMLElement,
+  ancestor: HTMLElement | null,
+): HeroRect {
+  const rect = getHeroRect(element);
+  if (!ancestor || !ancestor.contains(element)) return rect;
+  const style = getComputedStyle(ancestor);
+  if (!style.transform || style.transform === 'none') return rect;
+
+  try {
+    const matrix = new DOMMatrixReadOnly(style.transform);
+    // Hero background motion is axis-aligned. Refuse a rotated/skewed matrix
+    // rather than inventing a bounding box whose corners do not match media.
+    if (Math.abs(matrix.b) > 0.0001 || Math.abs(matrix.c) > 0.0001) return rect;
+    const [originX = 0, originY = 0] = style.transformOrigin
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((value) => Number.parseFloat(value) || 0);
+    const transformedAncestor = ancestor.getBoundingClientRect();
+    const shiftX = originX + matrix.e - matrix.a * originX - matrix.c * originY;
+    const shiftY = originY + matrix.f - matrix.b * originX - matrix.d * originY;
+    const worldOriginX = transformedAncestor.left - shiftX + originX;
+    const worldOriginY = transformedAncestor.top - shiftY + originY;
+    const inverse = matrix.inverse();
+    const map = (x: number, y: number) => {
+      const point = new DOMPoint(x - worldOriginX, y - worldOriginY).matrixTransform(inverse);
+      return { x: point.x + worldOriginX, y: point.y + worldOriginY };
+    };
+    const topLeft = map(rect.left, rect.top);
+    const bottomRight = map(rect.left + rect.width, rect.top + rect.height);
+    return {
+      top: topLeft.y,
+      left: topLeft.x,
+      width: bottomRight.x - topLeft.x,
+      height: bottomRight.y - topLeft.y,
+    };
+  } catch {
+    return rect;
+  }
 }
 
 export function getHeroHost(): HeroHost | null {
   const element = document.querySelector<HTMLElement>(HERO_HOST_SELECTOR);
-  return element ? { element, ...getHeroRect(element) } : null;
+  if (!element) return null;
+  return { element, ...getHeroRect(element) };
 }
 
 export function findImageHeroThumbnail(imageId: number, sourceKey?: string | null) {
-  const candidates = Array.from(document.querySelectorAll<HTMLElement>(
-    `[data-image-hero-role="thumbnail"][data-image-hero-id="${imageId}"]`,
-  ));
-  if (!sourceKey) return candidates[0] ?? null;
-  return candidates.find((element) => element.dataset.imageHeroSourceKey === sourceKey) ?? null;
+  const id = String(imageId);
+  if (sourceKey) {
+    const exact = document.querySelector<HTMLElement>(
+      `[data-image-hero-role="thumbnail"][data-image-hero-id="${escapeSelector(id)}"]` +
+      `[data-image-hero-source-key="${escapeSelector(sourceKey)}"]`,
+    );
+    if (exact) return exact;
+  }
+  return document.querySelector<HTMLElement>(
+    `[data-image-hero-role="thumbnail"][data-image-hero-id="${escapeSelector(id)}"]`,
+  );
 }
 
-export function getVisualMedia(element: HTMLElement | null) {
-  return element?.querySelector<VisualMedia>('img, video') ?? null;
+export function getVisualMedia(element: HTMLElement | null): VisualMedia | null {
+  if (!element) return null;
+  const directMedia = element instanceof HTMLImageElement || element instanceof HTMLVideoElement
+    ? element
+    : null;
+  const detailHost = directMedia?.hasAttribute('data-image-detail-layer')
+    ? (directMedia.matches('[data-image-detail-hero-active]')
+        ? directMedia
+        : directMedia.closest<HTMLElement>('[data-image-detail-hero-active]'))
+    : element.matches('[data-image-detail-hero-active]')
+      ? element
+      : element.querySelector<HTMLElement>('[data-image-detail-hero-active]');
+
+  if (detailHost) {
+    const layers = [
+      ...(detailHost.matches('img[data-image-detail-layer], video[data-image-detail-layer]')
+        ? [detailHost as VisualMedia]
+        : []),
+      ...detailHost.querySelectorAll<VisualMedia>(
+        'img[data-image-detail-layer], video[data-image-detail-layer]',
+      ),
+    ].filter((media) => (
+      media.closest<HTMLElement>('[data-image-detail-hero-active]') === detailHost
+    ));
+    const final = layers.find((media) => media.dataset.imageDetailLayer === 'final') ?? null;
+    const preview = layers.find((media) => media.dataset.imageDetailLayer === 'preview') ?? null;
+    // Capture the actual presentation. Data attributes remain CSS/debug mirrors,
+    // not an animation correctness gate.
+    const candidates = [preview, final]
+      .filter((media): media is VisualMedia => Boolean(media && isPaintableVisualMedia(media)))
+      .map((media) => ({ media, opacity: getPresentedMediaOpacity(media) }))
+      .filter(({ opacity }) => opacity > 0.001)
+      .sort((a, b) => b.opacity - a.opacity);
+    return candidates[0]?.media ?? null;
+  }
+
+  if (directMedia) return isPaintableVisualMedia(directMedia) ? directMedia : null;
+  const candidates = element.querySelectorAll<VisualMedia>('img, video');
+  for (let index = 0; index < candidates.length; index += 1) {
+    const media = candidates.item(index);
+    if (media && isPaintableVisualMedia(media)) return media;
+  }
+  return null;
 }
 
 export function getVisualMediaSrc(media: VisualMedia) {
@@ -78,7 +173,31 @@ export function getVisualMediaSrc(media: VisualMedia) {
 }
 
 export function isAnimatedVisualSource(src: string) {
-  return /(?:\.gif|\.apng)(?:[?#]|$)|[?&](?:format|ext)=(?:gif|apng)(?:&|$)/i.test(src);
+  if (!src) return false;
+  let decoded = src;
+  try {
+    decoded = decodeURIComponent(src);
+  } catch {
+    // A malformed escape does not prevent the plain URL checks below.
+  }
+  if (/(?:\.gif|\.apng)(?:[?#]|$)/i.test(decoded)) return true;
+  try {
+    const base = typeof window === 'undefined' ? 'http://localhost/' : window.location.href;
+    const url = new URL(decoded, base);
+    const format = url.searchParams.get('format') ?? url.searchParams.get('ext');
+    if (format && /^(?:gif|apng)$/i.test(format)) return true;
+    const nested = url.searchParams.get('url');
+    if (!nested || nested === src) return false;
+    let decodedNested = nested;
+    try {
+      decodedNested = decodeURIComponent(nested);
+    } catch {
+      // The URLSearchParams value may already be decoded.
+    }
+    return /(?:\.gif|\.apng)(?:[?#]|$)/i.test(decodedNested);
+  } catch {
+    return /[?&](?:format|ext)=(?:gif|apng)(?:&|$)/i.test(decoded);
+  }
 }
 
 export function isVolatileVisualMedia(media: VisualMedia) {
@@ -87,267 +206,183 @@ export function isVolatileVisualMedia(media: VisualMedia) {
 
 export function getMediaSize(media: VisualMedia) {
   const isVideo = media instanceof HTMLVideoElement;
-  const width = isVideo ? media.videoWidth : media.naturalWidth;
-  const height = isVideo ? media.videoHeight : media.naturalHeight;
   if (isVideo && media.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
   if (!isVideo && !media.complete) return null;
+  const width = isVideo ? media.videoWidth : media.naturalWidth;
+  const height = isVideo ? media.videoHeight : media.naturalHeight;
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
-export function hideHeroElement(element: HTMLElement | null) {
-  if (!element) return '';
-  const previous = element.style.opacity;
-  element.style.opacity = '0';
-  return previous;
+function isPaintableVisualMedia(media: VisualMedia) {
+  if (!getVisualMediaSrc(media) || !getMediaSize(media)) return false;
+  if (media instanceof HTMLImageElement) return true;
+  return media.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
 }
 
-export function restoreHeroElement(element: HTMLElement | null, previous: string) {
-  if (element) element.style.opacity = previous;
+function getPresentedMediaOpacity(media: VisualMedia) {
+  const style = getComputedStyle(media);
+  if (style.display === 'none' || style.visibility === 'hidden') return 0;
+  const opacity = Number.parseFloat(style.opacity);
+  return Number.isFinite(opacity) ? opacity : 1;
+}
+
+export function leaseInlineStyles(
+  element: HTMLElement,
+  values: Partial<Record<LeasedStyleProperty, string>>,
+): DomLease {
+  const entries = Object.entries(values) as Array<[LeasedStyleProperty, string]>;
+  const leaseId = Symbol('hero-inline-style');
+  let elementLeases = inlineStyleLeases.get(element);
+  if (!elementLeases) {
+    elementLeases = new Map();
+    inlineStyleLeases.set(element, elementLeases);
+  }
+
+  entries.forEach(([property, value]) => {
+    let state = elementLeases.get(property);
+    if (!state) {
+      state = { baseline: element.style[property], entries: [] };
+      elementLeases.set(property, state);
+    }
+    state.entries.push({ id: leaseId, value });
+    try {
+      element.style[property] = value;
+    } catch {
+      // Ignore browser-specific readonly style members.
+    }
+  });
+  let released = false;
+  return {
+    release() {
+      if (released) return;
+      released = true;
+      for (let index = entries.length - 1; index >= 0; index -= 1) {
+        const [property, written] = entries[index];
+        const state = elementLeases.get(property);
+        if (!state) continue;
+        const leaseIndex = state.entries.findIndex((entry) => entry.id === leaseId);
+        if (leaseIndex < 0) continue;
+        const wasTop = leaseIndex === state.entries.length - 1;
+        state.entries.splice(leaseIndex, 1);
+        if (!wasTop) continue;
+
+        const next = state.entries.at(-1);
+        const restore = next?.value ?? state.baseline;
+        if (!next && element.style[property] !== written) {
+          elementLeases.delete(property);
+          continue;
+        }
+        try {
+          element.style[property] = restore;
+        } catch {
+          // Element may have disconnected during route reconciliation.
+        }
+        if (!next) elementLeases.delete(property);
+      }
+      if (elementLeases.size === 0) inlineStyleLeases.delete(element);
+    },
+  };
+}
+
+export function leaseAttribute(
+  element: HTMLElement,
+  name: string,
+  value: string | null,
+): DomLease {
+  const hadAttribute = element.hasAttribute(name);
+  const previous = element.getAttribute(name);
+  if (value === null) element.removeAttribute(name);
+  else element.setAttribute(name, value);
+  let released = false;
+  return {
+    release() {
+      if (released) return;
+      released = true;
+      const current = element.getAttribute(name);
+      if (value === null ? current !== null : current !== value) return;
+      if (hadAttribute && previous !== null) element.setAttribute(name, previous);
+      else element.removeAttribute(name);
+    },
+  };
+}
+
+export function leaseHeroVisibility(element: HTMLElement | null, visible: boolean): DomLease {
+  if (!element) return { release() {} };
+  return leaseInlineStyles(element, {
+    opacity: visible ? '1' : '0',
+    pointerEvents: visible ? '' : 'none',
+  });
+}
+
+export function leaseHeroCardChrome(element: HTMLElement | null): DomLease {
+  const card = element?.closest<HTMLElement>('.image-hero-card-link');
+  if (!card) return { release() {} };
+  const leases = [...card.querySelectorAll<HTMLElement>('[data-image-hero-chrome]')]
+    .map((chrome) => leaseInlineStyles(chrome, {
+      opacity: '0',
+      willChange: 'opacity',
+    }));
+  let released = false;
+  return {
+    release() {
+      if (released) return;
+      released = true;
+      for (let index = leases.length - 1; index >= 0; index -= 1) {
+        leases[index].release();
+      }
+    },
+  };
+}
+
+export function leaseHeroRouteSealed(nodes: {
+  overlay: HTMLElement;
+  floatingBack: HTMLElement | null;
+}): DomLease {
+  const overlayStyle = leaseInlineStyles(nodes.overlay, {
+    opacity: '0',
+    visibility: 'hidden',
+    pointerEvents: 'none',
+  });
+  const inert = leaseAttribute(nodes.overlay, 'inert', '');
+  const state = leaseAttribute(nodes.overlay, 'data-image-hero-route-state', 'sealed');
+  const backStyle = nodes.floatingBack
+    ? leaseInlineStyles(nodes.floatingBack, {
+        opacity: '0',
+        visibility: 'hidden',
+        pointerEvents: 'none',
+      })
+    : { release() {} };
+  let released = false;
+  return {
+    release() {
+      if (released) return;
+      released = true;
+      state.release();
+      inert.release();
+      overlayStyle.release();
+      backStyle.release();
+    },
+  };
 }
 
 export function focusHeroElement(element: HTMLElement | null) {
-  if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) return;
-  element?.closest<HTMLElement>('a, button, [tabindex]')?.focus({ preventScroll: true });
-}
-
-const SUSPENDED_IMAGE_SRC =
-  'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
-
-function isAnimatedDetailImage(element: HTMLImageElement) {
-  return isAnimatedVisualSource(element.currentSrc || element.getAttribute('src') || '');
-}
-
-export function suspendHeavyDetailMedia(source: HTMLElement) {
-  const layers = Array.from(source.querySelectorAll<HTMLElement>('[data-image-detail-layer]'));
-  const previous = layers.map((element) => ({
-    element,
-    opacity: element.style.opacity,
-    src: element instanceof HTMLImageElement ? element.getAttribute('src') : null,
-    srcSet: element instanceof HTMLImageElement ? element.getAttribute('srcset') : null,
-    sizes: element instanceof HTMLImageElement ? element.getAttribute('sizes') : null,
-    animated: element instanceof HTMLImageElement && isAnimatedDetailImage(element),
-    wasPlaying: element instanceof HTMLVideoElement && !element.paused,
-  }));
-  previous.forEach(({ element, animated }) => {
-    if (element.dataset.imageDetailLayer === 'final') {
-      if (element instanceof HTMLVideoElement) element.pause();
-      element.style.opacity = '0';
-      if (element instanceof HTMLImageElement && animated) {
-        element.removeAttribute('srcset');
-        element.removeAttribute('sizes');
-        element.src = SUSPENDED_IMAGE_SRC;
-      }
-    } else if (element.dataset.imageDetailLayer === 'preview') {
-      element.style.opacity = '1';
-    }
-  });
-  return async () => {
-    const animatedDecodes: Promise<unknown>[] = [];
-    previous.forEach(({ element, src, srcSet, sizes, animated }) => {
-      if (!element.isConnected || !(element instanceof HTMLImageElement) || !animated) return;
-      if (sizes === null) element.removeAttribute('sizes');
-      else element.setAttribute('sizes', sizes);
-      if (srcSet === null) element.removeAttribute('srcset');
-      else element.setAttribute('srcset', srcSet);
-      if (src === null) element.removeAttribute('src');
-      else element.setAttribute('src', src);
-      animatedDecodes.push(element.decode().catch(() => undefined));
-    });
-    if (animatedDecodes.length > 0) {
-      await Promise.race([
-        Promise.allSettled(animatedDecodes),
-        new Promise<void>((resolve) => window.setTimeout(resolve, RESUME_DECODE_TIMEOUT_MS)),
-      ]);
-    }
-    previous.forEach(({ element, opacity, wasPlaying }) => {
-      if (!element.isConnected) return;
-      element.style.opacity = opacity;
-      if (element instanceof HTMLVideoElement && wasPlaying) {
-        void element.play().catch(() => undefined);
-      }
-    });
-  };
-}
-
-export function createElementWaiter(signal?: AbortSignal) {
-  const waits = new Set<PendingElementWait>();
-  let observer: MutationObserver | null = null;
-  let disposed = false;
-
-  const finish = (wait: PendingElementWait, element: HTMLElement | null) => {
-    if (!waits.delete(wait)) return;
-    if (wait.timer !== null) window.clearTimeout(wait.timer);
-    wait.resolve(element);
-    if (waits.size === 0) {
-      observer?.disconnect();
-      observer = null;
-    }
-  };
-  const check = () => {
-    if (disposed || waits.size === 0) return;
-    const selectors = [...new Set([...waits].map((wait) => wait.selector))].join(',');
-    const candidates = Array.from(document.querySelectorAll<HTMLElement>(selectors));
-    [...waits].forEach((wait) => {
-      const element = candidates.find((candidate) => candidate.matches(wait.selector)) ?? null;
-      if (element) finish(wait, element);
-    });
-  };
-  const ensureObserver = () => {
-    if (observer || disposed) return;
-    observer = new MutationObserver(check);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['data-image-hero-ready'],
-    });
-  };
-  const dispose = () => {
-    if (disposed) return;
-    disposed = true;
-    observer?.disconnect();
-    observer = null;
-    signal?.removeEventListener('abort', dispose);
-    [...waits].forEach((wait) => finish(wait, null));
-  };
-
-  signal?.addEventListener('abort', dispose, { once: true });
-  return {
-    wait(selector: string, timeout = HERO_ROUTE_TIMEOUT_MS) {
-      if (disposed || signal?.aborted) return Promise.resolve<HTMLElement | null>(null);
-      const existing = document.querySelector<HTMLElement>(selector);
-      if (existing) return Promise.resolve(existing);
-      return new Promise<HTMLElement | null>((resolve) => {
-        const wait: PendingElementWait = { selector, resolve, timer: null };
-        if (timeout > 0) {
-          wait.timer = window.setTimeout(() => finish(wait, null), timeout);
-        }
-        waits.add(wait);
-        ensureObserver();
-        check();
-      });
-    },
-    dispose,
-  };
-}
-
-export function createInterruptedRouteHold(onRelease: () => void) {
-  const selector = `${HERO_DETAIL_OVERLAY_SELECTOR}:not([data-image-hero-stage])`;
-  const held = new Set<HTMLElement>();
-  document.querySelectorAll<HTMLElement>(
-    `${selector}, [data-image-detail-floating-back="route"]`,
-  ).forEach((element) => {
-    element.dataset.imageHeroHidden = 'true';
-    held.add(element);
-  });
-  delete document.documentElement.dataset.imageHeroInterrupted;
-
-  let frame = 0;
-  let timer = 0;
-  let released = false;
-  const finish = () => {
-    if (released) return;
-    released = true;
-    if (frame) cancelAnimationFrame(frame);
-    if (timer) window.clearTimeout(timer);
-    observer.disconnect();
-    window.removeEventListener('popstate', check);
-    held.forEach((element) => { delete element.dataset.imageHeroHidden; });
-    delete document.documentElement.dataset.imageHeroInterrupted;
-    onRelease();
-  };
-  const check = () => {
-    if (frame) return;
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      if (!/^\/pic\/[^/]+\/?$/.test(window.location.pathname) &&
-          !document.querySelector(selector)) {
-        finish();
-      }
-    });
-  };
-  const observer = new MutationObserver(check);
-  window.addEventListener('popstate', check);
-  observer.observe(document.body, { childList: true, subtree: true });
-  timer = window.setTimeout(finish, INTERRUPT_HOLD_TIMEOUT_MS);
-  check();
-  return finish;
-}
-
-export function waitForRouteOverlayGone(timeout = 1200, signal?: AbortSignal) {
-  return new Promise<boolean>((resolve) => {
-    const selector = `${HERO_DETAIL_OVERLAY_SELECTOR}:not([data-image-hero-stage])`;
-    let settled = false;
-    let settling = false;
-    let observer: MutationObserver | null = null;
-    let timer = 0;
-    const finish = (gone: boolean) => {
-      if (settled) return;
-      settled = true;
-      observer?.disconnect();
-      window.clearTimeout(timer);
-      window.removeEventListener('popstate', check);
-      signal?.removeEventListener('abort', handleAbort);
-      resolve(gone);
-    };
-    const handleAbort = () => finish(false);
-    const check = () => {
-      if (settled || settling || /^\/pic\/[^/]+\/?$/.test(window.location.pathname) ||
-          document.querySelector(selector)) {
-        return;
-      }
-      settling = true;
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        settling = false;
-        if (!/^\/pic\/[^/]+\/?$/.test(window.location.pathname) &&
-            !document.querySelector(selector)) {
-          finish(true);
-        }
-      }));
-    };
-    if (signal?.aborted) {
-      finish(false);
-      return;
-    }
-    observer = new MutationObserver(check);
-    timer = window.setTimeout(() => finish(false), timeout);
-    window.addEventListener('popstate', check);
-    signal?.addEventListener('abort', handleAbort, { once: true });
-    check();
-    observer.observe(document.body, { childList: true, subtree: true });
-  });
-}
-
-export function getRouteScroller() {
-  return Array.from(
-    document.querySelectorAll<HTMLElement>(HERO_DETAIL_OVERLAY_SELECTOR),
-  ).find((element) => !element.hasAttribute('data-image-hero-stage'))
-    ?.querySelector<HTMLElement>('.image-detail-overlay-scroll') ?? null;
-}
-
-export function createTransitionScrollNodes(): TransitionScrollNodes {
-  return {
-    stageScroller: document.querySelector<HTMLElement>(
-      '[data-image-hero-stage] .image-detail-overlay-scroll',
-    ),
-    routeScroller: getRouteScroller(),
-  };
-}
-
-export function syncStageScroll(
-  scrollLeft: number,
-  scrollTop: number,
-  source?: HTMLElement | null,
-  nodes = createTransitionScrollNodes(),
-  mirrorRoute = true,
-) {
-  const { stageScroller, routeScroller } = nodes;
-  if (stageScroller && stageScroller !== source) {
-    stageScroller.scrollLeft = scrollLeft;
-    stageScroller.scrollTop = scrollTop;
+  if (!element?.isConnected) return;
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
   }
-  if (mirrorRoute && routeScroller && routeScroller !== source) {
-    routeScroller.scrollLeft = scrollLeft;
-    routeScroller.scrollTop = scrollTop;
-  }
+}
+
+export function clearHeroThumbnailFocus(preferred?: HTMLElement | null) {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return;
+  const owner = active.closest<HTMLElement>('a:has([data-image-hero-role="thumbnail"])');
+  if (!owner) return;
+  if (preferred?.contains(active)) return;
+  active.blur();
+}
+
+export function isDetailPathname(pathname = window.location.pathname) {
+  return /^\/pic\/[^/]+\/?$/.test(pathname);
 }

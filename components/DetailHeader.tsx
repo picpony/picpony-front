@@ -61,6 +61,7 @@ export default function DetailHeader({
   const [titleMetrics, setTitleMetrics] = useState<TitleMetrics | null>(null);
   const title = image.name || `Image #${image.id}`;
   const isStage = layout === 'stage';
+  const titleId = `image-title-${image.id}-${layout}`;
   const compactMetadata = layout !== 'page';
   const isTitleExpanded = expandedTitle === title;
   const isTitleOverflowing = !isStage && Boolean(titleMetrics?.overflowing);
@@ -144,7 +145,7 @@ export default function DetailHeader({
       <div className="mb-3 flex min-w-0 items-start gap-2 sm:gap-3">
         <h1
           ref={titleRef}
-          id={`image-title-${image.id}`}
+          id={titleId}
           title={isTitleOverflowing && !isTitleExpanded ? title : undefined}
           style={{
             height: titleHeight ? `${titleHeight}px` : `${TITLE_COLLAPSED_LINES}lh`,
@@ -159,7 +160,7 @@ export default function DetailHeader({
         {isTitleOverflowing && (
           <button
             type="button"
-            aria-controls={`image-title-${image.id}`}
+            aria-controls={titleId}
             aria-expanded={isTitleExpanded}
             onClick={() => setExpandedTitle((current) => current === title ? null : title)}
             aria-label={isTitleExpanded ? '收起完整标题' : '展开完整标题'}
@@ -195,6 +196,7 @@ export default function DetailHeader({
         </div>
         <Link
           href={image.uploader && image.uploader !== '匿名用户' && image.uploader_id ? `/derpi/user/${image.uploader_id}` : '#'}
+          prefetch={isStage ? false : undefined}
           onClick={(event) => {
             if (!image.uploader || image.uploader === '匿名用户' || !image.uploader_id) event.preventDefault();
           }}

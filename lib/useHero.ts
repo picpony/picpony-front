@@ -12,29 +12,23 @@ import {
 import type Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { PonyImage } from '@/lib/types/image';
-import {
-  cancelImageDetailPrefetch,
-} from '@/lib/detail';
+import { cancelImageDetailPrefetch } from '@/lib/detail';
 import {
   canAnimateImageHero,
-  canSupersedeImageHeroClose,
-  canUseImageHeroTransition,
-  collapseSupersededImageHeroHistory,
-  getActiveImageHeroKind,
-  getImageHeroBackgroundLocation,
-  interruptImageHero,
-  navigateToImageWithHero,
   prepareImageHero,
-  queueImageHeroOpen,
-  warmImageHeroFrame,
+  requestImageHeroOpen,
   warmImageHero,
+  warmImageHeroFrame,
   type ImageHeroSnapshot,
 } from '@/lib/hero';
+import { isScrollLikelyActive } from '@/lib/hero/scrollActivity';
 
 type HeroLinkKind = 'card' | 'featured';
 type NavigateHandler = NonNullable<ComponentProps<typeof Link>['onNavigate']>;
-const HOVER_INTENT_DELAY = 70;
-const FOCUS_INTENT_DELAY = 120;
+
+const HOVER_INTENT_DELAY_MS = 70;
+const FOCUS_INTENT_DELAY_MS = 120;
+const SNAPSHOT_REUSE_MS = 1500;
 
 export function useHeroLink<T extends HTMLElement>({
   image,
@@ -51,242 +45,173 @@ export function useHeroLink<T extends HTMLElement>({
 }) {
   const router = useRouter();
   const preparedRef = useRef<ImageHeroSnapshot | null>(null);
-  const lastActivationRef = useRef<{ imageId: number; at: number } | null>(null);
-  const expiryTimerRef = useRef<number | null>(null);
-  const hoverTimerRef = useRef<number | null>(null);
-  const cancelFrameWarmRef = useRef<(() => void) | null>(null);
+  const expiryTimerRef = useRef(0);
+  const intentTimerRef = useRef(0);
+  const cancelFrameWarmRef = useRef<Disposer | null>(null);
+  const capturedPointerRef = useRef<number | null>(null);
+  const clickOwnedRef = useRef(false);
   const href = image ? `/pic/${image.id}` : '#';
 
   const clearPrepared = useCallback(() => {
-    if (expiryTimerRef.current !== null) {
-      window.clearTimeout(expiryTimerRef.current);
-      expiryTimerRef.current = null;
-    }
+    if (expiryTimerRef.current) window.clearTimeout(expiryTimerRef.current);
+    expiryTimerRef.current = 0;
     preparedRef.current = null;
   }, []);
 
-  const cancelHoverIntent = useCallback((cancelDetail = false) => {
-    if (hoverTimerRef.current !== null) {
-      window.clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
+  const cancelIntent = useCallback((cancelDetail = false) => {
+    if (intentTimerRef.current) window.clearTimeout(intentTimerRef.current);
+    intentTimerRef.current = 0;
     cancelFrameWarmRef.current?.();
     cancelFrameWarmRef.current = null;
     if (cancelDetail && image) cancelImageDetailPrefetch(image.id);
   }, [image]);
 
-  const warmFrame = useCallback(() => {
+  const warmRouteAndMedia = useCallback((priority: 'background' | 'immediate') => {
+    if (!image) return;
+    router.prefetch(href);
+    void warmImageHero(image.id, priority);
     cancelFrameWarmRef.current?.();
     cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current);
-  }, [sourceRef]);
+  }, [href, image, router, sourceRef]);
 
-  const warmImmediately = useCallback(() => {
-    if (!image) return;
-    const lastActivation = lastActivationRef.current;
-    const timestamp = Date.now();
-    if (lastActivation?.imageId === image.id && timestamp - lastActivation.at < 1500) return;
-    lastActivationRef.current = { imageId: image.id, at: timestamp };
-    cancelHoverIntent();
-    router.prefetch(href);
-    void warmImageHero(image.id);
-  }, [cancelHoverIntent, href, image, router]);
-
-  const scheduleIntentWarm = useCallback((delay = HOVER_INTENT_DELAY) => {
-    if (!image || hoverTimerRef.current !== null) return;
-    hoverTimerRef.current = window.setTimeout(() => {
-      hoverTimerRef.current = null;
-      router.prefetch(href);
-      void warmImageHero(image.id, 'background');
-      warmFrame();
+  const scheduleIntent = useCallback((delay: number) => {
+    if (!image || intentTimerRef.current || isScrollLikelyActive()) return;
+    intentTimerRef.current = window.setTimeout(() => {
+      intentTimerRef.current = 0;
+      if (!isScrollLikelyActive()) warmRouteAndMedia('background');
     }, delay);
-  }, [href, image, router, warmFrame]);
+  }, [image, warmRouteAndMedia]);
 
   const prepare = useCallback(() => {
-    // A closing transition leaves the gallery mounted and measurable, so a
-    // new card can prepare its frame for a true visual preempt. Opening clicks
-    // use the capture-phase interrupt/replay path instead.
-    if (!image || getActiveImageHeroKind() === 'opening') return null;
-    const prepared = preparedRef.current;
-    if (prepared && Date.now() - prepared.createdAt < 1500) return prepared;
-
+    if (!image || !sourceRef.current) return null;
+    const cached = preparedRef.current;
+    if (cached && Date.now() - cached.createdAt < SNAPSHOT_REUSE_MS) return cached;
     clearPrepared();
     cancelFrameWarmRef.current?.();
     cancelFrameWarmRef.current = null;
-    const next = prepareImageHero(
+    const snapshot = prepareImageHero(
       image,
       sourceRef.current,
       canAnimate,
       previewSrc,
     );
-    preparedRef.current = next;
-    if (next) {
+    preparedRef.current = snapshot;
+    if (snapshot) {
       expiryTimerRef.current = window.setTimeout(() => {
-        if (preparedRef.current === next) preparedRef.current = null;
-        expiryTimerRef.current = null;
-      }, 1600);
+        if (preparedRef.current === snapshot) preparedRef.current = null;
+        expiryTimerRef.current = 0;
+      }, SNAPSHOT_REUSE_MS + 100);
     }
-    return next;
+    return snapshot;
   }, [canAnimate, clearPrepared, image, previewSrc, sourceRef]);
 
   const takePrepared = useCallback(() => {
-    const prepared = preparedRef.current;
+    const cached = preparedRef.current;
     clearPrepared();
-    return prepared && Date.now() - prepared.createdAt < 1500
-      ? prepared
+    return cached && Date.now() - cached.createdAt < SNAPSHOT_REUSE_MS
+      ? cached
       : prepare();
   }, [clearPrepared, prepare]);
 
-  const startHeroOpen = useCallback((snapshot: ImageHeroSnapshot, preempt: 'none' | 'over-close') => {
+  const activateHero = useCallback(() => {
+    if (!image) return;
     const source = sourceRef.current;
-    if (!source) return;
-    if (preempt === 'over-close') {
-      // Fly immediately, parallel with the fading close. Collapse the closing
-      // detail's history back to the gallery, then install this open on top;
-      // continue the gallery background's motion into this open's sink.
-      const backgroundLocation = getImageHeroBackgroundLocation() ?? undefined;
-      const galleryHref = backgroundLocation
-        ? `${backgroundLocation.pathname}${backgroundLocation.search}`
-        : `${window.location.pathname}${window.location.search}`;
-      void navigateToImageWithHero(
-        snapshot,
-        source,
-        async (isCurrent) => {
-          const collapsed = await collapseSupersededImageHeroHistory();
-          if (!isCurrent()) return;
-          if (!collapsed) {
-            // `history.go()` should always dispatch popstate; this branch is a
-            // containment fallback for embedded browsers that do not. Prefer
-            // completing the requested navigation over leaving the UI stuck.
-            router.replace(href, { scroll: false });
-            return;
-          }
-          window.history.pushState(
-            { ...window.history.state, picponyHero: href },
-            '',
-            galleryHref,
-          );
-          router.replace(href, { scroll: false });
-        },
-        (navigationHandled) => {
-          if (!navigationHandled) window.history.back();
-        },
-        { detailHref: href, backgroundLocation, background: 'continue' },
-      );
-      return;
-    }
-    const originHref = `${window.location.pathname}${window.location.search}`;
-    void navigateToImageWithHero(
+    const snapshot = takePrepared();
+    if (!source || !snapshot || !canAnimateImageHero(snapshot)) return false;
+    const background = {
+      pathname: window.location.pathname,
+      search: window.location.search,
+    };
+    return requestImageHeroOpen({
       snapshot,
       source,
-      () => {
-        window.history.pushState(
-          { ...window.history.state, picponyHero: href },
-          '',
-          originHref,
-        );
-        router.replace(href, { scroll: false });
+      detailHref: href,
+      background,
+      navigation: {
+        push: (nextHref) => router.push(nextHref, { scroll: false }),
+        replace: (nextHref) => router.replace(nextHref, { scroll: false }),
       },
-      (navigationHandled) => {
-        if (!navigationHandled) window.history.back();
-      },
-      { detailHref: href },
-    );
-  }, [href, router, sourceRef]);
-
-  const queueHeroOpen = useCallback((prepared?: ImageHeroSnapshot | null) => {
-    const targetImage = image;
-    queueImageHeroOpen(() => {
-      const source = sourceRef.current;
-      if (!targetImage || !source || !source.isConnected) {
-        router.push(href, { scroll: false });
-        return;
-      }
-      const queued = prepared && Date.now() - prepared.createdAt < 1500
-        ? prepared
-        : prepareImageHero(targetImage, source, canAnimate, previewSrc);
-      if (queued && canUseImageHeroTransition(queued)) {
-        startHeroOpen(queued, 'none');
-      } else {
-        router.push(href, { scroll: false });
-      }
     });
-  }, [canAnimate, href, image, previewSrc, router, sourceRef, startHeroOpen]);
+  }, [href, image, router, sourceRef, takePrepared]);
 
   const handleNavigate: NavigateHandler = useCallback((event) => {
-    if (!image) return;
-    const activeKind = getActiveImageHeroKind();
-
-    if (activeKind === 'opening') {
-      // The full-screen Stage is pointer-transparent. Its capture-phase click
-      // guard normally reverses A and replays B; keep the same safe behaviour
-      // for keyboard/programmatic Link activation that reaches onNavigate.
+    if (clickOwnedRef.current) {
       event.preventDefault();
-      queueHeroOpen();
-      interruptImageHero();
       return;
     }
+    if (activateHero()) event.preventDefault();
+  }, [activateHero]);
 
-    if (activeKind === 'closing') {
-      // Latest wins: fly this open immediately, parallel with the fading close.
-      event.preventDefault();
-      const snapshot = takePrepared();
-      const source = sourceRef.current;
-      if (
-        canSupersedeImageHeroClose() &&
-        snapshot &&
-        source &&
-        canAnimateImageHero(snapshot)
-      ) {
-        startHeroOpen(snapshot, 'over-close');
-      } else {
-        // The flyer may already have committed its history traversal. Queue the
-        // latest click until the gallery is idle instead of issuing a second
-        // traversal into the same guard/base pair.
-        queueHeroOpen(snapshot);
-      }
+  const handleClick = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
       return;
     }
-
-    const snapshot = takePrepared();
-    const source = sourceRef.current;
-    if (!snapshot || !source || !canUseImageHeroTransition(snapshot)) return;
+    cancelIntent();
+    warmRouteAndMedia('immediate');
+    prepare();
+    if (!activateHero()) return;
+    clickOwnedRef.current = true;
     event.preventDefault();
-    startHeroOpen(snapshot, 'none');
-  }, [image, queueHeroOpen, sourceRef, startHeroOpen, takePrepared]);
+    queueMicrotask(() => {
+      clickOwnedRef.current = false;
+    });
+  }, [activateHero, cancelIntent, prepare, warmRouteAndMedia]);
 
-  useEffect(() => {
-    return () => {
-      clearPrepared();
-      cancelHoverIntent(true);
-    };
-  }, [cancelHoverIntent, clearPrepared]);
+  useEffect(() => () => {
+    clearPrepared();
+    cancelIntent(true);
+  }, [cancelIntent, clearPrepared]);
 
   return {
     href,
     sourceKey: image ? `${kind}:${image.id}` : '',
     prefetch: false as const,
     scroll: false as const,
-    onPointerEnter: () => scheduleIntentWarm(),
-    onPointerLeave: () => cancelHoverIntent(true),
+    onNavigate: handleNavigate,
+    onClick: handleClick,
+    onPointerEnter: () => scheduleIntent(HOVER_INTENT_DELAY_MS),
+    onPointerLeave: () => cancelIntent(true),
+    onFocus: () => scheduleIntent(FOCUS_INTENT_DELAY_MS),
+    onBlur: () => cancelIntent(true),
     onPointerDown: (event: PointerEvent<HTMLAnchorElement>) => {
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-        scheduleIntentWarm();
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
         return;
       }
-      // Pointerdown also starts a native scroll gesture. Preparing here performs
-      // a synchronous canvas capture and router prefetch before we know whether
-      // this is a click or a swipe. Hover/focus intent still warms desktop
-      // targets, while click/onNavigate prepares the snapshot once activation
-      // is confirmed for every input type.
-      return;
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        capturedPointerRef.current = event.pointerId;
+      } catch {
+        capturedPointerRef.current = null;
+      }
     },
-    onClick: (event: MouseEvent<HTMLAnchorElement>) => {
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      warmImmediately();
-      prepare();
+    onPointerUp: (event: PointerEvent<HTMLAnchorElement>) => {
+      if (capturedPointerRef.current !== event.pointerId) return;
+      capturedPointerRef.current = null;
+      try {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      } catch {
+        // The browser may release capture when native scrolling wins.
+      }
     },
-    onFocus: () => scheduleIntentWarm(FOCUS_INTENT_DELAY),
-    onBlur: () => cancelHoverIntent(true),
-    onNavigate: handleNavigate,
+    onPointerCancel: (event: PointerEvent<HTMLAnchorElement>) => {
+      if (capturedPointerRef.current !== event.pointerId) return;
+      capturedPointerRef.current = null;
+    },
   };
 }
+
+type Disposer = () => void;

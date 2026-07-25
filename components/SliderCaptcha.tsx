@@ -28,17 +28,6 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
   const dragStartTimeRef = useRef(0);
   const lastSampleTimeRef = useRef(0);
 
-  // 用原生 touchstart（非被动模式）确保触屏上 preventDefault 生效
-  useEffect(() => {
-    const btn = sliderBtnRef.current;
-    if (!btn) return;
-    const onTouchStart = (e: TouchEvent) => {
-      e.preventDefault(); // { passive: false } 确保此行生效，阻止浏览器拦截手势
-      handleStart(e as unknown as React.TouchEvent);
-    };
-    btn.addEventListener('touchstart', onTouchStart, { passive: false });
-    return () => btn.removeEventListener('touchstart', onTouchStart);
-  }, [handleStart]);
   const maxSliderX = 260;
   const btnWidth = 50;
 
@@ -172,6 +161,18 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
     },
     [loading, verifying, errorMsg, maxSliderX, onVerify, fetchCaptcha]
   );
+
+  // 用原生 touchstart（非被动模式）确保触屏上 preventDefault 生效
+  useEffect(() => {
+    const btn = sliderBtnRef.current;
+    if (!btn) return;
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      handleStart(e as unknown as React.TouchEvent);
+    };
+    btn.addEventListener('touchstart', onTouchStart, { passive: false });
+    return () => btn.removeEventListener('touchstart', onTouchStart);
+  }, [handleStart]);
 
   return (
     <div className="flex flex-col items-center gap-4 w-[340px]">

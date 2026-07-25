@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { startTransition, useEffect, useId, useLayoutEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { MdDownload, MdOpenInNew, MdStar, MdStarBorder, MdShare, MdContentCopy, MdFlag, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import Modal from '@/components/Modal';
@@ -9,38 +9,36 @@ import Counter from 'yet-another-react-lightbox/plugins/counter';
 import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen';
 import Download from 'yet-another-react-lightbox/plugins/download';
 import Video from 'yet-another-react-lightbox/plugins/video';
-import FadeInImage from '@/components/FadeInImage';
 import { api, Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
 const Lightbox = dynamic(() => import('yet-another-react-lightbox'), { ssr: false });
-import RichTextRenderer from '@/components/RichTextRenderer';
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
-import TagList, { groupTags, EMPTY_TAG_GROUPS } from '@/components/TagList';
+import TagList, { groupTags } from '@/components/TagList';
 import CommentSection from '@/components/CommentSection';
-import CommentComposer from '@/components/CommentComposer';
 import { getHeroMediaStyle } from '@/lib/hero/geometry';
-import {
-  bindImageHeroDismissGesture,
-} from '@/lib/hero/dismissGesture';
-
-const INITIAL_TAG_LIMIT = 80;
-const INITIAL_RELATION_TAG_LIMIT = 32;
 import {
   peekImageDetail,
   prefetchImageDetail,
   subscribeImageDetail,
 } from '@/lib/detail';
 import {
+  bindImageHeroDismissGesture,
+  getImageHeroRuntime,
   getImageHeroOrigin,
   interruptImageHero,
-  isImageHeroTransitionRunning,
-  navigateBackWithImageHero,
-  waitForImageHeroTransition,
+  isImageHeroDetailDataPublishable,
+  isImageHeroPublicationQuiet,
+  markImageHeroRoutePreviewPaintable,
+  registerImageHeroRoute,
+  requestImageHeroClose,
+  requestImageHeroDetailRouteChange,
+  subscribeImageHeroRuntime,
+  updateImageHeroRouteTarget,
 } from '@/lib/hero';
 
 interface DictionaryEntry {
@@ -61,6 +59,8 @@ function getServerDetail() {
   return null;
 }
 
+const INITIAL_TAG_LIMIT = 80;
+const INITIAL_RELATION_TAG_LIMIT = 32;
 const commentsInFlight = new Map<string, Promise<Comment[]>>();
 const tagCountInFlight = new Map<string, Promise<{ tag: string; count: number | null }>>();
 
@@ -99,39 +99,98 @@ function getTagCountOnce(token: string, tag: string) {
   return request;
 }
 
-function scheduleDeferredDetail(callback: () => void) {
-  let secondFrame = 0;
-  let idleCallback = 0;
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-  const firstFrame = requestAnimationFrame(() => {
-    secondFrame = requestAnimationFrame(() => {
-      if ('requestIdleCallback' in window) {
-        idleCallback = window.requestIdleCallback(callback, { timeout: 240 });
-      } else {
-        timeout = globalThis.setTimeout(callback, 48);
-      }
-    });
-  });
-
-  return () => {
-    cancelAnimationFrame(firstFrame);
-    if (secondFrame) cancelAnimationFrame(secondFrame);
-    if (idleCallback) window.cancelIdleCallback(idleCallback);
-    if (timeout) clearTimeout(timeout);
-  };
+function isDetailHeavyWorkBlocked(canPublish: () => boolean) {
+  return document.visibilityState !== 'visible' || !canPublish();
 }
 
+/**
+ * Publish only after controller-owned interaction settles. Runtime and
+ * visibility subscriptions re-arm this once; there is no polling loop.
+ */
+function scheduleWhenDetailIdle(
+  callback: () => void,
+  {
+    idle = true,
+    canPublish = isImageHeroPublicationQuiet,
+  }: {
+    idle?: boolean;
+    canPublish?: () => boolean;
+  } = {},
+) {
+  let cancelled = false;
+  let fired = false;
+  let firstFrame = 0;
+  let secondFrame = 0;
+  let idleCallback = 0;
+
+  const clearScheduled = () => {
+    if (firstFrame) cancelAnimationFrame(firstFrame);
+    if (secondFrame) cancelAnimationFrame(secondFrame);
+    if (idleCallback) window.cancelIdleCallback(idleCallback);
+    firstFrame = 0;
+    secondFrame = 0;
+    idleCallback = 0;
+  };
+
+  const schedule = () => {
+    clearScheduled();
+    if (cancelled || fired || isDetailHeavyWorkBlocked(canPublish)) return;
+    firstFrame = requestAnimationFrame(() => {
+      firstFrame = 0;
+      secondFrame = requestAnimationFrame(() => {
+        secondFrame = 0;
+        if (cancelled || fired || isDetailHeavyWorkBlocked(canPublish)) return;
+        const publish = () => {
+          idleCallback = 0;
+          if (cancelled || fired || isDetailHeavyWorkBlocked(canPublish)) return;
+          fired = true;
+          releaseRuntime();
+          document.removeEventListener('visibilitychange', schedule);
+          callback();
+        };
+        if (idle && 'requestIdleCallback' in window) {
+          idleCallback = window.requestIdleCallback(publish, { timeout: 1200 });
+        } else {
+          publish();
+        }
+      });
+    });
+  };
+
+  const releaseRuntime = subscribeImageHeroRuntime(schedule);
+  document.addEventListener('visibilitychange', schedule);
+  schedule();
+
+  return () => {
+    cancelled = true;
+    clearScheduled();
+    releaseRuntime();
+    document.removeEventListener('visibilitychange', schedule);
+  };
+}
 export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
   const imageId = Number(id);
+  const heroRuntime = useSyncExternalStore(
+    subscribeImageHeroRuntime,
+    getImageHeroRuntime,
+    getImageHeroRuntime,
+  );
+  const routeInstanceId = useId();
+  const surfaceId = useMemo(
+    () => `hero-route:${imageId}:${routeInstanceId}`,
+    [imageId, routeInstanceId],
+  );
   // Latch the seed for this route id. A live read on every render would flip
   // to null when the module snapshot expires and remount the media mid-view.
-  const heroSeed = useMemo(
-    () => getImageHeroOrigin(imageId),
-    [imageId],
-  );
+  const heroSeed = useMemo(() => {
+    // Runtime session changes are the signal that a fresh controller-owned
+    // snapshot may now exist for this otherwise stable route id.
+    void heroRuntime.sessionId;
+    return getImageHeroOrigin(imageId);
+  }, [imageId, heroRuntime.sessionId]);
   const subscribeDetail = useCallback(
     (listener: () => void) => subscribeImageDetail(imageId, listener),
     [imageId],
@@ -143,9 +202,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     getServerDetail,
   );
   const image = prefetchedDetail?.image ?? heroSeed?.image ?? null;
-  const [heroPreviewId, setHeroPreviewId] = useState<number | null>(
-    () => heroSeed?.image.id ?? null,
-  );
+  const [revealedHeroSeedAt, setRevealedHeroSeedAt] = useState<number | null>(null);
+  const [finalReadyId, setFinalReadyId] = useState<number | null>(null);
   const [deferredBodyId, setDeferredBodyId] = useState<number | null>(
     () => heroSeed ? null : imageId,
   );
@@ -156,7 +214,13 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     regular: INITIAL_TAG_LIMIT,
   });
   const [detailError, setDetailError] = useState<{ id: number; error: Error } | null>(null);
-  const isHeroPreview = heroPreviewId === imageId;
+  const isHeroPreview = Boolean(
+    heroSeed?.image.id === imageId && heroSeed.createdAt !== revealedHeroSeedAt,
+  );
+  // A Hero snapshot is already a confirmed navigation intent. Start the final
+  // request on the first route render; input activity only controls publishing.
+  const preloadFinal = Boolean(heroSeed);
+  const finalReady = finalReadyId === imageId;
   const deferredBodyReady = deferredBodyId === imageId;
   const visibleTagLimits = visibleTags.imageId === imageId
     ? visibleTags
@@ -197,11 +261,53 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const [commentEditorMountId, setCommentEditorMountId] = useState<number | null>(null);
   const commentEditorMountRef = useRef<HTMLDivElement>(null);
   const commentsSectionRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLElement>(null);
   const overlayScrollerRef = useRef<HTMLDivElement>(null);
   const overlayContentRef = useRef<HTMLDivElement>(null);
   const overlaySurfaceRef = useRef<HTMLDivElement>(null);
+  const overlayBackRef = useRef<HTMLButtonElement>(null);
+  const detailTargetRef = useRef<HTMLDivElement>(null);
+  const previewSurfaceRef = useRef<string | null>(null);
   const shouldLoadComments = commentsViewport.imageId === imageId && commentsViewport.ready;
   const shouldMountCommentEditor = commentEditorMountId === imageId;
+
+  const heroNavigation = useMemo(() => ({
+    push: (href: string) => router.push(href, { scroll: false }),
+    replace: (href: string) => router.replace(href, { scroll: false }),
+  }), [router]);
+
+  const handleDetailTargetChange = useCallback((ownerSurfaceId: string, target: HTMLDivElement | null) => {
+    if (ownerSurfaceId !== surfaceId) return;
+    detailTargetRef.current = target;
+    updateImageHeroRouteTarget(surfaceId, target);
+  }, [surfaceId]);
+
+  const handlePreviewPaintable = useCallback((ownerSurfaceId: string, target: HTMLDivElement) => {
+    if (ownerSurfaceId !== surfaceId) return;
+    previewSurfaceRef.current = surfaceId;
+    detailTargetRef.current = target;
+    markImageHeroRoutePreviewPaintable(surfaceId, target);
+  }, [surfaceId]);
+
+  useLayoutEffect(() => {
+    if (presentation !== 'overlay') return;
+    const overlay = overlayRef.current;
+    const scroller = overlayScrollerRef.current;
+    const content = overlayContentRef.current;
+    const surface = overlaySurfaceRef.current;
+    if (!overlay || !scroller || !content || !surface) return;
+    return registerImageHeroRoute({
+      surfaceId,
+      imageId,
+      overlay,
+      scroller,
+      content,
+      surface,
+      target: detailTargetRef.current,
+      floatingBack: overlayBackRef.current,
+      previewPaintable: previewSurfaceRef.current === surfaceId,
+    });
+  }, [imageId, presentation, surfaceId]);
 
   const tokenRef = useRef<string | null>(null);
 
@@ -399,71 +505,80 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   useEffect(() => {
     let isMounted = true;
-    let cancelDeferredDetail = () => {};
+    let cancelBody = () => {};
 
     if (id) {
-      const transitionReady = heroSeed
-        ? waitForImageHeroTransition()
-        : Promise.resolve();
-
       void prefetchImageDetail(imageId).catch((err: Error) => {
         if (isMounted && !heroSeed) setDetailError({ id: imageId, error: err });
       });
 
-      void (async () => {
-        await transitionReady;
-        if (!isMounted || isImageHeroTransitionRunning()) return;
-        if (!heroSeed) {
-          setHeroPreviewId((current) => current === imageId ? null : current);
-          setDeferredBodyId(imageId);
-          return;
-        }
-
-        if (!getImageHeroOrigin(imageId)) return;
-        setHeroPreviewId((current) => current === imageId ? null : current);
-
-        cancelDeferredDetail = scheduleDeferredDetail(() => {
-          if (!isMounted || isImageHeroTransitionRunning()) return;
+      // Fetching and final-media decode start immediately. Only the sizeable
+      // body subtree waits for resolved detail plus an idle slice, so its mount
+      // cannot steal the first event of a newly started wheel/touch stream.
+      if (!heroSeed || prefetchedDetail) {
+        cancelBody = scheduleWhenDetailIdle(() => {
+          if (!isMounted) return;
           startTransition(() => setDeferredBodyId(imageId));
+        }, {
+          canPublish: () => {
+            if (!isImageHeroDetailDataPublishable(imageId)) return false;
+            return getImageHeroRuntime().phase !== 'opening.flight';
+          },
         });
-      })();
+      }
     }
 
     return () => {
       isMounted = false;
-      cancelDeferredDetail();
+      cancelBody();
     };
-  }, [heroSeed, id, imageId]);
+  }, [heroSeed, id, imageId, prefetchedDetail]);
 
   useEffect(() => {
     if (!deferredBodyReady || !shouldLoadComments || !id) return;
     let isMounted = true;
+    let cancelPublication = () => {};
     void (async () => {
       await Promise.resolve();
-      if (!isMounted || isImageHeroTransitionRunning()) return;
+      if (!isMounted) return;
       const nextComments = await fetchComments();
-      if (!isMounted || isImageHeroTransitionRunning()) return;
-      setComments(nextComments);
-      setIsLoadingComments(false);
+      if (!isMounted) return;
+      cancelPublication = scheduleWhenDetailIdle(() => {
+        if (!isMounted) return;
+        setComments(nextComments);
+        setIsLoadingComments(false);
+      });
     })();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+      cancelPublication();
+    };
   }, [deferredBodyReady, fetchComments, id, shouldLoadComments]);
 
   // --- Lightbox handlers ---
   const handleOpenLightbox = useCallback(() => {
-    if (
-      isImageHeroTransitionRunning() ||
-      document.documentElement.dataset.imageHeroDismissGesture ||
-      document.documentElement.dataset.imageHeroTransition
-    ) {
-      return;
-    }
+    if (!isImageHeroPublicationQuiet()) return;
     setIsLightboxOpen(true);
   }, []);
 
   const handleCloseLightbox = useCallback(() => {
     setIsLightboxOpen(false);
   }, []);
+
+  const handleFinalReady = useCallback((ownerSurfaceId?: string) => {
+    if (presentation === 'overlay' && ownerSurfaceId !== surfaceId) return;
+    setFinalReadyId(imageId);
+  }, [imageId, presentation, surfaceId]);
+
+  useEffect(() => {
+    if (!finalReady) return;
+    return scheduleWhenDetailIdle(() => {
+      if (heroSeed) setRevealedHeroSeedAt(heroSeed.createdAt);
+    }, {
+      idle: false,
+      canPublish: () => isImageHeroDetailDataPublishable(imageId),
+    });
+  }, [finalReady, heroSeed, imageId]);
 
   // --- Navigation handlers ---
   const handleNavigate = useCallback((direction: number) => {
@@ -473,66 +588,57 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       if (targetId !== Number(id)) {
         const href = `/pic/${targetId}`;
         if (presentation === 'overlay') {
-          router.replace(href, { scroll: false });
+          router.prefetch(href);
+          void prefetchImageDetail(targetId, { priority: 'immediate' });
+          void requestImageHeroDetailRouteChange({
+            imageId,
+            detailHref: href,
+            navigation: heroNavigation,
+          });
         } else {
-          router.push(href);
+          router.push(href, { scroll: false });
         }
       }
     } else {
       showToast(direction > 0 ? '已是最后一张' : '已是第一张', 'info');
     }
-  }, [currentNavIndex, navHistory, id, presentation, router]);
+  }, [currentNavIndex, heroNavigation, id, imageId, navHistory, presentation, router]);
 
   const handleBackToGallery = useCallback(() => {
     if (interruptImageHero()) return;
-    if (isImageHeroTransitionRunning()) return;
 
-    if (presentation === 'overlay') {
-      void navigateBackWithImageHero(Number(id), () => router.back());
+    if (presentation === 'page' && !getImageHeroOrigin(imageId)) {
+      router.push('/', { scroll: false });
       return;
     }
+    void requestImageHeroClose({
+      imageId,
+      navigation: heroNavigation,
+      cause: 'button',
+    });
+  }, [heroNavigation, imageId, presentation, router]);
 
-    const origin = getImageHeroOrigin(Number(id));
-    if (origin) {
-      void navigateBackWithImageHero(Number(id), () => router.back());
-    } else {
-      router.push('/');
-    }
-  }, [id, presentation, router]);
+  // Stable dismiss bind: rebinding on isLoading/modal state disposed the gesture
+  // mid-pull (data arrival) and made pull-to-dismiss feel random.
+  const dismissCanStartRef = useRef<() => boolean>(() => true);
+
+  useLayoutEffect(() => {
+    dismissCanStartRef.current = () => (
+      !isLightboxOpen &&
+      !tagInfoModal.open &&
+      !isReportModalOpen &&
+      !isShareOpen
+    );
+  }, [isLightboxOpen, isReportModalOpen, isShareOpen, tagInfoModal.open]);
 
   useEffect(() => {
     if (presentation !== 'overlay') return;
-    const scroller = overlayScrollerRef.current;
-    const content = overlayContentRef.current;
-    const surface = overlaySurfaceRef.current;
-    if (!scroller || !content || !surface) return;
-
-    return bindImageHeroDismissGesture({
-      scroller,
-      content,
-      surface,
-      canStart: () => (
-        !isImageHeroTransitionRunning() &&
-        !isLightboxOpen &&
-        !tagInfoModal.open &&
-        !isReportModalOpen &&
-        !isShareOpen
-      ),
-      dismiss: () => navigateBackWithImageHero(
-        imageId,
-        () => router.back(),
-        { background: 'continue' },
-      ),
-    });
-  }, [
-    imageId,
-    isLightboxOpen,
-    isReportModalOpen,
-    isShareOpen,
-    presentation,
-    router,
-    tagInfoModal.open,
-  ]);
+    return bindImageHeroDismissGesture(
+      surfaceId,
+      () => dismissCanStartRef.current(),
+      heroNavigation,
+    );
+  }, [heroNavigation, presentation, surfaceId]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -750,7 +856,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     return (
       <>
       <section
+        ref={overlayRef}
         data-image-detail-overlay
+        data-image-hero-route-id={String(imageId)}
+        data-image-hero-surface-id={surfaceId}
         role="region"
         aria-label="图片详情"
         className="image-detail-route absolute inset-0 z-40 overflow-hidden"
@@ -763,9 +872,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         </div>
       </section>
       <DetailBack
+        ref={overlayBackRef}
         data-image-detail-back-button
         data-image-detail-floating-back="route"
         data-image-detail-reveal="chrome"
+        data-image-hero-route-id={String(imageId)}
         onClick={handleBackToGallery}
         className="absolute left-3 top-3 z-[46] sm:left-4 sm:top-4"
       />
@@ -776,9 +887,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Loading skeleton ---
   if (isLoading) {
     return renderDetailShell(
-    <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8 animate-pulse">
-      <div className="flex flex-col">
-          <div className="p-4 sm:p-6 bg-transparent">
+    <div className="image-detail-page max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-6 animate-pulse">
+      <div className="flex flex-col rounded-xl bg-transparent">
+          <div className="image-detail-header-route p-4 sm:p-6">
             <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-4"></div>
             <div className="flex gap-4">
               <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
@@ -786,8 +897,22 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
             </div>
           </div>
-          <div className="w-full flex items-center justify-center p-4 relative min-h-[40vh] md:min-h-[60vh]">
+          <div className="relative flex min-h-[32vh] w-full items-start justify-center px-4 pb-4 pt-2 md:min-h-[48vh]">
             <div className="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-lg absolute inset-4"></div>
+          </div>
+          <div
+            data-image-detail-reveal="body"
+            className="image-detail-deferred image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6"
+          >
+            <div className="mx-auto w-full max-w-5xl space-y-4">
+              <div className="mb-2 flex justify-between">
+                <span className="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700" />
+                <span className="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700" />
+              </div>
+              <div className="h-2.5 w-full rounded bg-slate-200 dark:bg-slate-700" />
+              <div className="h-4 w-2/3 rounded bg-slate-200 dark:bg-slate-700" />
+              <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
+            </div>
           </div>
         </div>
       </div>
@@ -819,10 +944,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       </div>
     );
   }
-
-  const { artists, ocs, regularTags } = deferredBodyReady
-    ? groupTags(image.tags)
-    : EMPTY_TAG_GROUPS;
 
   const preferMediumDetail = (image.size || 0) > 16 * 1024 * 1024 ||
     (image.width || 0) * (image.height || 0) > 40_000_000;
@@ -876,7 +997,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               alt={image.name || `Video ${image.id}`}
               style={detailHeroStyle}
               heroActive={isHeroPreview}
-              onOpen={handleOpenLightbox}
+              preloadFinal={preloadFinal}
+              surfaceId={presentation === 'overlay' ? surfaceId : undefined}
+              onTargetChange={handleDetailTargetChange}
+              onPreviewReady={handlePreviewPaintable}
+              onFinalReady={handleFinalReady}
             />
           ) : (
             <DetailImage
@@ -889,13 +1014,24 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               height={image.height}
               style={detailHeroStyle}
               heroActive={isHeroPreview}
+              preloadFinal={preloadFinal}
+              surfaceId={presentation === 'overlay' ? surfaceId : undefined}
+              onTargetChange={handleDetailTargetChange}
+              onPreviewReady={handlePreviewPaintable}
+              onFinalReady={handleFinalReady}
               onOpen={handleOpenLightbox}
             />
           )}
         </div>
 
         {/* === Detail Info === */}
-        <div data-image-detail-reveal="body" className="image-detail-deferred flex min-h-[80vh] flex-col bg-transparent p-4 sm:p-6">
+        <div
+          data-image-detail-reveal="body"
+          className="image-detail-deferred flex min-h-[80dvh] flex-col bg-transparent p-4 sm:p-6"
+          // Isolate deferred body paint so late mount cannot blank the gallery
+          // compositor layer under the overlay (mid-scroll "background vanished").
+           style={{ contentVisibility: 'visible', contain: 'none' }}
+        >
           <div className="max-w-5xl mx-auto w-full space-y-6">
 
             {/* Votes */}

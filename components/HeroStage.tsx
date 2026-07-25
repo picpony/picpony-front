@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useSyncExternalStore,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
@@ -9,11 +16,12 @@ import {
   getImageHeroStage,
   interruptImageHero,
   observeImageHeroClientNavigation,
+  registerImageHeroStage,
   subscribeImageHeroStage,
   type ImageHeroStageState,
 } from '@/lib/hero';
 
-const EMPTY_STAGE: ImageHeroStageState = { phase: 'idle', snapshot: null };
+const EMPTY_STAGE: ImageHeroStageState = { phase: 'idle', snapshot: null, sessionId: null };
 
 function getServerStage() {
   return EMPTY_STAGE;
@@ -28,10 +36,68 @@ export default function HeroStage() {
     getImageHeroStage,
     getServerStage,
   );
+  const overlayRef = useRef<HTMLElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const targetRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const sessionId = state.sessionId;
 
   useEffect(() => {
     observeImageHeroClientNavigation(`${pathname}${search ? `?${search}` : ''}`);
   }, [pathname, search]);
+
+  // The routed detail component may not have committed yet while an opening
+  // flight is visible. Keep Escape owned by the mounted Stage so it reverses
+  // the active session instead of falling through to browser navigation.
+  useEffect(() => {
+    if (sessionId === null || state.phase === 'idle') return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!interruptImageHero()) return;
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [sessionId, state.phase]);
+
+  useLayoutEffect(() => {
+    if (sessionId === null) return;
+    const overlay = overlayRef.current;
+    const scroller = scrollerRef.current;
+    const content = contentRef.current;
+    const surface = surfaceRef.current;
+    const target = targetRef.current;
+    const anchor = anchorRef.current;
+    if (!overlay || !scroller || !content || !surface || !target || !anchor) return;
+    return registerImageHeroStage(sessionId, {
+      overlay,
+      scroller,
+      content,
+      surface,
+      target,
+      anchor,
+      floatingBack: backRef.current,
+    });
+  }, [sessionId]);
+
+  const forwardOpeningCardClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (state.phase !== 'opening' || event.defaultPrevented) return;
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    for (const element of document.elementsFromPoint(event.clientX, event.clientY)) {
+      const card = element.closest<HTMLAnchorElement>('a.image-hero-card-link');
+      if (!card || overlay.contains(card)) continue;
+      const thumbnail = card.querySelector<HTMLElement>('[data-image-hero-role="thumbnail"]');
+      if (!thumbnail || Number(thumbnail.dataset.imageHeroId) === state.snapshot?.image.id) return;
+      event.preventDefault();
+      event.stopPropagation();
+      card.click();
+      return;
+    }
+  }, [state.phase, state.snapshot?.image.id]);
 
   const snapshot = state.snapshot;
   if (state.phase === 'idle' || !snapshot) return null;
@@ -44,17 +110,24 @@ export default function HeroStage() {
   return (
     <>
     <section
+      ref={overlayRef}
       data-image-detail-overlay
       data-image-hero-stage
-      className="pointer-events-none absolute inset-0 z-[44] overflow-hidden"
+      data-image-hero-stage-state={state.phase}
+      aria-hidden="true"
+      className="pointer-events-auto absolute inset-0 z-[44] overflow-hidden"
     >
-      <div data-image-detail-surface className="absolute inset-0 bg-white dark:bg-slate-950" />
+      <div ref={surfaceRef} data-image-detail-surface className="pointer-events-none absolute inset-0 bg-white dark:bg-slate-950" />
       <div
+        ref={scrollerRef}
         data-image-hero-stage-foreground
+        data-image-hero-stage-scroll
         aria-hidden="true"
-        className="image-detail-overlay-scroll pointer-events-none absolute inset-0 z-10 overflow-y-auto overscroll-contain touch-pan-y"
+        className="image-detail-overlay-scroll pointer-events-auto absolute inset-0 z-10 overflow-y-auto overscroll-contain touch-pan-y"
+        onClick={forwardOpeningCardClick}
       >
         <div
+          ref={contentRef}
           inert
           className="image-detail-overlay-content pointer-events-none relative min-h-full w-full"
         >
@@ -66,13 +139,11 @@ export default function HeroStage() {
                   className="pointer-events-none absolute inset-x-4 top-2 z-20 flex justify-center"
                 >
                   <div
+                    ref={targetRef}
                     data-image-hero-stage-target
                     data-image-hero-stage-id={image.id}
-                    className="relative flex-none overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-900"
-                    style={{
-                      ...getHeroMediaStyle(image),
-                      opacity: state.phase === 'landed' ? 1 : 0,
-                    }}
+                    className="invisible relative flex-none overflow-hidden rounded-lg"
+                    style={getHeroMediaStyle(image)}
                   >
                   </div>
                 </div>
@@ -84,7 +155,7 @@ export default function HeroStage() {
               </div>
               <div
                 data-image-detail-reveal="body"
-                className="min-h-[80vh] bg-transparent p-4 sm:p-6"
+                className="image-detail-stage-body bg-transparent p-4 sm:p-6"
               >
                 <div className="mx-auto w-full max-w-5xl">
                   <div aria-hidden="true" className="mb-6 animate-pulse">
@@ -99,9 +170,16 @@ export default function HeroStage() {
             </div>
           </div>
         </div>
+        <div
+          ref={anchorRef}
+          data-image-hero-stage-anchor
+          aria-hidden="true"
+          className="image-hero-stage-anchor"
+        />
       </div>
     </section>
     <DetailBack
+      ref={backRef}
       data-image-detail-back-button
       data-image-detail-floating-back="stage"
       data-image-detail-reveal="chrome"
