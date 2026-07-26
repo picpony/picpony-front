@@ -10,7 +10,23 @@ interface SliderCaptchaProps {
   onClose: () => void;
 }
 
-export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps) {
+/**
+ * Drag / track logic mirrors the production Vue captcha on picpony.top
+ * (assets/main-*.js → startDrag / onDrag / stopDrag), which is known to
+ * pass backend checks on both desktop and mobile:
+ *
+ *   start:  track = [[0, 0, 0]]
+ *   move:   x = clamp(clientX - startX, 0, 260)   // kept as float on sliderX
+ *           relY = clientY - startY
+ *           track.push([round(x), round(relY), elapsed])  // max 150 pts
+ *   submit: { x: sliderX, track: xor90_btoa(JSON(track)) }
+ *
+ * Desktop-only mouse path already worked; mobile failed with the same API,
+ * so the difference has to be in how touch samples the track — keep the
+ * event model identical to production (document-level mouse/touch listeners,
+ * not PointerEvent).
+ */
+export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   const [bgImage, setBgImage] = useState("");
   const [pieceImage, setPieceImage] = useState("");
   const [pieceY, setPieceY] = useState(0);
@@ -19,45 +35,53 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
   const [verifying, setVerifying] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const startXRef = useRef(0);
+
   const sliderXRef = useRef(0);
   const sliderBtnRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
-
   const trackRef = useRef<[number, number, number][]>([]);
-  const dragStartTimeRef = useRef(0);
-  const lastSampleTimeRef = useRef(0);
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const startTimeRef = useRef(0);
+  const loadingRef = useRef(true);
+  const verifyingRef = useRef(false);
+  const draggingRef = useRef(false);
+  // Latest callbacks for document-level listeners (avoid stale closures /
+  // re-binding mid-gesture when handleStart identity changes).
+  const onVerifyRef = useRef(onVerify);
+  const fetchCaptchaRef = useRef<() => Promise<void>>(async () => {});
 
-  // 用原生 touchstart（非被动模式）确保触屏上 preventDefault 生效
-  useEffect(() => {
-    const btn = sliderBtnRef.current;
-    if (!btn) return;
-    const onTouchStart = (e: TouchEvent) => {
-      e.preventDefault(); // { passive: false } 确保此行生效，阻止浏览器拦截手势
-      handleStart(e as unknown as React.TouchEvent);
-    };
-    btn.addEventListener('touchstart', onTouchStart, { passive: false });
-    return () => btn.removeEventListener('touchstart', onTouchStart);
-  }, [handleStart]);
   const maxSliderX = 260;
   const btnWidth = 50;
 
-  const getClientX = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent): number => {
-    if ("touches" in e) return e.touches[0].clientX;
+  useEffect(() => {
+    onVerifyRef.current = onVerify;
+  }, [onVerify]);
+
+  const getClientX = (e: MouseEvent | TouchEvent): number => {
+    if ("touches" in e) {
+      const t = e.touches[0] ?? e.changedTouches[0];
+      return t ? t.clientX : 0;
+    }
     return e.clientX;
   };
 
-  const getClientY = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent): number => {
-    if ("touches" in e) return e.touches[0].clientY;
+  const getClientY = (e: MouseEvent | TouchEvent): number => {
+    if ("touches" in e) {
+      const t = e.touches[0] ?? e.changedTouches[0];
+      return t ? t.clientY : 0;
+    }
     return e.clientY;
   };
 
   const fetchCaptcha = useCallback(async () => {
     setLoading(true);
+    loadingRef.current = true;
     setSliderX(0);
-    setErrorMsg("");
     sliderXRef.current = 0;
+    setErrorMsg("");
     trackRef.current = [];
+    draggingRef.current = false;
     try {
       const data = await api.captchaGet();
       if (data.success) {
@@ -71,110 +95,148 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
       setErrorMsg("网络错误，请重试");
     }
     setLoading(false);
+    loadingRef.current = false;
   }, []);
 
   useEffect(() => {
-    if (!fetchedRef.current) {
-      fetchedRef.current = true;
-      api.captchaGet()
-        .then((data) => {
-          if (data.success) {
-            setBgImage(data.bg);
-            setPieceImage(data.piece);
-            setPieceY(data.y);
-          } else {
-            setErrorMsg("获取验证码失败");
-          }
-        })
-        .catch(() => setErrorMsg("网络错误，请重试"))
-        .finally(() => setLoading(false));
-    }
-  }, []);
+    fetchCaptchaRef.current = fetchCaptcha;
+  }, [fetchCaptcha]);
 
-  const handleStart = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      if (loading || verifying || errorMsg) return;
-      e.preventDefault();
-      const refX = getClientX(e);
-      const refY = getClientY(e);
-      setIsDragging(true);
-      startXRef.current = refX;
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    void fetchCaptcha();
+  }, [fetchCaptcha]);
 
-      const now = Date.now();
-      dragStartTimeRef.current = now;
-      lastSampleTimeRef.current = now;
-      trackRef.current = [[0, refY, 0]];
+  const startDrag = useCallback((e: MouseEvent | TouchEvent) => {
+    // Mirror production gates, but do NOT lock on errorMsg — a failed attempt
+    // must remain re-draggable once the soft error is showing.
+    if (loadingRef.current || verifyingRef.current || draggingRef.current) return;
+    if ("cancelable" in e && e.cancelable) e.preventDefault();
 
-      const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
-        moveEvent.preventDefault();
-        const currentClientX = getClientX(moveEvent);
-        const currentClientY = getClientY(moveEvent);
-        let moveX = currentClientX - refX;
-        if (moveX < 0) moveX = 0;
-        if (moveX > maxSliderX) moveX = maxSliderX;
-        sliderXRef.current = moveX;
-        setSliderX(moveX);
+    draggingRef.current = true;
+    setIsDragging(true);
+    setErrorMsg("");
 
-        const nowMove = Date.now();
-        const elapsed = nowMove - dragStartTimeRef.current;
-        if (nowMove - lastSampleTimeRef.current < 16) return;
-        lastSampleTimeRef.current = nowMove;
+    const clientX = getClientX(e);
+    const clientY = getClientY(e);
+    startXRef.current = clientX;
+    startYRef.current = clientY;
+    startTimeRef.current = Date.now();
+    sliderXRef.current = 0;
+    setSliderX(0);
+    // Production always seeds with [0, 0, 0] (relative coordinates).
+    trackRef.current = [[0, 0, 0]];
 
-        trackRef.current.push([moveX, currentClientY, elapsed]);
-      };
+    const onDrag = (moveEvent: MouseEvent | TouchEvent) => {
+      if (!draggingRef.current) return;
+      if ("cancelable" in moveEvent && moveEvent.cancelable) moveEvent.preventDefault();
 
-      const handleEnd = async () => {
-        setIsDragging(false);
-        document.removeEventListener("mousemove", handleMove);
-        document.removeEventListener("touchmove", handleMove);
-        document.removeEventListener("mouseup", handleEnd);
-        document.removeEventListener("touchend", handleEnd);
+      const xRaw = getClientX(moveEvent) - startXRef.current;
+      let x = xRaw;
+      if (x < 0) x = 0;
+      if (x > maxSliderX) x = maxSliderX;
 
-        const finalX = sliderXRef.current;
-        if (finalX < 5) return;
+      // Production keeps sliderX as a float; only the track samples are rounded.
+      sliderXRef.current = x;
+      setSliderX(x);
 
-        const endTime = Date.now();
-        const totalElapsed = endTime - dragStartTimeRef.current;
-        const lastY = trackRef.current.length > 0
-          ? trackRef.current[trackRef.current.length - 1][1]
-          : 0;
-        trackRef.current.push([finalX, lastY, totalElapsed]);
+      const relY = getClientY(moveEvent) - startYRef.current;
+      const elapsed = Date.now() - startTimeRef.current;
 
-        if (trackRef.current.length < 5) {
-          setSliderX(0);
-          setErrorMsg("请从起点开始完整滑动");
-          return;
+      if (trackRef.current.length < 150) {
+        const last = trackRef.current[trackRef.current.length - 1];
+        const sx = Math.round(x);
+        const sy = Math.round(relY);
+        if (!last || last[0] !== sx || last[1] !== sy || last[2] !== elapsed) {
+          trackRef.current.push([sx, sy, elapsed]);
         }
+      }
+    };
 
-        setVerifying(true);
-        try {
-          const encodedTrack = encodeTrack(trackRef.current);
-          const data = await api.captchaVerify(finalX, encodedTrack);
-          if (data.success && data.token) {
-            onVerify(data.token);
-          } else {
-            setSliderX(0);
-            setErrorMsg("验证失败，请重试");
-            setTimeout(() => fetchCaptcha(), 500);
-          }
-        } catch {
+    const stopDrag = async () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      setIsDragging(false);
+
+      document.removeEventListener("mousemove", onDrag);
+      document.removeEventListener("touchmove", onDrag);
+      document.removeEventListener("mouseup", stopDrag);
+      document.removeEventListener("touchend", stopDrag);
+      document.removeEventListener("touchcancel", stopDrag);
+
+      // Production submits sliderX as-is (float) with no extra end sample.
+      const finalX = sliderXRef.current;
+      if (finalX < 5) {
+        setSliderX(0);
+        sliderXRef.current = 0;
+        trackRef.current = [];
+        return;
+      }
+
+      setVerifying(true);
+      verifyingRef.current = true;
+      try {
+        const encodedTrack = encodeTrack(trackRef.current);
+        const data = await api.captchaVerify(finalX, encodedTrack);
+        if (data.success && data.token) {
+          onVerifyRef.current(data.token);
+        } else {
           setSliderX(0);
-          setErrorMsg("网络错误，请重试");
-          setTimeout(() => fetchCaptcha(), 500);
+          sliderXRef.current = 0;
+          trackRef.current = [];
+          // Surface the backend reason (production does the same with n.error).
+          // Helps distinguish "对齐" vs "异常拖动" vs "非人类" on mobile.
+          const fail = data as { error?: string; message?: string };
+          setErrorMsg(fail.error || fail.message || "验证失败，请重试");
+          setTimeout(() => {
+            void fetchCaptchaRef.current();
+          }, 500);
         }
-        setVerifying(false);
-      };
+      } catch {
+        setSliderX(0);
+        sliderXRef.current = 0;
+        trackRef.current = [];
+        setErrorMsg("网络错误，请重试");
+        setTimeout(() => {
+          void fetchCaptchaRef.current();
+        }, 500);
+      }
+      setVerifying(false);
+      verifyingRef.current = false;
+    };
 
-      document.addEventListener("mousemove", handleMove);
-      document.addEventListener("touchmove", handleMove, { passive: false });
-      document.addEventListener("mouseup", handleEnd);
-      document.addEventListener("touchend", handleEnd);
+    document.addEventListener("mousemove", onDrag);
+    // passive:false so touch scrolling doesn't steal the gesture on mobile
+    document.addEventListener("touchmove", onDrag, { passive: false });
+    document.addEventListener("mouseup", stopDrag);
+    document.addEventListener("touchend", stopDrag);
+    document.addEventListener("touchcancel", stopDrag);
+  }, [maxSliderX]);
+
+  // Native non-passive touchstart, re-bound when the knob mounts (after bgImage).
+  useEffect(() => {
+    if (!bgImage) return;
+    const btn = sliderBtnRef.current;
+    if (!btn) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+      startDrag(e);
+    };
+    btn.addEventListener("touchstart", onTouchStart, { passive: false });
+    return () => btn.removeEventListener("touchstart", onTouchStart);
+  }, [bgImage, startDrag]);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      startDrag(e.nativeEvent);
     },
-    [loading, verifying, errorMsg, maxSliderX, onVerify, fetchCaptcha]
+    [startDrag],
   );
 
   return (
-    <div className="flex flex-col items-center gap-4 w-[340px]">
+    <div className="flex flex-col items-center gap-4 w-full">
       <div className="flex justify-center items-center w-full">
         <span className="font-semibold text-slate-800 dark:text-slate-100">请完成安全验证</span>
       </div>
@@ -187,6 +249,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
 
         {bgImage && (
           <div className="relative w-[310px] h-[155px] bg-slate-200 dark:bg-slate-600 rounded-md overflow-hidden animate-fade-in">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={bgImage}
               alt="验证码背景"
@@ -194,6 +257,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
               draggable={false}
             />
             {pieceImage && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={pieceImage}
                 alt="滑动拼图"
@@ -208,12 +272,16 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
               </div>
             )}
             {errorMsg && !verifying && (
-              <div className="absolute inset-0 flex items-center justify-center bg-red-500/15 dark:bg-red-900/40 z-20 animate-fade-in">
-                <svg viewBox="0 0 24 24" className="w-12 h-12 text-red-500 drop-shadow-md" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-red-500/15 dark:bg-red-900/40 z-20 animate-fade-in px-3">
+                <svg viewBox="0 0 24 24" className="w-12 h-12 text-red-500 drop-shadow-md shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="15" y1="9" x2="9" y2="15" />
                   <line x1="9" y1="9" x2="15" y2="15" />
                 </svg>
+                {/* Backend error string — same as production captcha (n.error). */}
+                <span className="text-xs text-red-600 dark:text-red-300 text-center break-words max-w-full">
+                  {errorMsg}
+                </span>
               </div>
             )}
           </div>
@@ -238,7 +306,7 @@ export default function SliderCaptcha({ onVerify, onClose }: SliderCaptchaProps)
                 : "cursor-grab text-slate-600 dark:text-slate-300"
             } ${verifying ? "pointer-events-none opacity-70" : ""}`}
             style={{ left: `${sliderX}px`, touchAction: "none" }}
-            onMouseDown={handleStart}
+            onMouseDown={onMouseDown}
           >
             &rarr;
           </div>

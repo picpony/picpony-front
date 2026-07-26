@@ -12,6 +12,29 @@ interface ImageCardProps {
   image: PonyImage;
 }
 
+let spoilerTagsRaw: string | null = null;
+let spoilerTags = new Set<string>();
+
+function getActiveSpoilerTags() {
+  if (typeof window === 'undefined') return spoilerTags;
+  try {
+    const nextRaw = localStorage.getItem('trixie_active_spoilered_tags') || '[]';
+    if (nextRaw === spoilerTagsRaw) return spoilerTags;
+    spoilerTagsRaw = nextRaw;
+    const values: unknown = JSON.parse(nextRaw);
+    spoilerTags = new Set(
+      Array.isArray(values)
+        ? values.filter((value): value is string => typeof value === 'string')
+            .map((value) => value.trim().toLowerCase())
+        : [],
+    );
+  } catch {
+    spoilerTagsRaw = null;
+    spoilerTags = new Set();
+  }
+  return spoilerTags;
+}
+
 export default memo(function ImageCard({ image }: ImageCardProps) {
   const heroElementRef = useRef<HTMLDivElement>(null);
   const fullUrl = image.representations?.full || image.view_url || '';
@@ -34,7 +57,7 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
 
   const [isSpoilered, setIsSpoilered] = useState(false);
   const [isRevealed, setIsRevealed] = useState(false);
-  const { sourceKey: heroSourceKey, warmFrame, ...heroLinkProps } = useHeroLink({
+  const { sourceKey: heroSourceKey, ...heroLinkProps } = useHeroLink({
     image,
     sourceRef: heroElementRef,
     previewSrc: isWebm ? mediaUrl : thumbUrl,
@@ -43,14 +66,9 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
   });
 
   useEffect(() => {
-    try {
-      const spoileredTags: string[] = JSON.parse(localStorage.getItem('trixie_active_spoilered_tags') || '[]');
-      if (spoileredTags.length > 0) {
-        const imgTags = (image.tags || []).map(t => t.trim().toLowerCase());
-        const matched = spoileredTags.some(st => imgTags.includes(st.trim().toLowerCase()));
-        setIsSpoilered(matched);
-      }
-    } catch { /* ignore */ }
+    const activeTags = getActiveSpoilerTags();
+    const next = (image.tags || []).some((tag) => activeTags.has(tag.trim().toLowerCase()));
+    setIsSpoilered((current) => current === next ? current : next);
   }, [image.tags]);
 
   const handleReveal = (e: React.MouseEvent) => {
@@ -59,26 +77,34 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
     setIsRevealed(true);
   };
 
+  const aspectW = image.width || 1;
+  const aspectH = image.height || 1;
+  const intrinsicH = Math.round(300 * (aspectH / aspectW));
+
   return (
-    <div className="w-full">
+    <div
+      className="image-card w-full"
+      style={{ containIntrinsicSize: `auto ${intrinsicH}px` }}
+    >
       <Link
         {...heroLinkProps}
-        className="block relative rounded-lg overflow-hidden group bg-slate-100 dark:bg-slate-800 w-full text-left cursor-pointer"
+        className="image-hero-card-link block relative rounded-lg group bg-slate-100 dark:bg-slate-800 w-full text-left cursor-pointer"
       >
+        {/* Media only — hero hides this node while the flyer flies. */}
         <div
           ref={heroElementRef}
           data-image-hero-role="thumbnail"
           data-image-hero-id={image.id}
           data-image-hero-source-key={heroSourceKey}
           className="relative w-full overflow-hidden rounded-lg"
-          style={{ aspectRatio: `${image.width || 1} / ${image.height || 1}` }}
+          style={{ aspectRatio: `${aspectW} / ${aspectH}` }}
         >
           {isWebm ? (
             <div
               className="relative w-full overflow-hidden"
               style={{ paddingBottom: `${((image.height || 1) / (image.width || 1)) * 100}%` }}
             >
-              <ImageCardVideo src={mediaUrl} onLoadedData={warmFrame} />
+              <ImageCardVideo src={mediaUrl} />
             </div>
           ) : (
             <FadeInImage
@@ -86,17 +112,15 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
               alt={image.name || `Image ${image.id}`}
               width={image.width || 0}
               height={image.height || 0}
-              quality={88}
-              onLoad={warmFrame}
-              className="w-full h-auto object-cover transition-all duration-500"
+              quality={82}
+              className="w-full h-auto object-cover"
               sizes="(max-width: 767px) 50vw, (max-width: 1023px) 33vw, (min-width: 1536px) 304px, 25vw"
             />
           )}
 
           {isSpoilered && !isRevealed && (
             <div
-              className="absolute inset-0 z-10 flex flex-col items-center justify-center cursor-pointer select-none"
-              style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', background: 'rgba(0,0,0,0.3)' }}
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center cursor-pointer select-none bg-black/55"
               onClick={handleReveal}
             >
               <MdVisibility size={36} className="text-white mb-2 opacity-80" />
@@ -105,17 +129,30 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           )}
         </div>
 
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none" />
-        <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm pointer-events-none">
-          {format}
-        </div>
-        <div title="点赞数" className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm flex items-center gap-1 pointer-events-none">
-          <MdThumbUp size={12} />
-          <span>{image.score}</span>
-        </div>
-        <div title="评论数" className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs font-medium rounded backdrop-blur-sm flex items-center gap-1 pointer-events-none">
-          <MdComment size={12} />
-          <span>{image.comment_count}</span>
+        {/* Stay at the card slot; CSS fades when the sibling thumb is hero-locked. */}
+        <div
+          data-image-hero-chrome
+          className="pointer-events-none absolute inset-0 z-[2] rounded-lg"
+          aria-hidden="true"
+        >
+          <div className="absolute inset-0 rounded-lg bg-black/0 transition-colors duration-200 group-hover:bg-black/10" />
+          <div className="absolute top-2 right-2 rounded bg-black/55 px-2 py-1 text-xs font-medium text-white">
+            {format}
+          </div>
+          <div
+            title="点赞数"
+            className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/55 px-2 py-1 text-xs font-medium text-white"
+          >
+            <MdThumbUp size={12} />
+            <span>{image.score}</span>
+          </div>
+          <div
+            title="评论数"
+            className="absolute bottom-2 right-2 flex items-center gap-1 rounded bg-black/55 px-2 py-1 text-xs font-medium text-white"
+          >
+            <MdComment size={12} />
+            <span>{image.comment_count}</span>
+          </div>
         </div>
       </Link>
     </div>

@@ -17,7 +17,7 @@ import type {
   Comment,
 } from '@/lib/types/image';
 import type { CaptchaGetResponse, CaptchaVerifyResponse } from '@/lib/types/captcha';
-import { proxyFetch, handleDerpiError } from './client';
+import { proxyFetch } from './client';
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 
 // ---------------------------------------------------------------------------
@@ -325,7 +325,9 @@ export async function sendMessage(token: string, receiverId: number, content: st
 // ---------------------------------------------------------------------------
 
 export async function captchaGet(): Promise<CaptchaGetResponse> {
-  const res = await fetch(`${PICPONY_API_BASE}?action=captcha_get`);
+  const res = await fetch(`${PICPONY_API_BASE}?action=captcha_get`, {
+    cache: 'no-store',
+  });
   return res.json();
 }
 
@@ -334,6 +336,7 @@ export async function captchaVerify(x: number, track?: string): Promise<CaptchaV
   if (track) body.track = track;
   const res = await fetch(`${PICPONY_API_BASE}?action=captcha_verify`, {
     method: 'POST',
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });

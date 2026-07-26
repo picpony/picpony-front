@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { MdCollectionsBookmark } from "react-icons/md";
-import Link from "next/link";
 import { api, PonyImage } from "@/lib/api";
 import { useAuth } from "@/lib/hooks";
 import MasonryGrid from "@/components/MasonryGrid";
@@ -24,6 +23,89 @@ function FavoritesList() {
   const [activeTab, setActiveTab] = useState<'picpony' | 'derpibooru'>('picpony');
   const [apiKey, setApiKey] = useState<string | null>(null);
   const { getUserInfo } = useAuth();
+
+  const loadDerpibooruFaves = useCallback(async (key: string, targetPage: number) => {
+    try {
+      const query = encodeURIComponent('(my:faves), -explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, -anthro, -humanized, pony');
+      const res = await fetch(`https://trixiebooru.org/api/v1/json/search/images?q=${query}&page=${targetPage}&per_page=50&sf=created_at&sd=desc&key=${key}`, {
+        cache: 'no-store',
+        headers: {
+          'User-Agent': 'PicPony/1.0'
+        }
+      });
+
+      if (!res.ok) throw new Error('Failed to load Derpibooru favorites');
+
+      const data = await res.json();
+
+      if (targetPage === 1) {
+        setImages(data.images);
+      } else {
+        setImages(prev => {
+          const existingIds = new Set(prev.map(img => img.id));
+          const newImages = data.images.filter((img: PonyImage) => !existingIds.has(img.id));
+          return [...prev, ...newImages];
+        });
+      }
+
+      setPage(targetPage);
+      setHasMore(data.images.length === 50);
+    } catch (err) {
+      console.error("Failed to load Derpibooru favorites:", err);
+      if (targetPage === 1) setError(err as Error);
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, []);
+
+  const loadImages = useCallback(async (ids: number[], targetPage: number) => {
+    try {
+      const idsForPage = ids.slice((targetPage - 1) * 50, targetPage * 50);
+
+      if (idsForPage.length === 0) {
+        setHasMore(false);
+        setIsLoading(false);
+        return;
+      }
+
+      const query = idsForPage.map(id => `id:${id}`).join(' OR ');
+
+      const res = await fetch(`https://trixiebooru.org/api/v1/json/search/images?q=${encodeURIComponent(query)}&page=1&per_page=50`, {
+        cache: 'no-store',
+        headers: {
+          'User-Agent': 'PicPony/1.0'
+        }
+      });
+
+      if (!res.ok) throw new Error('Failed to load image details');
+
+      const data = await res.json();
+
+      const sortedImages = data.images.sort((a: PonyImage, b: PonyImage) => {
+        return idsForPage.indexOf(a.id) - idsForPage.indexOf(b.id);
+      });
+
+      if (targetPage === 1) {
+        setImages(sortedImages);
+      } else {
+        setImages(prev => {
+          const existingIds = new Set(prev.map(img => img.id));
+          const newImages = sortedImages.filter((img: PonyImage) => !existingIds.has(img.id));
+          return [...prev, ...newImages];
+        });
+      }
+
+      setPage(targetPage);
+      setHasMore(targetPage * 50 < ids.length);
+    } catch (err) {
+      console.error("Failed to load image details:", err);
+      if (targetPage === 1) setError(err as Error);
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchFaves = async () => {
@@ -71,90 +153,7 @@ function FavoritesList() {
     };
 
     fetchFaves();
-  }, [retryCount, activeTab, router]);
-
-  const loadDerpibooruFaves = async (key: string, targetPage: number) => {
-    try {
-      const query = encodeURIComponent('(my:faves), -explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, -anthro, -humanized, pony');
-      const res = await fetch(`https://trixiebooru.org/api/v1/json/search/images?q=${query}&page=${targetPage}&per_page=50&sf=created_at&sd=desc&key=${key}`, {
-        cache: 'no-store',
-        headers: {
-          'User-Agent': 'PicPony/1.0'
-        }
-      });
-
-      if (!res.ok) throw new Error('Failed to load Derpibooru favorites');
-
-      const data = await res.json();
-
-      if (targetPage === 1) {
-        setImages(data.images);
-      } else {
-        setImages(prev => {
-          const existingIds = new Set(prev.map(img => img.id));
-          const newImages = data.images.filter((img: PonyImage) => !existingIds.has(img.id));
-          return [...prev, ...newImages];
-        });
-      }
-
-      setPage(targetPage);
-      setHasMore(data.images.length === 50);
-    } catch (err) {
-      console.error("Failed to load Derpibooru favorites:", err);
-      if (targetPage === 1) setError(err as Error);
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  };
-
-  const loadImages = async (ids: number[], targetPage: number) => {
-    try {
-      const idsForPage = ids.slice((targetPage - 1) * 50, targetPage * 50);
-
-      if (idsForPage.length === 0) {
-        setHasMore(false);
-        setIsLoading(false);
-        return;
-      }
-
-      const query = idsForPage.map(id => `id:${id}`).join(' OR ');
-
-      const res = await fetch(`https://trixiebooru.org/api/v1/json/search/images?q=${encodeURIComponent(query)}&page=1&per_page=50`, {
-        cache: 'no-store',
-        headers: {
-          'User-Agent': 'PicPony/1.0'
-        }
-      });
-
-      if (!res.ok) throw new Error('Failed to load image details');
-
-      const data = await res.json();
-
-      const sortedImages = data.images.sort((a: PonyImage, b: PonyImage) => {
-        return idsForPage.indexOf(a.id) - idsForPage.indexOf(b.id);
-      });
-
-      if (targetPage === 1) {
-        setImages(sortedImages);
-      } else {
-        setImages(prev => {
-          const existingIds = new Set(prev.map(img => img.id));
-          const newImages = sortedImages.filter((img: PonyImage) => !existingIds.has(img.id));
-          return [...prev, ...newImages];
-        });
-      }
-
-      setPage(targetPage);
-      setHasMore(targetPage * 50 < ids.length);
-    } catch (err) {
-      console.error("Failed to load image details:", err);
-      if (targetPage === 1) setError(err as Error);
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  };
+  }, [retryCount, activeTab, router, getUserInfo, loadImages, loadDerpibooruFaves]);
 
   const loadMore = async () => {
     if (isLoadingMore || !hasMore) return;

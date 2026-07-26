@@ -71,10 +71,13 @@ export function distributeToMasonryColumns<T extends { height?: number; width?: 
 }
 
 /**
- * Encrypt track data using XOR with key 0x5A, then base64 encode.
- * Matches backend validation in api.php captcha_verify.
- * Track format: array of [x, y, elapsedMs] points.
- * Uses Uint8Array for safe binary encoding.
+ * Encrypt track data using XOR with key 0x5A (90), then base64 encode.
+ * Matches backend validation in api.php captcha_verify / production Vue captcha.
+ * Track format: array of [x, relativeY, elapsedMs] points
+ *   - x: slider offset in the 310-wide puzzle (0..260)
+ *   - relativeY: clientY - startY (NOT absolute clientY)
+ *   - elapsedMs: ms since drag start
+ * First point is always [0, 0, 0].
  */
 export function encodeTrack(track: [number, number, number][]): string {
   const jsonStr = JSON.stringify(track);

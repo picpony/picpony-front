@@ -74,7 +74,7 @@ export default function FeaturedBanner() {
     featured?.representations?.thumb_small ||
     featured?.representations?.thumb ||
     fullUrl;
-  const { sourceKey: heroSourceKey, warmFrame, ...heroLinkProps } = useHeroLink({
+  const { sourceKey: heroSourceKey, ...heroLinkProps } = useHeroLink({
     image: featured,
     sourceRef: heroElementRef,
     previewSrc: isVideo ? displayVideoUrl : displayImageUrl,
@@ -102,8 +102,9 @@ export default function FeaturedBanner() {
   return (
     <Link
       {...heroLinkProps}
-      className="mb-6 sm:mb-8 rounded-xl overflow-hidden relative group block"
+      className="image-hero-card-link mb-6 sm:mb-8 rounded-xl relative group block"
     >
+      {/* Media only — hero hides this while the flyer flies. */}
       <div
         ref={heroElementRef}
         data-image-hero-role="thumbnail"
@@ -121,26 +122,31 @@ export default function FeaturedBanner() {
               muted
               playsInline
               preload="auto"
-              onLoadedData={warmFrame}
               className="w-full h-full object-cover"
             />
           ) : (
             <FadeInImage
               src={displayImageUrl}
               alt={featured.name || `Featured Image ${featured.id}`}
+              eager
               width={featured.width || 0}
               height={featured.height || 0}
               quality={88}
-              onLoad={warmFrame}
               className="w-full h-full object-cover"
               sizes="(min-width: 1536px) 1216px, calc(100vw - 2rem)"
             />
           )}
         </div>
+      </div>
+
+      {/* Labels stay in the original card slot and simply fade via CSS. */}
+      <div
+        data-image-hero-chrome
+        className="pointer-events-none absolute inset-0 z-20 rounded-xl"
+        aria-hidden="true"
+      >
         <div
-          data-image-hero-shade
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-10 rounded-xl"
+          className="absolute inset-0 rounded-xl"
           style={{
             backgroundImage: [
               'linear-gradient(to right, rgba(0, 0, 0, 0.3), transparent)',
@@ -148,61 +154,60 @@ export default function FeaturedBanner() {
             ].join(', '),
           }}
         />
-      </div>
-
-      <div className="absolute bottom-0 left-0 right-0 z-20 p-4 sm:p-6 md:p-8">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/90 text-white text-xs font-semibold rounded-full mb-2 sm:mb-3 backdrop-blur-sm">
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-          近日推荐
-        </div>
-
-        {featured.description && (
-          <p className="text-white/90 text-sm sm:text-base line-clamp-2 max-w-2xl mb-2 sm:mb-3 leading-relaxed drop-shadow-lg">
-            {featured.description.split('\n')[0]
-              .replace(/\r/g, '')
-              .replace(/\\#/g, '#')
-              .replace(/#mylittlepony|#mlp|#scitwi/gi, '')
-              .replace(/> /g, '')
-              .trim()
-              .substring(0, 150)}
-          </p>
-        )}
-
-        {featured.tags && featured.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2 sm:mb-3 max-w-2xl">
-            {featured.tags.slice(0, 6).map((tag) => (
-              <span
-                key={tag}
-                className="px-2 py-0.5 bg-black/40 backdrop-blur-sm text-white/85 text-xs rounded-full truncate max-w-[140px]"
-              >
-                {tag}
-              </span>
-            ))}
-            {featured.tags.length > 6 && (
-              <span className="px-2 py-0.5 text-white/60 text-xs">
-                +{featured.tags.length - 6}
-              </span>
-            )}
+        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8">
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary/90 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm sm:mb-3">
+            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+            近日推荐
           </div>
-        )}
 
-        <div className="flex items-center gap-3 sm:gap-4 text-white/80 text-xs sm:text-sm pointer-events-none">
-          <div className="flex items-center gap-1">
-            <MdThumbUp size={14} />
-            <span>{featured.score?.toLocaleString() || 0}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <MdComment size={14} />
-            <span>{featured.comment_count?.toLocaleString() || 0}</span>
-          </div>
-          {featured.uploader && (
-            <div className="flex items-center gap-1">
-              <MdPerson size={14} />
-              <span>{featured.uploader}</span>
+          {featured.description && (
+            <p className="mb-2 max-w-2xl text-sm leading-relaxed text-white/90 line-clamp-2 drop-shadow-lg sm:mb-3 sm:text-base">
+              {featured.description.split('\n')[0]
+                .replace(/\r/g, '')
+                .replace(/\\#/g, '#')
+                .replace(/#mylittlepony|#mlp|#scitwi/gi, '')
+                .replace(/> /g, '')
+                .trim()
+                .substring(0, 150)}
+            </p>
+          )}
+
+          {featured.tags && featured.tags.length > 0 && (
+            <div className="mb-2 flex max-w-2xl flex-wrap gap-1.5 sm:mb-3">
+              {featured.tags.slice(0, 6).map((tag) => (
+                <span
+                  key={tag}
+                  className="max-w-[140px] truncate rounded-full bg-black/40 px-2 py-0.5 text-xs text-white/85 backdrop-blur-sm"
+                >
+                  {tag}
+                </span>
+              ))}
+              {featured.tags.length > 6 && (
+                <span className="px-2 py-0.5 text-xs text-white/60">
+                  +{featured.tags.length - 6}
+                </span>
+              )}
             </div>
           )}
+
+          <div className="flex items-center gap-3 text-xs text-white/80 sm:gap-4 sm:text-sm">
+            <div className="flex items-center gap-1">
+              <MdThumbUp size={14} />
+              <span>{featured.score?.toLocaleString() || 0}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <MdComment size={14} />
+              <span>{featured.comment_count?.toLocaleString() || 0}</span>
+            </div>
+            {featured.uploader && (
+              <div className="flex items-center gap-1">
+                <MdPerson size={14} />
+                <span>{featured.uploader}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Link>

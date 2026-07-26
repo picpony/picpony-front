@@ -5,29 +5,30 @@ import {
   useEffect,
   useRef,
   type ComponentProps,
+  type MouseEvent,
   type PointerEvent,
   type RefObject,
 } from 'react';
 import type Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { PonyImage } from '@/lib/types/image';
+import { cancelImageDetailPrefetch } from '@/lib/detail';
 import {
-  cancelImageDetailPrefetch,
-  prefetchImageDetail,
-} from '@/lib/detail';
-import {
-  canUseImageHeroTransition,
-  isImageHeroTransitionRunning,
-  navigateToImageWithHero,
+  canAnimateImageHero,
   prepareImageHero,
-  warmImageHeroFrame,
+  requestImageHeroOpen,
   warmImageHero,
+  warmImageHeroFrame,
   type ImageHeroSnapshot,
 } from '@/lib/hero';
+import { isScrollLikelyActive } from '@/lib/hero/scrollActivity';
 
 type HeroLinkKind = 'card' | 'featured';
 type NavigateHandler = NonNullable<ComponentProps<typeof Link>['onNavigate']>;
-const HOVER_INTENT_DELAY = 70;
+
+const HOVER_INTENT_DELAY_MS = 70;
+const FOCUS_INTENT_DELAY_MS = 120;
+const SNAPSHOT_REUSE_MS = 1500;
 
 export function useHeroLink<T extends HTMLElement>({
   image,
@@ -44,140 +45,173 @@ export function useHeroLink<T extends HTMLElement>({
 }) {
   const router = useRouter();
   const preparedRef = useRef<ImageHeroSnapshot | null>(null);
-  const expiryTimerRef = useRef<number | null>(null);
-  const hoverTimerRef = useRef<number | null>(null);
-  const cancelFrameWarmRef = useRef<(() => void) | null>(null);
+  const expiryTimerRef = useRef(0);
+  const intentTimerRef = useRef(0);
+  const cancelFrameWarmRef = useRef<Disposer | null>(null);
+  const capturedPointerRef = useRef<number | null>(null);
+  const clickOwnedRef = useRef(false);
   const href = image ? `/pic/${image.id}` : '#';
 
   const clearPrepared = useCallback(() => {
-    if (expiryTimerRef.current !== null) {
-      window.clearTimeout(expiryTimerRef.current);
-      expiryTimerRef.current = null;
-    }
+    if (expiryTimerRef.current) window.clearTimeout(expiryTimerRef.current);
+    expiryTimerRef.current = 0;
     preparedRef.current = null;
   }, []);
 
-  const cancelHoverIntent = useCallback((cancelDetail = false) => {
-    if (hoverTimerRef.current !== null) {
-      window.clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
+  const cancelIntent = useCallback((cancelDetail = false) => {
+    if (intentTimerRef.current) window.clearTimeout(intentTimerRef.current);
+    intentTimerRef.current = 0;
     cancelFrameWarmRef.current?.();
     cancelFrameWarmRef.current = null;
     if (cancelDetail && image) cancelImageDetailPrefetch(image.id);
   }, [image]);
 
-  const warmFrame = useCallback(() => {
+  const warmRouteAndMedia = useCallback((priority: 'background' | 'immediate') => {
+    if (!image) return;
+    router.prefetch(href);
+    void warmImageHero(image.id, priority);
     cancelFrameWarmRef.current?.();
     cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current);
-  }, [sourceRef]);
+  }, [href, image, router, sourceRef]);
 
-  const warmImmediately = useCallback(() => {
-    if (!image) return;
-    cancelHoverIntent();
-    router.prefetch(href);
-    void warmImageHero(image.id);
-  }, [cancelHoverIntent, href, image, router]);
-
-  const scheduleHoverWarm = useCallback(() => {
-    if (!image || hoverTimerRef.current !== null) return;
-    hoverTimerRef.current = window.setTimeout(() => {
-      hoverTimerRef.current = null;
-      router.prefetch(href);
-      void warmImageHero();
-      void prefetchImageDetail(image.id, { priority: 'background' }).catch(() => undefined);
-      warmFrame();
-    }, HOVER_INTENT_DELAY);
-  }, [href, image, router, warmFrame]);
+  const scheduleIntent = useCallback((delay: number) => {
+    if (!image || intentTimerRef.current || isScrollLikelyActive()) return;
+    intentTimerRef.current = window.setTimeout(() => {
+      intentTimerRef.current = 0;
+      if (!isScrollLikelyActive()) warmRouteAndMedia('background');
+    }, delay);
+  }, [image, warmRouteAndMedia]);
 
   const prepare = useCallback(() => {
-    if (!image || isImageHeroTransitionRunning()) return null;
-    const prepared = preparedRef.current;
-    if (prepared && Date.now() - prepared.createdAt < 1500) return prepared;
-
+    if (!image || !sourceRef.current) return null;
+    const cached = preparedRef.current;
+    if (cached && Date.now() - cached.createdAt < SNAPSHOT_REUSE_MS) return cached;
     clearPrepared();
     cancelFrameWarmRef.current?.();
     cancelFrameWarmRef.current = null;
-    const next = prepareImageHero(
+    const snapshot = prepareImageHero(
       image,
       sourceRef.current,
       canAnimate,
       previewSrc,
     );
-    preparedRef.current = next;
-    if (next) {
+    preparedRef.current = snapshot;
+    if (snapshot) {
       expiryTimerRef.current = window.setTimeout(() => {
-        if (preparedRef.current === next) preparedRef.current = null;
-        expiryTimerRef.current = null;
-      }, 1600);
+        if (preparedRef.current === snapshot) preparedRef.current = null;
+        expiryTimerRef.current = 0;
+      }, SNAPSHOT_REUSE_MS + 100);
     }
-    return next;
+    return snapshot;
   }, [canAnimate, clearPrepared, image, previewSrc, sourceRef]);
 
   const takePrepared = useCallback(() => {
-    const prepared = preparedRef.current;
+    const cached = preparedRef.current;
     clearPrepared();
-    return prepared && Date.now() - prepared.createdAt < 1500
-      ? prepared
+    return cached && Date.now() - cached.createdAt < SNAPSHOT_REUSE_MS
+      ? cached
       : prepare();
   }, [clearPrepared, prepare]);
 
-  const handleNavigate: NavigateHandler = useCallback((event) => {
+  const activateHero = useCallback(() => {
     if (!image) return;
-    if (isImageHeroTransitionRunning()) {
+    const source = sourceRef.current;
+    const snapshot = takePrepared();
+    if (!source || !snapshot || !canAnimateImageHero(snapshot)) return false;
+    const background = {
+      pathname: window.location.pathname,
+      search: window.location.search,
+    };
+    return requestImageHeroOpen({
+      snapshot,
+      source,
+      detailHref: href,
+      background,
+      navigation: {
+        push: (nextHref) => router.push(nextHref, { scroll: false }),
+        replace: (nextHref) => router.replace(nextHref, { scroll: false }),
+      },
+    });
+  }, [href, image, router, sourceRef, takePrepared]);
+
+  const handleNavigate: NavigateHandler = useCallback((event) => {
+    if (clickOwnedRef.current) {
       event.preventDefault();
       return;
     }
+    if (activateHero()) event.preventDefault();
+  }, [activateHero]);
 
-    const snapshot = takePrepared();
-    const source = sourceRef.current;
-    if (!snapshot || !source || !canUseImageHeroTransition(snapshot)) return;
-
+  const handleClick = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    cancelIntent();
+    warmRouteAndMedia('immediate');
+    prepare();
+    if (!activateHero()) return;
+    clickOwnedRef.current = true;
     event.preventDefault();
-    const originHref = `${window.location.pathname}${window.location.search}`;
-    void navigateToImageWithHero(
-      snapshot,
-      source,
-      () => {
-        window.history.pushState(
-          { ...window.history.state, picponyHero: href },
-          '',
-          originHref,
-        );
-        router.replace(href, { scroll: false });
-      },
-      (navigationHandled) => {
-        if (!navigationHandled) window.history.back();
-      },
-      { detailHref: href },
-    );
-  }, [href, image, router, sourceRef, takePrepared]);
+    queueMicrotask(() => {
+      clickOwnedRef.current = false;
+    });
+  }, [activateHero, cancelIntent, prepare, warmRouteAndMedia]);
 
-  useEffect(() => {
-    return () => {
-      clearPrepared();
-      cancelHoverIntent(true);
-    };
-  }, [cancelHoverIntent, clearPrepared]);
+  useEffect(() => () => {
+    clearPrepared();
+    cancelIntent(true);
+  }, [cancelIntent, clearPrepared]);
 
   return {
     href,
     sourceKey: image ? `${kind}:${image.id}` : '',
-    warmFrame,
     prefetch: false as const,
     scroll: false as const,
-    onPointerEnter: scheduleHoverWarm,
-    onPointerLeave: () => cancelHoverIntent(true),
-    onPointerDown: (event: PointerEvent<HTMLAnchorElement>) => {
-      warmImmediately();
-      if (event.button === 0) prepare();
-    },
-    onClick: () => {
-      warmImmediately();
-      prepare();
-    },
-    onFocus: warmImmediately,
-    onBlur: () => cancelHoverIntent(true),
     onNavigate: handleNavigate,
+    onClick: handleClick,
+    onPointerEnter: () => scheduleIntent(HOVER_INTENT_DELAY_MS),
+    onPointerLeave: () => cancelIntent(true),
+    onFocus: () => scheduleIntent(FOCUS_INTENT_DELAY_MS),
+    onBlur: () => cancelIntent(true),
+    onPointerDown: (event: PointerEvent<HTMLAnchorElement>) => {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        capturedPointerRef.current = event.pointerId;
+      } catch {
+        capturedPointerRef.current = null;
+      }
+    },
+    onPointerUp: (event: PointerEvent<HTMLAnchorElement>) => {
+      if (capturedPointerRef.current !== event.pointerId) return;
+      capturedPointerRef.current = null;
+      try {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      } catch {
+        // The browser may release capture when native scrolling wins.
+      }
+    },
+    onPointerCancel: (event: PointerEvent<HTMLAnchorElement>) => {
+      if (capturedPointerRef.current !== event.pointerId) return;
+      capturedPointerRef.current = null;
+    },
   };
 }
+
+type Disposer = () => void;

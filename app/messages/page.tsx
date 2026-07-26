@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api, Notification } from '@/lib/api';
-import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack, MdOutlineNotificationsActive, MdSearch } from 'react-icons/md';
+import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack, MdSearch } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
 import Spinner from '@/components/Spinner';
 
@@ -21,6 +21,7 @@ import RichTextRenderer from '@/components/RichTextRenderer';
 
 export default function MessagesPage() {
   const searchParams = useSearchParams();
+  const toUserIdParam = searchParams.get('to');
   const [activeTab, setActiveTab] = useState<'announcement' | 'notification' | 'interaction' | 'chat'>('announcement');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -60,7 +61,7 @@ export default function MessagesPage() {
     }
   }, [messages, activeTab]);
 
-  const fetchUnreadCounts = async () => {
+  const fetchUnreadCounts = useCallback(async () => {
     try {
       const storedUser = localStorage.getItem('user_info');
       if (!storedUser) return;
@@ -78,11 +79,11 @@ export default function MessagesPage() {
     } catch (err) {
       console.error('获取未读数量失败', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchUnreadCounts();
-  }, []);
+    queueMicrotask(() => { void fetchUnreadCounts(); });
+  }, [fetchUnreadCounts]);
 
   useEffect(() => {
     const loadEmojis = async () => {
@@ -93,13 +94,12 @@ export default function MessagesPage() {
   }, []);
 
   useEffect(() => {
-    const toUserId = searchParams.get('to');
-    if (!toUserId) return;
+    if (!toUserIdParam) return;
 
-    const targetId = parseInt(toUserId, 10);
+    const targetId = parseInt(toUserIdParam, 10);
     if (isNaN(targetId)) return;
 
-    setActiveTab('chat');
+    queueMicrotask(() => setActiveTab('chat'));
 
     const timer = setTimeout(async () => {
       const existing = contacts.find(c => c.id === targetId);
@@ -111,7 +111,6 @@ export default function MessagesPage() {
       try {
         const storedUser = localStorage.getItem('user_info');
         if (!storedUser) return;
-        const user = JSON.parse(storedUser);
 
         const res = await api.getUserProfile(String(targetId));
         if (res.success && res.user) {
@@ -134,7 +133,9 @@ export default function MessagesPage() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchParams.get('to')]);
+    // contacts intentionally omitted: only re-run when deep-link target changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toUserIdParam]);
 
   const handleCloseEmojiPicker = () => {
     setIsEmojiPickerClosing(true);
@@ -167,7 +168,7 @@ export default function MessagesPage() {
     };
   }, [showEmojiPicker, isEmojiPickerClosing]);
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -183,9 +184,9 @@ export default function MessagesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -208,9 +209,9 @@ export default function MessagesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchUnreadCounts]);
 
-  const fetchInteractionNotifications = async (page: number = 1) => {
+  const fetchInteractionNotifications = useCallback(async (page: number = 1) => {
     setLoading(true);
     setError(null);
     try {
@@ -235,9 +236,9 @@ export default function MessagesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchUnreadCounts]);
 
-  const fetchContacts = async (silent = false) => {
+  const fetchContacts = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true);
       setError(null);
@@ -262,9 +263,9 @@ export default function MessagesPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchMessages = async (contactId: number, silent = false) => {
+  const fetchMessages = useCallback(async (contactId: number, silent = false) => {
     if (!silent) setLoadingMessages(true);
     try {
       const storedUser = localStorage.getItem('user_info');
@@ -282,25 +283,28 @@ export default function MessagesPage() {
     } finally {
       setLoadingMessages(false);
     }
-  };
+  }, [currentUsername, fetchUnreadCounts, fetchContacts]);
 
   useEffect(() => {
-    if (activeTab === 'announcement') {
-      fetchAnnouncements();
-    } else if (activeTab === 'notification') {
-      fetchNotifications();
-    } else if (activeTab === 'interaction') {
-      fetchInteractionNotifications();
-    } else {
-      fetchContacts();
-    }
-  }, [activeTab]);
+    // Defer so loaders' sync setState is not in the effect body
+    queueMicrotask(() => {
+      if (activeTab === 'announcement') {
+        void fetchAnnouncements();
+      } else if (activeTab === 'notification') {
+        void fetchNotifications();
+      } else if (activeTab === 'interaction') {
+        void fetchInteractionNotifications();
+      } else {
+        void fetchContacts();
+      }
+    });
+  }, [activeTab, fetchAnnouncements, fetchNotifications, fetchInteractionNotifications, fetchContacts]);
 
   useEffect(() => {
     if (selectedContact) {
-      fetchMessages(selectedContact.id);
+      queueMicrotask(() => { void fetchMessages(selectedContact.id); });
     }
-  }, [selectedContact]);
+  }, [selectedContact, fetchMessages]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedContact || sending) return;

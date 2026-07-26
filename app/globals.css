@@ -218,25 +218,86 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+/* Isolate each gallery tile's paint invalidation while its image decodes or
+   its metadata chips change. */
+.image-card {
+  contain: layout paint style;
+  /* Per-card JS sets a better intrinsic height; this is the fallback only. */
+  contain-intrinsic-size: auto 320px;
+}
+
+/* Card chrome is leased only by the active session; avoid permanent layers. */
+.image-hero-card-link [data-image-hero-chrome] {
+  opacity: 1;
+  transition: opacity 220ms ease;
+}
+
+/*
+ * The gallery anchor is a sibling of the transformed visual, so its flyer can
+ * sit above Stage/routes instead of being trapped by the sink stacking context.
+ */
+[data-image-detail-background-visual] {
+  contain: layout paint style;
+  backface-visibility: hidden;
+  transform-origin: center top;
+}
+
+/*
+ * Each anchor lives in its native scroll coordinate system. A layer is
+ * positioned at the scroll origin captured by the controller, so normal and
+ * inertial scrolling move the flyer with its source without a scrollTop rAF
+ * correction. Do not give anchors a z-index or transform: that would create a
+ * new stacking context and trap a flyer below the Stage.
+ */
+.image-hero-gallery-anchor,
+.image-hero-stage-anchor {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* During a close the route shell is visually leaving, but new native input
+   must reach the already-visible gallery. The old scroller remains scrollable
+   so an already-latched stream can publish its residual delta to the gallery. */
+html[data-image-hero-transition='back'] [data-image-detail-overlay],
+html[data-image-hero-transition='back'] [data-image-detail-overlay] *,
+html[data-image-hero-transition='back'] [data-image-detail-floating-back='route'] {
+  pointer-events: none !important;
+}
+
+/* Gallery cards use `contain: paint`, which clips descendant outlines to the
+   padding box. A UA rectangular :focus ring then survives only as four dark
+   corner stubs on rounded thumbs (gone after the next click). Suppress the
+   clipped ring for mouse/history focus; keyboard uses an *inset* ring that
+   stays inside the paint containment box. */
+a:has([data-image-hero-role='thumbnail']):focus,
+a:has([data-image-hero-role='thumbnail']):-moz-focusring {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+
+a:has([data-image-hero-role='thumbnail']):focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--foreground) 55%, transparent) !important;
+}
+
 /* Shared image transition: a single flyer stays inside the app content area. */
 [data-image-detail-host] {
-  --image-detail-overlay-offset: 2rem;
+  /* Shared by the stage and the real route so both render the identical
+     header/page stack and the hero handoff cannot shift. */
+  --image-detail-overlay-offset: 1.5rem;
   --image-detail-page-padding: 1rem;
-  --image-detail-header-height: 9rem;
-  --image-detail-stage-padding: 1rem;
-  --image-hero-target-top: calc(
-    var(--image-detail-overlay-offset) +
-    var(--image-detail-page-padding) +
-    var(--image-detail-header-height) +
-    var(--image-detail-stage-padding)
-  );
+  --image-detail-header-height: 7.25rem;
 }
 
 @media (min-width: 640px) {
   [data-image-detail-host] {
-    --image-detail-overlay-offset: 2rem;
+    --image-detail-overlay-offset: 1.5rem;
     --image-detail-page-padding: 1.5rem;
-    --image-detail-header-height: 10rem;
+    --image-detail-header-height: 8.25rem;
   }
 }
 
@@ -253,8 +314,16 @@ body {
   height: var(--image-detail-header-height);
 }
 
-.image-hero-destination {
-  top: var(--image-hero-target-top);
+.image-detail-header-route {
+  min-height: var(--image-detail-header-height);
+}
+
+/* Freeze route geometry only while Stage and route must be pixel-identical.
+   After handoff, long-title expansion is allowed to grow the real header. */
+html[data-image-hero-transition] .image-detail-header-route {
+  height: var(--image-detail-header-height);
+  max-height: var(--image-detail-header-height);
+  overflow: hidden;
 }
 
 .image-detail-meta {
@@ -266,8 +335,38 @@ body {
 }
 
 .image-detail-deferred {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 1200px;
+  /* Detail content remains real in-flow content. `content-visibility:auto`
+     made the first scroll after a Hero handoff reveal blank space until the
+     browser decided to repaint the skipped subtree. */
+  content-visibility: visible;
+  contain: none;
+}
+
+.image-detail-stage-body {
+  min-height: 100dvh;
+}
+
+/* The Canvas owns only the Hero flight. Once the native preview has decoded,
+   the routed image becomes an ordinary in-flow element before the next paint;
+   the full-resolution image then replaces it atomically after decode. */
+.image-detail-preview-native {
+  opacity: 1;
+}
+
+.image-detail-final {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-image-detail-hero-active='false'][data-image-detail-final-ready='true']
+  > .image-detail-final {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+[data-image-detail-hero-active='false'][data-image-detail-final-ready='true']
+  > .image-detail-preview-native {
+  opacity: 0;
 }
 
 html[data-image-hero-transition] #nprogress {
@@ -279,54 +378,43 @@ html[data-image-hero-transition] #nprogress {
   animation: none;
 }
 
-html[data-image-hero-transition='forward'] [data-image-detail-surface] {
-  opacity: 0;
-}
-
-html[data-image-hero-transition='forward'] [data-image-detail-reveal] {
-  opacity: 0;
-  transform: translate3d(0, 18px, 0);
-}
-
-html[data-image-hero-transition='forward'] [data-image-hero-role='detail'] {
-  opacity: 0;
-}
-
-html[data-image-hero-interrupted='true'] [data-image-detail-overlay]:not([data-image-hero-stage]),
-html[data-image-hero-interrupted='true'] [data-image-detail-floating-back='route'] {
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-html[data-image-hero-interrupted='true'] [data-image-hero-stage],
-html[data-image-hero-interrupted='true'] [data-image-hero-stage-foreground] {
-  pointer-events: none !important;
-}
-
+/* The foreground flyer sits above Stage and route surfaces without a fixed layer. */
 .image-hero-flight-layer {
-  position: fixed;
+  position: absolute;
   z-index: 45;
-  overflow: hidden;
+  overflow: visible;
   pointer-events: none;
-  contain: layout paint style;
+  contain: layout style;
+}
+
+/* A superseded close may finish below the new Stage, but must never cover the
+   newly opened foreground flyer. The Stage surface starts transparent, so the
+   retiring layer still receives real overlapping paint before it fades out. */
+.image-hero-flight-layer[data-image-hero-role='retiring'] {
+  z-index: 43;
 }
 
 .image-hero-flyer {
   position: absolute;
   left: 0;
   top: 0;
-  overflow: hidden;
+  /* No overflow/radius here — scale stays compositor-friendly. */
+  overflow: visible;
   transform-origin: top left;
   backface-visibility: hidden;
-  will-change: transform, border-radius;
+  will-change: transform;
   background: transparent;
 }
 
-.image-hero-flyer img {
-  display: block;
-  width: 100%;
-  height: 100%;
+.image-hero-flyer-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform: translateZ(0);
+  /* Isolate so rounded corners do not composite parent fill / AA fringe. */
+  isolation: isolate;
   backface-visibility: hidden;
+  /* radius animated via WAAPI on this node only */
 }
 
 .image-hero-flight-compensator {

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, FormEvent, Suspense, useEffect, useRef, useCallback } from "react";
+import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSelectedLayoutSegment } from "next/navigation";
+import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from "next/navigation";
 import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
@@ -17,8 +17,10 @@ import {
 } from "./BackgroundLocation";
 import { api } from "@/lib/api";
 import {
+  getImageHeroRuntime,
   getImageHeroBackgroundLocation,
   initializeImageHeroHistory,
+  subscribeImageHeroRuntime,
 } from "@/lib/hero";
 import HeroStage from '@/components/HeroStage';
 
@@ -64,13 +66,10 @@ function TabNavBar() {
   const searchParams = useBackgroundSearchParams();
   const router = useRouter();
   const currentTab = searchParams.get('tab') || 'gallery';
-  const [pendingTab, setPendingTab] = useState<string | null>(null);
 
   const switchTab = (tab: string) => {
     if (tab === (currentTab === 'forum' ? 'forum' : 'gallery')) return;
-    setPendingTab(tab);
     setTimeout(() => {
-      setPendingTab(null);
       const params = new URLSearchParams(searchParams.toString());
       if (tab === 'gallery') params.delete('tab');
       else params.set('tab', tab);
@@ -121,67 +120,123 @@ export default function AppLayout({
   initialCollapsed: boolean;
   initialDark: boolean;
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return initialCollapsed;
-    if (window.innerWidth < 768) return true;
-    const saved = localStorage.getItem('sidebar_collapsed');
-    return saved !== null ? saved === 'true' : initialCollapsed;
-  });
+  // Keep the first client render identical to SSR. Browser-only sources
+  // (viewport, localStorage) are applied after mount to avoid hydration mismatch.
+  const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const saved = localStorage.getItem('user_menu_open');
-    if (saved !== null) return saved === 'true';
-    return !!localStorage.getItem('user_info');
-  });
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return initialDark;
-    const storedFollowSystem = localStorage.getItem('followSystemPrefersColorScheme');
-    if (storedFollowSystem === null || storedFollowSystem === 'true') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    const storedDark = localStorage.getItem('darkMode');
-    return storedDark === 'true';
-  });
+  const [darkMode, setDarkMode] = useState(initialDark);
 
-  const [followSystem, setFollowSystem] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const stored = localStorage.getItem('followSystemPrefersColorScheme');
-    return stored === null ? true : stored === 'true';
-  });
+  const [followSystem, setFollowSystem] = useState(true);
   const [isDarkDropdownOpen, setIsDarkDropdownOpen] = useState(false);
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
+  const liveSearchParams = useSearchParams();
+  const liveSearch = liveSearchParams.toString();
   const imageDetailSegment = useSelectedLayoutSegment('imageDetail');
   const imageDetailId = pathname.match(/^\/pic\/([^/]+)$/)?.[1];
   const isImageDetailOpen = Boolean(
     imageDetailId && imageDetailSegment === imageDetailId
   );
-  const imageHeroBackground = isImageDetailOpen
-    ? getImageHeroBackgroundLocation()
-    : null;
-  const backgroundPathname = isImageDetailOpen
-    ? imageHeroBackground?.pathname ?? '/'
-    : pathname;
-  const frozenBackgroundSearch = isImageDetailOpen
-    ? imageHeroBackground?.search ?? ''
-    : null;
+  const imageHeroRuntime = useSyncExternalStore(
+    subscribeImageHeroRuntime,
+    getImageHeroRuntime,
+    getImageHeroRuntime,
+  );
+  const retainedHeroBackground = getImageHeroBackgroundLocation();
+  const activeHeroBackground = imageHeroRuntime.background ?? retainedHeroBackground;
+  const activeBackgroundSearch = activeHeroBackground
+    ? new URLSearchParams(activeHeroBackground.search).toString()
+    : '';
+  const reactRouteAtBackground = Boolean(
+    activeHeroBackground &&
+    pathname === activeHeroBackground.pathname &&
+    liveSearch === activeBackgroundSearch,
+  );
+  const browserAtBackground = Boolean(
+    activeHeroBackground &&
+    typeof window !== 'undefined' &&
+    window.location.pathname === activeHeroBackground.pathname &&
+    new URLSearchParams(window.location.search).toString() === activeBackgroundSearch,
+  );
+  // History reaches the background before App Router publishes pathname,
+  // parallel-slot and search snapshots together. Keep the controller's exact
+  // background location through that one-way lag so query pages never observe
+  // a transient empty search and refetch themselves.
+  const bridgeRouteCommit = Boolean(
+    activeHeroBackground &&
+    browserAtBackground &&
+    !reactRouteAtBackground,
+  );
+  const imageHeroBackground = imageHeroRuntime.background ?? (
+    bridgeRouteCommit ? retainedHeroBackground : null
+  );
+  const backgroundPathname = imageHeroBackground?.pathname ?? (
+    isImageDetailOpen ? '/' : pathname
+  );
+  const frozenBackgroundSearch = imageHeroBackground?.search ?? (
+    isImageDetailOpen ? '' : null
+  );
 
   useEffect(() => {
-    initializeImageHeroHistory();
-  }, []);
-
-  const systemPrefersDark = typeof window !== 'undefined'
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches
-    : false;
+    initializeImageHeroHistory({
+      push: (href) => router.push(href, { scroll: false }),
+      replace: (href) => router.replace(href, { scroll: false }),
+    });
+  }, [router]);
 
   const applyDarkMode = useCallback((dark: boolean) => {
     document.documentElement.classList.toggle('dark', dark);
     document.cookie = `darkMode=${dark};path=/;max-age=${365 * 24 * 60 * 60}`;
   }, []);
+
+  // Apply browser-only preferences after mount so the first paint matches SSR.
+  // queueMicrotask keeps setState out of the effect's synchronous body
+  // (react-hooks/set-state-in-effect) while still running before the next paint.
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      const storedFollowSystem = localStorage.getItem('followSystemPrefersColorScheme');
+      const shouldFollowSystem = storedFollowSystem === null || storedFollowSystem === 'true';
+      setFollowSystem(shouldFollowSystem);
+
+      if (shouldFollowSystem) {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setDarkMode(isDark);
+        applyDarkMode(isDark);
+      } else {
+        const storedDark = localStorage.getItem('darkMode');
+        const isDark = storedDark === 'true';
+        setDarkMode(isDark);
+        applyDarkMode(isDark);
+      }
+
+      const savedMenu = localStorage.getItem('user_menu_open');
+      if (savedMenu !== null) {
+        setIsUserMenuOpen(savedMenu === 'true');
+      } else if (localStorage.getItem('user_info')) {
+        setIsUserMenuOpen(true);
+      }
+
+      if (window.innerWidth < 768) {
+        setIsCollapsed(true);
+        return;
+      }
+      const savedSidebar = localStorage.getItem('sidebar_collapsed');
+      if (savedSidebar !== null) {
+        setIsCollapsed(savedSidebar === 'true');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyDarkMode]);
 
   useEffect(() => {
     if (!followSystem) return;
@@ -269,8 +324,6 @@ export default function AppLayout({
       return newState;
     });
   };
-  const router = useRouter();
-
   useEffect(() => {
     const updateUserInfo = async () => {
       const storedUser = localStorage.getItem('user_info');
@@ -326,8 +379,7 @@ export default function AppLayout({
         setIsCollapsed(true);
       }
     };
-
-    handleResize();
+    // Initial mobile collapse is handled in the mount prefs effect above.
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -336,6 +388,8 @@ export default function AppLayout({
     setIsCollapsed(prev => {
       const newState = !prev;
       localStorage.setItem('sidebar_collapsed', String(newState));
+      // Cookie keeps SSR in sync with the last desktop preference.
+      document.cookie = `sidebarCollapsed=${newState};path=/;max-age=${365 * 24 * 60 * 60}`;
       return newState;
     });
   };
@@ -378,6 +432,8 @@ export default function AppLayout({
           <MdMenu size={24} />
         </button>
         <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex mr-2">
+          {/* Static brand SVG; next/image adds no benefit here. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
         </Link>
         <div
@@ -609,6 +665,7 @@ export default function AppLayout({
           <div className="relative min-h-0 flex-1">
             <main
               data-image-detail-background
+              data-image-hero-gallery-scroll
               className="main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-white dark:bg-slate-950"
             >
               <div
@@ -633,19 +690,12 @@ export default function AppLayout({
                   </div>
                 </footer>
               </div>
+              <div
+                data-image-hero-gallery-anchor
+                aria-hidden="true"
+                className="image-hero-gallery-anchor"
+              />
             </main>
-            <div
-              data-image-hero-destination
-              aria-hidden="true"
-              className="image-hero-destination pointer-events-none absolute inset-x-0 z-0 opacity-0"
-            >
-              <div className="mx-auto flex w-full max-w-7xl justify-center pl-6 pr-8 sm:pl-8 sm:pr-10">
-                <div
-                  data-image-hero-destination-box
-                  className="flex-none overflow-hidden rounded-lg"
-                />
-              </div>
-            </div>
             <Suspense fallback={null}>
               <HeroStage />
             </Suspense>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api, ForumPostDetail, ForumComment } from '@/lib/api';
-import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend, MdLink, MdContentCopy, MdReply, MdClose } from 'react-icons/md';
+import { MdErrorOutline, MdRefresh, MdArrowBack, MdThumbUp, MdOutlineThumbUp, MdComment, MdVisibility, MdSend, MdContentCopy, MdReply, MdClose } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -56,8 +56,11 @@ export default function ForumPostPage() {
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
-    setError(null);
+    queueMicrotask(() => {
+      if (!isMounted) return;
+      setIsLoading(true);
+      setError(null);
+    });
 
     api.getForumPostDetail(id, page)
       .then((res) => {

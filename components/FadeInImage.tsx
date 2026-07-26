@@ -8,68 +8,35 @@ interface FadeInImageProps extends ImageProps {
   eager?: boolean;
 }
 
+/**
+ * Lightweight fade-in. Avoids per-image rAF + long CSS transitions that thrash
+ * the gallery scroll frame on low-end devices when many thumbs decode at once.
+ */
 export default function FadeInImage({ className, onLoad, eager = false, ...props }: FadeInImageProps) {
   const [isLoaded, setIsLoaded] = useState(eager);
-  const [isInView, setIsInView] = useState(eager);
-  const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    if (eager) return;
-    const container = containerRef.current;
-    if (!container) return;
-    const root = container.closest<HTMLElement>('[data-image-detail-background]');
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsInView(true);
-          observer.disconnect();
-        }
-      },
-      {
-        root,
-        rootMargin: '300px',
-      }
-    );
-
-    observer.observe(container);
-
-    return () => observer.disconnect();
-  }, [eager]);
-
-  useEffect(() => {
+    // Synchronous complete check — no rAF (rAF during fling = jank).
     if (imgRef.current?.complete) {
-      requestAnimationFrame(() => {
-        setIsLoaded(true);
-      });
+      setIsLoaded(true);
     }
   }, [props.src]);
 
   return (
-    <div 
-      ref={containerRef}
-      className="relative w-full h-full flex items-center justify-center overflow-hidden"
-    >
-      {isInView && (
-        <Image
-          {...props}
-          alt={props.alt || ""}
-          ref={imgRef}
-          className={`
-            ${className || ''}
-            transition-opacity duration-500 ease-in-out
-            ${isLoaded ? 'opacity-100' : 'opacity-0'}
-          `}
-          onLoad={(e) => {
-            setIsLoaded(true);
-            if (onLoad) {
-              onLoad(e);
-            }
-          }}
-          loading={props.loading ?? 'eager'}
-        />
-      )}
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden contain-paint">
+      <Image
+        {...props}
+        alt={props.alt || ''}
+        ref={imgRef}
+        className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-150 ease-out`}
+        onLoad={(e) => {
+          setIsLoaded(true);
+          onLoad?.(e);
+        }}
+        loading={props.loading ?? (eager ? 'eager' : 'lazy')}
+        decoding={props.decoding ?? 'async'}
+      />
     </div>
   );
 }

@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
-  MdEdit, MdClose, MdEmail, MdPerson, MdImage,
+  MdEdit, MdClose, MdPerson, MdImage,
   MdSearch, MdFilterList, MdVisibility, MdSpeed,
-  MdSecurity, MdNotifications, MdSettings,
-  MdShield, MdHome,
+  MdSecurity, MdNotifications,
+  MdHome,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
@@ -51,15 +51,25 @@ function lsSet(key: string, val: string | boolean) {
   localStorage.setItem(key, String(val));
 }
 
-const CLOUD_SETTINGS_KEYS = [
-  'contentFilter', 'showTagCounts', 'banAnthro', 'banDiscomfort',
-  'onlyPony', 'showChineseTags', 'useCdn', 'usePicponyProxy',
-  'useApiAccel', 'showUploads', 'showFaves', 'showPosts',
-  'showComments', 'emailNotifMessage', 'emailNotifReply',
-  'defaultHomeSort', 'defaultSearchSort',
-] as const;
-
-type CloudSettings = Partial<Record<(typeof CLOUD_SETTINGS_KEYS)[number], string | boolean>>;
+type CloudSettings = {
+  contentFilter?: string;
+  showTagCounts?: boolean;
+  banAnthro?: boolean;
+  banDiscomfort?: boolean;
+  onlyPony?: boolean;
+  showChineseTags?: boolean;
+  useCdn?: boolean;
+  usePicponyProxy?: boolean;
+  useApiAccel?: boolean;
+  showUploads?: boolean;
+  showFaves?: boolean;
+  showPosts?: boolean;
+  showComments?: boolean;
+  emailNotifMessage?: boolean;
+  emailNotifReply?: boolean;
+  defaultHomeSort?: string;
+  defaultSearchSort?: string;
+};
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -212,48 +222,54 @@ export default function SettingsPage() {
     } catch (err) {
       console.warn('云端同步设置失败:', err);
     }
-    typeof window !== 'undefined' && window.dispatchEvent(new Event('settings_updated'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('settings_updated'));
+    }
   }, [userToken, contentFilter, showTagCounts, banAnthro, banDiscomfort, onlyPony, showChineseTags, useCdn, usePicponyProxy, useApiAccel, showUploads, showFaves, showPosts, showComments, emailNotifMessage, emailNotifReply, defaultHomeSort, defaultSearchSort]);
 
   const updateSetting = useCallback(<K extends keyof CloudSettings>(
     key: K,
-    value: CloudSettings[K],
+    value: NonNullable<CloudSettings[K]>,
     lsKey: string,
-    setter: (v: any) => void,
+    setter: (v: NonNullable<CloudSettings[K]>) => void,
   ) => {
-    lsSet(lsKey, value!);
+    lsSet(lsKey, value);
     setter(value);
     syncSettingsToCloud({ [key]: value } as CloudSettings);
   }, [syncSettingsToCloud]);
 
   const applyCloudSettings = useCallback((cloudSettings: CloudSettings | null) => {
     if (!cloudSettings) return;
-    const map: [keyof CloudSettings, string, (v: any) => void][] = [
-      ['contentFilter', 'trixie_content_filter', setContentFilter],
-      ['showTagCounts', 'trixie_show_tag_counts', setShowTagCounts],
-      ['banAnthro', 'trixie_ban_anthro', setBanAnthro],
-      ['banDiscomfort', 'trixie_ban_discomfort', setBanDiscomfort],
-      ['onlyPony', 'trixie_only_pony', setOnlyPony],
-      ['showChineseTags', 'picpony_show_chinese_tags', setShowChineseTags],
-      ['useCdn', 'trixie_use_cdn', setUseCdn],
-      ['usePicponyProxy', 'picpony_use_proxy', setUsePicponyProxy],
-      ['useApiAccel', 'picpony_api_accel', setUseApiAccel],
-      ['showUploads', 'picpony_show_uploads', setShowUploads],
-      ['showFaves', 'picpony_show_faves', setShowFaves],
-      ['showPosts', 'picpony_show_posts', setShowPosts],
-      ['showComments', 'picpony_show_comments', setShowComments],
-      ['emailNotifMessage', 'picpony_email_notif_message', setEmailNotifMessage],
-      ['emailNotifReply', 'picpony_email_notif_reply', setEmailNotifReply],
-      ['defaultHomeSort', 'picpony_default_home_sort', setDefaultHomeSort],
-      ['defaultSearchSort', 'picpony_default_search_sort', setDefaultSearchSort],
-    ];
-    for (const [key, lsKey, setter] of map) {
+
+    const apply = <K extends keyof CloudSettings>(
+      key: K,
+      lsKey: string,
+      setter: (v: NonNullable<CloudSettings[K]>) => void,
+    ) => {
       const val = cloudSettings[key];
       if (val !== undefined && val !== null) {
         lsSet(lsKey, val);
-        setter(val);
+        setter(val as NonNullable<CloudSettings[K]>);
       }
-    }
+    };
+
+    apply('contentFilter', 'trixie_content_filter', setContentFilter);
+    apply('showTagCounts', 'trixie_show_tag_counts', setShowTagCounts);
+    apply('banAnthro', 'trixie_ban_anthro', setBanAnthro);
+    apply('banDiscomfort', 'trixie_ban_discomfort', setBanDiscomfort);
+    apply('onlyPony', 'trixie_only_pony', setOnlyPony);
+    apply('showChineseTags', 'picpony_show_chinese_tags', setShowChineseTags);
+    apply('useCdn', 'trixie_use_cdn', setUseCdn);
+    apply('usePicponyProxy', 'picpony_use_proxy', setUsePicponyProxy);
+    apply('useApiAccel', 'picpony_api_accel', setUseApiAccel);
+    apply('showUploads', 'picpony_show_uploads', setShowUploads);
+    apply('showFaves', 'picpony_show_faves', setShowFaves);
+    apply('showPosts', 'picpony_show_posts', setShowPosts);
+    apply('showComments', 'picpony_show_comments', setShowComments);
+    apply('emailNotifMessage', 'picpony_email_notif_message', setEmailNotifMessage);
+    apply('emailNotifReply', 'picpony_email_notif_reply', setEmailNotifReply);
+    apply('defaultHomeSort', 'picpony_default_home_sort', setDefaultHomeSort);
+    apply('defaultSearchSort', 'picpony_default_search_sort', setDefaultSearchSort);
   }, []);
 
   useEffect(() => {
@@ -264,12 +280,14 @@ export default function SettingsPage() {
     }
     try {
       const user = JSON.parse(storedUser);
-      setCurrentUsername(user.username);
-      setCurrentAvatar(user.avatar || '');
-      setUserToken(user.token || '');
+      queueMicrotask(() => {
+        setCurrentUsername(user.username);
+        setCurrentAvatar(user.avatar || '');
+        setUserToken(user.token || '');
 
-      const dev = localStorage.getItem('picpony_developer') === 'true';
-      setIsDeveloper(dev);
+        const dev = localStorage.getItem('picpony_developer') === 'true';
+        setIsDeveloper(dev);
+      });
 
       api.getUser(user.token)
         .then(res => res.json())
@@ -327,7 +345,7 @@ export default function SettingsPage() {
       validFilter = 'safe';
       lsSet('trixie_content_filter', 'safe');
     }
-    setContentFilter(validFilter);
+    queueMicrotask(() => setContentFilter(validFilter));
   }, [userToken, profileBirthday, isDeveloper]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -621,7 +639,7 @@ export default function SettingsPage() {
       } else {
         showToast(data.message || '验证失败', 'error');
       }
-    } catch (err) {
+    } catch {
       showToast('验证失败', 'error');
     } finally {
       setEmailLoading(false);

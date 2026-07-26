@@ -5,6 +5,10 @@ import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
 import { useAuth } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
 import { getAssetUrl } from '@/lib/utils';
+import {
+  isImageHeroTransitionRunning,
+  waitForImageHeroTransition,
+} from '@/lib/hero';
 import '@wangeditor/editor/dist/css/style.css';
 
 import type { IDomEditor, Toolbar, IEditorConfig, IToolbarConfig } from '@wangeditor/editor';
@@ -169,16 +173,18 @@ export default function RichTextEditor({
     }
   }, [placeholder, onChange, enableImageUpload, imageUploadUrl, getToken, getTokenFromAuth, destroyEditor, value]);
 
+  // Mount once: re-running on initEditor/value changes would tear down the editor mid-edit
   useEffect(() => {
     initEditor().catch(err => console.error('编辑器初始化异常:', err));
 
     return () => {
-      if (document.documentElement.dataset.imageHeroTransition) {
-        window.setTimeout(destroyEditor, 450);
-      } else {
+      if (!isImageHeroTransitionRunning()) {
         destroyEditor();
+        return;
       }
+      void waitForImageHeroTransition().then(destroyEditor);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount/unmount lifecycle only
   }, []);
 
   useEffect(() => {

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { MdArrowBack, MdSend, MdImage, MdAdd, MdClose } from 'react-icons/md';
+import { MdArrowBack, MdSend, MdImage, MdClose } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
 import { api } from '@/lib/api';
@@ -24,18 +24,18 @@ export default function CreateForumPostPage() {
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [selectedCoverFile, setSelectedCoverFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !!localStorage.getItem('user_info');
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user_info');
-    if (!storedUser) {
+    if (!isLoggedIn) {
       router.push('/login');
-      return;
     }
-    setIsLoggedIn(true);
-  }, [router]);
+  }, [isLoggedIn, router]);
 
   const handleCoverSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,7 +113,7 @@ export default function CreateForumPostPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [title, content, category, selectedCoverFile, isSubmitting, router]);
+  }, [title, content, category, selectedCoverFile, router]);
 
   if (!isLoggedIn) return null;
 

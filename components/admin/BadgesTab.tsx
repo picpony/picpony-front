@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
-import { MdEmojiEvents, MdAdd, MdRefresh, MdEdit, MdDelete, MdContentCopy, MdLink } from 'react-icons/md';
+import { MdEmojiEvents, MdAdd, MdEdit, MdDelete, MdContentCopy, MdLink } from 'react-icons/md';
 import { SectionHeader, EmptyState, Spinner } from './';
 
 interface Badge {
@@ -24,7 +24,7 @@ interface BadgeLink {
 }
 
 export default function BadgesTab({ token }: { token: string }) {
-  const [badges, setBadges] = useState<Badge[]>([]);
+  const [badges] = useState<Badge[]>([]);
   const [badgeLinks, setBadgeLinks] = useState<BadgeLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'grant' | 'links'>('grant');
@@ -65,7 +65,24 @@ export default function BadgesTab({ token }: { token: string }) {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const linksRes = await api.adminGetBadgeLinks(token);
+        if (!cancelled) {
+          setBadgeLinks(linksRes.data?.links || linksRes.links || []);
+        }
+      } catch {
+        if (!cancelled) showToast('加载数据失败', 'error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
 
   // Confirm dialog
   const [confirmOpen, setConfirmOpen] = useState(false);
