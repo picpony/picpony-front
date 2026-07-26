@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
@@ -15,7 +15,6 @@ interface BlacklistItem {
 
 export default function BlacklistTab({ token }: { token: string }) {
   const [blacklist, setBlacklist] = useState<BlacklistItem[]>([]);
-  const [filteredBlacklist, setFilteredBlacklist] = useState<BlacklistItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchKw, setSearchKw] = useState('');
   const [imageId, setImageId] = useState('');
@@ -44,7 +43,6 @@ export default function BlacklistTab({ token }: { token: string }) {
       const data = await api.adminGetBlacklist(token);
       if (data.success) {
         setBlacklist(data.blacklist || []);
-        setFilteredBlacklist(data.blacklist || []);
       }
     } catch {
       showToast('加载黑名单失败', 'error');
@@ -59,23 +57,19 @@ export default function BlacklistTab({ token }: { token: string }) {
       .then((data) => {
         if (data.success) {
           setBlacklist(data.blacklist || []);
-          setFilteredBlacklist(data.blacklist || []);
         }
       })
       .catch(() => showToast('加载黑名单失败', 'error'))
       .finally(() => setIsLoading(false));
   }, [token]);
 
-  useEffect(() => {
-    if (!searchKw) {
-      setFilteredBlacklist(blacklist);
-      return;
-    }
+  const filteredBlacklist = useMemo(() => {
+    if (!searchKw) return blacklist;
     const kw = searchKw.toLowerCase();
-    setFilteredBlacklist(blacklist.filter(b => 
+    return blacklist.filter(b =>
       String(b.image_id) === kw ||
       b.reason?.toLowerCase().includes(kw)
-    ));
+    );
   }, [searchKw, blacklist]);
 
   const addBlacklist = async () => {

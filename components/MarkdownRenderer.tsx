@@ -23,6 +23,7 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
           ),
           img: ({ src, alt }) => {
             if (!src) return null;
+            // eslint-disable-next-line @next/next/no-img-element -- remote/dynamic markdown images
             return <img src={src} alt={alt || ''} className="max-w-full rounded-lg my-2" />;
           },
           code: ({ children }) => (

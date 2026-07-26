@@ -35,7 +35,7 @@ export default function Modal({
   useEffect(() => {
     if (isOpen) {
       everOpened.current = true;
-      setRendering(true);
+      queueMicrotask(() => setRendering(true));
     } else if (everOpened.current) {
       const timer = setTimeout(() => {
         setRendering(false);

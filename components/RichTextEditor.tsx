@@ -173,6 +173,7 @@ export default function RichTextEditor({
     }
   }, [placeholder, onChange, enableImageUpload, imageUploadUrl, getToken, getTokenFromAuth, destroyEditor, value]);
 
+  // Mount once: re-running on initEditor/value changes would tear down the editor mid-edit
   useEffect(() => {
     initEditor().catch(err => console.error('编辑器初始化异常:', err));
 
@@ -183,6 +184,7 @@ export default function RichTextEditor({
       }
       void waitForImageHeroTransition().then(destroyEditor);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount/unmount lifecycle only
   }, []);
 
   useEffect(() => {

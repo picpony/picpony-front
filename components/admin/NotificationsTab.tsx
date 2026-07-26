@@ -55,7 +55,24 @@ export default function NotificationsTab({ token }: { token: string }) {
     }
   };
 
-  useEffect(() => { loadNotifications(); }, [filter]);
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await api.adminGetNotifications(token, filter);
+        if (!cancelled && data.success) {
+          setNotifications(data.notifications || []);
+        }
+      } catch {
+        if (!cancelled) showToast('加载通知列表失败', 'error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token, filter]);
 
   const handleSend = async () => {
     if (!title.trim() || !content.trim()) {

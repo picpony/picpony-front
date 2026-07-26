@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
-import FadeInImage from '@/components/FadeInImage';
 import Checkbox from '@/components/Checkbox';
 import Modal from '@/components/Modal';
-import { 
-  MdLibraryBooks, MdAdd, MdSearch, MdEdit, MdDelete, MdContentCopy, 
+import {
+  MdLibraryBooks, MdAdd, MdSearch, MdEdit, MdDelete, MdContentCopy,
   MdTranslate, MdFileDownload, MdFileUpload, MdCloudDownload, MdClose,
   MdFeedback, MdEmojiEvents, MdCheckCircle, MdOutlineWarning
 } from 'react-icons/md';
@@ -83,9 +82,8 @@ export default function GlossaryTab() {
   };
 
   const initial = initFromStorage();
-  const [userRole, setUserRole] = useState<string>(initial.userRole);
-  const [isAdmin, setIsAdmin] = useState(initial.isAdmin);
-  const [token, setToken] = useState<string>(initial.token);
+  const [isAdmin] = useState(initial.isAdmin);
+  const [token] = useState<string>(initial.token);
   const [error, setError] = useState<string | null>(initial.initError);
   const [itemsPerPage, setItemsPerPage] = useState<number>(initial.itemsPerPage);
   const [currentPage, setCurrentPage] = useState(1);
@@ -97,7 +95,6 @@ export default function GlossaryTab() {
   const [showUntranslatedOnly, setShowUntranslatedOnly] = useState(false);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isEditModalClosing, setIsEditModalClosing] = useState(false);
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
   const [editForm, setEditForm] = useState({
     id: 0,
@@ -113,12 +110,10 @@ export default function GlossaryTab() {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
-  const [isBatchModalClosing, setIsBatchModalClosing] = useState(false);
   const [batchInput, setBatchInput] = useState('');
   const [isBatchImporting, setIsBatchImporting] = useState(false);
 
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
-  const [isSyncModalClosing, setIsSyncModalClosing] = useState(false);
   const [syncStartPage, setSyncStartPage] = useState(1);
   const [syncEndPage, setSyncEndPage] = useState(20);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -129,18 +124,15 @@ export default function GlossaryTab() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
-  const [isFeedbackModalClosing, setIsFeedbackModalClosing] = useState(false);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
 
   const [isDerpiModalOpen, setIsDerpiModalOpen] = useState(false);
-  const [isDerpiModalClosing, setIsDerpiModalClosing] = useState(false);
   const [derpiSearchQuery, setDerpiSearchQuery] = useState('');
   const [derpiResults, setDerpiResults] = useState<DerpiTag[]>([]);
   const [isDerpiSearching, setIsDerpiSearching] = useState(false);
 
   const [stats, setStats] = useState<TagStats>({ total: 0, translated: 0, leaderboard: [] });
-  const [showFullLeaderboard, setShowFullLeaderboard] = useState(false);
 
   const [glossaryConfirmModalOpen, setGlossaryConfirmModalOpen] = useState(false);
   const [glossaryConfirmTitle, setGlossaryConfirmTitle] = useState('');
@@ -162,7 +154,7 @@ export default function GlossaryTab() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  const loadTags = useCallback(async (page = 1, preserveScroll = false) => {
+  const loadTags = useCallback(async (page = 1) => {
     if (!token) return;
 
     setIsLoading(true);
@@ -319,16 +311,13 @@ export default function GlossaryTab() {
       });
     }
     setIsEditModalOpen(true);
-    setIsEditModalClosing(false);
     setDerpiSuggestions([]);
     setShowSuggestions(false);
   };
 
   const closeEditModal = () => {
-    setIsEditModalClosing(true);
     setTimeout(() => {
       setIsEditModalOpen(false);
-      setIsEditModalClosing(false);
     }, 200);
   };
 
@@ -366,7 +355,7 @@ export default function GlossaryTab() {
   const saveTag = async () => {
     if (!isAdmin || !token) return;
 
-    const { en, cn, aliases, cat, count, description, id } = editForm;
+    const { en, cn, cat, count, description, id } = editForm;
 
     if (!en.trim()) {
       showToast('英文标签不能为空', 'error');
@@ -655,7 +644,7 @@ export default function GlossaryTab() {
     try {
       const data = await api.searchDerpiTags(derpiSearchQuery);
       setDerpiResults(data.tags || []);
-    } catch (err) {
+    } catch {
       showToast('搜索失败', 'error');
     } finally {
       setIsDerpiSearching(false);
@@ -729,18 +718,6 @@ export default function GlossaryTab() {
     URL.revokeObjectURL(url);
 
     showToast('导出成功', 'success');
-  };
-
-  const loadFullLeaderboard = async () => {
-    try {
-      const data = await api.getDictionaryLeaderboard();
-      if (data.success && data.leaderboard) {
-        setStats((prev) => ({ ...prev, leaderboard: data.leaderboard }));
-        setShowFullLeaderboard(true);
-      }
-    } catch {
-      showToast('加载排行榜失败', 'error');
-    }
   };
 
   const renderTagRow = (tag: Tag) => {

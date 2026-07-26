@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
-import { MdPeople, MdAdd, MdEdit, MdDelete, MdRefresh } from 'react-icons/md';
+import { MdPeople, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
 import { SectionHeader, EmptyState, Spinner } from './';
 
 interface TeamMember {
@@ -53,7 +53,23 @@ export default function TeamTab({ token }: { token: string }) {
     }
   };
 
-  useEffect(() => { loadMembers(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await api.getTeamMembers();
+        if (!cancelled && data.success) {
+          setMembers(data.members || []);
+        }
+      } catch {
+        if (!cancelled) showToast('加载失败', 'error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const resetForm = () => {
     setForm({ name: '', role: '', category: 'developer', avatar_url: '', link_url: '', order_num: 0 });

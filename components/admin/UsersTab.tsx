@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Checkbox from '@/components/Checkbox';
@@ -38,7 +38,6 @@ const roleBadgeMap: Record<string, { label: string; color: string }> = {
 
 export default function UsersTab({ token, myRole }: { token: string; myRole: string }) {
   const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchKw, setSearchKw] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -120,7 +119,6 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       const data = await api.adminGetUsers(token);
       if (data.success) {
         setUsers(data.users || []);
-        setFilteredUsers(data.users || []);
       }
     } catch {
       showToast('加载用户失败', 'error');
@@ -135,24 +133,20 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       .then((data) => {
         if (data.success) {
           setUsers(data.users || []);
-          setFilteredUsers(data.users || []);
         }
       })
       .catch(() => showToast('加载用户失败', 'error'))
       .finally(() => setIsLoading(false));
   }, [token]);
 
-  useEffect(() => {
-    if (!searchKw) {
-      setFilteredUsers(users);
-      return;
-    }
+  const filteredUsers = useMemo(() => {
+    if (!searchKw) return users;
     const kw = searchKw.toLowerCase();
-    setFilteredUsers(users.filter(u => 
+    return users.filter(u =>
       String(u.id) === kw ||
       u.username?.toLowerCase().includes(kw) ||
       u.email?.toLowerCase().includes(kw)
-    ));
+    );
   }, [searchKw, users]);
 
   const openEditModal = (user: User) => {

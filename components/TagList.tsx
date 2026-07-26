@@ -2,9 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-const INITIAL_TAG_LIMIT = 80;
 const TAG_BATCH_SIZE = 120;
-const INITIAL_RELATION_TAG_LIMIT = 32;
 const RELATION_TAG_BATCH_SIZE = 64;
 
 export type TagGroups = { artists: string[]; ocs: string[]; regularTags: string[] };
@@ -45,7 +43,6 @@ export default function TagList({
   visibleTagLimits,
   showTagCounts,
   tagCounts,
-  imageId,
   onTagClick,
   onShowMore,
 }: TagListProps) {

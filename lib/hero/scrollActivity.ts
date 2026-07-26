@@ -21,7 +21,8 @@ export function ensureScrollActivityListeners() {
  * nested overlay scrollers. Keeping this function makes older call sites
  * harmless while avoiding per-scroller listeners and lifetime leaks.
  */
-export function bindScrollActivityRoot(_element: HTMLElement | null | undefined) {
+export function bindScrollActivityRoot(element: HTMLElement | null | undefined) {
+  void element;
   initializeHeroFrameRuntime();
 }
 

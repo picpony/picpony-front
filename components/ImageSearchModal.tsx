@@ -26,9 +26,11 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedImage(null);
-      setSelectedFile(null);
-      setDistance(0.10);
+      queueMicrotask(() => {
+        setSelectedImage(null);
+        setSelectedFile(null);
+        setDistance(0.10);
+      });
     }
   }, [isOpen]);
 

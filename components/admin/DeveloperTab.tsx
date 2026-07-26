@@ -56,7 +56,29 @@ export default function DeveloperTab({ token }: { token: string }) {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const passRes = await api.adminGetDeveloperPassword(token);
+        if (!cancelled && passRes.success) {
+          setDevPassword(passRes.password || '');
+          setPasswordUpdatedAt(passRes.updated_at || '');
+        }
+        const usersRes = await api.adminGetDeveloperUsers(token);
+        if (!cancelled && usersRes.success) {
+          setDevUsers(usersRes.users || []);
+        }
+      } catch {
+        if (!cancelled) showToast('加载数据失败', 'error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
 
   const handleRefreshPassword = async () => {
     try {

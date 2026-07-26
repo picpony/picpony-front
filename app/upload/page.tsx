@@ -6,7 +6,7 @@ import { showToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/hooks";
 import Spinner from "@/components/Spinner";
-import { MdCloudUpload, MdClose, MdLink, MdDescription, MdLocalOffer, MdInfoOutline, MdOpenInNew } from "react-icons/md";
+import { MdCloudUpload, MdClose, MdInfoOutline, MdOpenInNew } from "react-icons/md";
 
 export default function UploadPage() {
   const { getUserInfo } = useAuth();
@@ -23,45 +23,9 @@ export default function UploadPage() {
   const [uploadResult, setUploadResult] = useState<{ id: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 未登录 → 引导
-  if (!user || !user.token) {
-    return (
-      <div className="max-w-lg mx-auto mt-12 p-8 text-center animate-fade-in">
-        <MdCloudUpload size={64} className="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
-        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">需要登录</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">请先登录后再发布图片</p>
-        <button
-          onClick={() => router.push("/login")}
-          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
-        >
-          前往登录
-        </button>
-      </div>
-    );
-  }
+  const userApiKey = user ? ((user as Record<string, unknown>).api_key as string | undefined) : undefined;
 
-  const userApiKey = (user as Record<string, unknown>).api_key as string | undefined;
-
-  if (!userApiKey) {
-    return (
-      <div className="max-w-lg mx-auto mt-12 p-8 text-center animate-fade-in">
-        <MdInfoOutline size={64} className="mx-auto mb-4 text-amber-400" />
-        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">未配置 API Key</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-          发布图片需要绑定 Derpibooru API Key，请先在设置中配置
-        </p>
-        <button
-          onClick={() => router.push("/settings")}
-          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-2"
-        >
-          <MdOpenInNew size={18} />
-          前往设置
-        </button>
-      </div>
-    );
-  }
-
-  // ---- 文件选择 ----
+  // ---- 文件选择 (hooks must stay above early returns) ----
 
   const handleFileSelect = useCallback((f: File) => {
     const maxSize = 50 * 1024 * 1024; // 50MB
@@ -161,12 +125,48 @@ export default function UploadPage() {
         } catch { /* ignore */ }
         showToast(errorMsg, "error");
       }
-    } catch (err) {
+    } catch {
       showToast("网络错误，请检查网络连接后重试", "error");
     } finally {
       setIsUploading(false);
     }
   };
+
+  // 未登录 → 引导
+  if (!user || !user.token) {
+    return (
+      <div className="max-w-lg mx-auto mt-12 p-8 text-center animate-fade-in">
+        <MdCloudUpload size={64} className="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">需要登录</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">请先登录后再发布图片</p>
+        <button
+          onClick={() => router.push("/login")}
+          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
+        >
+          前往登录
+        </button>
+      </div>
+    );
+  }
+
+  if (!userApiKey) {
+    return (
+      <div className="max-w-lg mx-auto mt-12 p-8 text-center animate-fade-in">
+        <MdInfoOutline size={64} className="mx-auto mb-4 text-amber-400" />
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">未配置 API Key</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+          发布图片需要绑定 Derpibooru API Key，请先在设置中配置
+        </p>
+        <button
+          onClick={() => router.push("/settings")}
+          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-2"
+        >
+          <MdOpenInNew size={18} />
+          前往设置
+        </button>
+      </div>
+    );
+  }
 
   // ---- 渲染 ----
 
@@ -242,6 +242,7 @@ export default function UploadPage() {
 
             {preview ? (
               <div className="relative inline-block max-w-full">
+                {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
                 <img
                   src={preview}
                   alt="Preview"

@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
-import { MdShield, MdAdd, MdDelete, MdRefresh } from 'react-icons/md';
-import { SectionHeader, EmptyState, Spinner } from './';
+import { MdShield, MdAdd } from 'react-icons/md';
+import { SectionHeader, Spinner } from './';
 
 interface BlockTag {
   id: number;
@@ -60,7 +60,24 @@ export default function BlockTagsTab({ token }: { token: string }) {
     }
   };
 
-  useEffect(() => { loadBlockTags(); }, []);
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await api.getBlockTags(token);
+        if (!cancelled && data.success) {
+          setBlockTags(data.tags || {});
+        }
+      } catch {
+        if (!cancelled) showToast('加载失败', 'error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
 
   const handleAddTag = async (key: string) => {
     if (!newTagName.trim()) return;

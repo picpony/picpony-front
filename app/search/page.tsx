@@ -243,7 +243,9 @@ function SearchPageContent() {
   }, [showSuggestions, suggestions, acCursor, selectSuggestion]);
 
   useEffect(() => {
-    setInputValue(q);
+    queueMicrotask(() => {
+      setInputValue(q);
+    });
   }, [q]);
 
   useEffect(() => {
@@ -260,13 +262,19 @@ function SearchPageContent() {
     if (customResults) return;
 
     let isMounted = true;
-    setIsLoading(true);
-    setError(null);
+    queueMicrotask(() => {
+      if (!isMounted) return;
+      setIsLoading(true);
+      setError(null);
+
+      if (!q) {
+        setIsLoading(false);
+        setImages([]);
+      }
+    });
 
     if (!q) {
-      setIsLoading(false);
-      setImages([]);
-      return;
+      return () => { isMounted = false; };
     }
 
     api.getImages(q, page, sortBy === 'random' ? undefined : sortBy, sortDir)
@@ -298,15 +306,15 @@ function SearchPageContent() {
     const isSingleTag = !!q && !/[ ,:*?]/.test(q) && !q.startsWith('-');
 
     if (!isSingleTag) {
-      setTagInfo({ data: null, loading: false });
+      queueMicrotask(() => setTagInfo({ data: null, loading: false }));
       return;
     }
 
-    setTagInfo({ data: null, loading: true });
+    queueMicrotask(() => setTagInfo({ data: null, loading: true }));
 
     const token = tokenRef.current;
     if (!token) {
-      setTagInfo({ data: null, loading: false });
+      queueMicrotask(() => setTagInfo({ data: null, loading: false }));
       return;
     }
 
@@ -349,7 +357,7 @@ function SearchPageContent() {
       setPage(newPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [q]);
+  }, []);
 
   const handleImageSearchSuccess = (results: PonyImage[]) => {
     setCustomResults(results);
@@ -651,7 +659,7 @@ function SearchPageContent() {
               </div>
               <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
                 <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                  点击"应用"后，筛选条件会拼接到搜索框并执行搜索。
+                  点击&quot;应用&quot;后，筛选条件会拼接到搜索框并执行搜索。
                 </span>
                 <div className="flex gap-2">
                   <button

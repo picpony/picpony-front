@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { api, PonyImage, UserComment, UserPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import RichTextRenderer from '@/components/RichTextRenderer';
-import { MdPerson, MdCake, MdAccessTime, MdInfoOutline, MdFavorite, MdChatBubbleOutline, MdForum, MdImage, MdArticle, MdSearch, MdMessage, MdVerified, MdCloudUpload } from 'react-icons/md';
+import { MdPerson, MdCake, MdAccessTime, MdFavorite, MdChatBubbleOutline, MdForum, MdImage, MdArticle, MdSearch, MdMessage, MdVerified, MdCloudUpload } from 'react-icons/md';
 
 type ProfileTab = 'uploads' | 'faves' | 'posts' | 'comments';
 
@@ -93,7 +93,17 @@ export default function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const stored = localStorage.getItem('user_info');
+      if (stored) {
+        const user = JSON.parse(stored);
+        return user.id ?? null;
+      }
+    } catch {}
+    return null;
+  });
 
   const [tabValue, setTabValue] = useState<ProfileTab>('uploads');
 
@@ -123,7 +133,7 @@ export default function UserProfilePage() {
       const stored = localStorage.getItem('user_info');
       if (stored) {
         const user = JSON.parse(stored);
-        setCurrentUserId(user.id);
+        queueMicrotask(() => setCurrentUserId(user.id));
       }
     } catch {}
   }, []);
@@ -461,6 +471,7 @@ export default function UserProfilePage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- remote derpi avatar */}
                     <img
                       src={`https://derpicdn.net/img/${profile.derpi_user_id}/avatar.png`}
                       alt=""

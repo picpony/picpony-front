@@ -136,8 +136,9 @@ export async function proxyFetch(url: string, options?: ProxyFetchOptions): Prom
   try {
     const res = await fetch(url, options);
     if (res.ok) return res;
-    directError = new Error(`HTTP ${res.status}`);
-    (directError as any).status = res.status;
+    const httpError = new Error(`HTTP ${res.status}`) as Error & { status?: number };
+    httpError.status = res.status;
+    directError = httpError;
   } catch (err) {
     directError = err as Error;
   }

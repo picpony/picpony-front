@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { 
   MdBook, MdDashboard, MdPeople, 
   MdNotifications, MdMessage, MdEmojiEvents, 
@@ -54,9 +54,9 @@ export default function AdminPage() {
   };
 
   const initialAdmin = initAdmin();
-  const [userRole, setUserRole] = useState<string>(initialAdmin.userRole);
-  const [token, setToken] = useState<string>(initialAdmin.token);
-  const [isLoading, setIsLoading] = useState(false);
+  const [userRole] = useState<string>(initialAdmin.userRole);
+  const [token] = useState<string>(initialAdmin.token);
+  const [isLoading] = useState(false);
 
   const tabs: TabConfig[] = [
     { id: 'welcome', label: '欢迎', icon: <MdDashboard size={20} />, editorOnly: true },
@@ -87,7 +87,6 @@ export default function AdminPage() {
   const isEditor = userRole === 'editor';
   const isAdmin = ['super_admin', 'admin'].includes(userRole);
   const isSuperAdmin = userRole === 'super_admin';
-  const hasAccess = isAdmin || isEditor;
 
   const visibleTabs = tabs.filter(tab => {
     if (isEditor) return tab.editorOnly;

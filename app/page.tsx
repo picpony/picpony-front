@@ -22,13 +22,16 @@ function ImageList() {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
-    setError(null);
+    // page/retry handlers set loading; first load starts true. Avoid sync setState in effect.
+    queueMicrotask(() => {
+      if (!isMounted) return;
+      setIsLoading(true);
+      setError(null);
+    });
 
     api.getImages(undefined, page)
       .then((res) => {
@@ -92,7 +95,7 @@ function ImageList() {
         currentPage={page}
         hasMore={hasMore}
         onPageChange={handlePageChange}
-        disabled={isLoadingMore}
+        disabled={isLoading}
       />
     </>
   );

@@ -1,4 +1,4 @@
-import { Metadata, ResolvingMetadata } from 'next';
+import { Metadata } from 'next';
 import { api } from '@/lib/api';
 
 type Props = {
@@ -7,11 +7,10 @@ type Props = {
 
 export async function generateMetadata(
   { params }: Props,
-  parent: ResolvingMetadata
 ): Promise<Metadata> {
   const resolvedParams = await params;
   const id = resolvedParams.id;
-  
+
   try {
     const res = await api.getUserProfile(id);
     if (res.success && res.user) {
