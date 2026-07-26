@@ -8,7 +8,7 @@ export default function Logo({ className = 'w-32 h-auto' }: LogoProps) {
   return (
     <>
       <img
-        src="/img/picpony.svg"
+        src="/img/picpony-b.svg"
         alt="PicPony"
         className={`${className} dark:hidden`}
       />
