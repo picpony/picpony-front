@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
@@ -50,7 +49,6 @@ const tabs: { id: TaskTab; label: string; subtitle: string }[] = [
 ];
 
 export default function TasksPage() {
-  const router = useRouter();
   const [data, setData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +76,7 @@ export default function TasksPage() {
   }, []);
 
   useEffect(() => {
-    loadTasks();
+    queueMicrotask(() => { void loadTasks(); });
   }, [loadTasks]);
 
   const handleClaim = async (taskType: string) => {
@@ -106,14 +104,26 @@ export default function TasksPage() {
     if (!data) return [];
     if (activeTab === 'novice') {
       const nt = data.novice_tasks || {};
+      const bindApi = nt['bind_api'];
+      const verifyApi = nt['verify_api'];
+      const setBg = nt['set_bg'];
       return [
-        { id: 'novice_bind_api', name: '首次绑定 API Key', xp: 100, coins: 5, progress: (nt as any).bind_api?.progress || 0, target: 1, claimed: (nt as any).bind_api?.claimed || 0 },
-        { id: 'novice_verify_api', name: '首次验证 API Key', xp: 100, coins: 10, progress: (nt as any).verify_api?.progress || 0, target: 1, claimed: (nt as any).verify_api?.claimed || 0 },
-        { id: 'novice_set_bg', name: '首次设置背景图', xp: 30, coins: 2, progress: (nt as any).set_bg?.progress || 0, target: 1, claimed: (nt as any).set_bg?.claimed || 0 },
+        { id: 'novice_bind_api', name: '首次绑定 API Key', xp: 100, coins: 5, progress: bindApi?.progress || 0, target: 1, claimed: bindApi?.claimed || 0 },
+        { id: 'novice_verify_api', name: '首次验证 API Key', xp: 100, coins: 10, progress: verifyApi?.progress || 0, target: 1, claimed: verifyApi?.claimed || 0 },
+        { id: 'novice_set_bg', name: '首次设置背景图', xp: 30, coins: 2, progress: setBg?.progress || 0, target: 1, claimed: setBg?.claimed || 0 },
       ];
     }
     if (activeTab === 'daily') {
-      const t = data.tasks || {} as any;
+      const t = data.tasks || {
+        login_progress: 0,
+        login_claimed: 0,
+        fav_progress: 0,
+        fav_claimed: 0,
+        share_progress: 0,
+        share_claimed: 0,
+        comment_progress: 0,
+        comment_claimed: 0,
+      };
       return [
         { id: 'login', name: '每日登录', xp: 5, coins: 1, progress: t.login_progress ?? 0, target: 1, claimed: t.login_claimed ?? 0 },
         { id: 'fav', name: '每日收藏超过5张图片', xp: 10, coins: 2, progress: t.fav_progress ?? 0, target: 5, claimed: t.fav_claimed ?? 0 },
@@ -122,7 +132,7 @@ export default function TasksPage() {
       ];
     }
     if (activeTab === 'weekly') {
-      const wt = data.weekly_tasks || {} as any;
+      const wt = data.weekly_tasks || { upload_progress: 0, upload_claimed: 0 };
       return [
         { id: 'weekly_upload', name: '每周通过 picpony 上传新作品5次', xp: 15, coins: 5, progress: wt.upload_progress ?? 0, target: 5, claimed: wt.upload_claimed ?? 0 },
       ];

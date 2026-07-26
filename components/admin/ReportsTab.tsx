@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import { MdReport, MdOpenInNew } from 'react-icons/md';
@@ -17,7 +17,6 @@ interface Report {
 
 export default function ReportsTab({ token }: { token: string }) {
   const [reports, setReports] = useState<Report[]>([]);
-  const [filteredReports, setFilteredReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchKw, setSearchKw] = useState('');
 
@@ -27,7 +26,6 @@ export default function ReportsTab({ token }: { token: string }) {
       const data = await api.adminGetReports(token);
       if (data.success) {
         setReports(data.reports || []);
-        setFilteredReports(data.reports || []);
       }
     } catch {
       showToast('加载举报失败', 'error');
@@ -42,24 +40,20 @@ export default function ReportsTab({ token }: { token: string }) {
       .then((data) => {
         if (data.success) {
           setReports(data.reports || []);
-          setFilteredReports(data.reports || []);
         }
       })
       .catch(() => showToast('加载举报失败', 'error'))
       .finally(() => setIsLoading(false));
   }, [token]);
 
-  useEffect(() => {
-    if (!searchKw) {
-      setFilteredReports(reports);
-      return;
-    }
+  const filteredReports = useMemo(() => {
+    if (!searchKw) return reports;
     const kw = searchKw.toLowerCase();
-    setFilteredReports(reports.filter(r => 
+    return reports.filter(r =>
       String(r.id) === kw ||
       String(r.image_id) === kw ||
       r.username?.toLowerCase().includes(kw)
-    ));
+    );
   }, [searchKw, reports]);
 
   const handleReport = async (id: number, status: string) => {

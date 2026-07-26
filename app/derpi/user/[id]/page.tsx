@@ -2,11 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdPerson, MdStar, MdImage, MdAccessTime, MdArrowBack, MdSearch, MdOpenInNew, MdUpload, MdChatBubbleOutline, MdEdit, MdClose } from 'react-icons/md';
+import { MdStar, MdImage, MdSearch, MdOpenInNew, MdUpload, MdChatBubbleOutline, MdEdit } from 'react-icons/md';
 import { api, DerpiProfileUser, PonyImage } from '@/lib/api';
-import FadeInImage from '@/components/FadeInImage';
-import Spinner from '@/components/Spinner';
-import { showToast } from '@/components/Toast';
 
 const PER_PAGE = 24;
 
@@ -28,8 +25,11 @@ export default function DerpiUserPage() {
   // Fetch profile
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
-    setError(null);
+    queueMicrotask(() => {
+      if (!isMounted) return;
+      setIsLoading(true);
+      setError(null);
+    });
 
     (async () => {
       const data = await api.getDerpiProfile(userId);
@@ -50,7 +50,9 @@ export default function DerpiUserPage() {
   useEffect(() => {
     if (!profile) return;
     let isMounted = true;
-    setIsUploadsLoading(true);
+    queueMicrotask(() => {
+      if (isMounted) setIsUploadsLoading(true);
+    });
 
     (async () => {
       const query = `uploader_id:${profile.id}`;
@@ -133,6 +135,7 @@ export default function DerpiUserPage() {
           <div className="flex items-center gap-4">
             <div className="shrink-0">
               {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- remote derpi avatar URL
                 <img
                   src={avatarUrl}
                   alt={profile.name}
@@ -168,6 +171,7 @@ export default function DerpiUserPage() {
               {profile.awards.map((award, i) => {
                 const badgeUrl = award.image_url || award.badge_url || award.url || award.image;
                 return badgeUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- remote badge image
                   <img
                     key={i}
                     src={badgeUrl}
@@ -258,6 +262,7 @@ export default function DerpiUserPage() {
                         className="group relative aspect-square rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-pointer"
                         onClick={() => handleUploadClick(img.id)}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic derpi thumbnail */}
                         <img
                           src={thumbUrl}
                           alt={img.name || `#${img.id}`}

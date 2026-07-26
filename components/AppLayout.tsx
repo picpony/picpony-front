@@ -66,13 +66,10 @@ function TabNavBar() {
   const searchParams = useBackgroundSearchParams();
   const router = useRouter();
   const currentTab = searchParams.get('tab') || 'gallery';
-  const [pendingTab, setPendingTab] = useState<string | null>(null);
 
   const switchTab = (tab: string) => {
     if (tab === (currentTab === 'forum' ? 'forum' : 'gallery')) return;
-    setPendingTab(tab);
     setTimeout(() => {
-      setPendingTab(null);
       const params = new URLSearchParams(searchParams.toString());
       if (tab === 'gallery') params.delete('tab');
       else params.set('tab', tab);
@@ -123,36 +120,16 @@ export default function AppLayout({
   initialCollapsed: boolean;
   initialDark: boolean;
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return initialCollapsed;
-    if (window.innerWidth < 768) return true;
-    const saved = localStorage.getItem('sidebar_collapsed');
-    return saved !== null ? saved === 'true' : initialCollapsed;
-  });
+  // Keep the first client render identical to SSR. Browser-only sources
+  // (viewport, localStorage) are applied after mount to avoid hydration mismatch.
+  const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const saved = localStorage.getItem('user_menu_open');
-    if (saved !== null) return saved === 'true';
-    return !!localStorage.getItem('user_info');
-  });
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return initialDark;
-    const storedFollowSystem = localStorage.getItem('followSystemPrefersColorScheme');
-    if (storedFollowSystem === null || storedFollowSystem === 'true') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    const storedDark = localStorage.getItem('darkMode');
-    return storedDark === 'true';
-  });
+  const [darkMode, setDarkMode] = useState(initialDark);
 
-  const [followSystem, setFollowSystem] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const stored = localStorage.getItem('followSystemPrefersColorScheme');
-    return stored === null ? true : stored === 'true';
-  });
+  const [followSystem, setFollowSystem] = useState(true);
   const [isDarkDropdownOpen, setIsDarkDropdownOpen] = useState(false);
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -212,14 +189,54 @@ export default function AppLayout({
     });
   }, [router]);
 
-  const systemPrefersDark = typeof window !== 'undefined'
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches
-    : false;
-
   const applyDarkMode = useCallback((dark: boolean) => {
     document.documentElement.classList.toggle('dark', dark);
     document.cookie = `darkMode=${dark};path=/;max-age=${365 * 24 * 60 * 60}`;
   }, []);
+
+  // Apply browser-only preferences after mount so the first paint matches SSR.
+  // queueMicrotask keeps setState out of the effect's synchronous body
+  // (react-hooks/set-state-in-effect) while still running before the next paint.
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      const storedFollowSystem = localStorage.getItem('followSystemPrefersColorScheme');
+      const shouldFollowSystem = storedFollowSystem === null || storedFollowSystem === 'true';
+      setFollowSystem(shouldFollowSystem);
+
+      if (shouldFollowSystem) {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setDarkMode(isDark);
+        applyDarkMode(isDark);
+      } else {
+        const storedDark = localStorage.getItem('darkMode');
+        const isDark = storedDark === 'true';
+        setDarkMode(isDark);
+        applyDarkMode(isDark);
+      }
+
+      const savedMenu = localStorage.getItem('user_menu_open');
+      if (savedMenu !== null) {
+        setIsUserMenuOpen(savedMenu === 'true');
+      } else if (localStorage.getItem('user_info')) {
+        setIsUserMenuOpen(true);
+      }
+
+      if (window.innerWidth < 768) {
+        setIsCollapsed(true);
+        return;
+      }
+      const savedSidebar = localStorage.getItem('sidebar_collapsed');
+      if (savedSidebar !== null) {
+        setIsCollapsed(savedSidebar === 'true');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyDarkMode]);
 
   useEffect(() => {
     if (!followSystem) return;
@@ -362,8 +379,7 @@ export default function AppLayout({
         setIsCollapsed(true);
       }
     };
-
-    handleResize();
+    // Initial mobile collapse is handled in the mount prefs effect above.
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -372,6 +388,8 @@ export default function AppLayout({
     setIsCollapsed(prev => {
       const newState = !prev;
       localStorage.setItem('sidebar_collapsed', String(newState));
+      // Cookie keeps SSR in sync with the last desktop preference.
+      document.cookie = `sidebarCollapsed=${newState};path=/;max-age=${365 * 24 * 60 * 60}`;
       return newState;
     });
   };
@@ -414,6 +432,8 @@ export default function AppLayout({
           <MdMenu size={24} />
         </button>
         <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex mr-2">
+          {/* Static brand SVG; next/image adds no benefit here. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
         </Link>
         <div

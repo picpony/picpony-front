@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
@@ -14,16 +14,8 @@ interface User {
   coins: number;
 }
 
-const roleBadgeMap: Record<string, { label: string; color: string }> = {
-  super_admin: { label: '超管', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
-  admin: { label: '管理员', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
-  editor: { label: '小编', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-  user: { label: '用户', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
-};
-
 export default function WealthTab({ token }: { token: string }) {
   const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchKw, setSearchKw] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -41,7 +33,6 @@ export default function WealthTab({ token }: { token: string }) {
       const data = await api.adminGetWealth(token);
       if (data.success) {
         setUsers(data.users || []);
-        setFilteredUsers(data.users || []);
       }
     } catch {
       showToast('加载用户失败', 'error');
@@ -56,23 +47,19 @@ export default function WealthTab({ token }: { token: string }) {
       .then((data) => {
         if (data.success) {
           setUsers(data.users || []);
-          setFilteredUsers(data.users || []);
         }
       })
       .catch(() => showToast('加载用户失败', 'error'))
       .finally(() => setIsLoading(false));
   }, [token]);
 
-  useEffect(() => {
-    if (!searchKw) {
-      setFilteredUsers(users);
-      return;
-    }
+  const filteredUsers = useMemo(() => {
+    if (!searchKw) return users;
     const kw = searchKw.toLowerCase();
-    setFilteredUsers(users.filter(u => 
+    return users.filter(u =>
       String(u.id) === kw ||
       u.username?.toLowerCase().includes(kw)
-    ));
+    );
   }, [searchKw, users]);
 
   const openModal = (user: User) => {

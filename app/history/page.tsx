@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MdHistory, MdDelete, MdDeleteSweep, MdImage, MdPerson } from 'react-icons/md';
@@ -32,7 +32,7 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
-  const fetchHistory = async (targetPage: number) => {
+  const fetchHistory = useCallback(async (targetPage: number) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -50,16 +50,16 @@ export default function HistoryPage() {
       } else {
         setError('获取浏览历史失败');
       }
-    } catch (err) {
+    } catch {
       setError('网络请求失败');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
-    fetchHistory(1);
-  }, []);
+    queueMicrotask(() => { void fetchHistory(1); });
+  }, [fetchHistory]);
 
   const handleClear = async () => {
     setIsClearModalOpen(true);

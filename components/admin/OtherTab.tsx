@@ -6,7 +6,6 @@ import { showToast } from '@/components/Toast';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import Modal from '@/components/Modal';
 import { MdBuild, MdWarning, MdTranslate, MdBarChart, MdSync } from 'react-icons/md';
-import { Spinner } from './';
 
 export default function OtherTab({ token }: { token: string }) {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -57,30 +56,6 @@ export default function OtherTab({ token }: { token: string }) {
     };
     doLoad();
   }, []);
-
-  const loadSettings = async () => {
-    try {
-      const data = await api.getMaintenanceStatus();
-      if (data.success) {
-        setMaintenanceMode(data.maintenance_mode);
-        setMaintenanceMessage(data.maintenance_message || '');
-        setTranslateEnabled(data.translate_enabled !== false);
-      }
-    } catch {
-      showToast('加载设置失败', 'error');
-    }
-  };
-
-  const loadStats = async () => {
-    try {
-      const data = await api.getSiteStats();
-      if (data.success && data.stats) {
-        setStats(data.stats);
-      }
-    } catch {
-      // ignore
-    }
-  };
 
   const toggleMaintenance = async () => {
     const newValue = !maintenanceMode;

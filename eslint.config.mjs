@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // One-off local repro / e2e scripts, not part of the app runtime.
+    "scripts/**",
   ]),
 ]);
 

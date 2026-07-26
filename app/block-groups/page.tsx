@@ -21,9 +21,23 @@ interface BlockGroup {
   is_active: number;
 }
 
+type UserInfo = { id: number; token: string; username: string; role: string; avatar: string | null };
+
+function readUserInfo(): UserInfo | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem('user_info');
+    if (!stored) return null;
+    const u = JSON.parse(stored);
+    return { id: u.id, token: u.token, username: u.username, role: u.role, avatar: u.avatar };
+  } catch {
+    return null;
+  }
+}
+
 export default function BlockGroupsPage() {
   const router = useRouter();
-  const [userInfo, setUserInfo] = useState<{ id: number; token: string; username: string; role: string; avatar: string | null } | null>(null);
+  const [userInfo] = useState<UserInfo | null>(() => readUserInfo());
   const [groups, setGroups] = useState<BlockGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,18 +62,10 @@ export default function BlockGroupsPage() {
   const deleteTargetRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('user_info');
-    if (!stored) {
-      router.push('/login');
-      return;
-    }
-    try {
-      const u = JSON.parse(stored);
-      setUserInfo({ id: u.id, token: u.token, username: u.username, role: u.role, avatar: u.avatar });
-    } catch {
+    if (!userInfo) {
       router.push('/login');
     }
-  }, []);
+  }, [userInfo, router]);
 
   const loadGroups = useCallback(async () => {
     if (!userInfo?.token) return;
@@ -79,7 +85,11 @@ export default function BlockGroupsPage() {
     }
   }, [userInfo?.token]);
 
-  useEffect(() => { if (userInfo) loadGroups(); }, [userInfo, loadGroups]);
+  useEffect(() => {
+    if (!userInfo) return;
+    // Defer so setLoading inside loadGroups is not sync in the effect body
+    queueMicrotask(() => { void loadGroups(); });
+  }, [userInfo, loadGroups]);
 
   function updateLocalStorageCache(groups: BlockGroup[]) {
     const hidden = new Set<string>();
@@ -97,8 +107,11 @@ export default function BlockGroupsPage() {
   // ================= Tag Autocomplete =================
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    if (searchQuery.length < 2) { setShowSuggestions(false); return; }
     searchTimeoutRef.current = setTimeout(async () => {
+      if (searchQuery.length < 2) {
+        setShowSuggestions(false);
+        return;
+      }
       try {
         const res = await fetch(`${TRIXIE_SEARCH}?q=name:*${encodeURIComponent(searchQuery)}*&per_page=10`);
         if (!res.ok) return;
@@ -110,7 +123,7 @@ export default function BlockGroupsPage() {
           setShowSuggestions(false);
         }
       } catch { /* ignore */ }
-    }, 300);
+    }, searchQuery.length < 2 ? 0 : 300);
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
   }, [searchQuery]);
 
@@ -141,7 +154,7 @@ export default function BlockGroupsPage() {
     }
     setSearchQuery('');
     setShowSuggestions(false);
-  }, []);
+  }, [hiddenTags.length, spoileredTags.length, tagActionType]);
 
   const removeTag = useCallback((tagName: string, type: 'hide' | 'spoiler') => {
     if (type === 'hide') setHiddenTags(prev => prev.filter(t => t !== tagName));
