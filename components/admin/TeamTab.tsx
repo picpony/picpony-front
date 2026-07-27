@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
+import Select from '@/components/Select';
 import { MdPeople, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
 import { SectionHeader, EmptyState, Spinner } from './';
 
@@ -215,12 +216,8 @@ export default function TeamTab({ token }: { token: string }) {
 
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">栏目分类</label>
-          <select value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800">
-            {categoryOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          <Select value={form.category} onChange={(v) => setForm(f => ({ ...f, category: v }))}
+            className="w-full" options={categoryOptions} />
         </div>
 
         <div>

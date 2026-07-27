@@ -38,7 +38,6 @@ interface TabConfig {
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>('welcome');
-  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const initAdmin = () => {
     const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
@@ -76,13 +75,8 @@ export default function AdminPage() {
   ];
 
   const handleTabChange = useCallback((tabId: TabId) => {
-    if (tabId === activeTab) return;
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setActiveTab(tabId);
-      setIsTransitioning(false);
-    }, 200);
-  }, [activeTab]);
+    setActiveTab(tabId);
+  }, []);
 
   const isEditor = userRole === 'editor';
   const isAdmin = ['super_admin', 'admin'].includes(userRole);
@@ -120,13 +114,19 @@ export default function AdminPage() {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
+                data-ripple
+                aria-current={activeTab === tab.id}
+                className={`group flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ease-[var(--ease-standard)] whitespace-nowrap shrink-0 active:scale-[0.98] ${
                   activeTab === tab.id
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/10 text-primary md:translate-x-1'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
-                <span className="shrink-0">{tab.icon}</span>
+                <span className={`shrink-0 transition-transform duration-300 ease-[var(--ease-spring)] ${
+                  activeTab === tab.id ? 'scale-110' : 'group-hover:scale-105'
+                }`}>
+                  {tab.icon}
+                </span>
                 <span>{tab.label}</span>
               </button>
             ))}
@@ -134,7 +134,7 @@ export default function AdminPage() {
         </div>
 
         <div className="flex-1 p-4 sm:p-6 min-h-[400px] md:min-h-[600px] relative">
-          <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+          <div key={activeTab} className="animate-page-transition">
             {activeTab === 'welcome' && <WelcomeTab />}
             {activeTab === 'glossary' && <GlossaryTab />}
             {activeTab === 'users' && <UsersTab token={token} myRole={userRole} />}

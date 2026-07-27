@@ -1108,7 +1108,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                 onClick={handleToggleFave}
                 disabled={isFaveLoading}
                 title={isFaved ? '取消收藏' : '收藏'}
-                className={`p-2.5 rounded-full transition-colors duration-200 ${
+                className={`p-2.5 rounded-full transition-all duration-200 active:scale-90 ${
                   isFaved
                     ? 'text-yellow-600 border border-yellow-300 bg-yellow-50 hover:bg-yellow-100 dark:text-yellow-400 dark:border-yellow-700 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:bg-slate-700'
@@ -1117,7 +1117,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                 {isFaveLoading ? (
                   <Spinner size="sm" />
                 ) : isFaved ? (
-                  <MdStar size={20} />
+                  <MdStar size={20} className="animate-[star-burst_0.45s_var(--ease-spring)]" />
                 ) : (
                   <MdStarBorder size={20} />
                 )}
@@ -1133,7 +1133,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                 {isShareOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setIsShareOpen(false)} />
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-20 animate-fade-in">
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-40 origin-top bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-20 animate-pop-in">
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(window.location.href);
@@ -1336,6 +1336,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         <div className="flex gap-3 mt-4">
           <button
             onClick={() => { router.push(`/search?q=${encodeURIComponent(tagInfoModal.tag)}`); setTagInfoModal(prev => ({ ...prev, open: false })); }}
+            data-ripple
             className="flex-1 px-3 py-2 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
           >
             搜索此标签

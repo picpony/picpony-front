@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Checkbox from '@/components/Checkbox';
 import Modal from '@/components/Modal';
+import Select from '@/components/Select';
 import { MdPeople, MdEdit, MdDelete, MdCheckCircle, MdBlock } from 'react-icons/md';
 import { SectionHeader, SearchInput, EmptyState, Spinner } from './';
 
@@ -369,15 +370,16 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   角色
                 </label>
-                <select
+                <Select
                   value={editForm.role}
-                  onChange={(e) => setEditForm(f => ({ ...f, role: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
-                >
-                  <option value="user">用户</option>
-                  <option value="editor">小编</option>
-                  <option value="admin">管理员</option>
-                </select>
+                  onChange={(v) => setEditForm(f => ({ ...f, role: v }))}
+                  className="w-full"
+                  options={[
+                    { value: 'user', label: '用户' },
+                    { value: 'editor', label: '小编' },
+                    { value: 'admin', label: '管理员' },
+                  ]}
+                />
                 {myRole !== 'super_admin' && (
                   <p className="mt-0.5 text-xs text-slate-500">仅超管可提升至管理员</p>
                 )}
@@ -402,17 +404,18 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   性别
                 </label>
-                <select
+                <Select
                   value={editForm.gender}
-                  onChange={(e) => setEditForm(f => ({ ...f, gender: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
-                >
-                  <option value="">-- 不修改 --</option>
-                  <option value="male">男</option>
-                  <option value="female">女</option>
-                  <option value="other">其他</option>
-                  <option value="secret">保密</option>
-                </select>
+                  onChange={(v) => setEditForm(f => ({ ...f, gender: v }))}
+                  className="w-full"
+                  options={[
+                    { value: '', label: '-- 不修改 --' },
+                    { value: 'male', label: '男' },
+                    { value: 'female', label: '女' },
+                    { value: 'other', label: '其他' },
+                    { value: 'secret', label: '保密' },
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">

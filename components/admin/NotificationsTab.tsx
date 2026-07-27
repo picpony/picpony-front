@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
+import Select from '@/components/Select';
 import { MdNotifications, MdSend, MdDelete } from 'react-icons/md';
 import { SectionHeader, EmptyState, Spinner } from './';
 
@@ -179,15 +180,17 @@ export default function NotificationsTab({ token }: { token: string }) {
       <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">历史通知记录</h3>
-          <select
+          <Select
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-          >
-            <option value="all">全部通知</option>
-            <option value="broadcast">仅看全站广播</option>
-            <option value="personal">仅看单独推送</option>
-          </select>
+            onChange={(v) => setFilter(v)}
+            size="sm"
+            aria-label="通知筛选"
+            options={[
+              { value: 'all', label: '全部通知' },
+              { value: 'broadcast', label: '仅看全站广播' },
+              { value: 'personal', label: '仅看单独推送' },
+            ]}
+          />
         </div>
 
         {loading ? (

@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { MdSearch, MdImageSearch, MdErrorOutline, MdArrowBack } from 'react-icons/md';
+import { MdSearch, MdImageSearch, MdErrorOutline, MdArrowBack, MdExpandMore } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import { api, PonyImage, applyCdn } from '@/lib/api';
@@ -11,8 +11,12 @@ import MarkdownRenderer from '@/components/MarkdownRenderer';
 import Pagination from '@/components/Pagination';
 import ErrorRetry from '@/components/ErrorRetry';
 import ImageSearchModal from '@/components/ImageSearchModal';
+import Select from '@/components/Select';
 import { showToast } from '@/components/Toast';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
+
+const advInputClass =
+  'w-20 flex-1 px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary/20';
 
 interface DictionaryEntry {
   id: number;
@@ -425,7 +429,7 @@ function SearchPageContent() {
           </div>
           <button
             type="submit"
-            className="px-5 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors font-medium whitespace-nowrap"
+            data-ripple className="px-5 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200 font-medium whitespace-nowrap"
           >
             搜索
           </button>
@@ -522,72 +526,92 @@ function SearchPageContent() {
           {/* Bottom sort controls */}
           {q && (
             <div className="flex items-center justify-center gap-2 mt-6 flex-wrap">
-              <select
+              <Select
                 value={sortBy}
-                onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
-                className="px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-primary/30"
-              >
-                <option value="created_at">上传时间</option>
-                <option value="score">评分高低</option>
-                <option value="relevance">相关性</option>
-                <option value="wilson_score">Wilson 评分</option>
-                <option value="hotness">热度</option>
-                <option value="width">像素宽</option>
-                <option value="height">像素高</option>
-                <option value="size">文件大小</option>
-                <option value="random">随机</option>
-              </select>
+                onChange={(v) => { setSortBy(v); setPage(1); }}
+                size="sm"
+                aria-label="排序方式"
+                options={[
+                  { value: 'created_at', label: '上传时间' },
+                  { value: 'score', label: '评分高低' },
+                  { value: 'relevance', label: '相关性' },
+                  { value: 'wilson_score', label: 'Wilson 评分' },
+                  { value: 'hotness', label: '热度' },
+                  { value: 'width', label: '像素宽' },
+                  { value: 'height', label: '像素高' },
+                  { value: 'size', label: '文件大小' },
+                  { value: 'random', label: '随机' },
+                ]}
+              />
               {sortBy !== 'random' && (
                 <button
                   onClick={() => setSortDir(prev => prev === 'desc' ? 'asc' : 'desc')}
-                  className="px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  data-ripple
+                  className="px-2.5 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20 active:scale-95 transition-all duration-200"
                 >
-                  {sortDir === 'desc' ? '↓ 降序' : '↑ 升序'}
+                  <span
+                    key={sortDir}
+                    className="inline-block animate-[icon-swap_0.3s_var(--ease-spring)]"
+                  >
+                    {sortDir === 'desc' ? '↓ 降序' : '↑ 升序'}
+                  </span>
                 </button>
               )}
               {(sortParam || sortBy !== defaultSort || sortDir !== 'desc') && (
                 <button
                   onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }}
-                  className="px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  data-ripple
+                  className="px-2.5 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20 active:scale-95 transition-all duration-200 animate-pop-in"
                 >
                   重置排序
                 </button>
               )}
               <button
                 onClick={() => setShowAdvanced(prev => !prev)}
-                className={`px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${
+                data-ripple
+                aria-expanded={showAdvanced}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg active:scale-95 transition-all duration-200 ${
                   showAdvanced
-                    ? 'border-primary text-primary bg-primary/10'
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    ? 'text-primary bg-primary/10 dark:bg-primary/20'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20'
                 }`}
               >
                 高级排序
+                <MdExpandMore
+                  size={14}
+                  className={`transition-transform duration-300 ease-[var(--ease-standard)] ${showAdvanced ? 'rotate-180' : ''}`}
+                />
               </button>
             </div>
           )}
 
           {/* Advanced search panel */}
-          {q && showAdvanced && (
-            <div className="mt-4 p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 max-w-3xl mx-auto">
+          {q && (
+            <div
+              className={`grid transition-[grid-template-rows,opacity] duration-350 ease-[var(--ease-standard)] ${
+                showAdvanced ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+              }`}
+            >
+              <div className="min-h-0 overflow-hidden">
+              <div className="mt-4 p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 max-w-3xl mx-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Upvotes */}
                 <div>
                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">点赞数</label>
                   <div className="flex gap-2">
-                    <select
+                    <Select
                       value={advUpvoteOp}
-                      onChange={(e) => setAdvUpvoteOp(e.target.value)}
-                      className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
-                    >
-                      <option value="gte">≥</option>
-                      <option value="lt">&lt;</option>
-                    </select>
+                      onChange={setAdvUpvoteOp}
+                      size="sm"
+                      aria-label="点赞数比较符"
+                      options={[{ value: 'gte', label: '≥' }, { value: 'lt', label: '<' }]}
+                    />
                     <input
                       type="number"
                       value={advUpvoteVal}
                       onChange={(e) => setAdvUpvoteVal(e.target.value)}
                       placeholder="例如 100"
-                      className="flex-1 px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none w-20"
+                      className={advInputClass}
                     />
                   </div>
                 </div>
@@ -595,66 +619,74 @@ function SearchPageContent() {
                 <div>
                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">净得分</label>
                   <div className="flex gap-2">
-                    <select
+                    <Select
                       value={advScoreOp}
-                      onChange={(e) => setAdvScoreOp(e.target.value)}
-                      className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
-                    >
-                      <option value="gte">≥</option>
-                      <option value="lt">&lt;</option>
-                    </select>
+                      onChange={setAdvScoreOp}
+                      size="sm"
+                      aria-label="净得分比较符"
+                      options={[{ value: 'gte', label: '≥' }, { value: 'lt', label: '<' }]}
+                    />
                     <input
                       type="number"
                       value={advScoreVal}
                       onChange={(e) => setAdvScoreVal(e.target.value)}
                       placeholder="例如 50"
-                      className="flex-1 px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none w-20"
+                      className={advInputClass}
                     />
                   </div>
                 </div>
                 {/* Aspect ratio */}
                 <div>
                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">宽高比</label>
-                  <select
+                  <Select
                     value={advAspect}
-                    onChange={(e) => setAdvAspect(e.target.value)}
-                    className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
-                  >
-                    <option value="">不限比例</option>
-                    <option value="aspect_ratio.lt:1">竖图 (宽 &lt; 高)</option>
-                    <option value="aspect_ratio:1">正方形 (宽 = 高)</option>
-                    <option value="aspect_ratio.gt:1">横图 (宽 &gt; 高)</option>
-                    <option value="aspect_ratio.gt:1.5">超宽屏壁纸</option>
-                  </select>
+                    onChange={setAdvAspect}
+                    size="sm"
+                    className="w-full"
+                    aria-label="宽高比"
+                    options={[
+                      { value: '', label: '不限比例' },
+                      { value: 'aspect_ratio.lt:1', label: '竖图 (宽 < 高)' },
+                      { value: 'aspect_ratio:1', label: '正方形 (宽 = 高)' },
+                      { value: 'aspect_ratio.gt:1', label: '横图 (宽 > 高)' },
+                      { value: 'aspect_ratio.gt:1.5', label: '超宽屏壁纸' },
+                    ]}
+                  />
                 </div>
                 {/* Media type */}
                 <div>
                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">媒体类型</label>
-                  <select
+                  <Select
                     value={advMedia}
-                    onChange={(e) => setAdvMedia(e.target.value)}
-                    className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
-                  >
-                    <option value="">所有类型</option>
-                    <option value="animated:true">动态内容 (GIF/视频)</option>
-                    <option value="animated:false">静态图片 (PNG/JPG)</option>
-                    <option value="(mime_type:video/webm OR mime_type:video/mp4)">仅限视频</option>
-                  </select>
+                    onChange={setAdvMedia}
+                    size="sm"
+                    className="w-full"
+                    aria-label="媒体类型"
+                    options={[
+                      { value: '', label: '所有类型' },
+                      { value: 'animated:true', label: '动态内容 (GIF/视频)' },
+                      { value: 'animated:false', label: '静态图片 (PNG/JPG)' },
+                      { value: '(mime_type:video/webm OR mime_type:video/mp4)', label: '仅限视频' },
+                    ]}
+                  />
                 </div>
                 {/* Upload time */}
                 <div>
                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">上传时间</label>
-                  <select
+                  <Select
                     value={advTime}
-                    onChange={(e) => setAdvTime(e.target.value)}
-                    className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg outline-none"
-                  >
-                    <option value="">不限时间</option>
-                    <option value="created_at.gte:1 days ago">过去 24 小时</option>
-                    <option value="created_at.gte:1 weeks ago">过去 1 周</option>
-                    <option value="created_at.gte:1 months ago">过去 1 个月</option>
-                    <option value="created_at.gte:1 years ago">过去 1 年</option>
-                  </select>
+                    onChange={setAdvTime}
+                    size="sm"
+                    className="w-full"
+                    aria-label="上传时间"
+                    options={[
+                      { value: '', label: '不限时间' },
+                      { value: 'created_at.gte:1 days ago', label: '过去 24 小时' },
+                      { value: 'created_at.gte:1 weeks ago', label: '过去 1 周' },
+                      { value: 'created_at.gte:1 months ago', label: '过去 1 个月' },
+                      { value: 'created_at.gte:1 years ago', label: '过去 1 年' },
+                    ]}
+                  />
                 </div>
               </div>
               <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
@@ -664,17 +696,21 @@ function SearchPageContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={clearAdvancedFilters}
-                    className="px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    data-ripple
+                    className="px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all duration-200"
                   >
                     重置
                   </button>
                   <button
                     onClick={applyAdvancedFilters}
-                    className="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                    data-ripple
+                    className="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200"
                   >
                     应用并搜索
                   </button>
                 </div>
+              </div>
+              </div>
               </div>
             </div>
           )}

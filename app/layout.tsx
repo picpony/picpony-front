@@ -7,6 +7,7 @@ import AppLayout from "@/components/AppLayout";
 import NextTopLoader from 'nextjs-toploader';
 import { ToastContainer } from "@/components/Toast";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import RippleLayer from "@/components/RippleLayer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -72,6 +73,7 @@ export default async function RootLayout({
           {children}
         </AppLayout>
         <ToastContainer />
+        <RippleLayer />
       </body>
     </html>
   );

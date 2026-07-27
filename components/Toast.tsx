@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
+import { gsap, useGSAP, prefersReducedMotion } from '@/lib/motion';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -65,7 +66,7 @@ export function ToastContainer() {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-3 pointer-events-none items-center">
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col pointer-events-none items-center">
       {toasts.map(toast => (
         <ToastItem key={toast.id} toast={toast} onClose={handleClose} />
       ))}
@@ -75,45 +76,39 @@ export function ToastContainer() {
 }
 
 function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: number) => void }) {
-  const [phase, setPhase] = useState<'enter' | 'visible' | 'exit'>('enter');
+  const wrapRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // Enter animation: enter → visible after one frame
-    const raf = requestAnimationFrame(() => {
-      setPhase('visible');
-    });
+  useGSAP(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const card = wrap.firstElementChild as HTMLElement;
 
-    // Start exit animation 500ms before the full duration ends
-    const exitTimer = setTimeout(() => {
-      setPhase('exit');
-    }, toast.duration - 500);
+    if (prefersReducedMotion()) {
+      const timer = setTimeout(() => onClose(toast.id), toast.duration);
+      return () => clearTimeout(timer);
+    }
 
-    // Remove from DOM at the full duration
-    const removeTimer = setTimeout(() => {
-      onClose(toast.id);
-    }, toast.duration);
+    // Enter with a spring drop; exit collapses the wrapper's height so the
+    // remaining toasts glide up instead of jumping.
+    const tl = gsap.timeline({ onComplete: () => onClose(toast.id) })
+      .fromTo(card,
+        { y: -24, scale: 0.9, autoAlpha: 0 },
+        { y: 0, scale: 1, autoAlpha: 1, duration: 0.45, ease: 'spring' },
+      )
+      .to(card,
+        { y: -12, scale: 0.94, autoAlpha: 0, duration: 0.3, ease: 'accelerate' },
+        toast.duration / 1000,
+      )
+      .to(wrap, { height: 0, duration: 0.25, ease: 'standard' }, '<0.1');
 
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(exitTimer);
-      clearTimeout(removeTimer);
-    };
-  }, [toast.duration, onClose, toast.id]);
-
-  let containerClasses = "pointer-events-auto transition-all duration-500 ease-in-out ";
-  if (phase === 'enter') {
-    containerClasses += "opacity-0 translate-y-4 scale-95";
-  } else if (phase === 'visible') {
-    containerClasses += "opacity-100 translate-y-0 scale-100";
-  } else if (phase === 'exit') {
-    containerClasses += "opacity-0 -translate-y-4 scale-95";
-  }
+    return () => { tl.kill(); };
+  }, { scope: wrapRef });
 
   const style = severityStyles[toast.type];
 
   return (
-    <div className={containerClasses}>
-      <div className={`${style.bg} text-white rounded-xl shadow-lg px-5 py-2.5 flex items-center gap-3`}>
+    <div ref={wrapRef} className="pointer-events-auto overflow-hidden">
+      <div className={`${style.bg} text-white rounded-xl shadow-lg px-5 py-2.5 mb-3 flex items-center gap-3`}>
         <span className="shrink-0">{style.icon}</span>
         <span className="font-medium text-sm">{toast.message}</span>
       </div>

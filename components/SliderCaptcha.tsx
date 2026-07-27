@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
 import { encodeTrack } from "@/lib/utils";
+import { gsap, prefersReducedMotion } from "@/lib/motion";
 import Spinner from "./Spinner";
 
 interface SliderCaptchaProps {
@@ -38,6 +39,8 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
 
   const sliderXRef = useRef(0);
   const sliderBtnRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const snapTweenRef = useRef<gsap.core.Tween | null>(null);
   const fetchedRef = useRef(false);
   const trackRef = useRef<[number, number, number][]>([]);
   const startXRef = useRef(0);
@@ -57,6 +60,40 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   useEffect(() => {
     onVerifyRef.current = onVerify;
   }, [onVerify]);
+
+  /** Glide the knob (and piece) home instead of teleporting after a miss. */
+  const snapBack = useCallback(() => {
+    snapTweenRef.current?.kill();
+    const from = sliderXRef.current;
+    sliderXRef.current = 0;
+    if (from <= 0 || prefersReducedMotion()) {
+      setSliderX(0);
+      return;
+    }
+    const proxy = { x: from };
+    snapTweenRef.current = gsap.to(proxy, {
+      x: 0,
+      duration: 0.5,
+      ease: 'expo.out',
+      onUpdate: () => setSliderX(proxy.x),
+    });
+  }, []);
+
+  useEffect(() => () => { snapTweenRef.current?.kill(); }, []);
+
+  // Physical feedback on failure: shake the puzzle while the error overlay
+  // fades in.
+  useEffect(() => {
+    if (!errorMsg || prefersReducedMotion()) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const tween = gsap.to(el, {
+      keyframes: { x: [0, -9, 8, -5, 3, 0] },
+      duration: 0.45,
+      ease: 'power2.out',
+    });
+    return () => { tween.kill(); };
+  }, [errorMsg]);
 
   const getClientX = (e: MouseEvent | TouchEvent): number => {
     if ("touches" in e) {
@@ -117,6 +154,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     draggingRef.current = true;
     setIsDragging(true);
     setErrorMsg("");
+    snapTweenRef.current?.kill();
 
     const clientX = getClientX(e);
     const clientY = getClientY(e);
@@ -168,8 +206,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       // Production submits sliderX as-is (float) with no extra end sample.
       const finalX = sliderXRef.current;
       if (finalX < 5) {
-        setSliderX(0);
-        sliderXRef.current = 0;
+        snapBack();
         trackRef.current = [];
         return;
       }
@@ -182,8 +219,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
         if (data.success && data.token) {
           onVerifyRef.current(data.token);
         } else {
-          setSliderX(0);
-          sliderXRef.current = 0;
+          snapBack();
           trackRef.current = [];
           // Surface the backend reason (production does the same with n.error).
           // Helps distinguish "对齐" vs "异常拖动" vs "非人类" on mobile.
@@ -194,8 +230,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
           }, 500);
         }
       } catch {
-        setSliderX(0);
-        sliderXRef.current = 0;
+        snapBack();
         trackRef.current = [];
         setErrorMsg("网络错误，请重试");
         setTimeout(() => {
@@ -212,7 +247,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     document.addEventListener("mouseup", stopDrag);
     document.addEventListener("touchend", stopDrag);
     document.addEventListener("touchcancel", stopDrag);
-  }, [maxSliderX]);
+  }, [maxSliderX, snapBack]);
 
   // Native non-passive touchstart, re-bound when the knob mounts (after bgImage).
   useEffect(() => {
@@ -240,7 +275,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       <div className="flex justify-center items-center w-full">
         <span className="font-semibold text-slate-800 dark:text-slate-100">请完成安全验证</span>
       </div>
-      <div className="relative w-[310px]">
+      <div ref={containerRef} className="relative w-[310px]">
         {loading && !bgImage && (
           <div className="w-[310px] h-[155px] flex items-center justify-center bg-white/80 dark:bg-slate-800/80 rounded-md">
             <Spinner size="lg" />
@@ -300,9 +335,9 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
 
           <div
             ref={sliderBtnRef}
-            className={`absolute top-[-1px] w-[50px] h-10 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-colors ${
+            className={`absolute top-[-1px] w-[50px] h-10 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-[color,background-color,border-color,scale,box-shadow] duration-200 ${
               isDragging
-                ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500 dark:bg-emerald-600 dark:border-emerald-600"
+                ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500 dark:bg-emerald-600 dark:border-emerald-600 scale-110 shadow-lg"
                 : "cursor-grab text-slate-600 dark:text-slate-300"
             } ${verifying ? "pointer-events-none opacity-70" : ""}`}
             style={{ left: `${sliderX}px`, touchAction: "none" }}

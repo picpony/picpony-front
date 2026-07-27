@@ -150,7 +150,7 @@ function ForumTab() {
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">论坛</h2>
         <button onClick={() => router.push('/forum/create')}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium">
+          data-ripple className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200 text-sm font-medium">
           <MdAdd size={16} /> 发帖
         </button>
       </div>
@@ -178,7 +178,7 @@ function HomeContent() {
   return (
     <>
       <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8">
-        <div key={tab} className="animate-fade-in">
+        <div key={tab} className="animate-page-transition">
           {tab === 'gallery' ? (
             <>
               <FeaturedBanner />
