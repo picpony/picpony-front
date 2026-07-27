@@ -5,6 +5,11 @@ import type { FrameAsset } from './frameCache';
 
 export type HeroDirection = 'forward' | 'back';
 
+/**
+ * `opening.*` and `closing.flight` are the only phases with a live flyer.
+ * `reversing` covers an interrupted flight of either kind; `recovering` covers a
+ * transaction that lost its flight and is reconciling the URL instead.
+ */
 export type HeroControllerPhase =
   | 'gallery-idle'
   | 'opening.flight'
@@ -20,6 +25,7 @@ export type ImageHeroBackgroundLocation = {
   search: string;
 };
 
+/** Everything captured at activation, before any network work. */
 export type ImageHeroSnapshot = {
   image: PonyImage;
   previewSrc: string;
@@ -47,39 +53,32 @@ export type ImageHeroRuntimeState = {
 
 export type ImageHeroCloseOutcome = 'closed' | 'handled' | 'restored';
 
-export type HeroRouteNodes = {
+/** The DOM a detail surface is built from. */
+export type HeroSurfaceNodes = {
   overlay: HTMLElement;
   scroller: HTMLElement;
   content: HTMLElement;
   surface: HTMLElement;
-  target: HTMLElement | null;
   floatingBack: HTMLElement | null;
 };
 
-export type HeroRouteRegistration = HeroRouteNodes & {
+export type HeroRouteRegistration = HeroSurfaceNodes & {
   surfaceId: string;
   imageId: number;
+  target: HTMLElement | null;
+  /** The route can paint the same pixels the flyer is showing. */
   previewPaintable: boolean;
 };
 
-export type HeroStageNodes = {
-  overlay: HTMLElement;
-  scroller: HTMLElement;
-  content: HTMLElement;
-  surface: HTMLElement;
+export type HeroStageNodes = HeroSurfaceNodes & {
   target: HTMLElement;
+  /** Positions the flight layer inside the stage scroller's own coordinates. */
   anchor: HTMLElement;
-  floatingBack: HTMLElement | null;
 };
 
-export type HeroOpenNavigation = {
+export type HeroNavigation = {
   push: (href: string) => void;
   replace: (href: string) => void;
-};
-
-export type HeroCloseNavigation = {
-  replace: (href: string) => void;
-  push: (href: string) => void;
 };
 
 export type HeroOpenIntent = {
@@ -87,13 +86,14 @@ export type HeroOpenIntent = {
   source: HTMLElement;
   detailHref: string;
   background?: ImageHeroBackgroundLocation;
-  navigation: HeroOpenNavigation;
+  navigation: HeroNavigation;
+  /** Replaying a history entry rather than starting a fresh navigation. */
   historyRestore?: boolean;
 };
 
 export type HeroCloseIntent = {
   imageId: number;
-  navigation: HeroCloseNavigation;
+  navigation: HeroNavigation;
   backgroundMode?: 'fresh' | 'continue';
   cause?: 'button' | 'history' | 'dismiss' | 'interrupt';
 };
@@ -101,13 +101,5 @@ export type HeroCloseIntent = {
 export type HeroDetailRouteChangeIntent = {
   imageId: number;
   detailHref: string;
-  navigation: HeroOpenNavigation & HeroCloseNavigation;
+  navigation: HeroNavigation;
 };
-
-export type HeroMilestone =
-  | 'route-registered'
-  | 'preview-paintable'
-  | 'landed'
-  | 'handoff-complete'
-  | 'interaction-quiet'
-  | 'idle';

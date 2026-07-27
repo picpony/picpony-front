@@ -1,15 +1,15 @@
 'use client';
 
-import {
-  HERO_HOST_SELECTOR,
-} from './constants';
-import type { HeroHost, HeroRect } from './geometry';
+import { HERO_BACKGROUND_VISUAL_SELECTOR } from './constants';
+import type { HeroRect } from './geometry';
 
 export type VisualMedia = HTMLImageElement | HTMLVideoElement;
 
 export type DomLease = {
   release: () => void;
 };
+
+export const NO_OP_LEASE: DomLease = { release() {} };
 
 type LeasedStyleProperty =
   | 'opacity'
@@ -31,6 +31,11 @@ type InlineStyleLeaseState = {
   entries: InlineStyleLeaseEntry[];
 };
 
+/**
+ * Stacked inline-style ownership. Concurrent sessions (a retiring close beneath
+ * a fresh open) routinely want the same property on the same node; last writer
+ * wins visually and releasing out of order still restores the correct value.
+ */
 const inlineStyleLeases = new WeakMap<
   HTMLElement,
   Map<LeasedStyleProperty, InlineStyleLeaseState>
@@ -62,6 +67,13 @@ export function getHeroRect(element: HTMLElement): HeroRect {
   };
 }
 
+/**
+ * Measure an element as if a transformed ancestor were at rest.
+ *
+ * The gallery sinks under an open detail view, so a thumbnail measured during
+ * that sink reports a shrunken box. The flyer must land on the box the
+ * thumbnail will occupy once the sink unwinds.
+ */
 export function getHeroRectWithoutAncestorTransform(
   element: HTMLElement,
   ancestor: HTMLElement | null,
@@ -103,26 +115,72 @@ export function getHeroRectWithoutAncestorTransform(
   }
 }
 
-export function getHeroHost(): HeroHost | null {
-  const element = document.querySelector<HTMLElement>(HERO_HOST_SELECTOR);
-  if (!element) return null;
-  return { element, ...getHeroRect(element) };
-}
-
 export function findImageHeroThumbnail(imageId: number, sourceKey?: string | null) {
-  const id = String(imageId);
+  const id = escapeSelector(String(imageId));
   if (sourceKey) {
     const exact = document.querySelector<HTMLElement>(
-      `[data-image-hero-role="thumbnail"][data-image-hero-id="${escapeSelector(id)}"]` +
+      `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]` +
       `[data-image-hero-source-key="${escapeSelector(sourceKey)}"]`,
     );
     if (exact) return exact;
   }
   return document.querySelector<HTMLElement>(
-    `[data-image-hero-role="thumbnail"][data-image-hero-id="${escapeSelector(id)}"]`,
+    `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]`,
   );
 }
 
+let backgroundVisual: HTMLElement | null = null;
+
+/**
+ * The gallery layer that sinks behind an open detail view.
+ *
+ * Memoized because it is read on every frame of a dismiss drag; a document-wide
+ * query per frame was the most expensive thing in the gesture. The cache
+ * self-heals whenever the node is replaced by a route change.
+ */
+export function getHeroBackgroundVisual() {
+  if (backgroundVisual?.isConnected) return backgroundVisual;
+  backgroundVisual = document.querySelector<HTMLElement>(HERO_BACKGROUND_VISUAL_SELECTOR);
+  return backgroundVisual;
+}
+
+// ---------------------------------------------------------------------------
+// Visual media resolution
+// ---------------------------------------------------------------------------
+
+export function getVisualMediaSrc(media: VisualMedia) {
+  return normalizeHeroSrc(media.currentSrc || media.getAttribute('src') || '');
+}
+
+export function getMediaSize(media: VisualMedia) {
+  const isVideo = media instanceof HTMLVideoElement;
+  if (isVideo && media.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
+  if (!isVideo && !media.complete) return null;
+  const width = isVideo ? media.videoWidth : media.naturalWidth;
+  const height = isVideo ? media.videoHeight : media.naturalHeight;
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+function isPaintableVisualMedia(media: VisualMedia) {
+  if (!getVisualMediaSrc(media) || !getMediaSize(media)) return false;
+  if (media instanceof HTMLImageElement) return true;
+  return media.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+}
+
+function getPresentedMediaOpacity(media: VisualMedia) {
+  const style = getComputedStyle(media);
+  if (style.display === 'none' || style.visibility === 'hidden') return 0;
+  const opacity = Number.parseFloat(style.opacity);
+  return Number.isFinite(opacity) ? opacity : 1;
+}
+
+/**
+ * Find the media element that is actually on screen inside `element`.
+ *
+ * A detail target stacks a preview layer over a full-resolution layer and
+ * cross-fades them, so the answer depends on presented opacity rather than on
+ * which layer exists. Data attributes stay CSS/debug mirrors, never the gate.
+ */
 export function getVisualMedia(element: HTMLElement | null): VisualMedia | null {
   if (!element) return null;
   const directMedia = element instanceof HTMLImageElement || element instanceof HTMLVideoElement
@@ -149,8 +207,6 @@ export function getVisualMedia(element: HTMLElement | null): VisualMedia | null 
     ));
     const final = layers.find((media) => media.dataset.imageDetailLayer === 'final') ?? null;
     const preview = layers.find((media) => media.dataset.imageDetailLayer === 'preview') ?? null;
-    // Capture the actual presentation. Data attributes remain CSS/debug mirrors,
-    // not an animation correctness gate.
     const candidates = [preview, final]
       .filter((media): media is VisualMedia => Boolean(media && isPaintableVisualMedia(media)))
       .map((media) => ({ media, opacity: getPresentedMediaOpacity(media) }))
@@ -166,10 +222,6 @@ export function getVisualMedia(element: HTMLElement | null): VisualMedia | null 
     if (media && isPaintableVisualMedia(media)) return media;
   }
   return null;
-}
-
-export function getVisualMediaSrc(media: VisualMedia) {
-  return normalizeHeroSrc(media.currentSrc || media.getAttribute('src') || '');
 }
 
 export function isAnimatedVisualSource(src: string) {
@@ -200,31 +252,14 @@ export function isAnimatedVisualSource(src: string) {
   }
 }
 
+/** Media whose pixels change over time cannot be captured ahead of activation. */
 export function isVolatileVisualMedia(media: VisualMedia) {
   return media instanceof HTMLVideoElement || isAnimatedVisualSource(getVisualMediaSrc(media));
 }
 
-export function getMediaSize(media: VisualMedia) {
-  const isVideo = media instanceof HTMLVideoElement;
-  if (isVideo && media.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
-  if (!isVideo && !media.complete) return null;
-  const width = isVideo ? media.videoWidth : media.naturalWidth;
-  const height = isVideo ? media.videoHeight : media.naturalHeight;
-  return width > 0 && height > 0 ? { width, height } : null;
-}
-
-function isPaintableVisualMedia(media: VisualMedia) {
-  if (!getVisualMediaSrc(media) || !getMediaSize(media)) return false;
-  if (media instanceof HTMLImageElement) return true;
-  return media.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
-}
-
-function getPresentedMediaOpacity(media: VisualMedia) {
-  const style = getComputedStyle(media);
-  if (style.display === 'none' || style.visibility === 'hidden') return 0;
-  const opacity = Number.parseFloat(style.opacity);
-  return Number.isFinite(opacity) ? opacity : 1;
-}
+// ---------------------------------------------------------------------------
+// Leases
+// ---------------------------------------------------------------------------
 
 export function leaseInlineStyles(
   element: HTMLElement,
@@ -237,12 +272,13 @@ export function leaseInlineStyles(
     elementLeases = new Map();
     inlineStyleLeases.set(element, elementLeases);
   }
+  const leases = elementLeases;
 
   entries.forEach(([property, value]) => {
-    let state = elementLeases.get(property);
+    let state = leases.get(property);
     if (!state) {
       state = { baseline: element.style[property], entries: [] };
-      elementLeases.set(property, state);
+      leases.set(property, state);
     }
     state.entries.push({ id: leaseId, value });
     try {
@@ -251,6 +287,7 @@ export function leaseInlineStyles(
       // Ignore browser-specific readonly style members.
     }
   });
+
   let released = false;
   return {
     release() {
@@ -258,28 +295,29 @@ export function leaseInlineStyles(
       released = true;
       for (let index = entries.length - 1; index >= 0; index -= 1) {
         const [property, written] = entries[index];
-        const state = elementLeases.get(property);
+        const state = leases.get(property);
         if (!state) continue;
         const leaseIndex = state.entries.findIndex((entry) => entry.id === leaseId);
         if (leaseIndex < 0) continue;
         const wasTop = leaseIndex === state.entries.length - 1;
         state.entries.splice(leaseIndex, 1);
+        // Only the visible (top) owner may write; inner releases just unstack.
         if (!wasTop) continue;
 
         const next = state.entries.at(-1);
-        const restore = next?.value ?? state.baseline;
+        // Something outside the lease system took over this property; leave it.
         if (!next && element.style[property] !== written) {
-          elementLeases.delete(property);
+          leases.delete(property);
           continue;
         }
         try {
-          element.style[property] = restore;
+          element.style[property] = next?.value ?? state.baseline;
         } catch {
           // Element may have disconnected during route reconciliation.
         }
-        if (!next) elementLeases.delete(property);
+        if (!next) leases.delete(property);
       }
-      if (elementLeases.size === 0) inlineStyleLeases.delete(element);
+      if (leases.size === 0) inlineStyleLeases.delete(element);
     },
   };
 }
@@ -293,12 +331,14 @@ export function leaseAttribute(
   const previous = element.getAttribute(name);
   if (value === null) element.removeAttribute(name);
   else element.setAttribute(name, value);
+
   let released = false;
   return {
     release() {
       if (released) return;
       released = true;
       const current = element.getAttribute(name);
+      // A newer owner replaced this value; it owns the restore.
       if (value === null ? current !== null : current !== value) return;
       if (hadAttribute && previous !== null) element.setAttribute(name, previous);
       else element.removeAttribute(name);
@@ -306,83 +346,52 @@ export function leaseAttribute(
   };
 }
 
-export function leaseHeroVisibility(element: HTMLElement | null, visible: boolean): DomLease {
-  if (!element) return { release() {} };
-  return leaseInlineStyles(element, {
-    opacity: visible ? '1' : '0',
-    pointerEvents: visible ? '' : 'none',
-  });
-}
-
-export function leaseHeroCardChrome(element: HTMLElement | null): DomLease {
-  const card = element?.closest<HTMLElement>('.image-hero-card-link');
-  if (!card) return { release() {} };
-  const leases = [...card.querySelectorAll<HTMLElement>('[data-image-hero-chrome]')]
-    .map((chrome) => leaseInlineStyles(chrome, {
-      opacity: '0',
-      willChange: 'opacity',
-    }));
+export function combineHeroLeases(...leases: Array<DomLease | null | undefined>): DomLease {
   let released = false;
   return {
     release() {
       if (released) return;
       released = true;
       for (let index = leases.length - 1; index >= 0; index -= 1) {
-        leases[index].release();
+        try {
+          leases[index]?.release();
+        } catch {
+          // Best-effort: one disconnected node cannot block the rest.
+        }
       }
     },
   };
 }
 
+/** Hide the real element whose pixels the flyer is currently presenting. */
+export function leaseHeroVisibility(element: HTMLElement | null, visible: boolean): DomLease {
+  if (!element) return NO_OP_LEASE;
+  return leaseInlineStyles(element, {
+    opacity: visible ? '1' : '0',
+    pointerEvents: visible ? '' : 'none',
+  });
+}
+
+/** Fade a gallery card's score/format badges while its thumbnail is in flight. */
+export function leaseHeroCardChrome(element: HTMLElement | null): DomLease {
+  const card = element?.closest<HTMLElement>('.image-hero-card-link');
+  if (!card) return NO_OP_LEASE;
+  return combineHeroLeases(
+    ...[...card.querySelectorAll<HTMLElement>('[data-image-hero-chrome]')]
+      .map((chrome) => leaseInlineStyles(chrome, { opacity: '0', willChange: 'opacity' })),
+  );
+}
+
+/** Make a detail route invisible and non-interactive without unmounting it. */
 export function leaseHeroRouteSealed(nodes: {
   overlay: HTMLElement;
   floatingBack: HTMLElement | null;
 }): DomLease {
-  const overlayStyle = leaseInlineStyles(nodes.overlay, {
-    opacity: '0',
-    visibility: 'hidden',
-    pointerEvents: 'none',
-  });
-  const inert = leaseAttribute(nodes.overlay, 'inert', '');
-  const state = leaseAttribute(nodes.overlay, 'data-image-hero-route-state', 'sealed');
-  const backStyle = nodes.floatingBack
-    ? leaseInlineStyles(nodes.floatingBack, {
-        opacity: '0',
-        visibility: 'hidden',
-        pointerEvents: 'none',
-      })
-    : { release() {} };
-  let released = false;
-  return {
-    release() {
-      if (released) return;
-      released = true;
-      state.release();
-      inert.release();
-      overlayStyle.release();
-      backStyle.release();
-    },
-  };
-}
-
-export function focusHeroElement(element: HTMLElement | null) {
-  if (!element?.isConnected) return;
-  try {
-    element.focus({ preventScroll: true });
-  } catch {
-    element.focus();
-  }
-}
-
-export function clearHeroThumbnailFocus(preferred?: HTMLElement | null) {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement)) return;
-  const owner = active.closest<HTMLElement>('a:has([data-image-hero-role="thumbnail"])');
-  if (!owner) return;
-  if (preferred?.contains(active)) return;
-  active.blur();
-}
-
-export function isDetailPathname(pathname = window.location.pathname) {
-  return /^\/pic\/[^/]+\/?$/.test(pathname);
+  const sealed = { opacity: '0', visibility: 'hidden', pointerEvents: 'none' } as const;
+  return combineHeroLeases(
+    leaseInlineStyles(nodes.overlay, sealed),
+    leaseAttribute(nodes.overlay, 'inert', ''),
+    leaseAttribute(nodes.overlay, 'data-image-hero-route-state', 'sealed'),
+    nodes.floatingBack ? leaseInlineStyles(nodes.floatingBack, sealed) : null,
+  );
 }

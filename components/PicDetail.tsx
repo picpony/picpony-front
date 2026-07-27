@@ -34,6 +34,7 @@ import {
   isImageHeroDetailDataPublishable,
   isImageHeroPublicationQuiet,
   markImageHeroRoutePreviewPaintable,
+  publishWhenHeroSettled,
   registerImageHeroRoute,
   requestImageHeroClose,
   requestImageHeroDetailRouteChange,
@@ -99,75 +100,6 @@ function getTagCountOnce(token: string, tag: string) {
   return request;
 }
 
-function isDetailHeavyWorkBlocked(canPublish: () => boolean) {
-  return document.visibilityState !== 'visible' || !canPublish();
-}
-
-/**
- * Publish only after controller-owned interaction settles. Runtime and
- * visibility subscriptions re-arm this once; there is no polling loop.
- */
-function scheduleWhenDetailIdle(
-  callback: () => void,
-  {
-    idle = true,
-    canPublish = isImageHeroPublicationQuiet,
-  }: {
-    idle?: boolean;
-    canPublish?: () => boolean;
-  } = {},
-) {
-  let cancelled = false;
-  let fired = false;
-  let firstFrame = 0;
-  let secondFrame = 0;
-  let idleCallback = 0;
-
-  const clearScheduled = () => {
-    if (firstFrame) cancelAnimationFrame(firstFrame);
-    if (secondFrame) cancelAnimationFrame(secondFrame);
-    if (idleCallback) window.cancelIdleCallback(idleCallback);
-    firstFrame = 0;
-    secondFrame = 0;
-    idleCallback = 0;
-  };
-
-  const schedule = () => {
-    clearScheduled();
-    if (cancelled || fired || isDetailHeavyWorkBlocked(canPublish)) return;
-    firstFrame = requestAnimationFrame(() => {
-      firstFrame = 0;
-      secondFrame = requestAnimationFrame(() => {
-        secondFrame = 0;
-        if (cancelled || fired || isDetailHeavyWorkBlocked(canPublish)) return;
-        const publish = () => {
-          idleCallback = 0;
-          if (cancelled || fired || isDetailHeavyWorkBlocked(canPublish)) return;
-          fired = true;
-          releaseRuntime();
-          document.removeEventListener('visibilitychange', schedule);
-          callback();
-        };
-        if (idle && 'requestIdleCallback' in window) {
-          idleCallback = window.requestIdleCallback(publish, { timeout: 1200 });
-        } else {
-          publish();
-        }
-      });
-    });
-  };
-
-  const releaseRuntime = subscribeImageHeroRuntime(schedule);
-  document.addEventListener('visibilitychange', schedule);
-  schedule();
-
-  return () => {
-    cancelled = true;
-    clearScheduled();
-    releaseRuntime();
-    document.removeEventListener('visibilitychange', schedule);
-  };
-}
 export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const params = useParams();
   const router = useRouter();
@@ -516,7 +448,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       // body subtree waits for resolved detail plus an idle slice, so its mount
       // cannot steal the first event of a newly started wheel/touch stream.
       if (!heroSeed || prefetchedDetail) {
-        cancelBody = scheduleWhenDetailIdle(() => {
+        cancelBody = publishWhenHeroSettled(() => {
           if (!isMounted) return;
           startTransition(() => setDeferredBodyId(imageId));
         }, {
@@ -543,7 +475,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       if (!isMounted) return;
       const nextComments = await fetchComments();
       if (!isMounted) return;
-      cancelPublication = scheduleWhenDetailIdle(() => {
+      cancelPublication = publishWhenHeroSettled(() => {
         if (!isMounted) return;
         setComments(nextComments);
         setIsLoadingComments(false);
@@ -572,7 +504,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   useEffect(() => {
     if (!finalReady) return;
-    return scheduleWhenDetailIdle(() => {
+    return publishWhenHeroSettled(() => {
       if (heroSeed) setRevealedHeroSeedAt(heroSeed.createdAt);
     }, {
       idle: false,
