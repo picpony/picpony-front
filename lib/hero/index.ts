@@ -1,28 +1,26 @@
 'use client';
 
-import { imageHeroController } from './hero/controller';
-import { warmImageHeroFrame } from './hero/frameCache';
-import {
-  canAnimateImageHero,
-  canUseImageHeroTransition,
-  prepareImageHero,
-  warmImageHero,
-} from './hero/media';
+/**
+ * Public surface of the Hero transition system.
+ *
+ * Components should import from here rather than reaching into `lib/hero/*`, so
+ * the internal module layout stays free to change.
+ */
+
+import { imageHeroController } from './controller';
 import type {
   HeroCloseIntent,
-  HeroCloseNavigation,
   HeroDetailRouteChangeIntent,
-  HeroMilestone,
+  HeroNavigation,
   HeroOpenIntent,
-  HeroOpenNavigation,
   HeroRouteRegistration,
   HeroStageNodes,
-} from './hero/types';
+} from './types';
 
 export type {
   HeroControllerPhase,
   HeroDetailRouteChangeIntent,
-  HeroMilestone,
+  HeroNavigation,
   HeroRouteRegistration,
   HeroStageNodes,
   ImageHeroBackgroundLocation,
@@ -30,25 +28,24 @@ export type {
   ImageHeroRuntimeState,
   ImageHeroSnapshot,
   ImageHeroStageState,
-} from './hero/types';
+} from './types';
 
+export { warmImageHeroFrame } from './frameCache';
+export { isScrollLikelyActive } from './input';
+export { publishWhenHeroSettled } from './publish';
 export {
   canAnimateImageHero,
-  canUseImageHeroTransition,
   prepareImageHero,
   warmImageHero,
-  warmImageHeroFrame,
-};
+} from './media';
 
-export function initializeImageHeroHistory(
-  router?: HeroOpenNavigation & HeroCloseNavigation,
-) {
+// --- Setup ---------------------------------------------------------------
+
+export function initializeImageHeroHistory(router?: HeroNavigation) {
   imageHeroController.initialize(router);
 }
 
-export function connectImageHeroRouter(router: HeroOpenNavigation & HeroCloseNavigation) {
-  imageHeroController.connectRouter(router);
-}
+// --- Intents -------------------------------------------------------------
 
 export function requestImageHeroOpen(intent: HeroOpenIntent) {
   return imageHeroController.requestOpen(intent);
@@ -62,9 +59,12 @@ export function requestImageHeroDetailRouteChange(intent: HeroDetailRouteChangeI
   return imageHeroController.requestDetailRouteChange(intent);
 }
 
+/** Reverse whatever transition is running. Returns false if none was. */
 export function interruptImageHero(navigationHandled = false) {
   return imageHeroController.interrupt(navigationHandled);
 }
+
+// --- Registration --------------------------------------------------------
 
 export function observeImageHeroClientNavigation(href: string) {
   imageHeroController.observeRoute(href);
@@ -72,10 +72,6 @@ export function observeImageHeroClientNavigation(href: string) {
 
 export function registerImageHeroStage(sessionId: number, nodes: HeroStageNodes) {
   return imageHeroController.registerStage(sessionId, nodes);
-}
-
-export function createImageHeroRouteSurfaceId(imageId: number) {
-  return imageHeroController.createSurfaceId(imageId);
 }
 
 export function registerImageHeroRoute(registration: HeroRouteRegistration) {
@@ -96,10 +92,12 @@ export function markImageHeroRoutePreviewPaintable(
 export function bindImageHeroDismissGesture(
   surfaceId: string,
   canStart: () => boolean,
-  navigation: HeroCloseNavigation,
+  navigation: HeroNavigation,
 ) {
   return imageHeroController.bindRouteDismiss(surfaceId, canStart, navigation);
 }
+
+// --- State ---------------------------------------------------------------
 
 export function getImageHeroOrigin(imageId: number) {
   return imageHeroController.getOrigin(imageId);
@@ -129,34 +127,16 @@ export function isImageHeroTransitionRunning() {
   return imageHeroController.isRunning();
 }
 
-export function getActiveImageHeroKind() {
-  return imageHeroController.getActiveKind();
-}
-
-export function canSupersedeImageHeroClose() {
-  return imageHeroController.canSupersedeClose();
-}
-
 export function waitForImageHeroTransition(signal?: AbortSignal) {
   return imageHeroController.waitForIdle(signal).then(() => undefined);
 }
 
-export function waitForImageHeroMilestone(
-  milestone: HeroMilestone,
-  sessionId?: number,
-  signal?: AbortSignal,
-) {
-  return imageHeroController.waitForMilestone(milestone, sessionId, signal);
-}
-
+/** True once no transition is holding back detail content. */
 export function isImageHeroPublicationQuiet() {
   return imageHeroController.isPublicationQuiet();
 }
 
+/** True when this image's detail data may be shown without disturbing a flight. */
 export function isImageHeroDetailDataPublishable(imageId: number) {
   return imageHeroController.isDetailDataPublishable(imageId);
-}
-
-export function getImageHeroDiagnostics() {
-  return imageHeroController.diagnostics();
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { heroFrameScheduler, noteHeroInteraction } from './anchor';
+import { noteHeroInteraction } from './input';
+import { heroFrameScheduler } from './scheduler';
 
 const SCROLL_EPSILON_PX = 0.25;
 const WHEEL_RESIDUAL_RESPONSE_MS = 24;
@@ -34,6 +35,8 @@ type ResidualMeasurement = {
 export class HeroScrollContinuity {
   private peers = new Map<HTMLElement, ScrollListener>();
   private deltaSources = new Map<HTMLElement, DeltaListener>();
+  /** Last position this instance wrote, per scroller, to attribute scrolls. */
+  private written = new WeakMap<HTMLElement, { left: number; top: number }>();
   private primary: HTMLElement | null = null;
   private released = false;
   private readonly residualFrameOwner = {};
@@ -50,7 +53,15 @@ export class HeroScrollContinuity {
   addPeer(element: HTMLElement) {
     if (this.released || this.peers.has(element)) return;
     this.removeDeltaSource(element);
-    const listener = () => this.syncFrom(element);
+    const listener = () => {
+      // A scroll on the destination that we did not write is the user taking
+      // over. That is the signal the transfer is complete: anything still
+      // arriving from an outgoing scroller is now stale.
+      if (element === this.primary && this.isForeignScroll(element)) {
+        this.releaseDeltaSources();
+      }
+      this.syncFrom(element);
+    };
     this.peers.set(element, { element, listener });
     element.addEventListener('scroll', listener, { passive: true });
 
@@ -59,6 +70,9 @@ export class HeroScrollContinuity {
       this.writePosition(element, source.scrollLeft, source.scrollTop);
     } else {
       this.primary = element;
+      // Baseline the destination so a forwarded delta is not mistaken for the
+      // user's own scroll on the very first event.
+      this.recordWrite(element);
     }
   }
 
@@ -135,6 +149,26 @@ export class HeroScrollContinuity {
     this.deltaSources.delete(element);
   }
 
+  /**
+   * Stop carrying anything from outgoing scrollers.
+   *
+   * A dismissed detail view keeps decelerating for as long as a second after the
+   * finger leaves. Forwarding that momentum writes the gallery's scroll position
+   * from script, which cancels whatever native scroll the user has meanwhile
+   * started — the page feels stuck until the invisible scroller finally stops.
+   * Once the user is driving the destination directly there is nothing left to
+   * rescue, so every source is dropped along with any queued residual.
+   */
+  releaseDeltaSources() {
+    if (this.deltaSources.size === 0 && !this.hasWheelResidual()) return;
+    this.resetWheelResidual();
+    this.deltaSources.forEach(({ element, listener, wheelListener }) => {
+      element.removeEventListener('wheel', wheelListener);
+      element.removeEventListener('scroll', listener);
+    });
+    this.deltaSources.clear();
+  }
+
   sync() {
     if (this.primary) this.syncFrom(this.primary);
   }
@@ -178,6 +212,35 @@ export class HeroScrollContinuity {
     if (Math.abs(element.scrollTop - top) >= SCROLL_EPSILON_PX) {
       element.scrollTop = Math.max(0, top);
     }
+    this.recordWrite(element);
+  }
+
+  /**
+   * Remember where we left a scroller so its next scroll event can be
+   * attributed. Read back rather than stored from the requested value, since the
+   * browser clamps to the scrollable range.
+   */
+  private recordWrite(element: HTMLElement) {
+    this.written.set(element, { left: element.scrollLeft, top: element.scrollTop });
+  }
+
+  /** True while any delta source recently saw a real wheel event. */
+  private wheelActive() {
+    const now = performance.now();
+    for (const state of this.deltaSources.values()) {
+      if (now <= state.suppressScrollUntil) return true;
+    }
+    return false;
+  }
+
+  /** True when this scroller moved by something other than one of our writes. */
+  private isForeignScroll(element: HTMLElement) {
+    const written = this.written.get(element);
+    if (!written) return true;
+    return (
+      Math.abs(element.scrollLeft - written.left) >= SCROLL_EPSILON_PX ||
+      Math.abs(element.scrollTop - written.top) >= SCROLL_EPSILON_PX
+    );
   }
 
   private applyDelta(left: number, top: number) {
@@ -185,6 +248,13 @@ export class HeroScrollContinuity {
       Math.abs(left) < SCROLL_EPSILON_PX &&
       Math.abs(top) < SCROLL_EPSILON_PX
     ) return;
+    // Touch momentum on an outgoing scroller decays for up to a second. Only a
+    // wheel stream is genuinely latched and worth rescuing; forwarding inertial
+    // touch deltas would keep overwriting the user's own fresh scroll.
+    if (!this.hasWheelResidual() && !this.wheelActive()) {
+      this.releaseDeltaSources();
+      return;
+    }
     if (this.hasWheelResidual()) {
       this.queueWheelResidual(left, top);
       return;
@@ -276,10 +346,14 @@ export class HeroScrollContinuity {
     if (Math.abs(nextTop - measurement.top) >= SCROLL_EPSILON_PX) {
       measurement.target.scrollTop = nextTop;
     }
+    // Attribute this frame's write, or the resulting scroll event reads as the
+    // user taking over and cuts the residual short.
+    this.recordWrite(measurement.target);
     this.peers.forEach(({ element }) => {
       if (element === measurement.target || !element.isConnected) return;
       element.scrollLeft = nextLeft;
       element.scrollTop = nextTop;
+      this.recordWrite(element);
     });
 
     if (

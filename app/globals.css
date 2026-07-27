@@ -679,6 +679,33 @@ html[data-image-hero-transition] #nprogress {
   overscroll-behavior: contain;
 }
 
+/*
+ * Pull-to-dismiss.
+ *
+ * The gesture writes only `--hero-pull-y` / `--hero-veil` on the surface being
+ * dragged (and on the floating back button, which renders outside it); CSS fans
+ * those two values out to the whole reveal subtree. The per-frame cost is
+ * therefore constant no matter how much detail content is mounted.
+ *
+ * Everything is scoped to `[data-image-hero-pulling]`, set once when a drag
+ * begins and removed when it settles, so a Stage mounted alongside a route is
+ * never affected. Outside a drag these rules do not apply at all — in particular
+ * `.image-detail-overlay-content` must never carry a permanent transform, which
+ * would make it a containing block and trap the lightbox's `position: fixed`
+ * layers.
+ */
+[data-image-hero-pulling] .image-detail-overlay-content {
+  transform: translate3d(0, var(--hero-pull-y, 0px), 0);
+  will-change: transform;
+}
+
+[data-image-hero-pulling] [data-image-detail-surface],
+[data-image-hero-pulling] [data-image-detail-reveal],
+[data-image-detail-floating-back][data-image-hero-pulling] {
+  opacity: var(--hero-veil, 1);
+  will-change: opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .image-detail-route {
     animation-duration: 1ms !important;
