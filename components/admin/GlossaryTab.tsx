@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Checkbox from '@/components/Checkbox';
 import Modal from '@/components/Modal';
+import Select from '@/components/Select';
 import {
   MdLibraryBooks, MdAdd, MdSearch, MdEdit, MdDelete, MdContentCopy,
   MdTranslate, MdFileDownload, MdFileUpload, MdCloudDownload, MdClose,
@@ -860,31 +861,35 @@ export default function GlossaryTab() {
             className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
           />
         </div>
-        <select
+        <Select
           value={sortMode}
-          onChange={(e) => setSortMode(e.target.value)}
-          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm shrink-0"
-        >
-          <option value="count_desc">热度：高到低</option>
-          <option value="count_asc">热度：低到高</option>
-          <option value="newest">最新添加</option>
-          <option value="en_asc">英文：A-Z</option>
-        </select>
-        <select
+          onChange={(v) => setSortMode(v)}
+          className="shrink-0"
+          aria-label="排序方式"
+          options={[
+            { value: 'count_desc', label: '热度：高到低' },
+            { value: 'count_asc', label: '热度：低到高' },
+            { value: 'newest', label: '最新添加' },
+            { value: 'en_asc', label: '英文：A-Z' },
+          ]}
+        />
+        <Select
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm shrink-0"
-        >
-          <option value="all">全部分类</option>
-          <option value="general">常规</option>
-          <option value="character">角色</option>
-          <option value="species">种族</option>
-          <option value="rating">分级</option>
-          <option value="origin">来源</option>
-          <option value="content-official">官方内容</option>
-          <option value="content-fanmade">同人内容</option>
-          <option value="error">错误</option>
-        </select>
+          onChange={(v) => setCategoryFilter(v)}
+          className="shrink-0"
+          aria-label="分类筛选"
+          options={[
+            { value: 'all', label: '全部分类' },
+            { value: 'general', label: '常规' },
+            { value: 'character', label: '角色' },
+            { value: 'species', label: '种族' },
+            { value: 'rating', label: '分级' },
+            { value: 'origin', label: '来源' },
+            { value: 'content-official', label: '官方内容' },
+            { value: 'content-fanmade', label: '同人内容' },
+            { value: 'error', label: '错误' },
+          ]}
+        />
       </div>
 
       {isAdmin && (
@@ -1145,20 +1150,21 @@ export default function GlossaryTab() {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">分类</label>
-            <select
+            <Select
               value={editForm.cat}
-              onChange={(e) => setEditForm({ ...editForm, cat: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
-            >
-              <option value="general">常规 (general)</option>
-              <option value="character">角色 (character)</option>
-              <option value="species">种族 (species)</option>
-              <option value="rating">分级 (rating)</option>
-              <option value="origin">来源 (origin)</option>
-              <option value="content-official">官方内容 (content-official)</option>
-              <option value="content-fanmade">同人内容 (content-fanmade)</option>
-              <option value="error">错误 (error)</option>
-            </select>
+              onChange={(v) => setEditForm({ ...editForm, cat: v })}
+              className="w-full"
+              options={[
+                { value: 'general', label: '常规 (general)' },
+                { value: 'character', label: '角色 (character)' },
+                { value: 'species', label: '种族 (species)' },
+                { value: 'rating', label: '分级 (rating)' },
+                { value: 'origin', label: '来源 (origin)' },
+                { value: 'content-official', label: '官方内容 (content-official)' },
+                { value: 'content-fanmade', label: '同人内容 (content-fanmade)' },
+                { value: 'error', label: '错误 (error)' },
+              ]}
+            />
           </div>
 
           <div>

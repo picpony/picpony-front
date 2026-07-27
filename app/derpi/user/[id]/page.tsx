@@ -103,7 +103,7 @@ export default function DerpiUserPage() {
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">加载失败</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-6">{error || '用户可能不存在'}</p>
         <div className="flex gap-4 justify-center">
-          <button onClick={() => router.back()} className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+          <button onClick={() => router.back()} data-ripple className="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200">
             返回上一页
           </button>
           {userId && (
@@ -217,7 +217,7 @@ export default function DerpiUserPage() {
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <button
               onClick={() => router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`)}
-              className="flex-1 px-5 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 font-medium text-sm"
+              data-ripple className="flex-1 px-5 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 font-medium text-sm"
             >
               <MdSearch size={18} />
               搜搜 TA 的所有作品

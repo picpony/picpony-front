@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
+import Button from '@/components/Button';
+import { useSlidingIndicator } from '@/lib/motion';
 import { MdEmojiEvents, MdCheckCircle, MdLock } from 'react-icons/md';
 
 interface TaskData {
@@ -54,6 +56,7 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TaskTab>('novice');
   const [claiming, setClaiming] = useState<string | null>(null);
+  const { containerRef, indicatorRef } = useSlidingIndicator(activeTab, [data]);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -143,7 +146,7 @@ export default function TasksPage() {
   const renderTabContent = () => {
     if (activeTab === 'cumulative') {
       return (
-        <div className="text-center text-slate-400 dark:text-slate-500 py-12">
+        <div key="cumulative" className="text-center text-slate-400 dark:text-slate-500 py-12 animate-page-transition">
           <MdLock size={48} className="mx-auto mb-4 opacity-40" />
           <p>该类任务暂未开放，敬请期待</p>
         </div>
@@ -152,54 +155,64 @@ export default function TasksPage() {
 
     const items = getTaskItems();
     return (
-      <div className="space-y-3">
-        {items.map(item => {
+      <div key={`items-${activeTab}`} className="space-y-3">
+        {items.map((item, index) => {
           const pct = item.target > 0 ? Math.min(item.progress, item.target) / item.target * 100 : 0;
           const canClaim = item.progress >= item.target && !item.claimed;
           return (
-            <div key={item.id} className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div
+              key={item.id}
+              className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 animate-fade-in"
+              style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
+            >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{item.name}</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</span>
                   <span className="text-xs text-amber-500 dark:text-amber-400 whitespace-nowrap">
                     <MdEmojiEvents size={12} className="inline mr-0.5" />
                     经验+{item.xp}
                     <span className="ml-1 text-yellow-600 dark:text-yellow-400">金币+{item.coins}</span>
                   </span>
-                </div>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-300"
-                      style={{
-                        width: `${pct}%`,
-                        backgroundColor: item.claimed ? '#22c55e' : canClaim ? '#f59e0b' : 'var(--color-primary, #E06C9F)',
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0 w-14 text-right">
+                  {/* Sits at the bar's right edge; tabular figures stop the
+                      digits shifting as progress ticks up. */}
+                  <span className="ml-auto shrink-0 text-xs tabular-nums text-slate-400 dark:text-slate-500">
                     {Math.min(item.progress, item.target)}/{item.target}
                   </span>
                 </div>
+                <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full origin-left animate-[bar-grow_0.6s_var(--ease-decelerate)] transition-[width,background-color] duration-500 ease-[var(--ease-standard)]"
+                    style={{
+                      width: `${pct}%`,
+                      animationDelay: `${100 + index * 50}ms`,
+                      animationFillMode: 'backwards',
+                      backgroundColor: item.claimed ? '#22c55e' : canClaim ? '#f59e0b' : 'var(--color-primary, #E06C9F)',
+                    }}
+                  />
+                </div>
               </div>
-              <div className="shrink-0">
+              {/* Fixed footprint: 领取 / 去完成 / 已领取 / loading all occupy the
+                  same box, so claiming never reflows the row. */}
+              <div className="flex w-20 shrink-0 justify-end">
                 {item.claimed ? (
-                  <span className="flex items-center gap-1 text-xs text-green-500 font-medium">
+                  <span className="flex h-8 items-center gap-1 text-xs font-medium text-green-500">
                     <MdCheckCircle size={16} />
                     已领取
                   </span>
                 ) : (
-                  <button
+                  <Button
+                    size="sm"
+                    fullWidth
+                    variant={canClaim ? 'filled' : 'text'}
                     onClick={() => handleClaim(item.id)}
-                    disabled={!canClaim || claiming === item.id}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      canClaim
-                        ? 'bg-primary text-white hover:bg-primary/90'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                    }`}
+                    disabled={!canClaim}
+                    loading={claiming === item.id}
+                    className={canClaim
+                      ? 'animate-[control-pop_0.3s_var(--ease-spring)]'
+                      : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'}
                   >
-                    {claiming === item.id ? <Spinner size="sm" white /> : canClaim ? '领取' : '去完成'}
-                  </button>
+                    {canClaim ? '领取' : '去完成'}
+                  </Button>
                 )}
               </div>
             </div>
@@ -263,7 +276,7 @@ export default function TasksPage() {
           <p className="text-red-500 mb-4">{error}</p>
           <button
             onClick={loadTasks}
-            className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors"
+            data-ripple className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200"
           >
             重试
           </button>
@@ -273,15 +286,22 @@ export default function TasksPage() {
       {!loading && !error && data && (
         <>
           {/* Tabs */}
-          <div className="flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700">
+          <div ref={containerRef} className="relative flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700">
+            <span
+              ref={indicatorRef}
+              aria-hidden="true"
+              className="absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-amber-400"
+            />
             {tabs.map(tab => (
               <button
                 key={tab.id}
+                data-tab={tab.id}
+                data-ripple
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] ${
+                className={`px-4 py-2.5 text-sm font-medium transition-colors rounded-t-lg ${
                   activeTab === tab.id
-                    ? 'text-amber-500 border-amber-400'
-                    : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'
+                    ? 'text-amber-500'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
               >
                 {tab.label}
@@ -290,7 +310,7 @@ export default function TasksPage() {
           </div>
 
           {/* Tab subtitle */}
-          <div className="mb-4">
+          <div key={`subtitle-${activeTab}`} className="mb-4 animate-fade-in">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
               {tabs.find(t => t.id === activeTab)?.label}
             </span>

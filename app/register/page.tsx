@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import CaptchaModal from "@/components/CaptchaModal";
 import Spinner from "@/components/Spinner";
+import Reveal from "@/components/Reveal";
 import { api } from "@/lib/api";
 
 type RegisterStep = 'form' | 'verify';
@@ -140,12 +141,12 @@ export default function RegisterPage() {
     "w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all";
 
   const btnClass =
-    "w-full py-3 bg-primary text-white rounded-lg font-semibold transition-colors shadow-sm flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed hover:bg-primary/90";
+    "w-full py-3 bg-primary text-white rounded-lg font-semibold transition-all duration-200 shadow-sm flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98]";
 
   return (
     <div className="max-w-md mx-auto mt-12 p-8 bg-white dark:bg-transparent rounded-xl relative">
       {step === 'form' ? (
-        <>
+        <Reveal>
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               注册
@@ -208,7 +209,7 @@ export default function RegisterPage() {
               onVerify={onCaptchaVerify}
             />
 
-            <button type="submit" disabled={isLoading} className={btnClass}>
+            <button type="submit" disabled={isLoading} data-ripple className={btnClass}>
               {isLoading ? <Spinner size="sm" white /> : "注册"}
             </button>
           </form>
@@ -224,10 +225,9 @@ export default function RegisterPage() {
               </Link>
             </p>
           </div>
-        </>
+        </Reveal>
       ) : (
-        <>
-          <div className="space-y-6">
+        <Reveal className="space-y-6">
             <div className="text-center">
               <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
                 验证邮箱
@@ -288,6 +288,7 @@ export default function RegisterPage() {
             <button
               onClick={handleVerify}
               disabled={isVerifying || codeDigits.join('').length !== 6}
+              data-ripple
               className={btnClass}
             >
               {isVerifying ? <Spinner size="sm" white /> : "验证并登录"}
@@ -302,8 +303,7 @@ export default function RegisterPage() {
                 {isResending ? "发送中..." : "未收到？重新发送验证码"}
               </button>
             </div>
-          </div>
-        </>
+        </Reveal>
       )}
     </div>
   );

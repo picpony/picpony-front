@@ -58,7 +58,7 @@ export default function ForumPage() {
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">论坛</h1>
         <button
           onClick={() => router.push('/forum/create')}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+          data-ripple className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200 text-sm font-medium"
         >
           <MdAdd size={18} />
           发帖

@@ -6,6 +6,7 @@ import { api, Notification } from '@/lib/api';
 import { MdOutlineChatBubbleOutline, MdOutlineEmojiEmotions, MdRefresh, MdArrowBack, MdSearch } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
 import Spinner from '@/components/Spinner';
+import TabBar from '@/components/TabBar';
 
 interface Announcement {
   id: number;
@@ -31,7 +32,6 @@ export default function MessagesPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -405,46 +405,20 @@ export default function MessagesPage() {
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">消息</h1>
       
-      <div className="border-b border-slate-200 dark:border-slate-700 mb-3">
-        <div className="flex gap-0">
-          {[
-            { label: '公告', value: 'announcement', badge: 0 },
-            { label: '系统', value: 'notification', badge: unreadCounts.notifications },
-            { label: '互动', value: 'interaction', badge: unreadCounts.interactions },
-            { label: '私信', value: 'chat', badge: unreadCounts.messages },
-          ].map(tab => (
-            <button
-              key={tab.value}
-              onClick={() => {
-                if (tab.value === activeTab) return;
-                setIsTransitioning(true);
-                setTimeout(() => {
-                  setActiveTab(tab.value as typeof activeTab);
-                  setIsTransitioning(false);
-                }, 200);
-              }}
-              className={`px-4 py-2.5 text-base font-medium transition-colors relative flex items-center gap-1 ${
-                activeTab === tab.value
-                  ? 'text-primary'
-                  : 'text-[var(--sidebar-text)] hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              {tab.label}
-              {tab.badge > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
-                  {tab.badge > 99 ? '99+' : tab.badge}
-                </span>
-              )}
-              {activeTab === tab.value && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+      <TabBar
+        className="mb-3"
+        value={activeTab}
+        onChange={(v) => setActiveTab(v)}
+        tabs={[
+          { value: 'announcement' as const, label: '公告' },
+          { value: 'notification' as const, label: '系统', badge: unreadCounts.notifications },
+          { value: 'interaction' as const, label: '互动', badge: unreadCounts.interactions },
+          { value: 'chat' as const, label: '私信', badge: unreadCounts.messages },
+        ]}
+      />
 
       <div className="min-h-[400px] relative">
-        <div className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+        <div key={activeTab} className="animate-page-transition">
           {activeTab === 'chat' ? (
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden flex h-[calc(100vh-200px)] md:h-[600px]">
               <div className={`w-full md:w-80 border-r border-slate-100 dark:border-slate-700 flex-col ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
@@ -462,13 +436,22 @@ export default function MessagesPage() {
                   {loading && contacts.length === 0 ? (
                     <div className="space-y-1">
                       {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="flex items-center justify-start w-full p-2 gap-1.5 mb-4 animate-pulse">
+                        <div key={i} className="flex items-center justify-start w-full p-2 gap-1.5 mb-4">
                           <div className="relative">
-                            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700" />
+                            <div
+                              className="skeleton w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700"
+                              style={{ animationDelay: `${i * 80}ms` }}
+                            />
                           </div>
                           <div className="flex-1 min-w-0 space-y-2">
-                            <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded w-3/4" />
-                            <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-1/2" />
+                            <div
+                              className="skeleton h-4 bg-slate-100 dark:bg-slate-700 rounded w-3/4"
+                              style={{ animationDelay: `${i * 80 + 40}ms` }}
+                            />
+                            <div
+                              className="skeleton h-3 bg-slate-100 dark:bg-slate-700 rounded w-1/2"
+                              style={{ animationDelay: `${i * 80 + 80}ms` }}
+                            />
                           </div>
                         </div>
                       ))}
@@ -643,7 +626,7 @@ export default function MessagesPage() {
                         <button
                           onClick={handleSendMessage}
                           disabled={!newMessage.trim() || sending}
-                          className="bg-primary text-white px-2 py-1 rounded-full text-sm font-bold transition-colors duration-200 flex items-center justify-center min-w-[64px] disabled:opacity-50 disabled:cursor-not-allowed"
+                          data-ripple className="bg-primary text-white px-2 py-1 rounded-full text-sm font-bold hover:bg-primary/90 active:scale-95 transition-all duration-200 flex items-center justify-center min-w-[64px] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {sending ? <Spinner size="sm" white /> : '发送'}
                         </button>

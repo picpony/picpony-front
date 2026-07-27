@@ -89,7 +89,8 @@ export default function Modal({
             {!hideCloseButton && (
               <button
                 onClick={handleClose}
-                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors ml-auto cursor-pointer"
+                aria-label="关闭"
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:rotate-90 active:scale-90 transition-all duration-200 ease-[var(--ease-standard)] ml-auto cursor-pointer"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" />

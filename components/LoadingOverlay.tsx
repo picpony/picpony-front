@@ -30,7 +30,7 @@ export default function LoadingOverlay() {
         isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
     >
-      <Logo className="w-32 h-auto opacity-10" />
+      <Logo className="w-32 h-auto animate-[breathe_1.6s_ease-in-out_infinite]" />
     </div>
   );
 }

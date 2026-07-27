@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import CaptchaModal from "@/components/CaptchaModal";
 import Spinner from "@/components/Spinner";
+import Reveal from "@/components/Reveal";
 import { api } from "@/lib/api";
 
 export default function LoginPage() {
@@ -87,7 +88,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-12 p-8 bg-white dark:bg-transparent rounded-xl relative">
+    <Reveal className="max-w-md mx-auto mt-12 p-8 bg-white dark:bg-transparent rounded-xl relative">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
           登录
@@ -131,10 +132,11 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={isLoading || success}
-          className={`w-full py-3 bg-primary text-white rounded-lg font-semibold transition-colors shadow-sm flex items-center justify-center ${
+          data-ripple
+          className={`w-full py-3 bg-primary text-white rounded-lg font-semibold transition-all duration-200 shadow-sm flex items-center justify-center ${
             isLoading || success
               ? "opacity-70 cursor-not-allowed"
-              : "hover:bg-primary/90"
+              : "hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98]"
           }`}
         >
           {isLoading ? (
@@ -161,6 +163,6 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
-    </div>
+    </Reveal>
   );
 }

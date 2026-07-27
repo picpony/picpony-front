@@ -226,14 +226,14 @@ export default function ForumPostPage() {
         <div className="flex gap-4">
           <button 
             onClick={() => router.back()}
-            className="flex items-center px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+            data-ripple className="flex items-center px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium hover:bg-slate-200 dark:hover:bg-slate-600 active:scale-95 transition-all duration-200 cursor-pointer"
           >
             <MdArrowBack size={20} className="mr-2" />
             <span>返回</span>
           </button>
           <button 
             onClick={() => setRetryCount(c => c + 1)}
-            className="flex items-center px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors cursor-pointer"
+            data-ripple className="flex items-center px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200 cursor-pointer"
           >
             <MdRefresh size={20} className="mr-2" />
             <span>重试</span>
@@ -434,7 +434,7 @@ export default function ForumPostPage() {
             <p className="text-slate-500 dark:text-slate-400 mb-4">登录后才能发表回复</p>
             <Link 
               href="/login"
-              className="inline-flex items-center px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
+              data-ripple className="inline-flex items-center px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200 font-medium"
             >
               去登录
             </Link>
@@ -481,7 +481,7 @@ export default function ForumPostPage() {
               <button
                 onClick={handleSubmitComment}
                 disabled={isSubmitting || !newComment.trim()}
-                className="flex items-center px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                data-ripple className="flex items-center px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none font-medium"
               >
                 {isSubmitting ? (
                   <div className="flex items-center gap-1">
