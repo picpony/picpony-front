@@ -63,7 +63,7 @@ export function useSlidingIndicator<
 }
 
 type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void | Promise<void>) => {
+  startViewTransition: (update: () => void | Promise<void>) => {
     ready: Promise<void>;
     updateCallbackDone: Promise<void>;
     finished: Promise<void>;
@@ -72,7 +72,7 @@ type ViewTransitionDocument = Document & {
 };
 
 type ThemeViewTransition = ReturnType<
-  NonNullable<ViewTransitionDocument['startViewTransition']>
+  ViewTransitionDocument['startViewTransition']
 >;
 
 interface ActiveThemeTransition {
@@ -132,8 +132,9 @@ function measureSnapshotBox() {
  * Circular reveal for theme changes, growing from `origin` (viewport
  * coordinates — pass the icon's centre) out to the farthest corner.
  *
- * Falls back to applying the change outright when View Transitions are missing
- * or motion is reduced; the theme must switch either way.
+ * View Transitions are assumed present — every current engine ships them — so
+ * the only branch left is reduced motion, which is a stated preference rather
+ * than a capability.
  */
 export function circularReveal(
   applyChange: () => void,
@@ -142,7 +143,7 @@ export function circularReveal(
   const doc = document as ViewTransitionDocument;
   const root = document.documentElement;
 
-  if (typeof doc.startViewTransition !== 'function' || prefersReducedMotion()) {
+  if (prefersReducedMotion()) {
     applyChange();
     return;
   }
@@ -192,16 +193,7 @@ export function circularReveal(
   document.head.append(style);
   root.dataset.themeVt = id;
 
-  let transition: ThemeViewTransition;
-  try {
-    transition = doc.startViewTransition(applyChange);
-  } catch {
-    style.remove();
-    if (root.dataset.themeVt === id) delete root.dataset.themeVt;
-    // A transition that never started must not swallow the theme change.
-    applyChange();
-    return;
-  }
+  const transition = doc.startViewTransition(applyChange);
   const active = { id, style, transition };
   activeThemeTransition = active;
 
