@@ -63,55 +63,155 @@ export function useSlidingIndicator<
 }
 
 type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void) => {
+  startViewTransition?: (update: () => void | Promise<void>) => {
     ready: Promise<void>;
+    updateCallbackDone: Promise<void>;
     finished: Promise<void>;
+    skipTransition: () => void;
   };
 };
 
+type ThemeViewTransition = ReturnType<
+  NonNullable<ViewTransitionDocument['startViewTransition']>
+>;
+
+interface ActiveThemeTransition {
+  id: string;
+  style: HTMLStyleElement;
+  transition: ThemeViewTransition;
+}
+
+let activeThemeTransition: ActiveThemeTransition | null = null;
+let themeTransitionId = 0;
+
 /**
- * Circular reveal for theme changes: snapshots the page, applies the change,
- * then wipes the new frame in from `origin` (e.g. the toggle button). Falls
- * back to an instant swap without the View Transitions API or with reduced
- * motion. The `data-theme-vt` flag scopes the CSS overrides in globals.css.
+ * Geometry of the box the `::view-transition` pseudo-elements are painted into.
+ *
+ * That box is the *snapshot containing block*, and two things about it bite on
+ * phones:
+ *
+ * - Its units are not reliably CSS pixels. Some mobile engines size it at
+ *   device resolution, so a circle written in `px` lands compressed towards the
+ *   top-left by roughly the device pixel ratio. Everything below is therefore
+ *   expressed as a *fraction* of this box and emitted as percentages, which the
+ *   engine resolves against the box itself — correct under any uniform scale.
+ * - It spans the **large** viewport (browser UI retracted). Where the layout
+ *   viewport is genuinely shorter, that extra band sits above the origin of
+ *   client coordinates, and everything placed by `getBoundingClientRect()`
+ *   renders that much too high.
+ *
+ * `lv*` units measure the box; the `v*` pair in front of them is the fallback
+ * for engines that discard the large-viewport units as invalid.
+ */
+function measureSnapshotBox() {
+  const root = document.documentElement;
+  const probe = document.createElement('div');
+  probe.style.cssText =
+    'position:fixed;top:0;left:0;margin:0;padding:0;border:0;' +
+    'visibility:hidden;pointer-events:none;' +
+    'width:100vw;height:100vh;width:100lvw;height:100lvh;';
+  root.appendChild(probe);
+  const probed = probe.getBoundingClientRect();
+  probe.remove();
+
+  const layoutWidth = root.clientWidth || window.innerWidth || probed.width;
+  const layoutHeight = root.clientHeight || window.innerHeight || probed.height;
+  const width = Math.max(probed.width, layoutWidth, window.innerWidth || 0);
+  const height = Math.max(probed.height, layoutHeight, window.innerHeight || 0);
+  // Compared against the layout viewport specifically, not the visual one:
+  // Chrome and Safari keep the ICB at the large size and only shrink the visual
+  // viewport, so for them this stays 0 and no correction is applied. It fires
+  // only where the layout viewport really is the short one — the case where the
+  // snapshot cannot line up with client coordinates.
+  const topInset = Math.max(0, probed.height - layoutHeight);
+
+  return { width, height, topInset };
+}
+
+/**
+ * Circular reveal for theme changes, growing from `origin` (viewport
+ * coordinates — pass the icon's centre) out to the farthest corner.
+ *
+ * Falls back to applying the change outright when View Transitions are missing
+ * or motion is reduced; the theme must switch either way.
  */
 export function circularReveal(
   applyChange: () => void,
   origin?: { x: number; y: number },
 ) {
   const doc = document as ViewTransitionDocument;
-  if (!doc.startViewTransition || prefersReducedMotion()) {
+  const root = document.documentElement;
+
+  if (typeof doc.startViewTransition !== 'function' || prefersReducedMotion()) {
     applyChange();
     return;
   }
-  const x = origin?.x ?? window.innerWidth / 2;
-  const y = origin?.y ?? 0;
-  const radius = Math.hypot(
-    Math.max(x, window.innerWidth - x),
-    Math.max(y, window.innerHeight - y),
-  );
-  document.documentElement.dataset.themeVt = '';
-  const transition = doc.startViewTransition(applyChange);
-  transition.ready
-    .then(() => {
-      document.documentElement.animate(
-        {
-          clipPath: [
-            `circle(0px at ${x}px ${y}px)`,
-            `circle(${radius}px at ${x}px ${y}px)`,
-          ],
-        },
-        {
-          duration: 550,
-          easing: 'cubic-bezier(0.2, 0, 0, 1)',
-          pseudoElement: '::view-transition-new(root)',
-        },
-      );
-    })
-    .catch(() => {});
-  void transition.finished.finally(() => {
-    delete document.documentElement.dataset.themeVt;
-  });
+
+  const box = measureSnapshotBox();
+  const x = origin?.x ?? box.width / 2;
+  const y = (origin?.y ?? box.height / 2) + box.topInset;
+  // Position as a fraction of the snapshot box, so the wipe starts on the icon
+  // whatever units that box is measured in.
+  const fx = box.width > 0 ? x / box.width : 0.5;
+  const fy = box.height > 0 ? y / box.height : 0.5;
+  // Reach of the farthest corner, not the full viewport diagonal: the diagonal
+  // overshoots for any off-centre origin — a header icon needs about 90% of it —
+  // so the sweep used to finish well before the animation did.
+  const reachX = Math.max(fx, 1 - fx) * box.width;
+  // Slack for the vertical correction above: if this engine turns out to anchor
+  // the snapshot elsewhere, the circle still covers the corner it can't see.
+  const reachY = Math.max(fy, 1 - fy) * box.height + box.topInset;
+  // A percentage radius resolves against sqrt((w² + h²) / 2), so scale by √2
+  // over the diagonal to turn a length back into that percentage.
+  const radiusPercent =
+    (Math.hypot(reachX, reachY) / Math.hypot(box.width, box.height)) *
+      Math.SQRT2 *
+      100 +
+    1;
+  const at = `at ${(fx * 100).toFixed(3)}% ${(fy * 100).toFixed(3)}%`;
+  const id = String(++themeTransitionId);
+  const animationName = `theme-circular-reveal-${id}`;
+  const style = document.createElement('style');
+  style.dataset.themeTransitionStyle = id;
+  // `html:root[…]` outweighs the `html[data-theme-vt]` base rule in globals.css
+  // regardless of which stylesheet the browser sees last — matching on
+  // specificity alone left this animation one stylesheet re-injection away from
+  // losing to `animation: none`.
+  style.textContent = `
+    @keyframes ${animationName} {
+      from { clip-path: circle(0% ${at}); }
+      to { clip-path: circle(${radiusPercent.toFixed(3)}% ${at}); }
+    }
+    html:root[data-theme-vt="${id}"]::view-transition-new(root) {
+      animation: ${animationName} 550ms cubic-bezier(0.4, 0, 0.6, 1) both;
+    }
+  `;
+
+  activeThemeTransition?.transition.skipTransition();
+  activeThemeTransition?.style.remove();
+  document.head.append(style);
+  root.dataset.themeVt = id;
+
+  let transition: ThemeViewTransition;
+  try {
+    transition = doc.startViewTransition(applyChange);
+  } catch {
+    style.remove();
+    if (root.dataset.themeVt === id) delete root.dataset.themeVt;
+    // A transition that never started must not swallow the theme change.
+    applyChange();
+    return;
+  }
+  const active = { id, style, transition };
+  activeThemeTransition = active;
+
+  const cleanup = () => {
+    if (activeThemeTransition !== active) return;
+    activeThemeTransition = null;
+    style.remove();
+    if (root.dataset.themeVt === id) delete root.dataset.themeVt;
+  };
+  void transition.finished.then(cleanup, cleanup);
 }
 
 export { gsap, useGSAP };

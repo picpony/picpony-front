@@ -17,17 +17,22 @@ interface SliderCaptchaProps {
  * pass backend checks on both desktop and mobile:
  *
  *   start:  track = [[0, 0, 0]]
- *   move:   x = clamp(clientX - startX, 0, 260)   // kept as float on sliderX
+ *   move:   visual knob position is normalized to logical x in [0, 260]
  *           relY = clientY - startY
  *           track.push([round(x), round(relY), elapsed])  // max 150 pts
  *   submit: { x: sliderX, track: xor90_btoa(JSON(track)) }
  *
- * Desktop-only mouse path already worked; mobile failed with the same API,
- * so the difference has to be in how touch samples the track — keep the
- * event model identical to production (document-level mouse/touch listeners,
- * not PointerEvent).
+ * The backend always receives the 310px logical coordinate space. The visual
+ * track can be narrower on mobile, so pointer movement is converted back to
+ * that space before samples and the final x are submitted. The event model
+ * remains the production-compatible document-level mouse/touch path.
  */
 export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
+  const puzzleWidth = 310;
+  const puzzleHeight = 155;
+  const pieceSize = 50;
+  const maxSliderX = puzzleWidth - pieceSize;
+
   const [bgImage, setBgImage] = useState("");
   const [pieceImage, setPieceImage] = useState("");
   const [pieceY, setPieceY] = useState(0);
@@ -40,6 +45,8 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   const sliderXRef = useRef(0);
   const sliderBtnRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLDivElement>(null);
+  const trackRefElement = useRef<HTMLDivElement>(null);
   const snapTweenRef = useRef<gsap.core.Tween | null>(null);
   const fetchedRef = useRef(false);
   const trackRef = useRef<[number, number, number][]>([]);
@@ -49,17 +56,55 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   const loadingRef = useRef(true);
   const verifyingRef = useRef(false);
   const draggingRef = useRef(false);
+  const grabRatioRef = useRef(0.5);
+  const [layout, setLayout] = useState({
+    imageWidth: puzzleWidth,
+    imagePieceSize: pieceSize,
+    imageMaxX: maxSliderX,
+    barWidth: puzzleWidth,
+    barButtonWidth: pieceSize,
+    barMaxX: maxSliderX,
+  });
   // Latest callbacks for document-level listeners (avoid stale closures /
   // re-binding mid-gesture when handleStart identity changes).
   const onVerifyRef = useRef(onVerify);
   const fetchCaptchaRef = useRef<() => Promise<void>>(async () => {});
 
-  const maxSliderX = 260;
-  const btnWidth = 50;
-
   useEffect(() => {
     onVerifyRef.current = onVerify;
   }, [onVerify]);
+
+  const measureLayout = useCallback(() => {
+    const imageWidth = imageRef.current?.clientWidth || puzzleWidth;
+    const barWidth = trackRefElement.current?.clientWidth || puzzleWidth;
+    const nextLayout = {
+      imageWidth,
+      imagePieceSize: imageWidth * pieceSize / puzzleWidth,
+      imageMaxX: imageWidth * maxSliderX / puzzleWidth,
+      barWidth,
+      barButtonWidth: barWidth * pieceSize / puzzleWidth,
+      barMaxX: barWidth * maxSliderX / puzzleWidth,
+    };
+
+    setLayout((previous) => {
+      const changed = Object.keys(nextLayout).some((key) => {
+        const field = key as keyof typeof nextLayout;
+        return Math.abs(nextLayout[field] - previous[field]) > 0.5;
+      });
+      return changed ? nextLayout : previous;
+    });
+  }, [maxSliderX, pieceSize, puzzleWidth]);
+
+  useEffect(() => {
+    if (!bgImage) return;
+    measureLayout();
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(measureLayout);
+    if (imageRef.current) observer.observe(imageRef.current);
+    if (trackRefElement.current) observer.observe(trackRefElement.current);
+    return () => observer.disconnect();
+  }, [bgImage, measureLayout]);
 
   /** Glide the knob (and piece) home instead of teleporting after a miss. */
   const snapBack = useCallback(() => {
@@ -75,7 +120,13 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       x: 0,
       duration: 0.5,
       ease: 'expo.out',
-      onUpdate: () => setSliderX(proxy.x),
+      onUpdate: () => {
+        sliderXRef.current = proxy.x;
+        setSliderX(proxy.x);
+      },
+      onComplete: () => {
+        sliderXRef.current = 0;
+      },
     });
   }, []);
 
@@ -158,11 +209,15 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
 
     const clientX = getClientX(e);
     const clientY = getClientY(e);
+    const bar = trackRefElement.current;
+    const button = sliderBtnRef.current;
+    const buttonRect = button?.getBoundingClientRect();
+    grabRatioRef.current = buttonRect && buttonRect.width > 0
+      ? Math.max(0, Math.min(1, (clientX - buttonRect.left) / buttonRect.width))
+      : 0.5;
     startXRef.current = clientX;
     startYRef.current = clientY;
     startTimeRef.current = Date.now();
-    sliderXRef.current = 0;
-    setSliderX(0);
     // Production always seeds with [0, 0, 0] (relative coordinates).
     trackRef.current = [[0, 0, 0]];
 
@@ -170,12 +225,21 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       if (!draggingRef.current) return;
       if ("cancelable" in moveEvent && moveEvent.cancelable) moveEvent.preventDefault();
 
-      const xRaw = getClientX(moveEvent) - startXRef.current;
-      let x = xRaw;
-      if (x < 0) x = 0;
-      if (x > maxSliderX) x = maxSliderX;
+      const currentBarRect = bar?.getBoundingClientRect();
+      let x = getClientX(moveEvent) - startXRef.current;
+      if (bar && button && currentBarRect && bar.offsetWidth > 0) {
+        const transformScale = currentBarRect.width / bar.offsetWidth;
+        const contentLeft = currentBarRect.left + bar.clientLeft * transformScale;
+        const contentWidth = bar.clientWidth * transformScale;
+        const buttonWidth = button.offsetWidth * transformScale;
+        const visualMaxX = Math.max(1, contentWidth - buttonWidth);
+        const visualLeft = getClientX(moveEvent)
+          - contentLeft
+          - buttonWidth * grabRatioRef.current;
+        x = visualLeft / visualMaxX * maxSliderX;
+      }
+      x = Math.max(0, Math.min(maxSliderX, x));
 
-      // Production keeps sliderX as a float; only the track samples are rounded.
       sliderXRef.current = x;
       setSliderX(x);
 
@@ -192,19 +256,46 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       }
     };
 
-    const stopDrag = async () => {
-      if (!draggingRef.current) return;
-      draggingRef.current = false;
-      setIsDragging(false);
-
+    const removeDragListeners = () => {
       document.removeEventListener("mousemove", onDrag);
       document.removeEventListener("touchmove", onDrag);
       document.removeEventListener("mouseup", stopDrag);
       document.removeEventListener("touchend", stopDrag);
-      document.removeEventListener("touchcancel", stopDrag);
+      document.removeEventListener("touchcancel", cancelDrag);
+    };
 
-      // Production submits sliderX as-is (float) with no extra end sample.
+    const cancelDrag = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      setIsDragging(false);
+      removeDragListeners();
+      trackRef.current = [];
+      snapBack();
+    };
+
+    const stopDrag = async (endEvent: MouseEvent | TouchEvent) => {
+      if (!draggingRef.current) return;
+      onDrag(endEvent);
+      draggingRef.current = false;
+      setIsDragging(false);
+      removeDragListeners();
+
       const finalX = sliderXRef.current;
+      const finalSample: [number, number, number] = [
+        Math.round(finalX),
+        Math.round(getClientY(endEvent) - startYRef.current),
+        Date.now() - startTimeRef.current,
+      ];
+      const lastSample = trackRef.current[trackRef.current.length - 1];
+      if (
+        !lastSample ||
+        lastSample[0] !== finalSample[0] ||
+        lastSample[1] !== finalSample[1] ||
+        lastSample[2] !== finalSample[2]
+      ) {
+        if (trackRef.current.length < 150) trackRef.current.push(finalSample);
+        else trackRef.current[trackRef.current.length - 1] = finalSample;
+      }
       if (finalX < 5) {
         snapBack();
         trackRef.current = [];
@@ -246,7 +337,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     document.addEventListener("touchmove", onDrag, { passive: false });
     document.addEventListener("mouseup", stopDrag);
     document.addEventListener("touchend", stopDrag);
-    document.addEventListener("touchcancel", stopDrag);
+    document.addEventListener("touchcancel", cancelDrag);
   }, [maxSliderX, snapBack]);
 
   // Native non-passive touchstart, re-bound when the knob mounts (after bgImage).
@@ -275,15 +366,22 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       <div className="flex justify-center items-center w-full">
         <span className="font-semibold text-slate-800 dark:text-slate-100">请完成安全验证</span>
       </div>
-      <div ref={containerRef} className="relative w-[310px]">
+      <div ref={containerRef} className="relative w-full max-w-[310px]">
         {loading && !bgImage && (
-          <div className="w-[310px] h-[155px] flex items-center justify-center bg-white/80 dark:bg-slate-800/80 rounded-md">
+          <div
+            className="w-full flex items-center justify-center bg-white/80 dark:bg-slate-800/80 rounded-md"
+            style={{ aspectRatio: `${puzzleWidth} / ${puzzleHeight}` }}
+          >
             <Spinner size="lg" />
           </div>
         )}
 
         {bgImage && (
-          <div className="relative w-[310px] h-[155px] bg-slate-200 dark:bg-slate-600 rounded-md overflow-hidden animate-fade-in">
+          <div
+            ref={imageRef}
+            className="relative w-full bg-slate-200 dark:bg-slate-600 rounded-md overflow-hidden animate-fade-in"
+            style={{ aspectRatio: `${puzzleWidth} / ${puzzleHeight}` }}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={bgImage}
@@ -296,8 +394,13 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
               <img
                 src={pieceImage}
                 alt="滑动拼图"
-                className="absolute w-[50px] h-[50px] drop-shadow-[0_0_5px_rgba(0,0,0,0.5)] pointer-events-none"
-                style={{ top: `${pieceY}px`, left: `${sliderX}px` }}
+                className="absolute drop-shadow-[0_0_5px_rgba(0,0,0,0.5)] pointer-events-none"
+                style={{
+                  top: `${pieceY * layout.imageWidth / puzzleWidth}px`,
+                  left: `${sliderX * layout.imageMaxX / maxSliderX}px`,
+                  width: `${layout.imagePieceSize}px`,
+                  height: `${layout.imagePieceSize}px`,
+                }}
                 draggable={false}
               />
             )}
@@ -325,22 +428,27 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
 
       {bgImage && (
         <div
-          className="relative w-[310px] h-10 bg-slate-100 dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600 mt-2"
+          ref={trackRefElement}
+          className="relative w-full max-w-[310px] h-10 bg-slate-100 dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600 mt-2"
           style={{ touchAction: "none" }}
         >
           <div
             className="h-full bg-emerald-500/20 rounded-full transition-none"
-            style={{ width: `${sliderX + btnWidth}px` }}
+            style={{ width: `${(sliderX / maxSliderX) * layout.barMaxX + layout.barButtonWidth}px` }}
           />
 
           <div
             ref={sliderBtnRef}
-            className={`absolute top-[-1px] w-[50px] h-10 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-[color,background-color,border-color,scale,box-shadow] duration-200 ${
+            className={`absolute top-[-1px] h-10 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-[color,background-color,border-color,scale,box-shadow] duration-200 ${
               isDragging
                 ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500 dark:bg-emerald-600 dark:border-emerald-600 scale-110 shadow-lg"
                 : "cursor-grab text-slate-600 dark:text-slate-300"
             } ${verifying ? "pointer-events-none opacity-70" : ""}`}
-            style={{ left: `${sliderX}px`, touchAction: "none" }}
+            style={{
+              left: `${(sliderX / maxSliderX) * layout.barMaxX}px`,
+              width: `${layout.barButtonWidth}px`,
+              touchAction: "none",
+            }}
             onMouseDown={onMouseDown}
           >
             &rarr;

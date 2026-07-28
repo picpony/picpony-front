@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents, MdBrightnessAuto } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
 const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
 const Modal = dynamic(() => import("./Modal"), { ssr: false });
 import Logo from "./Logo";
 import FadeInImage from "./FadeInImage";
-import Checkbox from "./Checkbox";
 import {
   BackgroundLocationProvider,
   useBackgroundSearchParams,
@@ -40,7 +40,7 @@ function SearchBar() {
         title="搜索"
         aria-label="搜索"
         data-ripple
-        className="rounded-lg p-2 text-white hover:bg-white/10 active:scale-90 transition-all duration-200 cursor-pointer"
+        className="rounded-lg p-2 text-white hover:bg-white/10 transition-all duration-200 cursor-pointer"
       >
         <MdSearch size={24} />
       </button>
@@ -145,9 +145,8 @@ export default function AppLayout({
   const [darkMode, setDarkMode] = useState(initialDark);
 
   const [followSystem, setFollowSystem] = useState(true);
-  const [isDarkDropdownOpen, setIsDarkDropdownOpen] = useState(false);
-  const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const themeButtonRef = useRef<HTMLButtonElement>(null);
+  const themeIconRef = useRef<HTMLSpanElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const liveSearchParams = useSearchParams();
@@ -209,6 +208,29 @@ export default function AppLayout({
     document.cookie = `darkMode=${dark};path=/;max-age=${365 * 24 * 60 * 60}`;
   }, []);
 
+  const commitTheme = useCallback((dark: boolean, followsSystem?: boolean) => {
+    flushSync(() => {
+      if (followsSystem !== undefined) setFollowSystem(followsSystem);
+      setDarkMode(dark);
+    });
+    applyDarkMode(dark);
+  }, [applyDarkMode]);
+
+  const getRevealOrigin = useCallback(() => {
+    // The icon, not its 40×40 hit target: every entry point into a theme change
+    // grows the wipe out of the glyph itself. They share a centre while the
+    // button is a bare square, but the button is free to gain padding or a
+    // label, and the fallback below used to be the top edge of the viewport.
+    const element = themeIconRef.current ?? themeButtonRef.current;
+    if (!element) return undefined;
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return undefined;
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+  }, []);
+
   // Apply browser-only preferences after mount so the first paint matches SSR.
   // queueMicrotask keeps setState out of the effect's synchronous body
   // (react-hooks/set-state-in-effect) while still running before the next paint.
@@ -258,56 +280,46 @@ export default function AppLayout({
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e: MediaQueryListEvent) => {
-      setDarkMode(e.matches);
-      applyDarkMode(e.matches);
+      if (e.matches === darkMode) return;
+      circularReveal(() => {
+        commitTheme(e.matches);
+      }, getRevealOrigin());
     };
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
-  }, [followSystem, applyDarkMode]);
+  }, [followSystem, darkMode, commitTheme, getRevealOrigin]);
 
-  const toggleDarkMode = (event: React.MouseEvent<HTMLButtonElement>) => {
-    const newDark = !darkMode;
-    // Reveal the new theme in a circle growing from the toggle button.
-    circularReveal(() => {
-      setDarkMode(newDark);
-      applyDarkMode(newDark);
-    }, { x: event.clientX, y: event.clientY });
-    localStorage.setItem('darkMode', String(newDark));
-    if (followSystem) {
-      setFollowSystem(false);
-      localStorage.setItem('followSystemPrefersColorScheme', 'false');
-    }
-  };
+  const cycleThemeMode = () => {
+    const currentMode = followSystem ? 'system' : darkMode ? 'dark' : 'light';
+    const nextMode = currentMode === 'light'
+      ? 'dark'
+      : currentMode === 'dark'
+        ? 'system'
+        : 'light';
 
-  const handleFollowSystemChange = (checked: boolean) => {
-    setFollowSystem(checked);
-    localStorage.setItem('followSystemPrefersColorScheme', String(checked));
-    if (checked) {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (isDark !== darkMode) {
-        circularReveal(() => {
-          setDarkMode(isDark);
-          applyDarkMode(isDark);
-        });
+    if (nextMode === 'system') {
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      localStorage.setItem('followSystemPrefersColorScheme', 'true');
+      if (systemDark === darkMode) {
+        commitTheme(systemDark, true);
       } else {
-        setDarkMode(isDark);
-        applyDarkMode(isDark);
+        circularReveal(() => {
+          commitTheme(systemDark, true);
+        }, getRevealOrigin());
       }
+      return;
     }
-  };
 
-  const handleDropdownMouseEnter = () => {
-    if (dropdownTimeoutRef.current) {
-      clearTimeout(dropdownTimeoutRef.current);
-      dropdownTimeoutRef.current = null;
+    const nextDark = nextMode === 'dark';
+    localStorage.setItem('followSystemPrefersColorScheme', 'false');
+    localStorage.setItem('darkMode', String(nextDark));
+    if (nextDark === darkMode) {
+      commitTheme(nextDark, false);
+    } else {
+      circularReveal(() => {
+        commitTheme(nextDark, false);
+      }, getRevealOrigin());
     }
-    setIsDarkDropdownOpen(true);
-  };
-
-  const handleDropdownMouseLeave = () => {
-    dropdownTimeoutRef.current = setTimeout(() => {
-      setIsDarkDropdownOpen(false);
-    }, 150);
   };
 
   useEffect(() => {
@@ -452,7 +464,7 @@ export default function AppLayout({
           onClick={toggleSidebar}
           aria-label={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
           data-ripple
-          className="rounded-lg p-2 mr-2 sm:mr-4 text-white hover:bg-white/10 active:scale-90 transition-all duration-200"
+          className="rounded-lg p-2 mr-2 sm:mr-4 text-white hover:bg-white/10 transition-all duration-200"
         >
           <MdMenu size={24} />
         </button>
@@ -481,36 +493,28 @@ export default function AppLayout({
             <img src="/img/picpony.svg" alt="" className="h-auto w-25" />
           </span>
         </Link>
-        <div
-          className="relative"
-          ref={dropdownRef}
-          onMouseEnter={handleDropdownMouseEnter}
-          onMouseLeave={handleDropdownMouseLeave}
+        <button
+          ref={themeButtonRef}
+          onClick={cycleThemeMode}
+          aria-label="切换主题模式"
+          title={followSystem ? '跟随系统' : darkMode ? '深色模式' : '浅色模式'}
+          data-ripple
+          className="ml-2 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white hover:bg-white/10 transition-colors duration-200"
         >
-          <button
-            onClick={toggleDarkMode}
-            aria-label={darkMode ? '切换浅色模式' : '切换深色模式'}
-            title={darkMode ? '浅色模式' : '深色模式'}
-            data-ripple
-            className="rounded-lg p-2 ml-2 mr-0.5 text-white hover:bg-white/10 active:scale-90 transition-all duration-200"
+          <span
+            ref={themeIconRef}
+            key={followSystem ? 'system' : String(darkMode)}
+            className="block animate-[icon-swap_0.35s_var(--ease-spring)]"
           >
-            <span key={String(darkMode)} className="block animate-[icon-swap_0.35s_var(--ease-spring)]">
-              {darkMode ? <MdLightMode size={24} /> : <MdDarkMode size={24} />}
-            </span>
-          </button>
-          {isDarkDropdownOpen && (
-            <div
-              className="absolute left-0 top-full mt-1 w-52 origin-top-left bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-[60] animate-pop-in"
-              onMouseEnter={handleDropdownMouseEnter}
-              onMouseLeave={handleDropdownMouseLeave}
-            >
-              <div className="flex items-center px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                <Checkbox checked={followSystem} onChange={handleFollowSystemChange} />
-                <span className="ml-2.5 text-sm text-slate-700 dark:text-slate-300 select-none">跟随系统</span>
-              </div>
-            </div>
-          )}
-        </div>
+            {followSystem ? (
+              <MdBrightnessAuto size={24} />
+            ) : darkMode ? (
+              <MdLightMode size={24} />
+            ) : (
+              <MdDarkMode size={24} />
+            )}
+          </span>
+        </button>
         <div className="flex-1" />
         <Suspense fallback={<div className="w-8 h-8 bg-white/10 rounded-lg animate-pulse" />}>
           <SearchBar />
@@ -519,7 +523,7 @@ export default function AppLayout({
           href="/messages"
           aria-label="消息"
           data-ripple
-          className="relative rounded-lg p-2 ml-3 text-white hover:bg-white/10 active:scale-90 transition-all duration-200 inline-flex"
+          className="relative rounded-lg p-2 ml-3 text-white hover:bg-white/10 transition-all duration-200 inline-flex"
         >
           <MdNotifications size={24} />
           {totalUnread > 0 && (

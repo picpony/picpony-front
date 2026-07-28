@@ -121,26 +121,28 @@ export default function SettingsPage() {
   const [profileLoading, setProfileLoading] = useState(false);
 
   const [contentFilter, setContentFilter] = useState<string>('safe');
-  const [showTagCounts, setShowTagCounts] = useState(() => lsBool('trixie_show_tag_counts', false));
-  const [banAnthro, setBanAnthro] = useState(() => lsBool('trixie_ban_anthro', false));
-  const [banDiscomfort, setBanDiscomfort] = useState(() => lsBool('trixie_ban_discomfort', true));
-  const [onlyPony, setOnlyPony] = useState(() => lsBool('trixie_only_pony', false));
-  const [showChineseTags, setShowChineseTags] = useState(() => lsBool('picpony_show_chinese_tags', true));
+  // Defaults only on first render so SSR HTML matches the client hydrate pass.
+  // localStorage is applied after mount (see effect below).
+  const [showTagCounts, setShowTagCounts] = useState(false);
+  const [banAnthro, setBanAnthro] = useState(false);
+  const [banDiscomfort, setBanDiscomfort] = useState(true);
+  const [onlyPony, setOnlyPony] = useState(false);
+  const [showChineseTags, setShowChineseTags] = useState(true);
 
-  const [useCdn, setUseCdn] = useState(() => lsBool('trixie_use_cdn', false));
-  const [usePicponyProxy, setUsePicponyProxy] = useState(() => lsBool('picpony_use_proxy', true));
-  const [useApiAccel, setUseApiAccel] = useState(() => lsBool('picpony_api_accel', true));
+  const [useCdn, setUseCdn] = useState(false);
+  const [usePicponyProxy, setUsePicponyProxy] = useState(true);
+  const [useApiAccel, setUseApiAccel] = useState(true);
 
-  const [showUploads, setShowUploads] = useState(() => lsBool('picpony_show_uploads', true));
-  const [showFaves, setShowFaves] = useState(() => lsBool('picpony_show_faves', true));
-  const [showPosts, setShowPosts] = useState(() => lsBool('picpony_show_posts', true));
-  const [showComments, setShowComments] = useState(() => lsBool('picpony_show_comments', true));
+  const [showUploads, setShowUploads] = useState(true);
+  const [showFaves, setShowFaves] = useState(true);
+  const [showPosts, setShowPosts] = useState(true);
+  const [showComments, setShowComments] = useState(true);
 
-  const [emailNotifMessage, setEmailNotifMessage] = useState(() => lsBool('picpony_email_notif_message', true));
-  const [emailNotifReply, setEmailNotifReply] = useState(() => lsBool('picpony_email_notif_reply', true));
+  const [emailNotifMessage, setEmailNotifMessage] = useState(true);
+  const [emailNotifReply, setEmailNotifReply] = useState(true);
 
-  const [defaultHomeSort, setDefaultHomeSort] = useState(() => lsGet('picpony_default_home_sort', 'created_at'));
-  const [defaultSearchSort, setDefaultSearchSort] = useState(() => lsGet('picpony_default_search_sort', 'created_at'));
+  const [defaultHomeSort, setDefaultHomeSort] = useState('created_at');
+  const [defaultSearchSort, setDefaultSearchSort] = useState('created_at');
 
   const [userToken, setUserToken] = useState('');
   const [isDeveloper, setIsDeveloper] = useState(false);
@@ -327,6 +329,34 @@ export default function SettingsPage() {
       console.error("Failed to parse user info", e);
     }
   }, [router, applyCloudSettings]);
+
+  // Hydrate preference toggles from localStorage after mount so the first
+  // client render stays identical to SSR (avoids ToggleSwitch className mismatch).
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setShowTagCounts(lsBool('trixie_show_tag_counts', false));
+      setBanAnthro(lsBool('trixie_ban_anthro', false));
+      setBanDiscomfort(lsBool('trixie_ban_discomfort', true));
+      setOnlyPony(lsBool('trixie_only_pony', false));
+      setShowChineseTags(lsBool('picpony_show_chinese_tags', true));
+      setUseCdn(lsBool('trixie_use_cdn', false));
+      setUsePicponyProxy(lsBool('picpony_use_proxy', true));
+      setUseApiAccel(lsBool('picpony_api_accel', true));
+      setShowUploads(lsBool('picpony_show_uploads', true));
+      setShowFaves(lsBool('picpony_show_faves', true));
+      setShowPosts(lsBool('picpony_show_posts', true));
+      setShowComments(lsBool('picpony_show_comments', true));
+      setEmailNotifMessage(lsBool('picpony_email_notif_message', true));
+      setEmailNotifReply(lsBool('picpony_email_notif_reply', true));
+      setDefaultHomeSort(lsGet('picpony_default_home_sort', 'created_at'));
+      setDefaultSearchSort(lsGet('picpony_default_search_sort', 'created_at'));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const storedFilter = lsGet('trixie_content_filter', 'safe');

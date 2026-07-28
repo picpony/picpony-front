@@ -364,20 +364,29 @@ textarea {
   }
 }
 
-/* Dark-mode toggle: a scripted circular reveal replaces the default
-   view-transition cross-fade (see AppLayout). Scoped by attribute so other
-   view transitions keep their defaults. */
-html[data-theme-vt]::view-transition-old(root),
-html[data-theme-vt]::view-transition-new(root) {
+/* Theme utilities frequently transition their own colors. Letting those run
+   while the browser captures the new frame makes the snapshot browser-timing
+   dependent, so freeze descendant transitions for the lifetime of this wipe. */
+html[data-theme-vt],
+html[data-theme-vt] *,
+html[data-theme-vt] *::before,
+html[data-theme-vt] *::after {
+  transition: none !important;
+}
+
+html[data-theme-vt]::view-transition-group(root) {
   animation: none;
-  mix-blend-mode: normal;
 }
 
 html[data-theme-vt]::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
   z-index: 1;
 }
 
 html[data-theme-vt]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
   z-index: 2;
 }
 
