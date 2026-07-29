@@ -1,9 +1,10 @@
 'use client';
 
 import { memo } from 'react';
-import { MdErrorOutline, MdRefresh, MdComment, MdVisibility, MdThumbUp } from 'react-icons/md';
+import { MdComment, MdVisibility, MdThumbUp } from 'react-icons/md';
 import { ForumPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
+import ErrorRetry from '@/components/ErrorRetry';
 
 interface ForumPostListProps {
   posts: ForumPost[];
@@ -32,11 +33,20 @@ export default memo(function ForumPostList({
     return (
       <div className={`space-y-4 ${className}`}>
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="bg-white dark:bg-transparent p-4 rounded-xl animate-pulse flex gap-4">
-            <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full flex-shrink-0"></div>
+          <div key={i} className="bg-white dark:bg-transparent p-4 rounded-xl flex gap-4">
+            <div
+              className="skeleton w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full flex-shrink-0"
+              style={{ animationDelay: `${i * 80}ms` }}
+            />
             <div className="flex-1 space-y-3">
-              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
+              <div
+                className="skeleton h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4"
+                style={{ animationDelay: `${i * 80 + 40}ms` }}
+              />
+              <div
+                className="skeleton h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4"
+                style={{ animationDelay: `${i * 80 + 80}ms` }}
+              />
             </div>
           </div>
         ))}
@@ -46,20 +56,11 @@ export default memo(function ForumPostList({
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
-        <MdErrorOutline size={48} className="mb-4 text-slate-400 dark:text-slate-500" />
-        <h2 className="text-xl font-semibold mb-2 text-slate-700 dark:text-slate-200">帖子加载失败</h2>
-        <div className="mb-6 max-w-md">
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">{error.message}</p>
-        </div>
-        <button
-          onClick={onRetry}
-          className="flex items-center px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors cursor-pointer"
-        >
-          <MdRefresh size={20} className="mr-2" />
-          <span>重试</span>
-        </button>
-      </div>
+      <ErrorRetry
+        title="帖子加载失败"
+        message={error.message}
+        onRetry={onRetry}
+      />
     );
   }
 
@@ -67,15 +68,17 @@ export default memo(function ForumPostList({
     <div className={className}>
       <div className="space-y-4 mb-8">
         {posts.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 dark:text-slate-400 bg-white dark:bg-transparent rounded-xl">
+          <div className="text-center py-12 text-slate-500 dark:text-slate-400 bg-white dark:bg-transparent rounded-xl animate-fade-in">
             暂无帖子
           </div>
         ) : (
-          posts.map((post) => (
+          posts.map((post, index) => (
             <div
               key={post.id}
               onClick={() => onPostClick(post.id)}
-              className="block bg-white dark:bg-transparent p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors duration-200 cursor-pointer"
+              data-ripple
+              style={{ animationDelay: `${Math.min(index, 8) * 45}ms`, animationFillMode: 'backwards' }}
+              className="block bg-white dark:bg-transparent p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:-translate-y-0.5 hover:shadow-sm active:scale-[0.995] transition-all duration-200 ease-[var(--ease-standard)] cursor-pointer animate-page-transition"
             >
               <div className="flex gap-4">
                 <div className="flex-shrink-0">

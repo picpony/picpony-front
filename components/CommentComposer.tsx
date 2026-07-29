@@ -127,7 +127,8 @@ export default function CommentComposer({
           type="button"
           onClick={handleSubmit}
           disabled={isSubmitting || !trimmedComment}
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1 text-sm font-medium text-white shadow-none transition-all hover:bg-primary/90 hover:shadow-sm disabled:bg-gray-500/10 disabled:text-gray-500/40"
+          data-ripple
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1 text-sm font-medium text-white shadow-none transition-all hover:bg-primary/90 hover:shadow-sm active:scale-95 disabled:bg-gray-500/10 disabled:text-gray-500/40"
         >
           {isSubmitting ? (
             <>

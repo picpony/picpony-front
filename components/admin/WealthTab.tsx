@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
+import Select from '@/components/Select';
 import { MdAttachMoney } from 'react-icons/md';
 import { SectionHeader, SearchInput, EmptyState, Spinner } from './';
 
@@ -194,15 +195,16 @@ export default function WealthTab({ token }: { token: string }) {
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">金币操作</label>
             <div className="flex gap-2">
-              <select
+              <Select
                 value={form.coinsOp}
-                onChange={(e) => setForm({ ...form, coinsOp: e.target.value })}
-                className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
-              >
-                <option value="add">[+]</option>
-                <option value="sub">[-]</option>
-                <option value="set">[=]</option>
-              </select>
+                onChange={(v) => setForm({ ...form, coinsOp: v })}
+                aria-label="金币操作方式"
+                options={[
+                  { value: 'add', label: '[+]' },
+                  { value: 'sub', label: '[-]' },
+                  { value: 'set', label: '[=]' },
+                ]}
+              />
               <input
                 type="number"
                 value={form.coinsValue}

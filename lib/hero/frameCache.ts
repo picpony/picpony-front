@@ -14,10 +14,10 @@ import {
   type VisualMedia,
 } from './dom';
 import {
-  initializeHeroFrameRuntime,
+  initializeHeroInput,
   isHeroInteractionQuiet,
   subscribeHeroInteraction,
-} from './anchor';
+} from './input';
 
 const HERO_FRAME_CACHE_MAX_PIXELS = HERO_FRAME_MAX_DIMENSION * HERO_FRAME_MAX_DIMENSION * 2;
 
@@ -196,7 +196,7 @@ export function captureHeroFrame(media: VisualMedia | null): FrameAsset | null {
 
 export function warmImageHeroFrame(source: HTMLElement | null) {
   if (!source || typeof window === 'undefined') return () => {};
-  initializeHeroFrameRuntime();
+  initializeHeroInput();
   const initialMedia = getVisualMedia(source);
   const initialCapture = initialMedia ? getHeroFrameCapture(initialMedia) : null;
   // Animated media must be captured at activation so the flyer starts on the

@@ -26,8 +26,8 @@ export default function ImageGridSkeleton() {
           {colHeights.map((height, i) => (
             <div
               key={i}
-              className="w-full bg-slate-100 dark:bg-slate-700 rounded-lg animate-pulse"
-              style={{ height: `${height}px` }}
+              className="skeleton w-full bg-slate-100 dark:bg-slate-800 rounded-lg"
+              style={{ height: `${height}px`, animationDelay: `${(colIndex + i) * 90}ms` }}
             />
           ))}
         </div>

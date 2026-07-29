@@ -15,13 +15,13 @@ import type { PonyImage } from '@/lib/types/image';
 import { cancelImageDetailPrefetch } from '@/lib/detail';
 import {
   canAnimateImageHero,
+  isScrollLikelyActive,
   prepareImageHero,
   requestImageHeroOpen,
   warmImageHero,
   warmImageHeroFrame,
   type ImageHeroSnapshot,
 } from '@/lib/hero';
-import { isScrollLikelyActive } from '@/lib/hero/scrollActivity';
 
 type HeroLinkKind = 'card' | 'featured';
 type NavigateHandler = NonNullable<ComponentProps<typeof Link>['onNavigate']>;
@@ -189,6 +189,11 @@ export function useHeroLink<T extends HTMLElement>({
       ) {
         return;
       }
+      // Pressing is a firmer signal than hovering, and on touch there is no
+      // hover at all — this is the earliest honest moment to start fetching,
+      // typically 100ms or more before the click lands.
+      cancelIntent();
+      warmRouteAndMedia('immediate');
       try {
         event.currentTarget.setPointerCapture(event.pointerId);
         capturedPointerRef.current = event.pointerId;

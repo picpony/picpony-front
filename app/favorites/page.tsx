@@ -8,6 +8,7 @@ import MasonryGrid from "@/components/MasonryGrid";
 import ImageGridSkeleton from "@/components/ImageGridSkeleton";
 import ErrorRetry from "@/components/ErrorRetry";
 import { LoadMoreButton } from "@/components/Pagination";
+import TabBar from "@/components/TabBar";
 import { useRouter } from "next/navigation";
 
 function FavoritesList() {
@@ -166,29 +167,15 @@ function FavoritesList() {
   };
 
   const tabsComponent = (
-    <div className="border-b border-slate-200 dark:border-slate-700 mb-4">
-      <div className="flex gap-0">
-        {[
-          { label: 'PicPony', value: 'picpony' as const },
-          { label: 'Derpibooru', value: 'derpibooru' as const },
-        ].map(tab => (
-          <button
-            key={tab.value}
-            onClick={() => setActiveTab(tab.value)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors relative min-w-[100px] ${
-              activeTab === tab.value
-                ? 'text-primary'
-                : 'text-[var(--sidebar-text)] hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            {tab.label}
-            {activeTab === tab.value && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
+    <TabBar
+      className="mb-4"
+      value={activeTab}
+      onChange={setActiveTab}
+      tabs={[
+        { value: 'picpony' as const, label: 'PicPony' },
+        { value: 'derpibooru' as const, label: 'Derpibooru' },
+      ]}
+    />
   );
 
   if (isLoading) {
@@ -218,7 +205,7 @@ function FavoritesList() {
       {tabsComponent}
 
       {activeTab === 'derpibooru' && !apiKey ? (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
+        <div key="no-key" className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 dark:text-slate-400 animate-page-transition px-4 text-center">
           <MdCollectionsBookmark size={48} className="mb-4 text-slate-300 dark:text-slate-500" />
           <h2 className="text-xl font-medium mb-2 text-slate-600 dark:text-slate-300">未绑定 API Key</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
@@ -226,23 +213,24 @@ function FavoritesList() {
           </p>
           <button
             onClick={() => router.push('/settings')}
-            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            data-ripple
+            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200"
           >
             去绑定
           </button>
         </div>
       ) : images.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 dark:text-slate-400 animate-fade-in px-4 text-center">
+        <div key="empty" className="flex flex-col items-center justify-center min-h-[40vh] text-slate-500 dark:text-slate-400 animate-page-transition px-4 text-center">
           <MdCollectionsBookmark size={48} className="mb-4 text-slate-300 dark:text-slate-500" />
           <h2 className="text-xl font-medium mb-2 text-slate-600 dark:text-slate-300">滚木</h2>
         </div>
       ) : (
-        <>
+        <div key={activeTab} className="animate-page-transition">
           <MasonryGrid images={images} />
           {hasMore && (
             <LoadMoreButton onClick={loadMore} isLoading={isLoadingMore} />
           )}
-        </>
+        </div>
       )}
     </div>
   );

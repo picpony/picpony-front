@@ -9,6 +9,7 @@
   --sidebar-hover: #f1f5f9;
   --card-bg: #ffffff;
   --card-border: #e2e8f0;
+  --primary: #E06C9F;
 }
 
 .dark {
@@ -18,6 +19,12 @@
   --sidebar-hover: #1e293b;
   --card-bg: #1e293b;
   --card-border: #334155;
+  /* Dark-mode brand tone, derived in OKLCH from the light tone: identical hue
+     (354.3°) and chroma, lightness dropped to Material 3 tone ~54. Holding the
+     hue is what keeps it reading as the same brand; a naive HSL darken drifts
+     ~5° toward coral and looks like a different colour. Contrast: 5.2:1 as text
+     on the dark panels, 3.9:1 under white on filled surfaces. */
+  --primary: #CC5A8D;
 }
 
 .bbcode-content,
@@ -86,16 +93,23 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-primary: #E06C9F;
+  --color-primary: var(--primary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  
-  --animate-fade-in: fadeIn 0.3s ease-out forwards;
-  --animate-page-transition: fadeIn 0.3s ease-in-out forwards;
-  --animate-modal-overlay: modalOverlay 0.2s ease-out forwards;
-  --animate-modal-content: modalContent 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-modal-overlay-out: modalOverlayOut 0.2s ease-in forwards;
-  --animate-modal-content-out: modalContentOut 0.2s ease-in forwards;
+
+  /* Material 3 motion curves — mirrored in lib/motion.ts for GSAP. */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-fade-in: fadeIn 0.3s var(--ease-decelerate) forwards;
+  --animate-page-transition: pageIn 0.4s var(--ease-decelerate) forwards;
+  --animate-pop-in: popIn 0.22s var(--ease-decelerate) forwards;
+  --animate-modal-overlay: modalOverlay 0.25s var(--ease-decelerate) forwards;
+  --animate-modal-content: modalContent 0.32s var(--ease-decelerate) forwards;
+  --animate-modal-overlay-out: modalOverlayOut 0.18s var(--ease-accelerate) forwards;
+  --animate-modal-content-out: modalContentOut 0.18s var(--ease-accelerate) forwards;
 
   @keyframes fadeIn {
     from {
@@ -103,6 +117,30 @@
     }
     to {
       opacity: 1;
+    }
+  }
+
+  @keyframes pageIn {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      /* `none`, not translateY(0): a retained transform would create a
+         containing block for fixed/absolute descendants of the page. */
+      transform: none;
+    }
+  }
+
+  @keyframes popIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: none;
     }
   }
 
@@ -118,11 +156,11 @@
   @keyframes modalContent {
     from {
       opacity: 0;
-      transform: scale(0.5);
+      transform: translateY(14px) scale(0.93);
     }
     to {
       opacity: 1;
-      transform: scale(1);
+      transform: none;
     }
   }
 
@@ -138,12 +176,230 @@
   @keyframes modalContentOut {
     from {
       opacity: 1;
-      transform: scale(1);
+      transform: none;
     }
     to {
       opacity: 0;
-      transform: scale(0.95);
+      transform: translateY(6px) scale(0.97);
     }
+  }
+}
+
+/* --- Motion primitives --------------------------------------------------- */
+
+/* Text controls settle into focus rather than snapping. Only properties that
+   the utility classes already set are transitioned, so this never fights a
+   component's own styling. */
+input:not([type='checkbox']):not([type='radio']):not([type='range']),
+textarea {
+  transition:
+    border-color 200ms var(--ease-standard),
+    box-shadow 200ms var(--ease-standard),
+    background-color 200ms var(--ease-standard);
+}
+
+/* Press ripple: spawned by <RippleLayer /> on any [data-ripple] element.
+   The attribute also supplies clipping, so badges must live inside the box. */
+[data-ripple] {
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Shared micro-interaction keyframes (used via animate-[…] utilities). */
+@keyframes control-pop {
+  from {
+    transform: scale(0.8);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes icon-swap {
+  from {
+    transform: rotate(-90deg) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: none;
+    opacity: 0.5;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* Emoji picker popover (messages page) — grows from its anchor corner.
+   Self-contained keyframes: `@theme` keyframes are only emitted when their
+   `--animate-*` utility is used, so a plain class must not depend on them. */
+.emoji-picker-animate-in {
+  animation: emoji-picker-in 0.24s var(--ease-decelerate) forwards;
+}
+
+.emoji-picker-animate-out {
+  animation: emoji-picker-out 0.16s var(--ease-accelerate) forwards;
+}
+
+@keyframes emoji-picker-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes emoji-picker-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.08;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.16;
+    transform: scale(1.04);
+  }
+}
+
+/* Favourite star: overshoot with a quarter turn as it fills in. */
+@keyframes star-burst {
+  0% {
+    transform: scale(0.4) rotate(-40deg);
+  }
+  55% {
+    transform: scale(1.28) rotate(6deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* Skeleton shimmer — a light sweep reads as "loading" better than a flat
+   pulse. Applied via .skeleton in place of animate-pulse. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--foreground) 7%, transparent),
+    transparent
+  );
+  animation: shimmer 1.6s var(--ease-standard) infinite;
+  /* Pseudo-elements do not inherit animation-delay implicitly; the explicit
+     keyword lets a per-tile inline delay on .skeleton stagger the sweep. */
+  animation-delay: inherit;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Theme utilities frequently transition their own colors. Letting those run
+   while the browser captures the new frame makes the snapshot browser-timing
+   dependent, so freeze descendant transitions for the lifetime of this wipe. */
+html[data-theme-vt],
+html[data-theme-vt] *,
+html[data-theme-vt] *::before,
+html[data-theme-vt] *::after {
+  transition: none !important;
+}
+
+html[data-theme-vt]::view-transition-group(root) {
+  animation: none;
+}
+
+html[data-theme-vt]::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+  z-index: 1;
+}
+
+html[data-theme-vt]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-transition,
+  .animate-fade-in,
+  .animate-pop-in {
+    animation-duration: 1ms !important;
+  }
+
+  .ripple,
+  .skeleton::after {
+    display: none;
   }
 }
 
@@ -430,6 +686,33 @@ html[data-image-hero-transition] #nprogress {
 .image-detail-overlay-scroll {
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
+}
+
+/*
+ * Pull-to-dismiss.
+ *
+ * The gesture writes only `--hero-pull-y` / `--hero-veil` on the surface being
+ * dragged (and on the floating back button, which renders outside it); CSS fans
+ * those two values out to the whole reveal subtree. The per-frame cost is
+ * therefore constant no matter how much detail content is mounted.
+ *
+ * Everything is scoped to `[data-image-hero-pulling]`, set once when a drag
+ * begins and removed when it settles, so a Stage mounted alongside a route is
+ * never affected. Outside a drag these rules do not apply at all — in particular
+ * `.image-detail-overlay-content` must never carry a permanent transform, which
+ * would make it a containing block and trap the lightbox's `position: fixed`
+ * layers.
+ */
+[data-image-hero-pulling] .image-detail-overlay-content {
+  transform: translate3d(0, var(--hero-pull-y, 0px), 0);
+  will-change: transform;
+}
+
+[data-image-hero-pulling] [data-image-detail-surface],
+[data-image-hero-pulling] [data-image-detail-reveal],
+[data-image-detail-floating-back][data-image-hero-pulling] {
+  opacity: var(--hero-veil, 1);
+  will-change: opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {

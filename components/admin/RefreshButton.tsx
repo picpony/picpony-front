@@ -13,9 +13,10 @@ export default function RefreshButton({ onClick, label = '刷新列表', loading
     <button
       onClick={onClick}
       disabled={loading}
-      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors shrink-0 disabled:opacity-50"
+      data-ripple
+      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 active:scale-95 rounded-lg transition-all duration-200 shrink-0 disabled:opacity-50 group"
     >
-      <MdRefresh size={18} className={loading ? 'animate-spin' : ''} />
+      <MdRefresh size={18} className={loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500 ease-[var(--ease-standard)]'} />
       {label}
     </button>
   );

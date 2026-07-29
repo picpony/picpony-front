@@ -141,7 +141,8 @@ export default function UploadPage() {
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">请先登录后再发布图片</p>
         <button
           onClick={() => router.push("/login")}
-          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
+          data-ripple
+          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 active:scale-[0.98] transition-all duration-200"
         >
           前往登录
         </button>
@@ -159,7 +160,8 @@ export default function UploadPage() {
         </p>
         <button
           onClick={() => router.push("/settings")}
-          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-2"
+          data-ripple
+          className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 active:scale-[0.98] transition-all duration-200 inline-flex items-center gap-2"
         >
           <MdOpenInNew size={18} />
           前往设置
@@ -196,7 +198,8 @@ export default function UploadPage() {
           <div className="flex items-center justify-center gap-3">
             <button
               onClick={() => router.push(`/pic/${uploadResult.id}`)}
-              className="px-5 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-2"
+              data-ripple
+              className="px-5 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 active:scale-[0.98] transition-all duration-200 inline-flex items-center gap-2"
             >
               <MdOpenInNew size={18} />
               查看图片
@@ -224,9 +227,9 @@ export default function UploadPage() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`relative border-2 border-dashed rounded-xl p-8 sm:p-12 text-center cursor-pointer transition-all duration-200 mb-6 ${
+            className={`relative border-2 border-dashed rounded-xl p-8 sm:p-12 text-center cursor-pointer transition-all duration-300 ease-[var(--ease-standard)] mb-6 ${
               isDragging
-                ? "border-primary bg-primary/5 scale-[1.02]"
+                ? "border-primary bg-primary/5 scale-[1.02] shadow-lg shadow-primary/10"
                 : file
                   ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
                   : "border-slate-300 dark:border-slate-600 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800/50"
@@ -241,7 +244,7 @@ export default function UploadPage() {
             />
 
             {preview ? (
-              <div className="relative inline-block max-w-full">
+              <div className="relative inline-block max-w-full animate-pop-in">
                 {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
                 <img
                   src={preview}
@@ -250,7 +253,8 @@ export default function UploadPage() {
                 />
                 <button
                   onClick={(e) => { e.stopPropagation(); removeFile(); }}
-                  className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors"
+                  aria-label="移除文件"
+                  className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 hover:rotate-90 hover:scale-110 active:scale-95 transition-all duration-200 ease-[var(--ease-standard)]"
                 >
                   <MdClose size={16} />
                 </button>
@@ -339,7 +343,8 @@ export default function UploadPage() {
             <button
               onClick={handleUpload}
               disabled={!file || isUploading}
-              className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              data-ripple
+              className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
             >
               {isUploading ? (
                 <>

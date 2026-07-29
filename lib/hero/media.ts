@@ -6,9 +6,9 @@ import {
   prefetchImageDetail,
   type DetailRequestPriority,
 } from '@/lib/detail';
+import { HERO_GALLERY_ANCHOR_SELECTOR } from './constants';
 import { getHeroRect, getVisualMedia, normalizeHeroSrc } from './dom';
 import { captureHeroFrame } from './frameCache';
-import { imageHeroController } from './controller';
 import type { ImageHeroSnapshot } from './types';
 
 let detailComponentWarmup: Promise<unknown> | null = null;
@@ -71,17 +71,12 @@ export function prepareImageHero(
 export function canAnimateImageHero(snapshot: ImageHeroSnapshot) {
   return Boolean(
     snapshot.canAnimate &&
+    // Reduced motion opts out of the transition entirely and falls back to an
+    // ordinary navigation — this is a stated preference, not a device tier.
     !window.matchMedia('(prefers-reduced-motion: reduce)').matches &&
     typeof HTMLElement !== 'undefined' &&
     typeof HTMLElement.prototype.animate === 'function' &&
-    document.querySelector('[data-image-hero-gallery-anchor]'),
-  );
-}
-
-export function canUseImageHeroTransition(snapshot: ImageHeroSnapshot) {
-  const phase = imageHeroController.getRuntime().phase;
-  return canAnimateImageHero(snapshot) && (
-    phase === 'gallery-idle' || phase === 'closing.flight'
+    document.querySelector(HERO_GALLERY_ANCHOR_SELECTOR),
   );
 }
 

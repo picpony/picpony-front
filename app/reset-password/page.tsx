@@ -107,7 +107,8 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={isLoading || !email.trim()}
-            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            data-ripple
+            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isLoading ? <Spinner size="sm" white /> : (
               <>
@@ -165,7 +166,8 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={isLoading || !code.trim() || !newPassword.trim()}
-            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            data-ripple
+            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isLoading ? <Spinner size="sm" white /> : '重置密码'}
           </button>

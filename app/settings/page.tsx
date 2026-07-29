@@ -7,20 +7,20 @@ import {
   MdEdit, MdClose, MdPerson, MdImage,
   MdSearch, MdFilterList, MdVisibility, MdSpeed,
   MdSecurity, MdNotifications,
-  MdHome,
+  MdHome, MdVerifiedUser, MdLinkOff,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
 import FadeInImage from '@/components/FadeInImage';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import Modal from '@/components/Modal';
+import Reveal from '@/components/Reveal';
+import Select from '@/components/Select';
+import Button from '@/components/Button';
 import { api } from '@/lib/api';
 
-const buttonClass = (disabled: boolean) =>
-  `flex items-center justify-center min-w-[36px] sm:min-w-auto min-h-[36px] sm:min-h-auto px-0 sm:px-2 py-0 sm:py-1 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-md text-sm font-medium text-[var(--sidebar-text)] transition-all duration-200 hover:bg-[var(--sidebar-hover)] hover:text-primary ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
-
 const sectionTitle = "text-base font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2";
-const rowClass = "flex items-center justify-between p-3 sm:p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg gap-2 sm:gap-4";
+const rowClass = "flex items-center justify-between p-3 sm:p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg gap-2 sm:gap-4 transition-colors duration-200 hover:bg-slate-100/80 dark:hover:bg-slate-900/80";
 const labelClass = "text-sm text-slate-500 dark:text-slate-400 mb-1";
 const valueClass = "font-medium text-slate-800 dark:text-slate-200";
 
@@ -121,26 +121,28 @@ export default function SettingsPage() {
   const [profileLoading, setProfileLoading] = useState(false);
 
   const [contentFilter, setContentFilter] = useState<string>('safe');
-  const [showTagCounts, setShowTagCounts] = useState(() => lsBool('trixie_show_tag_counts', false));
-  const [banAnthro, setBanAnthro] = useState(() => lsBool('trixie_ban_anthro', false));
-  const [banDiscomfort, setBanDiscomfort] = useState(() => lsBool('trixie_ban_discomfort', true));
-  const [onlyPony, setOnlyPony] = useState(() => lsBool('trixie_only_pony', false));
-  const [showChineseTags, setShowChineseTags] = useState(() => lsBool('picpony_show_chinese_tags', true));
+  // Defaults only on first render so SSR HTML matches the client hydrate pass.
+  // localStorage is applied after mount (see effect below).
+  const [showTagCounts, setShowTagCounts] = useState(false);
+  const [banAnthro, setBanAnthro] = useState(false);
+  const [banDiscomfort, setBanDiscomfort] = useState(true);
+  const [onlyPony, setOnlyPony] = useState(false);
+  const [showChineseTags, setShowChineseTags] = useState(true);
 
-  const [useCdn, setUseCdn] = useState(() => lsBool('trixie_use_cdn', false));
-  const [usePicponyProxy, setUsePicponyProxy] = useState(() => lsBool('picpony_use_proxy', true));
-  const [useApiAccel, setUseApiAccel] = useState(() => lsBool('picpony_api_accel', true));
+  const [useCdn, setUseCdn] = useState(false);
+  const [usePicponyProxy, setUsePicponyProxy] = useState(true);
+  const [useApiAccel, setUseApiAccel] = useState(true);
 
-  const [showUploads, setShowUploads] = useState(() => lsBool('picpony_show_uploads', true));
-  const [showFaves, setShowFaves] = useState(() => lsBool('picpony_show_faves', true));
-  const [showPosts, setShowPosts] = useState(() => lsBool('picpony_show_posts', true));
-  const [showComments, setShowComments] = useState(() => lsBool('picpony_show_comments', true));
+  const [showUploads, setShowUploads] = useState(true);
+  const [showFaves, setShowFaves] = useState(true);
+  const [showPosts, setShowPosts] = useState(true);
+  const [showComments, setShowComments] = useState(true);
 
-  const [emailNotifMessage, setEmailNotifMessage] = useState(() => lsBool('picpony_email_notif_message', true));
-  const [emailNotifReply, setEmailNotifReply] = useState(() => lsBool('picpony_email_notif_reply', true));
+  const [emailNotifMessage, setEmailNotifMessage] = useState(true);
+  const [emailNotifReply, setEmailNotifReply] = useState(true);
 
-  const [defaultHomeSort, setDefaultHomeSort] = useState(() => lsGet('picpony_default_home_sort', 'created_at'));
-  const [defaultSearchSort, setDefaultSearchSort] = useState(() => lsGet('picpony_default_search_sort', 'created_at'));
+  const [defaultHomeSort, setDefaultHomeSort] = useState('created_at');
+  const [defaultSearchSort, setDefaultSearchSort] = useState('created_at');
 
   const [userToken, setUserToken] = useState('');
   const [isDeveloper, setIsDeveloper] = useState(false);
@@ -327,6 +329,34 @@ export default function SettingsPage() {
       console.error("Failed to parse user info", e);
     }
   }, [router, applyCloudSettings]);
+
+  // Hydrate preference toggles from localStorage after mount so the first
+  // client render stays identical to SSR (avoids ToggleSwitch className mismatch).
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setShowTagCounts(lsBool('trixie_show_tag_counts', false));
+      setBanAnthro(lsBool('trixie_ban_anthro', false));
+      setBanDiscomfort(lsBool('trixie_ban_discomfort', true));
+      setOnlyPony(lsBool('trixie_only_pony', false));
+      setShowChineseTags(lsBool('picpony_show_chinese_tags', true));
+      setUseCdn(lsBool('trixie_use_cdn', false));
+      setUsePicponyProxy(lsBool('picpony_use_proxy', true));
+      setUseApiAccel(lsBool('picpony_api_accel', true));
+      setShowUploads(lsBool('picpony_show_uploads', true));
+      setShowFaves(lsBool('picpony_show_faves', true));
+      setShowPosts(lsBool('picpony_show_posts', true));
+      setShowComments(lsBool('picpony_show_comments', true));
+      setEmailNotifMessage(lsBool('picpony_email_notif_message', true));
+      setEmailNotifReply(lsBool('picpony_email_notif_reply', true));
+      setDefaultHomeSort(lsGet('picpony_default_home_sort', 'created_at'));
+      setDefaultSearchSort(lsGet('picpony_default_search_sort', 'created_at'));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const storedFilter = lsGet('trixie_content_filter', 'safe');
@@ -750,6 +780,7 @@ export default function SettingsPage() {
         设置
       </h1>
 
+      <Reveal>
       <div className="bg-white dark:bg-slate-950 overflow-hidden rounded-xl space-y-0 mb-6">
         <div className="p-6 border-b border-slate-100 dark:border-slate-700">
           <h2 className={sectionTitle}><MdPerson size={20} /> 账户设置</h2>
@@ -790,11 +821,16 @@ export default function SettingsPage() {
               </div>
             </div>
             <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
-            <button onClick={() => fileInputRef.current?.click()} disabled={!currentUsername || isAvatarUploading}
-              className={buttonClass(!currentUsername || isAvatarUploading)}>
-              <MdEdit size={16} className="sm:mr-2" />
-              <span className="hidden sm:inline">修改头像</span>
-            </button>
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!currentUsername}
+              loading={isAvatarUploading}
+              icon={<MdEdit size={16} />}
+              responsiveLabel
+              title="修改头像"
+            >
+              修改头像
+            </Button>
           </div>
 
           <div className={rowClass + ' mb-4'}>
@@ -833,11 +869,16 @@ export default function SettingsPage() {
               </div>
             </div>
             <input type="file" ref={bannerInputRef} onChange={handleBannerUpload} accept="image/*" className="hidden" />
-            <button onClick={() => bannerInputRef.current?.click()} disabled={!currentUsername || isBannerUploading}
-              className={buttonClass(!currentUsername || isBannerUploading)}>
-              <MdImage size={16} className="sm:mr-2" />
-              <span className="hidden sm:inline">上传 Banner</span>
-            </button>
+            <Button
+              onClick={() => bannerInputRef.current?.click()}
+              disabled={!currentUsername}
+              loading={isBannerUploading}
+              icon={<MdImage size={16} />}
+              responsiveLabel
+              title="上传 Banner"
+            >
+              上传 Banner
+            </Button>
           </div>
 
           <div className={rowClass + ' mb-4'}>
@@ -845,10 +886,15 @@ export default function SettingsPage() {
               <p className={labelClass}>用户名</p>
               <p className={valueClass}>{currentUsername || '未登录'}</p>
             </div>
-            <button onClick={() => setIsModalOpen(true)} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
-              <MdEdit size={16} className="sm:mr-2" />
-              <span className="hidden sm:inline">修改用户名</span>
-            </button>
+            <Button
+              onClick={() => setIsModalOpen(true)}
+              disabled={!currentUsername}
+              icon={<MdEdit size={16} />}
+              responsiveLabel
+              title="修改用户名"
+            >
+              修改用户名
+            </Button>
           </div>
 
           <div className={rowClass + ' mb-4'}>
@@ -856,10 +902,15 @@ export default function SettingsPage() {
               <p className={labelClass}>账号密码</p>
               <p className={valueClass}>********</p>
             </div>
-            <button onClick={() => setIsPasswordModalOpen(true)} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
-              <MdEdit size={16} className="sm:mr-2" />
-              <span className="hidden sm:inline">修改密码</span>
-            </button>
+            <Button
+              onClick={() => setIsPasswordModalOpen(true)}
+              disabled={!currentUsername}
+              icon={<MdEdit size={16} />}
+              responsiveLabel
+              title="修改密码"
+            >
+              修改密码
+            </Button>
           </div>
 
           <div className={rowClass + ' mb-4'}>
@@ -874,10 +925,15 @@ export default function SettingsPage() {
                 )}
               </p>
             </div>
-            <button onClick={() => { setNewEmail(currentEmail); setIsEmailModalOpen(true); }} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
-              <MdEdit size={16} className="sm:mr-2" />
-              <span className="hidden sm:inline">{currentEmail ? '修改' : '绑定'}</span>
-            </button>
+            <Button
+              onClick={() => { setNewEmail(currentEmail); setIsEmailModalOpen(true); }}
+              disabled={!currentUsername}
+              icon={<MdEdit size={16} />}
+              responsiveLabel
+              title={currentEmail ? '修改邮箱' : '绑定邮箱'}
+            >
+              {currentEmail ? '修改' : '绑定'}
+            </Button>
           </div>
 
           <div className={rowClass + ' mb-4'}>
@@ -887,10 +943,15 @@ export default function SettingsPage() {
                 {profileBio ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '...' : '') : '点击编辑个人简介、性别、生日'}
               </p>
             </div>
-            <button onClick={() => setIsProfileModalOpen(true)} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
-              <MdEdit size={16} className="sm:mr-2" />
-              <span className="hidden sm:inline">编辑</span>
-            </button>
+            <Button
+              onClick={() => setIsProfileModalOpen(true)}
+              disabled={!currentUsername}
+              icon={<MdEdit size={16} />}
+              responsiveLabel
+              title="编辑个人资料"
+            >
+              编辑
+            </Button>
           </div>
 
           <div className={rowClass + ' mb-4'}>
@@ -908,18 +969,39 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2 shrink-0">
               {currentApiKey && (
                 <>
-                  <button onClick={handleVerifyIdentity} disabled={isVerifyLoading || !currentUsername} className={buttonClass(!currentUsername)} title="核验身份">
-                    {isVerifyLoading ? <Spinner size="sm" /> : <span className="hidden sm:inline">去核验</span>}
-                  </button>
-                  <button onClick={handleClearApiKey} disabled={!currentUsername} className={buttonClass(!currentUsername)} title="解除绑定">
-                    <span className="hidden sm:inline text-red-500">解除绑定</span>
-                  </button>
+                  <Button
+                    onClick={handleVerifyIdentity}
+                    disabled={!currentUsername}
+                    loading={isVerifyLoading}
+                    variant="tonal"
+                    icon={<MdVerifiedUser size={16} />}
+                    responsiveLabel
+                    title="核验身份"
+                  >
+                    去核验
+                  </Button>
+                  <Button
+                    onClick={handleClearApiKey}
+                    disabled={!currentUsername}
+                    variant="text"
+                    icon={<MdLinkOff size={16} />}
+                    responsiveLabel
+                    title="解除绑定"
+                    className="text-red-500 hover:bg-red-50 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                  >
+                    解除绑定
+                  </Button>
                 </>
               )}
-              <button onClick={() => { setNewApiKey(currentApiKey); setIsApiKeyModalOpen(true); }} disabled={!currentUsername} className={buttonClass(!currentUsername)}>
-                <MdEdit size={16} className="sm:mr-2" />
-                <span className="hidden sm:inline">{currentApiKey ? '修改配置' : '去配置'}</span>
-              </button>
+              <Button
+                onClick={() => { setNewApiKey(currentApiKey); setIsApiKeyModalOpen(true); }}
+                disabled={!currentUsername}
+                icon={<MdEdit size={16} />}
+                responsiveLabel
+                title={currentApiKey ? '修改配置' : '去配置'}
+              >
+                {currentApiKey ? '修改配置' : '去配置'}
+              </Button>
             </div>
           </div>
         </div>
@@ -938,15 +1020,17 @@ export default function SettingsPage() {
                 {contentFilter === 'developer' && '开发者模式，显示所有内容'}
               </p>
             </div>
-            <select
+            <Select
               value={contentFilter}
-              onChange={(e) => handleContentFilterChange(e.target.value)}
-              className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-            >
-              <option value="safe">完全安全 (Safe)</option>
-              <option value="spoilers">中等限制 (Spoilers)</option>
-              {isDeveloper && <option value="developer">开发者模式</option>}
-            </select>
+              onChange={handleContentFilterChange}
+              aria-label="内容分级过滤器"
+              className="min-w-[11rem]"
+              options={[
+                { value: 'safe', label: '完全安全 (Safe)' },
+                { value: 'spoilers', label: '中等限制 (Spoilers)' },
+                ...(isDeveloper ? [{ value: 'developer', label: '开发者模式' }] : []),
+              ]}
+            />
           </div>
 
           <div className={rowClass + ' mb-4'}>
@@ -1007,20 +1091,17 @@ export default function SettingsPage() {
                 <p className={labelClass}>首页瀑布流默认排序</p>
               </div>
             </div>
-            <select
+            <Select
               value={defaultHomeSort}
-              onChange={(e) => {
-                const v = e.target.value;
+              onChange={(v) => {
                 setDefaultHomeSort(v);
                 lsSet('picpony_default_home_sort', v);
                 syncSettingsToCloud({ defaultHomeSort: v });
               }}
-              className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-            >
-              {sortOptions.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+              aria-label="首页瀑布流默认排序"
+              className="min-w-[9rem]"
+              options={sortOptions}
+            />
           </div>
 
           <div className={rowClass}>
@@ -1030,20 +1111,17 @@ export default function SettingsPage() {
                 <p className={labelClass}>搜索默认排序</p>
               </div>
             </div>
-            <select
+            <Select
               value={defaultSearchSort}
-              onChange={(e) => {
-                const v = e.target.value;
+              onChange={(v) => {
                 setDefaultSearchSort(v);
                 lsSet('picpony_default_search_sort', v);
                 syncSettingsToCloud({ defaultSearchSort: v });
               }}
-              className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-            >
-              {sortOptions.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+              aria-label="搜索默认排序"
+              className="min-w-[9rem]"
+              options={sortOptions}
+            />
           </div>
         </div>
       </div>
@@ -1134,6 +1212,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+      </Reveal>
 
       {isModalOpen && typeof document !== 'undefined' && createPortal(
         <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
@@ -1153,9 +1232,9 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={closeModal} disabled={isLoading}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
                 <button type="submit" disabled={isLoading || !newUsername.trim()}
-                  className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50 flex items-center">
+                  data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none flex items-center">
                   {isLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认修改'}
                 </button>
               </div>
@@ -1188,9 +1267,9 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={closePasswordModal} disabled={passwordLoading}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
                 <button type="submit" disabled={passwordLoading || !oldPassword.trim() || !newPassword.trim()}
-                  className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50 flex items-center">
+                  data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none flex items-center">
                   {passwordLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认修改'}
                 </button>
               </div>
@@ -1221,9 +1300,9 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={closeApiKeyModal} disabled={apiKeyLoading}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
                 <button type="submit" disabled={apiKeyLoading}
-                  className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50 flex items-center">
+                  data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none flex items-center">
                   {apiKeyLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认保存'}
                 </button>
               </div>
@@ -1239,9 +1318,9 @@ export default function SettingsPage() {
         footer={
           <>
             <button onClick={() => setIsClearApiKeyModalOpen(false)}
-              className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+              className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
             <button onClick={handleClearApiKeyConfirm}
-              className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg">确认解除</button>
+              data-ripple className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 hover:shadow-md hover:shadow-red-500/25 active:scale-95 rounded-lg transition-all duration-200">确认解除</button>
           </>
         }
       >
@@ -1270,9 +1349,9 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex justify-end gap-3">
                     <button type="button" onClick={closeEmailModal} disabled={emailLoading}
-                      className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+                      className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
                     <button onClick={handleEmailSubmit} disabled={emailLoading || !newEmail.trim()}
-                      className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50">
+                      data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none">
                       {emailLoading ? '提交中...' : '更新邮箱'}
                     </button>
                   </div>
@@ -1295,9 +1374,9 @@ export default function SettingsPage() {
                     </button>
                     <div className="flex gap-3">
                       <button type="button" onClick={closeEmailModal} disabled={emailLoading}
-                        className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+                        className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
                       <button onClick={handleVerifyEmail} disabled={emailLoading || !verifyCode.trim()}
-                        className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50">
+                        data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none">
                         {emailLoading ? '验证中...' : '验证邮箱'}
                       </button>
                     </div>
@@ -1328,13 +1407,18 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">性别</label>
-                <select value={profileGender} onChange={(e) => setProfileGender(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
-                  <option value="保密">保密</option>
-                  <option value="男">男</option>
-                  <option value="女">女</option>
-                  <option value="武装直升机">其他</option>
-                </select>
+                <Select
+                  value={profileGender}
+                  onChange={setProfileGender}
+                  className="w-full"
+                  aria-label="性别"
+                  options={[
+                    { value: '保密', label: '保密' },
+                    { value: '男', label: '男' },
+                    { value: '女', label: '女' },
+                    { value: '武装直升机', label: '其他' },
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">生日</label>
@@ -1343,23 +1427,29 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">种族</label>
-                <select value={profileRace} onChange={(e) => setProfileRace(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
-                  <option value="">未设置</option>
-                  <option value="Earth Pony">陆马</option>
-                  <option value="Unicorn">独角兽</option>
-                  <option value="Pegasus">飞马</option>
-                  <option value="Alicorn">天角兽</option>
-                  <option value="Bat Pony">蝙蝠小马</option>
-                  <option value="Changeling">幻形灵</option>
-                  <option value="Other">其他</option>
-                </select>
+                <Select
+                  value={profileRace}
+                  onChange={setProfileRace}
+                  className="w-full"
+                  placeholder="未设置"
+                  aria-label="种族"
+                  options={[
+                    { value: '', label: '未设置' },
+                    { value: 'Earth Pony', label: '陆马' },
+                    { value: 'Unicorn', label: '独角兽' },
+                    { value: 'Pegasus', label: '飞马' },
+                    { value: 'Alicorn', label: '天角兽' },
+                    { value: 'Bat Pony', label: '蝙蝠小马' },
+                    { value: 'Changeling', label: '幻形灵' },
+                    { value: 'Other', label: '其他' },
+                  ]}
+                />
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeProfileModal} disabled={profileLoading}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">取消</button>
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
                 <button onClick={handleProfileSubmit} disabled={profileLoading}
-                  className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg disabled:opacity-50">
+                  data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none">
                   {profileLoading ? '保存中...' : '保存资料'}
                 </button>
               </div>

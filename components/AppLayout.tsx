@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents } from "react-icons/md";
+import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents, MdBrightnessAuto } from "react-icons/md";
 
 import dynamic from 'next/dynamic';
 const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
 const Modal = dynamic(() => import("./Modal"), { ssr: false });
 import Logo from "./Logo";
 import FadeInImage from "./FadeInImage";
-import Checkbox from "./Checkbox";
 import {
   BackgroundLocationProvider,
   useBackgroundSearchParams,
@@ -23,6 +23,7 @@ import {
   subscribeImageHeroRuntime,
 } from "@/lib/hero";
 import HeroStage from '@/components/HeroStage';
+import { circularReveal, useSlidingIndicator } from '@/lib/motion';
 
 function SearchBar() {
   const router = useRouter();
@@ -38,7 +39,8 @@ function SearchBar() {
         type="submit"
         title="搜索"
         aria-label="搜索"
-        className="rounded-md p-2 text-white hover:bg-white/10 transition-colors cursor-pointer"
+        data-ripple
+        className="rounded-lg p-2 text-white hover:bg-white/10 transition-all duration-200 cursor-pointer"
       >
         <MdSearch size={24} />
       </button>
@@ -65,42 +67,55 @@ const sidebarButtonClass = (isActive: boolean) =>
 function TabNavBar() {
   const searchParams = useBackgroundSearchParams();
   const router = useRouter();
-  const currentTab = searchParams.get('tab') || 'gallery';
+  const currentTab = searchParams.get('tab') === 'forum' ? 'forum' : 'gallery';
+  // Optimistic tab so the pill and label colors respond on click, before the
+  // route (and its search params) actually commit.
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+  const activeTab = pendingTab ?? currentTab;
+  const { containerRef, indicatorRef } = useSlidingIndicator(activeTab);
+
+  // Adjust-during-render: once the route commits, the optimistic tab is stale.
+  if (pendingTab && pendingTab === currentTab) setPendingTab(null);
 
   const switchTab = (tab: string) => {
-    if (tab === (currentTab === 'forum' ? 'forum' : 'gallery')) return;
+    if (tab === activeTab) return;
+    setPendingTab(tab);
+    // Let the pill glide before the heavy gallery/forum swap re-renders.
     setTimeout(() => {
       const params = new URLSearchParams(searchParams.toString());
       if (tab === 'gallery') params.delete('tab');
       else params.set('tab', tab);
       const qs = params.toString();
       router.push(qs ? `/?${qs}` : '/');
-    }, 200);
+    }, 180);
   };
+
+  const tabClass = (tab: string) =>
+    `relative z-10 flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+      activeTab === tab
+        ? 'text-primary'
+        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+    }`;
 
   return (
     <div
       data-image-detail-chrome
       className="pointer-events-none absolute inset-x-0 bottom-0 z-50 flex items-center justify-center py-3"
     >
-      <div className="pointer-events-auto flex items-center gap-1 rounded-xl bg-slate-100 p-1 shadow-lg shadow-black/10 dark:bg-slate-800 dark:shadow-black/30">
-        <button
-          onClick={() => switchTab('gallery')}
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${currentTab !== 'forum'
-              ? 'bg-white dark:bg-slate-700 text-primary'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
-        >
+      <div
+        ref={containerRef}
+        className="pointer-events-auto relative flex items-center gap-1 rounded-xl bg-slate-100 p-1 shadow-lg shadow-black/10 dark:bg-slate-800 dark:shadow-black/30"
+      >
+        <span
+          ref={indicatorRef}
+          aria-hidden="true"
+          className="absolute left-0 top-1 bottom-1 z-0 rounded-lg bg-white shadow-sm dark:bg-slate-700"
+        />
+        <button data-tab="gallery" data-ripple onClick={() => switchTab('gallery')} className={tabClass('gallery')}>
           <MdPhotoLibrary size={18} />
           <span>图库</span>
         </button>
-        <button
-          onClick={() => switchTab('forum')}
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${currentTab === 'forum'
-              ? 'bg-white dark:bg-slate-700 text-primary'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
-        >
+        <button data-tab="forum" data-ripple onClick={() => switchTab('forum')} className={tabClass('forum')}>
           <MdForum size={18} />
           <span>论坛</span>
         </button>
@@ -130,9 +145,8 @@ export default function AppLayout({
   const [darkMode, setDarkMode] = useState(initialDark);
 
   const [followSystem, setFollowSystem] = useState(true);
-  const [isDarkDropdownOpen, setIsDarkDropdownOpen] = useState(false);
-  const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const themeButtonRef = useRef<HTMLButtonElement>(null);
+  const themeIconRef = useRef<HTMLSpanElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const liveSearchParams = useSearchParams();
@@ -194,6 +208,29 @@ export default function AppLayout({
     document.cookie = `darkMode=${dark};path=/;max-age=${365 * 24 * 60 * 60}`;
   }, []);
 
+  const commitTheme = useCallback((dark: boolean, followsSystem?: boolean) => {
+    flushSync(() => {
+      if (followsSystem !== undefined) setFollowSystem(followsSystem);
+      setDarkMode(dark);
+    });
+    applyDarkMode(dark);
+  }, [applyDarkMode]);
+
+  const getRevealOrigin = useCallback(() => {
+    // The icon, not its 40×40 hit target: every entry point into a theme change
+    // grows the wipe out of the glyph itself. They share a centre while the
+    // button is a bare square, but the button is free to gain padding or a
+    // label, and the fallback below used to be the top edge of the viewport.
+    const element = themeIconRef.current ?? themeButtonRef.current;
+    if (!element) return undefined;
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return undefined;
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+  }, []);
+
   // Apply browser-only preferences after mount so the first paint matches SSR.
   // queueMicrotask keeps setState out of the effect's synchronous body
   // (react-hooks/set-state-in-effect) while still running before the next paint.
@@ -243,47 +280,46 @@ export default function AppLayout({
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e: MediaQueryListEvent) => {
-      setDarkMode(e.matches);
-      applyDarkMode(e.matches);
+      if (e.matches === darkMode) return;
+      circularReveal(() => {
+        commitTheme(e.matches);
+      }, getRevealOrigin());
     };
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
-  }, [followSystem, applyDarkMode]);
+  }, [followSystem, darkMode, commitTheme, getRevealOrigin]);
 
-  const toggleDarkMode = () => {
-    const newDark = !darkMode;
-    setDarkMode(newDark);
-    applyDarkMode(newDark);
-    localStorage.setItem('darkMode', String(newDark));
-    if (followSystem) {
-      setFollowSystem(false);
-      localStorage.setItem('followSystemPrefersColorScheme', 'false');
+  const cycleThemeMode = () => {
+    const currentMode = followSystem ? 'system' : darkMode ? 'dark' : 'light';
+    const nextMode = currentMode === 'light'
+      ? 'dark'
+      : currentMode === 'dark'
+        ? 'system'
+        : 'light';
+
+    if (nextMode === 'system') {
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      localStorage.setItem('followSystemPrefersColorScheme', 'true');
+      if (systemDark === darkMode) {
+        commitTheme(systemDark, true);
+      } else {
+        circularReveal(() => {
+          commitTheme(systemDark, true);
+        }, getRevealOrigin());
+      }
+      return;
     }
-  };
 
-  const handleFollowSystemChange = (checked: boolean) => {
-    setFollowSystem(checked);
-    localStorage.setItem('followSystemPrefersColorScheme', String(checked));
-    if (checked) {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const isDark = mediaQuery.matches;
-      setDarkMode(isDark);
-      applyDarkMode(isDark);
+    const nextDark = nextMode === 'dark';
+    localStorage.setItem('followSystemPrefersColorScheme', 'false');
+    localStorage.setItem('darkMode', String(nextDark));
+    if (nextDark === darkMode) {
+      commitTheme(nextDark, false);
+    } else {
+      circularReveal(() => {
+        commitTheme(nextDark, false);
+      }, getRevealOrigin());
     }
-  };
-
-  const handleDropdownMouseEnter = () => {
-    if (dropdownTimeoutRef.current) {
-      clearTimeout(dropdownTimeoutRef.current);
-      dropdownTimeoutRef.current = null;
-    }
-    setIsDarkDropdownOpen(true);
-  };
-
-  const handleDropdownMouseLeave = () => {
-    dropdownTimeoutRef.current = setTimeout(() => {
-      setIsDarkDropdownOpen(false);
-    }, 150);
   };
 
   useEffect(() => {
@@ -423,58 +459,75 @@ export default function AppLayout({
       <div className="bg-amber-400 text-amber-900 text-center text-xs sm:text-sm py-1 px-4 font-medium shrink-0">
         网站处于开发阶段，不代表最终品质
       </div>
-      <header className="h-16 bg-primary dark:bg-slate-900 text-white flex items-center px-4 sm:px-26 shrink-0 relative z-50">
+      <header className="h-16 bg-primary text-white flex items-center px-4 sm:px-26 shrink-0 relative z-50">
         <button
           onClick={toggleSidebar}
           aria-label={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
-          className="rounded-md p-2 mr-2 sm:mr-4 text-white hover:bg-white/10 transition-colors"
+          data-ripple
+          className="rounded-lg p-2 mr-2 sm:mr-4 text-white hover:bg-white/10 transition-all duration-200"
         >
           <MdMenu size={24} />
         </button>
-        <Link href="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity hidden sm:flex mr-2">
-          {/* Static brand SVG; next/image adds no benefit here. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/img/picpony-w.svg" alt="PicPony" className="h-auto w-25" />
-        </Link>
-        <div
-          className="relative"
-          ref={dropdownRef}
-          onMouseEnter={handleDropdownMouseEnter}
-          onMouseLeave={handleDropdownMouseLeave}
+        <Link
+          href="/"
+          aria-label="PicPony 主页"
+          className="group relative mr-2 hidden shrink-0 items-center sm:flex"
         >
-          <button
-            onClick={toggleDarkMode}
-            aria-label={darkMode ? '切换浅色模式' : '切换深色模式'}
-            title={darkMode ? '浅色模式' : '深色模式'}
-            className="rounded-md p-2 ml-2 mr-0.5 text-white hover:bg-white/10 transition-colors"
+          {/* Static brand SVG; next/image adds no benefit here. */}
+          {/* White wordmark reads on the pink header; it stays fully visible
+              and the color layer simply clips in on top, so there is no gap
+              (and no background flash) as the color retracts on mouse-out. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/img/picpony-w.svg"
+            alt="PicPony"
+            className="h-auto w-25"
+          />
+          {/* Full-color wordmark wipes in left-to-right on hover. clip-path
+              interpolates natively, so the reveal is a smooth sweep. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 [clip-path:inset(0_100%_0_0)] transition-[clip-path] duration-[550ms] ease-[var(--ease-decelerate)] group-hover:[clip-path:inset(0_0_0_0)]"
           >
-            {darkMode ? <MdLightMode size={24} /> : <MdDarkMode size={24} />}
-          </button>
-          {isDarkDropdownOpen && (
-            <div
-              className="absolute left-0 top-full mt-1 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-[60] animate-fade-in"
-              onMouseEnter={handleDropdownMouseEnter}
-              onMouseLeave={handleDropdownMouseLeave}
-            >
-              <div className="flex items-center px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                <Checkbox checked={followSystem} onChange={handleFollowSystemChange} />
-                <span className="ml-2.5 text-sm text-slate-700 dark:text-slate-300 select-none">跟随系统</span>
-              </div>
-            </div>
-          )}
-        </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/img/picpony.svg" alt="" className="h-auto w-25" />
+          </span>
+        </Link>
+        <button
+          ref={themeButtonRef}
+          onClick={cycleThemeMode}
+          aria-label="切换主题模式"
+          title={followSystem ? '跟随系统' : darkMode ? '深色模式' : '浅色模式'}
+          data-ripple
+          className="ml-2 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white hover:bg-white/10 transition-colors duration-200"
+        >
+          <span
+            ref={themeIconRef}
+            key={followSystem ? 'system' : String(darkMode)}
+            className="block animate-[icon-swap_0.35s_var(--ease-spring)]"
+          >
+            {followSystem ? (
+              <MdBrightnessAuto size={24} />
+            ) : darkMode ? (
+              <MdLightMode size={24} />
+            ) : (
+              <MdDarkMode size={24} />
+            )}
+          </span>
+        </button>
         <div className="flex-1" />
-        <Suspense fallback={<div className="w-8 h-8 bg-white/10 rounded-md animate-pulse"></div>}>
+        <Suspense fallback={<div className="w-8 h-8 bg-white/10 rounded-lg animate-pulse" />}>
           <SearchBar />
         </Suspense>
         <Link
           href="/messages"
           aria-label="消息"
-          className="relative rounded-md p-2 ml-3 text-white hover:bg-white/10 transition-colors inline-flex"
+          data-ripple
+          className="relative rounded-lg p-2 ml-3 text-white hover:bg-white/10 transition-all duration-200 inline-flex"
         >
           <MdNotifications size={24} />
           {totalUnread > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
+            <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 animate-[control-pop_0.3s_var(--ease-spring)]">
               {totalUnread > 99 ? '99+' : totalUnread}
             </span>
           )}
@@ -483,13 +536,13 @@ export default function AppLayout({
 
       <div className="flex flex-1 overflow-hidden relative bg-slate-50 dark:bg-slate-900">
         <div
-          className={`fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 ease-in-out ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          className={`fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 ease-[var(--ease-standard)] ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
             }`}
           onClick={() => setIsCollapsed(true)}
         />
 
         <aside
-          className={`bg-slate-50 dark:bg-slate-900 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden absolute md:relative h-full z-50 md:z-auto ${isCollapsed ? '-translate-x-full md:translate-x-0 md:w-0' : 'translate-x-0 w-64'
+          className={`bg-slate-50 dark:bg-slate-900 flex flex-col shrink-0 transition-all duration-300 ease-[var(--ease-standard)] overflow-hidden absolute md:relative h-full z-50 md:z-auto ${isCollapsed ? '-translate-x-full md:translate-x-0 md:w-0' : 'translate-x-0 w-64'
             }`}
         >
           <div className="w-64 p-3 pb-0">
@@ -543,14 +596,16 @@ export default function AppLayout({
                 </div>
 
                 <div
-                  className={`mt-1 flex flex-col space-y-1 transition-all duration-300 ease-in-out overflow-hidden ${isUserMenuOpen
-                      ? 'max-h-[1000px] opacity-100 mb-2'
-                      : 'max-h-0 opacity-0'
+                  className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-[var(--ease-standard)] ${isUserMenuOpen
+                      ? 'grid-rows-[1fr] opacity-100 mt-1 mb-2'
+                      : 'grid-rows-[0fr] opacity-0'
                     }`}
                 >
+                  <div className="flex min-h-0 flex-col space-y-1 overflow-hidden">
                   <Link
                     href="/favorites"
                     onClick={handleMobileNavigation}
+                    data-ripple
                     className={sidebarButtonClass(backgroundPathname === '/favorites')}
                   >
                     <MdCollectionsBookmark size={20} className="shrink-0 mr-3" />
@@ -559,6 +614,7 @@ export default function AppLayout({
                   <Link
                     href="/messages"
                     onClick={handleMobileNavigation}
+                    data-ripple
                     className={sidebarButtonClass(backgroundPathname === '/messages')}
                   >
                     <MdNotifications size={20} className="shrink-0 mr-3" />
@@ -572,6 +628,7 @@ export default function AppLayout({
                   <Link
                     href="/history"
                     onClick={handleMobileNavigation}
+                    data-ripple
                     className={sidebarButtonClass(backgroundPathname === '/history')}
                   >
                     <MdHistory size={20} className="shrink-0 mr-3" />
@@ -580,6 +637,7 @@ export default function AppLayout({
                   <Link
                     href="/upload"
                     onClick={handleMobileNavigation}
+                    data-ripple
                     className={sidebarButtonClass(backgroundPathname === '/upload')}
                   >
                     <MdCloudUpload size={20} className="shrink-0 mr-3" />
@@ -588,6 +646,7 @@ export default function AppLayout({
                   <Link
                     href="/block-groups"
                     onClick={handleMobileNavigation}
+                    data-ripple
                     className={sidebarButtonClass(backgroundPathname === '/block-groups')}
                   >
                     <MdShield size={20} className="shrink-0 mr-3" />
@@ -596,6 +655,7 @@ export default function AppLayout({
                   <Link
                     href="/tasks"
                     onClick={handleMobileNavigation}
+                    data-ripple
                     className={sidebarButtonClass(backgroundPathname === '/tasks')}
                   >
                     <MdEmojiEvents size={20} className="shrink-0 mr-3" />
@@ -604,6 +664,7 @@ export default function AppLayout({
                   <Link
                     href="/settings"
                     onClick={handleMobileNavigation}
+                    data-ripple
                     className={sidebarButtonClass(backgroundPathname === '/settings')}
                   >
                     <MdSettings size={20} className="shrink-0 mr-3" />
@@ -613,6 +674,7 @@ export default function AppLayout({
                     <Link
                       href="/admin"
                       onClick={handleMobileNavigation}
+                      data-ripple
                       className={sidebarButtonClass(backgroundPathname.startsWith('/admin'))}
                     >
                       <MdDashboard size={20} className="shrink-0 mr-3" />
@@ -621,11 +683,13 @@ export default function AppLayout({
                   )}
                   <button
                     onClick={handleLogoutClick}
+                    data-ripple
                     className={sidebarButtonClass(false)}
                   >
                     <MdLogout size={20} className="shrink-0 mr-3" />
                     <span>登出</span>
                   </button>
+                  </div>
                 </div>
                 <div className="h-px bg-slate-200 dark:bg-slate-700 mt-2 mx-2"></div>
               </div>
@@ -650,6 +714,7 @@ export default function AppLayout({
             <Link
               href="/"
               onClick={handleMobileNavigation}
+              data-ripple
               className={sidebarButtonClass(backgroundPathname === '/')}
             >
               <MdHome size={20} className="shrink-0 mr-3" />
@@ -719,12 +784,14 @@ export default function AppLayout({
             <button
               type="button"
               onClick={handleLogoutCancel}
+              data-ripple
               className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               取消
             </button>
             <button
               onClick={handleLogoutConfirm}
+              data-ripple
               className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
             >
               确认登出
