@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
@@ -18,6 +17,7 @@ import {
 } from 'react-icons/md';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
+import { useAuthModal } from '@/components/AuthModal';
 
 const TRIXIE_SEARCH = 'https://trixiebooru.org/api/v1/json/search/tags';
 const MAX_GROUPS = 50;
@@ -53,7 +53,7 @@ function readUserInfo(): UserInfo | null {
 }
 
 export default function BlockGroupsPage() {
-  const router = useRouter();
+  const { openAuth } = useAuthModal();
   const [userInfo] = useState<UserInfo | null>(() => readUserInfo());
   const [groups, setGroups] = useState<BlockGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,9 +80,9 @@ export default function BlockGroupsPage() {
 
   useEffect(() => {
     if (!userInfo) {
-      router.push('/login');
+      openAuth('login');
     }
-  }, [userInfo, router]);
+  }, [userInfo, openAuth]);
 
   const loadGroups = useCallback(async () => {
     if (!userInfo?.token) return;

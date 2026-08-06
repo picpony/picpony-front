@@ -32,6 +32,7 @@ import Logo from './Logo';
 import Avatar from './Avatar';
 import DevBanner from './DevBanner';
 import SidebarNav from './SidebarNav';
+import { useAuthModal } from './AuthModal';
 import { BackgroundLocationProvider, useBackgroundSearchParams } from './BackgroundLocation';
 import { api } from '@/lib/api';
 import { readJson } from '@/lib/api/client';
@@ -282,6 +283,7 @@ export default function AppLayout({
     getImageHeroRuntime,
     getImageHeroRuntime,
   );
+  const { openAuth } = useAuthModal();
   const retainedHeroBackground = getImageHeroBackgroundLocation();
   const activeHeroBackground = imageHeroRuntime.background ?? retainedHeroBackground;
   const activeBackgroundSearch = activeHeroBackground
@@ -729,11 +731,14 @@ export default function AppLayout({
                     </div>{' '}
                   </Link>
                 ) : (
-                  <Link
-                    href="/login"
-                    onClick={handleMobileNavigation}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openAuth('login');
+                      handleMobileNavigation();
+                    }}
                     data-ripple
-                    className="state-layer group flex items-center gap-3 rounded-md p-2 outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="state-layer group flex w-full cursor-pointer items-center gap-3 rounded-md p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     {' '}
                     <span className="bg-surface-container-highest text-on-surface-variant flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
@@ -749,7 +754,7 @@ export default function AppLayout({
                         点击登录
                       </span>{' '}
                     </span>{' '}
-                  </Link>
+                  </button>
                 )}{' '}
               </div>{' '}
               <div className="bg-outline-variant mx-5 my-3 h-px" />{' '}

@@ -26,6 +26,7 @@ import {
   MdThumbDown,
 } from 'react-icons/md';
 import Modal from '@/components/Modal';
+import { useAuthModal } from '@/components/AuthModal';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
 import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen';
@@ -130,6 +131,7 @@ function getTagCountOnce(token: string, tag: string) {
 export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const params = useParams();
   const router = useRouter();
+  const { openAuth } = useAuthModal();
   const id = params.id as string;
   const imageId = Number(id);
   const heroRuntime = useSyncExternalStore(
@@ -707,7 +709,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
     if (!token) {
       showToast('请先登录', 'error');
-      router.push('/login');
+      openAuth('login');
       return;
     }
 
@@ -771,7 +773,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     } catch {}
     if (!token) {
       showToast('请先登录', 'error');
-      router.push('/login');
+      openAuth('login');
       return;
     }
     setIsReporting(true);

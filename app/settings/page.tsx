@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   MdEdit,
   MdPerson,
@@ -27,6 +26,7 @@ import Button from '@/components/Button';
 import ImageCropper from '@/components/ImageCropper';
 import { api } from '@/lib/api';
 import { readJson } from '@/lib/api/client';
+import { useAuthModal } from '@/components/AuthModal';
 import { Input, Textarea } from '@/components/Input';
 
 const sectionTitle = 'text-title-m-emphasized text-on-surface mb-4 flex items-center gap-2';
@@ -88,7 +88,7 @@ type CloudSettings = {
 };
 
 export default function SettingsPage() {
-  const router = useRouter();
+  const { openAuth } = useAuthModal();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newUsername, setNewUsername] = useState('');
@@ -301,7 +301,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const storedUser = localStorage.getItem('user_info');
     if (!storedUser) {
-      router.push('/login');
+      openAuth('login');
       return;
     }
     try {
@@ -357,7 +357,7 @@ export default function SettingsPage() {
     } catch (e) {
       console.error('Failed to parse user info', e);
     }
-  }, [router, applyCloudSettings]);
+  }, [applyCloudSettings, openAuth]);
 
   // Hydrate preference toggles from localStorage after mount so the first
   // client render stays identical to SSR (avoids ToggleSwitch className mismatch).
@@ -662,7 +662,7 @@ export default function SettingsPage() {
         setTimeout(() => {
           localStorage.removeItem('user_info');
           window.dispatchEvent(new Event('user_info_updated'));
-          router.push('/login');
+          openAuth('login');
         }, 1500);
       } else {
         showToast(data.message || '修改失败', 'error');

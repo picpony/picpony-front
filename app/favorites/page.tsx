@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { MdCollectionsBookmark } from 'react-icons/md';
 import { api, PonyImage } from '@/lib/api';
 import { useAuth, useDeferredLoading } from '@/lib/hooks';
+import { useAuthModal } from '@/components/AuthModal';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -51,6 +52,7 @@ function FavoritesList() {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const router = useRouter();
   const { getUserInfo } = useAuth();
+  const { openAuth } = useAuthModal();
 
   /* Every request carries the generation it was issued in. A tab switch, a
      retry or an unmount bumps it, so a slow response from the previous
@@ -176,7 +178,7 @@ function FavoritesList() {
           // Without this the flag stayed true and the page sat on a skeleton
           // for as long as the redirect took — or forever, if it was blocked.
           setIsLoading(false);
-          router.push('/login');
+          openAuth('login');
           return;
         }
 
@@ -223,7 +225,7 @@ function FavoritesList() {
       generation.current += 1;
       controller.abort();
     };
-  }, [retryCount, activeTab, router, getUserInfo, isStale, loadImages, loadDerpibooruFaves]);
+  }, [retryCount, activeTab, router, getUserInfo, openAuth, isStale, loadImages, loadDerpibooruFaves]);
 
   const loadMore = () => {
     if (isLoadingMore || !hasMore) return;

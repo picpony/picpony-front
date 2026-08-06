@@ -218,7 +218,9 @@ export default function Modal({
             )}
           </div>
         )}
-        <div className={cn('main-scrollbar min-h-0 flex-1 overflow-y-auto p-6', bodyClassName)}>
+        {/* `bodyClassName` 完整接管 padding：cn 只拼接不解决 Tailwind
+            冲突，所以默认 p-6 不能留在 base 里，否则会盖掉传入的 p-0。 */}
+        <div className={cn('main-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'p-6')}>
           {children}
         </div>
         {footer && <div className="flex shrink-0 justify-end gap-3 px-6 pb-6">{footer}</div>}

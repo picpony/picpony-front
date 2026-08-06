@@ -4,6 +4,7 @@ import './globals.css';
 import { cookies } from 'next/headers';
 import Script from 'next/script';
 import AppLayout from '@/components/AppLayout';
+import { AuthProvider } from '@/components/AuthModal';
 import NextTopLoader from 'nextjs-toploader';
 import { ToastContainer } from '@/components/Toast';
 import LoadingOverlay from '@/components/LoadingOverlay';
@@ -92,9 +93,11 @@ export default async function RootLayout({
           easing="cubic-bezier(0.2, 0, 0, 1)"
           speed={200}
         />
-        <AppLayout initialCollapsed={sidebarCollapsed} initialDark={darkMode} overlay={imageDetail}>
-          {children}
-        </AppLayout>
+        <AuthProvider>
+          <AppLayout initialCollapsed={sidebarCollapsed} initialDark={darkMode} overlay={imageDetail}>
+            {children}
+          </AppLayout>
+        </AuthProvider>
         <ToastContainer />
         <RippleLayer />
       </body>

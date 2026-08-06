@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MdHistory, MdDelete, MdDeleteSweep, MdImage, MdPerson } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
@@ -11,6 +10,7 @@ import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
 import Button from '@/components/Button';
 import Skeleton from '@/components/Skeleton';
+import { useAuthModal } from '@/components/AuthModal';
 
 interface HistoryItem {
   id: number;
@@ -27,7 +27,7 @@ interface HistoryResponse {
 }
 
 export default function HistoryPage() {
-  const router = useRouter();
+  const { openAuth } = useAuthModal();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -42,7 +42,7 @@ export default function HistoryPage() {
       try {
         const storedUser = localStorage.getItem('user_info');
         if (!storedUser) {
-          router.push('/login');
+          openAuth('login');
           return;
         }
         const user = JSON.parse(storedUser);
@@ -60,7 +60,7 @@ export default function HistoryPage() {
         setIsLoading(false);
       }
     },
-    [router],
+    [openAuth],
   );
 
   useEffect(() => {

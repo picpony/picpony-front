@@ -28,12 +28,14 @@ import Button, { buttonClasses } from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import PageBack from '@/components/PageBack';
 import { useEscapeBack } from '@/lib/hooks';
+import { useAuthModal } from '@/components/AuthModal';
 import { readForumOrigin, playForumContainerTransform } from '@/lib/forumTransition';
 
 export default function ForumPostPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { openAuth } = useAuthModal();
   const id = params.id as string;
   const pageParam = searchParams.get('page');
   const initialPage = pageParam ? parseInt(pageParam, 10) : 1;
@@ -524,9 +526,13 @@ export default function ForumPostPage() {
           {!isLoggedIn ? (
             <div className="text-center py-8 bg-surface-container-low rounded-md border border-outline-variant">
               <p className="text-on-surface-variant mb-4">登录后才能发表回复</p>
-              <Link href="/login" className={buttonClasses({ variant: 'filled' })}>
+              <button
+                type="button"
+                onClick={() => openAuth('login')}
+                className={buttonClasses({ variant: 'filled' })}
+              >
                 去登录
-              </Link>
+              </button>
             </div>
           ) : (
             <div className="space-y-4">

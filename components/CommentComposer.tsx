@@ -1,10 +1,10 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MdClose, MdReply, MdSend } from 'react-icons/md';
 import Button from '@/components/Button';
+import { useAuthModal } from '@/components/AuthModal';
 import { showToast } from '@/components/Toast';
 import { api, type Comment } from '@/lib/api';
 
@@ -33,7 +33,7 @@ export default function CommentComposer({
   onCancelReply,
   onCommentsLoaded,
 }: CommentComposerProps) {
-  const router = useRouter();
+  const { openAuth } = useAuthModal();
   const [comment, setComment] = useState('');
   const [editorRevision, setEditorRevision] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,7 +60,7 @@ export default function CommentComposer({
 
     if (!token) {
       showToast('请先登录', 'error');
-      router.push('/login');
+      openAuth('login');
       return;
     }
 

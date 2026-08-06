@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/hooks';
+import { useAuthModal } from '@/components/AuthModal';
 import { MdCloudUpload, MdClose, MdInfoOutline, MdOpenInNew } from 'react-icons/md';
 import Button, { buttonClasses } from '@/components/Button';
 import { Input, Textarea } from '@/components/Input';
@@ -13,6 +14,7 @@ export default function UploadPage() {
   const { getUserInfo } = useAuth();
   const user = getUserInfo();
   const router = useRouter();
+  const { openAuth } = useAuthModal();
 
   const [file, setFile] = useState<File | null>(null);
   const [tags, setTags] = useState('');
@@ -156,7 +158,7 @@ export default function UploadPage() {
         <MdCloudUpload size={64} className="mx-auto mb-4 text-outline" />
         <h1 className="text-title-l text-on-surface mb-2">需要登录</h1>
         <p className="text-body-m text-on-surface-variant mb-6">请先登录后再发布图片</p>
-        <Button onClick={() => router.push('/login')} variant="filled">
+        <Button onClick={() => openAuth('login')} variant="filled">
           前往登录
         </Button>
       </div>

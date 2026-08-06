@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import dynamic from 'next/dynamic';
 import { Input } from '@/components/Input';
+import { useAuthModal } from '@/components/AuthModal';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 
 const categories = [
@@ -19,6 +20,7 @@ const categories = [
 
 export default function CreateForumPostPage() {
   const router = useRouter();
+  const { openAuth } = useAuthModal();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('discussion');
@@ -34,9 +36,9 @@ export default function CreateForumPostPage() {
 
   useEffect(() => {
     if (!isLoggedIn) {
-      router.push('/login');
+      openAuth('login');
     }
-  }, [isLoggedIn, router]);
+  }, [isLoggedIn, openAuth]);
 
   const handleCoverSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
