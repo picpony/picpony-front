@@ -79,14 +79,18 @@ export function buildSearchQuery(search?: string): string {
   }
 
   try {
-    const activeHidden: string[] = JSON.parse(localStorage.getItem('trixie_active_hidden_tags') || '[]');
+    const activeHidden: string[] = JSON.parse(
+      localStorage.getItem('trixie_active_hidden_tags') || '[]',
+    );
     const blockNegations = activeHidden
-      .filter(t => t && typeof t === 'string')
-      .map(t => `-${t.trim().toLowerCase()}`);
+      .filter((t) => t && typeof t === 'string')
+      .map((t) => `-${t.trim().toLowerCase()}`);
     if (blockNegations.length > 0) {
       tags = tags ? `${tags}, ${blockNegations.join(', ')}` : blockNegations.join(', ');
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   if (!tags && s.contentFilter !== 'developer') {
     tags = '-suggestive, -explicit, -questionable, -grotesque, -grimdark, pony';
@@ -203,4 +207,36 @@ export async function handleDerpiError(res: Response): Promise<never> {
   const error = new Error(errorText || res.statusText || 'Failed to fetch');
   (error as Error & { status?: number }).status = res.status;
   throw error;
+}
+
+/**
+ * `Response.json()` that survives an empty or non-JSON body.
+ *
+ * The PicPony endpoints answer `200` with a JSON envelope on the happy path,
+ * but a dropped session, a PHP fatal or a proxy hiccup can return an empty body
+ * or an HTML error page. `res.json()` then throws `Unexpected end of JSON
+ * input` from inside whatever called it — which is how a background unread-count
+ * poll ended up throwing on every tick.
+ *
+ * Callers all branch on `data.success`, so a parse failure is reported the same
+ * way the API reports a logical failure rather than as an exception.
+ */
+/* `T = any` mirrors `Response.json()`'s own signature. Narrowing it to
+   `unknown` would be more correct in isolation but would demand an annotation
+   at all 29 call sites, and the point of this change is to fix a crash without
+   touching their shapes. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function readJson<T = any>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!text) {
+    return { success: false, message: res.statusText || '空响应' } as T;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return {
+      success: false,
+      message: `响应不是合法 JSON (HTTP ${res.status})`,
+    } as T;
+  }
 }

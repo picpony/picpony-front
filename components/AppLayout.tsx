@@ -1,29 +1,59 @@
 'use client';
 
-import { useState, FormEvent, Suspense, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
-import { flushSync } from "react-dom";
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from "next/navigation";
-import { MdMenu, MdHome, MdSettings, MdSearch, MdPerson, MdExpandMore, MdLogout, MdNotifications, MdCollectionsBookmark, MdDarkMode, MdLightMode, MdDashboard, MdHistory, MdPhotoLibrary, MdForum, MdCloudUpload, MdShield, MdEmojiEvents, MdBrightnessAuto } from "react-icons/md";
+import {
+  useState,
+  FormEvent,
+  Suspense,
+  useEffect,
+  useRef,
+  useCallback,
+  useSyncExternalStore,
+  useTransition,
+} from 'react';
+import { flushSync } from 'react-dom';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation';
+import {
+  MdMenu,
+  MdSearch,
+  MdPerson,
+  MdNotifications,
+  MdDarkMode,
+  MdLightMode,
+  MdPhotoLibrary,
+  MdForum,
+  MdBrightnessAuto,
+} from 'react-icons/md';
 
 import dynamic from 'next/dynamic';
-const AnnouncementModal = dynamic(() => import("./AnnouncementModal"), { ssr: false });
-const Modal = dynamic(() => import("./Modal"), { ssr: false });
-import Logo from "./Logo";
-import FadeInImage from "./FadeInImage";
-import {
-  BackgroundLocationProvider,
-  useBackgroundSearchParams,
-} from "./BackgroundLocation";
-import { api } from "@/lib/api";
+const AnnouncementModal = dynamic(() => import('./AnnouncementModal'), { ssr: false });
+const Modal = dynamic(() => import('./Modal'), { ssr: false });
+import Logo from './Logo';
+import Avatar from './Avatar';
+import DevBanner from './DevBanner';
+import SidebarNav from './SidebarNav';
+import { BackgroundLocationProvider, useBackgroundSearchParams } from './BackgroundLocation';
+import { api } from '@/lib/api';
+import { readJson } from '@/lib/api/client';
+import { clearSnapshots } from '@/lib/pageCache';
 import {
   getImageHeroRuntime,
   getImageHeroBackgroundLocation,
   initializeImageHeroHistory,
   subscribeImageHeroRuntime,
-} from "@/lib/hero";
+} from '@/lib/hero';
 import HeroStage from '@/components/HeroStage';
-import { circularReveal, useSlidingIndicator } from '@/lib/motion';
+import RouteCrossFade from '@/components/RouteCrossFade';
+import Button from '@/components/Button';
+import {
+  circularReveal,
+  setTabIntent,
+  startTabTransition,
+  useDrawerSwipe,
+  useSlidingIndicator,
+} from '@/lib/motion';
+import { useMediaQuery } from '@/lib/hooks';
+import { MEDIA } from '@/lib/constants';
 
 function SearchBar() {
   const router = useRouter();
@@ -40,7 +70,7 @@ function SearchBar() {
         title="搜索"
         aria-label="搜索"
         data-ripple
-        className="rounded-lg p-2 text-white hover:bg-white/10 transition-all duration-200 cursor-pointer"
+        className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-on-primary state-layer transition-ui outline-none focus-visible:ring-2 focus-visible:ring-on-primary/50"
       >
         <MdSearch size={24} />
       </button>
@@ -58,13 +88,23 @@ interface UserInfo {
   derpi_username?: string;
 }
 
-const sidebarButtonClass = (isActive: boolean) =>
-  `flex items-center px-3 py-2 font-medium transition-all duration-200 rounded-lg w-full justify-start ${isActive
-    ? 'text-primary bg-primary/10 hover:bg-primary/15'
-    : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
-  }`;
+/**
+ * How long to wait before committing the tab to the URL.
+ *
+ * Long enough to sit past the end of the slide, which is the point. The push
+ * costs a React commit and an RSC navigation, and at 160ms that landed square
+ * in the middle of the transition: measured on the home switch, two frames of
+ * 41ms and 38ms against a 16.6ms median, right where the panes are moving
+ * fastest. Nothing is waiting for it — the transition owns the pane flags and
+ * `pendingTab` owns the pill — so the only thing deferring costs is how soon
+ * the URL agrees, and no one is looking at the URL mid-slide.
+ *
+ * It also swallows a burst of taps into one push, which is what it was
+ * originally for.
+ */
+const TAB_PUSH_COALESCE_MS = 480;
 
-function TabNavBar() {
+function TabNavBar({ hidden }: { hidden: boolean }) {
   const searchParams = useBackgroundSearchParams();
   const router = useRouter();
   const currentTab = searchParams.get('tab') === 'forum' ? 'forum' : 'gallery';
@@ -74,48 +114,124 @@ function TabNavBar() {
   const activeTab = pendingTab ?? currentTab;
   const { containerRef, indicatorRef } = useSlidingIndicator(activeTab);
 
-  // Adjust-during-render: once the route commits, the optimistic tab is stale.
-  if (pendingTab && pendingTab === currentTab) setPendingTab(null);
+  /* Whether a tab navigation we started is still on its way. `router.push` is
+     run inside this transition purely so React will tell us — it is the only
+     signal that distinguishes "the URL agrees with the user" from "the URL is
+     briefly agreeing on its way somewhere else". */
+  const [isNavigating, startNavigation] = useTransition();
+
+  /* Pushing on every tap queues one navigation per tap, and each of those
+     commits later lands as its own `tab` change — so after a burst of taps the
+     panes replayed the whole burst back at you. The animation is optimistic
+     and instant, so only the *final* destination needs to reach the router;
+     this collapses a burst into one push. */
+  const pushTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
+    },
+    [],
+  );
+
+  /* Adjust-during-render: once the route commits, the optimistic tab is stale.
+     Once it has *finished* committing, though. The URL trails the taps by a
+     coalescing window plus a navigation, so during a burst it passes through
+     values the user has already moved on from — and one of those can equal the
+     optimistic tab by coincidence. Releasing there handed control back to a URL
+     that was still in motion, and the next commit dragged the tab backwards:
+     measured on taps 180ms apart, 论坛 → 图库 → 论坛 landed on 图库, because the
+     third tap then read as a no-op against the tab it had just been dragged
+     onto and was swallowed. `isNavigating` is the missing piece — with nothing
+     in flight the URL cannot move again on its own.
+
+     A queued push needs no guard of its own: it always targets `pendingTab`,
+     so if the URL already agrees with `pendingTab` that push is a no-op. */
+  if (pendingTab && pendingTab === currentTab && !isNavigating) setPendingTab(null);
+
+  /* The panes live in the page and see only the URL, which trails these taps by
+     a coalescing window plus a navigation. Hand them the tab the user is really
+     on so they do not animate to a waypoint on the way. Cleared on unmount,
+     which is what keeps an intent from outliving the home route. */
+  useEffect(() => {
+    setTabIntent(pendingTab);
+    return () => setTabIntent(null);
+  }, [pendingTab]);
 
   const switchTab = (tab: string) => {
     if (tab === activeTab) return;
     setPendingTab(tab);
-    // Let the pill glide before the heavy gallery/forum swap re-renders.
-    setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (tab === 'gallery') params.delete('tab');
-      else params.set('tab', tab);
-      const qs = params.toString();
-      router.push(qs ? `/?${qs}` : '/');
-    }, 180);
+    /* Both panes are already mounted, so the transition does not need the
+       route — it only needs the attribute that gives the incoming pane a box,
+       and it sets that itself. Gallery sits left of forum, so moving right
+       sends the outgoing pane left. */
+    startTabTransition(activeTab, tab, tab === 'forum' ? 1 : -1);
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === 'gallery') params.delete('tab');
+    else params.set('tab', tab);
+    const qs = params.toString();
+    const href = qs ? `/?${qs}` : '/';
+
+    if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
+    pushTimer.current = window.setTimeout(() => {
+      pushTimer.current = null;
+      /* `scroll: false`: Next scrolls the new segment into view on commit,
+         which would fight the per-tab offset `startTabTransition` restored. */
+      startNavigation(() => router.push(href, { scroll: false }));
+    }, TAB_PUSH_COALESCE_MS);
   };
 
   const tabClass = (tab: string) =>
-    `relative z-10 flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+    `relative z-10 flex items-center gap-2 px-5 py-2.5 rounded-full text-label-l transition-ui ${
       activeTab === tab
-        ? 'text-primary'
-        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+        ? 'text-primary font-medium'
+        : 'text-on-surface-variant hover:text-on-surface'
     }`;
 
   return (
+    /* Kept mounted while an image-detail overlay is open rather than unmounted:
+       the sliding indicator measures its target on mount, so tearing it down
+       and rebuilding it makes the pill jump back to x=0 on the way out. It fades
+       instead, on the same 220ms the hero flight uses for card chrome, so the
+       two leave together.
+       `data-image-detail-chrome` was previously set here and consumed nowhere —
+       the pill just sat at z-50 on top of the overlay.
+       z-30 keeps it under the drawer scrim (z-40): the host `<section>` is
+       positioned but not a stacking context, so the pill's z competes directly
+       with the shell's. At z-50 it floated over the open drawer. */
     <div
       data-image-detail-chrome
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-50 flex items-center justify-center py-3"
+      data-chrome-hidden={hidden || undefined}
+      aria-hidden={hidden || undefined}
+      inert={hidden ? true : undefined}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-center py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[opacity,translate] duration-200 ease-[var(--ease-accelerate)] ${
+        hidden ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'
+      }`}
     >
       <div
         ref={containerRef}
-        className="pointer-events-auto relative flex items-center gap-1 rounded-xl bg-slate-100 p-1 shadow-lg shadow-black/10 dark:bg-slate-800 dark:shadow-black/30"
+        className="pointer-events-auto relative flex items-center gap-1 rounded-full bg-surface-container-high p-1 shadow-e3"
       >
         <span
           ref={indicatorRef}
           aria-hidden="true"
-          className="absolute left-0 top-1 bottom-1 z-0 rounded-lg bg-white shadow-sm dark:bg-slate-700"
+          className="absolute left-0 top-1 bottom-1 z-0 rounded-full bg-surface-raised shadow-e1"
         />
-        <button data-tab="gallery" data-ripple onClick={() => switchTab('gallery')} className={tabClass('gallery')}>
+        <button
+          data-tab="gallery"
+          data-ripple
+          onClick={() => switchTab('gallery')}
+          className={tabClass('gallery')}
+        >
           <MdPhotoLibrary size={18} />
           <span>图库</span>
         </button>
-        <button data-tab="forum" data-ripple onClick={() => switchTab('forum')} className={tabClass('forum')}>
+        <button
+          data-tab="forum"
+          data-ripple
+          onClick={() => switchTab('forum')}
+          className={tabClass('forum')}
+        >
           <MdForum size={18} />
           <span>论坛</span>
         </button>
@@ -128,7 +244,7 @@ export default function AppLayout({
   children,
   overlay,
   initialCollapsed,
-  initialDark
+  initialDark,
 }: {
   children: React.ReactNode;
   overlay: React.ReactNode;
@@ -139,7 +255,6 @@ export default function AppLayout({
   // (viewport, localStorage) are applied after mount to avoid hydration mismatch.
   const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
   const [darkMode, setDarkMode] = useState(initialDark);
@@ -147,15 +262,21 @@ export default function AppLayout({
   const [followSystem, setFollowSystem] = useState(true);
   const themeButtonRef = useRef<HTMLButtonElement>(null);
   const themeIconRef = useRef<HTMLSpanElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const liveSearchParams = useSearchParams();
   const liveSearch = liveSearchParams.toString();
   const imageDetailSegment = useSelectedLayoutSegment('imageDetail');
   const imageDetailId = pathname.match(/^\/pic\/([^/]+)$/)?.[1];
-  const isImageDetailOpen = Boolean(
-    imageDetailId && imageDetailSegment === imageDetailId
-  );
+  const isImageDetailOpen = Boolean(imageDetailId && imageDetailSegment === imageDetailId);
+  /* Any `/pic/:id` screen, intercepted overlay or direct navigation.
+     `isImageDetailOpen` only covers the overlay, so opening an image link
+     directly left the drawer's edge-swipe armed underneath the detail view —
+     and since that screen is one you pan and swipe on, the sidebar kept
+     flashing out from the left mid-gesture. */
+  const isImageDetailRoute = Boolean(imageDetailId);
   const imageHeroRuntime = useSyncExternalStore(
     subscribeImageHeroRuntime,
     getImageHeroRuntime,
@@ -182,19 +303,19 @@ export default function AppLayout({
   // background location through that one-way lag so query pages never observe
   // a transient empty search and refetch themselves.
   const bridgeRouteCommit = Boolean(
-    activeHeroBackground &&
-    browserAtBackground &&
-    !reactRouteAtBackground,
+    activeHeroBackground && browserAtBackground && !reactRouteAtBackground,
   );
-  const imageHeroBackground = imageHeroRuntime.background ?? (
-    bridgeRouteCommit ? retainedHeroBackground : null
-  );
-  const backgroundPathname = imageHeroBackground?.pathname ?? (
-    isImageDetailOpen ? '/' : pathname
-  );
-  const frozenBackgroundSearch = imageHeroBackground?.search ?? (
-    isImageDetailOpen ? '' : null
-  );
+  const imageHeroBackground =
+    imageHeroRuntime.background ?? (bridgeRouteCommit ? retainedHeroBackground : null);
+  const backgroundPathname = imageHeroBackground?.pathname ?? (isImageDetailOpen ? '/' : pathname);
+  /* The hero owns the same pixels during a flight — it transforms the
+     background, freezes this very pathname, and paints a flyer over the lot —
+     so the route cross-fade stands down entirely while one is in progress. */
+  const crossFadeEnabled =
+    imageHeroRuntime.phase === 'gallery-idle' &&
+    !imageHeroRuntime.background &&
+    !isImageDetailRoute;
+  const frozenBackgroundSearch = imageHeroBackground?.search ?? (isImageDetailOpen ? '' : null);
 
   useEffect(() => {
     initializeImageHeroHistory({
@@ -208,13 +329,16 @@ export default function AppLayout({
     document.cookie = `darkMode=${dark};path=/;max-age=${365 * 24 * 60 * 60}`;
   }, []);
 
-  const commitTheme = useCallback((dark: boolean, followsSystem?: boolean) => {
-    flushSync(() => {
-      if (followsSystem !== undefined) setFollowSystem(followsSystem);
-      setDarkMode(dark);
-    });
-    applyDarkMode(dark);
-  }, [applyDarkMode]);
+  const commitTheme = useCallback(
+    (dark: boolean, followsSystem?: boolean) => {
+      flushSync(() => {
+        if (followsSystem !== undefined) setFollowSystem(followsSystem);
+        setDarkMode(dark);
+      });
+      applyDarkMode(dark);
+    },
+    [applyDarkMode],
+  );
 
   const getRevealOrigin = useCallback(() => {
     // The icon, not its 40×40 hit target: every entry point into a theme change
@@ -254,20 +378,11 @@ export default function AppLayout({
         applyDarkMode(isDark);
       }
 
-      const savedMenu = localStorage.getItem('user_menu_open');
-      if (savedMenu !== null) {
-        setIsUserMenuOpen(savedMenu === 'true');
-      } else if (localStorage.getItem('user_info')) {
-        setIsUserMenuOpen(true);
-      }
-
-      if (window.innerWidth < 768) {
-        setIsCollapsed(true);
-        return;
-      }
-      const savedSidebar = localStorage.getItem('sidebar_collapsed');
-      if (savedSidebar !== null) {
-        setIsCollapsed(savedSidebar === 'true');
+      // Width is handled during render above; this only restores the docked
+      // drawer's remembered state, and must not fight it on a phone.
+      if (window.matchMedia(MEDIA.md).matches) {
+        const savedSidebar = localStorage.getItem('sidebar_collapsed');
+        if (savedSidebar !== null) setIsCollapsed(savedSidebar === 'true');
       }
     });
     return () => {
@@ -291,11 +406,7 @@ export default function AppLayout({
 
   const cycleThemeMode = () => {
     const currentMode = followSystem ? 'system' : darkMode ? 'dark' : 'light';
-    const nextMode = currentMode === 'light'
-      ? 'dark'
-      : currentMode === 'dark'
-        ? 'system'
-        : 'light';
+    const nextMode = currentMode === 'light' ? 'dark' : currentMode === 'dark' ? 'system' : 'light';
 
     if (nextMode === 'system') {
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -344,22 +455,6 @@ export default function AppLayout({
     return () => window.removeEventListener('unread_counts_updated', fetchUnreadCounts);
   }, [userInfo]);
 
-  const prevUserRef = useRef(userInfo);
-  useEffect(() => {
-    const prev = prevUserRef.current;
-    prevUserRef.current = userInfo;
-    if (!prev && userInfo) {
-      setIsUserMenuOpen(true);
-    }
-  }, [userInfo]);
-
-  const toggleUserMenu = () => {
-    setIsUserMenuOpen(prev => {
-      const newState = !prev;
-      localStorage.setItem('user_menu_open', String(newState));
-      return newState;
-    });
-  };
   useEffect(() => {
     const updateUserInfo = async () => {
       const storedUser = localStorage.getItem('user_info');
@@ -378,7 +473,13 @@ export default function AppLayout({
                 return;
               }
 
-              const data = await res.json();
+              /* `readJson`, not `res.json()`. This endpoint answers 200 with an
+                 empty body when the PHP session is gone or the proxy hiccups,
+                 and `res.json()` then throws `Unexpected end of JSON input` out
+                 of an effect that runs on every navigation. The branch below
+                 already treats a missing `success` as "leave the stored user
+                 alone", which is the right answer for an unreadable body too. */
+              const data = await readJson(res);
               if (data.success && data.user) {
                 const updatedUser = {
                   ...parsedUser,
@@ -392,11 +493,11 @@ export default function AppLayout({
                 setUserInfo(updatedUser);
               }
             } catch (err) {
-              console.error("Failed to fetch latest user info", err);
+              console.error('Failed to fetch latest user info', err);
             }
           }
         } catch (e) {
-          console.error("Failed to parse user info", e);
+          console.error('Failed to parse user info', e);
         }
       } else {
         setUserInfo(null);
@@ -409,19 +510,28 @@ export default function AppLayout({
     return () => window.removeEventListener('user_info_updated', updateUserInfo);
   }, [backgroundPathname]);
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setIsCollapsed(true);
-      }
-    };
-    // Initial mobile collapse is handled in the mount prefs effect above.
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // Below `md` the drawer overlays the content; at and above it is docked, and
+  // the swipe gesture and auto-collapse-on-navigate both switch off.
+  const isOverlayDrawer = !useMediaQuery(MEDIA.md, true);
+
+  /* Entering overlay territory collapses the drawer, so it never sits open
+     across a phone-width viewport.
+
+     Adjusted during render rather than from an effect, and this is the whole
+     point: SSR cannot know the viewport, so the first paint assumes the docked
+     desktop drawer. On a phone the media query flips to "overlay" at hydration
+     — and if the persisted preference said "expanded", the drawer painted open
+     over the content for a frame or two before any effect could close it. That
+     is the sidebar appearing out of nowhere on the home and settings screens.
+     Reacting during render closes it before the browser ever paints it. */
+  const [wasOverlayDrawer, setWasOverlayDrawer] = useState(isOverlayDrawer);
+  if (isOverlayDrawer !== wasOverlayDrawer) {
+    setWasOverlayDrawer(isOverlayDrawer);
+    if (isOverlayDrawer) setIsCollapsed(true);
+  }
 
   const toggleSidebar = () => {
-    setIsCollapsed(prev => {
+    setIsCollapsed((prev) => {
       const newState = !prev;
       localStorage.setItem('sidebar_collapsed', String(newState));
       // Cookie keeps SSR in sync with the last desktop preference.
@@ -431,10 +541,18 @@ export default function AppLayout({
   };
 
   const handleMobileNavigation = () => {
-    if (window.innerWidth < 768) {
-      setIsCollapsed(true);
-    }
+    if (isOverlayDrawer) setIsCollapsed(true);
   };
+
+  const setDrawerOpen = useCallback((next: boolean) => setIsCollapsed(!next), []);
+
+  useDrawerSwipe({
+    drawerRef: sidebarRef,
+    scrimRef: scrimRef,
+    open: !isCollapsed,
+    onOpenChange: setDrawerOpen,
+    enabled: isOverlayDrawer && !isImageDetailRoute && !imageHeroRuntime.background,
+  });
 
   const handleLogoutClick = () => {
     setIsLogoutDialogOpen(true);
@@ -442,9 +560,10 @@ export default function AppLayout({
 
   const handleLogoutConfirm = () => {
     localStorage.removeItem('user_info');
-    localStorage.removeItem('user_menu_open');
+    // Signing out does not reload the document, so the render snapshots have to
+    // be dropped by hand or the next account inherits this one's inbox.
+    clearSnapshots();
     setUserInfo(null);
-    setIsUserMenuOpen(false);
     setIsLogoutDialogOpen(false);
     router.push('/');
   };
@@ -455,355 +574,295 @@ export default function AppLayout({
 
   return (
     <BackgroundLocationProvider frozenSearch={frozenBackgroundSearch}>
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="bg-amber-400 text-amber-900 text-center text-xs sm:text-sm py-1 px-4 font-medium shrink-0">
-        网站处于开发阶段，不代表最终品质
-      </div>
-      <header className="h-16 bg-primary text-white flex items-center px-4 sm:px-26 shrink-0 relative z-50">
-        <button
-          onClick={toggleSidebar}
-          aria-label={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
-          data-ripple
-          className="rounded-lg p-2 mr-2 sm:mr-4 text-white hover:bg-white/10 transition-all duration-200"
-        >
-          <MdMenu size={24} />
-        </button>
-        <Link
-          href="/"
-          aria-label="PicPony 主页"
-          className="group relative mr-2 hidden shrink-0 items-center sm:flex"
-        >
-          {/* Static brand SVG; next/image adds no benefit here. */}
-          {/* White wordmark reads on the pink header; it stays fully visible
-              and the color layer simply clips in on top, so there is no gap
-              (and no background flash) as the color retracts on mouse-out. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/img/picpony-w.svg"
-            alt="PicPony"
-            className="h-auto w-25"
-          />
-          {/* Full-color wordmark wipes in left-to-right on hover. clip-path
-              interpolates natively, so the reveal is a smooth sweep. */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 [clip-path:inset(0_100%_0_0)] transition-[clip-path] duration-[550ms] ease-[var(--ease-decelerate)] group-hover:[clip-path:inset(0_0_0_0)]"
+      <div className="h-full flex flex-col overflow-hidden">
+        <DevBanner />
+        <header className="h-16 bg-primary text-on-primary flex items-center px-4 sm:px-26 shrink-0 relative z-50">
+          <button
+            onClick={toggleSidebar}
+            aria-label={isCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            aria-expanded={!isCollapsed}
+            aria-controls="app-sidebar"
+            data-ripple
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full mr-1 sm:mr-3 state-layer text-on-primary transition-ui outline-none focus-visible:ring-2 focus-visible:ring-on-primary/50"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/img/picpony.svg" alt="" className="h-auto w-25" />
-          </span>
-        </Link>
-        <button
-          ref={themeButtonRef}
-          onClick={cycleThemeMode}
-          aria-label="切换主题模式"
-          title={followSystem ? '跟随系统' : darkMode ? '深色模式' : '浅色模式'}
-          data-ripple
-          className="ml-2 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white hover:bg-white/10 transition-colors duration-200"
-        >
-          <span
-            ref={themeIconRef}
-            key={followSystem ? 'system' : String(darkMode)}
-            className="block animate-[icon-swap_0.35s_var(--ease-spring)]"
+            <MdMenu size={24} />
+          </button>
+          <Link
+            href="/"
+            aria-label="PicPony 主页"
+            className="relative mr-2 hidden shrink-0 items-center sm:flex"
           >
-            {followSystem ? (
-              <MdBrightnessAuto size={24} />
-            ) : darkMode ? (
-              <MdLightMode size={24} />
-            ) : (
-              <MdDarkMode size={24} />
-            )}
-          </span>
-        </button>
-        <div className="flex-1" />
-        <Suspense fallback={<div className="w-8 h-8 bg-white/10 rounded-lg animate-pulse" />}>
-          <SearchBar />
-        </Suspense>
-        <Link
-          href="/messages"
-          aria-label="消息"
-          data-ripple
-          className="relative rounded-lg p-2 ml-3 text-white hover:bg-white/10 transition-all duration-200 inline-flex"
-        >
-          <MdNotifications size={24} />
-          {totalUnread > 0 && (
-            <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 animate-[control-pop_0.3s_var(--ease-spring)]">
-              {totalUnread > 99 ? '99+' : totalUnread}
+            {/* The header used to carry its own copy of the wordmark and its own
+                copy of the hover — same idea as `Logo.tsx`, drifted to a
+                different width and a keyline the other never had. One component
+                now; `keyline` is the part that was genuinely header-specific. */}
+            <Logo className="h-auto w-25" keyline />
+          </Link>
+          <button
+            ref={themeButtonRef}
+            onClick={cycleThemeMode}
+            aria-label="切换主题模式"
+            title={followSystem ? '跟随系统' : darkMode ? '深色模式' : '浅色模式'}
+            data-ripple
+            className="ml-1 inline-flex h-11 w-11 items-center justify-center rounded-full state-layer text-on-primary transition-ui outline-none focus-visible:ring-2 focus-visible:ring-on-primary/50"
+          >
+            <span
+              ref={themeIconRef}
+              key={followSystem ? 'system' : String(darkMode)}
+              className="block animate-[icon-swap_0.35s_var(--ease-spring)]"
+            >
+              {/* The glyph shows the mode you are *in*, not the one you would
+                switch to — which is what the tooltip beside it already says.
+                It used to show the opposite (a sun while in dark mode), so the
+                icon and its own tooltip disagreed. */}
+              {followSystem ? (
+                <MdBrightnessAuto size={24} />
+              ) : darkMode ? (
+                <MdDarkMode size={24} />
+              ) : (
+                <MdLightMode size={24} />
+              )}
             </span>
-          )}
-        </Link>
-      </header>
+          </button>
+          <div className="flex-1" />
+          <Suspense fallback={<div className="h-11 w-11 rounded-full bg-on-primary/10" />}>
+            <SearchBar />
+          </Suspense>
+          <Link
+            href="/messages"
+            aria-label={totalUnread > 0 ? `消息（${totalUnread} 条未读）` : '消息'}
+            data-ripple
+            className="relative ml-1 inline-flex h-11 w-11 items-center justify-center rounded-full state-layer text-on-primary transition-ui outline-none focus-visible:ring-2 focus-visible:ring-on-primary/50"
+          >
+            <MdNotifications size={24} />
+            {totalUnread > 0 && (
+              <span className="absolute top-1 right-1 bg-error-fill text-on-fill text-label-s-emphasized leading-none tabular-nums min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 animate-[control-pop_0.3s_var(--ease-spring)]">
+                {totalUnread > 99 ? '99+' : totalUnread}
+              </span>
+            )}
+          </Link>
+        </header>
 
-      <div className="flex flex-1 overflow-hidden relative bg-slate-50 dark:bg-slate-900">
-        <div
-          className={`fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 ease-[var(--ease-standard)] ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        <div className="flex flex-1 overflow-hidden relative bg-surface-container-low">
+          {/* Out on `standard` for the same reason the drawer is, and 100ms
+              ahead of it: on `accelerate` the scrim held near-full opacity for
+              most of its 200ms and then cleared all at once, so the dismissal
+              read as the screen blinking rather than as the panel leaving.
+              Letting the light come back first means the drawer's last 13px
+              travel against a restored page, which is what makes it a
+              movement. */}
+          <div
+            ref={scrimRef}
+            className={`fixed inset-0 bg-scrim/50 z-40 md:hidden transition-opacity ${
+              isCollapsed
+                ? 'opacity-0 pointer-events-none duration-200 ease-[var(--ease-standard)]'
+                : 'opacity-100 duration-400 ease-[var(--ease-decelerate)]'
             }`}
-          onClick={() => setIsCollapsed(true)}
-        />
+            onClick={() => setIsCollapsed(true)}
+            aria-hidden="true"
+          />
+          <aside
+            ref={sidebarRef}
+            id="app-sidebar"
+            /* Hidden from assistive tech while closed, so the nav links inside
+               are not reachable by Tab from behind the scrim. */
+            aria-hidden={isCollapsed ? 'true' : undefined}
+            inert={isCollapsed ? true : undefined}
+            /* `width` is not in `transition-ui` — deliberately, since animating it is
+               usually a mistake. Here it is the whole point: the docked desktop
+               drawer collapses by width, the overlay one by transform. Both are
+               named explicitly.
 
-        <aside
-          className={`bg-slate-50 dark:bg-slate-900 flex flex-col shrink-0 transition-all duration-300 ease-[var(--ease-standard)] overflow-hidden absolute md:relative h-full z-50 md:z-auto ${isCollapsed ? '-translate-x-full md:translate-x-0 md:w-0' : 'translate-x-0 w-64'
+               Asymmetric, per the spec's nav-drawer entry: 400ms decelerate on
+               the way in. A symmetric 300ms `standard` in both directions — what
+               this was — makes the drawer dawdle on dismissal, and dismissal is
+               the half the user is waiting on.
+
+               The way out is `standard`, not the `accelerate` the motion table
+               gives a leaving element. That row is written for something small
+               that leaves and is forgotten; this is a 288px container the eye
+               tracks all the way off screen, and `accelerate` ends at its
+               maximum velocity by construction. Measured over 288px at 200ms it
+               moved 15% of its travel in the first 100ms and then cleared the
+               remaining 171px in the last 50 — a 79px jump between frames and a
+               4.75px/ms exit. Lengthening it does not help, because the shape is
+               what is wrong: even at 400ms it still leaves at 2.66px/ms. It read
+               as a cut rather than a movement. `standard` puts the speed where
+               the panel is still visible and lands at 0.02px/ms, so it settles
+               out of frame instead of snapping, and 300ms keeps it shorter than
+               the 400ms entry. The swipe-close already landed softly on its own
+               velocity-scaled `decelerate`; this makes the tap agree with it. */
+            className={`bg-surface-container-low flex flex-col shrink-0 transition-[width,translate] overflow-hidden absolute md:relative h-full z-50 md:z-auto ${
+              isCollapsed
+                ? '-translate-x-full md:translate-x-0 md:w-0 duration-300 ease-[var(--ease-standard)]'
+                : 'translate-x-0 w-72 duration-400 ease-[var(--ease-decelerate)]'
             }`}
-        >
-          <div className="w-64 p-3 pb-0">
-            {userInfo ? (
-              <div className="relative">
-                <div className="w-full flex items-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative z-20">
+          >
+            <div className="main-scrollbar flex w-72 flex-1 flex-col overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="p-3 pb-0">
+                {userInfo ? (
                   <Link
                     href={`/user/${userInfo.id}`}
                     onClick={handleMobileNavigation}
-                    className="flex items-center flex-1 overflow-hidden"
+                    data-ripple
+                    className="state-layer flex w-full items-center gap-3 rounded-md p-2 outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0">
-                      {userInfo.avatar ? (
-                        <div className="relative w-full h-full">
-                          <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-slate-400">
-                            <MdPerson size={24} />
-                          </div>
-                          <FadeInImage
-                            src={userInfo.avatar.startsWith('http') ? userInfo.avatar : `https://picpony.top/${userInfo.avatar}`}
-                            alt={userInfo.username}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
-                          <MdPerson size={24} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="ml-3 overflow-hidden flex-1">
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{userInfo.username}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <p className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium inline-block">
-                          Lv.{userInfo.level ?? '?'}
-                        </p>
+                    <Avatar src={userInfo.avatar} name={userInfo.username} size={44} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-title-s-emphasized text-on-surface truncate">
+                        {userInfo.username}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <span className="text-label-s bg-primary-container text-on-primary-container rounded px-1.5 py-0.5">
+                          Lv.{userInfo.level ?? '?'}{' '}
+                        </span>{' '}
                         {userInfo.derpi_username && (
-                          <span className="text-[10px] text-green-600 dark:text-green-400 truncate max-w-[100px]" title={userInfo.derpi_username}>
-                            ✓ {userInfo.derpi_username}
+                          <span
+                            className="text-label-s text-success max-w-[100px] truncate"
+                            title={userInfo.derpi_username}
+                          >
+                            {' '}
+                            ✓ {userInfo.derpi_username}{' '}
                           </span>
-                        )}
-                      </div>
-                    </div>
+                        )}{' '}
+                      </div>{' '}
+                    </div>{' '}
                   </Link>
-                  <button onClick={toggleUserMenu} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 p-1 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-                    <MdExpandMore
-                      size={20}
-                      className={`transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-                </div>
-
-                <div
-                  className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-[var(--ease-standard)] ${isUserMenuOpen
-                      ? 'grid-rows-[1fr] opacity-100 mt-1 mb-2'
-                      : 'grid-rows-[0fr] opacity-0'
-                    }`}
-                >
-                  <div className="flex min-h-0 flex-col space-y-1 overflow-hidden">
+                ) : (
                   <Link
-                    href="/favorites"
+                    href="/login"
                     onClick={handleMobileNavigation}
                     data-ripple
-                    className={sidebarButtonClass(backgroundPathname === '/favorites')}
+                    className="state-layer group flex items-center gap-3 rounded-md p-2 outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
-                    <MdCollectionsBookmark size={20} className="shrink-0 mr-3" />
-                    <span>我的收藏</span>
+                    {' '}
+                    <span className="bg-surface-container-highest text-on-surface-variant flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
+                      {' '}
+                      <MdPerson size={24} />{' '}
+                    </span>{' '}
+                    <span className="min-w-0">
+                      {' '}
+                      <span className="text-title-s text-on-surface block truncate ">
+                        未登录
+                      </span>{' '}
+                      <span className="text-body-s text-on-surface-variant block truncate">
+                        点击登录
+                      </span>{' '}
+                    </span>{' '}
                   </Link>
-                  <Link
-                    href="/messages"
-                    onClick={handleMobileNavigation}
-                    data-ripple
-                    className={sidebarButtonClass(backgroundPathname === '/messages')}
-                  >
-                    <MdNotifications size={20} className="shrink-0 mr-3" />
-                    <span>消息</span>
-                    {totalUnread > 0 && (
-                      <span className="ml-auto bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
-                        {totalUnread > 99 ? '99+' : totalUnread}
-                      </span>
-                    )}
-                  </Link>
-                  <Link
-                    href="/history"
-                    onClick={handleMobileNavigation}
-                    data-ripple
-                    className={sidebarButtonClass(backgroundPathname === '/history')}
-                  >
-                    <MdHistory size={20} className="shrink-0 mr-3" />
-                    <span>浏览历史</span>
-                  </Link>
-                  <Link
-                    href="/upload"
-                    onClick={handleMobileNavigation}
-                    data-ripple
-                    className={sidebarButtonClass(backgroundPathname === '/upload')}
-                  >
-                    <MdCloudUpload size={20} className="shrink-0 mr-3" />
-                    <span>发布图片</span>
-                  </Link>
-                  <Link
-                    href="/block-groups"
-                    onClick={handleMobileNavigation}
-                    data-ripple
-                    className={sidebarButtonClass(backgroundPathname === '/block-groups')}
-                  >
-                    <MdShield size={20} className="shrink-0 mr-3" />
-                    <span>屏蔽组</span>
-                  </Link>
-                  <Link
-                    href="/tasks"
-                    onClick={handleMobileNavigation}
-                    data-ripple
-                    className={sidebarButtonClass(backgroundPathname === '/tasks')}
-                  >
-                    <MdEmojiEvents size={20} className="shrink-0 mr-3" />
-                    <span>任务</span>
-                  </Link>
-                  <Link
-                    href="/settings"
-                    onClick={handleMobileNavigation}
-                    data-ripple
-                    className={sidebarButtonClass(backgroundPathname === '/settings')}
-                  >
-                    <MdSettings size={20} className="shrink-0 mr-3" />
-                    <span>设置</span>
-                  </Link>
-                  {userInfo && (userInfo.role === 'editor' || userInfo.role === 'admin' || userInfo.role === 'super_admin') && (
-                    <Link
-                      href="/admin"
-                      onClick={handleMobileNavigation}
-                      data-ripple
-                      className={sidebarButtonClass(backgroundPathname.startsWith('/admin'))}
-                    >
-                      <MdDashboard size={20} className="shrink-0 mr-3" />
-                      <span>管理面板</span>
-                    </Link>
-                  )}
-                  <button
-                    onClick={handleLogoutClick}
-                    data-ripple
-                    className={sidebarButtonClass(false)}
-                  >
-                    <MdLogout size={20} className="shrink-0 mr-3" />
-                    <span>登出</span>
-                  </button>
-                  </div>
-                </div>
-                <div className="h-px bg-slate-200 dark:bg-slate-700 mt-2 mx-2"></div>
-              </div>
-            ) : (
-              <Link
-                href="/login"
-                onClick={handleMobileNavigation}
-                className="flex items-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
+                )}{' '}
+              </div>{' '}
+              <div className="bg-outline-variant mx-5 my-3 h-px" />{' '}
+              <SidebarNav
+                user={userInfo}
+                backgroundPathname={backgroundPathname}
+                unread={totalUnread}
+                onNavigate={handleMobileNavigation}
+                onLogout={handleLogoutClick}
+              />{' '}
+            </div>{' '}
+          </aside>{' '}
+          <section
+            data-image-detail-host
+            className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface sm:m-3 sm:rounded-md"
+          >
+            {' '}
+            <div className="relative min-h-0 flex-1">
+              {' '}
+              <main
+                data-image-detail-background
+                data-image-hero-gallery-scroll
+                data-scroll-hidden={isImageDetailOpen || undefined}
+                className="app-scroller main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-surface"
               >
-                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
-                  <MdPerson size={24} />
-                </div>
-                <div className="ml-3 overflow-hidden">
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-primary transition-colors truncate">未登录</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">点击登录</p>
-                </div>
-              </Link>
+                {' '}
+                <div
+                  data-image-detail-background-visual
+                  className="flex min-h-full w-full flex-col"
+                >
+                  {' '}
+                  <div
+                    key={backgroundPathname}
+                    data-page-content
+                    className="animate-page-transition flex flex-1 flex-col p-4 sm:p-6"
+                  >
+                    {' '}
+                    <div className="flex-1">{children}</div>{' '}
+                    {/* Inside the page, not beside it.
+                        As a sibling of `[data-page-content]` the mark was the
+                        one thing a page transition could not move: on a short
+                        page — /search is where you cannot miss it — it sat
+                        perfectly still while the page it belongs to slid out
+                        from under it, and the next page's mark was simply
+                        already there. It used to be given a fade of its own to
+                        cover that, which is why it appeared for an instant,
+                        vanished, and floated back. Inside the page it is
+                        cloned, slid and landed with everything else and needs
+                        no choreography at all. `page-chrome` is left on for the
+                        one move it still cannot join — a tab switch, where the
+                        panes that slide are above it inside the same page. */}
+                    <footer className="page-chrome mt-auto pt-10 text-label-l text-on-surface-variant sm:pt-12">
+                      {' '}
+                      <div className="mx-auto flex max-w-screen-xl flex-col items-center justify-between gap-4 md:flex-row">
+                        {' '}
+                        <div className="flex w-full flex-col items-center gap-4 md:w-auto md:items-start">
+                          {' '}
+                          <Logo className="h-8 w-auto opacity-60" />{' '}
+                          <div>
+                            {' '}
+                            <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>{' '}
+                            <p>本站为 Derpibooru 第三方镜像站点</p>{' '}
+                          </div>{' '}
+                        </div>{' '}
+                      </div>{' '}
+                    </footer>{' '}
+                  </div>{' '}
+                </div>{' '}
+                <div
+                  data-image-hero-gallery-anchor
+                  aria-hidden="true"
+                  className="image-hero-gallery-anchor"
+                />{' '}
+              </main>{' '}
+              <RouteCrossFade pathname={backgroundPathname} enabled={crossFadeEnabled} />
+              <Suspense fallback={null}>
+                {' '}
+                <HeroStage />{' '}
+              </Suspense>{' '}
+              {overlay}{' '}
+            </div>{' '}
+            {backgroundPathname === '/' && (
+              <Suspense fallback={null}>
+                {/* `isImageDetailOpen` alone is not enough: the overlay is torn
+                    down before the hero flies home, so keying off it would pop
+                    the pill back in behind the still-moving image. The hero
+                    runtime reports the flight itself, so the pill returns only
+                    once the gallery is really back. */}
+                <TabNavBar hidden={isImageDetailOpen || Boolean(imageHeroRuntime.background)} />
+              </Suspense>
             )}
-            {!userInfo && <div className="h-px bg-slate-200 dark:bg-slate-700 mt-2 mx-2"></div>}
-          </div>
-          <nav className="flex-1 py-3 w-64 px-3 space-y-1">
-            <Link
-              href="/"
-              onClick={handleMobileNavigation}
-              data-ripple
-              className={sidebarButtonClass(backgroundPathname === '/')}
-            >
-              <MdHome size={20} className="shrink-0 mr-3" />
-              <span>主页</span>
-            </Link>
-          </nav>
-        </aside>
+          </section>
+        </div>
+        <AnnouncementModal />
 
-        <section
-          data-image-detail-host
-          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-slate-950 sm:m-3 sm:rounded-xl"
+        <Modal
+          isOpen={isLogoutDialogOpen}
+          onClose={handleLogoutCancel}
+          title="登出"
+          footer={
+            <>
+              <Button variant="text" type="button" onClick={handleLogoutCancel}>
+                取消
+              </Button>
+              <Button variant="danger" onClick={handleLogoutConfirm}>
+                确认登出
+              </Button>
+            </>
+          }
         >
-          <div className="relative min-h-0 flex-1">
-            <main
-              data-image-detail-background
-              data-image-hero-gallery-scroll
-              className="main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-white dark:bg-slate-950"
-            >
-              <div
-                data-image-detail-background-visual
-                className="flex min-h-full w-full flex-col"
-              >
-                <div
-                  key={backgroundPathname}
-                  className="animate-page-transition flex-1 p-4 sm:p-6"
-                >
-                  {children}
-                </div>
-                <footer className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 sm:px-6 sm:py-8">
-                  <div className="mx-auto flex max-w-screen-xl flex-col items-center justify-between gap-4 md:flex-row">
-                    <div className="flex w-full flex-col items-center gap-4 md:w-auto md:items-start">
-                      <Logo className="h-8 w-auto opacity-60" />
-                      <div>
-                        <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>
-                        <p>本站为 Derpibooru 第三方镜像站点</p>
-                      </div>
-                    </div>
-                  </div>
-                </footer>
-              </div>
-              <div
-                data-image-hero-gallery-anchor
-                aria-hidden="true"
-                className="image-hero-gallery-anchor"
-              />
-            </main>
-            <Suspense fallback={null}>
-              <HeroStage />
-            </Suspense>
-            {overlay}
-          </div>
-          {backgroundPathname === '/' && (
-            <Suspense fallback={null}>
-              <TabNavBar />
-            </Suspense>
-          )}
-        </section>
+          <p className="text-on-surface-variant">确定要登出当前账号吗？</p>
+        </Modal>
       </div>
-      <AnnouncementModal />
-
-      <Modal
-        isOpen={isLogoutDialogOpen}
-        onClose={handleLogoutCancel}
-        title="登出"
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={handleLogoutCancel}
-              data-ripple
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleLogoutConfirm}
-              data-ripple
-              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-            >
-              确认登出
-            </button>
-          </>
-        }
-      >
-        <p className="text-slate-600 dark:text-slate-300">
-          确定要登出当前账号吗？
-        </p>
-      </Modal>
-    </div>
     </BackgroundLocationProvider>
   );
 }

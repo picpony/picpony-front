@@ -1,30 +1,311 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* `lib/tagCategories.ts` composes these by interpolating a hue name, which the
+   source scanner cannot see. Safelisted here rather than as a dummy class list
+   in the module, so the reason lives next to the tokens. */
+@source inline("bg-accent-{red,orange,yellow,green,teal,blue,indigo,purple}");
+@source inline("text-on-accent-{red,orange,yellow,green,teal,blue,indigo,purple}");
+@source inline("bg-on-accent-{red,orange,yellow,green,teal,blue,indigo,purple}");
+
+/* ===========================================================================
+ * Material 3 colour system
+ *
+ * Every tone below is generated from the brand seed #E06C9F by holding its
+ * OKLCH hue (354.33°) and varying lightness across the M3 tone scale, exactly
+ * the way the previous dark-mode brand tone was derived by hand. Chroma per
+ * palette: primary .154 (the seed's own), secondary .048, tertiary .100 at
+ * hue +60°, neutral .006, neutral-variant .016.
+ *
+ * The neutral palette carries that same rose hue at near-zero chroma. That is
+ * the one decision the whole re-skin rests on: the old greys were `slate`,
+ * a blue-tinted ramp (hue ~250°) sitting under a rose brand, and the two
+ * fought each other on every screen. Warm greys make the chrome read as one
+ * material with the logo.
+ *
+ * Regenerate with the OKLCH ramp described above if the seed ever changes;
+ * tones are plain hex here so the browser's own gamut mapping can't drift
+ * the out-of-gamut ends between engines.
+ * ======================================================================== */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --sidebar-text: #334155;
-  --sidebar-hover: #f1f5f9;
-  --card-bg: #ffffff;
-  --card-border: #e2e8f0;
-  --primary: #E06C9F;
+  /* — Primary ————————————————————————————————————————————————————————— */
+  /* The brand pink itself, unchanged, and bright in BOTH modes. M3's own
+     scheme would put tone 50 here in light and tone 80 in dark, which flips a
+     filled button from dark-pink-on-light to pale-pink-on-dark — correct by
+     the spec, wrong for a brand colour, which should read as one constant
+     material. Fills, switches, the app bar and active pills all use this. */
+  --md-sys-color-primary: #e06c9f;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #ffd5e5;
+  --md-sys-color-on-primary-container: #39001e;
+
+  /* — Links ————————————————————————————————————————————————————————————
+     Navigable text gets its own hue rather than the brand rose. Two reasons:
+     rose collides with the accent used for controls, so a link and an active
+     tab looked like the same affordance; and the brand tone is only 3.08:1 on
+     a light surface, under the AA floor for body-sized text.
+
+     This replaces `--md-sys-color-primary-ink`, which had been doing both jobs
+     and neither well — as a link colour it was a muted rose that read as
+     "disabled brand", and as an active-state colour it inverted against the
+     dark scheme. Links are blue in both schemes; controls are pink in both. */
+  --md-sys-color-link: #1d4fd8;
+  --md-sys-color-link-hover: #17389f;
+
+  /* — Secondary / tertiary ———————————————————————————————————————————— */
+  --md-sys-color-secondary: #755360;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #fed6e4;
+  --md-sys-color-on-secondary-container: #2c111d;
+  --md-sys-color-tertiary: #894d1f;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ffdac3;
+  --md-sys-color-on-tertiary-container: #2f1300;
+
+  /* — Surfaces ———————————————————————————————————————————————————————— */
+  /* Five container levels replace the shadow-sm/md/lg/xl mix that used to
+     stand in for depth. Tonal steps survive dark mode; shadows don't. */
+  --md-sys-color-surface: #fdf8f9;
+  --md-sys-color-surface-dim: #ddd8da;
+  --md-sys-color-surface-bright: #fdf8f9;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f7f2f4;
+  --md-sys-color-surface-container: #f1ecee;
+  --md-sys-color-surface-container-high: #ece7e8;
+  --md-sys-color-surface-container-highest: #e6e1e3;
+  --md-sys-color-on-surface: #1e1a1c;
+  --md-sys-color-on-surface-variant: #4e4347;
+  --md-sys-color-outline: #7f7378;
+  --md-sys-color-outline-variant: #d0c2c7;
+  --md-sys-color-inverse-surface: #332f30;
+  --md-sys-color-inverse-on-surface: #f4eff1;
+  --md-sys-color-inverse-primary: #ffa9cb;
+  --md-sys-color-scrim: #000000;
+
+  /* Something that sits *on top of* a filled track and must read as raised:
+     a switch thumb, a segmented-control pill, a slider knob. M3 has no slot
+     for this because the direction flips — in light mode raised means lighter
+     than the track, in dark mode it also means lighter, but the track is
+     already dark. A single surface-container level cannot do both, so this is
+     its own token. */
+  --md-sys-color-surface-raised: #ffffff;
+
+  /* — Semantic ———————————————————————————————————————————————————————— */
+  /* success / warning are not M3 slots; the site needs them, so they are
+     generated the same way rather than left as ad-hoc green-600 / amber-400. */
+  --md-sys-color-error: #a62a2c;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffd8d4;
+  --md-sys-color-on-error-container: #3c0004;
+  --md-sys-color-success: #256f3b;
+  --md-sys-color-on-success: #ffffff;
+  --md-sys-color-success-container: #adf8bc;
+  --md-sys-color-on-success-container: #003c17;
+  --md-sys-color-warning: #7f5400;
+  --md-sys-color-on-warning: #ffffff;
+  --md-sys-color-warning-container: #ffddae;
+  --md-sys-color-on-warning-container: #432b00;
+
+  /* — Semantic *fills* —————————————————————————————————————————————————
+     The roles above are text roles: dark in the light scheme, pale in the dark
+     scheme, so ink stays legible on a neutral surface. That flip is correct for
+     text and wrong for a *graphic* — a progress meter or a vote-ratio bar is
+     nothing but its fill, so `bg-success` gave a near-black-green bar in light
+     mode and a pastel one in dark mode, i.e. the two schemes looked swapped.
+
+     These hold one saturated mid tone in both schemes instead, which is the
+     same treatment `--md-sys-color-primary` already gets and for the same
+     reason. Use them for bars, meters and swatches; keep the roles above for
+     text, icons, and filled buttons that carry an `on-*` label.
+
+     Deliberately *identical* in both schemes — no `.dark` override below. A
+     first pass lifted the dark values a few points "to sit better on a dark
+     surface", which put the light green at L≈0.26 against the dark one at 0.33
+     and still read as a flip. Each value clears 3:1 against both `surface`
+     tones on its own, so one tone serves both and the bar is provably the same
+     colour whichever scheme you are in.
+
+     They double as the fill for *filled semantic buttons* (destructive
+     confirms, batch actions). Those used to be `bg-error text-on-error`, which
+     is textbook M3 and still looked wrong here: `error` is a near-maroon in the
+     light scheme and a pale pink in the dark one, so the delete button in a
+     confirm dialog visibly swapped shade with the theme. */
+  --md-sys-color-success-fill: #218049;
+  --md-sys-color-error-fill: #d1414a;
+  --md-sys-color-warning-fill: #a3630a;
+  /* Neutral-severity fill, for the "here is what happened" toast. M3 would
+     hand that to `inverse-surface`, and this palette cannot: `inverse-surface`
+     is near-black in the light scheme and near-white in the dark one, so the
+     same toast would arrive as a dark chip or a light one depending on the
+     theme — the exact flip the three fills above exist to avoid. */
+  --md-sys-color-info-fill: #1f6feb;
+  /* One ink for all four. Each fill above is tuned so white clears 4.5:1 on
+     it (4.95 / 4.60 / 4.81 / 4.64), which is what lets a filled destructive
+     button and a filled confirm button share a single rule instead of each
+     picking an `on-*` that flips with the scheme. */
+  --md-sys-color-on-fill: #ffffff;
+
+  /* Backdrop for a media editing stage (the cropper). Also scheme-independent:
+     this previously used `inverse-surface`, which is near-black in the light
+     scheme and near-white in the dark one — so the crop stage went from a
+     photo-viewer backdrop to a blank sheet depending on the theme, and the
+     0.62 black mask painted over it stopped reading as a dim at all. */
+  --md-sys-color-media-stage: #191516;
+
+  /* Ink for labels drawn *on top of photography* — a format badge on a
+     thumbnail, a score pill, the caption over the featured banner.
+     Scheme-independent for the same reason `scrim` is: what is behind it is the
+     picture, not the app's surface, so nothing about it should follow the
+     theme. This was 39 hand-typed `text-white` / `bg-black/55` pairs, which is
+     also why a spoiler scrim and the app's own `bg-scrim/50` overlay never
+     quite matched. Pair it with `bg-scrim/NN`. */
+  --md-sys-color-on-media: #ffffff;
+
+  /* — Categorical accents ——————————————————————————————————————————————
+     Derpibooru tag categories (角色 / 种族 / 分级 / 来源 / 官方内容 / 同人内容)
+     and staff roles are a *categorical* dimension, not a semantic one: nothing
+     about 种族 is more successful or more dangerous than 来源, the eight only
+     have to stay apart from each other. M3 has no role for that, so they get
+     their own scale here rather than borrowing error/success/warning — which
+     is what the raw `bg-purple-100 dark:bg-purple-900/30` pairs were doing, and
+     why a 分级 badge and an error badge never looked like the same component.
+     `lib/tagCategories.ts` is the single map from category to hue; nothing else
+     should be picking one of these by hand.
+
+     Written in OKLCH, unlike the rest of the file, because an even hue sweep is
+     the entire point: lightness and chroma are pinned to the same values as the
+     M3 container pairs above, and only `h` moves. In hex that relationship
+     would be invisible and impossible to keep true when one hue is retuned.
+     `on-accent-*` doubles as the standalone ink for that hue — it clears 4.5:1
+     against `surface` as well as against its own container, in both schemes.
+     Contrast within each pair is ~6:1, comfortably past AA for chip text. */
+  --md-sys-color-accent-red: oklch(0.92 0.055 25);
+  --md-sys-color-on-accent-red: oklch(0.36 0.095 25);
+  --md-sys-color-accent-orange: oklch(0.92 0.055 62);
+  --md-sys-color-on-accent-orange: oklch(0.36 0.095 62);
+  --md-sys-color-accent-yellow: oklch(0.92 0.055 100);
+  --md-sys-color-on-accent-yellow: oklch(0.36 0.095 100);
+  --md-sys-color-accent-green: oklch(0.92 0.055 152);
+  --md-sys-color-on-accent-green: oklch(0.36 0.095 152);
+  --md-sys-color-accent-teal: oklch(0.92 0.055 195);
+  --md-sys-color-on-accent-teal: oklch(0.36 0.095 195);
+  --md-sys-color-accent-blue: oklch(0.92 0.055 235);
+  --md-sys-color-on-accent-blue: oklch(0.36 0.095 235);
+  --md-sys-color-accent-indigo: oklch(0.92 0.055 275);
+  --md-sys-color-on-accent-indigo: oklch(0.36 0.095 275);
+  --md-sys-color-accent-purple: oklch(0.92 0.055 315);
+  --md-sys-color-on-accent-purple: oklch(0.36 0.095 315);
+
+  /* — Legacy aliases ————————————————————————————————————————————————— */
+  /* Kept so the pre-migration call sites keep working while pages move over.
+     `--card-bg` / `--card-border` are gone: they were defined in both modes
+     and referenced nowhere. */
+  --background: var(--md-sys-color-surface);
+  --foreground: var(--md-sys-color-on-surface);
+  --sidebar-text: var(--md-sys-color-on-surface-variant);
+  --sidebar-hover: var(--md-sys-color-surface-container-high);
+  --primary: var(--md-sys-color-primary);
 }
 
 .dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --sidebar-text: #cbd5e1;
-  --sidebar-hover: #1e293b;
-  --card-bg: #1e293b;
-  --card-border: #334155;
-  /* Dark-mode brand tone, derived in OKLCH from the light tone: identical hue
-     (354.3°) and chroma, lightness dropped to Material 3 tone ~54. Holding the
-     hue is what keeps it reading as the same brand; a naive HSL darken drifts
-     ~5° toward coral and looks like a different colour. Contrast: 5.2:1 as text
-     on the dark panels, 3.9:1 under white on filled surfaces. */
-  --primary: #CC5A8D;
+  /* Same hue and chroma as the light brand tone, lightness dropped to M3
+     tone ~54. Holding the hue is what keeps it reading as the same brand;
+     a naive HSL darken drifts ~5° toward coral. */
+  --md-sys-color-primary: #cc5a8d;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #7f0c4c;
+  --md-sys-color-on-primary-container: #ffd5e5;
+  /* Text-only accent, lifted well clear of the dark surfaces (8.8:1). */
+  --md-sys-color-link: #9dc0ff;
+  --md-sys-color-link-hover: #c6dbff;
+
+  --md-sys-color-secondary: #e1bac8;
+  --md-sys-color-on-secondary: #432632;
+  --md-sys-color-secondary-container: #5c3c48;
+  --md-sys-color-on-secondary-container: #fed6e4;
+  --md-sys-color-tertiary: #fab588;
+  --md-sys-color-on-tertiary: #4d2300;
+  --md-sys-color-tertiary-container: #6e3500;
+  --md-sys-color-on-tertiary-container: #ffdac3;
+
+  --md-sys-color-surface: #161213;
+  --md-sys-color-surface-dim: #161213;
+  --md-sys-color-surface-bright: #3c3839;
+  --md-sys-color-surface-container-lowest: #100d0e;
+  --md-sys-color-surface-container-low: #1e1a1c;
+  --md-sys-color-surface-container: #221e20;
+  --md-sys-color-surface-container-high: #2d292a;
+  --md-sys-color-surface-container-highest: #373335;
+  --md-sys-color-on-surface: #e6e1e3;
+  --md-sys-color-on-surface-variant: #d0c2c7;
+  --md-sys-color-outline: #998d91;
+  --md-sys-color-outline-variant: #4e4347;
+  --md-sys-color-inverse-surface: #e6e1e3;
+  --md-sys-color-inverse-on-surface: #332f30;
+  --md-sys-color-inverse-primary: #b9497d;
+  --md-sys-color-scrim: #000000;
+
+  /* Lighter than every container level, so a thumb still reads as lifted. */
+  --md-sys-color-surface-raised: #45403f;
+
+  --md-sys-color-error: #ffaea7;
+  --md-sys-color-on-error: #61000a;
+  --md-sys-color-error-container: #890113;
+  --md-sys-color-on-error-container: #ffd8d4;
+  --md-sys-color-success: #91dba1;
+  --md-sys-color-on-success: #003c17;
+  --md-sys-color-success-container: #005624;
+  --md-sys-color-on-success-container: #adf8bc;
+  --md-sys-color-warning: #f8ba5e;
+  --md-sys-color-on-warning: #432b00;
+  --md-sys-color-warning-container: #613f00;
+  --md-sys-color-on-warning-container: #ffddae;
+
+  /* Same eight hues, lightness swapped for the dark scheme. */
+  --md-sys-color-accent-red: oklch(0.37 0.075 25);
+  --md-sys-color-on-accent-red: oklch(0.89 0.075 25);
+  --md-sys-color-accent-orange: oklch(0.37 0.075 62);
+  --md-sys-color-on-accent-orange: oklch(0.89 0.075 62);
+  --md-sys-color-accent-yellow: oklch(0.37 0.075 100);
+  --md-sys-color-on-accent-yellow: oklch(0.89 0.075 100);
+  --md-sys-color-accent-green: oklch(0.37 0.075 152);
+  --md-sys-color-on-accent-green: oklch(0.89 0.075 152);
+  --md-sys-color-accent-teal: oklch(0.37 0.075 195);
+  --md-sys-color-on-accent-teal: oklch(0.89 0.075 195);
+  --md-sys-color-accent-blue: oklch(0.37 0.075 235);
+  --md-sys-color-on-accent-blue: oklch(0.89 0.075 235);
+  --md-sys-color-accent-indigo: oklch(0.37 0.075 275);
+  --md-sys-color-on-accent-indigo: oklch(0.89 0.075 275);
+  --md-sys-color-accent-purple: oklch(0.37 0.075 315);
+  --md-sys-color-on-accent-purple: oklch(0.89 0.075 315);
+}
+
+/* State-layer opacities — M3 draws hover/focus/press as a tinted overlay at a
+   fixed alpha rather than as a hand-picked colour per component, which is what
+   the scattered `hover:bg-primary/10` pairs were approximating. */
+:root {
+  --md-sys-state-hover-opacity: 0.08;
+  --md-sys-state-focus-opacity: 0.1;
+  --md-sys-state-pressed-opacity: 0.12;
+  --md-sys-state-dragged-opacity: 0.16;
+
+  /* Elevation. Two-layer shadows per M3; in dark mode the tonal surface steps
+     carry most of the depth, so the shadows soften rather than darken. */
+  --md-sys-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 1px rgb(0 0 0 / 0.06);
+  --md-sys-elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.06), 0 2px 6px 2px rgb(0 0 0 / 0.08);
+  --md-sys-elevation-3: 0 4px 8px 3px rgb(0 0 0 / 0.08), 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --md-sys-elevation-4: 0 6px 10px 4px rgb(0 0 0 / 0.09), 0 2px 3px 0 rgb(0 0 0 / 0.1);
+  --md-sys-elevation-5: 0 8px 12px 6px rgb(0 0 0 / 0.1), 0 4px 4px 0 rgb(0 0 0 / 0.12);
+}
+
+.dark {
+  --md-sys-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 1px rgb(0 0 0 / 0.2);
+  --md-sys-elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 2px 6px 2px rgb(0 0 0 / 0.25);
+  --md-sys-elevation-3: 0 4px 8px 3px rgb(0 0 0 / 0.28), 0 1px 3px 0 rgb(0 0 0 / 0.4);
+  --md-sys-elevation-4: 0 6px 10px 4px rgb(0 0 0 / 0.3), 0 2px 3px 0 rgb(0 0 0 / 0.4);
+  --md-sys-elevation-5: 0 8px 12px 6px rgb(0 0 0 / 0.32), 0 4px 4px 0 rgb(0 0 0 / 0.45);
 }
 
 .bbcode-content,
@@ -32,56 +313,74 @@
   color: inherit;
 }
 
+/* Rendered content links read the same token as every other link on the site;
+   the scheme switch lives in the token, so the `.dark` overrides that used to
+   sit here are gone. */
 .bbcode-content a,
 .rich-text-content a {
-  color: #2563eb;
+  color: var(--md-sys-color-link);
+  text-underline-offset: 2px;
 }
 
 .bbcode-content a:hover,
 .rich-text-content a:hover {
-  color: #1d4ed8;
+  color: var(--md-sys-color-link-hover);
+  text-decoration: underline;
 }
 
-.dark .bbcode-content a,
-.dark .rich-text-content a {
-  color: #60a5fa;
+/* User-supplied media in rendered post and reply bodies.
+ *
+ * These are arbitrary uploads — measured on one thread: 1648x5684, 3000x4500,
+ * 1756x2048. Constrained only by `max-width: 100%`, a portrait image becomes a
+ * 2676px-tall column that the reader has to scroll past to reach the next
+ * reply, and a thread of eight replies ran to 10768px. That is the "big blank
+ * stretches" in both the post body and the replies: not empty space, one
+ * picture per screenful.
+ *
+ * Capping the height instead of the width keeps the aspect ratio (both `auto`,
+ * so the box fits inside whichever limit binds first) and leaves small art —
+ * emotes, 256px stickers — at its own size, since a max only ever shrinks.
+ * `min()` so it is a fraction of a tall window but never grows unbounded on a
+ * desktop monitor. */
+.bbcode-content :is(img, video),
+.rich-text-content :is(img, video) {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(60vh, 26rem);
+  margin: 0.75rem 0;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
 }
 
-.dark .bbcode-content a:hover,
-.dark .rich-text-content a:hover {
-  color: #93c5fd;
+.bbcode-content > :first-child,
+.rich-text-content > :first-child {
+  margin-top: 0;
+}
+
+.bbcode-content > :last-child,
+.rich-text-content > :last-child {
+  margin-bottom: 0;
 }
 
 .bbcode-content blockquote,
 .rich-text-content blockquote {
-  border-left: 3px solid #cbd5e1;
+  border-left: 3px solid var(--md-sys-color-outline-variant);
   padding-left: 0.75rem;
   margin: 0.5rem 0;
-  color: #64748b;
-}
-
-.dark .bbcode-content blockquote,
-.dark .rich-text-content blockquote {
-  border-left-color: #475569;
-  color: #94a3b8;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .bbcode-content pre,
 .bbcode-content code,
 .rich-text-content pre,
 .rich-text-content code {
-  background-color: #f1f5f9;
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
   border-radius: 0.375rem;
   padding: 0.125rem 0.375rem;
   font-size: 0.875em;
-}
-
-.dark .bbcode-content pre,
-.dark .bbcode-content code,
-.dark .rich-text-content pre,
-.dark .rich-text-content code {
-  background-color: #1e293b;
-  color: #e2e8f0;
 }
 
 .bbcode-content pre,
@@ -91,26 +390,346 @@
 }
 
 @theme inline {
+  /* — Colour utilities ——————————————————————————————————————————————— */
+  --color-primary: var(--md-sys-color-primary);
+  --color-on-primary: var(--md-sys-color-on-primary);
+  --color-primary-container: var(--md-sys-color-primary-container);
+  --color-on-primary-container: var(--md-sys-color-on-primary-container);
+  --color-link: var(--md-sys-color-link);
+  --color-link-hover: var(--md-sys-color-link-hover);
+  --color-secondary: var(--md-sys-color-secondary);
+  --color-on-secondary: var(--md-sys-color-on-secondary);
+  --color-secondary-container: var(--md-sys-color-secondary-container);
+  --color-on-secondary-container: var(--md-sys-color-on-secondary-container);
+  --color-tertiary: var(--md-sys-color-tertiary);
+  --color-on-tertiary: var(--md-sys-color-on-tertiary);
+  --color-tertiary-container: var(--md-sys-color-tertiary-container);
+  --color-on-tertiary-container: var(--md-sys-color-on-tertiary-container);
+
+  --color-surface: var(--md-sys-color-surface);
+  --color-surface-dim: var(--md-sys-color-surface-dim);
+  --color-surface-bright: var(--md-sys-color-surface-bright);
+  --color-surface-container-lowest: var(--md-sys-color-surface-container-lowest);
+  --color-surface-container-low: var(--md-sys-color-surface-container-low);
+  --color-surface-container: var(--md-sys-color-surface-container);
+  --color-surface-container-high: var(--md-sys-color-surface-container-high);
+  --color-surface-container-highest: var(--md-sys-color-surface-container-highest);
+  --color-on-surface: var(--md-sys-color-on-surface);
+  --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
+  --color-outline: var(--md-sys-color-outline);
+  --color-outline-variant: var(--md-sys-color-outline-variant);
+  --color-inverse-surface: var(--md-sys-color-inverse-surface);
+  --color-inverse-on-surface: var(--md-sys-color-inverse-on-surface);
+  --color-inverse-primary: var(--md-sys-color-inverse-primary);
+  --color-scrim: var(--md-sys-color-scrim);
+  --color-surface-raised: var(--md-sys-color-surface-raised);
+
+  --color-error: var(--md-sys-color-error);
+  --color-on-error: var(--md-sys-color-on-error);
+  --color-error-container: var(--md-sys-color-error-container);
+  --color-on-error-container: var(--md-sys-color-on-error-container);
+  --color-success: var(--md-sys-color-success);
+  --color-on-success: var(--md-sys-color-on-success);
+  --color-success-container: var(--md-sys-color-success-container);
+  --color-on-success-container: var(--md-sys-color-on-success-container);
+  --color-warning: var(--md-sys-color-warning);
+  --color-on-warning: var(--md-sys-color-on-warning);
+  --color-warning-container: var(--md-sys-color-warning-container);
+  --color-on-warning-container: var(--md-sys-color-on-warning-container);
+  --color-success-fill: var(--md-sys-color-success-fill);
+  --color-error-fill: var(--md-sys-color-error-fill);
+  --color-warning-fill: var(--md-sys-color-warning-fill);
+  --color-info-fill: var(--md-sys-color-info-fill);
+  --color-on-fill: var(--md-sys-color-on-fill);
+  --color-media-stage: var(--md-sys-color-media-stage);
+  --color-on-media: var(--md-sys-color-on-media);
+
+  /* Categorical, not semantic — see the accent block above before reaching for
+     one of these. `bg-accent-blue text-on-accent-blue` is the whole API. */
+  --color-accent-red: var(--md-sys-color-accent-red);
+  --color-on-accent-red: var(--md-sys-color-on-accent-red);
+  --color-accent-orange: var(--md-sys-color-accent-orange);
+  --color-on-accent-orange: var(--md-sys-color-on-accent-orange);
+  --color-accent-yellow: var(--md-sys-color-accent-yellow);
+  --color-on-accent-yellow: var(--md-sys-color-on-accent-yellow);
+  --color-accent-green: var(--md-sys-color-accent-green);
+  --color-on-accent-green: var(--md-sys-color-on-accent-green);
+  --color-accent-teal: var(--md-sys-color-accent-teal);
+  --color-on-accent-teal: var(--md-sys-color-on-accent-teal);
+  --color-accent-blue: var(--md-sys-color-accent-blue);
+  --color-on-accent-blue: var(--md-sys-color-on-accent-blue);
+  --color-accent-indigo: var(--md-sys-color-accent-indigo);
+  --color-on-accent-indigo: var(--md-sys-color-on-accent-indigo);
+  --color-accent-purple: var(--md-sys-color-accent-purple);
+  --color-on-accent-purple: var(--md-sys-color-on-accent-purple);
+
+  /* Legacy aliases — still referenced until every page has migrated. */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  /* — Type ——————————————————————————————————————————————————————————— */
+  /* Latin resolves in Geist; CJK glyphs miss there and fall through to Noto
+     Sans SC. Ordering the stack this way is what keeps English looking like
+     Geist without shipping a second Latin face. */
+  --font-sans:
+    var(--font-geist-sans), var(--font-noto-sc), 'PingFang SC', 'HarmonyOS Sans SC',
+    'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+  --font-mono: var(--font-geist-mono), 'Noto Sans Mono CJK SC', monospace;
+
+  /* The M3 baseline type scale, verbatim: size, line-height, weight and
+     tracking are the spec values for all fifteen roles.
+
+     Two deliberate divergences, both for Chinese:
+
+     1. Body line-heights run 1.6–1.75 instead of the spec's 1.33–1.5. CJK
+        glyphs fill the full em box, so the spec's leading — comfortable for
+        Latin, which has ascenders and descenders to breathe into — reads as
+        solid blocks of characters. Display, headline, title and label roles
+        stay on-spec: they are one or two lines, where the argument does not
+        apply, and loosening them detached headings from their own text.
+
+     2. Tracking is halved from the spec on body and label roles. M3's positive
+        tracking opens up Latin at small sizes; applied at full strength to Han
+        characters it reads as forced letter-spacing. Display keeps the spec's
+        negative tracking exactly, since those are almost always Latin numerals
+        or the wordmark. */
+  --text-display-l: 3.5625rem;
+  --text-display-l--line-height: 1.1228;
+  --text-display-l--letter-spacing: -0.25px;
+  --text-display-m: 2.8125rem;
+  --text-display-m--line-height: 1.1556;
+  --text-display-m--letter-spacing: 0;
+  --text-display-s: 2.25rem;
+  --text-display-s--line-height: 1.2222;
+  --text-display-s--letter-spacing: 0;
+  --text-headline-l: 2rem;
+  --text-headline-l--line-height: 1.25;
+  --text-headline-l--letter-spacing: 0;
+  --text-headline-m: 1.75rem;
+  --text-headline-m--line-height: 1.2857;
+  --text-headline-m--letter-spacing: 0;
+  --text-headline-s: 1.5rem;
+  --text-headline-s--line-height: 1.3333;
+  --text-headline-s--letter-spacing: 0;
+  --text-title-l: 1.375rem;
+  --text-title-l--line-height: 1.2727;
+  --text-title-l--letter-spacing: 0;
+  --text-title-m: 1rem;
+  --text-title-m--line-height: 1.5;
+  --text-title-m--letter-spacing: 0.075px;
+  --text-title-m--font-weight: 500;
+  --text-title-s: 0.875rem;
+  --text-title-s--line-height: 1.4286;
+  --text-title-s--letter-spacing: 0.05px;
+  --text-title-s--font-weight: 500;
+  --text-body-l: 1rem;
+  --text-body-l--line-height: 1.75;
+  --text-body-l--letter-spacing: 0.25px;
+  --text-body-m: 0.875rem;
+  --text-body-m--line-height: 1.65;
+  --text-body-m--letter-spacing: 0.125px;
+  --text-body-s: 0.75rem;
+  --text-body-s--line-height: 1.6;
+  --text-body-s--letter-spacing: 0.2px;
+  --text-label-l: 0.875rem;
+  --text-label-l--line-height: 1.4286;
+  --text-label-l--letter-spacing: 0.05px;
+  --text-label-l--font-weight: 500;
+  --text-label-m: 0.75rem;
+  --text-label-m--line-height: 1.3333;
+  --text-label-m--letter-spacing: 0.25px;
+  --text-label-m--font-weight: 500;
+  --text-label-s: 0.6875rem;
+  --text-label-s--line-height: 1.4545;
+  --text-label-s--letter-spacing: 0.25px;
+  --text-label-s--font-weight: 500;
+
+  /* The emphasized half of the scale. M3 pairs every role with a heavier twin
+     for the one line in a block that has to carry more weight — a section
+     heading among its rows, the active item in a list, a stat next to its
+     label. Roles that sit at 400 emphasize to 500; roles already at 500
+     emphasize to 700.
+
+     These exist so that emphasis is a *role*, not a patch. 62 call sites were
+     stacking `font-bold` / `font-semibold` on top of a role that already
+     defined a weight, which silently overrode the token and left the same kind
+     of heading rendering at 600 on one page and 700 on the next.
+
+     Headings are the exception and do not need these: `@layer base` below gives
+     h1–h6 their own weights, so an `<h2 class="text-headline-s">` is already
+     emphasized by virtue of being an h2. */
+  --text-display-l-emphasized: 3.5625rem;
+  --text-display-l-emphasized--line-height: 1.1228;
+  --text-display-l-emphasized--letter-spacing: -0.25px;
+  --text-display-l-emphasized--font-weight: 500;
+  --text-display-m-emphasized: 2.8125rem;
+  --text-display-m-emphasized--line-height: 1.1556;
+  --text-display-m-emphasized--letter-spacing: 0;
+  --text-display-m-emphasized--font-weight: 500;
+  --text-display-s-emphasized: 2.25rem;
+  --text-display-s-emphasized--line-height: 1.2222;
+  --text-display-s-emphasized--letter-spacing: 0;
+  --text-display-s-emphasized--font-weight: 500;
+  --text-headline-l-emphasized: 2rem;
+  --text-headline-l-emphasized--line-height: 1.25;
+  --text-headline-l-emphasized--letter-spacing: 0;
+  --text-headline-l-emphasized--font-weight: 500;
+  --text-headline-m-emphasized: 1.75rem;
+  --text-headline-m-emphasized--line-height: 1.2857;
+  --text-headline-m-emphasized--letter-spacing: 0;
+  --text-headline-m-emphasized--font-weight: 500;
+  --text-headline-s-emphasized: 1.5rem;
+  --text-headline-s-emphasized--line-height: 1.3333;
+  --text-headline-s-emphasized--letter-spacing: 0;
+  --text-headline-s-emphasized--font-weight: 500;
+  --text-title-l-emphasized: 1.375rem;
+  --text-title-l-emphasized--line-height: 1.2727;
+  --text-title-l-emphasized--letter-spacing: 0;
+  --text-title-l-emphasized--font-weight: 500;
+  --text-title-m-emphasized: 1rem;
+  --text-title-m-emphasized--line-height: 1.5;
+  --text-title-m-emphasized--letter-spacing: 0.075px;
+  --text-title-m-emphasized--font-weight: 700;
+  --text-title-s-emphasized: 0.875rem;
+  --text-title-s-emphasized--line-height: 1.4286;
+  --text-title-s-emphasized--letter-spacing: 0.05px;
+  --text-title-s-emphasized--font-weight: 700;
+  --text-body-l-emphasized: 1rem;
+  --text-body-l-emphasized--line-height: 1.75;
+  --text-body-l-emphasized--letter-spacing: 0.25px;
+  --text-body-l-emphasized--font-weight: 500;
+  --text-body-m-emphasized: 0.875rem;
+  --text-body-m-emphasized--line-height: 1.65;
+  --text-body-m-emphasized--letter-spacing: 0.125px;
+  --text-body-m-emphasized--font-weight: 500;
+  --text-body-s-emphasized: 0.75rem;
+  --text-body-s-emphasized--line-height: 1.6;
+  --text-body-s-emphasized--letter-spacing: 0.2px;
+  --text-body-s-emphasized--font-weight: 500;
+  --text-label-l-emphasized: 0.875rem;
+  --text-label-l-emphasized--line-height: 1.4286;
+  --text-label-l-emphasized--letter-spacing: 0.05px;
+  --text-label-l-emphasized--font-weight: 700;
+  --text-label-m-emphasized: 0.75rem;
+  --text-label-m-emphasized--line-height: 1.3333;
+  --text-label-m-emphasized--letter-spacing: 0.25px;
+  --text-label-m-emphasized--font-weight: 700;
+  --text-label-s-emphasized: 0.6875rem;
+  --text-label-s-emphasized--line-height: 1.4545;
+  --text-label-s-emphasized--letter-spacing: 0.25px;
+  --text-label-s-emphasized--font-weight: 700;
+
+  /* — Shape ——————————————————————————————————————————————————————————— */
+  /* The M3 shape scale, shifted one step up from Tailwind's defaults so the
+     314 existing `rounded-lg` call sites land on M3 medium (16px) instead of
+     8px. Softer corners suit an art gallery, and it makes the scale uniform
+     without editing every call site.
+     NOTE: `lib/hero/constants.ts` HERO_TARGET_RADIUS_PX must equal --radius-lg
+     in px — the flyer morphs its corner to that value on landing.
+
+     The role → step mapping is fixed; do not pick a step by eye:
+
+       rounded-full  Button / Chip / FAB / avatar / circular icon button
+       rounded-md    Card, grouped-list block, section surface     (12dp)
+       rounded-sm    Text field, Select menu, small tag             (8dp)
+       rounded-2xl   Dialog, bottom sheet, large media container   (28dp)
+       rounded-lg    Gallery thumbnail / grid tile                 (16dp,
+                     pinned to HERO_TARGET_RADIUS_PX — see above)
+
+     `--radius` is the bare `rounded` utility. It was never defined, so 100+
+     call sites silently fell through to Tailwind's built-in 4px and would not
+     have followed the scale if any of it moved. */
+  --radius: 0.25rem; /* 4, == --radius-xs */
+  --radius-xs: 0.25rem; /* 4  */
+  --radius-sm: 0.5rem; /* 8  */
+  --radius-md: 0.75rem; /* 12 */
+  --radius-lg: 1rem; /* 16 */
+  --radius-xl: 1.25rem; /* 20 */
+  --radius-2xl: 1.75rem; /* 28 */
+  --radius-3xl: 2.25rem; /* 36 */
+
+  /* — Elevation utilities ————————————————————————————————————————————— */
+  --shadow-e1: var(--md-sys-elevation-1);
+  --shadow-e2: var(--md-sys-elevation-2);
+  --shadow-e3: var(--md-sys-elevation-3);
+  --shadow-e4: var(--md-sys-elevation-4);
+  --shadow-e5: var(--md-sys-elevation-5);
 
   /* Material 3 motion curves — mirrored in lib/motion.ts for GSAP. */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Matches GSAP's `back.out(1.55)` in lib/motion.ts. The previous value
+     (0.34, 1.56, 0.64, 1) overshot on a different curve, so scripted and
+     declarative springs did not settle alike. */
+  --ease-spring: cubic-bezier(0.18, 1.36, 0.5, 1);
+  /* M3's emphasized curve is two cubic segments, not one, so it has no
+     `cubic-bezier()` form — the pair below were aliases of `standard` and
+     `decelerate`, which quietly made "emphasized" mean nothing. This is the
+     spec path
+       M 0,0 C 0.05,0 0.133333,0.06 0.166666,0.4 C 0.208333,0.82 0.25,1 1,1
+     sampled at 24 points. It hangs back, snaps through the middle at two and a
+     half times `standard`'s peak speed, then takes a long tail into rest —
+     which is the whole difference between a page that slides and a page that is
+     thrown. Mirrored in lib/motion.ts, where GSAP takes the path directly. */
+  --ease-emphasized: linear(
+    0 0%,
+    0.0141 4.167%,
+    0.0616 8.333%,
+    0.1622 12.5%,
+    0.4 16.67%,
+    0.6686 20.83%,
+    0.7728 25%,
+    0.8315 29.17%,
+    0.8706 33.33%,
+    0.8989 37.5%,
+    0.9204 41.67%,
+    0.9372 45.83%,
+    0.9506 50%,
+    0.9614 54.17%,
+    0.9701 58.33%,
+    0.9773 62.5%,
+    0.983 66.67%,
+    0.9877 70.83%,
+    0.9914 75%,
+    0.9943 79.17%,
+    0.9965 83.33%,
+    0.9981 87.5%,
+    0.9992 91.67%,
+    0.9998 95.83%,
+    1 100%
+  );
+  /* These two the spec does give as single cubics, and they match the
+     decelerate/accelerate pair above by definition. */
+  --ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  /* What a bare `transition-opacity` / `transition-transform` gets when the call
+     site names no curve. Tailwind's own default is Material *2*'s
+     cubic-bezier(0.4, 0, 0.2, 1) at 150ms — symmetric, and slower off the mark
+     than anything else here, so an un-eased utility read visibly limper than the
+     tokens beside it. Re-pointing the default means a forgotten `ease-[…]` now
+     degrades to the right curve instead of the wrong one. */
+  --default-transition-timing-function: var(--ease-standard);
+  --default-transition-duration: 200ms;
 
   --animate-fade-in: fadeIn 0.3s var(--ease-decelerate) forwards;
-  --animate-page-transition: pageIn 0.4s var(--ease-decelerate) forwards;
+  /* `0.08s both`, not `forwards`. The backwards fill holds the incoming page at
+     opacity 0 for the first 80ms, which is what lets the outgoing clone's own
+     fade (0–120ms, see lib/routeCrossFade.ts) genuinely overlap it instead of
+     merely abutting it. Total is still 400ms door to door. */
+  --animate-page-transition: pageIn 0.32s var(--ease-decelerate) 0.08s both;
   --animate-pop-in: popIn 0.22s var(--ease-decelerate) forwards;
-  --animate-modal-overlay: modalOverlay 0.25s var(--ease-decelerate) forwards;
-  --animate-modal-content: modalContent 0.32s var(--ease-decelerate) forwards;
-  --animate-modal-overlay-out: modalOverlayOut 0.18s var(--ease-accelerate) forwards;
-  --animate-modal-content-out: modalContentOut 0.18s var(--ease-accelerate) forwards;
-
+  /* Durations are the M3 scale, paired as the spec prescribes: something
+     entering the screen uses medium-4 (400ms) with emphasized-decelerate,
+     something leaving uses short-4 (200ms) with emphasized-accelerate. The
+     overlay scrim is a utility fade, so it takes medium-2 (300ms) in and
+     short-4 out. These were 250/320/180 — close enough to look right and
+     wrong enough that nothing in the app shared a timing. */
+  --animate-modal-overlay: modalOverlay 0.3s var(--ease-decelerate) forwards;
+  --animate-modal-content: modalContent 0.4s var(--ease-decelerate) forwards;
+  --animate-modal-overlay-out: modalOverlayOut 0.2s var(--ease-accelerate) forwards;
+  --animate-modal-content-out: modalContentOut 0.2s var(--ease-accelerate) forwards;
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -187,6 +806,150 @@
 
 /* --- Motion primitives --------------------------------------------------- */
 
+/* The wordmark, as a mask.
+ *
+ * There used to be two copies of the artwork — `picpony-b.svg` (black) and
+ * `picpony-w.svg` (white) — swapped by a `dark:` variant, and that swap was the
+ * one place in the app allowed to use `dark:` at all. Painting the redrawn mark
+ * through a mask retires it: the glyph is alpha, the colour is `currentColor`,
+ * and every context gets the value its own text role already carries. Pink
+ * header, tonal sidebar, surface footer, light scheme and dark, all from one
+ * file and no second tint to keep in step.
+ *
+ * `aspect-ratio` is what keeps `h-8 w-auto` and `w-32 h-auto` working: a masked
+ * box has no intrinsic size the way an `<img>` does, so without it one axis
+ * resolves to zero. The figure is the source viewBox.
+ */
+.logo-mask {
+  display: block;
+  aspect-ratio: 2851.534 / 1001.036;
+  background-color: currentColor;
+  -webkit-mask: url('/img/picpony-g.svg') no-repeat center / contain;
+  mask: url('/img/picpony-g.svg') no-repeat center / contain;
+}
+
+/* The colour mark that draws itself on over the base. Its own opacity is
+   animated rather than the base's, so the base never leaves — there is no
+   frame where the wordmark is absent. Leaves on the exit curve, which is why
+   pulling away is quick where arriving is not.
+
+   The base and the trace are now the SAME drawing, which is the only thing
+   that ever made this align. `picpony-g.svg` is generated: it is the Lottie's
+   own final frame, flattened to one colour (a mask reads only alpha) and with
+   its viewBox cropped so the ink keeps the position and size the hand-drawn
+   asset had, so nothing on screen moved.
+
+   That matters because the two used to be different files — the redrawn
+   wordmark and the animation export — and a hill climb over (scale, dx, dy)
+   maximising per-pixel overlap topped out at 0.890. Freeing the aspect ratio
+   as a fourth degree of freedom only reached 0.903. Rendering the difference
+   showed why: base-only ink on the left of nearly every stroke and trace-only
+   ink on the right, with the per-band drift swinging -2.8px to +1.7px across
+   the mark. That is per-glyph divergence between two drawings, and no affine
+   transform closes it — only generating one from the other, which is what
+   this now does. Overlap is 0.9986 (0.857 -> 0.890 -> 0.9986), and the
+   remainder is antialiasing on the measuring raster, not placement.
+
+   The numbers below therefore follow analytically from that crop rather than
+   from a search: the trace lays the full 3000x1053 artboard over a mask box
+   that is the 2851.534x1001.036 window into it.
+
+   `margin-left`/`margin-top` are both percentages of the *width* — that is how
+   percentage margins resolve on either axis — so the vertical one is not a
+   fraction of the height.
+
+   `aspect-ratio` matches the Lottie composition rather than the mask, so the
+   player's own `preserveAspectRatio` letterboxing is a no-op. */
+.logo-trace {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 105.2065%;
+  aspect-ratio: 3000 / 1053;
+  margin-left: -2.6238%;
+  margin-top: -0.2314%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease-accelerate);
+}
+
+.logo-trace[data-shown] {
+  opacity: 1;
+  transition: opacity 120ms var(--ease-decelerate);
+}
+
+/* The hairline that keeps the colour mark legible where its own hues sit close
+ * to what is behind it — the pink brand bar, mainly. The header is the only
+ * caller; see `keyline` in `Logo.tsx`.
+ *
+ * A class rather than an inline `filter` assembled at the call site, because it
+ * was the same four strings typed into a component prop.
+ *
+ * Chained `drop-shadow`s **compound**: each dilates the previous one's output,
+ * so the total reach is the sum of every offset, not the largest of them. Four
+ * at +/-d on the two axes therefore dilate by a d-radius square — and adding
+ * four diagonals on top does not make that rounder, it makes it half again as
+ * thick. Measured at 0.5px + 0.35px: a ~1.2px blob that swallowed the counter
+ * of the P and closed the gap inside the o.
+ *
+ * So: four, and exactly one *device* pixel each.
+ *
+ * The offset has to be a whole device pixel or the outline cannot be even. A
+ * zero-blur `drop-shadow` is a hard-edged copy, and at a fractional offset each
+ * of the four is resampled at a different subpixel phase — so an edge pixel
+ * picks up coverage from one copy, or two, or three, and the line visibly
+ * thickens and thins along every curve. That is the aliasing on a 1x screen: at
+ * the previous flat 0.6px there was no scale factor at which all four landed on
+ * the grid, and 1x is where a wrong pixel has no neighbour to hide behind.
+ * Pinned to the device grid the copies share the source's own phase, so the
+ * result is the mark dilated by exactly one pixel, evenly, at every scale.
+ *
+ * Ordered so the unqualified value is the retina one: a browser that does not
+ * understand `resolution` still gets 0.5px rather than a 1x-sized line blown up
+ * to double width. */
+.logo-keyline {
+  --logo-keyline: 0.5px;
+  filter: drop-shadow(var(--logo-keyline) 0 0 currentColor)
+    drop-shadow(calc(-1 * var(--logo-keyline)) 0 0 currentColor)
+    drop-shadow(0 var(--logo-keyline) 0 currentColor)
+    drop-shadow(0 calc(-1 * var(--logo-keyline)) 0 currentColor);
+}
+
+@media (max-resolution: 1.5dppx) {
+  .logo-keyline {
+    --logo-keyline: 1px;
+  }
+}
+
+@media (min-resolution: 2.5dppx) {
+  .logo-keyline {
+    --logo-keyline: 0.3334px;
+  }
+}
+
+/* Once the splash's trace has finished drawing it is opaque and permanent, so
+ * the base under it has no job left — and leaving it there is not free. Two
+ * independently antialiased renderings of the same path do not cancel at the
+ * rim: the trace's partial-alpha edge lets the base's grey through as a halo
+ * down the right and bottom of every letter, which reads as the two layers
+ * being out of register. They are not. Rendering the difference shows a single
+ * pixel of red/blue that alternates along the *same* edge — the signature of
+ * antialiasing, not of an offset — so there is nothing to nudge, and the fix is
+ * to stop stacking.
+ *
+ * The hover cut keeps its base: that trace is temporary and has to fade back
+ * out, and there must be no frame in which the wordmark is missing. */
+.logo-intro:has(.logo-trace[data-settled]) .logo-mask {
+  opacity: 0;
+  transition: opacity 200ms var(--ease-standard);
+}
+
+.logo-trace svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 /* Text controls settle into focus rather than snapping. Only properties that
    the utility classes already set are transitioned, so this never fights a
    component's own styling. */
@@ -232,25 +995,6 @@ textarea {
   to {
     transform: none;
     opacity: 1;
-  }
-}
-
-@keyframes shake {
-  0%,
-  100% {
-    transform: none;
-  }
-  20% {
-    transform: translateX(-7px);
-  }
-  40% {
-    transform: translateX(6px);
-  }
-  60% {
-    transform: translateX(-4px);
-  }
-  80% {
-    transform: translateX(2px);
   }
 }
 
@@ -306,18 +1050,6 @@ textarea {
   to {
     opacity: 0;
     transform: translateY(4px) scale(0.96);
-  }
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    opacity: 0.08;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.16;
-    transform: scale(1.04);
   }
 }
 
@@ -391,15 +1123,138 @@ html[data-theme-vt]::view-transition-new(root) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Everything decorative collapses to a cut. Enumerated rather than a blanket
+     `* { animation: none }` because the hero flight and the theme wipe already
+     branch on this preference in JS, and a global override would fight them. */
   .animate-page-transition,
   .animate-fade-in,
-  .animate-pop-in {
+  .animate-pop-in,
+  .animate-modal-overlay,
+  .animate-modal-content,
+  .animate-modal-overlay-out,
+  .animate-modal-content-out,
+  .emoji-picker-animate-in,
+  .emoji-picker-animate-out {
     animation-duration: 1ms !important;
+  }
+
+  /* Continuous loops: a spinner still has to read as "busy", so it slows down
+     rather than stopping. Purely ambient loops stop outright. */
+  .animate-spin {
+    animation-duration: 2.4s !important;
+  }
+
+  [class*='animate-[dot-bounce'],
+  [class*='animate-[star-burst'],
+  [class*='animate-[control-pop'],
+  [class*='animate-[icon-swap'],
+  [class*='animate-[bar-grow'] {
+    animation: none !important;
   }
 
   .ripple,
   .skeleton::after {
     display: none;
+  }
+
+  /* `playSharedAxis` returns before it ever flags a transit under this
+     preference, so the chrome simply never leaves — but the plain route
+     cross-fade is skipped further upstream, in `captureRouteSnapshot`, and this
+     is what guarantees the two agree. */
+  .page-chrome,
+  [data-page-transit] .page-chrome {
+    opacity: 1;
+    translate: none;
+    transition: none;
+  }
+}
+
+/* Material 3 circular progress indicator.
+ *
+ * Two animations composed, which is what gives the Material spinner its
+ * character and what a plain `animate-spin` on a gradient ring cannot produce:
+ * the whole SVG rotates at a constant rate, while the arc itself grows and
+ * shrinks. The head therefore accelerates and the tail lags, so the indicator
+ * reads as "working" rather than as a wheel turning at a fixed speed.
+ *
+ * The dash figures are user units against `pathLength="100"` on the circle, so
+ * they hold at any rendered radius.
+ */
+.m3-progress-spin {
+  animation: m3-progress-rotate 1.6s linear infinite;
+  transform-origin: center;
+}
+
+/* The arc grows and shrinks, so it has to ease at BOTH ends; `--ease-standard`
+   is one-sided and left the arc snapping to a stop at full length. */
+.m3-progress-arc {
+  animation: m3-progress-dash 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: center;
+}
+
+@keyframes m3-progress-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Seamless because the last frame is congruent with the first: the dash array
+   returns to its starting value and the offset has advanced by exactly one
+   `pathLength` (-100 ≡ 0). The previous cycle ended at `65 35 / -72` and
+   restarted at `1 99 / 0`, so the head jumped backwards once per revolution —
+   the stutter that made the indicator read as dropping frames.
+
+   Dash period (1.4s) is deliberately not a multiple of the rotation period
+   (1.6s): the two drift against each other, so the head starts from a
+   different angle each time round instead of retracing one fixed path. */
+@keyframes m3-progress-dash {
+  0% {
+    stroke-dasharray: 2 98;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 70 30;
+    stroke-dashoffset: -18;
+  }
+  100% {
+    stroke-dasharray: 2 98;
+    stroke-dashoffset: -100;
+  }
+}
+
+/* Indeterminate linear indicator — the bar sweeps its track, widening through
+   the middle of the pass. */
+.m3-linear-bar {
+  animation: m3-linear-sweep 1.8s var(--ease-standard) infinite;
+  transform-origin: left center;
+}
+
+@keyframes m3-linear-sweep {
+  0% {
+    transform: translateX(-60%) scaleX(0.3);
+  }
+  55% {
+    transform: translateX(40%) scaleX(0.7);
+  }
+  100% {
+    transform: translateX(160%) scaleX(0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The arc stops sweeping but the ring keeps turning, slowly, so the control
+     still reads as busy instead of as a frozen graphic. */
+  .m3-progress-spin {
+    animation-duration: 3.2s;
+  }
+
+  .m3-progress-arc {
+    animation: none;
+    stroke-dasharray: 62 38;
+  }
+
+  .m3-linear-bar {
+    animation-duration: 3.2s;
   }
 }
 
@@ -409,13 +1264,9 @@ html[data-theme-vt]::view-transition-new(root) {
   appearance: none;
   height: 6px;
   border-radius: 3px;
-  background: #e2e8f0;
+  background: var(--md-sys-color-surface-container-highest);
   outline: none;
   cursor: pointer;
-}
-
-.dark .range-slider {
-  background: #334155;
 }
 
 .range-slider::-webkit-slider-thumb {
@@ -424,54 +1275,393 @@ html[data-theme-vt]::view-transition-new(root) {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--md-sys-color-primary);
   cursor: pointer;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: box-shadow 0.2s ease;
+  border: 2px solid var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-1);
+  transition: box-shadow 0.2s var(--ease-standard);
 }
 
+/* The halo is the M3 state layer, so it has to be derived from the live
+   primary. It used to be a literal rgba() of the light-mode brand pink and
+   stayed that colour in dark mode. */
 .range-slider::-webkit-slider-thumb:hover {
-  box-shadow: 0 0 0 8px rgba(224, 108, 159, 0.16), 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 0 8px color-mix(in oklab, var(--md-sys-color-primary) 16%, transparent),
+    var(--md-sys-elevation-1);
 }
 
 .range-slider::-webkit-slider-thumb:active {
-  box-shadow: 0 0 0 14px rgba(224, 108, 159, 0.16), 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 0 14px color-mix(in oklab, var(--md-sys-color-primary) 16%, transparent),
+    var(--md-sys-elevation-1);
 }
 
 .range-slider::-moz-range-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--md-sys-color-primary);
   cursor: pointer;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: box-shadow 0.2s ease;
+  border: 2px solid var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-1);
+  transition: box-shadow 0.2s var(--ease-standard);
 }
 
 .range-slider::-moz-range-thumb:hover {
-  box-shadow: 0 0 0 8px rgba(224, 108, 159, 0.16), 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 0 8px color-mix(in oklab, var(--md-sys-color-primary) 16%, transparent),
+    var(--md-sys-elevation-1);
 }
 
 .range-slider::-moz-range-thumb:active {
-  box-shadow: 0 0 0 14px rgba(224, 108, 159, 0.16), 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 0 14px color-mix(in oklab, var(--md-sys-color-primary) 16%, transparent),
+    var(--md-sys-elevation-1);
 }
 
 .range-slider::-moz-range-track {
   height: 6px;
   border-radius: 3px;
-  background: #e2e8f0;
+  background: var(--md-sys-color-surface-container-highest);
 }
 
-.dark .range-slider::-moz-range-track {
-  background: #334155;
+/* A cross-fade clone is a still frame: every animation and transition inside it
+   would otherwise restart from its first keyframe the moment it is appended. */
+[data-route-crossfade-layer] *,
+[data-route-crossfade-layer] *::before,
+[data-route-crossfade-layer] *::after {
+  animation: none !important;
+  transition: none !important;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+/* One placement for the detail back affordance.
+ *
+ * The Stage, the routed overlay and the direct-navigation page each spelled
+ * this out separately and did not agree: the two overlays anchor to the detail
+ * host, but the page variant renders inside the shell's own `p-4 sm:p-6`, so it
+ * sat 16px further right. At the moment the route took over from the Stage the
+ * button therefore jumped sideways. Anchoring is now stated once. */
+.image-detail-back {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 46;
+  pointer-events: auto;
+}
+
+@media (min-width: 640px) {
+  .image-detail-back {
+    top: 1rem;
+    left: 1rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Lightbox (yet-another-react-lightbox)
+ *
+ * The zoomed viewer shipped with the library's stock chrome: translucent white
+ * glyphs wearing a hard `drop-shadow(2px 2px 2px rgba(0,0,0,.8))`, on a pure
+ * black backdrop, at sizes and timings that matched nothing else in the app.
+ * It is a full screen of this product's UI and was the one surface the M3 pass
+ * had not reached.
+ *
+ * Everything below is either a token the library already exposes or a rule for
+ * a class it already emits — no DOM is patched.
+ * ------------------------------------------------------------------------ */
+
+.yarl__portal {
+  /* `media-stage`, not `scrim`: this is a photo-viewing backdrop, which the
+     token was defined for, and it is scheme-independent for the same reason. */
+  --yarl__color_backdrop: var(--md-sys-color-media-stage);
+  --yarl__color_button: color-mix(in oklab, var(--md-sys-color-on-media) 78%, transparent);
+  --yarl__color_button_active: var(--md-sys-color-on-media);
+  --yarl__color_button_disabled: color-mix(in oklab, var(--md-sys-color-on-media) 38%, transparent);
+  /* M3 icon buttons are 24dp glyphs in a 40dp container, and they read against
+     the backdrop on their own — the stock drop-shadow was compensating for
+     having no container at all. */
+  --yarl__icon_size: 24px;
+  --yarl__button_padding: 8px;
+  --yarl__button_margin: 4px;
+  --yarl__button_filter: none;
+  --yarl__toolbar_padding: 12px;
+  --yarl__navigation_button_padding: 16px;
+  --yarl__fade_animation_duration: 300ms;
+  --yarl__fade_animation_timing_function: var(--ease-standard);
+  --yarl__slide_icon_loading_color: var(--md-sys-color-on-media);
+  --yarl__slide_icon_error_color: var(--md-sys-color-error-fill);
+}
+
+/* Give every control the M3 icon-button container it was missing: a 40dp
+   circle with a state layer, so hover/focus/press read the same here as
+   everywhere else in the app. */
+.yarl__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-full, 9999px);
+  transition:
+    background-color 200ms var(--ease-standard),
+    color 200ms var(--ease-standard);
+}
+
+.yarl__button:hover,
+.yarl__button:focus-visible {
+  background-color: color-mix(in oklab, var(--md-sys-color-on-media) 12%, transparent);
+}
+
+.yarl__button:active {
+  background-color: color-mix(in oklab, var(--md-sys-color-on-media) 16%, transparent);
+}
+
+.yarl__button:focus-visible {
+  outline: 2px solid var(--md-sys-color-on-media);
+  outline-offset: -2px;
+}
+
+/* The counter is a label, not a control. It exposes its own tokens, so this
+   goes through those rather than fighting the plugin's declarations. */
+.yarl__portal {
+  --yarl__counter_color: color-mix(in oklab, var(--md-sys-color-on-media) 78%, transparent);
+  --yarl__counter_filter: none;
+  --yarl__counter_padding: 8px 12px;
+}
+
+.yarl__counter {
+  font-size: var(--text-label-m);
+  font-weight: var(--text-label-m--font-weight);
+  letter-spacing: var(--text-label-m--letter-spacing);
+}
+
+/* Entrance: the viewer grows out of the picture you tapped.
+ *
+ * `transform-origin` is set from the detail image's centre by
+ * `handleOpenLightbox`; without it the fallback is the middle of the screen.
+ * A one-shot animation rather than a transition, so nothing is left holding a
+ * transform once it has played — `.yarl__slide` is an ancestor of the zoom
+ * plugin's own transforms and must not compound with them. */
+.yarl__slide {
+  transform-origin: var(--m3-lightbox-origin-x, 50%) var(--m3-lightbox-origin-y, 50%);
+  animation: m3-lightbox-in 300ms var(--ease-decelerate) both;
+}
+
+@keyframes m3-lightbox-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yarl__slide {
+    animation-duration: 1ms;
+  }
+}
+
+/* M3 shared-axis tab panes.
+ *
+ * The two panes stack in ONE grid cell rather than one being `display: none`.
+ * That is the whole mechanism: during a switch both need a box at the same
+ * time, and stacking makes the row `max(outgoing, incoming)` tall, so the
+ * scroller's `scrollHeight` can only grow while the transition runs. Absolute
+ * positioning would have been the obvious alternative and is wrong — the
+ * container would collapse to the incoming pane's height immediately, the
+ * browser would clamp `scrollTop`, and the page would snap to the top. That is
+ * the exact failure `app/page.tsx` documents for the pagination case.
+ *
+ * `align-items: start`, not the default `stretch`: stretching a short forum
+ * pane to the gallery's height would change every `h-full` inside it.
+ */
+[data-tab-panel] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+[data-tab-panel] > [data-tab-pane] {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+/* While a shared-axis run is in flight, the scroller is the window the two
+ * pages slide past — see `playSharedAxis`, which sets and clears this.
+ *
+ * It has to be the scroller and not the panel. The panel is the centred content
+ * column; the scroller is the whole content area, from the sidebar's edge to
+ * the screen's. Clipping at the column would have the incoming page appear out
+ * of the middle of the page instead of in from the side.
+ *
+ * `clip`, not `hidden`: `overflow-x: hidden` beside `overflow-y: visible`
+ * forces the visible one to compute to `auto`, which would make a second scroll
+ * container out of whatever this is applied to. `clip` is the one value allowed
+ * to sit beside `visible`. Scoped to a live run because a clip is also a clip
+ * context for absolutely positioned descendants, and cards have popovers.
+ *
+ * There is deliberately no `y` rule to match. The vertical axis needs no help:
+ * the scroller already clips everything above its own origin, which is where a
+ * page arriving from the top sits, and the outgoing clone is inside the
+ * cross-fade layer's `overflow-hidden`. Clipping `overflow-y` here would stop
+ * the scroller from being a scroll container at all for the length of the run,
+ * which throws away the user's scroll position. */
+[data-axis-running='x'] {
+  overflow-x: clip;
+}
+
+/* The footer, on every page-to-page move.
+ *
+ * It lives inside `[data-page-content]`, so the *outgoing* copy is part of the
+ * clone and slides away with the page it belongs to. This rule governs the
+ * live one, which is the incoming page's.
+ *
+ * Asymmetric on purpose: it goes out with `transition: none` and comes back on
+ * 400ms decelerate. A 200ms fade-out meant the mark was still on screen for the
+ * first fifth of the move — it appeared, dimmed, and only then floated back,
+ * which is three events where the eye wanted one. Leaving instantly and
+ * arriving once, after the page has landed, is the whole behaviour.
+ *
+ * It can only arrive after the landing because the flag is cleared at settle
+ * and the transition starts from there. `beginPageTransit` in lib/motion.ts
+ * owns it; the shared axis and the plain route cross-fade both arm it, so tab
+ * switches and route changes behave alike. */
+.page-chrome {
+  transition:
+    opacity 400ms var(--ease-decelerate),
+    translate 400ms var(--ease-decelerate);
+}
+
+[data-page-transit] .page-chrome {
+  opacity: 0;
+  translate: 0 8px;
+  transition: none;
+}
+
+/* React's `active` flag decides normally. The motion layer's two flags
+   override it for the length of a switch, so the leaving pane keeps its box
+   past the route commit and the entering pane gets one before it. */
+[data-tab-panel]
+  > [data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
+    [data-tab-pane-entering]
+  ) {
+  display: none;
+}
+
+[data-tab-panel] > [data-tab-pane][data-tab-pane-leaving] {
+  pointer-events: none;
+}
+
+/* Freeze CSS transitions inside a pane while GSAP is driving it.
+ *
+ * The rows the shared axis animates are ordinary page content, and some of them
+ * carry transitions of their own — the gallery's list has
+ * `transition-opacity duration-200` for its paging dim. GSAP writes inline
+ * `opacity`/`translate` every frame, and an inline write triggers a CSS
+ * transition, so each frame was being re-animated over 200ms: the fade lagged
+ * the movement and the whole switch read as mushy. Same technique, and the same
+ * reason, as the `html[data-theme-vt]` freeze further down.
+ *
+ * Keyed on its own flag rather than on `-leaving`/`-entering`. Those two decide
+ * *layout* and have to outlive the animation — `-entering` in particular stays
+ * until the route commit lands, which on a slow list is a whole fetch later.
+ * Fused, that made the freeze outlive the movement by however long the data
+ * took, and every hover inside the arriving pane snapped instead of animating.
+ * `runTabTransition` sets this pair at the start and clears them at settle. */
+[data-tab-pane-animating],
+[data-tab-pane-animating] * {
+  transition: none !important;
+}
+
+/* The arriving pane paints above the departing one. With the opacity handoff
+   they barely coexist, but on a phone the two are the same width and any
+   sub-pixel overlap during the crossover reads as the new page landing *under*
+   the old one. Ordering it explicitly removes the ambiguity. */
+[data-tab-panel] > [data-tab-pane][data-tab-pane-entering] {
+  z-index: 1;
+}
+
+/* The transition has settled but the route may still not have committed, in
+   which case React is *also* still marking the outgoing pane active — and the
+   settle's `clearProps` has just restored it to full opacity. Without this the
+   old page reappears on top of the new one at the very end of the switch.
+   `useTabPanes` clears the flag once the commit lands. */
+[data-tab-panel] > [data-tab-pane][data-tab-pane-done] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Belt and braces — `startTabTransition` already returns before setting it. */
+  [data-tab-panel] > [data-tab-pane][data-tab-pane-leaving] {
+    display: none;
+  }
+}
+
+/* Element defaults MUST stay inside `@layer base`. Unlayered CSS outranks every
+   cascade layer no matter how specific, so an unlayered `h2 { font-size }` beats
+   `text-label-m` on the same element — which is how the sidebar's section
+   headings ended up larger than the rows under them. */
+@layer base {
+  body {
+    background: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface);
+    font-family: var(--font-sans);
+    font-size: var(--text-body-m);
+    line-height: var(--text-body-m--line-height);
+  }
+
+  /* Tailwind's preflight zeroes heading sizes and nothing put them back, so
+     every heading in the app was carrying its own ad-hoc `text-2xl font-bold`.
+     These give the document a default hierarchy; utilities still override. */
+  h1 {
+    font-size: var(--text-headline-m);
+    line-height: var(--text-headline-m--line-height);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  h2 {
+    font-size: var(--text-headline-s);
+    line-height: var(--text-headline-s--line-height);
+    font-weight: 600;
+  }
+
+  h3 {
+    font-size: var(--text-title-l);
+    line-height: var(--text-title-l--line-height);
+    font-weight: 600;
+  }
+
+  h4 {
+    font-size: var(--text-title-m);
+    line-height: var(--text-title-m--line-height);
+    font-weight: 600;
+  }
+
+  h5,
+  h6 {
+    font-size: var(--text-title-s);
+    line-height: var(--text-title-s--line-height);
+    font-weight: 600;
+  }
+
+  /* Chinese text has no ascender/descender slack, so unbroken runs of Latin
+     inside it (URLs, tags, usernames) are the only things that overflow. */
+  :where(p, li, blockquote, td, dd) {
+    overflow-wrap: break-word;
+  }
+
+  /* An inline <svg> sits on the text baseline and inherits the line box, so an
+     icon-only control centres its *span* rather than the glyph — every icon
+     ends up a fraction low, and by a different amount per glyph. Scoped to
+     `:only-child` so the handful of icons that are deliberately inline next to
+     text (`className="inline mr-0.5"`) keep their inline flow. */
+  :where(button, a, label) > svg:only-child {
+    display: block;
+  }
 }
 
 /* Isolate each gallery tile's paint invalidation while its image decodes or
@@ -485,7 +1675,7 @@ body {
 /* Card chrome is leased only by the active session; avoid permanent layers. */
 .image-hero-card-link [data-image-hero-chrome] {
   opacity: 1;
-  transition: opacity 220ms ease;
+  transition: opacity 220ms var(--ease-standard);
 }
 
 /*
@@ -546,14 +1736,24 @@ a:has([data-image-hero-role='thumbnail']):focus-visible {
      header/page stack and the hero handoff cannot shift. */
   --image-detail-overlay-offset: 1.5rem;
   --image-detail-page-padding: 1rem;
-  --image-detail-header-height: 7.25rem;
+  /* The strip carries no title any more (see DetailHeader), so this is just its
+     `py-3` plus the metadata rows — two of them here, one from `sm` up.
+
+     It must equal the rendered height exactly: Stage and route are laid out
+     against it during a flight, and any disagreement slides the image out from
+     under the flyer on landing. So it is derived from the same tokens that
+     produce the row rather than typed as a rem value that would quietly drift
+     the next time the type scale moves. */
+  --image-detail-meta-line: calc(var(--text-body-m) * var(--text-body-m--line-height));
+  --image-detail-header-height: calc(1.5rem + 2 * var(--image-detail-meta-line) + 0.25rem);
 }
 
 @media (min-width: 640px) {
   [data-image-detail-host] {
     --image-detail-overlay-offset: 1.5rem;
     --image-detail-page-padding: 1.5rem;
-    --image-detail-header-height: 8.25rem;
+    /* One row fits from here up — the six items stop wrapping. */
+    --image-detail-header-height: calc(1.5rem + var(--image-detail-meta-line));
   }
 }
 
@@ -580,14 +1780,6 @@ html[data-image-hero-transition] .image-detail-header-route {
   height: var(--image-detail-header-height);
   max-height: var(--image-detail-header-height);
   overflow: hidden;
-}
-
-.image-detail-meta {
-  scrollbar-width: none;
-}
-
-.image-detail-meta::-webkit-scrollbar {
-  display: none;
 }
 
 .image-detail-deferred {
@@ -684,7 +1876,6 @@ html[data-image-hero-transition] #nprogress {
 }
 
 .image-detail-overlay-scroll {
-  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 
@@ -721,6 +1912,26 @@ html[data-image-hero-transition] #nprogress {
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Scrollbars
+ *
+ * One appearance for the whole app. There used to be five — the page scroller,
+ * the image-detail scroller (gutter but no width/colour), a dozen inner panes
+ * on the browser default, `scrollbar-hide`, and the detail scroller's
+ * hidden-while-overlaid state — so the bar visibly changed width and colour as
+ * you moved between routes.
+ *
+ * `scrollbar-gutter` is the one axis that legitimately differs, and it is the
+ * whole reason there are two classes rather than one:
+ *
+ *   .main-scrollbar    reserves the track even when the content fits. Anything
+ *                      that occupies the page column needs this, or a route
+ *                      whose content happens to be short shifts sideways by the
+ *                      bar's width as you navigate to it.
+ *   .popover-scrollbar does not. A 160px-wide menu that permanently gives up 8px
+ *                      on its right edge just looks mis-padded.
+ * ------------------------------------------------------------------------ */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -731,27 +1942,171 @@ html[data-image-hero-transition] #nprogress {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--md-sys-color-outline-variant);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--md-sys-color-outline);
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: #475569;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
-}
-
-.main-scrollbar {
-  scrollbar-color: #cbd5e1 transparent;
+.main-scrollbar,
+.popover-scrollbar {
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
   scrollbar-width: thin;
 }
 
-.dark .main-scrollbar {
-  scrollbar-color: #475569 transparent;
+.main-scrollbar {
+  scrollbar-gutter: stable;
+}
+
+/* An image-detail overlay brings its own scroller and covers the gallery
+   completely, so the gallery's thumb would otherwise sit behind it — two bars
+   on the same edge, one moving and one frozen. Only the *thumb* is hidden:
+   dropping `scrollbar-width` too would collapse the reserved gutter and shift
+   the background page's content 8px sideways on every open and close. */
+.app-scroller[data-scroll-hidden] {
+  scrollbar-color: transparent transparent;
+}
+
+.app-scroller[data-scroll-hidden]::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+/* The app's default transition set.
+ *
+ * Replaces `transition-all`, which was used at 84 call sites. `all` animates
+ * every animatable property, layout included — so a control that grew its
+ * padding on hover animated the reflow, and anything inside a card being
+ * measured by the hero flight could be caught mid-tween. This lists only the
+ * properties that are actually meant to move.
+ *
+ * Duration and easing are baked in so the 82 sites that specified neither stop
+ * inheriting Tailwind's 150ms and its Material *2* curve. Pass `duration-*`
+ * after it to override; the utility is registered before Tailwind's own
+ * duration utilities, so the override wins. */
+@utility transition-ui {
+  /* `translate`, `scale` and `rotate` are listed alongside `transform` because
+     Tailwind v4 compiles `translate-x-*`, `scale-*` and `rotate-*` to those
+     standalone CSS properties, NOT to `transform` — so a list naming only
+     `transform` silently animates none of them. That is what broke the
+     sidebar's slide and every hover-lift in the app when this replaced
+     `transition-all`. Tailwind's own `transition-transform` lists all four for
+     exactly this reason. */
+  transition-property:
+    color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity,
+    transform, translate, scale, rotate, filter, backdrop-filter;
+  transition-timing-function: var(--ease-standard);
+  transition-duration: 200ms;
+}
+
+/* Expands an element's *hit area* to the 44px minimum without changing what it
+ * looks like or how it lays out.
+ *
+ * Dense chrome — an admin table's edit/delete pair, a chip's dismiss cross —
+ * genuinely wants a 28px glyph; scaling the box to 44px would double the row
+ * height of every table in the app. A centred pseudo-element takes the hit
+ * instead, which is the M3 "touch target may extend beyond the component
+ * bounds" rule.
+ *
+ * Do not combine with `data-ripple`: that sets `overflow: hidden` (to clip the
+ * ripple), which would clip the pseudo-element out of hit-testing too. Those
+ * controls need a genuinely larger box.
+ */
+@utility touch-target {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    translate: -50% -50%;
+  }
+}
+
+/* Used by the admin rail and any horizontally-scrolled chip row. Was
+   referenced in app/admin/page.tsx with no rule behind it. */
+@utility scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* M3 Expressive grouped list.
+ *
+ * A run of related rows — the options inside one settings section — is a single
+ * block of material that has been *cut*, not a stack of separate cards. So the
+ * group's outer corners are `large` and every cut edge inside it is
+ * `extra-small`, leaving the first row round-on-top, the last round-on-bottom,
+ * and the ones between it square-ish on both. A 2px seam separates them; the
+ * previous 16px margin made each row read as its own floating card and lost the
+ * grouping entirely.
+ *
+ * Expressed with sibling selectors rather than :first-child/:last-child because
+ * the rows sit next to a section heading, so they are not the first or last
+ * child of anything. `:has(+ .m3-row)` asks "is another row after me", which is
+ * the actual question.
+ */
+.m3-row {
+  border-radius: var(--radius-xs);
+}
+
+/* First row of a run: nothing of the same kind before it. */
+:not(.m3-row) + .m3-row,
+.m3-row:first-child {
+  border-start-start-radius: var(--radius-lg);
+  border-start-end-radius: var(--radius-lg);
+}
+
+/* Last row of a run: nothing of the same kind after it. */
+.m3-row:not(:has(+ .m3-row)) {
+  border-end-start-radius: var(--radius-lg);
+  border-end-end-radius: var(--radius-lg);
+}
+
+.m3-row + .m3-row {
+  margin-top: 2px;
+}
+
+/* M3 state layer. A tinted overlay at a fixed alpha, painted from the
+   element's own `color`, replacing the hand-picked `hover:bg-*` pairs that
+   had to be written twice (light + dark) at every call site. */
+@utility state-layer {
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms var(--ease-standard);
+    z-index: -1;
+  }
+
+  &:hover::before {
+    opacity: var(--md-sys-state-hover-opacity);
+  }
+
+  &:focus-visible::before {
+    opacity: var(--md-sys-state-focus-opacity);
+  }
+
+  &:active::before {
+    opacity: var(--md-sys-state-pressed-opacity);
+  }
+
+  &:disabled::before,
+  &[aria-disabled='true']::before {
+    opacity: 0;
+  }
 }

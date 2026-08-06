@@ -120,7 +120,7 @@ export function findImageHeroThumbnail(imageId: number, sourceKey?: string | nul
   if (sourceKey) {
     const exact = document.querySelector<HTMLElement>(
       `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]` +
-      `[data-image-hero-source-key="${escapeSelector(sourceKey)}"]`,
+        `[data-image-hero-source-key="${escapeSelector(sourceKey)}"]`,
     );
     if (exact) return exact;
   }
@@ -183,13 +183,12 @@ function getPresentedMediaOpacity(media: VisualMedia) {
  */
 export function getVisualMedia(element: HTMLElement | null): VisualMedia | null {
   if (!element) return null;
-  const directMedia = element instanceof HTMLImageElement || element instanceof HTMLVideoElement
-    ? element
-    : null;
+  const directMedia =
+    element instanceof HTMLImageElement || element instanceof HTMLVideoElement ? element : null;
   const detailHost = directMedia?.hasAttribute('data-image-detail-layer')
-    ? (directMedia.matches('[data-image-detail-hero-active]')
-        ? directMedia
-        : directMedia.closest<HTMLElement>('[data-image-detail-hero-active]'))
+    ? directMedia.matches('[data-image-detail-hero-active]')
+      ? directMedia
+      : directMedia.closest<HTMLElement>('[data-image-detail-hero-active]')
     : element.matches('[data-image-detail-hero-active]')
       ? element
       : element.querySelector<HTMLElement>('[data-image-detail-hero-active]');
@@ -202,9 +201,9 @@ export function getVisualMedia(element: HTMLElement | null): VisualMedia | null 
       ...detailHost.querySelectorAll<VisualMedia>(
         'img[data-image-detail-layer], video[data-image-detail-layer]',
       ),
-    ].filter((media) => (
-      media.closest<HTMLElement>('[data-image-detail-hero-active]') === detailHost
-    ));
+    ].filter(
+      (media) => media.closest<HTMLElement>('[data-image-detail-hero-active]') === detailHost,
+    );
     const final = layers.find((media) => media.dataset.imageDetailLayer === 'final') ?? null;
     const preview = layers.find((media) => media.dataset.imageDetailLayer === 'preview') ?? null;
     const candidates = [preview, final]
@@ -322,11 +321,7 @@ export function leaseInlineStyles(
   };
 }
 
-export function leaseAttribute(
-  element: HTMLElement,
-  name: string,
-  value: string | null,
-): DomLease {
+export function leaseAttribute(element: HTMLElement, name: string, value: string | null): DomLease {
   const hadAttribute = element.hasAttribute(name);
   const previous = element.getAttribute(name);
   if (value === null) element.removeAttribute(name);
@@ -377,8 +372,9 @@ export function leaseHeroCardChrome(element: HTMLElement | null): DomLease {
   const card = element?.closest<HTMLElement>('.image-hero-card-link');
   if (!card) return NO_OP_LEASE;
   return combineHeroLeases(
-    ...[...card.querySelectorAll<HTMLElement>('[data-image-hero-chrome]')]
-      .map((chrome) => leaseInlineStyles(chrome, { opacity: '0', willChange: 'opacity' })),
+    ...[...card.querySelectorAll<HTMLElement>('[data-image-hero-chrome]')].map((chrome) =>
+      leaseInlineStyles(chrome, { opacity: '0', willChange: 'opacity' }),
+    ),
   );
 }
 

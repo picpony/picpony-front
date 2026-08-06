@@ -114,7 +114,11 @@ export class HeroRouteRegistry {
   findForSession(
     imageId: number,
     href: string,
-    { floor, requirePreview, allowExisting }: {
+    {
+      floor,
+      requirePreview,
+      allowExisting,
+    }: {
       floor: number;
       requirePreview: boolean;
       allowExisting: boolean;

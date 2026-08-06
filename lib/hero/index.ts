@@ -33,11 +33,7 @@ export type {
 export { warmImageHeroFrame } from './frameCache';
 export { isScrollLikelyActive } from './input';
 export { publishWhenHeroSettled } from './publish';
-export {
-  canAnimateImageHero,
-  prepareImageHero,
-  warmImageHero,
-} from './media';
+export { canAnimateImageHero, prepareImageHero, warmImageHero } from './media';
 
 // --- Setup ---------------------------------------------------------------
 
@@ -82,10 +78,7 @@ export function updateImageHeroRouteTarget(surfaceId: string, target: HTMLElemen
   imageHeroController.updateRouteTarget(surfaceId, target);
 }
 
-export function markImageHeroRoutePreviewPaintable(
-  surfaceId: string,
-  target?: HTMLElement | null,
-) {
+export function markImageHeroRoutePreviewPaintable(surfaceId: string, target?: HTMLElement | null) {
   imageHeroController.markRoutePreviewPaintable(surfaceId, target);
 }
 

@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  HERO_BACKGROUND_SELECTOR,
-  HERO_GALLERY_ANCHOR_SELECTOR,
-} from './constants';
+import { HERO_BACKGROUND_SELECTOR, HERO_GALLERY_ANCHOR_SELECTOR } from './constants';
 import type { HeroHost, HeroRect } from './geometry';
 
 /**

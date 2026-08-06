@@ -93,10 +93,15 @@ function planeHost(flight: HeroFlight): HeroHost {
  * that starts and lands on the chord peaks at g·t²/8 above it halfway through.
  * Clamped only at the visual extremes — never by device class.
  */
-export function getFlightArc(from: HeroRect, to: HeroRect, duration: number, direction: HeroDirection) {
+export function getFlightArc(
+  from: HeroRect,
+  to: HeroRect,
+  duration: number,
+  direction: HeroDirection,
+) {
   const distance = Math.hypot(
-    (to.left + to.width / 2) - (from.left + from.width / 2),
-    (to.top + to.height / 2) - (from.top + from.height / 2),
+    to.left + to.width / 2 - (from.left + from.width / 2),
+    to.top + to.height / 2 - (from.top + from.height / 2),
   );
   const seconds = Math.max(0.001, duration / 1000);
   const gravityLift = (HERO_ARC_GRAVITY_PX_PER_S2 * seconds * seconds) / 8;
@@ -144,12 +149,11 @@ export function evaluateLeg(leg: HeroLeg, time: number): HeroPose {
   // Chord speed: |Δcenter| · dp/dt. The arc term is deliberately excluded so an
   // interruption inherits travel along the path, not the vertical bow.
   const chord = Math.hypot(
-    (leg.to.left + leg.to.width / 2) - (leg.from.left + leg.from.width / 2),
-    (leg.to.top + leg.to.height / 2) - (leg.from.top + leg.from.height / 2),
+    leg.to.left + leg.to.width / 2 - (leg.from.left + leg.from.width / 2),
+    leg.to.top + leg.to.height / 2 - (leg.from.top + leg.from.height / 2),
   );
-  const speed = leg.duration > 0
-    ? (chord * springVelocity(offset, leg.response)) / leg.duration
-    : 0;
+  const speed =
+    leg.duration > 0 ? (chord * springVelocity(offset, leg.response)) / leg.duration : 0;
 
   return {
     rect,
@@ -210,9 +214,7 @@ export function buildFlightKeyframes(flight: HeroFlight, leg: HeroLeg): FlightKe
 /** Write a pose directly, for a paused or just-rebased flight. */
 export function applyFlightPose(flight: HeroFlight, rect: HeroRect, radius: number) {
   const host = planeHost(flight);
-  flight.flyer.style.transform = formatHeroTransform(
-    getHeroBoxTransform(flight.base, rect, host),
-  );
+  flight.flyer.style.transform = formatHeroTransform(getHeroBoxTransform(flight.base, rect, host));
   flight.clip.style.borderRadius = formatHeroClipRadius(
     flight.base,
     rect.width,

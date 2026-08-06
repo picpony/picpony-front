@@ -5,7 +5,12 @@ import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdEmojiEvents, MdAdd, MdEdit, MdDelete, MdContentCopy, MdLink } from 'react-icons/md';
-import { SectionHeader, EmptyState, Spinner } from './';
+import DataTable, { type Column } from '@/components/DataTable';
+import { SectionHeader } from './';
+import UserBadge from '@/components/UserBadge';
+import Button from '@/components/Button';
+import Card from '@/components/Card';
+import { Input } from '@/components/Input';
 
 interface Badge {
   id: number;
@@ -81,7 +86,9 @@ export default function BadgesTab({ token }: { token: string }) {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   // Confirm dialog
@@ -99,7 +106,10 @@ export default function BadgesTab({ token }: { token: string }) {
   };
 
   const handleGrantBadge = async () => {
-    if (!badgeName.trim()) { showToast('请填写徽章名称', 'warning'); return; }
+    if (!badgeName.trim()) {
+      showToast('请填写徽章名称', 'warning');
+      return;
+    }
     setGranting(true);
     try {
       const payload: Record<string, unknown> = {
@@ -107,7 +117,10 @@ export default function BadgesTab({ token }: { token: string }) {
         badge_color: badgeColor,
       };
       if (targetUserIds.trim()) {
-        payload.user_ids = targetUserIds.split(',').map((s: string) => parseInt(s.trim())).filter((n: number) => !isNaN(n));
+        payload.user_ids = targetUserIds
+          .split(',')
+          .map((s: string) => parseInt(s.trim()))
+          .filter((n: number) => !isNaN(n));
       }
       if (startDate) payload.start_date = startDate;
       if (endDate) payload.end_date = endDate;
@@ -179,7 +192,10 @@ export default function BadgesTab({ token }: { token: string }) {
   };
 
   const handleCreateBadgeLink = async () => {
-    if (!linkBadgeName.trim()) { showToast('请填写徽章名称', 'warning'); return; }
+    if (!linkBadgeName.trim()) {
+      showToast('请填写徽章名称', 'warning');
+      return;
+    }
     setCreatingLink(true);
     try {
       const payload: Record<string, unknown> = {
@@ -247,285 +263,386 @@ export default function BadgesTab({ token }: { token: string }) {
     { id: 'links' as const, label: '领取链接' },
   ];
 
+  const badgeColumns: Column<Badge>[] = [
+    { key: 'id', header: 'ID', render: (b) => b.id },
+    {
+      key: 'name',
+      header: '名称',
+      primary: true,
+      render: (b) => <span className="font-medium">{b.badge_name}</span>,
+    },
+    {
+      key: 'color',
+      header: '颜色',
+      render: (b) => <UserBadge name={b.badge_color} color={b.badge_color} />,
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      actions: true,
+      render: (b) => (
+        <>
+          <button
+            onClick={() => handleEditBadge(b)}
+            className="touch-target state-layer text-primary rounded-full p-1.5"
+            title="编辑"
+            aria-label={`编辑徽章 ${b.badge_name}`}
+          >
+            <MdEdit size={16} />
+          </button>
+          <button
+            onClick={() => handleDeleteBadge(b.id)}
+            className="touch-target state-layer rounded-full p-1.5 text-error"
+            title="删除"
+            aria-label={`删除徽章 ${b.badge_name}`}
+          >
+            <MdDelete size={16} />
+          </button>
+        </>
+      ),
+    },
+  ];
+
+  const badgeLinkColumns: Column<BadgeLink>[] = [
+    {
+      key: 'badge',
+      header: '徽章',
+      primary: true,
+      render: (l) => <UserBadge name={l.badge_name} color={l.badge_color} />,
+    },
+    {
+      key: 'state',
+      header: '状态',
+      render: (l) => (
+        <button
+          onClick={() => handleToggleBadgeLink(l.id, l.is_active)}
+          className={`rounded px-2 py-1 text-body-s transition-ui ${
+            l.is_active
+              ? 'bg-success-container text-success hover:bg-success-container/70'
+              : 'bg-error-container text-error hover:bg-error-container/70'
+          }`}
+        >
+          {l.is_active ? '已启用' : '已停用'}
+        </button>
+      ),
+    },
+    {
+      key: 'expiry',
+      header: '有效期',
+      render: (l) => (
+        <span className="text-outline text-body-s">
+          {l.link_expires_at ? `链接: ${l.link_expires_at}` : '永久'}
+          {l.badge_expires_at && ` / 徽章: ${l.badge_expires_at}`}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      actions: true,
+      render: (l) => (
+        <button
+          onClick={() => copyBadgeLink(l)}
+          className="touch-target state-layer text-primary rounded-full p-1.5"
+          title="复制链接"
+          aria-label={`复制 ${l.badge_name} 的领取链接`}
+        >
+          {' '}
+          <MdContentCopy size={16} />{' '}
+        </button>
+      ),
+    },
+  ];
   return (
     <div className="space-y-6">
+      {' '}
       <SectionHeader
         icon={<MdEmojiEvents className="text-primary" size={24} />}
         title="徽章管理"
         onRefresh={loadData}
-      />
-
+      />{' '}
       <div className="flex gap-2 mb-4">
+        {' '}
         {subTabs.map((st) => (
           <button
             key={st.id}
             onClick={() => setActiveSubTab(st.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2 rounded-full text-label-l transition-ui ${
               activeSubTab === st.id
                 ? 'bg-primary/10 text-primary'
-                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
             {st.label}
           </button>
         ))}
       </div>
-
       {activeSubTab === 'grant' && (
         <>
-          <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700 space-y-4">
-            <div className="text-xs text-slate-500 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border-l-4 border-l-yellow-500">
-              您可以向特定用户 ID，或在某日期区间注册的用户批量授予专属徽章。徽章将在用户的发言、个人主页等多处显示。
-            </div>
-
+          {' '}
+          <Card variant="outlined" className="space-y-4">
+            {' '}
+            <div className="text-body-s text-on-surface-variant p-3 bg-warning-container rounded border-l-4 border-l-warning">
+              {' '}
+              您可以向特定用户
+              ID，或在某日期区间注册的用户批量授予专属徽章。徽章将在用户的发言、个人主页等多处显示。{' '}
+            </div>{' '}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">徽章名称</label>
-              <input
-                type="text" value={badgeName} onChange={(e) => setBadgeName(e.target.value)}
+              {' '}
+              <Input
+                label="徽章名称"
+                id="badgestab-f1"
+                type="text"
+                value={badgeName}
+                onChange={(e) => setBadgeName(e.target.value)}
                 placeholder="例如：元老、贡献者"
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800"
-              />
-            </div>
-
+              />{' '}
+            </div>{' '}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">徽章颜色</label>
+              {' '}
+              <label className="block text-label-l text-on-surface mb-1">徽章颜色</label>{' '}
               <div className="flex items-center gap-3">
+                {' '}
                 <input
-                  type="color" value={badgeColor}
+                  type="color"
+                  value={badgeColor}
                   onChange={(e) => setBadgeColor(e.target.value)}
                   className="w-10 h-10 p-0.5 border rounded cursor-pointer"
-                />
-                <input
-                  type="text" value={badgeColor} onChange={(e) => setBadgeColor(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800"
-                />
-              </div>
-            </div>
-
+                />{' '}
+                <Input
+                  type="text"
+                  value={badgeColor}
+                  onChange={(e) => setBadgeColor(e.target.value)}
+                  fieldClassName="flex-1"
+                />{' '}
+              </div>{' '}
+            </div>{' '}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                授予指定用户（输入用户ID，多个用逗号隔开，留空则使用下方日期区间）
-              </label>
-              <input
-                type="text" value={targetUserIds} onChange={(e) => setTargetUserIds(e.target.value)}
+              {' '}
+              <Input
+                label="授予指定用户（输入用户ID，多个用逗号隔开，留空则使用下方日期区间）"
+                type="text"
+                value={targetUserIds}
+                onChange={(e) => setTargetUserIds(e.target.value)}
                 placeholder="例如：1, 2, 5"
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800"
-              />
-            </div>
-
+              />{' '}
+            </div>{' '}
             <div className="flex gap-4">
+              {' '}
               <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">注册起始日期</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-              </div>
+                {' '}
+                <Input
+                  label="注册起始日期"
+                  id="badgestab-f2"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />{' '}
+              </div>{' '}
               <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">注册截止日期</label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-              </div>
-            </div>
-
+                {' '}
+                <Input
+                  label="注册截止日期"
+                  id="badgestab-f3"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />{' '}
+              </div>{' '}
+            </div>{' '}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">有效期</label>
+              {' '}
+              <label className="block text-label-l text-on-surface mb-1">有效期</label>{' '}
               <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="radio" checked={isPermanent} onChange={() => setIsPermanent(true)} />
-                  永久徽章
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="radio" checked={!isPermanent} onChange={() => setIsPermanent(false)} />
-                  设定有效期至
-                </label>
+                {' '}
+                <label className="flex items-center gap-2 text-label-l cursor-pointer">
+                  {' '}
+                  <input
+                    type="radio"
+                    checked={isPermanent}
+                    onChange={() => setIsPermanent(true)}
+                  />{' '}
+                  永久徽章{' '}
+                </label>{' '}
+                <label className="flex items-center gap-2 text-label-l cursor-pointer">
+                  {' '}
+                  <input
+                    type="radio"
+                    checked={!isPermanent}
+                    onChange={() => setIsPermanent(false)}
+                  />{' '}
+                  设定有效期至{' '}
+                </label>{' '}
                 {!isPermanent && (
-                  <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-                )}
-              </div>
-            </div>
-
-            <button
+                  <Input
+                    type="date"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                  />
+                )}{' '}
+              </div>{' '}
+            </div>{' '}
+            <Button
               onClick={handleGrantBadge}
-              disabled={granting}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+              variant="filled"
+              loading={granting}
+              icon={<MdAdd size={16} />}
             >
-              <MdAdd size={16} />
               {granting ? '授予中...' : '立即授予徽章'}
-            </button>
-          </div>
-
+            </Button>
+          </Card>
           {/* Badges list */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">已有徽章列表</h3>
-            {loading ? <Spinner /> : badges.length === 0 ? <EmptyState message="暂无徽章" /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-700">
-                      <th className="text-left py-2 px-2 text-slate-500 font-medium">ID</th>
-                      <th className="text-left py-2 px-2 text-slate-500 font-medium">名称</th>
-                      <th className="text-left py-2 px-2 text-slate-500 font-medium">颜色</th>
-                      <th className="text-left py-2 px-2 text-slate-500 font-medium">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {badges.map((badge) => (
-                      <tr key={badge.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td className="py-2 px-2">{badge.id}</td>
-                        <td className="py-2 px-2 font-medium">{badge.badge_name}</td>
-                        <td className="py-2 px-2">
-                          <span className="px-2 py-0.5 rounded text-xs text-white" style={{ backgroundColor: badge.badge_color }}>
-                            {badge.badge_color}
-                          </span>
-                        </td>
-                        <td className="py-2 px-2 flex gap-1">
-                          <button onClick={() => handleEditBadge(badge)} className="text-blue-500 hover:text-blue-700 p-1" title="编辑">
-                            <MdEdit size={16} />
-                          </button>
-                          <button onClick={() => handleDeleteBadge(badge.id)} className="text-red-500 hover:text-red-700 p-1" title="删除">
-                            <MdDelete size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <Card variant="outlined">
+            <h3 className="text-label-l-emphasized text-on-surface mb-4">已有徽章列表</h3>
+            <DataTable<Badge>
+              columns={badgeColumns}
+              rows={badges}
+              rowKey={(b) => b.id}
+              loading={loading}
+              empty="暂无徽章"
+            />
+          </Card>
         </>
       )}
-
       {activeSubTab === 'links' && (
         <>
-          <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700 space-y-4">
-            <div className="text-xs text-slate-500 p-3 bg-orange-50 dark:bg-orange-900/20 rounded border-l-4 border-l-orange-500">
-              生成一个包含徽章信息的专属链接，用户点击链接即可自动领取指定的徽章。
-            </div>
-
+          {' '}
+          <Card variant="outlined" className="space-y-4">
+            {' '}
+            <div className="text-body-s text-on-surface-variant p-3 bg-warning-container rounded border-l-4 border-l-warning">
+              {' '}
+              生成一个包含徽章信息的专属链接，用户点击链接即可自动领取指定的徽章。{' '}
+            </div>{' '}
             <div className="flex gap-4">
+              {' '}
               <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">徽章名称</label>
-                <input type="text" value={linkBadgeName} onChange={(e) => setLinkBadgeName(e.target.value)}
+                {' '}
+                <Input
+                  label="徽章名称"
+                  type="text"
+                  value={linkBadgeName}
+                  onChange={(e) => setLinkBadgeName(e.target.value)}
                   placeholder="输入徽章名称"
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-              </div>
+                />{' '}
+              </div>{' '}
               <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">徽章颜色</label>
+                {' '}
+                <label className="block text-label-l text-on-surface mb-1">徽章颜色</label>{' '}
                 <div className="flex items-center gap-2">
-                  <input type="color" value={linkBadgeColor} onChange={(e) => setLinkBadgeColor(e.target.value)}
-                    className="w-10 h-10 p-0.5 border rounded cursor-pointer" />
-                  <input type="text" value={linkBadgeColor} onChange={(e) => setLinkBadgeColor(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-                </div>
-              </div>
-            </div>
-
+                  {' '}
+                  <input
+                    type="color"
+                    value={linkBadgeColor}
+                    onChange={(e) => setLinkBadgeColor(e.target.value)}
+                    className="w-10 h-10 p-0.5 border rounded cursor-pointer"
+                  />{' '}
+                  <Input
+                    type="text"
+                    value={linkBadgeColor}
+                    onChange={(e) => setLinkBadgeColor(e.target.value)}
+                    fieldClassName="flex-1"
+                  />{' '}
+                </div>{' '}
+              </div>{' '}
+            </div>{' '}
             <div className="flex gap-4">
+              {' '}
               <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">徽章有效期至（留空为永久）</label>
-                <input type="date" value={linkBadgeExpiresAt} onChange={(e) => setLinkBadgeExpiresAt(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-              </div>
+                {' '}
+                <Input
+                  label="徽章有效期至（留空为永久）"
+                  type="date"
+                  value={linkBadgeExpiresAt}
+                  onChange={(e) => setLinkBadgeExpiresAt(e.target.value)}
+                />{' '}
+              </div>{' '}
               <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">链接有效期至（留空为永久）</label>
-                <input type="date" value={linkExpiresAt} onChange={(e) => setLinkExpiresAt(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-              </div>
-            </div>
-
-            <button onClick={handleCreateBadgeLink} disabled={creatingLink}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50">
-              <MdLink size={16} />
-              {creatingLink ? '生成中...' : '生成领取链接'}
+                {' '}
+                <Input
+                  label="链接有效期至（留空为永久）"
+                  id="badgestab-f4"
+                  type="date"
+                  value={linkExpiresAt}
+                  onChange={(e) => setLinkExpiresAt(e.target.value)}
+                />{' '}
+              </div>{' '}
+            </div>{' '}
+            <button
+              onClick={handleCreateBadgeLink}
+              disabled={creatingLink}
+              className="flex items-center gap-2 px-4 py-2 bg-warning-fill text-on-fill rounded-full text-label-l hover:bg-warning-fill/90 disabled:opacity-50"
+            >
+              {' '}
+              <MdLink size={16} /> {creatingLink ? '生成中...' : '生成领取链接'}
             </button>
-          </div>
-
+          </Card>
           {/* Existing badge links */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">已生成的链接</h3>
-            {badgeLinks.length === 0 ? <EmptyState message="暂无领取链接" /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-700">
-                      <th className="text-left py-2 px-2 text-slate-500 font-medium">徽章</th>
-                      <th className="text-left py-2 px-2 text-slate-500 font-medium">状态</th>
-                      <th className="text-left py-2 px-2 text-slate-500 font-medium">有效期</th>
-                      <th className="text-left py-2 px-2 text-slate-500 font-medium">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {badgeLinks.map((link) => (
-                      <tr key={link.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td className="py-2 px-2">
-                          <span className="px-2 py-0.5 rounded text-xs text-white" style={{ backgroundColor: link.badge_color }}>
-                            {link.badge_name}
-                          </span>
-                        </td>
-                        <td className="py-2 px-2">
-                          <button
-                            onClick={() => handleToggleBadgeLink(link.id, link.is_active)}
-                            className={`text-xs px-2 py-1 rounded ${link.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
-                          >
-                            {link.is_active ? '已启用' : '已停用'}
-                          </button>
-                        </td>
-                        <td className="py-2 px-2 text-xs text-slate-400">
-                          {link.link_expires_at ? `链接: ${link.link_expires_at}` : '永久'}
-                          {link.badge_expires_at && ` / 徽章: ${link.badge_expires_at}`}
-                        </td>
-                        <td className="py-2 px-2">
-                          <button onClick={() => copyBadgeLink(link)}
-                            className="text-blue-500 hover:text-blue-700 p-1" title="复制链接">
-                            <MdContentCopy size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <Card variant="outlined">
+            <h3 className="text-label-l-emphasized text-on-surface mb-4">已生成的链接</h3>
+            <DataTable<BadgeLink>
+              columns={badgeLinkColumns}
+              rows={badgeLinks}
+              rowKey={(l) => l.id}
+              empty="暂无领取链接"
+            />
+          </Card>
         </>
       )}
-
       {/* Edit badge modal */}
-      {editModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setEditModalOpen(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">编辑徽章</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">名称</label>
-                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">颜色</label>
-                <div className="flex items-center gap-3">
-                  <input type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)}
-                    className="w-10 h-10 p-0.5 border rounded cursor-pointer" />
-                  <input type="text" value={editColor} onChange={(e) => setEditColor(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setEditModalOpen(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-600 dark:text-slate-400">
-                  取消
-                </button>
-                <button onClick={handleSaveEdit}
-                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90">
-                  保存
-                </button>
-              </div>
+      <Modal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        title="编辑徽章"
+        maxWidth="max-w-md"
+        footer={
+          <>
+            <button
+              onClick={() => setEditModalOpen(false)}
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
+            >
+              取消
+            </button>
+            <Button onClick={handleSaveEdit} variant="filled">
+              保存
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="badge-edit-name" className="block text-label-l text-on-surface mb-1">
+              名称
+            </label>
+            <Input
+              id="badge-edit-name"
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="badge-edit-color" className="block text-label-l text-on-surface mb-1">
+              颜色
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={editColor}
+                onChange={(e) => setEditColor(e.target.value)}
+                aria-label="选择徽章颜色"
+                className="h-10 w-10 shrink-0 cursor-pointer rounded border border-outline p-0.5"
+              />
+              <Input
+                id="badge-edit-color"
+                type="text"
+                value={editColor}
+                onChange={(e) => setEditColor(e.target.value)}
+                fieldClassName="flex-1"
+              />
             </div>
           </div>
         </div>
-      )}
-
+      </Modal>
       <Modal
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
@@ -535,20 +652,17 @@ export default function BadgesTab({ token }: { token: string }) {
           <>
             <button
               onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
             >
               取消
             </button>
-            <button
-              onClick={handleConfirm}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-            >
+            <Button variant="danger" onClick={handleConfirm}>
               确认
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400">确定要删除此徽章？</p>
+        <p className="text-body-m text-on-surface-variant">确定要删除此徽章？</p>
       </Modal>
     </div>
   );

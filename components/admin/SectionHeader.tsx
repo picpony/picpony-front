@@ -24,13 +24,11 @@ export default function SectionHeader({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+        <h2 className="text-title-l text-on-surface flex items-center gap-2">
           {icon}
           {title}
         </h2>
-        {subtitle && (
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{subtitle}</p>
-        )}
+        {subtitle && <p className="text-body-m text-on-surface-variant mt-1">{subtitle}</p>}
       </div>
       <div className="flex items-center gap-2">
         {actions}

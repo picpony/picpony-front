@@ -18,11 +18,7 @@ import {
   REVEAL_SURFACE_DURATION_MS,
   HERO_BACKGROUND_SINK_Y_PX,
 } from './constants';
-import {
-  getHeroBackgroundSinkTransform,
-  heroRectCenterDistance,
-  type HeroRect,
-} from './geometry';
+import { getHeroBackgroundSinkTransform, heroRectCenterDistance, type HeroRect } from './geometry';
 import {
   applyFlightPose,
   buildFlightKeyframes,
@@ -170,16 +166,18 @@ function buildOverlayAnimations(
 
   if (direction === 'forward') {
     if (surface) {
-      owners.push(animateAt(
-        surface,
-        [{ opacity: 0 }, { opacity: 1 }],
-        {
-          duration: REVEAL_SURFACE_DURATION_MS,
-          delay: REVEAL_SURFACE_DELAY_MS,
-          easing: REVEAL_EASING,
-        },
-        startTime,
-      ));
+      owners.push(
+        animateAt(
+          surface,
+          [{ opacity: 0 }, { opacity: 1 }],
+          {
+            duration: REVEAL_SURFACE_DURATION_MS,
+            delay: REVEAL_SURFACE_DELAY_MS,
+            easing: REVEAL_EASING,
+          },
+          startTime,
+        ),
+      );
     }
     const reveal = new Set<HTMLElement>([
       ...overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR),
@@ -187,19 +185,21 @@ function buildOverlayAnimations(
     ]);
     reveal.forEach((element) => {
       const role = revealRole(element);
-      owners.push(animateAt(
-        element,
-        [
-          { opacity: 0, transform: `translate3d(0, ${REVEAL_DISTANCE_PX[role]}px, 0)` },
-          { opacity: 1, transform: 'translate3d(0, 0, 0)' },
-        ],
-        {
-          duration: REVEAL_CONTENT_DURATION_MS,
-          delay: REVEAL_DELAY_MS[role],
-          easing: REVEAL_EASING,
-        },
-        startTime,
-      ));
+      owners.push(
+        animateAt(
+          element,
+          [
+            { opacity: 0, transform: `translate3d(0, ${REVEAL_DISTANCE_PX[role]}px, 0)` },
+            { opacity: 1, transform: 'translate3d(0, 0, 0)' },
+          ],
+          {
+            duration: REVEAL_CONTENT_DURATION_MS,
+            delay: REVEAL_DELAY_MS[role],
+            easing: REVEAL_EASING,
+          },
+          startTime,
+        ),
+      );
     });
     return owners;
   }
@@ -211,15 +211,17 @@ function buildOverlayAnimations(
     ...(floatingBack ? [floatingBack] : []),
   ]);
   fadeTargets.forEach((element) => {
-    owners.push(animateAt(
-      element,
-      [
-        { opacity: numericOpacity(element), transform: 'translate3d(0, 0, 0)' },
-        { opacity: 0, transform: `translate3d(0, ${HIDE_DISTANCE_PX}px, 0)` },
-      ],
-      { duration: HERO_DURATIONS.back, easing: HIDE_EASING },
-      startTime,
-    ));
+    owners.push(
+      animateAt(
+        element,
+        [
+          { opacity: numericOpacity(element), transform: 'translate3d(0, 0, 0)' },
+          { opacity: 0, transform: `translate3d(0, ${HIDE_DISTANCE_PX}px, 0)` },
+        ],
+        { duration: HERO_DURATIONS.back, easing: HIDE_EASING },
+        startTime,
+      ),
+    );
   });
   return owners;
 }
@@ -280,8 +282,9 @@ export class HeroMotion {
   }
 
   get finished() {
-    return Promise.all([this.landedCompletion.promise, this.sharedCompletion.promise])
-      .then(() => undefined);
+    return Promise.all([this.landedCompletion.promise, this.sharedCompletion.promise]).then(
+      () => undefined,
+    );
   }
 
   /** Current visual state — analytic, so no forced layout and no DOM reads. */
@@ -299,9 +302,7 @@ export class HeroMotion {
    */
   setPullOffset(distance: number) {
     this.pullOffset = distance;
-    this.flight.compensator.style.transform = distance
-      ? `translate3d(0, ${distance}px, 0)`
-      : '';
+    this.flight.compensator.style.transform = distance ? `translate3d(0, ${distance}px, 0)` : '';
   }
 
   /**
@@ -337,12 +338,7 @@ export class HeroMotion {
     const currentScreen = planeRectToScreen(posed, this.flight.plane);
     const originScreen = planeRectToScreen(previous.from, this.flight.plane);
     if (plane) {
-      moveFlightToPlane(
-        this.flight,
-        plane,
-        screenRectToPlane(currentScreen, plane),
-        pose.radius,
-      );
+      moveFlightToPlane(this.flight, plane, screenRectToPlane(currentScreen, plane), pose.radius);
     }
     const from = screenRectToPlane(currentScreen, this.flight.plane);
     const to = screenRectToPlane(destination ?? originScreen, this.flight.plane);
@@ -351,14 +347,12 @@ export class HeroMotion {
     const direction: HeroDirection = previous.direction === 'forward' ? 'back' : 'forward';
     const fullTravel = heroRectCenterDistance(previous.from, previous.to);
     const returnTravel = heroRectCenterDistance(from, to);
-    const ratio = fullTravel > 0.5
-      ? Math.min(1, Math.max(0, returnTravel / fullTravel))
-      : 1;
+    const ratio = fullTravel > 0.5 ? Math.min(1, Math.max(0, returnTravel / fullTravel)) : 1;
     const duration = Math.max(
       HERO_REVERSE_MIN_DURATION_MS,
       Math.round(
         HERO_DURATIONS[direction] *
-        (HERO_REVERSE_BASE_RATIO + HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(ratio)),
+          (HERO_REVERSE_BASE_RATIO + HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(ratio)),
       ),
     );
 
@@ -401,12 +395,7 @@ export class HeroMotion {
 
     const currentScreen = planeRectToScreen(pose.rect, this.flight.plane);
     if (plane) {
-      moveFlightToPlane(
-        this.flight,
-        plane,
-        screenRectToPlane(currentScreen, plane),
-        pose.radius,
-      );
+      moveFlightToPlane(this.flight, plane, screenRectToPlane(currentScreen, plane), pose.radius);
     }
     const from = screenRectToPlane(currentScreen, this.flight.plane);
     const to = screenRectToPlane(destination, this.flight.plane);
@@ -450,10 +439,11 @@ export class HeroMotion {
   fadeRetiring(duration = 160) {
     if (this.disposed) return Promise.resolve();
     try {
-      const fade = this.flight.layer.animate(
-        [{ opacity: 1 }, { opacity: 0 }],
-        { duration, easing: 'ease-out', fill: 'forwards' },
-      );
+      const fade = this.flight.layer.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration,
+        easing: HIDE_EASING,
+        fill: 'forwards',
+      });
       return fade.finished.catch(() => undefined).then(() => this.dispose());
     } catch {
       this.dispose();
@@ -517,12 +507,14 @@ export class HeroMotion {
         owners.push(this.buildBackgroundAnimation(continueBackground));
       }
       if (this.overlay) {
-        owners.push(...buildOverlayAnimations(
-          this.overlay,
-          this.floatingBack,
-          this.leg.direction,
-          this.leg.startedAt,
-        ));
+        owners.push(
+          ...buildOverlayAnimations(
+            this.overlay,
+            this.floatingBack,
+            this.leg.direction,
+            this.leg.startedAt,
+          ),
+        );
       }
     } catch {
       settle(owners, false);
@@ -548,7 +540,9 @@ export class HeroMotion {
     const { direction, response, duration, startedAt } = this.leg;
     const from = continueFromCurrent
       ? readBackgroundAmount(element)
-      : direction === 'forward' ? 0 : 1;
+      : direction === 'forward'
+        ? 0
+        : 1;
     const to = direction === 'forward' ? 1 : 0;
     element.style.transformOrigin = 'center top';
     element.style.willChange = 'transform';

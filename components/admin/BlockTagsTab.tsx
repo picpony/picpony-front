@@ -6,6 +6,8 @@ import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdShield, MdAdd } from 'react-icons/md';
 import { SectionHeader, Spinner } from './';
+import Button from '@/components/Button';
+import { Input } from '@/components/Input';
 
 interface BlockTag {
   id: number;
@@ -76,13 +78,18 @@ export default function BlockTagsTab({ token }: { token: string }) {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const handleAddTag = async (key: string) => {
     if (!newTagName.trim()) return;
     try {
-      const res = await api.adminAddBlockTag(token, { filter_key: key, tag_name: newTagName.trim() });
+      const res = await api.adminAddBlockTag(token, {
+        filter_key: key,
+        tag_name: newTagName.trim(),
+      });
       const data = await res.json();
       if (data.success) {
         showToast('已添加', 'success');
@@ -113,71 +120,72 @@ export default function BlockTagsTab({ token }: { token: string }) {
       }
     });
   };
-
   return (
     <div className="space-y-6">
+      {' '}
       <SectionHeader
         icon={<MdShield className="text-primary" size={24} />}
         title="底层屏蔽标签管理"
         onRefresh={loadBlockTags}
-      />
-
-      <div className="text-xs text-slate-500 dark:text-slate-400 p-3 bg-red-50 dark:bg-red-900/20 rounded border-l-4 border-l-red-500">
-        此处管理网站全局底层屏蔽规则，影响所有用户的搜索过滤结果。
-        <b>safe</b> 与 <b>spoilers</b> 中的标签会作为排除项（-标签）加入搜索。
-        <b>onlyPony</b> 中的标签会作为可选物种范围（OR 关系）。
-      </div>
-
+      />{' '}
+      <div className="text-body-s text-on-surface-variant p-3 bg-error-container rounded border-l-4 border-l-error">
+        {' '}
+        此处管理网站全局底层屏蔽规则，影响所有用户的搜索过滤结果。 <b>safe</b> 与 <b>spoilers</b>{' '}
+        中的标签会作为排除项（-标签）加入搜索。 <b>onlyPony</b> 中的标签会作为可选物种范围（OR
+        关系）。{' '}
+      </div>{' '}
       {loading ? (
         <Spinner />
       ) : (
         <div className="space-y-6">
+          {' '}
           {filterKeys.map((key) => {
             const tags = blockTags[key] || [];
             return (
-              <div key={key} className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+              <div key={key} className="bg-surface rounded-md border border-outline-variant p-4">
+                {' '}
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{filterLabels[key]}</h3>
+                  {' '}
+                  <h3 className="text-label-l-emphasized text-on-surface">
+                    {filterLabels[key]}
+                  </h3>{' '}
                   <button
                     onClick={() => setAddingKey(addingKey === key ? null : key)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
+                    className="flex items-center gap-1 px-3 py-1.5 text-label-m bg-primary/10 text-primary rounded-full hover:bg-primary/20"
                   >
-                    <MdAdd size={14} /> 添加
-                  </button>
-                </div>
-
+                    {' '}
+                    <MdAdd size={14} /> 添加{' '}
+                  </button>{' '}
+                </div>{' '}
                 {addingKey === key && (
                   <div className="flex items-center gap-2 mb-3">
-                    <input
+                    {' '}
+                    <Input
                       type="text"
                       value={newTagName}
                       onChange={(e) => setNewTagName(e.target.value)}
                       placeholder="输入标签名..."
-                      className="flex-1 px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800"
+                      className="rounded" fieldClassName="flex-1"
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTag(key)}
                     />
-                    <button
-                      onClick={() => handleAddTag(key)}
-                      className="px-3 py-1.5 bg-primary text-white rounded text-xs font-medium"
-                    >
+                    <Button onClick={() => handleAddTag(key)} variant="filled" size="sm">
                       确认
-                    </button>
+                    </Button>
                   </div>
                 )}
-
                 {tags.length === 0 ? (
-                  <p className="text-xs text-slate-400">暂无标签</p>
+                  <p className="text-body-s text-outline">暂无标签</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {tags.map((tag: BlockTag) => (
                       <span
                         key={tag.id}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded bg-surface-container-high text-body-s text-on-surface border border-outline-variant"
                       >
                         {tag.tag_name}
                         <button
                           onClick={() => handleRemoveTag(key, tag.id)}
-                          className="text-red-400 hover:text-red-600 ml-1"
+                          className="state-layer ml-1 rounded-full p-0.5 text-error"
                         >
                           ×
                         </button>
@@ -190,7 +198,6 @@ export default function BlockTagsTab({ token }: { token: string }) {
           })}
         </div>
       )}
-
       <Modal
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
@@ -200,20 +207,17 @@ export default function BlockTagsTab({ token }: { token: string }) {
           <>
             <button
               onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
             >
               取消
             </button>
-            <button
-              onClick={handleConfirm}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-            >
+            <Button variant="danger" onClick={handleConfirm}>
               确认
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400">确定要移除此标签？</p>
+        <p className="text-body-m text-on-surface-variant">确定要移除此标签？</p>
       </Modal>
     </div>
   );

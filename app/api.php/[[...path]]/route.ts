@@ -65,12 +65,14 @@ function isSecureRequest(request: NextRequest): boolean {
 }
 
 function downgradeCookie(cookie: string): string {
-  return cookie
-    .replace(/;\s*Secure\b/gi, '')
-    // `SameSite=None` is only honoured on Secure cookies, so leaving it would
-    // just lose the cookie to a different rule. Lax is the safe equivalent for
-    // a same-origin flow like this one.
-    .replace(/;\s*SameSite\s*=\s*None\b/gi, '; SameSite=Lax');
+  return (
+    cookie
+      .replace(/;\s*Secure\b/gi, '')
+      // `SameSite=None` is only honoured on Secure cookies, so leaving it would
+      // just lose the cookie to a different rule. Lax is the safe equivalent for
+      // a same-origin flow like this one.
+      .replace(/;\s*SameSite\s*=\s*None\b/gi, '; SameSite=Lax')
+  );
 }
 
 async function proxy(

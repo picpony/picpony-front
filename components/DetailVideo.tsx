@@ -13,15 +13,9 @@ import { getHeroMediaPreviewSizes } from '@/lib/hero/geometry';
 
 const HERO_MEDIA_PREVIEW_SIZES = getHeroMediaPreviewSizes();
 
-type DetailMediaTargetCallback = (
-  surfaceId: string,
-  target: HTMLDivElement | null,
-) => void;
+type DetailMediaTargetCallback = (surfaceId: string, target: HTMLDivElement | null) => void;
 
-type DetailMediaReadyCallback = (
-  surfaceId: string,
-  target: HTMLDivElement,
-) => void;
+type DetailMediaReadyCallback = (surfaceId: string, target: HTMLDivElement) => void;
 
 type DetailVideoProps = {
   imageId: number;
@@ -137,35 +131,45 @@ export default function DetailVideo({
     lease.cancel();
   }, []);
 
-  const setFinalVideoRef = useCallback((video: HTMLVideoElement | null) => {
-    const previous = videoRef.current;
-    if (previous && previous !== video) {
-      cancelFinalReady(previous);
-      previous.pause();
-    }
-    videoRef.current = video;
-    if (!video) {
-      finalReadyRef.current = false;
-      publishedFinalSurfaceRef.current = null;
-      targetRef.current?.removeAttribute('data-image-detail-final-ready');
-    }
-  }, [cancelFinalReady]);
+  const setFinalVideoRef = useCallback(
+    (video: HTMLVideoElement | null) => {
+      const previous = videoRef.current;
+      if (previous && previous !== video) {
+        cancelFinalReady(previous);
+        previous.pause();
+      }
+      videoRef.current = video;
+      if (!video) {
+        finalReadyRef.current = false;
+        publishedFinalSurfaceRef.current = null;
+        targetRef.current?.removeAttribute('data-image-detail-final-ready');
+      }
+    },
+    [cancelFinalReady],
+  );
 
-  const setPreviewVideoRef = useCallback((video: HTMLVideoElement | null) => {
-    const previous = previewVideoRef.current;
-    if (previous && previous !== video) {
-      cancelPreviewReady(previous);
-      previous.pause();
-    }
-    previewVideoRef.current = video;
-  }, [cancelPreviewReady]);
+  const setPreviewVideoRef = useCallback(
+    (video: HTMLVideoElement | null) => {
+      const previous = previewVideoRef.current;
+      if (previous && previous !== video) {
+        cancelPreviewReady(previous);
+        previous.pause();
+      }
+      previewVideoRef.current = video;
+    },
+    [cancelPreviewReady],
+  );
 
   const publishPreviewReady = useCallback(() => {
     const readySurfaceId = surfaceIdRef.current;
     const target = targetRef.current;
     const callback = onPreviewReadyRef.current;
-    if (!readySurfaceId || !target || !callback ||
-        publishedPreviewSurfaceRef.current === readySurfaceId) {
+    if (
+      !readySurfaceId ||
+      !target ||
+      !callback ||
+      publishedPreviewSurfaceRef.current === readySurfaceId
+    ) {
       return;
     }
     publishedPreviewSurfaceRef.current = readySurfaceId;
@@ -176,8 +180,12 @@ export default function DetailVideo({
     const readySurfaceId = surfaceIdRef.current;
     const target = targetRef.current;
     const callback = onFinalReadyRef.current;
-    if (!readySurfaceId || !target || !callback ||
-        publishedFinalSurfaceRef.current === readySurfaceId) {
+    if (
+      !readySurfaceId ||
+      !target ||
+      !callback ||
+      publishedFinalSurfaceRef.current === readySurfaceId
+    ) {
       return;
     }
     publishedFinalSurfaceRef.current = readySurfaceId;
@@ -256,26 +264,33 @@ export default function DetailVideo({
     return () => onTargetChange(surfaceId, null);
   }, [onTargetChange, surfaceId]);
 
-  const markFinalReady = useCallback((video: HTMLVideoElement) => {
-    if (sourceRef.current.finalSrc !== finalSrc || videoRef.current !== video) return;
-    if (finalReadyRef.current) {
-      publishFinalReady();
-      return;
-    }
-    cancelFinalReady();
-    const loadedSrc = video.currentSrc;
-    let cancel = () => {};
-    cancel = afterVideoFrame(video, () => {
-      if (finalFrameLeaseRef.current?.cancel === cancel) finalFrameLeaseRef.current = null;
-      if (sourceRef.current.finalSrc !== finalSrc || videoRef.current !== video ||
-          !video.isConnected || video.currentSrc !== loadedSrc ||
-          video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+  const markFinalReady = useCallback(
+    (video: HTMLVideoElement) => {
+      if (sourceRef.current.finalSrc !== finalSrc || videoRef.current !== video) return;
+      if (finalReadyRef.current) {
+        publishFinalReady();
         return;
       }
-      markFinalPaintable();
-    });
-    finalFrameLeaseRef.current = { video, cancel };
-  }, [cancelFinalReady, finalSrc, markFinalPaintable, publishFinalReady]);
+      cancelFinalReady();
+      const loadedSrc = video.currentSrc;
+      let cancel = () => {};
+      cancel = afterVideoFrame(video, () => {
+        if (finalFrameLeaseRef.current?.cancel === cancel) finalFrameLeaseRef.current = null;
+        if (
+          sourceRef.current.finalSrc !== finalSrc ||
+          videoRef.current !== video ||
+          !video.isConnected ||
+          video.currentSrc !== loadedSrc ||
+          video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+        ) {
+          return;
+        }
+        markFinalPaintable();
+      });
+      finalFrameLeaseRef.current = { video, cancel };
+    },
+    [cancelFinalReady, finalSrc, markFinalPaintable, publishFinalReady],
+  );
 
   useEffect(() => {
     const video = videoRef.current;
@@ -302,40 +317,60 @@ export default function DetailVideo({
     };
   }, [cancelPreviewReady, heroActive, previewKind, previewSrc]);
 
-  const handleFinalLoaded = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
-    markFinalReady(event.currentTarget);
-  }, [markFinalReady]);
+  const handleFinalLoaded = useCallback(
+    (event: SyntheticEvent<HTMLVideoElement>) => {
+      markFinalReady(event.currentTarget);
+    },
+    [markFinalReady],
+  );
 
-  const handlePreviewVideoLoaded = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
-    const video = event.currentTarget;
-    if (sourceRef.current.previewSrc !== previewSrc || previewVideoRef.current !== video) return;
-    const loadedSrc = video.currentSrc;
-    cancelPreviewReady();
-    let cancel = () => {};
-    cancel = afterVideoFrame(video, () => {
-      if (previewFrameLeaseRef.current?.cancel === cancel) previewFrameLeaseRef.current = null;
-      if (sourceRef.current.previewSrc !== previewSrc || previewVideoRef.current !== video ||
-          !video.isConnected || video.currentSrc !== loadedSrc ||
-          video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-        return;
-      }
-      markPreviewReady();
-    });
-    previewFrameLeaseRef.current = { video, cancel };
-  }, [cancelPreviewReady, markPreviewReady, previewSrc]);
-
-  const handlePreviewImageLoaded = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
-    const image = event.currentTarget;
-    const loadedSrc = image.currentSrc;
-    void image.decode().catch(() => undefined).then(() => {
-      requestAnimationFrame(() => {
-        if (sourceRef.current.previewSrc === previewSrc &&
-            image.isConnected && image.currentSrc === loadedSrc && image.naturalWidth > 0) {
-          markPreviewReady();
+  const handlePreviewVideoLoaded = useCallback(
+    (event: SyntheticEvent<HTMLVideoElement>) => {
+      const video = event.currentTarget;
+      if (sourceRef.current.previewSrc !== previewSrc || previewVideoRef.current !== video) return;
+      const loadedSrc = video.currentSrc;
+      cancelPreviewReady();
+      let cancel = () => {};
+      cancel = afterVideoFrame(video, () => {
+        if (previewFrameLeaseRef.current?.cancel === cancel) previewFrameLeaseRef.current = null;
+        if (
+          sourceRef.current.previewSrc !== previewSrc ||
+          previewVideoRef.current !== video ||
+          !video.isConnected ||
+          video.currentSrc !== loadedSrc ||
+          video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+        ) {
+          return;
         }
+        markPreviewReady();
       });
-    });
-  }, [markPreviewReady, previewSrc]);
+      previewFrameLeaseRef.current = { video, cancel };
+    },
+    [cancelPreviewReady, markPreviewReady, previewSrc],
+  );
+
+  const handlePreviewImageLoaded = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      const image = event.currentTarget;
+      const loadedSrc = image.currentSrc;
+      void image
+        .decode()
+        .catch(() => undefined)
+        .then(() => {
+          requestAnimationFrame(() => {
+            if (
+              sourceRef.current.previewSrc === previewSrc &&
+              image.isConnected &&
+              image.currentSrc === loadedSrc &&
+              image.naturalWidth > 0
+            ) {
+              markPreviewReady();
+            }
+          });
+        });
+    },
+    [markPreviewReady, previewSrc],
+  );
 
   return (
     <div
@@ -343,7 +378,7 @@ export default function DetailVideo({
       data-image-hero-role="detail"
       data-image-hero-id={imageId}
       data-image-detail-hero-active={heroActive ? 'true' : 'false'}
-      className="group relative flex-none cursor-default overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-900"
+      className="group relative flex-none cursor-default overflow-hidden rounded-lg bg-surface-container-low"
       style={style}
     >
       {finalSrc && mountFinal && (
@@ -363,33 +398,34 @@ export default function DetailVideo({
           className="image-detail-final absolute inset-0 z-0 block h-full w-full object-contain"
         />
       )}
-      {previewSrc && (previewKind === 'video' ? (
-        <video
-          ref={setPreviewVideoRef}
-          src={previewSrc}
-          aria-hidden="true"
-          muted
-          playsInline
-          preload="auto"
-          onLoadedData={handlePreviewVideoLoaded}
-          data-image-detail-layer="preview"
-          className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
-        />
-      ) : (
-        <Image
-          src={previewSrc}
-          alt=""
-          aria-hidden="true"
-          fill
-          sizes={HERO_MEDIA_PREVIEW_SIZES}
-          loading="eager"
-          fetchPriority={heroActive ? 'low' : 'high'}
-          unoptimized
-          onLoad={handlePreviewImageLoaded}
-          data-image-detail-layer="preview"
-          className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
-        />
-      ))}
+      {previewSrc &&
+        (previewKind === 'video' ? (
+          <video
+            ref={setPreviewVideoRef}
+            src={previewSrc}
+            aria-hidden="true"
+            muted
+            playsInline
+            preload="auto"
+            onLoadedData={handlePreviewVideoLoaded}
+            data-image-detail-layer="preview"
+            className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
+          />
+        ) : (
+          <Image
+            src={previewSrc}
+            alt=""
+            aria-hidden="true"
+            fill
+            sizes={HERO_MEDIA_PREVIEW_SIZES}
+            loading="eager"
+            fetchPriority={heroActive ? 'low' : 'high'}
+            unoptimized
+            onLoad={handlePreviewImageLoaded}
+            data-image-detail-layer="preview"
+            className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
+          />
+        ))}
     </div>
   );
 }

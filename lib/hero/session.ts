@@ -207,7 +207,10 @@ export function settleUnlessAborted<T>(promise: Promise<T>, signal: AbortSignal)
     };
     const abort = () => finish(null);
     signal.addEventListener('abort', abort, { once: true });
-    void promise.then((value) => finish(value), () => finish(null));
+    void promise.then(
+      (value) => finish(value),
+      () => finish(null),
+    );
     if (signal.aborted) abort();
   });
 }

@@ -13,11 +13,7 @@ import {
   isVolatileVisualMedia,
   type VisualMedia,
 } from './dom';
-import {
-  initializeHeroInput,
-  isHeroInteractionQuiet,
-  subscribeHeroInteraction,
-} from './input';
+import { initializeHeroInput, isHeroInteractionQuiet, subscribeHeroInteraction } from './input';
 
 const HERO_FRAME_CACHE_MAX_PIXELS = HERO_FRAME_MAX_DIMENSION * HERO_FRAME_MAX_DIMENSION * 2;
 
@@ -202,8 +198,12 @@ export function warmImageHeroFrame(source: HTMLElement | null) {
   // Animated media must be captured at activation so the flyer starts on the
   // frame the user actually saw. A warm capture cannot be reused correctly.
   if (initialMedia && isVolatileVisualMedia(initialMedia)) return () => {};
-  if (initialMedia && initialCapture && !isVolatileVisualMedia(initialMedia) &&
-      getCachedHeroFrame(getHeroFrameCacheKey(initialCapture))) {
+  if (
+    initialMedia &&
+    initialCapture &&
+    !isVolatileVisualMedia(initialMedia) &&
+    getCachedHeroFrame(getHeroFrameCacheKey(initialCapture))
+  ) {
     return () => {};
   }
 

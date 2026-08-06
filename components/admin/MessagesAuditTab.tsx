@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import { MdMessage, MdSearch, MdRefresh } from 'react-icons/md';
-import { SectionHeader, EmptyState, Spinner } from './';
+import DataTable, { type Column } from '@/components/DataTable';
+import { SectionHeader } from './';
+import Card from '@/components/Card';
+import Button from '@/components/Button';
+import { Input } from '@/components/Input';
 
 interface AuditMessage {
   id: number;
@@ -16,6 +20,40 @@ interface AuditMessage {
   is_read: number;
   created_at: string;
 }
+
+/* The message body leads the phone card — it is the only column an auditor is
+   actually reading; the ids and timestamps around it are context. On desktop it
+   stays an ordinary cell, clamped so one long message can't blow out the grid. */
+const AUDIT_COLUMNS: Column<AuditMessage>[] = [
+  {
+    key: 'content',
+    header: '私信内容',
+    primary: true,
+    className: 'max-w-xs truncate',
+    render: (m) => m.content,
+  },
+  { key: 'id', header: '消息ID', render: (m) => m.id },
+  { key: 'sender', header: '发送方', render: (m) => m.sender_name },
+  { key: 'receiver', header: '接收方', render: (m) => m.receiver_name },
+  {
+    key: 'state',
+    header: '状态',
+    render: (m) => (
+      <span
+        className={`rounded-full px-2 py-0.5 text-body-s ${
+          m.is_read ? 'bg-success-container text-success' : 'bg-warning-container text-warning'
+        }`}
+      >
+        {m.is_read ? '已读' : '未读'}
+      </span>
+    ),
+  },
+  {
+    key: 'created',
+    header: '时间',
+    render: (m) => <span className="text-outline text-body-s">{m.created_at}</span>,
+  },
+];
 
 export default function MessagesAuditTab({ token }: { token: string }) {
   const [messages, setMessages] = useState<AuditMessage[]>([]);
@@ -38,80 +76,59 @@ export default function MessagesAuditTab({ token }: { token: string }) {
       setLoading(false);
     }
   };
-
   return (
     <div className="space-y-6">
+      {' '}
       <SectionHeader
         icon={<MdMessage className="text-primary" size={24} />}
         title="私信安全审计查阅"
         onRefresh={() => loadMessages()}
-      />
-
-      <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-        <div className="text-xs text-red-500 mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded border-l-4 border-l-red-500">
-          警告：作为管理员，您有权审计全站私信以排查违规交易、辱骂或诈骗行为。请严格遵守用户隐私准则，切勿滥用此功能。
-        </div>
-
-        <div className="flex items-center gap-3 mb-4">
-          <input
+      />{' '}
+      <Card variant="outlined">
+        {' '}
+        <div className="text-body-s text-error mb-4 p-3 bg-error-container rounded border-l-4 border-l-error">
+          {' '}
+          警告：作为管理员，您有权审计全站私信以排查违规交易、辱骂或诈骗行为。请严格遵守用户隐私准则，切勿滥用此功能。{' '}
+        </div>{' '}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          {' '}
+          <Input
             type="number"
             min={1}
             value={searchUserId}
             onChange={(e) => setSearchUserId(e.target.value)}
             placeholder="输入用户 ID 查询 TA 的私信..."
-            className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-          />
-          <button
-            onClick={() => loadMessages(searchUserId ? parseInt(searchUserId) : undefined)}
-            className="flex items-center gap-1 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
-          >
-            <MdSearch size={16} /> 检索
-          </button>
-          <button
-            onClick={() => { setSearchUserId(''); loadMessages(); }}
-            className="flex items-center gap-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            <MdRefresh size={16} /> 查全站
-          </button>
-        </div>
-
-        {loading ? (
-          <Spinner />
-        ) : messages.length === 0 ? (
-          <EmptyState message="暂无消息记录" />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700">
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">消息ID</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">发送方</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">接收方</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">私信内容</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">状态</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {messages.map((m) => (
-                  <tr key={m.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="py-2 px-2">{m.id}</td>
-                    <td className="py-2 px-2">{m.sender_name}</td>
-                    <td className="py-2 px-2">{m.receiver_name}</td>
-                    <td className="py-2 px-2 max-w-xs truncate">{m.content}</td>
-                    <td className="py-2 px-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${m.is_read ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                        {m.is_read ? '已读' : '未读'}
-                      </span>
-                    </td>
-                    <td className="py-2 px-2 text-xs text-slate-400">{m.created_at}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            fieldClassName="flex-1"
+          />{' '}
+          <div className="flex items-center gap-3">
+            {' '}
+            <Button
+              onClick={() => loadMessages(searchUserId ? parseInt(searchUserId) : undefined)}
+              variant="filled"
+              className="flex-1 sm:flex-none"
+              icon={<MdSearch size={16} />}
+            >
+              检索
+            </Button>
+            <button
+              onClick={() => {
+                setSearchUserId('');
+                loadMessages();
+              }}
+              className="flex flex-1 items-center justify-center gap-1 px-3 py-2 border border-outline rounded-full text-body-m text-on-surface-variant hover:bg-surface-container-high sm:flex-none"
+            >
+              <MdRefresh size={16} /> 查全站
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+        <DataTable<AuditMessage>
+          columns={AUDIT_COLUMNS}
+          rows={messages}
+          rowKey={(m) => m.id}
+          loading={loading}
+          empty="暂无消息记录"
+        />
+      </Card>
     </div>
   );
 }

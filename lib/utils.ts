@@ -1,5 +1,20 @@
 const API_BASE = 'https://picpony.top';
 
+/**
+ * Joins class names, keeping only non-empty strings. The components in this
+ * repo compose classes with template literals, which leaves `undefined` and
+ * `false` in the output string; this keeps the conditional cases readable
+ * without pulling in clsx/tailwind-merge.
+ *
+ * Takes `unknown` so that `someReactNode && 'pl-10'` type-checks — a ReactNode
+ * narrows to `0 | 0n | '' | false | null | undefined` on the falsy branch, none
+ * of which a narrower signature would accept. It does not resolve Tailwind
+ * conflicts: put the overridable classes first and let `className` land last.
+ */
+export function cn(...parts: unknown[]): string {
+  return parts.filter((p): p is string => typeof p === 'string' && p !== '').join(' ');
+}
+
 export function getAvatarUrl(avatar: string | undefined | null): string {
   if (!avatar) return '';
   if (avatar.startsWith('http')) return avatar;
@@ -47,7 +62,7 @@ export function processImageFile(file: File, maxSizeMB: number = 5): Promise<str
 
 export function distributeToMasonryColumns<T extends { height?: number; width?: number }>(
   items: T[],
-  columns: number
+  columns: number,
 ): T[][] {
   const columnData: T[][] = Array.from({ length: columns }, () => []);
   const columnHeights = new Array(columns).fill(0);

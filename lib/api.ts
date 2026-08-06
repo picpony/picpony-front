@@ -56,21 +56,13 @@ export type {
   UnreadCountsResponse,
 } from '@/lib/types/message';
 
-export type {
-  CaptchaGetResponse,
-  CaptchaVerifyResponse,
-} from '@/lib/types/captcha';
+export type { CaptchaGetResponse, CaptchaVerifyResponse } from '@/lib/types/captcha';
 
 // ---------------------------------------------------------------------------
 // API 方法重导出 (命名导出)
 // ---------------------------------------------------------------------------
 
-export {
-  getBrowsingSettings,
-  applyCdn,
-  buildSearchQuery,
-  proxyFetch,
-} from '@/lib/api/client';
+export { getBrowsingSettings, applyCdn, buildSearchQuery, proxyFetch } from '@/lib/api/client';
 
 export {
   getImage,

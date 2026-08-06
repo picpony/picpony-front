@@ -5,10 +5,7 @@ import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
 import { useAuth } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
 import { getAssetUrl } from '@/lib/utils';
-import {
-  isImageHeroTransitionRunning,
-  waitForImageHeroTransition,
-} from '@/lib/hero';
+import { isImageHeroTransitionRunning, waitForImageHeroTransition } from '@/lib/hero';
 import '@wangeditor/editor/dist/css/style.css';
 
 import type { IDomEditor, Toolbar, IEditorConfig, IToolbarConfig } from '@wangeditor/editor';
@@ -171,11 +168,20 @@ export default function RichTextEditor({
     } catch (err) {
       console.error('初始化编辑器失败:', err);
     }
-  }, [placeholder, onChange, enableImageUpload, imageUploadUrl, getToken, getTokenFromAuth, destroyEditor, value]);
+  }, [
+    placeholder,
+    onChange,
+    enableImageUpload,
+    imageUploadUrl,
+    getToken,
+    getTokenFromAuth,
+    destroyEditor,
+    value,
+  ]);
 
   // Mount once: re-running on initEditor/value changes would tear down the editor mid-edit
   useEffect(() => {
-    initEditor().catch(err => console.error('编辑器初始化异常:', err));
+    initEditor().catch((err) => console.error('编辑器初始化异常:', err));
 
     return () => {
       if (!isImageHeroTransitionRunning()) {
@@ -232,75 +238,176 @@ export default function RichTextEditor({
   }, [disabled]);
 
   return (
-    <div className="w-full border border-slate-200 dark:border-slate-700 rounded-xl focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+    <div className="w-full overflow-hidden rounded-sm border border-outline-variant transition-ui focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
       <style>{`
-        .dark .w-e-bar,
-        .dark .w-e-text-container,
-        .dark .w-e-modal,
-        .dark .w-e-select-list,
-        .dark .w-e-drop-panel,
-        .dark .w-e-bar-item-group .w-e-bar-item-menus-container {
-          --w-e-textarea-bg-color: #1e293b;
-          --w-e-textarea-color: #cbd5e1;
-          --w-e-textarea-border-color: #334155;
-          --w-e-textarea-slight-border-color: #334155;
-          --w-e-textarea-slight-color: #64748b;
-          --w-e-textarea-slight-bg-color: #0f172a;
-          --w-e-textarea-selected-border-color: #e06c9f;
-          --w-e-textarea-handler-bg-color: #e06c9f;
-          --w-e-toolbar-color: #94a3b8;
-          --w-e-toolbar-bg-color: #1e293b;
-          --w-e-toolbar-active-color: #f1f5f9;
-          --w-e-toolbar-active-bg-color: #334155;
-          --w-e-toolbar-disabled-color: #475569;
-          --w-e-toolbar-border-color: #334155;
-          --w-e-modal-button-bg-color: #334155;
-          --w-e-modal-button-border-color: #475569;
+        /* wangEditor is themed entirely through its own \`--w-e-*\` variables.
+           These used to be set only under \`.dark\`, and to a cold slate palette:
+           light mode fell through to the library's stock greys, and dark mode
+           got a blue-grey that fought the warm rose neutral everywhere else.
+           Pointing them at the design tokens instead means the editor follows
+           the scheme on its own and neither branch can drift. */
+        .w-e-bar,
+        .w-e-text-container,
+        .w-e-modal,
+        .w-e-select-list,
+        .w-e-drop-panel,
+        .w-e-bar-item-group .w-e-bar-item-menus-container {
+          --w-e-textarea-bg-color: var(--md-sys-color-surface-container-lowest);
+          --w-e-textarea-color: var(--md-sys-color-on-surface);
+          --w-e-textarea-border-color: var(--md-sys-color-outline-variant);
+          --w-e-textarea-slight-border-color: var(--md-sys-color-outline-variant);
+          --w-e-textarea-slight-color: var(--md-sys-color-on-surface-variant);
+          --w-e-textarea-slight-bg-color: var(--md-sys-color-surface-container);
+          --w-e-textarea-selected-border-color: var(--md-sys-color-primary);
+          --w-e-textarea-handler-bg-color: var(--md-sys-color-primary);
+          --w-e-toolbar-color: var(--md-sys-color-on-surface-variant);
+          --w-e-toolbar-bg-color: var(--md-sys-color-surface-container-low);
+          --w-e-toolbar-active-color: var(--md-sys-color-on-surface);
+          --w-e-toolbar-active-bg-color: var(--md-sys-color-surface-container-high);
+          --w-e-toolbar-disabled-color: var(--md-sys-color-outline);
+          --w-e-toolbar-border-color: var(--md-sys-color-outline-variant);
+          --w-e-modal-button-bg-color: var(--md-sys-color-surface-container-high);
+          --w-e-modal-button-border-color: var(--md-sys-color-outline);
         }
 
-        .dark .w-e-text-container [data-slate-editor] pre > code {
-          background-color: #0f172a;
-          border-color: #334155;
+        .w-e-text-container [data-slate-editor] pre > code {
+          background-color: var(--md-sys-color-surface-container-high);
+          border-color: var(--md-sys-color-outline-variant);
         }
 
-        .dark .w-e-text-container [data-slate-editor] table th {
-          background-color: #0f172a;
+        .w-e-text-container [data-slate-editor] table th {
+          background-color: var(--md-sys-color-surface-container);
         }
 
-        .dark .w-e-text-container [data-slate-editor] table td,
-        .dark .w-e-text-container [data-slate-editor] table th {
-          border-color: #334155;
+        .w-e-text-container [data-slate-editor] table td,
+        .w-e-text-container [data-slate-editor] table th {
+          border-color: var(--md-sys-color-outline-variant);
         }
 
-        .dark .w-e-panel-content-color li {
+        .w-e-panel-content-color li {
           border-color: var(--w-e-toolbar-bg-color);
         }
 
-        .dark .w-e-textarea-video-container {
-          background-image: linear-gradient(45deg, #334155 25%, transparent 0, transparent 75%, #334155 0, #334155),
-            linear-gradient(45deg, #334155 25%, #1e293b 0, #1e293b 75%, #334155 0, #334155);
+        /* The checkerboard behind a transparent video poster. */
+        .w-e-textarea-video-container {
+          background-image:
+            linear-gradient(45deg, var(--md-sys-color-surface-container-high) 25%, transparent 0, transparent 75%, var(--md-sys-color-surface-container-high) 0, var(--md-sys-color-surface-container-high)),
+            linear-gradient(45deg, var(--md-sys-color-surface-container-high) 25%, var(--md-sys-color-surface-container-lowest) 0, var(--md-sys-color-surface-container-lowest) 75%, var(--md-sys-color-surface-container-high) 0, var(--md-sys-color-surface-container-high));
         }
 
         .w-e-text-container {
           min-height: 300px;
           height: auto !important;
-          border-radius: 0 0 calc(0.75rem - 1px) calc(0.75rem - 1px);
+          border-radius: 0 0 calc(0.5rem - 1px) calc(0.5rem - 1px);
         }
         .w-e-text-container [data-slate-editor] {
           min-height: 300px;
         }
 
         .w-e-bar {
-          border-radius: calc(0.75rem - 1px) calc(0.75rem - 1px) 0 0;
+          border-radius: calc(0.5rem - 1px) calc(0.5rem - 1px) 0 0;
+        }
+
+        /* ---- Toolbar -------------------------------------------------
+           wangEditor ships a 32px-tall row of bare 14px glyphs with a square
+           grey hover — none of which is M3, and none of which is usable with a
+           thumb. It also lays the row out as a single unwrapped flex line, so
+           in simple mode (~15 items, roughly 600px) it spilled straight through
+           the rounded border on a phone and pushed horizontal overflow onto the
+           whole detail page.
+
+           Rebuilt here as a row of M3 icon buttons: 40dp round targets, a
+           state-layer hover, secondary-container for the active state, and the
+           row wraps instead of overflowing. Wrapping rather than a horizontal
+           scroller because a scroller here would compete with pull-to-dismiss,
+           which force-writes touch-action on the surrounding scroller.
+           (No backticks in this block: it lives inside a JS template literal.) */
+        .w-e-bar {
+          padding: 6px;
+          font-size: var(--text-label-l);
+        }
+
+        .w-e-bar-show {
+          flex-wrap: wrap;
+          gap: 2px;
+        }
+
+        .w-e-bar svg {
+          height: 18px;
+          width: 18px;
+        }
+
+        .w-e-bar-item {
+          height: auto;
+          padding: 0;
+        }
+
+        .w-e-bar-item button {
+          height: 40px;
+          min-width: 40px;
+          padding: 0 8px;
+          border-radius: 9999px;
+          transition:
+            background-color 200ms var(--ease-standard),
+            color 200ms var(--ease-standard);
+        }
+
+        .w-e-bar-item button:hover {
+          background-color: color-mix(
+            in oklab,
+            var(--md-sys-color-on-surface) 8%,
+            transparent
+          );
+          color: var(--md-sys-color-on-surface);
+        }
+
+        .w-e-bar-item button:active {
+          background-color: color-mix(
+            in oklab,
+            var(--md-sys-color-on-surface) 12%,
+            transparent
+          );
+        }
+
+        .w-e-bar-item button:focus-visible {
+          outline: 2px solid var(--md-sys-color-primary);
+          outline-offset: -2px;
+        }
+
+        /* Selected state — the M3 pairing, not a grey wash. */
+        .w-e-bar-item .active,
+        .w-e-bar-item .active:hover {
+          background-color: var(--md-sys-color-secondary-container);
+          color: var(--md-sys-color-on-secondary-container);
+        }
+
+        .w-e-bar-item .active svg {
+          fill: var(--md-sys-color-on-secondary-container);
+        }
+
+        .w-e-bar-divider {
+          height: 24px;
+          align-self: center;
+          margin: 0 4px;
+          background-color: var(--md-sys-color-outline-variant);
+        }
+
+        /* Grouped menus (indent, justify) opened on hover only, so on a touch
+           device they could not be opened at all. */
+        .w-e-bar-item-group:focus-within .w-e-bar-item-menus-container {
+          display: block;
+        }
+
+        .w-e-bar-item-group .w-e-bar-item-menus-container {
+          margin-top: 44px;
+          border-radius: var(--radius-sm);
+          border-color: var(--md-sys-color-outline-variant);
+          box-shadow: var(--md-sys-elevation-2);
+          padding: 4px;
         }
       `}</style>
-      <div
-        ref={toolbarContainerRef}
-        className="border-b border-slate-200 dark:border-slate-700"
-      />
-      <div
-        ref={editorContainerRef}
-      />
+      <div ref={toolbarContainerRef} className="border-b border-outline-variant" />
+      <div ref={editorContainerRef} />
     </div>
   );
 }

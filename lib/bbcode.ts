@@ -27,7 +27,7 @@ export function htmlToBBCode(html: string | null | undefined): string {
     }
 
     let content = '';
-    node.childNodes.forEach(child => {
+    node.childNodes.forEach((child) => {
       content += traverse(child);
     });
 
@@ -79,7 +79,9 @@ export function htmlToBBCode(html: string | null | undefined): string {
     }
   }
 
-  return traverse(div).trim().replace(/\n{3,}/g, '\n\n');
+  return traverse(div)
+    .trim()
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 export function bbcodeToHtml(bbcode: string | null | undefined): string {
@@ -90,40 +92,28 @@ export function bbcodeToHtml(bbcode: string | null | undefined): string {
   html = html.replace(/\[img\](.*?)\[\/img\]/gi, '<img src="$1" style="max-width:100%;" />');
   html = html.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
   html = html.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
-  html = html.replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '<span style="text-decoration:underline;">$1</span>');
+  html = html.replace(
+    /\[u\]([\s\S]*?)\[\/u\]/gi,
+    '<span style="text-decoration:underline;">$1</span>',
+  );
   html = html.replace(/\[s\]([\s\S]*?)\[\/s\]/gi, '<strike>$1</strike>');
   html = html.replace(
     /\[color=(.*?)\]([\s\S]*?)\[\/color\]/gi,
-    '<span style="color:$1;">$2</span>'
+    '<span style="color:$1;">$2</span>',
   );
   html = html.replace(
     /\[center\]([\s\S]*?)\[\/center\]/gi,
-    '<div style="text-align:center;">$1</div>'
+    '<div style="text-align:center;">$1</div>',
   );
-  html = html.replace(
-    /\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi,
-    '<a href="$1" target="_blank">$2</a>'
-  );
-  html = html.replace(
-    /\[quote\]([\s\S]*?)\[\/quote\]/gi,
-    '<blockquote>$1</blockquote>'
-  );
-  html = html.replace(
-    /\[code\]([\s\S]*?)\[\/code\]/gi,
-    '<pre><code>$1</code></pre>'
-  );
-  html = html.replace(
-    /\[list\]([\s\S]*?)\[\/list\]/gi,
-    '<ul>$1</ul>'
-  );
-  html = html.replace(
-    /\[list=1\]([\s\S]*?)\[\/list\]/gi,
-    '<ol>$1</ol>'
-  );
+  html = html.replace(/\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi, '<a href="$1" target="_blank">$2</a>');
+  html = html.replace(/\[quote\]([\s\S]*?)\[\/quote\]/gi, '<blockquote>$1</blockquote>');
+  html = html.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, '<pre><code>$1</code></pre>');
+  html = html.replace(/\[list\]([\s\S]*?)\[\/list\]/gi, '<ul>$1</ul>');
+  html = html.replace(/\[list=1\]([\s\S]*?)\[\/list\]/gi, '<ol>$1</ol>');
   html = html.replace(/\[\*\] /gi, '<li>');
   html = html.replace(/\[\*\]([\s\S]*?)(?=\[\*\]|\[\/list\]|$)/gi, '<li>$1</li>');
 
-  const paragraphs = html.split('\n').filter(line => line.trim() !== '');
+  const paragraphs = html.split('\n').filter((line) => line.trim() !== '');
   if (paragraphs.length === 0) return '<p><br></p>';
 
   return `<p>${paragraphs.join('</p><p>')}</p>`;

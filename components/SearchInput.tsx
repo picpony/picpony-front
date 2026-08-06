@@ -1,12 +1,17 @@
 'use client';
 
 import { MdSearch } from 'react-icons/md';
+import { Input } from '@/components/Input';
 
 interface SearchInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  /** Accessible name. Defaults to the placeholder — a placeholder alone is not
+   *  a label, but it is the text the sighted user sees, so it is the right
+   *  fallback rather than a generic "搜索". */
+  'aria-label'?: string;
 }
 
 export default function SearchInput({
@@ -14,17 +19,17 @@ export default function SearchInput({
   onChange,
   placeholder = '搜索...',
   className = '',
+  'aria-label': ariaLabel,
 }: SearchInputProps) {
   return (
-    <div className={`relative ${className}`}>
-      <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
-      />
-    </div>
+    <Input
+      type="search"
+      icon={<MdSearch size={20} />}
+      aria-label={ariaLabel ?? placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      fieldClassName={className}
+    />
   );
 }

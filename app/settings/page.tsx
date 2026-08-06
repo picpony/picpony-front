@@ -1,13 +1,20 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
-  MdEdit, MdClose, MdPerson, MdImage,
-  MdSearch, MdFilterList, MdVisibility, MdSpeed,
-  MdSecurity, MdNotifications,
-  MdHome, MdVerifiedUser, MdLinkOff,
+  MdEdit,
+  MdPerson,
+  MdImage,
+  MdSearch,
+  MdFilterList,
+  MdVisibility,
+  MdSpeed,
+  MdSecurity,
+  MdNotifications,
+  MdHome,
+  MdVerifiedUser,
+  MdLinkOff,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
@@ -17,12 +24,21 @@ import Modal from '@/components/Modal';
 import Reveal from '@/components/Reveal';
 import Select from '@/components/Select';
 import Button from '@/components/Button';
+import ImageCropper from '@/components/ImageCropper';
 import { api } from '@/lib/api';
+import { readJson } from '@/lib/api/client';
+import { Input, Textarea } from '@/components/Input';
 
-const sectionTitle = "text-base font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2";
-const rowClass = "flex items-center justify-between p-3 sm:p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg gap-2 sm:gap-4 transition-colors duration-200 hover:bg-slate-100/80 dark:hover:bg-slate-900/80";
-const labelClass = "text-sm text-slate-500 dark:text-slate-400 mb-1";
-const valueClass = "font-medium text-slate-800 dark:text-slate-200";
+const sectionTitle = 'text-title-m-emphasized text-on-surface mb-4 flex items-center gap-2';
+/* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run
+   of rows as one cut block rather than as separate floating cards. */
+const rowClass =
+  'm3-row flex flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 sm:flex-nowrap sm:gap-x-4 bg-surface-container-low transition-ui hover:bg-surface-container-high';
+/* The label column of a row. `min-w-0` is what lets a long value truncate
+   instead of pushing the action out of the card. */
+const rowLabelClass = 'min-w-0 flex-1';
+const labelClass = 'text-body-m text-on-surface-variant mb-1';
+const valueClass = 'font-medium text-on-surface ';
 
 /** 计算年龄 */
 function calcAge(birthday: string): number {
@@ -75,7 +91,6 @@ export default function SettingsPage() {
   const router = useRouter();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentUsername, setCurrentUsername] = useState('');
@@ -85,9 +100,12 @@ export default function SettingsPage() {
   const [isBannerUploading, setIsBannerUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  // The picked file is staged here rather than uploaded straight away; the
+  // cropper is what eventually produces the blob that gets sent.
+  const [avatarPick, setAvatarPick] = useState<File | null>(null);
+  const [bannerPick, setBannerPick] = useState<File | null>(null);
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [isPasswordClosing, setIsPasswordClosing] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -97,7 +115,6 @@ export default function SettingsPage() {
   const [derpiUsername, setDerpiUsername] = useState('');
   const [isVerifyLoading, setIsVerifyLoading] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
-  const [isApiKeyClosing, setIsApiKeyClosing] = useState(false);
   const [newApiKey, setNewApiKey] = useState('');
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
   const [isClearApiKeyModalOpen, setIsClearApiKeyModalOpen] = useState(false);
@@ -105,7 +122,6 @@ export default function SettingsPage() {
   const [currentEmail, setCurrentEmail] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
-  const [isEmailClosing, setIsEmailClosing] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
   const [verifyCode, setVerifyCode] = useState('');
@@ -113,7 +129,6 @@ export default function SettingsPage() {
   const [isResending, setIsResending] = useState(false);
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isProfileClosing, setIsProfileClosing] = useState(false);
   const [profileBio, setProfileBio] = useState('');
   const [profileGender, setProfileGender] = useState('保密');
   const [profileBirthday, setProfileBirthday] = useState('');
@@ -150,57 +165,71 @@ export default function SettingsPage() {
   const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [bannerLoaded, setBannerLoaded] = useState(false);
 
+  /* `Modal` keeps the panel mounted through its own exit animation, so these
+     just flip the flag — the previous 200ms setTimeout dance existed only to
+     hold the hand-rolled overlay on screen long enough to animate out. The
+     in-flight guards stay: a half-submitted form should not be dismissable. */
   const closeModal = () => {
     if (isLoading) return;
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsModalOpen(false);
-      setIsClosing(false);
-      setNewUsername('');
-    }, 200);
+    setIsModalOpen(false);
+    setNewUsername('');
   };
   const closePasswordModal = () => {
     if (passwordLoading) return;
-    setIsPasswordClosing(true);
-    setTimeout(() => {
-      setIsPasswordModalOpen(false);
-      setIsPasswordClosing(false);
-      setOldPassword('');
-      setNewPassword('');
-    }, 200);
+    setIsPasswordModalOpen(false);
+    setOldPassword('');
+    setNewPassword('');
   };
   const closeApiKeyModal = () => {
     if (apiKeyLoading) return;
-    setIsApiKeyClosing(true);
-    setTimeout(() => {
-      setIsApiKeyModalOpen(false);
-      setIsApiKeyClosing(false);
-      setNewApiKey('');
-    }, 200);
+    setIsApiKeyModalOpen(false);
+    setNewApiKey('');
   };
   const closeEmailModal = () => {
     if (emailLoading) return;
-    setIsEmailClosing(true);
-    setTimeout(() => {
-      setIsEmailModalOpen(false);
-      setIsEmailClosing(false);
-      setNewEmail('');
-      setVerifyCode('');
-      setShowVerifyInput(false);
-    }, 200);
+    setIsEmailModalOpen(false);
+    setNewEmail('');
+    setVerifyCode('');
+    setShowVerifyInput(false);
   };
   const closeProfileModal = () => {
     if (profileLoading) return;
-    setIsProfileClosing(true);
-    setTimeout(() => {
-      setIsProfileModalOpen(false);
-      setIsProfileClosing(false);
-    }, 200);
+    setIsProfileModalOpen(false);
   };
 
-  const syncSettingsToCloud = useCallback(async (overrides?: CloudSettings) => {
-    if (!userToken) return;
-    const settings: CloudSettings = overrides ?? {
+  const syncSettingsToCloud = useCallback(
+    async (overrides?: CloudSettings) => {
+      if (!userToken) return;
+      const settings: CloudSettings = overrides ?? {
+        contentFilter,
+        showTagCounts,
+        banAnthro,
+        banDiscomfort,
+        onlyPony,
+        showChineseTags,
+        useCdn,
+        usePicponyProxy,
+        useApiAccel,
+        showUploads,
+        showFaves,
+        showPosts,
+        showComments,
+        emailNotifMessage,
+        emailNotifReply,
+        defaultHomeSort,
+        defaultSearchSort,
+      };
+      try {
+        await api.updateSettings(userToken, { settings });
+      } catch (err) {
+        console.warn('云端同步设置失败:', err);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('settings_updated'));
+      }
+    },
+    [
+      userToken,
       contentFilter,
       showTagCounts,
       banAnthro,
@@ -218,27 +247,22 @@ export default function SettingsPage() {
       emailNotifReply,
       defaultHomeSort,
       defaultSearchSort,
-    };
-    try {
-      await api.updateSettings(userToken, { settings });
-    } catch (err) {
-      console.warn('云端同步设置失败:', err);
-    }
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('settings_updated'));
-    }
-  }, [userToken, contentFilter, showTagCounts, banAnthro, banDiscomfort, onlyPony, showChineseTags, useCdn, usePicponyProxy, useApiAccel, showUploads, showFaves, showPosts, showComments, emailNotifMessage, emailNotifReply, defaultHomeSort, defaultSearchSort]);
+    ],
+  );
 
-  const updateSetting = useCallback(<K extends keyof CloudSettings>(
-    key: K,
-    value: NonNullable<CloudSettings[K]>,
-    lsKey: string,
-    setter: (v: NonNullable<CloudSettings[K]>) => void,
-  ) => {
-    lsSet(lsKey, value);
-    setter(value);
-    syncSettingsToCloud({ [key]: value } as CloudSettings);
-  }, [syncSettingsToCloud]);
+  const updateSetting = useCallback(
+    <K extends keyof CloudSettings>(
+      key: K,
+      value: NonNullable<CloudSettings[K]>,
+      lsKey: string,
+      setter: (v: NonNullable<CloudSettings[K]>) => void,
+    ) => {
+      lsSet(lsKey, value);
+      setter(value);
+      syncSettingsToCloud({ [key]: value } as CloudSettings);
+    },
+    [syncSettingsToCloud],
+  );
 
   const applyCloudSettings = useCallback((cloudSettings: CloudSettings | null) => {
     if (!cloudSettings) return;
@@ -291,9 +315,12 @@ export default function SettingsPage() {
         setIsDeveloper(dev);
       });
 
-      api.getUser(user.token)
-        .then(res => res.json())
-        .then(data => {
+      api
+        .getUser(user.token)
+        // Same empty-body hazard as `AppLayout`'s own `get_user` call — and
+        // here it lands as an unhandled rejection, since nothing follows.
+        .then((res) => readJson(res))
+        .then((data) => {
           if (data.success && data.user) {
             const u = data.user;
             setCurrentApiKey(u.api_key || '');
@@ -303,7 +330,9 @@ export default function SettingsPage() {
             else localStorage.removeItem('derpi_api_key');
 
             if (u.avatar) {
-              const fullUrl = u.avatar.startsWith('http') ? u.avatar : `https://picpony.top/${u.avatar}`;
+              const fullUrl = u.avatar.startsWith('http')
+                ? u.avatar
+                : `https://picpony.top/${u.avatar}`;
               setCurrentAvatar(fullUrl);
               const updatedUser = { ...user, avatar: fullUrl };
               localStorage.setItem('user_info', JSON.stringify(updatedUser));
@@ -324,9 +353,9 @@ export default function SettingsPage() {
             }
           }
         })
-        .catch(err => console.error("Failed to fetch user info", err));
+        .catch((err) => console.error('Failed to fetch user info', err));
     } catch (e) {
-      console.error("Failed to parse user info", e);
+      console.error('Failed to parse user info', e);
     }
   }, [router, applyCloudSettings]);
 
@@ -378,22 +407,40 @@ export default function SettingsPage() {
     queueMicrotask(() => setContentFilter(validFilter));
   }, [userToken, profileBirthday, isDeveloper]);
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { showToast('请选择图片文件', 'error'); return; }
-    if (file.size > 5 * 1024 * 1024) { showToast('图片大小不能超过 5MB', 'error'); return; }
+    if (!file.type.startsWith('image/')) {
+      showToast('请选择图片文件', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('图片大小不能超过 5MB', 'error');
+      return;
+    }
+    setAvatarPick(file);
+    // Cleared now, not on close: picking the same file twice in a row fires no
+    // change event otherwise, and the cropper would never reopen.
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
+  const handleAvatarCropped = async (blob: Blob) => {
     setIsAvatarUploading(true);
     try {
       const storedUser = localStorage.getItem('user_info');
       if (!storedUser) throw new Error('未登录');
       const user = JSON.parse(storedUser);
+      const file = new File([blob], `avatar.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, {
+        type: blob.type,
+      });
       const res = await api.uploadAvatar(user.token, file);
       const data = await res.json();
       if (data.success) {
         showToast('头像上传成功', 'success');
-        const fullUrl = data.avatar_url.startsWith('http') ? data.avatar_url : `https://picpony.top/${data.avatar_url}`;
+        setAvatarPick(null);
+        const fullUrl = data.avatar_url.startsWith('http')
+          ? data.avatar_url
+          : `https://picpony.top/${data.avatar_url}`;
         setCurrentAvatar(fullUrl);
         const updatedUser = { ...user, avatar: fullUrl };
         localStorage.setItem('user_info', JSON.stringify(updatedUser));
@@ -405,26 +452,41 @@ export default function SettingsPage() {
       showToast(err instanceof Error ? err.message : '网络错误', 'error');
     } finally {
       setIsAvatarUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { showToast('请选择图片文件', 'error'); return; }
-    if (file.size > 10 * 1024 * 1024) { showToast('图片大小不能超过 10MB', 'error'); return; }
+    if (!file.type.startsWith('image/')) {
+      showToast('请选择图片文件', 'error');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('图片大小不能超过 10MB', 'error');
+      return;
+    }
+    setBannerPick(file);
+    if (bannerInputRef.current) bannerInputRef.current.value = '';
+  };
 
+  const handleBannerCropped = async (blob: Blob) => {
     setIsBannerUploading(true);
     try {
       const storedUser = localStorage.getItem('user_info');
       if (!storedUser) throw new Error('未登录');
       const user = JSON.parse(storedUser);
+      const file = new File([blob], `banner.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, {
+        type: blob.type,
+      });
       const res = await api.uploadBanner(user.token, file);
       const data = await res.json();
       if (data.success) {
         showToast('Banner 上传成功', 'success');
-        const fullUrl = data.banner_url.startsWith('http') ? data.banner_url : `https://picpony.top/${data.banner_url}`;
+        setBannerPick(null);
+        const fullUrl = data.banner_url.startsWith('http')
+          ? data.banner_url
+          : `https://picpony.top/${data.banner_url}`;
         setCurrentBanner(fullUrl);
         const updatedUser = { ...user, banner: fullUrl };
         localStorage.setItem('user_info', JSON.stringify(updatedUser));
@@ -436,7 +498,6 @@ export default function SettingsPage() {
       showToast(err instanceof Error ? err.message : '网络错误', 'error');
     } finally {
       setIsBannerUploading(false);
-      if (bannerInputRef.current) bannerInputRef.current.value = '';
     }
   };
 
@@ -446,7 +507,10 @@ export default function SettingsPage() {
     if (key) {
       const keyRegex = /^\S{20}$/;
       if (!keyRegex.test(key)) {
-        showToast('API Key 格式不正确！请检查是否漏选或多复制了空格。Derpibooru 的 API Key 为 20 位字符', 'error');
+        showToast(
+          'API Key 格式不正确！请检查是否漏选或多复制了空格。Derpibooru 的 API Key 为 20 位字符',
+          'error',
+        );
         return;
       }
     }
@@ -456,7 +520,9 @@ export default function SettingsPage() {
       if (!storedUser) throw new Error('未登录');
       const user = JSON.parse(storedUser);
       const res = await api.saveApikey(user.token, {
-        api_key: key, derpi_user_id: derpiUserId, derpi_username: derpiUsername
+        api_key: key,
+        derpi_user_id: derpiUserId,
+        derpi_username: derpiUsername,
       });
       const data = await res.json();
       if (data.success) {
@@ -479,10 +545,12 @@ export default function SettingsPage() {
   const detectRealIdentity = useCallback(async (apiKey: string) => {
     const base = 'https://trixiebooru.org/api/v1/json';
     for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
       try {
         // 1. Try my:uploads
-        const uploadsRes = await fetch(`${base}/search/images?q=my:uploads&per_page=1&key=${encodeURIComponent(apiKey)}`);
+        const uploadsRes = await fetch(
+          `${base}/search/images?q=my:uploads&per_page=1&key=${encodeURIComponent(apiKey)}`,
+        );
         if (uploadsRes.status === 401 || uploadsRes.status === 403) return null;
         if (uploadsRes.ok) {
           const data = await uploadsRes.json();
@@ -493,7 +561,9 @@ export default function SettingsPage() {
           throw new Error(`HTTP ${uploadsRes.status}`);
         }
         // 2. Try my:comments
-        const commentsRes = await fetch(`${base}/search/comments?q=my:comments&per_page=1&key=${encodeURIComponent(apiKey)}`);
+        const commentsRes = await fetch(
+          `${base}/search/comments?q=my:comments&per_page=1&key=${encodeURIComponent(apiKey)}`,
+        );
         if (commentsRes.status === 401 || commentsRes.status === 403) return null;
         if (commentsRes.ok) {
           const data = await commentsRes.json();
@@ -527,7 +597,9 @@ export default function SettingsPage() {
       if (storedUser) {
         const user = JSON.parse(storedUser);
         await api.saveApikey(user.token, {
-          api_key: currentApiKey, derpi_user_id: identity.id, derpi_username: identity.name
+          api_key: currentApiKey,
+          derpi_user_id: identity.id,
+          derpi_username: identity.name,
         });
         localStorage.setItem('derpi_api_key', currentApiKey);
         window.dispatchEvent(new Event('user_info_updated'));
@@ -553,7 +625,9 @@ export default function SettingsPage() {
       if (!storedUser) return;
       const user = JSON.parse(storedUser);
       await api.saveApikey(user.token, {
-        api_key: '', derpi_user_id: '', derpi_username: ''
+        api_key: '',
+        derpi_user_id: '',
+        derpi_username: '',
       });
       setCurrentApiKey('');
       setDerpiUserId('');
@@ -577,7 +651,10 @@ export default function SettingsPage() {
       const storedUser = localStorage.getItem('user_info');
       if (!storedUser) throw new Error('未登录');
       const user = JSON.parse(storedUser);
-      const res = await api.changePassword(user.token, { old_password: oldPassword, new_password: newPassword });
+      const res = await api.changePassword(user.token, {
+        old_password: oldPassword,
+        new_password: newPassword,
+      });
       const data = await res.json();
       if (data.success) {
         showToast('密码修改成功，即将重新登录', 'success');
@@ -599,7 +676,10 @@ export default function SettingsPage() {
 
   const handleUsernameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUsername.trim()) { showToast('用户名不能为空', 'error'); return; }
+    if (!newUsername.trim()) {
+      showToast('用户名不能为空', 'error');
+      return;
+    }
     setIsLoading(true);
     try {
       const storedUser = localStorage.getItem('user_info');
@@ -626,9 +706,15 @@ export default function SettingsPage() {
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmail.trim()) { showToast('请输入邮箱', 'error'); return; }
+    if (!newEmail.trim()) {
+      showToast('请输入邮箱', 'error');
+      return;
+    }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmail)) { showToast('请输入有效的邮箱地址', 'error'); return; }
+    if (!emailRegex.test(newEmail)) {
+      showToast('请输入有效的邮箱地址', 'error');
+      return;
+    }
 
     setEmailLoading(true);
     try {
@@ -653,7 +739,10 @@ export default function SettingsPage() {
   };
 
   const handleVerifyEmail = async () => {
-    if (!verifyCode.trim()) { showToast('请输入验证码', 'error'); return; }
+    if (!verifyCode.trim()) {
+      showToast('请输入验证码', 'error');
+      return;
+    }
     setEmailLoading(true);
     try {
       const storedUser = localStorage.getItem('user_info');
@@ -742,7 +831,10 @@ export default function SettingsPage() {
     setContentFilter(val);
     lsSet('trixie_content_filter', val);
     syncSettingsToCloud({ contentFilter: val });
-    showToast(`内容过滤器已切换至: ${val === 'safe' ? '安全模式' : val === 'spoilers' ? '中等限制' : '开发者模式'}`, 'info');
+    showToast(
+      `内容过滤器已切换至: ${val === 'safe' ? '安全模式' : val === 'spoilers' ? '中等限制' : '开发者模式'}`,
+      'info',
+    );
   };
 
   const handleUsePicponyProxyChange = (val: boolean) => {
@@ -776,687 +868,898 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
-        设置
-      </h1>
-
+      <h1 className="text-headline-s text-on-surface mb-6 flex items-center gap-2">设置</h1>
       <Reveal>
-      <div className="bg-white dark:bg-slate-950 overflow-hidden rounded-xl space-y-0 mb-6">
-        <div className="p-6 border-b border-slate-100 dark:border-slate-700">
-          <h2 className={sectionTitle}><MdPerson size={20} /> 账户设置</h2>
+        <div className="bg-surface overflow-hidden rounded-md space-y-0 mb-6">
+          <div className="p-6 border-b border-outline-variant">
+            <h2 className={sectionTitle}>
+              <MdPerson size={20} /> 账户设置
+            </h2>
 
-          <div className={rowClass + ' mb-4'}>
-            <div className="flex items-center gap-4">
-              <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
-                {currentAvatar ? (
-                  <>
-                    {!avatarLoaded && (
-                      <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
-                        <MdPerson size={24} />
-                      </div>
-                    )}
-                    <FadeInImage
-                      key={currentAvatar}
-                      src={currentAvatar}
-                      alt="Avatar"
-                      fill
-                      className="object-cover"
-                      onLoad={() => setAvatarLoaded(true)}
-                    />
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-400 text-2xl font-bold">
-                    {currentUsername ? currentUsername.charAt(0).toUpperCase() : '?'}
-                  </div>
-                )}
-                {isAvatarUploading && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <Spinner white />
-                  </div>
-                )}
+            <div className={rowClass}>
+              <div className="flex items-center gap-4">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden bg-surface-container-highest flex-shrink-0">
+                  {currentAvatar ? (
+                    <>
+                      {!avatarLoaded && (
+                        <div className="absolute inset-0 flex items-center justify-center text-outline z-10">
+                          <MdPerson size={24} />
+                        </div>
+                      )}
+                      <FadeInImage
+                        key={currentAvatar}
+                        src={currentAvatar}
+                        alt="Avatar"
+                        fill
+                        className="object-cover"
+                        onLoad={() => setAvatarLoaded(true)}
+                      />
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-outline text-headline-s-emphasized">
+                      {currentUsername ? currentUsername.charAt(0).toUpperCase() : '?'}
+                    </div>
+                  )}
+                  {isAvatarUploading && (
+                    <div className="absolute inset-0 bg-scrim/50 flex items-center justify-center">
+                      <Spinner white />
+                    </div>
+                  )}
+                </div>
+                <div className={rowLabelClass}>
+                  <p className={labelClass}>用户头像</p>
+                  <p className="text-body-s text-outline">支持 JPG、PNG、GIF 格式，最大 5MB</p>
+                </div>
               </div>
-              <div>
-                <p className={labelClass}>用户头像</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">支持 JPG、PNG、GIF 格式，最大 5MB</p>
-              </div>
-            </div>
-            <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!currentUsername}
-              loading={isAvatarUploading}
-              icon={<MdEdit size={16} />}
-              responsiveLabel
-              title="修改头像"
-            >
-              修改头像
-            </Button>
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <div className="flex items-center gap-4">
-              <div className="relative w-24 h-14 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
-                {currentBanner ? (
-                  <>
-                    {!bannerLoaded && (
-                      <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
-                        <MdImage size={20} />
-                      </div>
-                    )}
-                    <FadeInImage
-                      key={currentBanner}
-                      src={currentBanner.startsWith('http') ? currentBanner : `https://picpony.top/${currentBanner}`}
-                      alt="Banner"
-                      fill
-                      className="object-cover"
-                      onLoad={() => setBannerLoaded(true)}
-                    />
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-400">
-                    <MdImage size={20} />
-                  </div>
-                )}
-                {isBannerUploading && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <Spinner white />
-                  </div>
-                )}
-              </div>
-              <div>
-                <p className={labelClass}>个人 Banner</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">建议尺寸 1200×300，最大 10MB</p>
-              </div>
-            </div>
-            <input type="file" ref={bannerInputRef} onChange={handleBannerUpload} accept="image/*" className="hidden" />
-            <Button
-              onClick={() => bannerInputRef.current?.click()}
-              disabled={!currentUsername}
-              loading={isBannerUploading}
-              icon={<MdImage size={16} />}
-              responsiveLabel
-              title="上传 Banner"
-            >
-              上传 Banner
-            </Button>
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <div>
-              <p className={labelClass}>用户名</p>
-              <p className={valueClass}>{currentUsername || '未登录'}</p>
-            </div>
-            <Button
-              onClick={() => setIsModalOpen(true)}
-              disabled={!currentUsername}
-              icon={<MdEdit size={16} />}
-              responsiveLabel
-              title="修改用户名"
-            >
-              修改用户名
-            </Button>
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <div>
-              <p className={labelClass}>账号密码</p>
-              <p className={valueClass}>********</p>
-            </div>
-            <Button
-              onClick={() => setIsPasswordModalOpen(true)}
-              disabled={!currentUsername}
-              icon={<MdEdit size={16} />}
-              responsiveLabel
-              title="修改密码"
-            >
-              修改密码
-            </Button>
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <div>
-              <p className={labelClass}>邮箱</p>
-              <p className={valueClass}>
-                {currentEmail || '未设置'}
-                {currentEmail && (
-                  <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${isEmailVerified ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                    {isEmailVerified ? '已验证' : '未验证'}
-                  </span>
-                )}
-              </p>
-            </div>
-            <Button
-              onClick={() => { setNewEmail(currentEmail); setIsEmailModalOpen(true); }}
-              disabled={!currentUsername}
-              icon={<MdEdit size={16} />}
-              responsiveLabel
-              title={currentEmail ? '修改邮箱' : '绑定邮箱'}
-            >
-              {currentEmail ? '修改' : '绑定'}
-            </Button>
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <div>
-              <p className={labelClass}>个人资料</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                {profileBio ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '...' : '') : '点击编辑个人简介、性别、生日'}
-              </p>
-            </div>
-            <Button
-              onClick={() => setIsProfileModalOpen(true)}
-              disabled={!currentUsername}
-              icon={<MdEdit size={16} />}
-              responsiveLabel
-              title="编辑个人资料"
-            >
-              编辑
-            </Button>
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <div>
-              <p className={labelClass}>Derpibooru API Key</p>
-              <p className={valueClass}>
-                {currentApiKey ? `${currentApiKey.substring(0, 4)}...${currentApiKey.substring(currentApiKey.length - 4)}` : '未配置'}
-              </p>
-              {derpiUsername && (
-                <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                  已验证身份：{derpiUsername}
-                </p>
-              )}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {currentApiKey && (
-                <>
-                  <Button
-                    onClick={handleVerifyIdentity}
-                    disabled={!currentUsername}
-                    loading={isVerifyLoading}
-                    variant="tonal"
-                    icon={<MdVerifiedUser size={16} />}
-                    responsiveLabel
-                    title="核验身份"
-                  >
-                    去核验
-                  </Button>
-                  <Button
-                    onClick={handleClearApiKey}
-                    disabled={!currentUsername}
-                    variant="text"
-                    icon={<MdLinkOff size={16} />}
-                    responsiveLabel
-                    title="解除绑定"
-                    className="text-red-500 hover:bg-red-50 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-900/20 dark:hover:text-red-300"
-                  >
-                    解除绑定
-                  </Button>
-                </>
-              )}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleAvatarPick}
+                accept="image/*"
+                className="hidden"
+              />
               <Button
-                onClick={() => { setNewApiKey(currentApiKey); setIsApiKeyModalOpen(true); }}
+                onClick={() => fileInputRef.current?.click()}
                 disabled={!currentUsername}
+                loading={isAvatarUploading}
                 icon={<MdEdit size={16} />}
-                responsiveLabel
-                title={currentApiKey ? '修改配置' : '去配置'}
+                title="修改头像"
               >
-                {currentApiKey ? '修改配置' : '去配置'}
+                修改头像
               </Button>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="bg-white dark:bg-slate-950 overflow-hidden rounded-xl mb-6">
-        <div className="p-6">
-          <h2 className={sectionTitle}><MdFilterList size={20} /> 内容筛选</h2>
-
-          <div className={rowClass + ' mb-4'}>
-            <div>
-              <p className={labelClass}>内容分级过滤器</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                {contentFilter === 'safe' && '仅显示安全内容'}
-                {contentFilter === 'spoilers' && '拦截限制级内容（需 16 岁以上）'}
-                {contentFilter === 'developer' && '开发者模式，显示所有内容'}
-              </p>
-            </div>
-            <Select
-              value={contentFilter}
-              onChange={handleContentFilterChange}
-              aria-label="内容分级过滤器"
-              className="min-w-[11rem]"
-              options={[
-                { value: 'safe', label: '完全安全 (Safe)' },
-                { value: 'spoilers', label: '中等限制 (Spoilers)' },
-                ...(isDeveloper ? [{ value: 'developer', label: '开发者模式' }] : []),
-              ]}
-            />
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <ToggleSwitch
-              checked={banAnthro}
-              onChange={(v) => updateSetting('banAnthro', v, 'trixie_ban_anthro', setBanAnthro)}
-              label="禁止类人生物 (马头人)"
-              description="隐藏 anthropomorphic 标签的图片"
-            />
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <ToggleSwitch
-              checked={banDiscomfort}
-              onChange={(v) => updateSetting('banDiscomfort', v, 'trixie_ban_discomfort', setBanDiscomfort)}
-              label="屏蔽可能令您不适的内容"
-              description="隐藏血腥、恐怖等内容"
-            />
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <ToggleSwitch
-              checked={onlyPony}
-              onChange={(v) => updateSetting('onlyPony', v, 'trixie_only_pony', setOnlyPony)}
-              label="只看小马 (含类马)"
-              description="仅显示 pony 相关标签的图片"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-950 overflow-hidden rounded-xl mb-6">
-        <div className="p-6">
-          <h2 className={sectionTitle}><MdVisibility size={20} /> 显示偏好</h2>
-
-          <div className={rowClass + ' mb-4'}>
-            <ToggleSwitch
-              checked={showTagCounts}
-              onChange={(v) => updateSetting('showTagCounts', v, 'trixie_show_tag_counts', setShowTagCounts)}
-              label="显示各标签数量"
-              description="在标签列表旁显示图片计数"
-            />
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <ToggleSwitch
-              checked={showChineseTags}
-              onChange={(v) => updateSetting('showChineseTags', v, 'picpony_show_chinese_tags', setShowChineseTags)}
-              label="显示中文标签 (beta)"
-              description="启用中文标签名翻译"
-            />
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <div className="flex items-center gap-2">
-              <MdHome size={20} className="text-slate-400" />
-              <div>
-                <p className={labelClass}>首页瀑布流默认排序</p>
-              </div>
-            </div>
-            <Select
-              value={defaultHomeSort}
-              onChange={(v) => {
-                setDefaultHomeSort(v);
-                lsSet('picpony_default_home_sort', v);
-                syncSettingsToCloud({ defaultHomeSort: v });
-              }}
-              aria-label="首页瀑布流默认排序"
-              className="min-w-[9rem]"
-              options={sortOptions}
-            />
-          </div>
-
-          <div className={rowClass}>
-            <div className="flex items-center gap-2">
-              <MdSearch size={20} className="text-slate-400" />
-              <div>
-                <p className={labelClass}>搜索默认排序</p>
-              </div>
-            </div>
-            <Select
-              value={defaultSearchSort}
-              onChange={(v) => {
-                setDefaultSearchSort(v);
-                lsSet('picpony_default_search_sort', v);
-                syncSettingsToCloud({ defaultSearchSort: v });
-              }}
-              aria-label="搜索默认排序"
-              className="min-w-[9rem]"
-              options={sortOptions}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-950 overflow-hidden rounded-xl mb-6">
-        <div className="p-6">
-          <h2 className={sectionTitle}><MdSpeed size={20} /> 性能与加速</h2>
-
-          <div className={rowClass + ' mb-4'}>
-            <ToggleSwitch
-              checked={useCdn}
-              onChange={(v) => updateSetting('useCdn', v, 'trixie_use_cdn', setUseCdn)}
-              label="启用图片 CDN 加速"
-              description="通过 wsrv.nl 加速图片加载"
-            />
-          </div>
-
-          <div className={rowClass + ' mb-4'}>
-            <ToggleSwitch
-              checked={usePicponyProxy}
-              onChange={handleUsePicponyProxyChange}
-              label="启用 PicPony 加速服务器 (beta)"
-              description="使用 picpony 代理服务器加速请求，开启后自动启用 CDN"
-            />
-          </div>
-
-          <div className={rowClass}>
-            <ToggleSwitch
-              checked={useApiAccel}
-              onChange={handleUseApiAccelChange}
-              disabled={!currentApiKey}
-              label="启用 API 加速"
-              description={currentApiKey ? '通过备用 API 代理提升请求稳定性' : '需要先配置 Derpibooru API Key'}
-            />
-            {!currentApiKey && (
-              <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">需先配置 API Key</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-950 overflow-hidden rounded-xl mb-6">
-        <div className="p-6">
-          <h2 className={sectionTitle}><MdSecurity size={20} /> 隐私设置</h2>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">控制您的个人主页上对外显示的内容</p>
-
-          <div className="space-y-3">
-            {[
-              { key: 'showUploads' as const, label: '公开我的上传', val: showUploads, setter: setShowUploads, lsKey: 'picpony_show_uploads' },
-              { key: 'showFaves' as const, label: '公开我的收藏', val: showFaves, setter: setShowFaves, lsKey: 'picpony_show_faves' },
-              { key: 'showPosts' as const, label: '公开我的帖子', val: showPosts, setter: setShowPosts, lsKey: 'picpony_show_posts' },
-              { key: 'showComments' as const, label: '公开我的评论', val: showComments, setter: setShowComments, lsKey: 'picpony_show_comments' },
-            ].map(item => (
-              <div key={item.key} className={rowClass}>
-                <ToggleSwitch
-                  checked={item.val}
-                  onChange={(v) => updateSetting(item.key, v, item.lsKey, item.setter)}
-                  label={item.label}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-950 overflow-hidden rounded-xl mb-6">
-        <div className="p-6">
-          <h2 className={sectionTitle}><MdNotifications size={20} /> 通知偏好</h2>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">选择接收哪些邮件通知（需要先绑定邮箱）</p>
-
-          <div className="space-y-3">
             <div className={rowClass}>
-              <ToggleSwitch
-                checked={emailNotifMessage}
-                onChange={(v) => updateSetting('emailNotifMessage', v, 'picpony_email_notif_message', setEmailNotifMessage)}
-                label="有人给我发私信"
-                description="当收到新私信时发送邮件通知"
+              <div className="flex items-center gap-4">
+                <div className="relative w-24 h-14 rounded-md overflow-hidden bg-surface-container-highest flex-shrink-0">
+                  {currentBanner ? (
+                    <>
+                      {!bannerLoaded && (
+                        <div className="absolute inset-0 flex items-center justify-center text-outline z-10">
+                          <MdImage size={20} />
+                        </div>
+                      )}
+                      <FadeInImage
+                        key={currentBanner}
+                        src={
+                          currentBanner.startsWith('http')
+                            ? currentBanner
+                            : `https://picpony.top/${currentBanner}`
+                        }
+                        alt="Banner"
+                        fill
+                        className="object-cover"
+                        onLoad={() => setBannerLoaded(true)}
+                      />
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-outline">
+                      <MdImage size={20} />
+                    </div>
+                  )}
+                  {isBannerUploading && (
+                    <div className="absolute inset-0 bg-scrim/50 flex items-center justify-center">
+                      <Spinner white />
+                    </div>
+                  )}
+                </div>
+                <div className={rowLabelClass}>
+                  <p className={labelClass}>个人 Banner</p>
+                  <p className="text-body-s text-outline">建议尺寸 1200×300，最大 10MB</p>
+                </div>
+              </div>
+              <input
+                type="file"
+                ref={bannerInputRef}
+                onChange={handleBannerPick}
+                accept="image/*"
+                className="hidden"
               />
+              <Button
+                onClick={() => bannerInputRef.current?.click()}
+                disabled={!currentUsername}
+                loading={isBannerUploading}
+                icon={<MdImage size={16} />}
+                title="上传 Banner"
+              >
+                上传 Banner
+              </Button>
             </div>
+
             <div className={rowClass}>
-              <ToggleSwitch
-                checked={emailNotifReply}
-                onChange={(v) => updateSetting('emailNotifReply', v, 'picpony_email_notif_reply', setEmailNotifReply)}
-                label="有人回复我的帖子/评论"
-                description="当帖子或评论被回复时发送邮件通知"
-              />
+              <div className={rowLabelClass}>
+                <p className={labelClass}>用户名</p>
+                <p className={valueClass}>{currentUsername || '未登录'}</p>
+              </div>
+              <Button
+                onClick={() => setIsModalOpen(true)}
+                disabled={!currentUsername}
+                icon={<MdEdit size={16} />}
+                title="修改用户名"
+              >
+                修改用户名
+              </Button>
             </div>
-          </div>
-        </div>
-      </div>
-      </Reveal>
 
-      {isModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closeModal}>
-          <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">修改用户名</h3>
-              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><MdClose size={24} /></button>
+            <div className={rowClass}>
+              <div className={rowLabelClass}>
+                <p className={labelClass}>账号密码</p>
+                <p className={valueClass}>********</p>
+              </div>
+              <Button
+                onClick={() => setIsPasswordModalOpen(true)}
+                disabled={!currentUsername}
+                icon={<MdEdit size={16} />}
+                title="修改密码"
+              >
+                修改密码
+              </Button>
             </div>
-            <form onSubmit={handleUsernameSubmit} className="px-6 pb-6">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">新用户名</label>
-                <input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                  placeholder="请输入新用户名" disabled={isLoading} autoFocus />
-              </div>
-              <div className="flex justify-end gap-3">
-                <button type="button" onClick={closeModal} disabled={isLoading}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
-                <button type="submit" disabled={isLoading || !newUsername.trim()}
-                  data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none flex items-center">
-                  {isLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认修改'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>, document.body
-      )}
 
-      {isPasswordModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isPasswordClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closePasswordModal}>
-          <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isPasswordClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">修改密码</h3>
-              <button onClick={closePasswordModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><MdClose size={24} /></button>
-            </div>
-            <form onSubmit={handlePasswordSubmit} className="px-6 pb-6">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">原密码</label>
-                <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                  placeholder="请输入原密码" disabled={passwordLoading} autoFocus />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">新密码</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                  placeholder="请输入新密码" disabled={passwordLoading} />
-              </div>
-              <div className="flex justify-end gap-3">
-                <button type="button" onClick={closePasswordModal} disabled={passwordLoading}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
-                <button type="submit" disabled={passwordLoading || !oldPassword.trim() || !newPassword.trim()}
-                  data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none flex items-center">
-                  {passwordLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认修改'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>, document.body
-      )}
-
-      {isApiKeyModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isApiKeyClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closeApiKeyModal}>
-          <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isApiKeyClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">配置 API Key</h3>
-              <button onClick={closeApiKeyModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><MdClose size={24} /></button>
-            </div>
-            <form onSubmit={handleApiKeySubmit} className="px-6 pb-6">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Derpibooru API Key</label>
-                <input type="text" value={newApiKey} onChange={(e) => setNewApiKey(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                  placeholder="请输入你的 API Key" disabled={apiKeyLoading} autoFocus />
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                  通过绑定 Derpibooru API Key 可同步黑名单过滤等设置。<br />
-                  获取方法：登录 Derpibooru → Account Settings → API Key 区域。
+            <div className={rowClass}>
+              <div className={rowLabelClass}>
+                <p className={labelClass}>邮箱</p>
+                <p className={valueClass}>
+                  {currentEmail || '未设置'}
+                  {currentEmail && (
+                    <span
+                      className={`ml-2 text-body-s px-1.5 py-0.5 rounded ${isEmailVerified ? 'bg-success-container text-success' : 'bg-warning-container text-warning'}`}
+                    >
+                      {isEmailVerified ? '已验证' : '未验证'}
+                    </span>
+                  )}
                 </p>
               </div>
-              <div className="flex justify-end gap-3">
-                <button type="button" onClick={closeApiKeyModal} disabled={apiKeyLoading}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
-                <button type="submit" disabled={apiKeyLoading}
-                  data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none flex items-center">
-                  {apiKeyLoading ? <><Spinner size="sm" white className="mr-2" />提交中...</> : '确认保存'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>, document.body
-      )}
+              <Button
+                onClick={() => {
+                  setNewEmail(currentEmail);
+                  setIsEmailModalOpen(true);
+                }}
+                disabled={!currentUsername}
+                icon={<MdEdit size={16} />}
+                title={currentEmail ? '修改邮箱' : '绑定邮箱'}
+              >
+                {currentEmail ? '修改' : '绑定'}
+              </Button>
+            </div>
 
+            <div className={rowClass}>
+              <div className={rowLabelClass}>
+                <p className={labelClass}>个人资料</p>
+                <p className="text-body-s text-outline">
+                  {profileBio
+                    ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '...' : '')
+                    : '点击编辑个人简介、性别、生日'}
+                </p>
+              </div>
+              <Button
+                onClick={() => setIsProfileModalOpen(true)}
+                disabled={!currentUsername}
+                icon={<MdEdit size={16} />}
+                title="编辑个人资料"
+              >
+                编辑
+              </Button>
+            </div>
+
+            <div className={rowClass}>
+              <div className={rowLabelClass}>
+                <p className={labelClass}>Derpibooru API Key</p>
+                <p className={valueClass}>
+                  {currentApiKey
+                    ? `${currentApiKey.substring(0, 4)}...${currentApiKey.substring(currentApiKey.length - 4)}`
+                    : '未配置'}
+                </p>
+                {derpiUsername && (
+                  <p className="text-body-s text-success mt-1">已验证身份：{derpiUsername}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {currentApiKey && (
+                  <>
+                    <Button
+                      onClick={handleVerifyIdentity}
+                      disabled={!currentUsername}
+                      loading={isVerifyLoading}
+                      variant="tonal"
+                      icon={<MdVerifiedUser size={16} />}
+                      title="核验身份"
+                      responsiveLabel
+                    >
+                      去核验
+                    </Button>
+                    <Button
+                      onClick={handleClearApiKey}
+                      disabled={!currentUsername}
+                      variant="text"
+                      icon={<MdLinkOff size={16} />}
+                      title="解除绑定"
+                      responsiveLabel
+                      className="text-error hover:bg-error-container hover:text-error"
+                    >
+                      解除绑定
+                    </Button>
+                  </>
+                )}
+                <Button
+                  onClick={() => {
+                    setNewApiKey(currentApiKey);
+                    setIsApiKeyModalOpen(true);
+                  }}
+                  disabled={!currentUsername}
+                  icon={<MdEdit size={16} />}
+                  title={currentApiKey ? '修改配置' : '去配置'}
+                  responsiveLabel
+                >
+                  {currentApiKey ? '修改配置' : '去配置'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface overflow-hidden rounded-md mb-6">
+          <div className="p-6">
+            <h2 className={sectionTitle}>
+              <MdFilterList size={20} /> 内容筛选
+            </h2>
+
+            <div className={rowClass}>
+              <div className={rowLabelClass}>
+                <p className={labelClass}>内容分级过滤器</p>
+                <p className="text-body-s text-outline mt-1">
+                  {contentFilter === 'safe' && '仅显示安全内容'}
+                  {contentFilter === 'spoilers' && '拦截限制级内容（需 16 岁以上）'}
+                  {contentFilter === 'developer' && '开发者模式，显示所有内容'}
+                </p>
+              </div>
+              <Select
+                value={contentFilter}
+                onChange={handleContentFilterChange}
+                aria-label="内容分级过滤器"
+                className="w-full sm:w-auto sm:min-w-[11rem]"
+                options={[
+                  { value: 'safe', label: '完全安全 (Safe)' },
+                  { value: 'spoilers', label: '中等限制 (Spoilers)' },
+                  ...(isDeveloper ? [{ value: 'developer', label: '开发者模式' }] : []),
+                ]}
+              />
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                checked={banAnthro}
+                onChange={(v) => updateSetting('banAnthro', v, 'trixie_ban_anthro', setBanAnthro)}
+                label="禁止类人生物 (马头人)"
+                description="隐藏 anthropomorphic 标签的图片"
+              />
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                checked={banDiscomfort}
+                onChange={(v) =>
+                  updateSetting('banDiscomfort', v, 'trixie_ban_discomfort', setBanDiscomfort)
+                }
+                label="屏蔽可能令您不适的内容"
+                description="隐藏血腥、恐怖等内容"
+              />
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                checked={onlyPony}
+                onChange={(v) => updateSetting('onlyPony', v, 'trixie_only_pony', setOnlyPony)}
+                label="只看小马 (含类马)"
+                description="仅显示 pony 相关标签的图片"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface overflow-hidden rounded-md mb-6">
+          <div className="p-6">
+            <h2 className={sectionTitle}>
+              <MdVisibility size={20} /> 显示偏好
+            </h2>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                checked={showTagCounts}
+                onChange={(v) =>
+                  updateSetting('showTagCounts', v, 'trixie_show_tag_counts', setShowTagCounts)
+                }
+                label="显示各标签数量"
+                description="在标签列表旁显示图片计数"
+              />
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                checked={showChineseTags}
+                onChange={(v) =>
+                  updateSetting(
+                    'showChineseTags',
+                    v,
+                    'picpony_show_chinese_tags',
+                    setShowChineseTags,
+                  )
+                }
+                label="显示中文标签 (beta)"
+                description="启用中文标签名翻译"
+              />
+            </div>
+
+            <div className={rowClass}>
+              <div className="flex items-center gap-2">
+                <MdHome size={20} className="text-outline" />
+                <div className={rowLabelClass}>
+                  <p className={labelClass}>首页瀑布流默认排序</p>
+                </div>
+              </div>
+              <Select
+                value={defaultHomeSort}
+                onChange={(v) => {
+                  setDefaultHomeSort(v);
+                  lsSet('picpony_default_home_sort', v);
+                  syncSettingsToCloud({ defaultHomeSort: v });
+                }}
+                aria-label="首页瀑布流默认排序"
+                className="w-full sm:w-auto sm:min-w-[9rem]"
+                options={sortOptions}
+              />
+            </div>
+
+            <div className={rowClass}>
+              <div className="flex items-center gap-2">
+                <MdSearch size={20} className="text-outline" />
+                <div className={rowLabelClass}>
+                  <p className={labelClass}>搜索默认排序</p>
+                </div>
+              </div>
+              <Select
+                value={defaultSearchSort}
+                onChange={(v) => {
+                  setDefaultSearchSort(v);
+                  lsSet('picpony_default_search_sort', v);
+                  syncSettingsToCloud({ defaultSearchSort: v });
+                }}
+                aria-label="搜索默认排序"
+                className="w-full sm:w-auto sm:min-w-[9rem]"
+                options={sortOptions}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface overflow-hidden rounded-md mb-6">
+          <div className="p-6">
+            <h2 className={sectionTitle}>
+              <MdSpeed size={20} /> 性能与加速
+            </h2>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                checked={useCdn}
+                onChange={(v) => updateSetting('useCdn', v, 'trixie_use_cdn', setUseCdn)}
+                label="启用图片 CDN 加速"
+                description="通过 wsrv.nl 加速图片加载"
+              />
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                checked={usePicponyProxy}
+                onChange={handleUsePicponyProxyChange}
+                label="启用 PicPony 加速服务器 (beta)"
+                description="使用 picpony 代理服务器加速请求，开启后自动启用 CDN"
+              />
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                checked={useApiAccel}
+                onChange={handleUseApiAccelChange}
+                disabled={!currentApiKey}
+                label="启用 API 加速"
+                description={
+                  currentApiKey
+                    ? '通过备用 API 代理提升请求稳定性'
+                    : '需要先配置 Derpibooru API Key'
+                }
+              />
+              {!currentApiKey && (
+                <span className="text-body-s text-on-surface-variant ml-2">需先配置 API Key</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface overflow-hidden rounded-md mb-6">
+          <div className="p-6">
+            <h2 className={sectionTitle}>
+              <MdSecurity size={20} /> 隐私设置
+            </h2>
+            <p className="text-body-s text-outline mb-4">控制您的个人主页上对外显示的内容</p>
+
+            <div>
+              {[
+                {
+                  key: 'showUploads' as const,
+                  label: '公开我的上传',
+                  val: showUploads,
+                  setter: setShowUploads,
+                  lsKey: 'picpony_show_uploads',
+                },
+                {
+                  key: 'showFaves' as const,
+                  label: '公开我的收藏',
+                  val: showFaves,
+                  setter: setShowFaves,
+                  lsKey: 'picpony_show_faves',
+                },
+                {
+                  key: 'showPosts' as const,
+                  label: '公开我的帖子',
+                  val: showPosts,
+                  setter: setShowPosts,
+                  lsKey: 'picpony_show_posts',
+                },
+                {
+                  key: 'showComments' as const,
+                  label: '公开我的评论',
+                  val: showComments,
+                  setter: setShowComments,
+                  lsKey: 'picpony_show_comments',
+                },
+              ].map((item) => (
+                <div key={item.key} className={rowClass}>
+                  <ToggleSwitch
+                    checked={item.val}
+                    onChange={(v) => updateSetting(item.key, v, item.lsKey, item.setter)}
+                    label={item.label}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface overflow-hidden rounded-md mb-6">
+          <div className="p-6">
+            <h2 className={sectionTitle}>
+              <MdNotifications size={20} /> 通知偏好
+            </h2>
+            <p className="text-body-s text-outline mb-4">选择接收哪些邮件通知（需要先绑定邮箱）</p>
+            <div>
+              <div className={rowClass}>
+                <ToggleSwitch
+                  checked={emailNotifMessage}
+                  onChange={(v) =>
+                    updateSetting(
+                      'emailNotifMessage',
+                      v,
+                      'picpony_email_notif_message',
+                      setEmailNotifMessage,
+                    )
+                  }
+                  label="有人给我发私信"
+                  description="当收到新私信时发送邮件通知"
+                />
+              </div>
+              <div className={rowClass}>
+                <ToggleSwitch
+                  checked={emailNotifReply}
+                  onChange={(v) =>
+                    updateSetting(
+                      'emailNotifReply',
+                      v,
+                      'picpony_email_notif_reply',
+                      setEmailNotifReply,
+                    )
+                  }
+                  label="有人回复我的帖子/评论"
+                  description="当帖子或评论被回复时发送邮件通知"
+                />{' '}
+              </div>{' '}
+            </div>{' '}
+          </div>{' '}
+        </div>{' '}
+      </Reveal>{' '}
+      <ImageCropper
+        file={avatarPick}
+        onClose={() => setAvatarPick(null)}
+        onCropped={handleAvatarCropped}
+        aspect={1}
+        shape="circle"
+        outputWidth={512}
+        title="调整头像"
+        busy={isAvatarUploading}
+      />{' '}
+      <ImageCropper
+        file={bannerPick}
+        onClose={() => setBannerPick(null)}
+        onCropped={handleBannerCropped}
+        aspect={4}
+        outputWidth={1600}
+        outputHeight={400}
+        title="调整个人横幅"
+        busy={isBannerUploading}
+      />{' '}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        title="修改用户名"
+        footer={
+          <>
+            {' '}
+            <Button variant="text" type="button" onClick={closeModal} disabled={isLoading}>
+              取消
+            </Button>{' '}
+            <Button
+              variant="filled"
+              type="submit"
+              form="username-form"
+              loading={isLoading}
+              disabled={!newUsername.trim()}
+            >
+              确认修改
+            </Button>{' '}
+          </>
+        }
+      >
+        {' '}
+        <form id="username-form" onSubmit={handleUsernameSubmit}>
+          {' '}
+          <label htmlFor="new-username" className="block text-label-l text-on-surface mb-2">
+            新用户名
+          </label>{' '}
+          <Input
+            id="new-username"
+            data-autofocus
+            type="text"
+            value={newUsername}
+            onChange={(e) => setNewUsername(e.target.value)}
+            placeholder="请输入新用户名"
+            disabled={isLoading}
+          />{' '}
+        </form>{' '}
+      </Modal>{' '}
+      <Modal
+        isOpen={isPasswordModalOpen}
+        onClose={closePasswordModal}
+        title="修改密码"
+        footer={
+          <>
+            {' '}
+            <Button
+              variant="text"
+              type="button"
+              onClick={closePasswordModal}
+              disabled={passwordLoading}
+            >
+              取消
+            </Button>{' '}
+            <Button
+              variant="filled"
+              type="submit"
+              form="password-form"
+              loading={passwordLoading}
+              disabled={!oldPassword.trim() || !newPassword.trim()}
+            >
+              确认修改
+            </Button>{' '}
+          </>
+        }
+      >
+        {' '}
+        <form id="password-form" onSubmit={handlePasswordSubmit} className="space-y-4">
+          {' '}
+          <div>
+            {' '}
+            <label htmlFor="old-password" className="block text-label-l text-on-surface mb-2">
+              原密码
+            </label>{' '}
+            <Input
+              id="old-password"
+              data-autofocus
+              type="password"
+              value={oldPassword}
+              onChange={(e) => setOldPassword(e.target.value)}
+              placeholder="请输入原密码"
+              disabled={passwordLoading}
+            />{' '}
+          </div>{' '}
+          <div>
+            {' '}
+            <label htmlFor="new-password" className="block text-label-l text-on-surface mb-2">
+              新密码
+            </label>{' '}
+            <Input
+              id="new-password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="请输入新密码"
+              disabled={passwordLoading}
+            />{' '}
+          </div>{' '}
+        </form>{' '}
+      </Modal>{' '}
+      <Modal
+        isOpen={isApiKeyModalOpen}
+        onClose={closeApiKeyModal}
+        title="配置 API Key"
+        footer={
+          <>
+            {' '}
+            <Button
+              variant="text"
+              type="button"
+              onClick={closeApiKeyModal}
+              disabled={apiKeyLoading}
+            >
+              取消
+            </Button>{' '}
+            <Button variant="filled" type="submit" form="apikey-form" loading={apiKeyLoading}>
+              确认保存
+            </Button>{' '}
+          </>
+        }
+      >
+        {' '}
+        <form id="apikey-form" onSubmit={handleApiKeySubmit}>
+          {' '}
+          <label htmlFor="derpi-api-key" className="block text-label-l text-on-surface mb-2">
+            Derpibooru API Key
+          </label>{' '}
+          <Input
+            id="derpi-api-key"
+            data-autofocus
+            type="text"
+            value={newApiKey}
+            onChange={(e) => setNewApiKey(e.target.value)}
+            placeholder="请输入你的 API Key"
+            disabled={apiKeyLoading}
+          />{' '}
+          <p className="text-body-s text-on-surface-variant mt-2">
+            {' '}
+            通过绑定 Derpibooru API Key 可同步黑名单过滤等设置。
+            <br /> 获取方法：登录 Derpibooru → Account Settings → API Key 区域。{' '}
+          </p>{' '}
+        </form>{' '}
+      </Modal>{' '}
       <Modal
         isOpen={isClearApiKeyModalOpen}
         onClose={() => setIsClearApiKeyModalOpen(false)}
         title="解除绑定 API Key"
         footer={
           <>
-            <button onClick={() => setIsClearApiKeyModalOpen(false)}
-              className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
-            <button onClick={handleClearApiKeyConfirm}
-              data-ripple className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 hover:shadow-md hover:shadow-red-500/25 active:scale-95 rounded-lg transition-all duration-200">确认解除</button>
+            {' '}
+            <button
+              onClick={() => setIsClearApiKeyModalOpen(false)}
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui disabled:opacity-50"
+              data-ripple
+            >
+              取消
+            </button>{' '}
+            <button
+              onClick={handleClearApiKeyConfirm}
+              data-ripple
+              className="px-4 py-2 text-label-l bg-error-fill text-on-fill hover:bg-error-fill/90 hover:shadow-e2 hover:shadow-error/25 rounded-full transition-ui"
+            >
+              确认解除
+            </button>{' '}
           </>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          确定要解除 Derpibooru API Key 的绑定吗？解除后部分功能（如黑名单过滤同步）将无法使用。
-        </p>
+        {' '}
+        <p className="text-body-m text-on-surface-variant">
+          {' '}
+          确定要解除 Derpibooru API Key
+          的绑定吗？解除后部分功能（如黑名单过滤同步）将无法使用。{' '}
+        </p>{' '}
+      </Modal>{' '}
+      <Modal isOpen={isEmailModalOpen} onClose={closeEmailModal} title="邮箱设置">
+        {' '}
+        {!showVerifyInput ? (
+          <div className="space-y-4">
+            {' '}
+            <div>
+              {' '}
+              <label htmlFor="new-email" className="block text-label-l text-on-surface mb-2">
+                新邮箱地址
+              </label>{' '}
+              <Input
+                id="new-email"
+                data-autofocus
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="example@email.com"
+                disabled={emailLoading}
+              />{' '}
+            </div>{' '}
+            <div className="flex justify-end gap-3">
+              {' '}
+              <Button
+                variant="text"
+                type="button"
+                onClick={closeEmailModal}
+                disabled={emailLoading}
+              >
+                取消
+              </Button>{' '}
+              <Button
+                variant="filled"
+                onClick={handleEmailSubmit}
+                disabled={emailLoading || !newEmail.trim()}
+              >
+                {' '}
+                {emailLoading ? '提交中...' : '更新邮箱'}{' '}
+              </Button>{' '}
+            </div>{' '}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {' '}
+            <div className="bg-accent-blue text-on-accent-blue text-body-m rounded-sm p-3">
+              {' '}
+              验证码已发送至 {newEmail}，请查收{' '}
+            </div>{' '}
+            <div>
+              {' '}
+              <label htmlFor="email-code" className="block text-label-l text-on-surface mb-2">
+                验证码
+              </label>{' '}
+              <Input
+                id="email-code"
+                data-autofocus
+                type="text"
+                value={verifyCode}
+                onChange={(e) => setVerifyCode(e.target.value)}
+                placeholder="请输入验证码"
+                disabled={emailLoading}
+              />{' '}
+            </div>{' '}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {' '}
+              <button
+                onClick={handleResendCode}
+                disabled={isResending}
+                className="text-body-m text-link hover:underline disabled:opacity-50"
+              >
+                {' '}
+                {isResending ? '发送中...' : '重新发送'}
+              </button>
+              <div className="flex gap-3">
+                <Button
+                  variant="text"
+                  type="button"
+                  onClick={closeEmailModal}
+                  disabled={emailLoading}
+                >
+                  取消
+                </Button>
+                <Button
+                  variant="filled"
+                  onClick={handleVerifyEmail}
+                  disabled={emailLoading || !verifyCode.trim()}
+                >
+                  {emailLoading ? '验证中...' : '验证邮箱'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
-
-      {isEmailModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isEmailClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closeEmailModal}>
-          <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden ${isEmailClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">邮箱设置</h3>
-              <button onClick={closeEmailModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><MdClose size={24} /></button>
-            </div>
-            <div className="px-6 pb-6 space-y-4">
-              {!showVerifyInput ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">新邮箱地址</label>
-                    <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
-                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                      placeholder="example@email.com" disabled={emailLoading} autoFocus />
-                  </div>
-                  <div className="flex justify-end gap-3">
-                    <button type="button" onClick={closeEmailModal} disabled={emailLoading}
-                      className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
-                    <button onClick={handleEmailSubmit} disabled={emailLoading || !newEmail.trim()}
-                      data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none">
-                      {emailLoading ? '提交中...' : '更新邮箱'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm text-blue-700 dark:text-blue-400">
-                    验证码已发送至 {newEmail}，请查收
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">验证码</label>
-                    <input type="text" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value)}
-                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                      placeholder="请输入验证码" disabled={emailLoading} />
-                  </div>
-                  <div className="flex justify-between">
-                    <button onClick={handleResendCode} disabled={isResending}
-                      className="text-sm text-primary hover:underline disabled:opacity-50">
-                      {isResending ? '发送中...' : '重新发送'}
-                    </button>
-                    <div className="flex gap-3">
-                      <button type="button" onClick={closeEmailModal} disabled={emailLoading}
-                        className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
-                      <button onClick={handleVerifyEmail} disabled={emailLoading || !verifyCode.trim()}
-                        data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none">
-                        {emailLoading ? '验证中...' : '验证邮箱'}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+      <Modal
+        isOpen={isProfileModalOpen}
+        onClose={closeProfileModal}
+        title="编辑个人资料"
+        maxWidth="max-w-lg"
+        footer={
+          <>
+            <Button
+              variant="text"
+              type="button"
+              onClick={closeProfileModal}
+              disabled={profileLoading}
+            >
+              取消
+            </Button>
+            <Button variant="filled" onClick={handleProfileSubmit} disabled={profileLoading}>
+              {profileLoading ? '保存中...' : '保存资料'}{' '}
+            </Button>{' '}
+          </>
+        }
+      >
+        {' '}
+        <div className="space-y-4">
+          {' '}
+          <div>
+            {' '}
+            <label htmlFor="profile-bio" className="block text-label-l text-on-surface mb-2">
+              个人简介 (Bio)
+            </label>{' '}
+            <Textarea
+              id="profile-bio"
+              data-autofocus
+              value={profileBio}
+              onChange={(e) => setProfileBio(e.target.value)}
+              rows={3}
+              maxLength={500}
+              className="resize-none"
+              placeholder="介绍一下你自己..."
+            />{' '}
+            <p className="text-body-s text-outline mt-1">{profileBio.length}/500</p>{' '}
+          </div>{' '}
+          <div>
+            {' '}
+            <label className="block text-label-l text-on-surface mb-2">性别</label>{' '}
+            <Select
+              value={profileGender}
+              onChange={setProfileGender}
+              className="w-full"
+              aria-label="性别"
+              options={[
+                { value: '保密', label: '保密' },
+                { value: '男', label: '男' },
+                { value: '女', label: '女' },
+                { value: '武装直升机', label: '其他' },
+              ]}
+            />{' '}
+          </div>{' '}
+          <div>
+            {' '}
+            <label htmlFor="profile-birthday" className="block text-label-l text-on-surface mb-2">
+              生日
+            </label>{' '}
+            <Input
+              id="profile-birthday"
+              type="date"
+              value={profileBirthday}
+              onChange={(e) => setProfileBirthday(e.target.value)}
+            />{' '}
+          </div>{' '}
+          <div>
+            {' '}
+            <label className="block text-label-l text-on-surface mb-2">种族</label>{' '}
+            <Select
+              value={profileRace}
+              onChange={setProfileRace}
+              className="w-full"
+              placeholder="未设置"
+              aria-label="种族"
+              options={[
+                { value: '', label: '未设置' },
+                { value: 'Earth Pony', label: '陆马' },
+                { value: 'Unicorn', label: '独角兽' },
+                { value: 'Pegasus', label: '飞马' },
+                { value: 'Alicorn', label: '天角兽' },
+                { value: 'Bat Pony', label: '蝙蝠小马' },
+                { value: 'Changeling', label: '幻形灵' },
+                { value: 'Other', label: '其他' },
+              ]}
+            />
           </div>
-        </div>, document.body
-      )}
-
-      {isProfileModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 ${isProfileClosing ? 'animate-modal-overlay-out' : 'animate-modal-overlay'}`}
-          onClick={closeProfileModal}>
-          <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg overflow-hidden ${isProfileClosing ? 'animate-modal-content-out' : 'animate-modal-content'}`}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-6">
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">编辑个人资料</h3>
-              <button onClick={closeProfileModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><MdClose size={24} /></button>
-            </div>
-            <div className="px-6 pb-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">个人简介 (Bio)</label>
-                <textarea value={profileBio} onChange={(e) => setProfileBio(e.target.value)} rows={3} maxLength={500}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none"
-                  placeholder="介绍一下你自己..." />
-                <p className="text-xs text-slate-400 mt-1">{profileBio.length}/500</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">性别</label>
-                <Select
-                  value={profileGender}
-                  onChange={setProfileGender}
-                  className="w-full"
-                  aria-label="性别"
-                  options={[
-                    { value: '保密', label: '保密' },
-                    { value: '男', label: '男' },
-                    { value: '女', label: '女' },
-                    { value: '武装直升机', label: '其他' },
-                  ]}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">生日</label>
-                <input type="date" value={profileBirthday} onChange={(e) => setProfileBirthday(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">种族</label>
-                <Select
-                  value={profileRace}
-                  onChange={setProfileRace}
-                  className="w-full"
-                  placeholder="未设置"
-                  aria-label="种族"
-                  options={[
-                    { value: '', label: '未设置' },
-                    { value: 'Earth Pony', label: '陆马' },
-                    { value: 'Unicorn', label: '独角兽' },
-                    { value: 'Pegasus', label: '飞马' },
-                    { value: 'Alicorn', label: '天角兽' },
-                    { value: 'Bat Pony', label: '蝙蝠小马' },
-                    { value: 'Changeling', label: '幻形灵' },
-                    { value: 'Other', label: '其他' },
-                  ]}
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={closeProfileModal} disabled={profileLoading}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 active:scale-95 disabled:opacity-50" data-ripple>取消</button>
-                <button onClick={handleProfileSubmit} disabled={profileLoading}
-                  data-ripple className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:shadow-none">
-                  {profileLoading ? '保存中...' : '保存资料'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>, document.body
-      )}
+        </div>
+      </Modal>
     </div>
   );
 }

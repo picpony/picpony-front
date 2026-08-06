@@ -108,7 +108,7 @@ export function readHeroHistoryMarker(state: unknown): HeroMarker | null {
   return {
     token: marker.token,
     role,
-    sessionId: legacy ? 0 : marker.sessionId as number,
+    sessionId: legacy ? 0 : (marker.sessionId as number),
     imageId: marker.imageId,
     detailHref: marker.detailHref,
     background: marker.background,
@@ -118,9 +118,7 @@ export function readHeroHistoryMarker(state: unknown): HeroMarker | null {
 
 function stateWithMarker(marker: HeroMarker) {
   const current = window.history.state;
-  const state = current && typeof current === 'object'
-    ? current as Record<string, unknown>
-    : {};
+  const state = current && typeof current === 'object' ? (current as Record<string, unknown>) : {};
   return { ...state, [HISTORY_STATE_KEY]: { version: 2, ...marker } };
 }
 
@@ -137,9 +135,10 @@ function markerFor(record: HeroHistoryRecord, role: HistoryRole): HeroMarker {
 }
 
 function createToken(sessionId: number, imageId: number) {
-  const suffix = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+  const suffix =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
   return `v2:${sessionId}:${imageId}:${suffix}`;
 }
 
@@ -249,15 +248,12 @@ class HeroHistoryDriver {
    */
   claim(record: HeroHistoryRecord) {
     if (!this.isStableForWrite()) return false;
-    const expected = normalizeHref(
-      `${record.background.pathname}${record.background.search}`,
-    );
+    const expected = normalizeHref(`${record.background.pathname}${record.background.search}`);
     if (normalizeHref(window.location.href) !== expected) return false;
 
     const current = this.currentMarker();
-    const reuseCurrent = current?.role === 'provisional' || (
-      !current && this.position === 'provisional'
-    );
+    const reuseCurrent =
+      current?.role === 'provisional' || (!current && this.position === 'provisional');
     if (current && !reuseCurrent) return false;
 
     record.backgroundDepth = 2;
@@ -315,9 +311,8 @@ class HeroHistoryDriver {
       );
       const currentHref = normalizeHref(window.location.href);
       const current = this.currentMarker();
-      const ownsUnmarkedProvisional = !current &&
-        this.position === 'provisional' &&
-        this.provisionalTokens.has(record.token);
+      const ownsUnmarkedProvisional =
+        !current && this.position === 'provisional' && this.provisionalTokens.has(record.token);
 
       if (currentHref === expectedHref && !current && !ownsUnmarkedProvisional) {
         this.position = 'background';
@@ -329,13 +324,16 @@ class HeroHistoryDriver {
       const role = current?.role ?? (ownsUnmarkedProvisional ? 'provisional' : null);
       // A provisional entry that already routed sits one level deeper.
       const routedProvisional = role === 'provisional' && currentHref === record.detailHref;
-      const steps = role === 'guard'
-        ? -(record.backgroundDepth + 1)
-        : role === 'base'
-          ? -record.backgroundDepth
-          : role === 'provisional'
-            ? routedProvisional ? -2 : -1
-            : 0;
+      const steps =
+        role === 'guard'
+          ? -(record.backgroundDepth + 1)
+          : role === 'base'
+            ? -record.backgroundDepth
+            : role === 'provisional'
+              ? routedProvisional
+                ? -2
+                : -1
+              : 0;
       if (!steps) return false;
 
       const confirmed = await this.goAndConfirm(
@@ -373,9 +371,7 @@ class HeroHistoryDriver {
   /** Back overshot past the gallery entry; step forward onto it. */
   recoverSkippedBackground(record: HeroHistoryRecord) {
     return this.enqueue(async () => {
-      const expected = normalizeHref(
-        `${record.background.pathname}${record.background.search}`,
-      );
+      const expected = normalizeHref(`${record.background.pathname}${record.background.search}`);
       if (normalizeHref(window.location.href) === expected && !this.currentMarker()) {
         this.position = 'background';
         return true;
@@ -417,11 +413,13 @@ class HeroHistoryDriver {
       }
       if (marker.role !== 'base') return false;
 
-      if (await this.goAndConfirm(
-        1,
-        (next) => next?.token === record.token && next.role === 'guard',
-        record.token,
-      )) {
+      if (
+        await this.goAndConfirm(
+          1,
+          (next) => next?.token === record.token && next.role === 'guard',
+          record.token,
+        )
+      ) {
         this.position = 'guard';
         return true;
       }
@@ -455,19 +453,14 @@ class HeroHistoryDriver {
   collapseOrphanMarker(marker: HeroMarker) {
     return this.enqueue(async () => {
       if (this.hasLateTraversal()) return false;
-      const steps = marker.role === 'guard'
-        ? -(marker.backgroundDepth + 1)
-        : marker.role === 'base'
-          ? -marker.backgroundDepth
-          : -1;
-      const expected = normalizeHref(
-        `${marker.background.pathname}${marker.background.search}`,
-      );
-      return this.goAndConfirm(
-        steps,
-        (next, href) => href === expected && !next,
-        marker.token,
-      );
+      const steps =
+        marker.role === 'guard'
+          ? -(marker.backgroundDepth + 1)
+          : marker.role === 'base'
+            ? -marker.backgroundDepth
+            : -1;
+      const expected = normalizeHref(`${marker.background.pathname}${marker.background.search}`);
+      return this.goAndConfirm(steps, (next, href) => href === expected && !next, marker.token);
     });
   }
 
@@ -520,7 +513,10 @@ class HeroHistoryDriver {
         return false;
       },
     );
-    this.transaction = observed.then(() => undefined, () => undefined);
+    this.transaction = observed.then(
+      () => undefined,
+      () => undefined,
+    );
     return observed;
   }
 
@@ -624,11 +620,7 @@ class HeroHistoryDriver {
     return this.lateWaiters.size > 0;
   }
 
-  private accepts(
-    accept: PopWaiter['accept'],
-    marker: HeroMarker | null,
-    href: string,
-  ) {
+  private accepts(accept: PopWaiter['accept'], marker: HeroMarker | null, href: string) {
     try {
       return accept(marker, href);
     } catch {
@@ -637,11 +629,7 @@ class HeroHistoryDriver {
   }
 
   private isStableForWrite() {
-    return (
-      this.queuedTransactions === 0 &&
-      this.waiters.size === 0 &&
-      !this.hasLateTraversal()
-    );
+    return this.queuedTransactions === 0 && this.waiters.size === 0 && !this.hasLateTraversal();
   }
 
   private notifyStability() {

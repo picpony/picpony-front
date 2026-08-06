@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 type ImageCardVideoProps = {
   src: string;
@@ -10,6 +10,16 @@ export default function ImageCardVideo({ src }: ImageCardVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameReadyRef = useRef(false);
   const [preload, setPreload] = useState<'metadata' | 'auto'>('metadata');
+  /* Video thumbs used to pop in with no transition at all, next to image thumbs
+     that faded — two different arrivals in the same grid. Same shimmer, same
+     fade, same curve as `FadeInImage`. */
+  const [posterReady, setPosterReady] = useState(false);
+
+  useLayoutEffect(() => {
+    // HAVE_CURRENT_DATA: the poster frame is already decoded (cached video on a
+    // return visit), so there is nothing to reveal.
+    if ((videoRef.current?.readyState ?? 0) >= 2) setPosterReady(true);
+  }, [src]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -32,23 +42,34 @@ export default function ImageCardVideo({ src }: ImageCardVideoProps) {
   const coolVideo = () => setPreload('metadata');
   const handleLoadedData = () => {
     frameReadyRef.current = true;
+    setPosterReady(true);
     setPreload('metadata');
   };
 
   return (
-    <video
-      ref={videoRef}
-      src={`${src}#t=0.1`}
-      preload={preload}
-      muted
-      playsInline
-      onLoadedData={handleLoadedData}
-      onPointerEnter={warmVideo}
-      onPointerDown={warmVideo}
-      onPointerLeave={coolVideo}
-      onFocus={warmVideo}
-      onBlur={coolVideo}
-      className="absolute left-0 top-0 h-full w-full object-cover"
-    />
+    <>
+      {!posterReady && (
+        <span
+          aria-hidden="true"
+          className="skeleton bg-surface-container-high absolute inset-0 block"
+        />
+      )}
+      <video
+        ref={videoRef}
+        src={`${src}#t=0.1`}
+        preload={preload}
+        muted
+        playsInline
+        onLoadedData={handleLoadedData}
+        onPointerEnter={warmVideo}
+        onPointerDown={warmVideo}
+        onPointerLeave={coolVideo}
+        onFocus={warmVideo}
+        onBlur={coolVideo}
+        className={`absolute left-0 top-0 h-full w-full object-cover transition-opacity duration-200 ease-[var(--ease-standard)] motion-reduce:transition-none ${
+          posterReady ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+    </>
   );
 }

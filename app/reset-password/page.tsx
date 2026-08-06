@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MdEmail, MdLock, MdSend, MdArrowBack } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
-import Spinner from '@/components/Spinner';
+import Button from '@/components/Button';
+import { Input } from '@/components/Input';
 import { api } from '@/lib/api';
 
 export default function ResetPasswordPage() {
@@ -20,9 +21,15 @@ export default function ResetPasswordPage() {
 
   const handleRequestCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) { showToast('请输入邮箱', 'error'); return; }
+    if (!email.trim()) {
+      showToast('请输入邮箱', 'error');
+      return;
+    }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) { showToast('请输入有效的邮箱地址', 'error'); return; }
+    if (!emailRegex.test(email)) {
+      showToast('请输入有效的邮箱地址', 'error');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -43,10 +50,22 @@ export default function ResetPasswordPage() {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) { showToast('请输入验证码', 'error'); return; }
-    if (!newPassword.trim()) { showToast('请输入新密码', 'error'); return; }
-    if (newPassword.length < 6) { showToast('密码长度至少6位', 'error'); return; }
-    if (newPassword !== confirmPassword) { showToast('两次密码输入不一致', 'error'); return; }
+    if (!code.trim()) {
+      showToast('请输入验证码', 'error');
+      return;
+    }
+    if (!newPassword.trim()) {
+      showToast('请输入新密码', 'error');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast('密码长度至少6位', 'error');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('两次密码输入不一致', 'error');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -68,114 +87,96 @@ export default function ResetPasswordPage() {
       setIsLoading(false);
     }
   };
-
   return (
     <div className="max-w-md mx-auto mt-8 sm:mt-12 p-6 sm:p-8 animate-fade-in">
+      {' '}
       <Link
         href="/login"
-        className="flex items-center text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-8 transition-colors"
+        className="flex items-center text-label-l text-on-surface-variant hover:text-on-surface mb-8 transition-ui"
       >
-        <MdArrowBack size={18} className="mr-1" />
-        返回登录
-      </Link>
-
-      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+        {' '}
+        <MdArrowBack size={18} className="mr-1" /> 返回登录{' '}
+      </Link>{' '}
+      <h1 className="text-headline-s text-on-surface mb-2">
+        {' '}
         {step === 'request' ? '忘记密码' : '重置密码'}
       </h1>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">
-        {step === 'request'
-          ? '输入注册邮箱，我们将发送验证码到您的邮箱'
-          : '输入验证码和新密码'}
+      <p className="text-body-m text-on-surface-variant mb-8">
+        {step === 'request' ? '输入注册邮箱，我们将发送验证码到您的邮箱' : '输入验证码和新密码'}
       </p>
-
       {step === 'request' ? (
         <form onSubmit={handleRequestCode} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">邮箱</label>
-            <div className="relative">
-              <MdEmail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                placeholder="请输入注册邮箱"
-              />
-            </div>
-          </div>
-          <button
+          {' '}
+          <Input
+            type="email"
+            label="邮箱"
+            icon={<MdEmail size={18} />}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="请输入注册邮箱"
+          />
+          <Button
             type="submit"
-            disabled={isLoading || !email.trim()}
-            data-ripple
-            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+            variant="filled"
+            size="lg"
+            fullWidth
+            loading={isLoading}
+            disabled={!email.trim()}
+            icon={<MdSend size={18} />}
           >
-            {isLoading ? <Spinner size="sm" white /> : (
-              <>
-                <MdSend size={18} />
-                发送验证码
-              </>
-            )}
-          </button>
+            发送验证码
+          </Button>
         </form>
       ) : (
         <form onSubmit={handleResetPassword} className="space-y-4">
-          <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
-            <p className="text-sm text-primary font-medium">验证码已发送至 {email}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">验证码</label>
-            <input
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-              placeholder="请输入邮箱验证码"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">新密码</label>
-            <div className="relative">
-              <MdLock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                placeholder="至少6位密码"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">确认密码</label>
-            <div className="relative">
-              <MdLock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                placeholder="再次输入新密码"
-              />
-            </div>
-          </div>
-          <button
+          {' '}
+          <div className="p-3 bg-primary/5 rounded-md border border-primary/20">
+            {' '}
+            <p className="text-body-m text-primary ">验证码已发送至 {email}</p>{' '}
+          </div>{' '}
+          <Input
+            type="text"
+            label="验证码"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            required
+            placeholder="请输入邮箱验证码"
+          />
+          <Input
+            type="password"
+            label="新密码"
+            icon={<MdLock size={18} />}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+            minLength={6}
+            placeholder="至少6位密码"
+          />
+          <Input
+            type="password"
+            label="确认密码"
+            icon={<MdLock size={18} />}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            placeholder="再次输入新密码"
+          />
+          <Button
             type="submit"
-            disabled={isLoading || !code.trim() || !newPassword.trim()}
-            data-ripple
-            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+            variant="filled"
+            size="lg"
+            fullWidth
+            loading={isLoading}
+            disabled={!code.trim() || !newPassword.trim()}
           >
-            {isLoading ? <Spinner size="sm" white /> : '重置密码'}
-          </button>
+            重置密码
+          </Button>
           <div className="text-center">
             <button
               type="button"
               onClick={() => setStep('request')}
-              className="text-sm text-primary hover:underline"
+              className="text-body-m text-primary hover:underline"
             >
               重新发送验证码
             </button>
