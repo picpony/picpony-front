@@ -139,7 +139,7 @@ export default function AdminPage() {
       {' '}
       <div className="bg-surface rounded-md overflow-hidden flex flex-col md:flex-row">
         {' '}
-        <div className="md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-outline-variant">
+        <div className="md:w-48 shrink-0 border-b md:border-b-0 border-outline-variant">
           {' '}
           <nav className="flex md:flex-col p-2 gap-1 overflow-x-auto scrollbar-hide">
             {' '}

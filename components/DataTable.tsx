@@ -75,7 +75,7 @@ export default function DataTable<T>({
   return (
     <div className={cn('w-full', className)}>
       {/* ---- Desktop / tablet: a real table ---- */}
-      <div className="border-outline-variant hidden overflow-x-auto rounded-md border sm:block">
+      <div className="hidden overflow-x-auto rounded-md sm:block">
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-surface-container-high">
@@ -94,7 +94,7 @@ export default function DataTable<T>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-outline-variant divide-y">
+          <tbody>
             {loading && <SkeletonRows rows={skeletonRows} cols={columns.length} />}
 
             {isEmpty && (
@@ -111,7 +111,9 @@ export default function DataTable<T>({
                   key={rowKey(row, i)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cn(
-                    'bg-surface-container-lowest transition-ui',
+                    // 斑马纹：深浅交替区分行，替代分割线
+                    i % 2 === 0 ? 'bg-surface-container-lowest' : 'bg-surface-container-low/25',
+                    'transition-ui',
                     onRowClick && 'hover:bg-surface-container cursor-pointer',
                   )}
                 >
@@ -139,7 +141,7 @@ export default function DataTable<T>({
           Array.from({ length: Math.min(skeletonRows, 4) }, (_, i) => (
             <div
               key={i}
-              className="border-outline-variant bg-surface-container-lowest flex flex-col gap-2 rounded-md border p-4"
+              className="bg-surface-container-lowest flex flex-col gap-2 rounded-md p-4"
             >
               <Skeleton className="h-4 w-2/5" delay={i * 80} />
               <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
@@ -148,7 +150,7 @@ export default function DataTable<T>({
           ))}
 
         {isEmpty && (
-          <div className="border-outline-variant rounded-md border px-4 py-10 text-center">
+          <div className="rounded-md px-4 py-10 text-center">
             {empty ?? <span className="text-on-surface-variant">暂无数据</span>}
           </div>
         )}
@@ -159,7 +161,9 @@ export default function DataTable<T>({
               key={rowKey(row, i)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
-                'border-outline-variant bg-surface-container-lowest rounded-md border p-4',
+                // 斑马纹：深浅交替区分卡片
+                i % 2 === 0 ? 'bg-surface-container-lowest' : 'bg-surface-container-low/25',
+                'rounded-md p-4',
                 onRowClick && 'cursor-pointer',
               )}
             >
@@ -183,7 +187,7 @@ export default function DataTable<T>({
               )}
 
               {actions.length > 0 && (
-                <div className="border-outline-variant mt-3 flex flex-wrap gap-2 border-t pt-3">
+                <div className="mt-3 flex flex-wrap gap-2 pt-3">
                   {actions.map((col) => (
                     <div key={col.key} className="flex flex-wrap gap-2">
                       {col.render(row, i)}
