@@ -32,14 +32,17 @@ interface DataTableProps<T> {
 }
 
 /**
- * Admin data table, rendered as a `.m3-row` grouped list to match the settings
- * page: one continuous cut block of `bg-surface-container-low` rows, 2px seams,
- * large outer corners — not a column grid, and no zebra striping.
+ * Admin data table: a `.m3-row` grouped list that keeps the table's header row.
+ * The header is the first row of the cut block (`bg-surface-container-high`),
+ * naming every column; the data rows below it are `bg-surface-container-low`
+ * with 2px seams and large outer corners — matching the settings list, but
+ * with the column names the old `<table>` header carried.
  *
- * Each row keeps the same information as the old `<table>`: a `primary` column
- * becomes the row heading, every other column a label/value pair, and an
- * `actions` column a trailing button group. `hideOnMobile` columns (the
- * select-all checkbox) render as a bare leading control.
+ * Each row keeps the same information as before: a `primary` column becomes
+ * the row heading, every other column renders its value (its name lives in
+ * the header row), and an `actions` column a trailing button group.
+ * `hideOnMobile` columns (the select-all checkbox) render as a bare leading
+ * control.
  *
  * It also owns the loading state: the tables previously did
  * `{loading ? <Spinner/> : rows}`, which collapsed the list to nothing and then
@@ -70,21 +73,45 @@ export default function DataTable<T>({
 
   return (
     <div className={cn('w-full', className)}>
-      {/* ---- Loading: a run of row-shaped skeletons ---- */}
-      {loading && (
-        <div className="flex flex-col">
-          {Array.from({ length: Math.min(skeletonRows, 6) }, (_, i) => (
-            <div
-              key={i}
-              className="m3-row flex flex-col gap-2 bg-surface-container-low p-4"
-            >
-              <Skeleton className="h-4 w-2/5" delay={i * 80} />
-              <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
-              <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
-            </div>
-          ))}
-        </div>
-      )}
+      {/* ---- Header: column names, first row of the cut block ---- */}
+      <div className="m3-row flex flex-wrap items-center gap-x-4 gap-y-2 bg-surface-container-high px-4 py-3">
+        {leading.length > 0 && (
+          <div className="flex shrink-0 items-center gap-2">
+            {leading.map((col) => (
+              <div key={col.key}>{col.header}</div>
+            ))}
+          </div>
+        )}
+        {heading && (
+          <span className="text-label-l text-on-surface-variant shrink-0">{heading.header}</span>
+        )}
+        {details.map((col) => (
+          <span key={col.key} className="text-label-l text-on-surface-variant shrink-0">
+            {col.header}
+          </span>
+        ))}
+        {actions.length > 0 && (
+          <span className="ml-auto text-label-l text-on-surface-variant shrink-0">
+            {actions[0].header}
+          </span>
+        )}
+      </div>
+
+      {/* ---- Loading: a run of row-shaped skeletons ----
+           Skeleton rows sit directly in the container — wrapping them in a
+           <div> would break the `.m3-row` sibling chain and give the header
+           row the "last row" bottom corner radius while the list was loading. */}
+      {loading &&
+        Array.from({ length: Math.min(skeletonRows, 6) }, (_, i) => (
+          <div
+            key={i}
+            className="m3-row flex flex-col gap-2 bg-surface-container-low p-4"
+          >
+            <Skeleton className="h-4 w-2/5" delay={i * 80} />
+            <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
+            <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
+          </div>
+        ))}
 
       {/* ---- Empty ---- */}
       {isEmpty && (
@@ -121,16 +148,12 @@ export default function DataTable<T>({
             )}
 
             {details.map((col) => (
-              <div key={col.key} className="flex min-w-0 items-center gap-2">
-                <span className="text-label-m text-on-surface-variant shrink-0">
-                  {col.header}
-                </span>
-                <span
-                  className={cn('text-body-m text-on-surface min-w-0 break-words', col.className)}
-                >
-                  {col.render(row, i)}
-                </span>
-              </div>
+              <span
+                key={col.key}
+                className={cn('text-body-m text-on-surface min-w-0 break-words', col.className)}
+              >
+                {col.render(row, i)}
+              </span>
             ))}
 
             {actions.length > 0 && (
