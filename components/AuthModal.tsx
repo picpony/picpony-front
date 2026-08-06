@@ -111,7 +111,7 @@ function AuthModal({
           <button
             onClick={onClose}
             aria-label="关闭"
-            className="absolute right-3 top-5 z-10 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-on-surface-variant outline-none transition-ui hover:rotate-90 hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/40 motion-reduce:hover:rotate-0"
+            className="absolute right-1 top-5 z-10 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-on-surface-variant outline-none transition-ui hover:rotate-90 hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/40 motion-reduce:hover:rotate-0"
           >
             <MdClose size={22} />
           </button>
