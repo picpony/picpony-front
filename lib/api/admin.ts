@@ -435,8 +435,18 @@ export async function deleteTeamMember(token: string, id: number) {
 // 标签反馈管理
 // ---------------------------------------------------------------------------
 
-export async function getTagFeedback(token: string) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_tag_feedback`, {
+export async function getTagFeedback(
+  token: string,
+  params: { status?: string; keyword?: string; page?: number; limit?: number } = {},
+) {
+  const search = new URLSearchParams();
+  search.set('action', 'admin_get_tag_feedback');
+  if (params.status) search.set('status', params.status);
+  if (params.keyword) search.set('keyword', params.keyword);
+  search.set('page', String(params.page ?? 1));
+  search.set('limit', String(params.limit ?? 40));
+  search.set('_t', String(Date.now()));
+  const res = await fetch(`${PICPONY_API_BASE}?${search}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return readJson(res);

@@ -50,11 +50,22 @@ interface TagStats {
 
 interface Feedback {
   id: number;
+  user_id?: number;
   tag_name: string;
   content: string;
   username: string;
   status: 'pending' | 'processed' | 'rejected';
   created_at: string;
+  handled_by?: number | null;
+  handled_by_name?: string | null;
+  handled_at?: string | null;
+  handling_note?: string;
+}
+
+interface FeedbackSummary {
+  pending: number;
+  processed: number;
+  rejected: number;
 }
 
 interface DerpiTag {
@@ -140,6 +151,14 @@ export default function GlossaryTab() {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState<'all' | 'pending' | 'processed' | 'rejected'>('pending');
+  const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary>({
+    pending: 0,
+    processed: 0,
+    rejected: 0,
+  });
+  const [feedbackPage, setFeedbackPage] = useState(1);
+  const [feedbackTotalPages, setFeedbackTotalPages] = useState(1);
 
   const [isDerpiModalOpen, setIsDerpiModalOpen] = useState(false);
   const [derpiSearchQuery, setDerpiSearchQuery] = useState('');
@@ -697,14 +716,27 @@ export default function GlossaryTab() {
     });
   };
 
-  const loadFeedbacks = async () => {
+  const loadFeedbacks = async (
+    status: string = feedbackStatus,
+    page: number = feedbackPage,
+  ) => {
     if (!token || !isAdmin) return;
 
     setIsLoadingFeedback(true);
     try {
-      const data = await api.getTagFeedback(token);
+      const data = await api.getTagFeedback(token, {
+        status: status === 'all' ? undefined : status,
+        page,
+        limit: 40,
+      });
       if (data.success) {
         setFeedbacks(data.feedbacks || []);
+        setFeedbackSummary(data.summary || { pending: 0, processed: 0, rejected: 0 });
+        const pg = data.pagination;
+        if (pg) {
+          setFeedbackTotalPages(pg.pages || 1);
+          setFeedbackPage(pg.page || 1);
+        }
       }
     } catch {
       showToast('加载反馈失败', 'error');
@@ -713,15 +745,31 @@ export default function GlossaryTab() {
     }
   };
 
+  // 打开弹窗时按当前筛选加载
+  useEffect(() => {
+    if (isFeedbackModalOpen) {
+      queueMicrotask(() => {
+        void loadFeedbacks();
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 打开时按当前筛选加载一次
+  }, [isFeedbackModalOpen]);
+
   const handleFeedback = async (id: number, status: string) => {
     if (!token) return;
 
     try {
       await api.handleTagFeedback(token, id, status);
-      loadFeedbacks();
+      void loadFeedbacks();
     } catch {
       showToast('操作失败', 'error');
     }
+  };
+
+  const changeFeedbackStatus = (status: 'all' | 'pending' | 'processed' | 'rejected') => {
+    setFeedbackStatus(status);
+    setFeedbackPage(1);
+    void loadFeedbacks(status, 1);
   };
 
   const exportCurrentPage = () => {
@@ -1406,82 +1454,120 @@ export default function GlossaryTab() {
         title="用户反馈与翻译申请"
         maxWidth="max-w-xl"
       >
-        {' '}
+        {/* 统计条 + 状态筛选 */}
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-body-s text-on-surface-variant">
+            待处理 <strong className="text-warning">{feedbackSummary.pending}</strong>
+          </span>
+          <span className="text-body-s text-on-surface-variant">
+            已采纳 <strong className="text-success">{feedbackSummary.processed}</strong>
+          </span>
+          <span className="text-body-s text-on-surface-variant">
+            已忽略 <strong className="text-error">{feedbackSummary.rejected}</strong>
+          </span>
+          <div className="ml-auto flex flex-wrap gap-1">
+            {(['all', 'pending', 'processed', 'rejected'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => changeFeedbackStatus(s)}
+                className={`px-2.5 py-1 text-label-m rounded-full transition-ui ${
+                  feedbackStatus === s
+                    ? 'bg-primary text-on-primary'
+                    : 'text-on-surface-variant hover:bg-surface-container-high'
+                }`}
+              >
+                {s === 'all' ? '全部' : s === 'pending' ? '待处理' : s === 'processed' ? '已采纳' : '已忽略'}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="popover-scrollbar max-h-[60vh] overflow-y-auto">
-          {' '}
           {isLoadingFeedback ? (
             <div className="flex items-center justify-center py-12">
-              {' '}
-              <Spinner label="" size="md" />{' '}
+              <Spinner label="" size="md" />
             </div>
           ) : feedbacks.length === 0 ? (
             <div className="text-center py-12 text-on-surface-variant"> 暂无任何反馈申请 </div>
           ) : (
-            <div className="space-y-3">
-              {' '}
-              {feedbacks.map((feedback) => (
-                <div
-                  key={feedback.id}
-                  className="p-4 rounded-md"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-body-m text-on-surface-variant">
-                      来自: {feedback.username} | {feedback.created_at}
-                    </span>
-                    <span
-                      className={`text-body-s px-2 py-0.5 rounded ${
-                        feedback.status === 'pending'
-                          ? 'bg-warning-container text-warning'
-                          : feedback.status === 'processed'
-                            ? 'bg-success-container text-success'
-                            : 'bg-error-container text-error'
-                      }`}
-                    >
-                      {feedback.status === 'pending'
-                        ? '待处理'
-                        : feedback.status === 'processed'
-                          ? '已采纳'
-                          : '已忽略'}{' '}
-                    </span>{' '}
-                  </div>{' '}
-                  <div className="font-mono text-label-l-emphasized text-primary mb-2">
-                    {feedback.tag_name}
-                  </div>{' '}
-                  <div className="text-body-m text-on-surface-variant mb-3 p-2 rounded">
-                    {' '}
-                    {feedback.content}{' '}
-                  </div>{' '}
-                  <div className="flex justify-end gap-2">
-                    {' '}
-                    {feedback.status === 'pending' ? (
-                      <>
-                        <button
-                          onClick={() => handleFeedback(feedback.id, 'processed')}
-                          className="px-3 py-1 text-label-m bg-success-fill text-on-fill hover:bg-success-fill/90 rounded transition-ui"
-                        >
-                          {' '}
-                          采纳{' '}
-                        </button>{' '}
-                        <button
-                          onClick={() => handleFeedback(feedback.id, 'rejected')}
-                          className="px-3 py-1 text-label-m bg-error-fill text-on-fill hover:bg-error-fill/90 rounded transition-ui"
-                        >
-                          {' '}
-                          忽略{' '}
-                        </button>{' '}
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => handleFeedback(feedback.id, 'pending')}
-                        className="px-3 py-1 text-label-m text-on-surface-variant hover:bg-surface-container-high rounded transition-ui"
+            <>
+              <div className="space-y-3">
+                {feedbacks.map((feedback) => (
+                  <div key={feedback.id} className="p-4 rounded-md">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-body-m text-on-surface-variant">
+                        来自: {feedback.username} | {feedback.created_at}
+                      </span>
+                      <span
+                        className={`text-body-s px-2 py-0.5 rounded ${
+                          feedback.status === 'pending'
+                            ? 'bg-warning-container text-warning'
+                            : feedback.status === 'processed'
+                              ? 'bg-success-container text-success'
+                              : 'bg-error-container text-error'
+                        }`}
                       >
-                        标记为未处理
-                      </button>
+                        {feedback.status === 'pending'
+                          ? '待处理'
+                          : feedback.status === 'processed'
+                            ? '已采纳'
+                            : '已忽略'}
+                      </span>
+                    </div>
+                    <div className="font-mono text-label-l-emphasized text-primary mb-2">
+                      {feedback.tag_name}
+                    </div>
+                    <div className="text-body-m text-on-surface-variant mb-3 p-2 rounded">
+                      {feedback.content}
+                    </div>
+                    {/* 已处理信息 */}
+                    {feedback.status !== 'pending' && (
+                      <div className="text-body-s text-outline mb-3">
+                        已由 {feedback.handled_by_name || '管理员'} 处理
+                        {feedback.handled_at ? ` · ${feedback.handled_at}` : ''}
+                        {feedback.handling_note ? ` · 备注: ${feedback.handling_note}` : ''}
+                      </div>
                     )}
+                    <div className="flex justify-end gap-2">
+                      {feedback.status === 'pending' ? (
+                        <>
+                          <button
+                            onClick={() => handleFeedback(feedback.id, 'processed')}
+                            className="px-3 py-1 text-label-m bg-success-fill text-on-fill hover:bg-success-fill/90 rounded transition-ui"
+                          >
+                            采纳
+                          </button>
+                          <button
+                            onClick={() => handleFeedback(feedback.id, 'rejected')}
+                            className="px-3 py-1 text-label-m bg-error-fill text-on-fill hover:bg-error-fill/90 rounded transition-ui"
+                          >
+                            忽略
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleFeedback(feedback.id, 'pending')}
+                          className="px-3 py-1 text-label-m text-on-surface-variant hover:bg-surface-container-high rounded transition-ui"
+                        >
+                          标记为未处理
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              {feedbackTotalPages > 1 && (
+                <Pagination
+                  currentPage={feedbackPage}
+                  totalPages={feedbackTotalPages}
+                  onPageChange={(p) => {
+                    setFeedbackPage(p);
+                    void loadFeedbacks(feedbackStatus, p);
+                  }}
+                  className="mt-4"
+                />
+              )}
+            </>
           )}
         </div>
       </Modal>
