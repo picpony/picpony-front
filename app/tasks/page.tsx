@@ -234,7 +234,7 @@ export default function TasksPage() {
           return (
             <div
               key={item.id}
-              className="flex items-center gap-4 p-4 rounded-md bg-surface-container border border-outline-variant animate-fade-in"
+              className="flex items-center gap-4 p-4 rounded-md bg-surface-container animate-fade-in"
               style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
             >
               <div className="flex-1 min-w-0">
@@ -309,7 +309,7 @@ export default function TasksPage() {
       </div>{' '}
       {/* User card */}{' '}
       {data && (
-        <div className="mb-6 p-5 rounded-md bg-warning-container/60 border border-warning/40">
+        <div className="mb-6 p-5 rounded-md bg-warning-container/60">
           {' '}
           <div className="flex items-center justify-between mb-3">
             {' '}
@@ -368,7 +368,7 @@ export default function TasksPage() {
           {/* Tabs */}{' '}
           <div
             ref={containerRef}
-            className="relative flex gap-1 mb-6 border-b border-outline-variant"
+            className="relative flex gap-1 mb-6"
           >
             {' '}
             <span
