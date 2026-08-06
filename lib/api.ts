@@ -124,6 +124,7 @@ export {
   getBrowsingHistory,
   clearBrowsingHistory,
   deleteBrowsingHistoryItem,
+  recordWeeklyUpload,
   checkHasPrivacyPassword,
   setPrivacyPassword,
   verifyPrivacyPassword,

@@ -545,6 +545,14 @@ export async function deleteBrowsingHistoryItem(token: string, imageId: number) 
   });
 }
 
+/** 记录每周上传任务进度（上传作品成功后调用，fire-and-forget） */
+export async function recordWeeklyUpload(token: string) {
+  return fetch(`${PICPONY_API_BASE}?action=record_weekly_upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // 隐私收藏（需要隐私密码）
 // ---------------------------------------------------------------------------

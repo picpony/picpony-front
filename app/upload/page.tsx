@@ -87,6 +87,22 @@ export default function UploadPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  /** 清空整个表单（成功/已提交后复位，供继续发布） */
+  const resetForm = () => {
+    setFile(null);
+    setTags('');
+    setSource('');
+    setDescription('');
+    setUploadResult(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  /** 记录每周上传任务进度，fire-and-forget（与完整版前端一致） */
+  const recordWeekly = () => {
+    if (!user?.token) return;
+    void api.recordWeeklyUpload(user.token).catch(() => {});
+  };
+
   // ---- 上传 ----
 
   const handleUpload = async () => {
@@ -128,6 +144,7 @@ export default function UploadPage() {
         } else {
           showToast('上传成功，但未能获取图片 ID', 'success');
         }
+        recordWeekly();
       } else {
         let errorMsg = `上传失败 (HTTP ${res.status})`;
         try {
@@ -144,8 +161,20 @@ export default function UploadPage() {
         }
         showToast(errorMsg, 'error');
       }
-    } catch {
-      showToast('网络错误，请检查网络连接后重试', 'error');
+    } catch (err) {
+      /* Derpibooru 上传是异步落库的：源站可能已接收文件却在响应前断开，
+         此时 fetch 抛 TypeError/Failed to fetch，作品实际上已提交。
+         与完整版前端一致，按「已提交等待上架」处理而非报网络错误。 */
+      const isNetworkFailure =
+        err instanceof TypeError ||
+        (err instanceof Error && err.message.includes('Failed to fetch'));
+      if (isNetworkFailure) {
+        showToast('作品已成功提交，请等待几分钟后即可上架（若内容不符合 Derpibooru 上传规则将不会上架）', 'success');
+        recordWeekly();
+        resetForm();
+      } else {
+        showToast('网络错误，请检查网络连接后重试', 'error');
+      }
     } finally {
       setIsUploading(false);
     }
@@ -225,16 +254,7 @@ export default function UploadPage() {
             >
               查看图片
             </Button>
-            <button
-              onClick={() => {
-                setFile(null);
-                setTags('');
-                setSource('');
-                setDescription('');
-                setUploadResult(null);
-              }}
-              className={buttonClasses({ variant: 'outlined' })}
-            >
+            <button onClick={resetForm} className={buttonClasses({ variant: 'outlined' })}>
               继续发布
             </button>
           </div>
