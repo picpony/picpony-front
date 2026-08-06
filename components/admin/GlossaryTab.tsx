@@ -151,6 +151,7 @@ export default function GlossaryTab() {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+  const [feedbackKeyword, setFeedbackKeyword] = useState('');
   const [feedbackStatus, setFeedbackStatus] = useState<'all' | 'pending' | 'processed' | 'rejected'>('pending');
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary>({
     pending: 0,
@@ -719,6 +720,7 @@ export default function GlossaryTab() {
   const loadFeedbacks = async (
     status: string = feedbackStatus,
     page: number = feedbackPage,
+    keyword: string = feedbackKeyword,
   ) => {
     if (!token || !isAdmin) return;
 
@@ -726,6 +728,7 @@ export default function GlossaryTab() {
     try {
       const data = await api.getTagFeedback(token, {
         status: status === 'all' ? undefined : status,
+        keyword: keyword || undefined,
         page,
         limit: 40,
       });
@@ -1454,6 +1457,23 @@ export default function GlossaryTab() {
         title="用户反馈与翻译申请"
         maxWidth="max-w-xl"
       >
+        {/* 关键词搜索 */}
+        <div className="mb-4">
+          <Input
+            type="text"
+            value={feedbackKeyword}
+            onChange={(e) => setFeedbackKeyword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setFeedbackPage(1);
+                void loadFeedbacks(feedbackStatus, 1, feedbackKeyword.trim());
+              }
+            }}
+            icon={<MdSearch size={18} />}
+            placeholder="搜索标签名或用户名，回车搜索"
+          />
+        </div>
+
         {/* 统计条 + 状态筛选 */}
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="text-body-s text-on-surface-variant">
