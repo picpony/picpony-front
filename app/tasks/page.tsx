@@ -226,7 +226,7 @@ export default function TasksPage() {
 
     const items = getTaskItems();
     return (
-      <div key={`items-${activeTab}`} className="space-y-3">
+      <div key={`items-${activeTab}`}>
         {items.map((item, index) => {
           const pct =
             item.target > 0 ? (Math.min(item.progress, item.target) / item.target) * 100 : 0;
@@ -234,7 +234,7 @@ export default function TasksPage() {
           return (
             <div
               key={item.id}
-              className="flex items-center gap-4 p-4 rounded-md bg-surface-container animate-fade-in"
+              className="m3-row flex items-center gap-4 p-4 bg-surface-container-low animate-fade-in"
               style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
             >
               <div className="flex-1 min-w-0">

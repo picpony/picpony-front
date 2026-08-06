@@ -33,9 +33,9 @@ export default memo(function ForumPostList({
 }: ForumPostListProps) {
   if (isLoading) {
     return (
-      <div className={`space-y-4 ${className}`}>
+      <div className={className}>
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="bg-surface-container-lowest p-4 rounded-md flex gap-4">
+          <div key={i} className="m3-row bg-surface-container-low p-4 flex gap-4">
             <div
               className="skeleton w-12 h-12 bg-surface-container-highest rounded-full flex-shrink-0"
               style={{ animationDelay: `${i * 80}ms` }}
@@ -62,9 +62,9 @@ export default memo(function ForumPostList({
 
   return (
     <div className={className}>
-      <div className="space-y-4 mb-8">
+      <div className="mb-8">
         {posts.length === 0 ? (
-          <div className="text-center py-12 text-on-surface-variant bg-surface-container-lowest rounded-md animate-fade-in">
+          <div className="m3-row text-center py-12 text-on-surface-variant bg-surface-container-low animate-fade-in">
             暂无帖子
           </div>
         ) : (
@@ -105,13 +105,13 @@ export default memo(function ForumPostList({
                   animationDelay: `${Math.min(index, 8) * 45}ms`,
                   animationFillMode: 'backwards',
                 }}
-                /* M3 filled card: no container at rest, one elevation step and a
-                 state layer on hover. The tint used to be `hover:bg-…/50`,
-                 which is the alpha hack `state-layer` exists to replace — it
-                 has to be written once per scheme and drifts. Properties are
-                 named rather than left to `transition-ui`'s catch-all list, so
-                 it is obvious what moves. */
-                className="block bg-surface-container-lowest p-4 rounded-md cursor-pointer state-layer transition-[box-shadow,translate] duration-200 ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:shadow-e1"
+                /* M3 grouped list row, settings-page style: one continuous cut
+                 block of `bg-surface-container-low` rows with 2px seams and
+                 large outer corners, hover raising the tone one step. The
+                 tint used to be `hover:bg-…/50`, which is the alpha hack
+                 `state-layer` exists to replace — it has to be written once
+                 per scheme and drifts. */
+                className="m3-row block bg-surface-container-low p-4 cursor-pointer state-layer transition-ui hover:bg-surface-container-high"
               >
                 <div className="flex gap-4">
                   <div className="flex-shrink-0">

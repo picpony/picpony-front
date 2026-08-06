@@ -126,7 +126,7 @@ export default function HistoryPage() {
         <div className="space-y-3">
           {' '}
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex gap-4 p-4 bg-surface-container-low/50 rounded-md">
+            <div key={i} className="m3-row flex gap-4 p-4 bg-surface-container-low">
               {' '}
               <Skeleton className="w-20 h-16 rounded-md flex-shrink-0" />{' '}
               <div className="flex-1 space-y-2">
@@ -181,12 +181,12 @@ export default function HistoryPage() {
         ) : (
           <>
             {' '}
-            <div className="space-y-2">
+            <div>
               {' '}
               {history.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-4 p-3 bg-surface-container/50 rounded-md hover:bg-surface-container-high transition-ui group"
+                  className="m3-row flex items-center gap-4 p-4 bg-surface-container-low transition-ui hover:bg-surface-container-high group"
                 >
                   {' '}
                   <Link href={`/pic/${item.id}`} className="flex items-center gap-4 flex-1 min-w-0">

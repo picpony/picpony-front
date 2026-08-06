@@ -831,10 +831,17 @@ export default function MessagesPage() {
               <div>
                 {' '}
                 {loading ? (
-                  <div className="space-y-4">
+                  <div>
                     {' '}
                     {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-32 rounded-md" />
+                      <div
+                        key={i}
+                        className="m3-row flex flex-col gap-2 bg-surface-container-low p-5"
+                      >
+                        <Skeleton className="h-4 w-1/3" delay={i * 80} />
+                        <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
+                        <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
+                      </div>
                     ))}{' '}
                   </div>
                 ) : error ? (
@@ -850,10 +857,10 @@ export default function MessagesPage() {
                     </button>{' '}
                   </div>
                 ) : announcements.length > 0 ? (
-                  <div className="space-y-4">
+                  <div>
                     {' '}
                     {announcements.map((item) => (
-                      <div key={item.id} className="bg-surface-container rounded-md p-5">
+                      <div key={item.id} className="m3-row bg-surface-container-low p-5">
                         {' '}
                         <div className="flex justify-between items-start mb-3">
                           {' '}
@@ -883,9 +890,16 @@ export default function MessagesPage() {
             ) : activeTab === 'interaction' ? (
               <div>
                 {loading ? (
-                  <div className="space-y-4">
+                  <div>
                     {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-24 rounded-md" />
+                      <div
+                        key={i}
+                        className="m3-row flex flex-col gap-2 bg-surface-container-low p-5"
+                      >
+                        <Skeleton className="h-4 w-1/3" delay={i * 80} />
+                        <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
+                        <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
+                      </div>
                     ))}
                   </div>
                 ) : error ? (
@@ -899,11 +913,11 @@ export default function MessagesPage() {
                     </button>
                   </div>
                 ) : interactionNotifications.length > 0 ? (
-                  <div className="space-y-4">
+                  <div>
                     {interactionNotifications.map((item) => (
                       <div
                         key={item.id}
-                        className={`rounded-md p-5 relative overflow-hidden transition-ui ${item.is_read === 0 ? 'bg-primary/5' : 'bg-surface-container'}`}
+                        className={`m3-row p-5 relative overflow-hidden transition-ui ${item.is_read === 0 ? 'bg-primary/5' : 'bg-surface-container-low'}`}
                       >
                         <div className="flex justify-between items-start mb-2">
                           <h3
@@ -934,9 +948,16 @@ export default function MessagesPage() {
             ) : (
               <div>
                 {loading ? (
-                  <div className="space-y-4">
+                  <div>
                     {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-24 rounded-md" />
+                      <div
+                        key={i}
+                        className="m3-row flex flex-col gap-2 bg-surface-container-low p-5"
+                      >
+                        <Skeleton className="h-4 w-1/3" delay={i * 80} />
+                        <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
+                        <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
+                      </div>
                     ))}
                   </div>
                 ) : error ? (
@@ -950,11 +971,11 @@ export default function MessagesPage() {
                     </button>
                   </div>
                 ) : notifications.length > 0 ? (
-                  <div className="space-y-4">
+                  <div>
                     {notifications.map((item) => (
                       <div
                         key={item.id}
-                        className={`rounded-md p-5 relative overflow-hidden transition-ui ${item.is_read === 0 ? 'bg-primary/5' : 'bg-surface-container'}`}
+                        className={`m3-row p-5 relative overflow-hidden transition-ui ${item.is_read === 0 ? 'bg-primary/5' : 'bg-surface-container-low'}`}
                       >
                         <div className="flex justify-between items-start mb-2">
                           <h3
