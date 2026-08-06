@@ -182,22 +182,24 @@ export default function SidebarNav({
         />
       </Section>
 
-      <Section label="创作">
-        <NavItem
-          href="/upload"
-          icon={<MdCloudUpload size={22} />}
-          label="发布图片"
-          active={backgroundPathname === '/upload'}
-          onClick={onNavigate}
-        />
-        <NavItem
-          href="/forum/create"
-          icon={<MdEditNote size={22} />}
-          label="发布帖子"
-          active={backgroundPathname === '/forum/create'}
-          onClick={onNavigate}
-        />
-      </Section>
+      {user && (
+        <Section label="创作">
+          <NavItem
+            href="/upload"
+            icon={<MdCloudUpload size={22} />}
+            label="发布图片"
+            active={backgroundPathname === '/upload'}
+            onClick={onNavigate}
+          />
+          <NavItem
+            href="/forum/create"
+            icon={<MdEditNote size={22} />}
+            label="发布帖子"
+            active={backgroundPathname === '/forum/create'}
+            onClick={onNavigate}
+          />
+        </Section>
+      )}
 
       {user && (
         <Section label="我的">
@@ -240,16 +242,18 @@ export default function SidebarNav({
         </Section>
       )}
 
-      <div className="bg-outline-variant mx-4 my-2 h-px" />
+      {user && <div className="bg-outline-variant mx-4 my-2 h-px" />}
 
       <Section>
-        <NavItem
-          href="/settings"
-          icon={<MdSettings size={22} />}
-          label="设置"
-          active={backgroundPathname === '/settings'}
-          onClick={onNavigate}
-        />
+        {user && (
+          <NavItem
+            href="/settings"
+            icon={<MdSettings size={22} />}
+            label="设置"
+            active={backgroundPathname === '/settings'}
+            onClick={onNavigate}
+          />
+        )}
         {staff && (
           <NavItem
             href="/admin"
