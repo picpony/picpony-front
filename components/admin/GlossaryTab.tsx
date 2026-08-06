@@ -21,6 +21,7 @@ import {
   MdFeedback,
   MdEmojiEvents,
   MdCheckCircle,
+  MdCheckBox,
   MdOutlineWarning,
 } from 'react-icons/md';
 import { Spinner } from './';
@@ -762,10 +763,7 @@ export default function GlossaryTab() {
   const tagColumns: Column<Tag>[] = [
     {
       key: 'select',
-      align: 'center',
-      headerClassName: 'w-12',
-      // The phone card has no row grid to select across, so the checkbox
-      // column would just be a stray control with no header to explain it.
+      // 列表布局无表头网格：该列渲染为行首裸控件（无 label），全选移到工具栏按钮
       hideOnMobile: true,
       header: isAdmin ? (
         <Checkbox checked={allSelected} onChange={toggleSelectAll} aria-label="全选本页标签" />
@@ -861,7 +859,6 @@ export default function GlossaryTab() {
       key: 'actions',
       header: '操作',
       actions: true,
-      headerClassName: 'w-24',
       render: (tag) =>
         isAdmin ? (
           <>
@@ -986,6 +983,19 @@ export default function GlossaryTab() {
             >
               {' '}
               <MdDelete size={16} /> 批量删除 ({selectedIds.size}){' '}
+            </button>
+          )}{' '}
+          {visibleTags.length > 0 && (
+            <button
+              onClick={toggleSelectAll}
+              className={`inline-flex items-center gap-1 px-3 py-2 text-label-l rounded-full transition-ui shrink-0 ${
+                allSelected
+                  ? 'bg-primary text-on-primary hover:bg-primary/90'
+                  : 'bg-primary/10 text-primary hover:bg-primary/20'
+              }`}
+            >
+              <MdCheckBox size={16} />
+              {allSelected ? '取消全选' : '全选本页'}
             </button>
           )}{' '}
           <button
