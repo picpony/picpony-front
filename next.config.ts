@@ -26,6 +26,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // 以图搜图 API 走服务端代理，避免 dev.picpony.top → picpony.top 的跨域 CORS。
+  // search-api 无状态、不涉及 cookie，rewrites 足矣（区别于 /api.php 的 route handler）。
+  async rewrites() {
+    return [
+      {
+        source: '/search-api/:path*',
+        destination: 'https://picpony.top/search-api/:path*',
+      },
+    ];
+  },
   images: {
     qualities: [75, 82, 88],
     remotePatterns: [

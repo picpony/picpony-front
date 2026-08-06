@@ -7,8 +7,8 @@ export const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 /** PicPony 图片代理加速服务器 */
 export const PROXY_API_BASE = 'https://picponyapi.147052.xyz/?url=';
 
-/** 搜索引擎图片搜索 API */
-export const SEARCH_IMAGE_API = 'https://picpony.top/search-api/api/upload-search';
+/** 搜索引擎图片搜索 API (Next.js rewrite to picpony.top/search-api) */
+export const SEARCH_IMAGE_API = '/search-api/api/upload-search';
 
 /** 浏览器 localStorage 中使用的键 */
 export const LS_KEYS = {
