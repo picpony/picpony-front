@@ -29,6 +29,7 @@ import Pagination from '@/components/Pagination';
 import Button from '@/components/Button';
 import { tagCategoryChip, tagCategoryDot } from '@/lib/tagCategories';
 import { Input, Textarea } from '@/components/Input';
+import { DURATION, gsap, prefersReducedMotion, useGSAP } from '@/lib/motion';
 
 interface Tag {
   id: number;
@@ -40,6 +41,16 @@ interface Tag {
   description: string;
   last_editor?: string;
   created_at?: string;
+}
+
+interface TagEditForm {
+  id: number;
+  en: string;
+  cn: string;
+  aliases: string;
+  cat: string;
+  count: number;
+  description: string;
 }
 
 interface TagStats {
@@ -72,6 +83,86 @@ interface DerpiTag {
   name: string;
   category: string;
   images: number;
+}
+
+const TAG_CATEGORY_OPTIONS = [
+  { value: 'general', label: '常规 (general)' },
+  { value: 'character', label: '角色 (character)' },
+  { value: 'species', label: '种族 (species)' },
+  { value: 'rating', label: '分级 (rating)' },
+  { value: 'origin', label: '来源 (origin)' },
+  { value: 'content-official', label: '官方内容 (content-official)' },
+  { value: 'content-fanmade', label: '同人内容 (content-fanmade)' },
+  { value: 'error', label: '错误 (error)' },
+];
+
+function InlineEditorMotion({
+  id,
+  label,
+  isClosing,
+  onExitComplete,
+  children,
+}: {
+  id: string;
+  label: string;
+  isClosing: boolean;
+  onExitComplete: () => void;
+  children: React.ReactNode;
+}) {
+  const editorRef = useRef<HTMLElement>(null);
+  const onExitCompleteRef = useRef(onExitComplete);
+
+  useEffect(() => {
+    onExitCompleteRef.current = onExitComplete;
+  }, [onExitComplete]);
+
+  useGSAP(
+    () => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      if (prefersReducedMotion()) {
+        if (isClosing) queueMicrotask(() => onExitCompleteRef.current());
+        return;
+      }
+
+      const animation = isClosing
+        ? gsap.to(editor, {
+            height: 0,
+            autoAlpha: 0,
+            y: -8,
+            duration: DURATION.short,
+            ease: 'accelerate',
+            onComplete: () => onExitCompleteRef.current(),
+          })
+        : gsap.fromTo(
+            editor,
+            { height: 0, autoAlpha: 0, y: -8 },
+            {
+              height: 'auto',
+              autoAlpha: 1,
+              y: 0,
+              duration: DURATION.long,
+              ease: 'decelerate',
+              onComplete: () => gsap.set(editor, { clearProps: 'height,opacity,visibility,transform' }),
+            },
+          );
+
+      return () => animation.kill();
+    },
+    { scope: editorRef, dependencies: [isClosing], revertOnUpdate: true },
+  );
+
+  return (
+    <section
+      ref={editorRef}
+      id={id}
+      className="m3-row overflow-hidden bg-surface-container px-4 py-5"
+      aria-label={label}
+    >
+      {children}
+    </section>
+  );
 }
 
 export default function GlossaryTab() {
@@ -121,7 +212,7 @@ export default function GlossaryTab() {
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<TagEditForm>({
     id: 0,
     en: '',
     cn: '',
@@ -130,6 +221,7 @@ export default function GlossaryTab() {
     count: 0,
     description: '',
   });
+  const [isInlineEditorClosing, setIsInlineEditorClosing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [derpiSuggestions, setDerpiSuggestions] = useState<DerpiTag[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -187,6 +279,7 @@ export default function GlossaryTab() {
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const refreshAfterInlineCloseRef = useRef(false);
 
   const loadTags = useCallback(
     async (page = 1) => {
@@ -319,44 +412,74 @@ export default function GlossaryTab() {
     }
   };
 
-  const openEditModal = (tag?: Tag) => {
+  const openInlineEditor = (tag: Tag) => {
     if (!isAdmin) {
       showToast('无权限', 'error');
       return;
     }
 
-    if (tag) {
-      setEditingTag(tag);
-      setEditForm({
-        id: tag.id,
-        en: tag.en,
-        cn: tag.cn === '未翻译' ? '' : tag.cn,
-        aliases: tag.aliases?.join(',') || '',
-        cat: tag.cat || 'general',
-        count: tag.count || 0,
-        description: tag.description || '',
-      });
-    } else {
-      setEditingTag(null);
-      setEditForm({
-        id: 0,
-        en: '',
-        cn: '',
-        aliases: '',
-        cat: 'general',
-        count: 0,
-        description: '',
-      });
+    setIsEditModalOpen(false);
+    setEditingTag(tag);
+    setIsInlineEditorClosing(false);
+    setEditForm({
+      id: tag.id,
+      en: tag.en,
+      cn: tag.cn === '未翻译' ? '' : [tag.cn, ...(tag.aliases || [])].join(','),
+      aliases: tag.aliases?.join(',') || '',
+      cat: tag.cat || 'general',
+      count: tag.count || 0,
+      description: tag.description || '',
+    });
+    setDerpiSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const openCreateModal = (tag?: DerpiTag) => {
+    if (!isAdmin) {
+      showToast('无权限', 'error');
+      return;
     }
+
+    setEditingTag(null);
+    setIsInlineEditorClosing(false);
+    setEditForm({
+      id: 0,
+      en: tag?.name || '',
+      cn: '',
+      aliases: '',
+      cat: tag?.category || 'general',
+      count: tag?.images || 0,
+      description: '',
+    });
     setIsEditModalOpen(true);
     setDerpiSuggestions([]);
     setShowSuggestions(false);
   };
 
-  const closeEditModal = () => {
+  const closeCreateModal = () => {
     setTimeout(() => {
       setIsEditModalOpen(false);
     }, 200);
+  };
+
+  const closeInlineEditor = () => {
+    if (!editingTag) return;
+    setIsInlineEditorClosing(true);
+  };
+
+  const finishInlineEditorClose = () => {
+    setEditingTag(null);
+    setIsInlineEditorClosing(false);
+    setDerpiSuggestions([]);
+    setShowSuggestions(false);
+
+    if (!refreshAfterInlineCloseRef.current) return;
+    refreshAfterInlineCloseRef.current = false;
+    if (isDuplicateMode) {
+      loadDuplicates();
+    } else {
+      loadTags(currentPage);
+    }
   };
 
   const searchDerpiSuggestions = async (query: string) => {
@@ -441,11 +564,16 @@ export default function GlossaryTab() {
 
       if (data.success) {
         showToast(id ? '更新成功' : '添加成功', 'success');
-        closeEditModal();
-        if (isDuplicateMode) {
-          loadDuplicates();
+        if (id) {
+          refreshAfterInlineCloseRef.current = true;
+          closeInlineEditor();
         } else {
-          loadTags(currentPage);
+          closeCreateModal();
+          if (isDuplicateMode) {
+            loadDuplicates();
+          } else {
+            loadTags(currentPage);
+          }
         }
       } else {
         showToast(data.error || '保存失败', 'error');
@@ -706,15 +834,7 @@ export default function GlossaryTab() {
 
   const importFromDerpi = (tag: DerpiTag) => {
     setIsDerpiModalOpen(false);
-    openEditModal({
-      id: 0,
-      en: tag.name,
-      cn: '未翻译',
-      aliases: [],
-      cat: tag.category || 'general',
-      count: tag.images || 0,
-      description: '',
-    });
+    openCreateModal(tag);
   };
 
   const loadFeedbacks = async (
@@ -806,6 +926,124 @@ export default function GlossaryTab() {
 
   const visibleTags = isDuplicateMode ? duplicateTags : tags;
   const allSelected = visibleTags.length > 0 && visibleTags.every((t) => selectedIds.has(t.id));
+
+  const renderInlineEditor = (tag: Tag) => {
+    if (editingTag?.id !== tag.id) return null;
+
+    const enId = `glossary-inline-en-${tag.id}`;
+    const cnId = `glossary-inline-cn-${tag.id}`;
+    const categoryId = `glossary-inline-category-${tag.id}`;
+    const descriptionId = `glossary-inline-description-${tag.id}`;
+
+    return (
+      <InlineEditorMotion
+        id={`glossary-inline-editor-${tag.id}`}
+        label={`编辑标签 ${tag.en}`}
+        isClosing={isInlineEditorClosing}
+        onExitComplete={finishInlineEditorClose}
+      >
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-title-m text-on-surface">编辑标签</h3>
+            <p className="text-body-s text-on-surface-variant break-words">{tag.en}</p>
+          </div>
+          <Button variant="text" size="sm" onClick={closeInlineEditor} disabled={isSaving}>
+            取消
+          </Button>
+        </div>
+
+        <div className="popover-scrollbar overflow-x-auto">
+          <table className="w-full border-collapse">
+              <thead className="bg-surface-container-high">
+                <tr>
+                  <th
+                    scope="col"
+                    className="w-28 px-3 py-2 text-left text-label-l text-on-surface-variant sm:w-36"
+                  >
+                    字段
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left text-label-l text-on-surface-variant">
+                    内容
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-surface-container-low">
+                <tr>
+                  <th scope="row" className="px-3 py-3 text-left align-top">
+                    <label htmlFor={enId} className="text-label-l text-on-surface-variant">
+                      英文原标签
+                    </label>
+                  </th>
+                  <td className="min-w-48 px-3 py-3">
+                    <Input id={enId} value={editForm.en} disabled className="font-mono" />
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" className="px-3 py-3 text-left align-top">
+                    <label htmlFor={cnId} className="text-label-l text-on-surface-variant">
+                      中文翻译
+                    </label>
+                    <span className="mt-1 block text-body-s text-outline">英文逗号分隔别名</span>
+                  </th>
+                  <td className="min-w-48 px-3 py-3">
+                    <Input
+                      id={cnId}
+                      value={editForm.cn}
+                      onChange={(event) => setEditForm({ ...editForm, cn: event.target.value })}
+                      placeholder="例如：紫悦,暮光闪闪,ts"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" className="px-3 py-3 text-left align-top">
+                    <span id={categoryId} className="text-label-l text-on-surface-variant">
+                      分类
+                    </span>
+                  </th>
+                  <td className="min-w-48 px-3 py-3">
+                    <Select
+                      value={editForm.cat}
+                      onChange={(value) => setEditForm({ ...editForm, cat: value })}
+                      className="w-full"
+                      aria-label="标签分类"
+                      options={TAG_CATEGORY_OPTIONS}
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" className="px-3 py-3 text-left align-top">
+                    <label htmlFor={descriptionId} className="text-label-l text-on-surface-variant">
+                      标签简介
+                    </label>
+                  </th>
+                  <td className="min-w-48 px-3 py-3">
+                    <Textarea
+                      id={descriptionId}
+                      value={editForm.description}
+                      onChange={(event) =>
+                        setEditForm({ ...editForm, description: event.target.value })
+                      }
+                      placeholder="例如：该角色首次登场于第X季..."
+                      rows={3}
+                      className="resize-none"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="text" onClick={closeInlineEditor} disabled={isSaving}>
+            取消
+          </Button>
+          <Button variant="filled" onClick={saveTag} loading={isSaving}>
+            保存
+          </Button>
+        </div>
+      </InlineEditorMotion>
+    );
+  };
 
   /* Built here rather than at module scope: every cell closes over `isAdmin`,
      the selection set and the row handlers, and the header cell owns the
@@ -912,22 +1150,32 @@ export default function GlossaryTab() {
       render: (tag) =>
         isAdmin ? (
           <>
-            <button
-              onClick={() => openEditModal(tag)}
-              className="touch-target state-layer text-warning rounded-full p-1.5"
+            <Button
+              type="button"
+              variant="text"
+              size="sm"
+              icon={<MdEdit size={18} />}
+              onClick={() =>
+                editingTag?.id === tag.id && !isInlineEditorClosing
+                  ? closeInlineEditor()
+                  : openInlineEditor(tag)
+              }
+              className="w-9 px-0 text-warning"
               title="编辑"
               aria-label={`编辑 ${tag.en}`}
-            >
-              <MdEdit size={18} />
-            </button>
-            <button
+              aria-expanded={editingTag?.id === tag.id && !isInlineEditorClosing}
+              aria-controls={`glossary-inline-editor-${tag.id}`}
+            />
+            <Button
+              type="button"
+              variant="text"
+              size="sm"
+              icon={<MdDelete size={18} />}
               onClick={() => deleteTag(tag.id)}
-              className="touch-target state-layer rounded-full p-1.5 text-error"
+              className="w-9 px-0 text-error"
               title="删除"
               aria-label={`删除 ${tag.en}`}
-            >
-              <MdDelete size={18} />
-            </button>
+            />
           </>
         ) : (
           <span className="text-outline text-body-m">无权限</span>
@@ -963,13 +1211,9 @@ export default function GlossaryTab() {
           条){' '}
         </h2>{' '}
         {isAdmin && (
-          <button
-            onClick={() => openEditModal()}
-            className="inline-flex items-center gap-2 px-4 py-2 text-label-l text-on-primary bg-primary hover:bg-primary/90 rounded-full transition-ui shrink-0"
-          >
-            {' '}
-            <MdAdd size={18} /> 添加新标签{' '}
-          </button>
+          <Button variant="filled" icon={<MdAdd size={18} />} onClick={() => openCreateModal()}>
+            添加新标签
+          </Button>
         )}{' '}
       </div>{' '}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -1087,6 +1331,7 @@ export default function GlossaryTab() {
         columns={tagColumns}
         rows={visibleTags}
         rowKey={(tag) => tag.id}
+        expandedRow={renderInlineEditor}
         loading={isLoading}
         empty={
           isDuplicateMode ? (
@@ -1156,17 +1401,17 @@ export default function GlossaryTab() {
       {/* Modals */}
       <Modal
         isOpen={isEditModalOpen}
-        onClose={closeEditModal}
-        title={editingTag ? '编辑标签' : '添加新标签'}
+        onClose={closeCreateModal}
+        title="添加新标签"
         maxWidth="max-w-lg"
         footer={
           <>
-            <Button variant="text" onClick={closeEditModal}>
+            <Button variant="text" onClick={closeCreateModal}>
               取消
             </Button>
-            <Button variant="filled" onClick={saveTag} disabled={isSaving}>
-              {isSaving ? '保存中...' : '保存'}{' '}
-            </Button>{' '}
+            <Button variant="filled" onClick={saveTag} loading={isSaving}>
+              保存
+            </Button>
           </>
         }
       >
@@ -1177,7 +1422,7 @@ export default function GlossaryTab() {
             {' '}
             <label className="block text-label-l text-on-surface mb-1" htmlFor="glossarytab-f1">
               {' '}
-              英文原标签 {editingTag ? '(勿改动)' : ''}{' '}
+              英文原标签{' '}
             </label>{' '}
             <Input
               id="glossarytab-f1"
@@ -1187,7 +1432,6 @@ export default function GlossaryTab() {
                 setEditForm({ ...editForm, en: e.target.value });
                 searchDerpiSuggestions(e.target.value);
               }}
-              disabled={!!editingTag}
               placeholder="例如：twilight sparkle"
               className="font-mono"
             />{' '}
@@ -1240,16 +1484,7 @@ export default function GlossaryTab() {
               value={editForm.cat}
               onChange={(v) => setEditForm({ ...editForm, cat: v })}
               className="w-full"
-              options={[
-                { value: 'general', label: '常规 (general)' },
-                { value: 'character', label: '角色 (character)' },
-                { value: 'species', label: '种族 (species)' },
-                { value: 'rating', label: '分级 (rating)' },
-                { value: 'origin', label: '来源 (origin)' },
-                { value: 'content-official', label: '官方内容 (content-official)' },
-                { value: 'content-fanmade', label: '同人内容 (content-fanmade)' },
-                { value: 'error', label: '错误 (error)' },
-              ]}
+              options={TAG_CATEGORY_OPTIONS}
             />{' '}
           </div>{' '}
           <div>

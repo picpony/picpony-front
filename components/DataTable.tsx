@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import Skeleton from './Skeleton';
 
@@ -29,6 +29,8 @@ interface DataTableProps<T> {
   skeletonRows?: number;
   className?: string;
   onRowClick?: (row: T) => void;
+  /** Renders an optional editor/details row immediately below its data row. */
+  expandedRow?: (row: T, index: number) => ReactNode;
 }
 
 /**
@@ -63,6 +65,7 @@ export default function DataTable<T>({
   skeletonRows = 6,
   className = '',
   onRowClick,
+  expandedRow,
 }: DataTableProps<T>) {
   const leading = columns.filter((c) => c.hideOnMobile);
   const heading = columns.find((c) => c.primary) ?? null;
@@ -123,49 +126,51 @@ export default function DataTable<T>({
       {/* ---- Rows: one continuous cut block, like a settings list ---- */}
       {!loading &&
         rows.map((row, i) => (
-          <div
-            key={rowKey(row, i)}
-            onClick={onRowClick ? () => onRowClick(row) : undefined}
-            className={cn(
-              'm3-row flex flex-wrap items-center gap-x-4 gap-y-2 p-4',
-              'bg-surface-container-low transition-ui',
-              'hover:bg-surface-container-high',
-              onRowClick && 'cursor-pointer',
-            )}
-          >
-            {leading.length > 0 && (
-              <div className="flex shrink-0 items-center gap-2">
-                {leading.map((col) => (
-                  <div key={col.key}>{col.render(row, i)}</div>
-                ))}
-              </div>
-            )}
+          <Fragment key={rowKey(row, i)}>
+            <div
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={cn(
+                'm3-row flex flex-wrap items-center gap-x-4 gap-y-2 p-4',
+                'bg-surface-container-low transition-ui',
+                'hover:bg-surface-container-high',
+                onRowClick && 'cursor-pointer',
+              )}
+            >
+              {leading.length > 0 && (
+                <div className="flex shrink-0 items-center gap-2">
+                  {leading.map((col) => (
+                    <div key={col.key}>{col.render(row, i)}</div>
+                  ))}
+                </div>
+              )}
 
-            {heading && (
-              <div className="text-title-s text-on-surface min-w-0 break-words">
-                {heading.render(row, i)}
-              </div>
-            )}
+              {heading && (
+                <div className="text-title-s text-on-surface min-w-0 break-words">
+                  {heading.render(row, i)}
+                </div>
+              )}
 
-            {details.map((col) => (
-              <span
-                key={col.key}
-                className={cn('text-body-m text-on-surface min-w-0 break-words', col.className)}
-              >
-                {col.render(row, i)}
-              </span>
-            ))}
+              {details.map((col) => (
+                <span
+                  key={col.key}
+                  className={cn('text-body-m text-on-surface min-w-0 break-words', col.className)}
+                >
+                  {col.render(row, i)}
+                </span>
+              ))}
 
-            {actions.length > 0 && (
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                {actions.map((col) => (
-                  <div key={col.key} className="flex flex-wrap items-center gap-2">
-                    {col.render(row, i)}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              {actions.length > 0 && (
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {actions.map((col) => (
+                    <div key={col.key} className="flex flex-wrap items-center gap-2">
+                      {col.render(row, i)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {expandedRow?.(row, i)}
+          </Fragment>
         ))}
     </div>
   );
