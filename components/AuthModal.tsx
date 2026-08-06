@@ -8,6 +8,7 @@ import Button from './Button';
 import { Input } from './Input';
 import LottieIcon from './LottieIcon';
 import { showToast } from './Toast';
+import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { readJson } from '@/lib/api/client';
 
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         onClose={closeAuth}
         onSwitchView={switchView}
         closeOnEscape={!innerModalOpen}
+        innerModalOpen={innerModalOpen}
         onInnerModalChange={setInnerModalOpen}
       />
     </AuthContext.Provider>
@@ -66,6 +68,7 @@ function AuthModal({
   onClose,
   onSwitchView,
   closeOnEscape,
+  innerModalOpen,
   onInnerModalChange,
 }: {
   isOpen: boolean;
@@ -73,6 +76,7 @@ function AuthModal({
   onClose: () => void;
   onSwitchView: (view: AuthView) => void;
   closeOnEscape: boolean;
+  innerModalOpen: boolean;
   onInnerModalChange: (open: boolean) => void;
 }) {
   return (
@@ -83,6 +87,12 @@ function AuthModal({
       bodyClassName="p-0"
       closeOnEscape={closeOnEscape}
       hideCloseButton
+      // 整个窗口组件在验证码弹窗打开时缩小让位，带动画
+      // 用独立 scale 属性（Tailwind v4），避开 modalContent 动画 forwards 对 transform/opacity 的填充锁定
+      panelClassName={cn(
+        'transition-[scale] duration-300 ease-[var(--ease-standard)]',
+        innerModalOpen ? 'scale-[0.96]' : 'scale-100',
+      )}
     >
       {/* 手机高度跟随内容自适应，桌面保持固定较高高度 */}
       <div className="flex md:min-h-[640px]">

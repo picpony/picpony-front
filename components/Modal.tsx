@@ -20,6 +20,9 @@ interface ModalProps {
   closeOnEscape?: boolean;
   /** Removes the default padding so a child can bleed to the edges (e.g. a cropper). */
   bodyClassName?: string;
+  /** Extra classes on the panel itself, for shared transform states (e.g. an
+   *  inner dialog opening shrinks this one). Lands last so it can override. */
+  panelClassName?: string;
 }
 
 const CLOSE_ANIM_DURATION = 200;
@@ -86,6 +89,7 @@ export default function Modal({
   closeOnOverlayClick = true,
   closeOnEscape = true,
   bodyClassName = '',
+  panelClassName = '',
 }: ModalProps) {
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -197,6 +201,7 @@ export default function Modal({
           'bg-surface-container-lowest text-on-surface rounded-2xl shadow-e3',
           maxWidth,
           isOpen ? 'animate-modal-content' : 'animate-modal-content-out',
+          panelClassName,
         )}
         onClick={(e) => e.stopPropagation()}
       >
