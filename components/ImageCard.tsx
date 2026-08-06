@@ -153,19 +153,21 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           aria-hidden="true"
         >
           <div className="absolute inset-0 rounded-lg bg-scrim/0 transition-ui group-hover:bg-scrim/10" />
-          <div className="absolute top-2 right-2 rounded bg-scrim/55 px-2 py-1 text-label-m text-on-media">
+          {/* 贴角圆角 = 图片大圆角(--radius-lg) - 角标间距(top-2/left-2/right-2)，
+              与图片外角同心弧，间距均匀、视觉平衡 */}
+          <div className="absolute top-2 right-2 rounded rounded-tr-[calc(var(--radius-lg)-var(--spacing)*2)] bg-scrim/55 px-3 py-1.5 text-label-m text-on-media">
             {format}
           </div>
           <div
             title="点赞数"
-            className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-scrim/55 px-2 py-1 text-label-m text-on-media"
+            className="absolute bottom-2 left-2 flex items-center gap-1 rounded rounded-bl-[calc(var(--radius-lg)-var(--spacing)*2)] bg-scrim/55 px-3 py-1.5 text-label-m text-on-media"
           >
             <MdThumbUp size={12} />
             <span>{image.score}</span>
           </div>
           <div
             title="评论数"
-            className="absolute bottom-2 right-2 flex items-center gap-1 rounded bg-scrim/55 px-2 py-1 text-label-m text-on-media"
+            className="absolute bottom-2 right-2 flex items-center gap-1 rounded rounded-br-[calc(var(--radius-lg)-var(--spacing)*2)] bg-scrim/55 px-3 py-1.5 text-label-m text-on-media"
           >
             <MdComment size={12} />
             <span>{image.comment_count}</span>
