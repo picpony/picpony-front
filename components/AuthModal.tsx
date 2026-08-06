@@ -6,6 +6,7 @@ import Modal from './Modal';
 import CaptchaModal from './CaptchaModal';
 import Button from './Button';
 import { Input } from './Input';
+import LottieIcon from './LottieIcon';
 import { showToast } from './Toast';
 import { api } from '@/lib/api';
 import { readJson } from '@/lib/api/client';
@@ -85,7 +86,16 @@ function AuthModal({
     >
       <div className="flex min-h-[560px]">
         {/* 左侧 2/3 占位区，暂不放内容 */}
-        <div aria-hidden="true" className="hidden md:block md:w-2/3 bg-surface-container-low" />
+        <div
+          aria-hidden="true"
+          className="hidden md:flex md:w-2/3 items-center justify-center bg-surface-container-low"
+        >
+          <LottieIcon
+            className="w-4/5 max-w-md"
+            load={() => import('@/lib/lottie/login.json').then((m) => m.default)}
+            fallback={null}
+          />
+        </div>
         {/* 右侧 1/3：登录/注册/找回，窗口内切换 */}
         <div className="relative main-scrollbar w-full md:w-1/3 overflow-y-auto p-6 sm:p-8">
           <button
@@ -389,7 +399,15 @@ function RegisterForm({
 
   if (step === 'verify') {
     return (
-      <div className="space-y-6">
+      <div>
+        <button
+          type="button"
+          onClick={() => onSwitch('login')}
+          className="flex items-center text-label-l text-on-surface-variant hover:text-on-surface mb-8 transition-ui"
+        >
+          <MdArrowBack size={18} className="mr-1" /> 返回登录
+        </button>
+        <div className="space-y-6">
         <div className="text-center">
           <h1 className="text-headline-s text-on-surface mb-2">验证邮箱</h1>
           <p className="text-body-m text-on-surface-variant">
@@ -462,12 +480,20 @@ function RegisterForm({
             {isResending ? '发送中...' : '未收到？重新发送验证码'}
           </button>
         </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
+      <button
+        type="button"
+        onClick={() => onSwitch('login')}
+        className="flex items-center text-label-l text-on-surface-variant hover:text-on-surface mb-8 transition-ui"
+      >
+        <MdArrowBack size={18} className="mr-1" /> 返回登录
+      </button>
       <h1 className="text-headline-s text-on-surface mb-8">注册</h1>
       <form className="space-y-4" onSubmit={handleSubmit}>
         <Input
