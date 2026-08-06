@@ -587,24 +587,7 @@ function SearchPageContent() {
           <div className="flex flex-col items-center justify-center min-h-[40vh] text-outline animate-fade-in">
             {' '}
             <LottieIcon
-              /* The box is the artwork, not the canvas it was exported on.
-                 That export was 3000x1553 for 1290x1178 of drawing, so `w-90`
-                 reserved 360x186px to paint 155x141 — 98.7px of nothing on the
-                 left, 106.6px on the right, and a caption pushed down by empty
-                 space it could not see. The canvas is now cropped to the ink
-                 with an even 65-unit margin (verified as the union over every
-                 frame, not just the last, so nothing flies in from outside it),
-                 which leaves the drawing centred by construction.
-
-                 168px keeps the drawing the size it already was — 152.6px
-                 against the previous 154.8 — because that size is itself
-                 measured: it is where the magnifier *inside* the illustration
-                 inks 46.6px, the ink of the `MdSearch size={64}` it replaces.
-                 The artwork was rebalanced to make that possible, the magnifier
-                 scaled up 2.14x and the other five elements down to 0.85 and
-                 pulled the same amount toward centre, so the composition
-                 tightens around it instead of leaving a ring of empty space. */
-              className="mb-4 w-42 max-w-full"
+              className="mb-4 w-156 max-w-full mt-14 mb-12"
               load={() => import('@/lib/lottie/search.json').then((m) => m.default)}
               fallback={<MdSearch size={64} />}
             />{' '}

@@ -83,8 +83,7 @@ export default async function RootLayout({
       <body className="h-full flex flex-col overflow-hidden">
         <LoadingOverlay />
         <NextTopLoader
-          /* Was #ffffff — invisible against the light-mode page it loads over. */
-          color="var(--md-sys-color-primary)"
+          color="#ffffff"
           initialPosition={0.08}
           crawlSpeed={200}
           height={3}
