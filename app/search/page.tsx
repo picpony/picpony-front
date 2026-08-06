@@ -589,7 +589,7 @@ function SearchPageContent() {
             <LottieIcon
               className="mb-4 w-156 max-w-full mt-14 mb-12"
               load={() => import('@/lib/lottie/search.json').then((m) => m.default)}
-              fallback={<MdSearch size={64} />}
+              fallback={null}
             />{' '}
             <p className="text-title-m">输入关键词搜索图片</p>{' '}
           </div>

@@ -576,11 +576,11 @@ export default function MessagesPage() {
         <div className="min-h-[400px] relative">
           <div key={activeTab} className="animate-page-transition">
             {activeTab === 'chat' ? (
-              <div className="bg-surface-container rounded-2xl border border-outline-variant overflow-hidden flex h-[calc(100dvh-200px)] md:h-[600px]">
+              <div className="bg-surface-container rounded-2xl overflow-hidden flex h-[calc(100dvh-200px)] md:h-[600px]">
                 <div
-                  className={`w-full md:w-80 border-r border-outline-variant flex-col ${selectedContact ? 'hidden md:flex' : 'flex'}`}
+                  className={`w-full md:w-80 flex-col ${selectedContact ? 'hidden md:flex' : 'flex'}`}
                 >
-                  <div className="p-3 border-b border-outline-variant">
+                  <div className="p-3">
                     <Input
                       type="text"
                       icon={<MdSearch size={18} />}
@@ -628,7 +628,7 @@ export default function MessagesPage() {
                           }`}
                         >
                           <div className="relative">
-                            <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant">
+                            <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high">
                               {contact.avatar ? (
                                 <FadeInImage
                                   src={`https://picpony.top/${contact.avatar}`}
@@ -644,7 +644,7 @@ export default function MessagesPage() {
                               )}
                             </div>
                             {contact.unread_count > 0 && (
-                              <div className="absolute -top-1 -right-1 bg-error-fill text-on-fill text-label-s-emphasized px-1.5 py-0.5 rounded-full border-2 border-surface">
+                              <div className="absolute -top-1 -right-1 bg-error-fill text-on-fill text-label-s-emphasized px-1.5 py-0.5 rounded-full">
                                 {contact.unread_count}
                               </div>
                             )}
@@ -672,7 +672,7 @@ export default function MessagesPage() {
                 >
                   {selectedContact ? (
                     <>
-                      <div className="p-4 border-b border-outline-variant bg-surface-container flex items-center justify-between">
+                      <div className="p-4 bg-surface-container flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                           <IconButton
                             onClick={() => setSelectedContact(null)}
@@ -731,7 +731,7 @@ export default function MessagesPage() {
                                       className={`px-4 py-2 rounded-2xl text-body-m ${
                                         isMe
                                           ? 'bg-primary text-on-primary rounded-br-sm'
-                                          : 'bg-surface-container-lowest border border-outline-variant text-on-surface rounded-bl-sm'
+                                          : 'bg-surface-container-lowest text-on-surface rounded-bl-sm'
                                       }`}
                                     >
                                       {renderMessageContent(msg.content)}
@@ -747,7 +747,7 @@ export default function MessagesPage() {
                           </div>
                         )}
                       </div>
-                      <div className="px-4 pb-4 pt-1 bg-surface-container border-t border-outline-variant relative">
+                      <div className="px-4 pb-4 pt-1 bg-surface-container relative">
                         <div className="flex items-center justify-between mb-1">
                           <div className="relative" ref={emojiPickerRef}>
                             <IconButton
@@ -760,7 +760,7 @@ export default function MessagesPage() {
 
                             {(showEmojiPicker || isEmojiPickerClosing) && (
                               <div
-                                className={`absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-2rem)] bg-surface-container border border-outline-variant rounded-sm shadow-e4 z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}
+                                className={`absolute bottom-full left-0 mb-2 w-72 max-w-[calc(100vw-2rem)] bg-surface-container rounded-sm shadow-e4 z-50 p-2 origin-bottom-left ${isEmojiPickerClosing ? 'emoji-picker-animate-out' : 'emoji-picker-animate-in'}`}
                               >
                                 <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 popover-scrollbar max-h-60 overflow-y-auto p-1">
                                   {emojiList.map((emoji) => (
@@ -903,7 +903,7 @@ export default function MessagesPage() {
                     {interactionNotifications.map((item) => (
                       <div
                         key={item.id}
-                        className={`rounded-md p-5 relative overflow-hidden transition-ui ${item.is_read === 0 ? 'bg-primary/5 border border-primary/20' : 'bg-surface-container'}`}
+                        className={`rounded-md p-5 relative overflow-hidden transition-ui ${item.is_read === 0 ? 'bg-primary/5' : 'bg-surface-container'}`}
                       >
                         <div className="flex justify-between items-start mb-2">
                           <h3
@@ -954,7 +954,7 @@ export default function MessagesPage() {
                     {notifications.map((item) => (
                       <div
                         key={item.id}
-                        className={`rounded-md p-5 relative overflow-hidden transition-ui ${item.is_read === 0 ? 'bg-primary/5 border border-primary/20' : 'bg-surface-container'}`}
+                        className={`rounded-md p-5 relative overflow-hidden transition-ui ${item.is_read === 0 ? 'bg-primary/5' : 'bg-surface-container'}`}
                       >
                         <div className="flex justify-between items-start mb-2">
                           <h3
