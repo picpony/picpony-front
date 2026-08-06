@@ -29,7 +29,7 @@ import Pagination from '@/components/Pagination';
 import Button from '@/components/Button';
 import { tagCategoryChip, tagCategoryDot } from '@/lib/tagCategories';
 import { Input, Textarea } from '@/components/Input';
-import { DURATION, gsap, prefersReducedMotion, useGSAP } from '@/lib/motion';
+import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
 
 interface Tag {
   id: number;
@@ -95,75 +95,6 @@ const TAG_CATEGORY_OPTIONS = [
   { value: 'content-fanmade', label: '同人内容 (content-fanmade)' },
   { value: 'error', label: '错误 (error)' },
 ];
-
-function InlineEditorMotion({
-  id,
-  label,
-  isClosing,
-  onExitComplete,
-  children,
-}: {
-  id: string;
-  label: string;
-  isClosing: boolean;
-  onExitComplete: () => void;
-  children: React.ReactNode;
-}) {
-  const editorRef = useRef<HTMLElement>(null);
-  const onExitCompleteRef = useRef(onExitComplete);
-
-  useEffect(() => {
-    onExitCompleteRef.current = onExitComplete;
-  }, [onExitComplete]);
-
-  useGSAP(
-    () => {
-      const editor = editorRef.current;
-      if (!editor) return;
-
-      if (prefersReducedMotion()) {
-        if (isClosing) queueMicrotask(() => onExitCompleteRef.current());
-        return;
-      }
-
-      const animation = isClosing
-        ? gsap.to(editor, {
-            height: 0,
-            autoAlpha: 0,
-            y: -8,
-            duration: DURATION.short,
-            ease: 'accelerate',
-            onComplete: () => onExitCompleteRef.current(),
-          })
-        : gsap.fromTo(
-            editor,
-            { height: 0, autoAlpha: 0, y: -8 },
-            {
-              height: 'auto',
-              autoAlpha: 1,
-              y: 0,
-              duration: DURATION.long,
-              ease: 'decelerate',
-              onComplete: () => gsap.set(editor, { clearProps: 'height,opacity,visibility,transform' }),
-            },
-          );
-
-      return () => animation.kill();
-    },
-    { scope: editorRef, dependencies: [isClosing], revertOnUpdate: true },
-  );
-
-  return (
-    <section
-      ref={editorRef}
-      id={id}
-      className="m3-row overflow-hidden bg-surface-container px-4 py-5"
-      aria-label={label}
-    >
-      {children}
-    </section>
-  );
-}
 
 export default function GlossaryTab() {
   const [tags, setTags] = useState<Tag[]>([]);
@@ -936,7 +867,7 @@ export default function GlossaryTab() {
     const descriptionId = `glossary-inline-description-${tag.id}`;
 
     return (
-      <InlineEditorMotion
+      <InlineEditorPanel
         id={`glossary-inline-editor-${tag.id}`}
         label={`编辑标签 ${tag.en}`}
         isClosing={isInlineEditorClosing}
@@ -1041,7 +972,7 @@ export default function GlossaryTab() {
             保存
           </Button>
         </div>
-      </InlineEditorMotion>
+      </InlineEditorPanel>
     );
   };
 
@@ -1155,11 +1086,14 @@ export default function GlossaryTab() {
               variant="text"
               size="sm"
               icon={<MdEdit size={18} />}
-              onClick={() =>
-                editingTag?.id === tag.id && !isInlineEditorClosing
-                  ? closeInlineEditor()
-                  : openInlineEditor(tag)
-              }
+              onClick={(event) => {
+                if (editingTag?.id === tag.id && !isInlineEditorClosing) {
+                  closeInlineEditor();
+                  return;
+                }
+                captureInlineEditorLayout(event.currentTarget);
+                openInlineEditor(tag);
+              }}
               className="w-9 px-0 text-warning"
               title="编辑"
               aria-label={`编辑 ${tag.en}`}

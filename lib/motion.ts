@@ -4,11 +4,12 @@ import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type RefObjec
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { CustomEase } from 'gsap/CustomEase';
+import { Flip } from 'gsap/Flip';
 import { Observer } from 'gsap/Observer';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-gsap.registerPlugin(useGSAP, CustomEase, Observer, ScrollToPlugin, ScrollTrigger);
+gsap.registerPlugin(useGSAP, CustomEase, Flip, Observer, ScrollToPlugin, ScrollTrigger);
 
 /**
  * Motion tokens for GSAP-driven animation. The same curves live in
@@ -1550,4 +1551,4 @@ export function finishTabTransition() {
   activeTabRun?.finish();
 }
 
-export { gsap, useGSAP, ScrollTrigger };
+export { Flip, gsap, useGSAP, ScrollTrigger };
