@@ -85,7 +85,6 @@ function AuthModal({
       hideCloseButton
     >
       <div className="flex min-h-[560px]">
-        {/* 左侧 2/3 占位区，暂不放内容 */}
         <div
           aria-hidden="true"
           className="hidden md:flex md:w-2/3 items-center justify-center bg-surface-container-low"
@@ -96,7 +95,6 @@ function AuthModal({
             fallback={null}
           />
         </div>
-        {/* 右侧 1/3：登录/注册/找回，窗口内切换 */}
         <div className="relative main-scrollbar w-full md:w-1/3 overflow-y-auto p-6 sm:p-8">
           <button
             onClick={onClose}
@@ -105,7 +103,7 @@ function AuthModal({
           >
             <MdClose size={22} />
           </button>
-          <div key={view} className="animate-fade-in">
+          <div key={view} className="animate-page-transition">
             {view === 'login' && (
               <LoginForm
                 onSwitch={onSwitchView}
@@ -456,7 +454,7 @@ function RegisterForm({
                   const nextIndex = Math.min(text.length, 5);
                   codeInputRefs.current[nextIndex]?.focus();
                 }}
-                className="w-11 h-12 sm:w-12 sm:h-13 text-center text-title-l-emphasized rounded-sm border border-outline bg-surface-container-lowest text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+                className="w-9 h-10 sm:w-10 sm:h-11 text-center text-title-m-emphasized rounded-sm border border-outline bg-surface-container-lowest text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
               />
             ))}
           </div>
