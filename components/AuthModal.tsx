@@ -87,7 +87,7 @@ function AuthModal({
       <div className="flex min-h-[560px]">
         <div
           aria-hidden="true"
-          className="hidden md:flex md:w-2/3 items-center justify-center bg-surface-container-low"
+          className="hidden md:flex md:w-3/5 items-center justify-center bg-surface-container-low"
         >
           <LottieIcon
             className="w-4/5 max-w-md"
@@ -95,7 +95,7 @@ function AuthModal({
             fallback={null}
           />
         </div>
-        <div className="relative main-scrollbar w-full md:w-1/3 overflow-y-auto p-6 sm:p-8">
+        <div className="relative main-scrollbar w-full md:w-2/5 overflow-y-auto p-6 sm:p-8">
           <button
             onClick={onClose}
             aria-label="关闭"
