@@ -28,15 +28,11 @@ export function useAuthModal() {
   return ctx;
 }
 
-/**
- * 全局登录弹窗 Provider。
- * 登录 / 注册 / 找回密码共用同一个弹窗，切换视图时窗口保持打开，
- * 只是右侧内容直接切换——弹窗就是这三个页面的 layout。
- */
+// 全局登录弹窗：登录/注册/找回共用，切换视图时窗口不关闭
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<AuthView>('login');
-  // 滑块验证码弹窗打开时，禁用外层弹窗的 Esc 关闭，避免误关整窗
+  // 验证码弹窗打开时禁用外层 Esc，避免误关整窗
   const [innerModalOpen, setInnerModalOpen] = useState(false);
 
   const openAuth = useCallback((v: AuthView = 'login') => {
@@ -88,12 +84,10 @@ function AuthModal({
       hideCloseButton
     >
       <div className="flex min-h-[560px]">
-        {/* 左侧 2/3 占位区，暂时不放任何内容，直接贴边 */}
+        {/* 左侧 2/3 占位区，暂不放内容 */}
         <div aria-hidden="true" className="hidden md:block md:w-2/3 bg-surface-container-low" />
-        {/* 右侧 1/3：登录 / 注册 / 找回密码，窗口内直接切换。
-            容器保留自身内边距，整个内容块与窗口框架的间距由 Modal 的 p-0 控制 */}
+        {/* 右侧 1/3：登录/注册/找回，窗口内切换 */}
         <div className="relative main-scrollbar w-full md:w-1/3 overflow-y-auto p-6 sm:p-8">
-          {/* 关闭按钮嵌套在右侧 UI 内侧右上角 */}
           <button
             onClick={onClose}
             aria-label="关闭"
@@ -123,8 +117,6 @@ function AuthModal({
     </Modal>
   );
 }
-
-/* ---------- 登录 ---------- */
 
 function LoginForm({
   onSwitch,
@@ -191,7 +183,6 @@ function LoginForm({
           console.error('Failed to fetch user info after login', err);
         }
         showToast('登录成功', 'success');
-        // 通知 AppLayout 等组件刷新用户状态
         window.dispatchEvent(new Event('user_info_updated'));
         onSuccess();
       } else {
@@ -259,8 +250,6 @@ function LoginForm({
     </div>
   );
 }
-
-/* ---------- 注册 ---------- */
 
 type RegisterStep = 'form' | 'verify';
 
@@ -538,8 +527,6 @@ function RegisterForm({
   );
 }
 
-/* ---------- 找回密码 ---------- */
-
 function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
   const [step, setStep] = useState<'request' | 'reset'>('request');
   const [email, setEmail] = useState('');
@@ -606,7 +593,6 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
       const data = await res.json();
       if (data.success) {
         showToast('密码重置成功，请登录', 'success');
-        // 重置成功后直接切回登录视图，弹窗不关闭
         onSwitch('login');
       } else {
         showToast(data.message || '重置失败', 'error');
