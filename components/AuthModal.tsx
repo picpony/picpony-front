@@ -84,7 +84,8 @@ function AuthModal({
       closeOnEscape={closeOnEscape}
       hideCloseButton
     >
-      <div className="flex min-h-[560px]">
+      {/* 手机高度跟随内容自适应，桌面保持固定较高高度 */}
+      <div className="flex md:min-h-[640px]">
         <div
           aria-hidden="true"
           className="hidden md:flex md:w-3/5 items-center justify-center bg-surface-container-low"
@@ -95,7 +96,8 @@ function AuthModal({
             fallback={null}
           />
         </div>
-        <div className="relative main-scrollbar w-full md:w-2/5 overflow-y-auto p-6 sm:p-8">
+        {/* flex-col + my-auto：内容短时垂直居中，超高时正常滚动 */}
+        <div className="relative main-scrollbar flex w-full md:w-2/5 flex-col overflow-y-auto p-6 sm:p-8">
           <button
             onClick={onClose}
             aria-label="关闭"
@@ -103,7 +105,7 @@ function AuthModal({
           >
             <MdClose size={22} />
           </button>
-          <div key={view} className="animate-page-transition">
+          <div key={view} className="my-auto animate-page-transition">
             {view === 'login' && (
               <LoginForm
                 onSwitch={onSwitchView}
