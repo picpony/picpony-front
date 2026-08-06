@@ -136,7 +136,7 @@ export default function OtherTab({ token }: { token: string }) {
         {' '}
         <MdBuild className="text-primary" size={24} /> 其他功能{' '}
       </h2>{' '}
-      <Card variant="outlined">
+      <Card variant="filled">
         {' '}
         <div className="flex items-center justify-between">
           {' '}
@@ -170,7 +170,7 @@ export default function OtherTab({ token }: { token: string }) {
           </div>
         )}{' '}
       </Card>{' '}
-      <Card variant="outlined">
+      <Card variant="filled">
         {' '}
         <div className="flex items-center justify-between">
           {' '}
@@ -188,7 +188,7 @@ export default function OtherTab({ token }: { token: string }) {
           <ToggleSwitch checked={translateEnabled} onChange={toggleTranslate} />{' '}
         </div>{' '}
       </Card>{' '}
-      <Card variant="outlined">
+      <Card variant="transparent">
         {' '}
         <h3 className="font-semibold text-on-surface flex items-center gap-2 mb-4">
           {' '}
@@ -196,21 +196,21 @@ export default function OtherTab({ token }: { token: string }) {
         </h3>{' '}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
           {' '}
-          <div className="text-center p-3 bg-surface-container-lowest rounded-md">
+          <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">图片总数</div>{' '}
             <div className="text-title-l-emphasized text-primary">
               {stats.images?.toLocaleString() || 0}
             </div>{' '}
           </div>{' '}
-          <div className="text-center p-3 bg-surface-container-lowest rounded-md">
+          <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">标签总数</div>{' '}
             <div className="text-title-l-emphasized text-primary">
               {stats.tags?.toLocaleString() || 0}
             </div>{' '}
           </div>{' '}
-          <div className="text-center p-3 bg-surface-container-lowest rounded-md">
+          <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">评论总数</div>{' '}
             <div className="text-title-l-emphasized text-primary">

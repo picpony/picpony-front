@@ -1087,7 +1087,7 @@ export default function GlossaryTab() {
           </div>
         </div>
       )}
-      <div className="p-4 bg-surface-container-low/50 rounded-md border border-outline-variant">
+      <div className="p-4 rounded-md">
         <div className="text-center mb-3">
           <span className="text-body-m text-on-surface-variant">
             词库翻译进度：已翻译 <strong className="text-primary">{stats.translated}</strong> /
@@ -1422,13 +1422,7 @@ export default function GlossaryTab() {
               {feedbacks.map((feedback) => (
                 <div
                   key={feedback.id}
-                  className={`p-4 rounded-md border-l-4 ${
-                    feedback.status === 'pending'
-                      ? 'bg-warning-container border-warning/40'
-                      : feedback.status === 'processed'
-                        ? 'bg-success-container border-success/40'
-                        : 'bg-error-container border-error/40'
-                  }`}
+                  className="p-4 rounded-md"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-body-m text-on-surface-variant">
@@ -1453,7 +1447,7 @@ export default function GlossaryTab() {
                   <div className="font-mono text-label-l-emphasized text-primary mb-2">
                     {feedback.tag_name}
                   </div>{' '}
-                  <div className="text-body-m text-on-surface-variant mb-3 bg-surface-container-high/50 p-2 rounded">
+                  <div className="text-body-m text-on-surface-variant mb-3 p-2 rounded">
                     {' '}
                     {feedback.content}{' '}
                   </div>{' '}

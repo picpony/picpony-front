@@ -3,7 +3,7 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-export type CardVariant = 'filled' | 'elevated' | 'outlined';
+export type CardVariant = 'filled' | 'elevated' | 'outlined' | 'transparent';
 export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
@@ -33,6 +33,8 @@ const VARIANTS: Record<CardVariant, string> = {
   elevated: 'bg-surface-container-lowest shadow-e1',
   // For dense lists where filled cards would stack into one grey mass.
   outlined: 'bg-surface border border-outline-variant',
+  // No surface at all — content lies directly on the page background.
+  transparent: 'bg-transparent',
 };
 
 const PADDINGS: Record<CardPadding, string> = {

@@ -225,7 +225,7 @@ export default function ShopTab({ token }: { token: string }) {
         onRefresh={loadItems}
       />
 
-      <Card variant="outlined">
+      <Card variant="transparent">
         <h3 className="font-semibold text-on-surface mb-4 flex items-center gap-2">
           {isEditing ? <MdEdit size={20} /> : <MdAdd size={20} />}
           {isEditing ? '编辑商品' : '添加新商品'}{' '}

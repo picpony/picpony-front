@@ -380,9 +380,9 @@ export default function BadgesTab({ token }: { token: string }) {
       {activeSubTab === 'grant' && (
         <>
           {' '}
-          <Card variant="outlined" className="space-y-4">
+          <Card variant="transparent" className="space-y-4">
             {' '}
-            <div className="text-body-s text-on-surface-variant p-3 bg-warning-container rounded border-l-4 border-l-warning">
+            <div className="text-body-s text-on-surface-variant p-3 rounded">
               {' '}
               您可以向特定用户
               ID，或在某日期区间注册的用户批量授予专属徽章。徽章将在用户的发言、个人主页等多处显示。{' '}
@@ -492,7 +492,7 @@ export default function BadgesTab({ token }: { token: string }) {
             </Button>
           </Card>
           {/* Badges list */}
-          <Card variant="outlined">
+          <Card variant="transparent">
             <h3 className="text-label-l-emphasized text-on-surface mb-4">已有徽章列表</h3>
             <DataTable<Badge>
               columns={badgeColumns}
@@ -507,9 +507,9 @@ export default function BadgesTab({ token }: { token: string }) {
       {activeSubTab === 'links' && (
         <>
           {' '}
-          <Card variant="outlined" className="space-y-4">
+          <Card variant="transparent" className="space-y-4">
             {' '}
-            <div className="text-body-s text-on-surface-variant p-3 bg-warning-container rounded border-l-4 border-l-warning">
+            <div className="text-body-s text-on-surface-variant p-3 rounded">
               {' '}
               生成一个包含徽章信息的专属链接，用户点击链接即可自动领取指定的徽章。{' '}
             </div>{' '}
@@ -577,7 +577,7 @@ export default function BadgesTab({ token }: { token: string }) {
             </button>
           </Card>
           {/* Existing badge links */}
-          <Card variant="outlined">
+          <Card variant="transparent">
             <h3 className="text-label-l-emphasized text-on-surface mb-4">已生成的链接</h3>
             <DataTable<BadgeLink>
               columns={badgeLinkColumns}

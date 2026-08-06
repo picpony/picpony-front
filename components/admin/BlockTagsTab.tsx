@@ -128,7 +128,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
         title="底层屏蔽标签管理"
         onRefresh={loadBlockTags}
       />{' '}
-      <div className="text-body-s text-on-surface-variant p-3 bg-error-container rounded border-l-4 border-l-error">
+      <div className="text-body-s text-on-surface-variant p-3 rounded">
         {' '}
         此处管理网站全局底层屏蔽规则，影响所有用户的搜索过滤结果。 <b>safe</b> 与 <b>spoilers</b>{' '}
         中的标签会作为排除项（-标签）加入搜索。 <b>onlyPony</b> 中的标签会作为可选物种范围（OR
@@ -142,7 +142,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
           {filterKeys.map((key) => {
             const tags = blockTags[key] || [];
             return (
-              <div key={key} className="bg-surface rounded-md border border-outline-variant p-4">
+              <div key={key} className="bg-surface-container-low rounded-md p-4">
                 {' '}
                 <div className="flex items-center justify-between mb-3">
                   {' '}

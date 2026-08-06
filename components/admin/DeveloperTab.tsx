@@ -188,9 +188,9 @@ export default function DeveloperTab({ token }: { token: string }) {
       />
 
       {/* Developer Password */}
-      <Card variant="outlined" className="space-y-4">
+      <Card variant="transparent" className="space-y-4">
         <h3 className="text-label-l-emphasized text-on-surface">维护密码</h3>
-        <div className="text-body-s bg-accent-blue text-on-accent-blue border-l-on-accent-blue rounded-sm border-l-4 p-3">
+        <div className="text-body-s text-primary rounded-sm p-3">
           此密码为系统随机生成的8位纯数字，每3天自动更新一次。用户开启开发者模式需输入此密码。
         </div>
 
@@ -216,9 +216,9 @@ export default function DeveloperTab({ token }: { token: string }) {
       </Card>
 
       {/* Developer Users */}
-      <Card variant="outlined" className="space-y-4">
+      <Card variant="transparent" className="space-y-4">
         <h3 className="text-label-l-emphasized text-on-surface">开发者用户列表</h3>
-        <div className="text-body-s text-on-surface-variant p-3 bg-warning-container rounded border-l-4 border-l-warning">
+        <div className="text-body-s text-on-surface-variant p-3 rounded">
           以下用户已开启开发者模式。管理员可随时关闭任一用户的开发者模式。
         </div>
 

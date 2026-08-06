@@ -84,9 +84,9 @@ export default function MessagesAuditTab({ token }: { token: string }) {
         title="私信安全审计查阅"
         onRefresh={() => loadMessages()}
       />{' '}
-      <Card variant="outlined">
+      <Card variant="transparent">
         {' '}
-        <div className="text-body-s text-error mb-4 p-3 bg-error-container rounded border-l-4 border-l-error">
+        <div className="text-body-s text-error mb-4 p-3 rounded">
           {' '}
           警告：作为管理员，您有权审计全站私信以排查违规交易、辱骂或诈骗行为。请严格遵守用户隐私准则，切勿滥用此功能。{' '}
         </div>{' '}

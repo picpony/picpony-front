@@ -255,11 +255,11 @@ export default function TeamTab({ token }: { token: string }) {
         onRefresh={loadMembers}
       />
 
-      <Card variant="outlined" className="space-y-4">
+      <Card variant="transparent" className="space-y-4">
         <h3 className="text-label-l-emphasized text-on-surface">
           {editingMember ? '编辑团队成员' : '添加团队成员'}{' '}
         </h3>{' '}
-        <div className="flex items-end gap-3 p-3 bg-surface-container-low rounded border border-dashed border-outline">
+        <div className="flex items-end gap-3 p-3 rounded border border-dashed border-outline">
           {' '}
           <div className="flex-1">
             {' '}
@@ -371,7 +371,7 @@ export default function TeamTab({ token }: { token: string }) {
         </div>
       </Card>
 
-      <Card variant="outlined">
+      <Card variant="transparent">
         <h3 className="text-label-l-emphasized text-on-surface mb-4">成员列表</h3>
         <DataTable<TeamMember>
           columns={teamColumns}

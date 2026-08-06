@@ -167,9 +167,9 @@ export default function NotificationsTab({ token }: { token: string }) {
         title="系统通知发送"
         onRefresh={loadNotifications}
       />{' '}
-      <Card variant="outlined" className="space-y-4">
+      <Card variant="transparent" className="space-y-4">
         {' '}
-        <div className="text-body-s text-on-surface-variant bg-surface-container-low p-3 rounded border-l-on-accent-blue border-l-4">
+        <div className="text-body-s text-on-surface-variant p-3 rounded">
           {' '}
           使用系统通知可以向特定用户或全站用户发送消息（信箱红点提醒）。用户ID填 0
           代表全站广播。{' '}
@@ -219,7 +219,7 @@ export default function NotificationsTab({ token }: { token: string }) {
           {sending ? '发送中...' : '发送通知'}
         </Button>
       </Card>
-      <Card variant="outlined">
+      <Card variant="transparent">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-label-l-emphasized text-on-surface">历史通知记录</h3>
           <Select

@@ -166,7 +166,7 @@ export default function BlacklistTab({ token }: { token: string }) {
         onRefresh={loadBlacklist}
       />
 
-      <div className="p-4 bg-error-container rounded-md border border-error/40">
+      <div className="p-4 rounded-md">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <Input
