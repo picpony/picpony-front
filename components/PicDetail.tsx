@@ -299,6 +299,24 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     } catch {}
   }, []);
 
+  // 记录浏览历史：登录用户打开图片详情时同步到云端（与完整版前端
+  // openModal 里的 add_browsing_history 一致），fire-and-forget。
+  // 依赖 image?.id：同一张图只在 id 变化时记录一次，prefetch 详情不算浏览。
+  useEffect(() => {
+    const token = tokenRef.current;
+    if (!token || !image) return;
+    const reps = image.representations ?? {};
+    const previewUrl = reps.thumb || reps.small || reps.large || image.view_url;
+    void api
+      .addBrowsingHistory(token, {
+        image_id: image.id,
+        preview_url: previewUrl,
+        uploader: image.uploader || '匿名',
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只需跟随 image.id
+  }, [image?.id]);
+
   // Read "显示各标签数量" setting from localStorage
   const [showTagCounts, setShowTagCounts] = useState(false);
   useEffect(() => {

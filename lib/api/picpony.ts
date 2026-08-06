@@ -553,6 +553,18 @@ export async function recordWeeklyUpload(token: string) {
   });
 }
 
+/** 记录浏览历史（打开图片详情时调用，与完整版前端 add_browsing_history 一致） */
+export async function addBrowsingHistory(
+  token: string,
+  params: { image_id: number; preview_url: string; uploader: string },
+) {
+  return fetch(`${PICPONY_API_BASE}?action=add_browsing_history`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // 隐私收藏（需要隐私密码）
 // ---------------------------------------------------------------------------
