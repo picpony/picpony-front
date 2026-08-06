@@ -13,10 +13,7 @@ import type { ImageHeroSnapshot } from './types';
 
 let detailComponentWarmup: Promise<unknown> | null = null;
 
-export function warmImageHero(
-  imageId?: number,
-  priority: DetailRequestPriority = 'immediate',
-) {
+export function warmImageHero(imageId?: number, priority: DetailRequestPriority = 'immediate') {
   detailComponentWarmup ??= import('@/components/PicDetail').catch(() => {
     detailComponentWarmup = null;
   });
@@ -41,20 +38,20 @@ export function prepareImageHero(
   const mediaType = visual instanceof HTMLVideoElement ? 'video' : 'image';
   const previewSrc = normalizeHeroSrc(
     visual?.currentSrc ||
-    visual?.getAttribute('src') ||
-    previewSrcOverride ||
-    (mediaType === 'video'
-      ? image.representations?.thumb ||
-        image.representations?.thumb_small ||
-        image.representations?.thumb_tiny ||
-        image.representations?.small ||
-        image.representations?.full
-      : image.representations?.small) ||
-    image.representations?.thumb ||
-    image.representations?.small ||
-    image.representations?.full ||
-    image.view_url ||
-    '',
+      visual?.getAttribute('src') ||
+      previewSrcOverride ||
+      (mediaType === 'video'
+        ? image.representations?.thumb ||
+          image.representations?.thumb_small ||
+          image.representations?.thumb_tiny ||
+          image.representations?.small ||
+          image.representations?.full
+        : image.representations?.small) ||
+      image.representations?.thumb ||
+      image.representations?.small ||
+      image.representations?.full ||
+      image.view_url ||
+      '',
   );
   const rect = getHeroRect(source);
   return {
@@ -79,4 +76,3 @@ export function canAnimateImageHero(snapshot: ImageHeroSnapshot) {
     document.querySelector(HERO_GALLERY_ANCHOR_SELECTOR),
   );
 }
-

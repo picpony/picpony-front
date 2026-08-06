@@ -6,7 +6,11 @@ import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
 import { MdPeople, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
-import { SectionHeader, EmptyState, Spinner } from './';
+import DataTable, { type Column } from '@/components/DataTable';
+import { SectionHeader } from './';
+import Button from '@/components/Button';
+import Card from '@/components/Card';
+import { Input } from '@/components/Input';
 
 interface TeamMember {
   id: number;
@@ -69,11 +73,20 @@ export default function TeamTab({ token }: { token: string }) {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const resetForm = () => {
-    setForm({ name: '', role: '', category: 'developer', avatar_url: '', link_url: '', order_num: 0 });
+    setForm({
+      name: '',
+      role: '',
+      category: 'developer',
+      avatar_url: '',
+      link_url: '',
+      order_num: 0,
+    });
     setEditingMember(null);
   };
 
@@ -104,7 +117,10 @@ export default function TeamTab({ token }: { token: string }) {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { showToast('姓名不能为空', 'warning'); return; }
+    if (!form.name.trim()) {
+      showToast('姓名不能为空', 'warning');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -156,13 +172,16 @@ export default function TeamTab({ token }: { token: string }) {
 
   const handleImportUser = async () => {
     const uid = parseInt(importUserId);
-    if (isNaN(uid)) { showToast('请输入有效的用户 ID', 'warning'); return; }
+    if (isNaN(uid)) {
+      showToast('请输入有效的用户 ID', 'warning');
+      return;
+    }
     try {
       const data = await api.adminGetUsers(token);
       if (data.success) {
         const user = (data.users || []).find((u: { id: number }) => u.id === uid);
         if (user) {
-          setForm(prev => ({ ...prev, name: user.username || '' }));
+          setForm((prev) => ({ ...prev, name: user.username || '' }));
           showToast('已导入用户信息', 'success');
           setImportUserId('');
         } else {
@@ -174,6 +193,60 @@ export default function TeamTab({ token }: { token: string }) {
     }
   };
 
+  const teamColumns: Column<TeamMember>[] = [
+    { key: 'id', header: 'ID', render: (m) => m.id },
+    {
+      key: 'name',
+      header: '姓名',
+      primary: true,
+      render: (m) => <span className="font-medium">{m.name}</span>,
+    },
+    {
+      key: 'role',
+      header: '角色',
+      render: (m) => <span className="text-on-surface-variant text-body-s">{m.role}</span>,
+    },
+    {
+      key: 'category',
+      header: '分类',
+      render: (m) => (
+        <span className="text-body-s">
+          {categoryOptions.find((c) => c.value === m.category)?.label || m.category}
+        </span>
+      ),
+    },
+    {
+      key: 'order',
+      header: '排序',
+      render: (m) => <span className="text-outline text-body-s">{m.order_num}</span>,
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      actions: true,
+      render: (m) => (
+        <>
+          <button
+            onClick={() => handleEdit(m)}
+            className="touch-target state-layer text-primary rounded-full p-1.5"
+            title="编辑"
+            aria-label={`编辑 ${m.name}`}
+          >
+            <MdEdit size={16} />
+          </button>
+          <button
+            onClick={() => handleDelete(m.id)}
+            className="touch-target state-layer rounded-full p-1.5 text-error"
+            title="删除"
+            aria-label={`删除 ${m.name}`}
+          >
+            <MdDelete size={16} />
+          </button>
+        </>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -182,117 +255,132 @@ export default function TeamTab({ token }: { token: string }) {
         onRefresh={loadMembers}
       />
 
-      <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-          {editingMember ? '编辑团队成员' : '添加团队成员'}
-        </h3>
-
-        <div className="flex items-end gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded border border-dashed border-slate-300 dark:border-slate-600">
+      <Card variant="outlined" className="space-y-4">
+        <h3 className="text-label-l-emphasized text-on-surface">
+          {editingMember ? '编辑团队成员' : '添加团队成员'}{' '}
+        </h3>{' '}
+        <div className="flex items-end gap-3 p-3 bg-surface-container-low rounded border border-dashed border-outline">
+          {' '}
           <div className="flex-1">
-            <label className="block text-xs font-medium text-slate-500 mb-1">快捷导入：调用站内用户</label>
-            <input type="number" value={importUserId} onChange={(e) => setImportUserId(e.target.value)}
+            {' '}
+            <label className="block text-label-m text-on-surface-variant mb-1" htmlFor="teamtab-f1">
+              快捷导入：调用站内用户
+            </label>{' '}
+            <Input
+              id="teamtab-f1"
+              type="number"
+              value={importUserId}
+              onChange={(e) => setImportUserId(e.target.value)}
               placeholder="输入用户 ID"
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800" />
-          </div>
-          <button onClick={handleImportUser}
-            className="px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary/90">
+              className="rounded"
+            />{' '}
+          </div>{' '}
+          <Button onClick={handleImportUser} variant="filled">
             导入信息
-          </button>
-        </div>
-
+          </Button>
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">成员姓名（必填）</label>
-          <input type="text" value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+          {' '}
+          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f2">
+            成员姓名（必填）
+          </label>{' '}
+          <Input
+            id="teamtab-f2"
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             placeholder="如：小明"
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-        </div>
-
+          />{' '}
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">角色/头衔</label>
-          <input type="text" value={form.role} onChange={(e) => setForm(f => ({ ...f, role: e.target.value }))}
+          {' '}
+          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f3">
+            角色/头衔
+          </label>{' '}
+          <Input
+            id="teamtab-f3"
+            type="text"
+            value={form.role}
+            onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
             placeholder="如：全栈开发"
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-        </div>
-
+          />{' '}
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">栏目分类</label>
-          <Select value={form.category} onChange={(v) => setForm(f => ({ ...f, category: v }))}
-            className="w-full" options={categoryOptions} />
-        </div>
-
+          {' '}
+          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f4">
+            栏目分类
+          </label>{' '}
+          <Select
+            value={form.category}
+            onChange={(v) => setForm((f) => ({ ...f, category: v }))}
+            className="w-full"
+            options={categoryOptions}
+          />{' '}
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">头像链接（选填）</label>
-          <input type="text" value={form.avatar_url} onChange={(e) => setForm(f => ({ ...f, avatar_url: e.target.value }))}
+          {' '}
+          <label className="block text-body-m text-on-surface mb-1">头像链接（选填）</label>{' '}
+          <Input
+            id="teamtab-f4"
+            type="text"
+            value={form.avatar_url}
+            onChange={(e) => setForm((f) => ({ ...f, avatar_url: e.target.value }))}
             placeholder="头像图片直链"
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-        </div>
-
+          />{' '}
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">个人主页链接（选填）</label>
-          <input type="text" value={form.link_url} onChange={(e) => setForm(f => ({ ...f, link_url: e.target.value }))}
+          {' '}
+          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f5">
+            个人主页链接（选填）
+          </label>{' '}
+          <Input
+            id="teamtab-f5"
+            type="text"
+            value={form.link_url}
+            onChange={(e) => setForm((f) => ({ ...f, link_url: e.target.value }))}
             placeholder="如：https://github.com/xxx"
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-        </div>
-
+          />{' '}
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">排序号（值越小越靠前）</label>
-          <input type="number" value={form.order_num} onChange={(e) => setForm(f => ({ ...f, order_num: parseInt(e.target.value) || 0 }))}
-            className="w-32 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800" />
-        </div>
-
+          {' '}
+          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f6">
+            排序号（值越小越靠前）
+          </label>{' '}
+          <Input
+            id="teamtab-f6"
+            type="number"
+            value={form.order_num}
+            onChange={(e) => setForm((f) => ({ ...f, order_num: parseInt(e.target.value) || 0 }))}
+            fieldClassName="w-32"
+          />{' '}
+        </div>{' '}
         <div className="flex gap-3">
+          {' '}
           {editingMember && (
-            <button onClick={resetForm}
-              className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-600 dark:text-slate-400">
-              取消编辑
+            <button
+              onClick={resetForm}
+              className="px-4 py-2 border border-outline rounded-full text-body-m text-on-surface-variant"
+            >
+              {' '}
+              取消编辑{' '}
             </button>
-          )}
-          <button onClick={handleSave} disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-            <MdAdd size={16} />
-            {saving ? '保存中...' : (editingMember ? '更新成员' : '添加成员')}
-          </button>
+          )}{' '}
+          <Button onClick={handleSave} variant="filled" loading={saving} icon={<MdAdd size={16} />}>
+            {saving ? '保存中...' : editingMember ? '更新成员' : '添加成员'}
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">成员列表</h3>
-        {loading ? <Spinner /> : members.length === 0 ? <EmptyState message="暂无成员" /> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700">
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">ID</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">姓名</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">角色</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">分类</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">排序</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((m) => (
-                  <tr key={m.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="py-2 px-2">{m.id}</td>
-                    <td className="py-2 px-2 font-medium">{m.name}</td>
-                    <td className="py-2 px-2 text-xs text-slate-500">{m.role}</td>
-                    <td className="py-2 px-2 text-xs">{categoryOptions.find(c => c.value === m.category)?.label || m.category}</td>
-                    <td className="py-2 px-2 text-xs text-slate-400">{m.order_num}</td>
-                    <td className="py-2 px-2 flex gap-1">
-                      <button onClick={() => handleEdit(m)} className="text-blue-500 hover:text-blue-700 p-1" title="编辑">
-                        <MdEdit size={16} />
-                      </button>
-                      <button onClick={() => handleDelete(m.id)} className="text-red-500 hover:text-red-700 p-1" title="删除">
-                        <MdDelete size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <Card variant="outlined">
+        <h3 className="text-label-l-emphasized text-on-surface mb-4">成员列表</h3>
+        <DataTable<TeamMember>
+          columns={teamColumns}
+          rows={members}
+          rowKey={(m) => m.id}
+          loading={loading}
+          empty="暂无成员"
+        />
+      </Card>
 
       <Modal
         isOpen={confirmOpen}
@@ -303,20 +391,17 @@ export default function TeamTab({ token }: { token: string }) {
           <>
             <button
               onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
             >
               取消
             </button>
-            <button
-              onClick={handleConfirm}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-            >
+            <Button variant="danger" onClick={handleConfirm}>
               确认
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400">确定要删除此成员？</p>
+        <p className="text-body-m text-on-surface-variant">确定要删除此成员？</p>
       </Modal>
     </div>
   );

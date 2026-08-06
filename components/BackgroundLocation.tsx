@@ -24,10 +24,7 @@ export function useBackgroundSearchParams() {
   const liveSearchParams = useSearchParams();
 
   return useMemo(
-    () =>
-      frozenSearch === null
-        ? liveSearchParams
-        : new URLSearchParams(frozenSearch),
-    [frozenSearch, liveSearchParams]
+    () => (frozenSearch === null ? liveSearchParams : new URLSearchParams(frozenSearch)),
+    [frozenSearch, liveSearchParams],
   );
 }

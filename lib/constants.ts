@@ -21,4 +21,29 @@ export const LS_KEYS = {
   useApiAccel: 'picpony_api_accel',
   homeSort: 'picpony_default_home_sort',
   searchSort: 'picpony_default_search_sort',
+  devBannerDismissed: 'picpony_dev_banner_dismissed',
+} as const;
+
+/**
+ * Breakpoints, in px, matching Tailwind's defaults.
+ *
+ * These were previously restated in five places that did not agree with one
+ * another: `useDisplay` split at 640/1024, `useMasonryColumns` at 768/1024,
+ * `lib/hero/constants.ts` at 640, `ImageCard`'s `sizes` attribute at 767/1023,
+ * and the CSS at Tailwind's own values. Anything that has to branch on width in
+ * JS reads from here so it stays in step with the `sm:`/`md:`/`lg:` classes.
+ */
+export const BREAKPOINTS = {
+  sm: 640,
+  md: 768,
+  lg: 1024,
+  xl: 1280,
+} as const;
+
+/** Media queries derived from the above, for `matchMedia` subscriptions. */
+export const MEDIA = {
+  sm: `(min-width: ${BREAKPOINTS.sm}px)`,
+  md: `(min-width: ${BREAKPOINTS.md}px)`,
+  lg: `(min-width: ${BREAKPOINTS.lg}px)`,
+  xl: `(min-width: ${BREAKPOINTS.xl}px)`,
 } as const;

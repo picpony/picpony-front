@@ -6,7 +6,10 @@ import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
 import { MdAttachMoney } from 'react-icons/md';
-import { SectionHeader, SearchInput, EmptyState, Spinner } from './';
+import DataTable, { type Column } from '@/components/DataTable';
+import { SectionHeader, SearchInput } from './';
+import Button from '@/components/Button';
+import { Input } from '@/components/Input';
 
 interface User {
   id: number;
@@ -44,7 +47,8 @@ export default function WealthTab({ token }: { token: string }) {
 
   useEffect(() => {
     if (!token) return;
-    api.adminGetWealth(token)
+    api
+      .adminGetWealth(token)
       .then((data) => {
         if (data.success) {
           setUsers(data.users || []);
@@ -57,10 +61,7 @@ export default function WealthTab({ token }: { token: string }) {
   const filteredUsers = useMemo(() => {
     if (!searchKw) return users;
     const kw = searchKw.toLowerCase();
-    return users.filter(u =>
-      String(u.id) === kw ||
-      u.username?.toLowerCase().includes(kw)
-    );
+    return users.filter((u) => String(u.id) === kw || u.username?.toLowerCase().includes(kw));
   }, [searchKw, users]);
 
   const openModal = (user: User) => {
@@ -106,60 +107,47 @@ export default function WealthTab({ token }: { token: string }) {
     }
   };
 
+  const wealthColumns: Column<User>[] = [
+    { key: 'id', header: 'ID', render: (u) => `#${u.id}` },
+    {
+      key: 'name',
+      header: '用户名',
+      primary: true,
+      render: (u) => <span className="text-primary font-medium">{u.username}</span>,
+    },
+    { key: 'exp', header: '当前经验', render: (u) => u.experience || 0 },
+    {
+      key: 'coins',
+      header: '当前金币',
+      render: (u) => <span className="text-warning font-medium">{u.coins || 0}</span>,
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      actions: true,
+      render: (u) => (
+        <Button onClick={() => openModal(u)} variant="filled" size="sm">
+          修改资产
+        </Button>
+      ),
+    },
+  ];
   return (
     <div className="space-y-6">
+      {' '}
       <SectionHeader
         icon={<MdAttachMoney className="text-primary" size={24} />}
         title="经验与金币管理"
         onRefresh={loadUsers}
-      />
-
-      <SearchInput
-        value={searchKw}
-        onChange={setSearchKw}
-        placeholder="搜索用户ID或用户名..."
-      />
-
-      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-        <table className="w-full">
-          <thead className="bg-slate-50 dark:bg-slate-800">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">ID</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">用户名</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">当前经验</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">当前金币</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <EmptyState colSpan={5} message="" icon={<Spinner label="" />} />
-            ) : filteredUsers.length === 0 ? (
-              <EmptyState colSpan={5} message="没有找到匹配的用户" />
-            ) : (
-              filteredUsers.map((user) => (
-                <tr key={user.id} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="px-4 py-3 text-sm">#{user.id}</td>
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-primary">{user.username}</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">{user.experience || 0}</td>
-                  <td className="px-4 py-3 text-sm font-medium text-amber-600">{user.coins || 0}</td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => openModal(user)}
-                      className="px-3 py-1 text-xs font-medium text-white bg-primary hover:bg-primary/90 rounded transition-colors"
-                    >
-                      修改资产
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
+      />{' '}
+      <SearchInput value={searchKw} onChange={setSearchKw} placeholder="搜索用户ID或用户名..." />{' '}
+      <DataTable<User>
+        columns={wealthColumns}
+        rows={filteredUsers}
+        rowKey={(u) => u.id}
+        loading={isLoading}
+        empty="没有找到匹配的用户"
+      />{' '}
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
@@ -167,34 +155,36 @@ export default function WealthTab({ token }: { token: string }) {
         maxWidth="max-w-md"
         footer={
           <>
-            <button
-              onClick={closeModal}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              取消
-            </button>
-            <button
-              onClick={submit}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
-            >
-              确认修改
-            </button>
+            {' '}
+            <Button variant="text" onClick={closeModal}>
+              {' '}
+              取消{' '}
+            </Button>{' '}
+            <Button variant="filled" onClick={submit}>
+              {' '}
+              确认修改{' '}
+            </Button>{' '}
           </>
         }
       >
+        {' '}
         <div className="space-y-4">
+          {' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">经验值</label>
-            <input
+            {' '}
+            <Input
+              label="经验值"
+              id="wealthtab-f1"
               type="number"
               value={form.experience}
               onChange={(e) => setForm({ ...form, experience: parseInt(e.target.value) || 0 })}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
-            />
-          </div>
+            />{' '}
+          </div>{' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">金币操作</label>
+            {' '}
+            <label className="block text-label-l text-on-surface mb-1">金币操作</label>{' '}
             <div className="flex gap-2">
+              {' '}
               <Select
                 value={form.coinsOp}
                 onChange={(v) => setForm({ ...form, coinsOp: v })}
@@ -205,23 +195,22 @@ export default function WealthTab({ token }: { token: string }) {
                   { value: 'set', label: '[=]' },
                 ]}
               />
-              <input
+              <Input
                 type="number"
                 value={form.coinsValue}
                 onChange={(e) => setForm({ ...form, coinsValue: e.target.value })}
                 placeholder="数值"
-                className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
+                fieldClassName="flex-1"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">变动原因（必填）</label>
-            <input
+            <Input
+              label="变动原因（必填）"
               type="text"
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
               placeholder="例如: 违规惩罚、特殊活动奖励..."
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
             />
           </div>
         </div>

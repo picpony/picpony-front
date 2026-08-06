@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import Modal from './Modal';
+import Button from './Button';
 
 interface Announcement {
   version: string;
@@ -49,20 +50,17 @@ export default function AnnouncementModal() {
       title="系统公告"
       maxWidth="max-w-lg"
       footer={
-        <button
-          onClick={handleClose}
-          className="px-4 py-2 text-primary font-medium hover:bg-primary/10 rounded-lg transition-colors active:scale-95 cursor-pointer"
-        >
+        <Button variant="text" className="text-primary" onClick={handleClose}>
           我已知悉
-        </button>
+        </Button>
       }
     >
       {announcement && (
         <>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">{announcement.title}</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 font-medium pb-3">发布日期：{announcement.date}</p>
+          <h3 className="text-title-m-emphasized text-on-surface mb-2">{announcement.title}</h3>
+          <p className="text-label-m text-outline mb-4 pb-3">发布日期：{announcement.date}</p>
           <div
-            className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed space-y-2"
+            className="text-on-surface-variant text-body-m leading-relaxed space-y-2"
             dangerouslySetInnerHTML={{ __html: announcement.content }}
           />
         </>

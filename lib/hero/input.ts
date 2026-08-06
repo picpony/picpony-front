@@ -247,10 +247,26 @@ export function subscribeHeroViewportInvalidation(listener: () => void) {
   return () => viewportListeners.delete(listener);
 }
 
-/** Resolves once no finger or wheel stream is holding the page. */
+/**
+ * Resolves once no *finger* is holding the page.
+ *
+ * Touch only, deliberately. The one caller is the flyer teardown, and its
+ * reason is entirely about touch: tearing the flyer down while a finger is
+ * still on the glass shows the user the thumbnail reappearing under their own
+ * contact point. A wheel stream has no such relationship to the flyer — the
+ * pointer is not holding anything — and letting it hold the gate was open-ended
+ * in a way touch is not: every wheel event pushes `WHEEL_RELEASE_MS` out
+ * another 160ms, and a trackpad delivers them closer together than that, so
+ * scrolling continuously through the return kept the teardown pending for as
+ * long as the user kept scrolling, with the route left pinned to the detail.
+ *
+ * `waitForHeroInteractionQuiet` is the one that still counts the wheel, and
+ * should: it guards the scroll *handoff*, where a latched wheel stream really
+ * does have to finish before the receiver changes.
+ */
 export function waitForHeroInputRelease(signal?: AbortSignal) {
   if (signal?.aborted) return Promise.resolve(false);
-  if (!hasActiveHeroInput()) return Promise.resolve(true);
+  if (activeTouchCount() === 0) return Promise.resolve(true);
 
   return new Promise<boolean>((resolve) => {
     let finished = false;
@@ -262,7 +278,7 @@ export function waitForHeroInputRelease(signal?: AbortSignal) {
       resolve(value);
     };
     const check = () => {
-      if (!hasActiveHeroInput()) finish(true);
+      if (activeTouchCount() === 0) finish(true);
     };
     const abort = () => finish(false);
     inputReleaseListeners.add(check);
@@ -303,9 +319,7 @@ export function waitForHeroInteractionQuiet(signal?: AbortSignal, quietFor = QUI
       // Active input is released through `scheduleQuietCheck`, which publishes
       // the next quiet-state change. Spinning a 1ms timer while a wheel stream
       // is live starves the very scroll events this waiter observes.
-      timer = hasActiveHeroInput()
-        ? 0
-        : window.setTimeout(check, Math.max(1, remaining));
+      timer = hasActiveHeroInput() ? 0 : window.setTimeout(check, Math.max(1, remaining));
     };
     const abort = () => finish(false);
     activityListeners.add(check);

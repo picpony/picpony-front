@@ -106,11 +106,12 @@ export class HeroScrollContinuity {
       suppressScrollUntil: 0,
       wheelListener: (event) => {
         if (this.released || event.ctrlKey) return;
-        const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE
-          ? lineHeight
-          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-            ? pageHeight
-            : 1;
+        const unit =
+          event.deltaMode === WheelEvent.DOM_DELTA_LINE
+            ? lineHeight
+            : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+              ? pageHeight
+              : 1;
         // A wheel stream may remain latched to the outgoing scroller after it
         // stops owning the screen. Claim only that stale receiver and carry its
         // residual through the shared frame scheduler; direct scrollTop jumps
@@ -129,10 +130,8 @@ export class HeroScrollContinuity {
         state.left = nextLeft;
         state.top = nextTop;
         if (performance.now() <= state.suppressScrollUntil) return;
-        if (
-          Math.abs(deltaLeft) < SCROLL_EPSILON_PX &&
-          Math.abs(deltaTop) < SCROLL_EPSILON_PX
-        ) return;
+        if (Math.abs(deltaLeft) < SCROLL_EPSILON_PX && Math.abs(deltaTop) < SCROLL_EPSILON_PX)
+          return;
         this.applyDelta(deltaLeft, deltaTop);
       },
     };
@@ -244,10 +243,7 @@ export class HeroScrollContinuity {
   }
 
   private applyDelta(left: number, top: number) {
-    if (
-      Math.abs(left) < SCROLL_EPSILON_PX &&
-      Math.abs(top) < SCROLL_EPSILON_PX
-    ) return;
+    if (Math.abs(left) < SCROLL_EPSILON_PX && Math.abs(top) < SCROLL_EPSILON_PX) return;
     // Touch momentum on an outgoing scroller decays for up to a second. Only a
     // wheel stream is genuinely latched and worth rescuing; forwarding inertial
     // touch deltas would keep overwriting the user's own fresh scroll.
@@ -261,19 +257,12 @@ export class HeroScrollContinuity {
     }
     const target = this.primary;
     if (!target?.isConnected) return;
-    this.writePosition(
-      target,
-      target.scrollLeft + left,
-      target.scrollTop + top,
-    );
+    this.writePosition(target, target.scrollLeft + left, target.scrollTop + top);
     this.syncFrom(target);
   }
 
   private queueWheelResidual(left: number, top: number) {
-    if (
-      Math.abs(left) < SCROLL_EPSILON_PX &&
-      Math.abs(top) < SCROLL_EPSILON_PX
-    ) return;
+    if (Math.abs(left) < SCROLL_EPSILON_PX && Math.abs(top) < SCROLL_EPSILON_PX) return;
     this.pendingResidualLeft += left;
     this.pendingResidualTop += top;
     if (!this.residualSampleAt) this.residualSampleAt = performance.now();
@@ -300,11 +289,7 @@ export class HeroScrollContinuity {
   }
 
   private stepWheelResidual(measurement: ResidualMeasurement | null) {
-    if (
-      this.released ||
-      !measurement ||
-      measurement.target !== this.primary
-    ) {
+    if (this.released || !measurement || measurement.target !== this.primary) {
       this.resetWheelResidual();
       return;
     }
@@ -328,10 +313,8 @@ export class HeroScrollContinuity {
     );
     this.residualSampleAt = measurement.at;
     const amount = 1 - Math.exp(-elapsed / WHEEL_RESIDUAL_RESPONSE_MS);
-    let nextLeft = measurement.left +
-      (this.residualTargetLeft - measurement.left) * amount;
-    let nextTop = measurement.top +
-      (this.residualTargetTop - measurement.top) * amount;
+    let nextLeft = measurement.left + (this.residualTargetLeft - measurement.left) * amount;
+    let nextTop = measurement.top + (this.residualTargetTop - measurement.top) * amount;
 
     if (Math.abs(this.residualTargetLeft - nextLeft) < SCROLL_EPSILON_PX) {
       nextLeft = this.residualTargetLeft;
@@ -369,9 +352,11 @@ export class HeroScrollContinuity {
   }
 
   private hasWheelResidual() {
-    return this.residualTargetLeft !== null ||
+    return (
+      this.residualTargetLeft !== null ||
       Math.abs(this.pendingResidualLeft) >= SCROLL_EPSILON_PX ||
-      Math.abs(this.pendingResidualTop) >= SCROLL_EPSILON_PX;
+      Math.abs(this.pendingResidualTop) >= SCROLL_EPSILON_PX
+    );
   }
 
   private resetWheelResidual() {

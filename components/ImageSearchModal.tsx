@@ -9,6 +9,7 @@ import { processImageFile } from '../lib/utils';
 import { PonyImage } from '../lib/api';
 import FadeInImage from './FadeInImage';
 import Modal from './Modal';
+import Button from '@/components/Button';
 
 interface ImageSearchModalProps {
   isOpen: boolean;
@@ -16,10 +17,14 @@ interface ImageSearchModalProps {
   onSearchSuccess?: (results: PonyImage[]) => void;
 }
 
-export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: ImageSearchModalProps) {
+export default function ImageSearchModal({
+  isOpen,
+  onClose,
+  onSearchSuccess,
+}: ImageSearchModalProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [distance, setDistance] = useState<number>(0.10);
+  const [distance, setDistance] = useState<number>(0.1);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -29,7 +34,7 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
       queueMicrotask(() => {
         setSelectedImage(null);
         setSelectedFile(null);
-        setDistance(0.10);
+        setDistance(0.1);
       });
     }
   }, [isOpen]);
@@ -91,7 +96,6 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
       setIsUploading(false);
     }
   };
-
   return (
     <Modal
       isOpen={isOpen}
@@ -99,21 +103,18 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
       title="以图搜图"
       footer={
         <>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            disabled={isUploading}
-          >
-            取消
-          </button>
+          {' '}
+          <Button variant="text" type="button" onClick={onClose} disabled={isUploading}>
+            {' '}
+            取消{' '}
+          </Button>{' '}
           <button
             onClick={handleSubmit}
             disabled={!selectedFile || isUploading}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors flex items-center ${
+            className={`px-4 py-2 text-label-l text-on-primary rounded-full transition-ui flex items-center ${
               !selectedFile || isUploading
                 ? 'bg-primary/50 cursor-not-allowed'
-                : 'bg-primary hover:bg-primary-dark'
+                : 'bg-primary hover:bg-primary/90'
             }`}
           >
             {isUploading ? '请稍后' : '开始搜索'}
@@ -122,8 +123,10 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
       }
     >
       <div
-        className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors mb-6 ${
-          selectedImage ? 'border-primary/50 bg-primary/5' : 'border-slate-300 dark:border-slate-600 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-700'
+        className={`border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-ui mb-6 ${
+          selectedImage
+            ? 'border-primary/50 bg-primary/5'
+            : 'border-outline hover:border-primary hover:bg-surface-container-high'
         }`}
         onClick={() => fileInputRef.current?.click()}
         onDragOver={handleDragOver}
@@ -143,35 +146,35 @@ export default function ImageSearchModal({ isOpen, onClose, onSearchSuccess }: I
               src={selectedImage}
               alt="Selected"
               fill
-              className="object-contain rounded-xl shadow-sm"
+              className="object-contain rounded-md shadow-e1"
             />
-            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
-              <span className="text-white font-medium">更换图片</span>
+            <div className="absolute inset-0 bg-scrim/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
+              <span className="text-on-media font-medium">更换图片</span>
             </div>
           </div>
         ) : (
           <>
-            <MdCloudUpload size={48} className="text-slate-400 dark:text-slate-500 mb-3" />
-            <p className="text-slate-700 dark:text-slate-300 font-medium mb-1">点击或拖拽图片到此处</p>
+            <MdCloudUpload size={48} className="text-outline mb-3" />
+            <p className="text-on-surface font-medium mb-1">点击或拖拽图片到此处</p>
           </>
         )}
       </div>
 
       <div className="mb-2 px-2">
         <div className="flex justify-between items-center mb-2">
-          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">容差</label>
-          <span className="text-sm font-bold text-primary">{distance.toFixed(2)}</span>
+          <label className="text-label-l text-on-surface">容差</label>
+          <span className="text-label-l-emphasized text-primary">{distance.toFixed(2)}</span>
         </div>
         <input
           type="range"
           min={0.01}
-          max={1.00}
+          max={1.0}
           step={0.01}
           value={distance}
           onChange={(e) => setDistance(parseFloat(e.target.value))}
           className="range-slider w-full"
         />
-        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mt-1">
+        <div className="flex justify-between text-body-s text-on-surface-variant mt-1">
           <span>精确匹配</span>
           <span>模糊匹配</span>
         </div>

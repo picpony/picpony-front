@@ -1,65 +1,170 @@
 'use client';
 
-import { MdRefresh } from 'react-icons/md';
+import { useRef } from 'react';
+import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from 'react-icons/md';
+import { scrollAppToTop, scrollAppToElement } from '@/lib/motion';
+import { cn } from '@/lib/utils';
 
 interface PaginationProps {
   currentPage: number;
-  hasMore: boolean;
+  /** Either give a known page count, or `hasMore` for cursor-style sources. */
+  totalPages?: number;
+  hasMore?: boolean;
   onPageChange: (page: number) => void;
   disabled?: boolean;
+  /** Number of numbered buttons; trimmed automatically on narrow screens. */
+  siblings?: number;
+  /** Opt out of the automatic scroll reset (e.g. an inline widget mid-page). */
+  scrollToTop?: boolean;
+  className?: string;
 }
 
-const navButtonClass =
-  'px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 ease-[var(--ease-standard)] active:scale-95';
+/**
+ * The one pager.
+ *
+ * There were three: this component, an inline copy inside `ForumPostList`, and
+ * another inside the profile page repeated four times, each with different
+ * button sizes and a different idea of how many numbers to show.
+ *
+ * It also owns the scroll reset. Every call site used to do
+ * `window.scrollTo({ top: 0 })` by hand, which silently did nothing because the
+ * scroll container is not the window (see `scrollAppToTop`). Putting it here
+ * means a new call site cannot forget it or get it wrong.
+ *
+ * The target is the nearest `[data-pagination-anchor]` ancestor — i.e. the top
+ * of the list this pager belongs to — rather than the top of the document, so
+ * turning a page lands on the first new row instead of replaying the featured
+ * banner. Pages with several independent pagers (the profile tabs) each get
+ * their own anchor. With no anchor it falls back to the top.
+ */
+export default function Pagination({
+  currentPage,
+  totalPages,
+  hasMore,
+  onPageChange,
+  disabled,
+  siblings = 2,
+  scrollToTop = true,
+  className = '',
+}: PaginationProps) {
+  const rootRef = useRef<HTMLElement>(null);
+  const known = typeof totalPages === 'number' && totalPages > 0;
+  const canPrev = currentPage > 1;
+  const canNext = known ? currentPage < totalPages : Boolean(hasMore);
 
-export default function Pagination({ currentPage, hasMore, onPageChange, disabled }: PaginationProps) {
+  const go = (page: number) => {
+    if (disabled) return;
+    if (page < 1 || (known && page > totalPages)) return;
+    if (page === currentPage) return;
+    onPageChange(page);
+    if (!scrollToTop) return;
+    const anchor = rootRef.current?.closest('[data-pagination-anchor]');
+    if (anchor) scrollAppToElement(anchor);
+    else scrollAppToTop();
+  };
+
+  // Centre the window on the current page and clamp it to the known range.
+  const span = siblings * 2 + 1;
+  let start = Math.max(1, currentPage - siblings);
+  if (known) start = Math.min(start, Math.max(1, totalPages - span + 1));
+  const count = known ? Math.min(span, totalPages) : span;
+  const pages = Array.from({ length: count }, (_, i) => start + i);
+
+  const navBtn = cn(
+    'inline-flex h-10 min-w-10 cursor-pointer items-center justify-center rounded-full px-2',
+    'text-on-surface-variant state-layer outline-none',
+    'transition-ui',
+    'focus-visible:ring-2 focus-visible:ring-primary/40',
+    'disabled:pointer-events-none disabled:opacity-40',
+    '',
+  );
+
   return (
-    <div className="mt-12 flex justify-center items-center gap-1.5 sm:gap-2">
+    <nav
+      ref={rootRef}
+      aria-label="分页"
+      /* Takes part in the tab shared-axis cascade; see `paneRows`. Harmless
+         outside a tab pane, which is the only place that attribute is read. */
+      data-tab-row
+      className={cn('mt-12 flex items-center justify-center gap-1', className)}
+    >
+      {known && (
+        <button
+          onClick={() => go(1)}
+          disabled={!canPrev || disabled}
+          aria-label="第一页"
+          data-ripple
+          className={cn(navBtn, 'max-sm:hidden')}
+        >
+          <MdFirstPage size={20} />
+        </button>
+      )}
+
       <button
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 1 || disabled}
+        onClick={() => go(currentPage - 1)}
+        disabled={!canPrev || disabled}
+        aria-label="上一页"
         data-ripple
-        className={navButtonClass}
+        className={navBtn}
       >
-        上一页
+        <MdChevronLeft size={20} />
+        <span className="max-sm:hidden text-label-l pr-1">上一页</span>
       </button>
 
-      <div className="flex items-center gap-1 sm:gap-2">
-        {Array.from({ length: 5 }, (_, i) => {
-          let pageNum;
-          if (currentPage <= 3) {
-            pageNum = i + 1;
-          } else {
-            pageNum = currentPage - 2 + i;
-          }
-
+      <div className="flex items-center gap-1">
+        {pages.map((page) => {
+          const active = page === currentPage;
           return (
             <button
-              key={pageNum}
-              onClick={() => onPageChange(pageNum)}
+              key={page}
+              onClick={() => go(page)}
               disabled={disabled}
+              aria-label={`第 ${page} 页`}
+              aria-current={active ? 'page' : undefined}
               data-ripple
-              className={`w-8 sm:w-10 h-8 sm:h-10 rounded-lg flex items-center justify-center transition-all duration-200 ease-[var(--ease-standard)] text-xs sm:text-sm active:scale-90 ${
-                currentPage === pageNum
-                  ? 'bg-primary text-white font-medium scale-105 shadow-md shadow-primary/30'
-                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:-translate-y-0.5'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={cn(
+                'inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full outline-none',
+                'text-label-l transition-ui',
+                'focus-visible:ring-2 focus-visible:ring-primary/40',
+                'disabled:pointer-events-none disabled:opacity-40',
+                '',
+                active
+                  ? 'bg-primary text-on-primary font-medium shadow-e1'
+                  : 'text-on-surface-variant state-layer',
+                // Beyond five numbers the row overflows a 390px viewport, so
+                // the outer two collapse instead of wrapping to a second line.
+                Math.abs(page - currentPage) === siblings && 'max-sm:hidden',
+              )}
             >
-              {pageNum}
+              {page}
             </button>
           );
         })}
       </div>
 
       <button
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={!hasMore || disabled}
+        onClick={() => go(currentPage + 1)}
+        disabled={!canNext || disabled}
+        aria-label="下一页"
         data-ripple
-        className={navButtonClass}
+        className={navBtn}
       >
-        下一页
+        <span className="max-sm:hidden text-label-l pl-1">下一页</span>
+        <MdChevronRight size={20} />
       </button>
-    </div>
+
+      {known && (
+        <button
+          onClick={() => go(totalPages)}
+          disabled={!canNext || disabled}
+          aria-label="最后一页"
+          data-ripple
+          className={cn(navBtn, 'max-sm:hidden')}
+        >
+          <MdLastPage size={20} />
+        </button>
+      )}
+    </nav>
   );
 }
 
@@ -76,20 +181,30 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
         onClick={onClick}
         disabled={isLoading || disabled}
         data-ripple
-        className="px-8 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-medium rounded-full transition-all duration-200 ease-[var(--ease-standard)] flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 group"
+        className={cn(
+          'group flex cursor-pointer items-center gap-2 rounded-full px-8 py-3',
+          'bg-secondary-container text-on-secondary-container text-label-l',
+          'state-layer outline-none transition-ui',
+          'focus-visible:ring-2 focus-visible:ring-primary/40',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+          '',
+        )}
       >
         {isLoading ? (
-          <div className="flex gap-1 items-center">
+          <div className="flex items-center gap-1">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="w-1.5 h-1.5 bg-primary rounded-full animate-[dot-bounce_1s_ease-in-out_infinite]"
+                className="bg-primary h-1.5 w-1.5 rounded-full animate-[dot-bounce_1s_ease-in-out_infinite]"
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}
           </div>
         ) : (
-          <MdRefresh size={20} className="group-hover:rotate-180 transition-transform duration-500 ease-[var(--ease-standard)]" />
+          <MdRefresh
+            size={20}
+            className="transition-transform duration-500 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
+          />
         )}
         <span>{isLoading ? '正在加载' : '加载更多'}</span>
       </button>

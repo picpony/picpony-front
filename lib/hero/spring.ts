@@ -62,8 +62,8 @@ export function springVelocity(time: number, response: SpringResponse) {
   const clamped = Math.min(1, Math.max(0, time));
   const end = rawResponse(1, response);
   if (Math.abs(end) < 1e-9) return 1;
-  const slope = Math.exp(-rate * clamped) *
-    (rate * (1 + (rate - velocity) * clamped) - (rate - velocity));
+  const slope =
+    Math.exp(-rate * clamped) * (rate * (1 + (rate - velocity) * clamped) - (rate - velocity));
   return slope / end;
 }
 
@@ -119,10 +119,7 @@ const MAX_CACHED_TABLES = 64;
  * fixed offsets at whatever refresh rate the display runs, so the sample count
  * is a fidelity constant — never scaled by device class.
  */
-export function sampleSpring(
-  response: SpringResponse,
-  count: number,
-): readonly SpringFrame[] {
+export function sampleSpring(response: SpringResponse, count: number): readonly SpringFrame[] {
   const samples = Math.max(2, Math.round(count));
   const velocity = Math.round(response.velocity * VELOCITY_QUANTUM) / VELOCITY_QUANTUM;
   const quantized: SpringResponse = { rate: response.rate, velocity };

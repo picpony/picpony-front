@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { api } from "@/lib/api";
-import { encodeTrack } from "@/lib/utils";
-import { gsap, prefersReducedMotion } from "@/lib/motion";
-import Spinner from "./Spinner";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { api } from '@/lib/api';
+import { encodeTrack } from '@/lib/utils';
+import { gsap, prefersReducedMotion } from '@/lib/motion';
+import Spinner from './Spinner';
 
 interface SliderCaptchaProps {
   onVerify: (token: string) => void;
@@ -33,13 +33,13 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   const pieceSize = 50;
   const maxSliderX = puzzleWidth - pieceSize;
 
-  const [bgImage, setBgImage] = useState("");
-  const [pieceImage, setPieceImage] = useState("");
+  const [bgImage, setBgImage] = useState('');
+  const [pieceImage, setPieceImage] = useState('');
   const [pieceY, setPieceY] = useState(0);
   const [sliderX, setSliderX] = useState(0);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState('');
   const [isDragging, setIsDragging] = useState(false);
 
   const sliderXRef = useRef(0);
@@ -79,11 +79,11 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     const barWidth = trackRefElement.current?.clientWidth || puzzleWidth;
     const nextLayout = {
       imageWidth,
-      imagePieceSize: imageWidth * pieceSize / puzzleWidth,
-      imageMaxX: imageWidth * maxSliderX / puzzleWidth,
+      imagePieceSize: (imageWidth * pieceSize) / puzzleWidth,
+      imageMaxX: (imageWidth * maxSliderX) / puzzleWidth,
       barWidth,
-      barButtonWidth: barWidth * pieceSize / puzzleWidth,
-      barMaxX: barWidth * maxSliderX / puzzleWidth,
+      barButtonWidth: (barWidth * pieceSize) / puzzleWidth,
+      barMaxX: (barWidth * maxSliderX) / puzzleWidth,
     };
 
     setLayout((previous) => {
@@ -98,7 +98,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   useEffect(() => {
     if (!bgImage) return;
     measureLayout();
-    if (typeof ResizeObserver === "undefined") return;
+    if (typeof ResizeObserver === 'undefined') return;
 
     const observer = new ResizeObserver(measureLayout);
     if (imageRef.current) observer.observe(imageRef.current);
@@ -130,7 +130,12 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     });
   }, []);
 
-  useEffect(() => () => { snapTweenRef.current?.kill(); }, []);
+  useEffect(
+    () => () => {
+      snapTweenRef.current?.kill();
+    },
+    [],
+  );
 
   // Physical feedback on failure: shake the puzzle while the error overlay
   // fades in.
@@ -143,11 +148,13 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       duration: 0.45,
       ease: 'power2.out',
     });
-    return () => { tween.kill(); };
+    return () => {
+      tween.kill();
+    };
   }, [errorMsg]);
 
   const getClientX = (e: MouseEvent | TouchEvent): number => {
-    if ("touches" in e) {
+    if ('touches' in e) {
       const t = e.touches[0] ?? e.changedTouches[0];
       return t ? t.clientX : 0;
     }
@@ -155,7 +162,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   };
 
   const getClientY = (e: MouseEvent | TouchEvent): number => {
-    if ("touches" in e) {
+    if ('touches' in e) {
       const t = e.touches[0] ?? e.changedTouches[0];
       return t ? t.clientY : 0;
     }
@@ -167,7 +174,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     loadingRef.current = true;
     setSliderX(0);
     sliderXRef.current = 0;
-    setErrorMsg("");
+    setErrorMsg('');
     trackRef.current = [];
     draggingRef.current = false;
     try {
@@ -177,10 +184,10 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
         setPieceImage(data.piece);
         setPieceY(data.y);
       } else {
-        setErrorMsg("获取验证码失败");
+        setErrorMsg('获取验证码失败');
       }
     } catch {
-      setErrorMsg("网络错误，请重试");
+      setErrorMsg('网络错误，请重试');
     }
     setLoading(false);
     loadingRef.current = false;
@@ -196,149 +203,152 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     void fetchCaptcha();
   }, [fetchCaptcha]);
 
-  const startDrag = useCallback((e: MouseEvent | TouchEvent) => {
-    // Mirror production gates, but do NOT lock on errorMsg — a failed attempt
-    // must remain re-draggable once the soft error is showing.
-    if (loadingRef.current || verifyingRef.current || draggingRef.current) return;
-    if ("cancelable" in e && e.cancelable) e.preventDefault();
+  const startDrag = useCallback(
+    (e: MouseEvent | TouchEvent) => {
+      // Mirror production gates, but do NOT lock on errorMsg — a failed attempt
+      // must remain re-draggable once the soft error is showing.
+      if (loadingRef.current || verifyingRef.current || draggingRef.current) return;
+      if ('cancelable' in e && e.cancelable) e.preventDefault();
 
-    draggingRef.current = true;
-    setIsDragging(true);
-    setErrorMsg("");
-    snapTweenRef.current?.kill();
+      draggingRef.current = true;
+      setIsDragging(true);
+      setErrorMsg('');
+      snapTweenRef.current?.kill();
 
-    const clientX = getClientX(e);
-    const clientY = getClientY(e);
-    const bar = trackRefElement.current;
-    const button = sliderBtnRef.current;
-    const buttonRect = button?.getBoundingClientRect();
-    grabRatioRef.current = buttonRect && buttonRect.width > 0
-      ? Math.max(0, Math.min(1, (clientX - buttonRect.left) / buttonRect.width))
-      : 0.5;
-    startXRef.current = clientX;
-    startYRef.current = clientY;
-    startTimeRef.current = Date.now();
-    // Production always seeds with [0, 0, 0] (relative coordinates).
-    trackRef.current = [[0, 0, 0]];
+      const clientX = getClientX(e);
+      const clientY = getClientY(e);
+      const bar = trackRefElement.current;
+      const button = sliderBtnRef.current;
+      const buttonRect = button?.getBoundingClientRect();
+      grabRatioRef.current =
+        buttonRect && buttonRect.width > 0
+          ? Math.max(0, Math.min(1, (clientX - buttonRect.left) / buttonRect.width))
+          : 0.5;
+      startXRef.current = clientX;
+      startYRef.current = clientY;
+      startTimeRef.current = Date.now();
+      // Production always seeds with [0, 0, 0] (relative coordinates).
+      trackRef.current = [[0, 0, 0]];
 
-    const onDrag = (moveEvent: MouseEvent | TouchEvent) => {
-      if (!draggingRef.current) return;
-      if ("cancelable" in moveEvent && moveEvent.cancelable) moveEvent.preventDefault();
+      const onDrag = (moveEvent: MouseEvent | TouchEvent) => {
+        if (!draggingRef.current) return;
+        if ('cancelable' in moveEvent && moveEvent.cancelable) moveEvent.preventDefault();
 
-      const currentBarRect = bar?.getBoundingClientRect();
-      let x = getClientX(moveEvent) - startXRef.current;
-      if (bar && button && currentBarRect && bar.offsetWidth > 0) {
-        const transformScale = currentBarRect.width / bar.offsetWidth;
-        const contentLeft = currentBarRect.left + bar.clientLeft * transformScale;
-        const contentWidth = bar.clientWidth * transformScale;
-        const buttonWidth = button.offsetWidth * transformScale;
-        const visualMaxX = Math.max(1, contentWidth - buttonWidth);
-        const visualLeft = getClientX(moveEvent)
-          - contentLeft
-          - buttonWidth * grabRatioRef.current;
-        x = visualLeft / visualMaxX * maxSliderX;
-      }
-      x = Math.max(0, Math.min(maxSliderX, x));
-
-      sliderXRef.current = x;
-      setSliderX(x);
-
-      const relY = getClientY(moveEvent) - startYRef.current;
-      const elapsed = Date.now() - startTimeRef.current;
-
-      if (trackRef.current.length < 150) {
-        const last = trackRef.current[trackRef.current.length - 1];
-        const sx = Math.round(x);
-        const sy = Math.round(relY);
-        if (!last || last[0] !== sx || last[1] !== sy || last[2] !== elapsed) {
-          trackRef.current.push([sx, sy, elapsed]);
+        const currentBarRect = bar?.getBoundingClientRect();
+        let x = getClientX(moveEvent) - startXRef.current;
+        if (bar && button && currentBarRect && bar.offsetWidth > 0) {
+          const transformScale = currentBarRect.width / bar.offsetWidth;
+          const contentLeft = currentBarRect.left + bar.clientLeft * transformScale;
+          const contentWidth = bar.clientWidth * transformScale;
+          const buttonWidth = button.offsetWidth * transformScale;
+          const visualMaxX = Math.max(1, contentWidth - buttonWidth);
+          const visualLeft =
+            getClientX(moveEvent) - contentLeft - buttonWidth * grabRatioRef.current;
+          x = (visualLeft / visualMaxX) * maxSliderX;
         }
-      }
-    };
+        x = Math.max(0, Math.min(maxSliderX, x));
 
-    const removeDragListeners = () => {
-      document.removeEventListener("mousemove", onDrag);
-      document.removeEventListener("touchmove", onDrag);
-      document.removeEventListener("mouseup", stopDrag);
-      document.removeEventListener("touchend", stopDrag);
-      document.removeEventListener("touchcancel", cancelDrag);
-    };
+        sliderXRef.current = x;
+        setSliderX(x);
 
-    const cancelDrag = () => {
-      if (!draggingRef.current) return;
-      draggingRef.current = false;
-      setIsDragging(false);
-      removeDragListeners();
-      trackRef.current = [];
-      snapBack();
-    };
+        const relY = getClientY(moveEvent) - startYRef.current;
+        const elapsed = Date.now() - startTimeRef.current;
 
-    const stopDrag = async (endEvent: MouseEvent | TouchEvent) => {
-      if (!draggingRef.current) return;
-      onDrag(endEvent);
-      draggingRef.current = false;
-      setIsDragging(false);
-      removeDragListeners();
+        if (trackRef.current.length < 150) {
+          const last = trackRef.current[trackRef.current.length - 1];
+          const sx = Math.round(x);
+          const sy = Math.round(relY);
+          if (!last || last[0] !== sx || last[1] !== sy || last[2] !== elapsed) {
+            trackRef.current.push([sx, sy, elapsed]);
+          }
+        }
+      };
 
-      const finalX = sliderXRef.current;
-      const finalSample: [number, number, number] = [
-        Math.round(finalX),
-        Math.round(getClientY(endEvent) - startYRef.current),
-        Date.now() - startTimeRef.current,
-      ];
-      const lastSample = trackRef.current[trackRef.current.length - 1];
-      if (
-        !lastSample ||
-        lastSample[0] !== finalSample[0] ||
-        lastSample[1] !== finalSample[1] ||
-        lastSample[2] !== finalSample[2]
-      ) {
-        if (trackRef.current.length < 150) trackRef.current.push(finalSample);
-        else trackRef.current[trackRef.current.length - 1] = finalSample;
-      }
-      if (finalX < 5) {
-        snapBack();
+      const removeDragListeners = () => {
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('touchmove', onDrag);
+        document.removeEventListener('mouseup', stopDrag);
+        document.removeEventListener('touchend', stopDrag);
+        document.removeEventListener('touchcancel', cancelDrag);
+      };
+
+      const cancelDrag = () => {
+        if (!draggingRef.current) return;
+        draggingRef.current = false;
+        setIsDragging(false);
+        removeDragListeners();
         trackRef.current = [];
-        return;
-      }
+        snapBack();
+      };
 
-      setVerifying(true);
-      verifyingRef.current = true;
-      try {
-        const encodedTrack = encodeTrack(trackRef.current);
-        const data = await api.captchaVerify(finalX, encodedTrack);
-        if (data.success && data.token) {
-          onVerifyRef.current(data.token);
-        } else {
+      const stopDrag = async (endEvent: MouseEvent | TouchEvent) => {
+        if (!draggingRef.current) return;
+        onDrag(endEvent);
+        draggingRef.current = false;
+        setIsDragging(false);
+        removeDragListeners();
+
+        const finalX = sliderXRef.current;
+        const finalSample: [number, number, number] = [
+          Math.round(finalX),
+          Math.round(getClientY(endEvent) - startYRef.current),
+          Date.now() - startTimeRef.current,
+        ];
+        const lastSample = trackRef.current[trackRef.current.length - 1];
+        if (
+          !lastSample ||
+          lastSample[0] !== finalSample[0] ||
+          lastSample[1] !== finalSample[1] ||
+          lastSample[2] !== finalSample[2]
+        ) {
+          if (trackRef.current.length < 150) trackRef.current.push(finalSample);
+          else trackRef.current[trackRef.current.length - 1] = finalSample;
+        }
+        if (finalX < 5) {
           snapBack();
           trackRef.current = [];
-          // Surface the backend reason (production does the same with n.error).
-          // Helps distinguish "对齐" vs "异常拖动" vs "非人类" on mobile.
-          const fail = data as { error?: string; message?: string };
-          setErrorMsg(fail.error || fail.message || "验证失败，请重试");
+          return;
+        }
+
+        setVerifying(true);
+        verifyingRef.current = true;
+        try {
+          const encodedTrack = encodeTrack(trackRef.current);
+          const data = await api.captchaVerify(finalX, encodedTrack);
+          if (data.success && data.token) {
+            onVerifyRef.current(data.token);
+          } else {
+            snapBack();
+            trackRef.current = [];
+            // Surface the backend reason (production does the same with n.error).
+            // Helps distinguish "对齐" vs "异常拖动" vs "非人类" on mobile.
+            const fail = data as { error?: string; message?: string };
+            setErrorMsg(fail.error || fail.message || '验证失败，请重试');
+            setTimeout(() => {
+              void fetchCaptchaRef.current();
+            }, 500);
+          }
+        } catch {
+          snapBack();
+          trackRef.current = [];
+          setErrorMsg('网络错误，请重试');
           setTimeout(() => {
             void fetchCaptchaRef.current();
           }, 500);
         }
-      } catch {
-        snapBack();
-        trackRef.current = [];
-        setErrorMsg("网络错误，请重试");
-        setTimeout(() => {
-          void fetchCaptchaRef.current();
-        }, 500);
-      }
-      setVerifying(false);
-      verifyingRef.current = false;
-    };
+        setVerifying(false);
+        verifyingRef.current = false;
+      };
 
-    document.addEventListener("mousemove", onDrag);
-    // passive:false so touch scrolling doesn't steal the gesture on mobile
-    document.addEventListener("touchmove", onDrag, { passive: false });
-    document.addEventListener("mouseup", stopDrag);
-    document.addEventListener("touchend", stopDrag);
-    document.addEventListener("touchcancel", cancelDrag);
-  }, [maxSliderX, snapBack]);
+      document.addEventListener('mousemove', onDrag);
+      // passive:false so touch scrolling doesn't steal the gesture on mobile
+      document.addEventListener('touchmove', onDrag, { passive: false });
+      document.addEventListener('mouseup', stopDrag);
+      document.addEventListener('touchend', stopDrag);
+      document.addEventListener('touchcancel', cancelDrag);
+    },
+    [maxSliderX, snapBack],
+  );
 
   // Native non-passive touchstart, re-bound when the knob mounts (after bgImage).
   useEffect(() => {
@@ -350,8 +360,8 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       if (e.cancelable) e.preventDefault();
       startDrag(e);
     };
-    btn.addEventListener("touchstart", onTouchStart, { passive: false });
-    return () => btn.removeEventListener("touchstart", onTouchStart);
+    btn.addEventListener('touchstart', onTouchStart, { passive: false });
+    return () => btn.removeEventListener('touchstart', onTouchStart);
   }, [bgImage, startDrag]);
 
   const onMouseDown = useCallback(
@@ -364,12 +374,12 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   return (
     <div className="flex flex-col items-center gap-4 w-full">
       <div className="flex justify-center items-center w-full">
-        <span className="font-semibold text-slate-800 dark:text-slate-100">请完成安全验证</span>
+        <span className="font-semibold text-on-surface">请完成安全验证</span>
       </div>
       <div ref={containerRef} className="relative w-full max-w-[310px]">
         {loading && !bgImage && (
           <div
-            className="w-full flex items-center justify-center bg-white/80 dark:bg-slate-800/80 rounded-md"
+            className="w-full flex items-center justify-center bg-surface-container-lowest/80 rounded-md"
             style={{ aspectRatio: `${puzzleWidth} / ${puzzleHeight}` }}
           >
             <Spinner size="lg" />
@@ -379,25 +389,20 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
         {bgImage && (
           <div
             ref={imageRef}
-            className="relative w-full bg-slate-200 dark:bg-slate-600 rounded-md overflow-hidden animate-fade-in"
+            className="relative w-full bg-surface-container-highest rounded-md overflow-hidden animate-fade-in"
             style={{ aspectRatio: `${puzzleWidth} / ${puzzleHeight}` }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={bgImage}
-              alt="验证码背景"
-              className="w-full h-full block"
-              draggable={false}
-            />
+            <img src={bgImage} alt="验证码背景" className="w-full h-full block" draggable={false} />
             {pieceImage && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={pieceImage}
                 alt="滑动拼图"
-                className="absolute drop-shadow-[0_0_5px_rgba(0,0,0,0.5)] pointer-events-none"
+                className="absolute drop-shadow-[0_0_5px_color-mix(in_oklab,var(--md-sys-color-scrim)_50%,transparent)] pointer-events-none"
                 style={{
-                  top: `${pieceY * layout.imageWidth / puzzleWidth}px`,
-                  left: `${sliderX * layout.imageMaxX / maxSliderX}px`,
+                  top: `${(pieceY * layout.imageWidth) / puzzleWidth}px`,
+                  left: `${(sliderX * layout.imageMaxX) / maxSliderX}px`,
                   width: `${layout.imagePieceSize}px`,
                   height: `${layout.imagePieceSize}px`,
                 }}
@@ -405,19 +410,27 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
               />
             )}
             {verifying && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-black/50 z-20 animate-fade-in">
+              <div className="absolute inset-0 flex items-center justify-center bg-surface/70 z-20 animate-fade-in">
                 <Spinner size="lg" />
               </div>
             )}
             {errorMsg && !verifying && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-red-500/15 dark:bg-red-900/40 z-20 animate-fade-in px-3">
-                <svg viewBox="0 0 24 24" className="w-12 h-12 text-red-500 drop-shadow-md shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-error/15 z-20 animate-fade-in px-3">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-12 h-12 text-error drop-shadow-md shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <line x1="15" y1="9" x2="9" y2="15" />
                   <line x1="9" y1="9" x2="15" y2="15" />
                 </svg>
                 {/* Backend error string — same as production captcha (n.error). */}
-                <span className="text-xs text-red-600 dark:text-red-300 text-center break-words max-w-full">
+                <span className="text-body-s text-error text-center break-words max-w-full">
                   {errorMsg}
                 </span>
               </div>
@@ -429,25 +442,27 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       {bgImage && (
         <div
           ref={trackRefElement}
-          className="relative w-full max-w-[310px] h-10 bg-slate-100 dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600 mt-2"
-          style={{ touchAction: "none" }}
+          className="relative w-full max-w-[310px] h-10 bg-surface-container-high rounded-full border border-outline-variant mt-2"
+          style={{ touchAction: 'none' }}
         >
           <div
-            className="h-full bg-emerald-500/20 rounded-full transition-none"
-            style={{ width: `${(sliderX / maxSliderX) * layout.barMaxX + layout.barButtonWidth}px` }}
+            className="h-full bg-success-fill/20 rounded-full transition-none"
+            style={{
+              width: `${(sliderX / maxSliderX) * layout.barMaxX + layout.barButtonWidth}px`,
+            }}
           />
 
           <div
             ref={sliderBtnRef}
-            className={`absolute top-[-1px] h-10 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full flex items-center justify-center shadow-md select-none z-10 text-lg transition-[color,background-color,border-color,scale,box-shadow] duration-200 ${
+            className={`absolute top-[-1px] h-10 bg-surface-raised  border border-outline rounded-full flex items-center justify-center shadow-e2 select-none z-10 text-title-m transition-[color,background-color,border-color,scale,box-shadow] duration-200 ${
               isDragging
-                ? "cursor-grabbing bg-emerald-500 text-white border-emerald-500 dark:bg-emerald-600 dark:border-emerald-600 scale-110 shadow-lg"
-                : "cursor-grab text-slate-600 dark:text-slate-300"
-            } ${verifying ? "pointer-events-none opacity-70" : ""}`}
+                ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill scale-110 shadow-e3'
+                : 'cursor-grab text-on-surface-variant'
+            } ${verifying ? 'pointer-events-none opacity-70' : ''}`}
             style={{
               left: `${(sliderX / maxSliderX) * layout.barMaxX}px`,
               width: `${layout.barButtonWidth}px`,
-              touchAction: "none",
+              touchAction: 'none',
             }}
             onMouseDown={onMouseDown}
           >

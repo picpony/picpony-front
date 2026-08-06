@@ -7,7 +7,12 @@ import FadeInImage from '@/components/FadeInImage';
 import Checkbox from '@/components/Checkbox';
 import Modal from '@/components/Modal';
 import { MdStore, MdEdit, MdDelete, MdAdd } from 'react-icons/md';
-import { SectionHeader, EmptyState, Spinner } from './';
+import DataTable, { type Column } from '@/components/DataTable';
+import Chip from '@/components/Chip';
+import { SectionHeader } from './';
+import Button from '@/components/Button';
+import Card from '@/components/Card';
+import { Input, Textarea } from '@/components/Input';
 
 interface ShopItem {
   id: number;
@@ -67,7 +72,8 @@ export default function ShopTab({ token }: { token: string }) {
 
   useEffect(() => {
     if (!token) return;
-    api.adminGetShopItems(token)
+    api
+      .adminGetShopItems(token)
       .then((data) => {
         if (data.success) {
           setItems(data.items || []);
@@ -78,7 +84,15 @@ export default function ShopTab({ token }: { token: string }) {
   }, [token]);
 
   const resetForm = () => {
-    setForm({ id: 0, name: '', description: '', image_url: '', price: 10, stock: 100, active: true });
+    setForm({
+      id: 0,
+      name: '',
+      description: '',
+      image_url: '',
+      price: 10,
+      stock: 100,
+      active: true,
+    });
     setEditingItem(null);
     setIsEditing(false);
   };
@@ -121,25 +135,87 @@ export default function ShopTab({ token }: { token: string }) {
   };
 
   const deleteItem = async (id: number) => {
-    showShopConfirm(
-      '确认删除',
-      '确定要删除这个商品吗？',
-      async () => {
-        try {
-          const res = await api.adminDeleteShopItem(token, id);
-          const data = await res.json();
-          if (data.success) {
-            showToast('删除成功', 'success');
-            loadItems();
-          } else {
-            showToast(data.error || '删除失败', 'error');
-          }
-        } catch {
-          showToast('删除失败', 'error');
+    showShopConfirm('确认删除', '确定要删除这个商品吗？', async () => {
+      try {
+        const res = await api.adminDeleteShopItem(token, id);
+        const data = await res.json();
+        if (data.success) {
+          showToast('删除成功', 'success');
+          loadItems();
+        } else {
+          showToast(data.error || '删除失败', 'error');
         }
+      } catch {
+        showToast('删除失败', 'error');
       }
-    );
+    });
   };
+
+  const shopColumns: Column<ShopItem>[] = [
+    { key: 'id', header: 'ID', render: (item) => `#${item.id}` },
+    {
+      key: 'item',
+      header: '商品',
+      primary: true,
+      render: (item) => (
+        <div className="flex items-center gap-3">
+          {item.image_url && (
+            <FadeInImage
+              src={item.image_url}
+              alt=""
+              width={40}
+              height={40}
+              className="h-10 w-10 shrink-0 rounded object-cover"
+            />
+          )}
+          <div className="min-w-0">
+            <div className="text-on-surface font-medium">{item.name}</div>
+            <div className="text-on-surface-variant line-clamp-1 text-body-s">{item.description}</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'price',
+      header: '价格',
+      render: (item) => <span className="text-warning font-medium">{item.price}</span>,
+    },
+    { key: 'stock', header: '库存', render: (item) => item.stock },
+    {
+      key: 'state',
+      header: '状态',
+      render: (item) => (
+        <Chip variant="input" tone={item.active === 1 ? 'success' : 'neutral'}>
+          {item.active === 1 ? '上架中' : '已下架'}
+        </Chip>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      actions: true,
+      render: (item) => (
+        <>
+          <button
+            onClick={() => startEdit(item)}
+            className="touch-target state-layer text-warning rounded-full p-1.5"
+            title="编辑"
+            aria-label={`编辑 ${item.name}`}
+          >
+            <MdEdit size={18} />
+          </button>
+          <button
+            onClick={() => deleteItem(item.id)}
+            className="touch-target state-layer rounded-full p-1.5 text-error"
+            title="删除"
+            aria-label={`删除 ${item.name}`}
+          >
+            <MdDelete size={18} />
+          </button>
+        </>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -149,149 +225,101 @@ export default function ShopTab({ token }: { token: string }) {
         onRefresh={loadItems}
       />
 
-      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-        <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+      <Card variant="outlined">
+        <h3 className="font-semibold text-on-surface mb-4 flex items-center gap-2">
           {isEditing ? <MdEdit size={20} /> : <MdAdd size={20} />}
-          {isEditing ? '编辑商品' : '添加新商品'}
-        </h3>
+          {isEditing ? '编辑商品' : '添加新商品'}{' '}
+        </h3>{' '}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">商品名称</label>
-            <input
+            {' '}
+            <Input
+              label="商品名称"
+              id="shoptab-f1"
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
-            />
-          </div>
+            />{' '}
+          </div>{' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">图片URL</label>
-            <input
+            {' '}
+            <Input
+              label="图片URL"
+              id="shoptab-f2"
               type="text"
               value={form.image_url}
               onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
-            />
-          </div>
+            />{' '}
+          </div>{' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">价格（金币）</label>
-            <input
+            {' '}
+            <Input
+              label="价格（金币）"
+              id="shoptab-f3"
               type="number"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: parseInt(e.target.value) || 0 })}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
-            />
-          </div>
+            />{' '}
+          </div>{' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">库存</label>
-            <input
+            {' '}
+            <Input
+              label="库存"
+              id="shoptab-f4"
               type="number"
               value={form.stock}
               onChange={(e) => setForm({ ...form, stock: parseInt(e.target.value) || 0 })}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
-            />
-          </div>
-        </div>
+            />{' '}
+          </div>{' '}
+        </div>{' '}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">商品简介</label>
-          <textarea
+          {' '}
+          <label className="block text-label-l text-on-surface mb-1" htmlFor="shoptab-f5">
+            商品简介
+          </label>{' '}
+          <Textarea
+            id="shoptab-f5"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={3}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm resize-none"
-          />
-        </div>
+            className="resize-none"
+          />{' '}
+        </div>{' '}
         <div className="flex items-center gap-4 mb-4">
+          {' '}
           <div className="flex items-center gap-2 cursor-pointer">
-            <Checkbox checked={form.active} onChange={(checked) => setForm({ ...form, active: checked })} />
-            <span className="text-sm text-slate-700 dark:text-slate-300">上架展示</span>
-          </div>
-        </div>
+            {' '}
+            <Checkbox
+              checked={form.active}
+              onChange={(checked) => setForm({ ...form, active: checked })}
+              aria-label="上架该商品"
+            />{' '}
+            <span className="text-body-m text-on-surface">上架展示</span>{' '}
+          </div>{' '}
+        </div>{' '}
         <div className="flex gap-3">
+          {' '}
           {isEditing && (
-            <button
-              onClick={resetForm}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              取消
-            </button>
-          )}
-          <button
-            onClick={saveItem}
-            className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
-          >
+            <Button variant="text" onClick={resetForm}>
+              {' '}
+              取消{' '}
+            </Button>
+          )}{' '}
+          <Button variant="filled" onClick={saveItem}>
+            {' '}
             {isEditing ? '保存修改' : '添加商品'}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-        <table className="w-full">
-          <thead className="bg-slate-50 dark:bg-slate-800">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">ID</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">商品</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">价格</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">库存</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">状态</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <EmptyState colSpan={6} message="" icon={<Spinner label="" />} />
-            ) : items.length === 0 ? (
-              <EmptyState colSpan={6} message="暂无商品" />
-            ) : (
-              items.map((item) => (
-                <tr key={item.id} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="px-4 py-3 text-sm">#{item.id}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                        {item.image_url && (
-                        <FadeInImage src={item.image_url} alt="" width={40} height={40} className="w-10 h-10 rounded object-cover" />
-                      )}
-                      <div>
-                        <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">{item.description}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-medium text-amber-600">{item.price}</td>
-                  <td className="px-4 py-3 text-sm">{item.stock}</td>
-                  <td className="px-4 py-3">
-                    {item.active === 1 ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                        上架中
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        已下架
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => startEdit(item)}
-                        className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
-                      >
-                        <MdEdit size={18} />
-                      </button>
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
-                      >
-                        <MdDelete size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable<ShopItem>
+        columns={shopColumns}
+        rows={items}
+        rowKey={(item) => item.id}
+        loading={isLoading}
+        empty="暂无商品"
+      />
 
       <Modal
         isOpen={shopConfirmModalOpen}
@@ -302,20 +330,17 @@ export default function ShopTab({ token }: { token: string }) {
           <>
             <button
               onClick={() => setShopConfirmModalOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
             >
               取消
             </button>
-            <button
-              onClick={handleShopConfirmAction}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-            >
+            <Button variant="danger" onClick={handleShopConfirmAction}>
               确认
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400">{shopConfirmMessage}</p>
+        <p className="text-body-m text-on-surface-variant">{shopConfirmMessage}</p>
       </Modal>
     </div>
   );

@@ -59,9 +59,10 @@ export function getHeroMediaRenderedWidth(
   viewport: { width: number; height: number },
 ) {
   const { width, aspectRatio } = getHeroMediaDimensions(image);
-  const horizontalPadding = viewport.width < HERO_MEDIA_BREAKPOINT_PX
-    ? HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX
-    : HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX;
+  const horizontalPadding =
+    viewport.width < HERO_MEDIA_BREAKPOINT_PX
+      ? HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX
+      : HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX;
   return Math.min(
     width,
     HERO_MEDIA_MAX_WIDTH_PX,
@@ -153,8 +154,8 @@ export function getHeroBackgroundSinkTransform(amount: number) {
 
 export function heroRectCenterDistance(from: HeroRect, to: HeroRect) {
   return Math.hypot(
-    (to.left + to.width / 2) - (from.left + from.width / 2),
-    (to.top + to.height / 2) - (from.top + from.height / 2),
+    to.left + to.width / 2 - (from.left + from.width / 2),
+    to.top + to.height / 2 - (from.top + from.height / 2),
     (to.width - from.width) / 2,
     (to.height - from.height) / 2,
   );

@@ -1,21 +1,13 @@
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import type { PonyImage, ApiResponse, FeaturedImage } from '@/lib/types/image';
 import type { DerpiProfileResponse } from '@/lib/types/user';
-import {
-  proxyFetch,
-  fetchDerpiImages,
-  handleDerpiError,
-  getBrowsingSettings,
-} from './client';
+import { proxyFetch, fetchDerpiImages, handleDerpiError, getBrowsingSettings, readJson } from './client';
 
 // ---------------------------------------------------------------------------
 // 图片详情
 // ---------------------------------------------------------------------------
 
-export async function getImage(
-  id: string,
-  signal?: AbortSignal,
-): Promise<{ image: PonyImage }> {
+export async function getImage(id: string, signal?: AbortSignal): Promise<{ image: PonyImage }> {
   const res = await proxyFetch(`${DERPIBOORU_API_BASE}/images/${id}`, {
     cache: 'no-store',
     headers: { 'User-Agent': 'PicPony/1.0' },
@@ -23,7 +15,7 @@ export async function getImage(
   });
 
   if (!res.ok) await handleDerpiError(res);
-  return res.json();
+  return readJson(res);
 }
 
 export async function getImages(
@@ -42,7 +34,7 @@ export async function getImages(
   });
 
   if (!res.ok) await handleDerpiError(res);
-  return res.json();
+  return readJson(res);
 }
 
 export async function getFeatured(key?: string): Promise<FeaturedImage | null> {
@@ -63,7 +55,7 @@ export async function getFeatured(key?: string): Promise<FeaturedImage | null> {
       console.error(`Featured API Error: ${res.status} ${res.statusText}`);
       return null;
     }
-    return res.json();
+    return readJson(res);
   } catch (err) {
     console.error('Failed to fetch featured image', err);
     return null;
@@ -85,7 +77,7 @@ export async function searchDerpiImages(
       { headers: { 'User-Agent': 'PicPony/1.0' } },
     );
     if (!res.ok) return null;
-    return res.json();
+    return readJson(res);
   } catch {
     return null;
   }
@@ -99,7 +91,7 @@ export async function searchImagesByIds(
   if (ids.length === 0) {
     return { total: 0, images: [] };
   }
-  const idQuery = ids.map(id => `id:${id}`).join('%20OR%20');
+  const idQuery = ids.map((id) => `id:${id}`).join('%20OR%20');
   const res = await proxyFetch(
     `${DERPIBOORU_API_BASE}/search/images?q=${idQuery}&page=${page}&per_page=${perPage}`,
     {
@@ -108,7 +100,7 @@ export async function searchImagesByIds(
     },
   );
   if (!res.ok) await handleDerpiError(res);
-  return res.json();
+  return readJson(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +114,7 @@ export async function searchDerpiTags(query: string) {
     headers: { 'User-Agent': 'PicPony/1.0' },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return readJson(res);
 }
 
 export async function getDerpiPopularTags(page: number = 1) {
@@ -131,20 +123,22 @@ export async function getDerpiPopularTags(page: number = 1) {
     headers: { 'User-Agent': 'PicPony/1.0' },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return readJson(res);
 }
 
 // ---------------------------------------------------------------------------
 // Derpibooru 用户资料
 // ---------------------------------------------------------------------------
 
-export async function getDerpiProfile(userId: string | number): Promise<DerpiProfileResponse | null> {
+export async function getDerpiProfile(
+  userId: string | number,
+): Promise<DerpiProfileResponse | null> {
   try {
     const res = await fetch(`${DERPIBOORU_API_BASE}/profiles/${userId}`, {
       headers: { 'User-Agent': 'PicPony/1.0' },
     });
     if (!res.ok) return null;
-    return res.json();
+    return readJson(res);
   } catch {
     return null;
   }

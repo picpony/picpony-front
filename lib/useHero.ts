@@ -58,29 +58,38 @@ export function useHeroLink<T extends HTMLElement>({
     preparedRef.current = null;
   }, []);
 
-  const cancelIntent = useCallback((cancelDetail = false) => {
-    if (intentTimerRef.current) window.clearTimeout(intentTimerRef.current);
-    intentTimerRef.current = 0;
-    cancelFrameWarmRef.current?.();
-    cancelFrameWarmRef.current = null;
-    if (cancelDetail && image) cancelImageDetailPrefetch(image.id);
-  }, [image]);
-
-  const warmRouteAndMedia = useCallback((priority: 'background' | 'immediate') => {
-    if (!image) return;
-    router.prefetch(href);
-    void warmImageHero(image.id, priority);
-    cancelFrameWarmRef.current?.();
-    cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current);
-  }, [href, image, router, sourceRef]);
-
-  const scheduleIntent = useCallback((delay: number) => {
-    if (!image || intentTimerRef.current || isScrollLikelyActive()) return;
-    intentTimerRef.current = window.setTimeout(() => {
+  const cancelIntent = useCallback(
+    (cancelDetail = false) => {
+      if (intentTimerRef.current) window.clearTimeout(intentTimerRef.current);
       intentTimerRef.current = 0;
-      if (!isScrollLikelyActive()) warmRouteAndMedia('background');
-    }, delay);
-  }, [image, warmRouteAndMedia]);
+      cancelFrameWarmRef.current?.();
+      cancelFrameWarmRef.current = null;
+      if (cancelDetail && image) cancelImageDetailPrefetch(image.id);
+    },
+    [image],
+  );
+
+  const warmRouteAndMedia = useCallback(
+    (priority: 'background' | 'immediate') => {
+      if (!image) return;
+      router.prefetch(href);
+      void warmImageHero(image.id, priority);
+      cancelFrameWarmRef.current?.();
+      cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current);
+    },
+    [href, image, router, sourceRef],
+  );
+
+  const scheduleIntent = useCallback(
+    (delay: number) => {
+      if (!image || intentTimerRef.current || isScrollLikelyActive()) return;
+      intentTimerRef.current = window.setTimeout(() => {
+        intentTimerRef.current = 0;
+        if (!isScrollLikelyActive()) warmRouteAndMedia('background');
+      }, delay);
+    },
+    [image, warmRouteAndMedia],
+  );
 
   const prepare = useCallback(() => {
     if (!image || !sourceRef.current) return null;
@@ -89,12 +98,7 @@ export function useHeroLink<T extends HTMLElement>({
     clearPrepared();
     cancelFrameWarmRef.current?.();
     cancelFrameWarmRef.current = null;
-    const snapshot = prepareImageHero(
-      image,
-      sourceRef.current,
-      canAnimate,
-      previewSrc,
-    );
+    const snapshot = prepareImageHero(image, sourceRef.current, canAnimate, previewSrc);
     preparedRef.current = snapshot;
     if (snapshot) {
       expiryTimerRef.current = window.setTimeout(() => {
@@ -108,9 +112,7 @@ export function useHeroLink<T extends HTMLElement>({
   const takePrepared = useCallback(() => {
     const cached = preparedRef.current;
     clearPrepared();
-    return cached && Date.now() - cached.createdAt < SNAPSHOT_REUSE_MS
-      ? cached
-      : prepare();
+    return cached && Date.now() - cached.createdAt < SNAPSHOT_REUSE_MS ? cached : prepare();
   }, [clearPrepared, prepare]);
 
   const activateHero = useCallback(() => {
@@ -134,39 +136,42 @@ export function useHeroLink<T extends HTMLElement>({
     });
   }, [href, image, router, sourceRef, takePrepared]);
 
-  const handleNavigate: NavigateHandler = useCallback((event) => {
-    if (clickOwnedRef.current) {
+  const handleNavigate: NavigateHandler = useCallback(
+    (event) => {
+      if (clickOwnedRef.current) {
+        event.preventDefault();
+        return;
+      }
+      if (activateHero()) event.preventDefault();
+    },
+    [activateHero],
+  );
+
+  const handleClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      cancelIntent();
+      warmRouteAndMedia('immediate');
+      prepare();
+      if (!activateHero()) return;
+      clickOwnedRef.current = true;
       event.preventDefault();
-      return;
-    }
-    if (activateHero()) event.preventDefault();
-  }, [activateHero]);
+      queueMicrotask(() => {
+        clickOwnedRef.current = false;
+      });
+    },
+    [activateHero, cancelIntent, prepare, warmRouteAndMedia],
+  );
 
-  const handleClick = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
-    if (
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
-    cancelIntent();
-    warmRouteAndMedia('immediate');
-    prepare();
-    if (!activateHero()) return;
-    clickOwnedRef.current = true;
-    event.preventDefault();
-    queueMicrotask(() => {
-      clickOwnedRef.current = false;
-    });
-  }, [activateHero, cancelIntent, prepare, warmRouteAndMedia]);
-
-  useEffect(() => () => {
-    clearPrepared();
-    cancelIntent(true);
-  }, [cancelIntent, clearPrepared]);
+  useEffect(
+    () => () => {
+      clearPrepared();
+      cancelIntent(true);
+    },
+    [cancelIntent, clearPrepared],
+  );
 
   return {
     href,
@@ -180,13 +185,7 @@ export function useHeroLink<T extends HTMLElement>({
     onFocus: () => scheduleIntent(FOCUS_INTENT_DELAY_MS),
     onBlur: () => cancelIntent(true),
     onPointerDown: (event: PointerEvent<HTMLAnchorElement>) => {
-      if (
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      ) {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
         return;
       }
       // Pressing is a firmer signal than hovering, and on touch there is no

@@ -11,17 +11,16 @@ interface CaptchaModalProps {
 }
 
 export default function CaptchaModal({ isOpen, onClose, onVerify }: CaptchaModalProps) {
-  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   if (!mounted) return null;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidth="max-w-fit"
-      hideCloseButton
-    >
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-fit" hideCloseButton>
       <SliderCaptcha onVerify={onVerify} onClose={onClose} />
     </Modal>
   );

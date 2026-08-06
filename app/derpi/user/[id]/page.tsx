@@ -2,8 +2,19 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdStar, MdImage, MdSearch, MdOpenInNew, MdUpload, MdChatBubbleOutline, MdEdit } from 'react-icons/md';
+import {
+  MdStar,
+  MdImage,
+  MdSearch,
+  MdOpenInNew,
+  MdUpload,
+  MdChatBubbleOutline,
+  MdEdit,
+} from 'react-icons/md';
 import { api, DerpiProfileUser, PonyImage } from '@/lib/api';
+import Pagination from '@/components/Pagination';
+import Skeleton from '@/components/Skeleton';
+import Button from '@/components/Button';
 
 const PER_PAGE = 24;
 
@@ -43,7 +54,9 @@ export default function DerpiUserPage() {
       }
     })();
 
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [userId]);
 
   // Fetch uploads
@@ -65,31 +78,36 @@ export default function DerpiUserPage() {
       setIsUploadsLoading(false);
     })();
 
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [profile, uploadsPage]);
 
   const totalPages = Math.ceil(uploadsTotal / PER_PAGE);
 
-  const handleUploadClick = useCallback((id: number) => {
-    router.push(`/pic/${id}`);
-  }, [router]);
+  const handleUploadClick = useCallback(
+    (id: number) => {
+      router.push(`/pic/${id}`);
+    },
+    [router],
+  );
 
   // --- Loading skeleton ---
   if (isLoading) {
     return (
-      <div className="animate-pulse bg-white dark:bg-slate-950 min-h-screen">
+      <div className="bg-surface">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
           <div className="flex items-center gap-4 pb-6">
-            <div className="w-24 h-24 sm:w-32 sm:h-32 bg-slate-300 dark:bg-slate-600 rounded-full border-4 border-white dark:border-slate-800 shrink-0"></div>
+            <Skeleton className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mb-4"></div>
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
+              <Skeleton className="h-8 rounded w-1/3 mb-4" />
+              <Skeleton className="h-4 rounded w-1/4" />
             </div>
           </div>
           <div className="space-y-4">
-            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
-            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
-            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-4/6"></div>
+            <Skeleton className="h-4 rounded w-full" />
+            <Skeleton className="h-4 rounded w-5/6" />
+            <Skeleton className="h-4 rounded w-4/6" />
           </div>
         </div>
       </div>
@@ -100,21 +118,20 @@ export default function DerpiUserPage() {
   if (error || !profile) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">加载失败</h2>
-        <p className="text-slate-600 dark:text-slate-400 mb-6">{error || '用户可能不存在'}</p>
+        <h2 className="text-headline-s text-on-surface mb-4">加载失败</h2>
+        <p className="text-on-surface-variant mb-6">{error || '用户可能不存在'}</p>
         <div className="flex gap-4 justify-center">
-          <button onClick={() => router.back()} data-ripple className="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200">
+          <Button onClick={() => router.back()} variant="filled">
             返回上一页
-          </button>
+          </Button>
           {userId && (
             <a
               href={`https://derpibooru.org/profiles/${encodeURIComponent(userId)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors inline-flex items-center gap-1.5"
+              className="px-6 py-2 bg-surface-container-highest text-on-surface rounded-full hover:bg-surface-container-highest transition-ui inline-flex items-center gap-1.5"
             >
-              <MdOpenInNew size={16} />
-              在 Derpibooru 查看
+              <MdOpenInNew size={16} />在 Derpibooru 查看
             </a>
           )}
         </div>
@@ -126,11 +143,10 @@ export default function DerpiUserPage() {
   const uploaderQuery = `uploader_id:${profile.id}`;
 
   return (
-    <div className="animate-fade-in bg-white dark:bg-slate-950 min-h-screen">
+    <div className="animate-fade-in bg-surface">
       {/* ===== Main Content ===== */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="pb-8 pt-6 sm:pt-8">
-
           {/* Avatar + Username row */}
           <div className="flex items-center gap-4">
             <div className="shrink-0">
@@ -139,7 +155,7 @@ export default function DerpiUserPage() {
                 <img
                   src={avatarUrl}
                   alt={profile.name}
-                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-white dark:border-slate-800 shadow-lg"
+                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-surface shadow-e3"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
                     const fb = (e.target as HTMLImageElement).nextElementSibling;
@@ -147,21 +163,19 @@ export default function DerpiUserPage() {
                   }}
                 />
               ) : null}
-              <div className={`w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-3xl sm:text-4xl border-4 border-white dark:border-slate-800 shadow-lg ${avatarUrl ? 'hidden' : ''}`}>
+              <div
+                className={`w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-primary/10 flex items-center justify-center text-primary text-headline-m-emphasized sm:text-display-s border-4 border-surface shadow-e3 ${avatarUrl ? 'hidden' : ''}`}
+              >
                 {profile.name.charAt(0).toUpperCase()}
               </div>
             </div>
 
             <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+              <h1 className="text-headline-s sm:text-headline-m text-on-surface flex items-center gap-3">
                 {profile.name}
-                <span className="text-sm font-normal text-slate-400 dark:text-slate-500">
-                  #{profile.id}
-                </span>
+                <span className="text-body-m font-normal text-outline">#{profile.id}</span>
               </h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Derpibooru 用户
-              </p>
+              <p className="text-body-m text-on-surface-variant mt-1">Derpibooru 用户</p>
             </div>
           </div>
 
@@ -176,7 +190,7 @@ export default function DerpiUserPage() {
                     key={i}
                     src={badgeUrl}
                     title={award.title || '勋章'}
-                    className="h-7 rounded shadow-sm hover:scale-110 transition-transform"
+                    className="h-7 rounded shadow-e1 hover:scale-110 transition-transform"
                     alt=""
                   />
                 ) : null;
@@ -185,29 +199,35 @@ export default function DerpiUserPage() {
           )}
 
           {/* Stats row */}
-          <div className="flex items-center gap-5 mt-6 bg-slate-50 dark:bg-slate-900/50 rounded-xl px-5 py-3 text-sm">
+          <div className="flex items-center gap-5 mt-6 bg-surface-container-low/50 rounded-md px-5 py-3 text-body-m">
             <div className="flex items-center gap-1.5 text-primary">
               <MdUpload size={16} />
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{(profile.uploads_count ?? 0).toLocaleString()}</span>
-              <span className="text-slate-500 dark:text-slate-400">上传</span>
+              <span className="font-semibold text-on-surface">
+                {(profile.uploads_count ?? 0).toLocaleString()}
+              </span>
+              <span className="text-on-surface-variant">上传</span>
             </div>
-            <div className="flex items-center gap-1.5 text-blue-500">
+            <div className="text-on-accent-blue flex items-center gap-1.5">
               <MdChatBubbleOutline size={16} />
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{(profile.comments_count ?? 0).toLocaleString()}</span>
-              <span className="text-slate-500 dark:text-slate-400">评论</span>
+              <span className="font-semibold text-on-surface">
+                {(profile.comments_count ?? 0).toLocaleString()}
+              </span>
+              <span className="text-on-surface-variant">评论</span>
             </div>
-            <div className="flex items-center gap-1.5 text-amber-500">
+            <div className="flex items-center gap-1.5 text-warning">
               <MdEdit size={16} />
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{(profile.posts_count ?? 0).toLocaleString()}</span>
-              <span className="text-slate-500 dark:text-slate-400">发帖</span>
+              <span className="font-semibold text-on-surface">
+                {(profile.posts_count ?? 0).toLocaleString()}
+              </span>
+              <span className="text-on-surface-variant">发帖</span>
             </div>
           </div>
 
           {/* Description */}
           {profile.description && (
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">个人简介</h3>
-              <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+              <h3 className="text-label-l-emphasized text-on-surface mb-2">个人简介</h3>
+              <div className="text-body-m text-on-surface-variant bg-surface-container-low/50 p-4 rounded-md leading-relaxed whitespace-pre-wrap popover-scrollbar max-h-40 overflow-y-auto">
                 {profile.description}
               </div>
             </div>
@@ -215,31 +235,32 @@ export default function DerpiUserPage() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
-            <button
+            <Button
               onClick={() => router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`)}
-              data-ripple className="flex-1 px-5 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 font-medium text-sm"
+              variant="filled"
+              size="lg"
+              className="flex-1"
+              icon={<MdSearch size={18} />}
             >
-              <MdSearch size={18} />
               搜搜 TA 的所有作品
-            </button>
+            </Button>
             <a
               href={`https://derpibooru.org/profiles/${encodeURIComponent(profile.name)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 px-5 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 font-medium text-sm"
+              className="flex-1 px-5 py-3 border border-outline text-on-surface rounded-full hover:bg-surface-container-high transition-ui flex items-center justify-center gap-2 text-label-l"
             >
-              <MdOpenInNew size={18} />
-              在 Derpibooru 查看主页
+              <MdOpenInNew size={18} />在 Derpibooru 查看主页
             </a>
           </div>
 
           {/* ===== Uploads Tab ===== */}
           <div className="mt-10">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <h2 className="text-title-m-emphasized text-on-surface mb-4 flex items-center gap-2">
               <MdImage size={20} className="text-primary" />
               最近上传
               {uploadsTotal > 0 && (
-                <span className="text-sm font-normal text-slate-400 dark:text-slate-500">
+                <span className="text-body-m font-normal text-outline">
                   （共 {uploadsTotal.toLocaleString()} 张）
                 </span>
               )}
@@ -248,18 +269,19 @@ export default function DerpiUserPage() {
             {isUploadsLoading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="aspect-square rounded-xl bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                  <Skeleton key={i} className="aspect-square rounded-md" />
                 ))}
               </div>
             ) : uploads.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                   {uploads.map((img) => {
-                    const thumbUrl = img.representations?.small || img.representations?.thumb || img.view_url;
+                    const thumbUrl =
+                      img.representations?.small || img.representations?.thumb || img.view_url;
                     return (
                       <div
                         key={img.id}
-                        className="group relative aspect-square rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-pointer"
+                        className="group relative aspect-square rounded-md overflow-hidden bg-surface-container-high cursor-pointer"
                         onClick={() => handleUploadClick(img.id)}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element -- dynamic derpi thumbnail */}
@@ -269,12 +291,12 @@ export default function DerpiUserPage() {
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           loading="lazy"
                         />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                        <div className="absolute inset-0 bg-scrim/0 group-hover:bg-scrim/20 transition-ui" />
                         <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-white text-xs font-medium">#{img.id}</span>
+                          <span className="text-on-media text-label-m">#{img.id}</span>
                         </div>
                         {img.score !== undefined && (
-                          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/50 backdrop-blur-sm text-white text-xs rounded flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-scrim/50 backdrop-blur-sm text-on-media text-body-s rounded flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <MdStar size={10} />
                             {img.score}
                           </div>
@@ -286,46 +308,21 @@ export default function DerpiUserPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-2 mt-8 mb-4">
-                    <button
-                      onClick={() => { setIsUploadsLoading(true); setUploadsPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                      disabled={uploadsPage === 1}
-                      className="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      首页
-                    </button>
-                    <button
-                      onClick={() => { setIsUploadsLoading(true); setUploadsPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                      disabled={uploadsPage === 1}
-                      className="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      上一页
-                    </button>
-                    <span className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
-                      {uploadsPage} / {totalPages}
-                    </span>
-                    <button
-                      onClick={() => { setIsUploadsLoading(true); setUploadsPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                      disabled={uploadsPage === totalPages}
-                      className="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      下一页
-                    </button>
-                    <button
-                      onClick={() => { setIsUploadsLoading(true); setUploadsPage(totalPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                      disabled={uploadsPage === totalPages}
-                      className="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      末页
-                    </button>
-                  </div>
+                  <Pagination
+                    currentPage={uploadsPage}
+                    totalPages={totalPages}
+                    onPageChange={(next) => {
+                      setIsUploadsLoading(true);
+                      setUploadsPage(next);
+                    }}
+                  />
                 )}
               </>
             ) : (
               <div className="text-center py-16">
-                <MdImage size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-                <p className="text-slate-500 dark:text-slate-400 text-lg">暂无上传</p>
-                <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">该用户尚未上传任何图片</p>
+                <MdImage size={48} className="mx-auto text-outline mb-4" />
+                <p className="text-on-surface-variant text-title-m">暂无上传</p>
+                <p className="text-outline text-body-m mt-1">该用户尚未上传任何图片</p>
               </div>
             )}
           </div>

@@ -18,6 +18,21 @@ export const HERO_SURFACE_SELECTOR = '[data-image-detail-surface]';
 // ---------------------------------------------------------------------------
 
 export const HERO_ROUTE_TIMEOUT_MS = 4000;
+
+/**
+ * Budget for acquiring the detail route *after the flight has already landed*.
+ *
+ * Deliberately far longer than `HERO_ROUTE_TIMEOUT_MS`. Once the flyer has
+ * landed the user is looking at the detail surface — the navigation has visibly
+ * happened — so expiring here and reversing means the app spontaneously flies
+ * back to the gallery while they are reading a loading skeleton. On a slow
+ * connection that was reproducible every time.
+ *
+ * Still bounded rather than infinite: a route that genuinely never publishes
+ * (a deleted image, a failed fetch with no error path) has to release the
+ * session eventually instead of wedging the controller.
+ */
+export const HERO_DETAIL_ROUTE_TIMEOUT_MS = 30000;
 export const SNAPSHOT_TTL = 2 * 60 * 1000;
 /**
  * Browsers may keep a wheel/touch stream latched to its original scroller after
@@ -73,7 +88,16 @@ export const HERO_FLIGHT_SAMPLES: Record<HeroDirection, number> = {
  * rather than as a rectangle that morphs on arrival.
  */
 export const HERO_RADIUS_LEAD = 1.45;
-export const HERO_TARGET_RADIUS_PX = 8;
+/**
+ * The radius the flyer lands on, i.e. the detail media's own corner. The source
+ * (gallery card) radius is measured from the DOM in flight.ts, but the
+ * destination is only mounted mid-flight, so it is pinned here.
+ *
+ * Must equal `--radius-lg` from app/globals.css in px — that is what
+ * `rounded-lg` on DetailImage/DetailVideo resolves to. If the shape scale
+ * moves, this moves with it or the corner pops on arrival.
+ */
+export const HERO_TARGET_RADIUS_PX = 16;
 
 /** Ballistic lift. Outbound throws higher; the return is flatter and quicker. */
 export const HERO_ARC_GRAVITY_PX_PER_S2 = 2400;
@@ -114,8 +138,13 @@ export const REVEAL_DISTANCE_PX = {
   body: 22,
   default: 16,
 } as const;
-export const REVEAL_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
-export const HIDE_EASING = 'cubic-bezier(0.4, 0, 1, 1)';
+/* Were `cubic-bezier(0.22, 1, 0.36, 1)` and `cubic-bezier(0.4, 0, 1, 1)` —
+   easeOutQuint and easeIn, neither of which is in the design system. The first
+   is a near-miss for M3 decelerate; the second is Material *2*'s accelerate,
+   which coasts through its whole second half and made the detail content
+   dissolve rather than leave. */
+export const REVEAL_EASING = 'cubic-bezier(0.05, 0.7, 0.1, 1)';
+export const HIDE_EASING = 'cubic-bezier(0.3, 0, 0.8, 0.15)';
 export const HIDE_DISTANCE_PX = 10;
 
 // ---------------------------------------------------------------------------

@@ -101,9 +101,7 @@ export function bindHeroDismissGesture({
   const originalTouchAction = scroller.style.touchAction;
   let writtenTouchAction = '';
   const syncTouchAction = () => {
-    const next = scroller.scrollTop <= 0.5
-      ? 'pan-x pan-down pinch-zoom'
-      : 'pan-x pan-y pinch-zoom';
+    const next = scroller.scrollTop <= 0.5 ? 'pan-x pan-down pinch-zoom' : 'pan-x pan-y pinch-zoom';
     if (next === writtenTouchAction) return;
     writtenTouchAction = next;
     scroller.style.touchAction = next;
@@ -135,13 +133,14 @@ export function bindHeroDismissGesture({
     immediate: boolean,
   ) => {
     const generation = ++settleGeneration;
-    const run = () => Promise.resolve(callback(release))
-      .catch(() => undefined)
-      .finally(() => {
-        if (generation !== settleGeneration || disposed) return;
-        latest = PULL_REST;
-        clearGestureState();
-      });
+    const run = () =>
+      Promise.resolve(callback(release))
+        .catch(() => undefined)
+        .finally(() => {
+          if (generation !== settleGeneration || disposed) return;
+          latest = PULL_REST;
+          clearGestureState();
+        });
 
     if (immediate) {
       // Commit the release pose and open the closing transaction inside this
@@ -217,12 +216,8 @@ export function bindHeroDismissGesture({
   };
 
   /** Drag can only continue while the surface is at its top edge. */
-  const dragStillValid = (deltaX: number, deltaY: number) => (
-    deltaY > 0 &&
-    Math.abs(deltaX) < deltaY &&
-    scroller.scrollTop <= 0.5 &&
-    canStart()
-  );
+  const dragStillValid = (deltaX: number, deltaY: number) =>
+    deltaY > 0 && Math.abs(deltaX) < deltaY && scroller.scrollTop <= 0.5 && canStart();
 
   function handlePointerDown(event: PointerEvent) {
     if (
@@ -294,12 +289,10 @@ export function bindHeroDismissGesture({
     record(deltaY, event.timeStamp);
 
     const velocity = releaseVelocity();
-    const shouldCommit = canStart() && (
-      latest.raw >= DISMISS_DISTANCE_PX || (
-        latest.raw >= DISMISS_MIN_FLING_DISTANCE_PX &&
-        velocity >= DISMISS_VELOCITY_PX_PER_MS
-      )
-    );
+    const shouldCommit =
+      canStart() &&
+      (latest.raw >= DISMISS_DISTANCE_PX ||
+        (latest.raw >= DISMISS_MIN_FLING_DISTANCE_PX && velocity >= DISMISS_VELOCITY_PX_PER_MS));
     releasedClick = {
       x: event.clientX,
       y: event.clientY,
@@ -392,10 +385,9 @@ export function bindHeroDismissGesture({
     if (releasedClick && performance.now() > releasedClick.expiresAt) releasedClick = null;
     const release = releasedClick;
     if (release) {
-      const isGestureClick = Math.hypot(
-        event.clientX - release.x,
-        event.clientY - release.y,
-      ) <= CLICK_SUPPRESSION_RADIUS_PX;
+      const isGestureClick =
+        Math.hypot(event.clientX - release.x, event.clientY - release.y) <=
+        CLICK_SUPPRESSION_RADIUS_PX;
       releasedClick = null;
       if (isGestureClick) {
         // Swallow the synthetic click a drag leaves behind.

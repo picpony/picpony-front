@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useRef } from 'react';
-import { gsap, useGSAP, prefersReducedMotion } from '@/lib/motion';
+import { gsap, useGSAP, prefersReducedMotion, DURATION } from '@/lib/motion';
 
 interface RevealProps {
   children: ReactNode;
@@ -15,8 +15,14 @@ interface RevealProps {
 }
 
 /**
- * Staggered entrance for its direct children — the standard way to bring
- * page sections in. Renders a plain wrapper; children animate once on mount.
+ * Staggered entrance for its direct children, played once on mount.
+ *
+ * This is *not* superseded by `useScrollReveal` — the two answer different
+ * questions. Content that is already on screen when the route commits (a login
+ * form, the first settings card, an error state) has to animate on mount;
+ * hanging it off a ScrollTrigger means it never plays, because it never
+ * crosses the trigger line. Use `useScrollReveal` for anything below the fold,
+ * where a mount-time animation would have finished before you scrolled to it.
  */
 export default function Reveal({
   children,
@@ -27,18 +33,21 @@ export default function Reveal({
 }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
 
-  useGSAP(() => {
-    if (!ref.current || prefersReducedMotion()) return;
-    gsap.from(ref.current.children, {
-      autoAlpha: 0,
-      y: distance,
-      duration: 0.55,
-      ease: 'decelerate',
-      stagger,
-      delay,
-      clearProps: 'all',
-    });
-  }, { scope: ref });
+  useGSAP(
+    () => {
+      if (!ref.current || prefersReducedMotion()) return;
+      gsap.from(ref.current.children, {
+        autoAlpha: 0,
+        y: distance,
+        duration: DURATION.emphasized,
+        ease: 'decelerate',
+        stagger,
+        delay,
+        clearProps: 'all',
+      });
+    },
+    { scope: ref },
+  );
 
   return (
     <div ref={ref} className={className}>

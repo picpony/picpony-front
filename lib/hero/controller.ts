@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  HERO_DETAIL_ROUTE_TIMEOUT_MS,
   HERO_INPUT_TRANSFER_QUIET_MS,
   HERO_ROUTE_TIMEOUT_MS,
   HERO_VIEWPORT_REBUILD_EPSILON_PX,
@@ -37,11 +38,7 @@ import {
   waitForHeroInteractionQuiet,
 } from './input';
 import { clearInactiveHeroBackground, HeroMotion } from './motion';
-import {
-  getElementScrollPlane,
-  getGalleryScrollPlane,
-  type HeroScrollPlane,
-} from './plane';
+import { getElementScrollPlane, getGalleryScrollPlane, type HeroScrollPlane } from './plane';
 import { createHeroFlight } from './flight';
 import { HeroPullSurface } from './pull';
 import { HeroRouteRegistry, type HeroRoute } from './routes';
@@ -280,11 +277,12 @@ export class HeroController {
   waitForIdle(signal?: AbortSignal) {
     return waitForSignal(this.events, {
       signal,
-      read: () => (
+      read: () =>
         this.foreground === null &&
         this.detailRouteChange === null &&
         (this.runtime.phase === 'gallery-idle' || this.runtime.phase === 'detail-idle')
-      ) ? true : null,
+          ? true
+          : null,
     }).then(Boolean);
   }
 
@@ -294,8 +292,9 @@ export class HeroController {
    * quiet; this only gates publication after the route is stable.
    */
   isPublicationQuiet() {
-    return !this.detailRouteChange && (
-      this.runtime.phase === 'detail-idle' || this.runtime.phase === 'gallery-idle'
+    return (
+      !this.detailRouteChange &&
+      (this.runtime.phase === 'detail-idle' || this.runtime.phase === 'gallery-idle')
     );
   }
 
@@ -303,9 +302,11 @@ export class HeroController {
     if (this.detailRouteChange) return false;
     if (this.runtime.phase === 'gallery-idle') return true;
     if (this.runtime.phase === 'detail-idle') return this.runtime.imageId === imageId;
-    return this.runtime.phase.startsWith('opening.') &&
+    return (
+      this.runtime.phase.startsWith('opening.') &&
       this.foreground?.kind === 'opening' &&
-      this.foreground.snapshot.image.id === imageId;
+      this.foreground.snapshot.image.id === imageId
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -470,10 +471,11 @@ export class HeroController {
     this.initialize();
     this.router = intent.navigation;
     if (this.detailRouteChange) {
-      const retry = () => this.requestClose({
-        ...intent,
-        imageId: this.runtime.imageId ?? intent.imageId,
-      });
+      const retry = () =>
+        this.requestClose({
+          ...intent,
+          imageId: this.runtime.imageId ?? intent.imageId,
+        });
       return this.detailRouteChange.then(retry, retry);
     }
     const foreground = this.foreground;
@@ -510,12 +512,17 @@ export class HeroController {
     });
     this.detailRouteChange = operation;
     this.events.notify();
-    void operation.then(() => undefined, () => undefined).then(() => {
-      if (this.detailRouteChange !== operation) return;
-      this.detailRouteChange = null;
-      if (this.detailRouteAbort === abort) this.detailRouteAbort = null;
-      this.events.notify();
-    });
+    void operation
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .then(() => {
+        if (this.detailRouteChange !== operation) return;
+        this.detailRouteChange = null;
+        if (this.detailRouteAbort === abort) this.detailRouteAbort = null;
+        this.events.notify();
+      });
     return operation;
   }
 
@@ -533,11 +540,28 @@ export class HeroController {
 
   private queuePendingOpen(intent: HeroOpenIntent, gate: Promise<unknown>) {
     this.pendingOpen = intent;
-    void gate.then(() => undefined, () => undefined).then(() => {
-      if (this.pendingOpen !== intent) return;
-      this.pendingOpen = null;
-      if (this.runtime.phase === 'gallery-idle') this.startOpening(intent);
-    });
+    void gate
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .then(async () => {
+        if (this.pendingOpen !== intent) return;
+        /* The gate opening is not the same as the gallery being ready. A route
+           commit can land a frame before the unwind finishes releasing the
+           foreground, and a queued tap discarded there is a tap that did
+           nothing — so wait the rest of the way out rather than testing once. */
+        if (this.runtime.phase !== 'gallery-idle' || this.foreground) {
+          if (!(await this.waitForGalleryIdle())) {
+            if (this.pendingOpen === intent) this.pendingOpen = null;
+            return;
+          }
+        }
+        if (this.pendingOpen !== intent) return;
+        this.pendingOpen = null;
+        if (!intent.source.isConnected) return;
+        this.startOpening(intent);
+      });
   }
 
   // -------------------------------------------------------------------------
@@ -554,9 +578,8 @@ export class HeroController {
     );
     route.pull = pull;
 
-    const active = () => (
-      this.runtime.phase === 'detail-idle' && this.runtime.imageId === route.imageId
-    );
+    const active = () =>
+      this.runtime.phase === 'detail-idle' && this.runtime.imageId === route.imageId;
     const release = bindHeroDismissGesture({
       target: route.scroller,
       scroller: route.scroller,
@@ -586,15 +609,13 @@ export class HeroController {
   /** Hide the gallery card the detail will collapse back into. */
   private leaseRouteThumbnail(route: HeroRoute) {
     const record = this.detailRecord;
-    const thumbnail = findImageHeroThumbnail(
-      route.imageId,
-      record?.imageId === route.imageId ? record.snapshot.sourceKey : undefined,
-    ) ?? findImageHeroThumbnail(route.imageId);
+    const thumbnail =
+      findImageHeroThumbnail(
+        route.imageId,
+        record?.imageId === route.imageId ? record.snapshot.sourceKey : undefined,
+      ) ?? findImageHeroThumbnail(route.imageId);
     if (!thumbnail) return null;
-    return combineHeroLeases(
-      leaseHeroCardChrome(thumbnail),
-      leaseHeroVisibility(thumbnail, false),
-    );
+    return combineHeroLeases(leaseHeroCardChrome(thumbnail), leaseHeroVisibility(thumbnail, false));
   }
 
   /**
@@ -683,12 +704,9 @@ export class HeroController {
     const background = intent.background ?? this.runtime.background ?? currentBackground();
     intent.background = background;
     const id = ++this.sessionSequence;
-    const record = options.historyRecord ?? imageHeroHistory.createRecord(
-      intent.snapshot,
-      background,
-      intent.detailHref,
-      id,
-    );
+    const record =
+      options.historyRecord ??
+      imageHeroHistory.createRecord(intent.snapshot, background, intent.detailHref, id);
     if (options.historyRecord) imageHeroHistory.remember(record);
 
     const session: OpeningSession = {
@@ -767,7 +785,7 @@ export class HeroController {
       const stage = await waitForSignal<HeroStageNodes>(this.events, {
         signal: session.abort.signal,
         timeout: 1000,
-        read: () => this.stage?.sessionId === session.id ? this.stage.nodes : null,
+        read: () => (this.stage?.sessionId === session.id ? this.stage.nodes : null),
       });
       if (!this.owns(session)) return;
       if (!stage || !intent.source.isConnected) {
@@ -782,11 +800,13 @@ export class HeroController {
       this.setStage('landed', session);
       this.setPhase('opening.landed', session, intent.background!);
 
-      if (collapse && !await this.commitParallelCollapse(session, collapse)) return;
+      if (collapse && !(await this.commitParallelCollapse(session, collapse))) return;
 
       const route = await waitForSignal<HeroRoute>(this.events, {
         signal: session.abort.signal,
-        timeout: HERO_ROUTE_TIMEOUT_MS,
+        // Post-landing: see HERO_DETAIL_ROUTE_TIMEOUT_MS. Reversing here would
+        // undo a navigation the user has already seen complete.
+        timeout: HERO_DETAIL_ROUTE_TIMEOUT_MS,
         read: () => this.findOpeningRoute(session, true),
       });
       if (!this.owns(session)) return;
@@ -858,10 +878,12 @@ export class HeroController {
       await this.failParallelOpen(session);
       return false;
     }
-    if (!await this.waitForRouterCommit(
-      backgroundHref(session.collapseRecord!.background),
-      session.abort.signal,
-    )) {
+    if (
+      !(await this.waitForRouterCommit(
+        backgroundHref(session.collapseRecord!.background),
+        session.abort.signal,
+      ))
+    ) {
       await this.failParallelOpen(session);
       return false;
     }
@@ -883,23 +905,19 @@ export class HeroController {
    * The route's scroll position is written and the Stage is hidden inside one
    * batched read/write pass so no frame can show both or neither.
    */
-  private async handoffOpening(
-    session: OpeningSession,
-    route: HeroRoute,
-    stage: HeroStageNodes,
-  ) {
+  private async handoffOpening(session: OpeningSession, route: HeroRoute, stage: HeroStageNodes) {
     if (!this.owns(session) || !session.motion) return;
     this.setPhase('opening.handoff', session, session.intent.background!);
 
     if (session.pullSeized) {
       const settled = await waitForSignal(this.events, {
         signal: session.abort.signal,
-        read: () => session.pullSeized ? null : true,
+        read: () => (session.pullSeized ? null : true),
       });
       if (!settled || !this.owns(session) || !session.motion) return;
     }
 
-    if (!await this.establishOpeningGuard(session)) {
+    if (!(await this.establishOpeningGuard(session))) {
       if (this.owns(session)) await this.reverseOpening(session, false);
       return;
     }
@@ -941,7 +959,7 @@ export class HeroController {
       return;
     }
 
-    if (!await this.waitForInputTransfer(session, () => session.scrollBridge?.sync())) return;
+    if (!(await this.waitForInputTransfer(session, () => session.scrollBridge?.sync()))) return;
     this.completeOpeningHandoff(session);
   }
 
@@ -1016,7 +1034,7 @@ export class HeroController {
     this.setPhase('recovering', session, session.intent.background!);
 
     if (collapse) {
-      if (!await this.commitParallelCollapse(session, collapse)) return;
+      if (!(await this.commitParallelCollapse(session, collapse))) return;
     } else if (!session.routeNavigationStarted && !this.startRouteNavigation(session)) {
       await this.reverseOpening(session, false);
       return;
@@ -1025,7 +1043,8 @@ export class HeroController {
     const committed = await waitForSignal(this.events, {
       signal: session.abort.signal,
       timeout: HERO_ROUTE_TIMEOUT_MS,
-      read: () => this.observedHref === normalizeHeroHref(session.intent.detailHref) ? true : null,
+      read: () =>
+        this.observedHref === normalizeHeroHref(session.intent.detailHref) ? true : null,
     });
     if (!this.owns(session)) return;
     if (!committed) {
@@ -1040,12 +1059,13 @@ export class HeroController {
     session.visual.dispose();
 
     const onDetail = normalizeHeroHref(window.location.href) === session.record.detailHref;
-    if (!(onDetail && await this.establishOpeningGuard(session))) {
+    if (!(onDetail && (await this.establishOpeningGuard(session)))) {
       if (this.owns(session)) await this.reverseOpening(session, false);
       return;
     }
 
-    const route = this.findOpeningRoute(session, false) ??
+    const route =
+      this.findOpeningRoute(session, false) ??
       this.routes.findByImage(session.snapshot.image.id, normalizeHeroHref(window.location.href));
     if (route) this.routes.reveal(route, route.sealOwner);
     this.retainStagePointerShield(session.id);
@@ -1080,11 +1100,14 @@ export class HeroController {
     const source = session.intent.source.isConnected
       ? session.intent.source
       : findImageHeroThumbnail(session.snapshot.image.id, session.snapshot.sourceKey);
-    const measurement = session.motion && source ? {
-      destination: getGalleryLandingRect(source),
-      plane: getGalleryScrollPlane() ?? undefined,
-      pose: session.motion.measurePose(),
-    } : null;
+    const measurement =
+      session.motion && source
+        ? {
+            destination: getGalleryLandingRect(source),
+            plane: getGalleryScrollPlane() ?? undefined,
+            pose: session.motion.measurePose(),
+          }
+        : null;
 
     session.reversing = true;
     session.abort.abort();
@@ -1118,11 +1141,7 @@ export class HeroController {
 
     try {
       if (session.motion && measurement) {
-        await session.motion.reverse(
-          measurement.destination,
-          measurement.plane,
-          measurement.pose,
-        );
+        await session.motion.reverse(measurement.destination, measurement.plane, measurement.pose);
       }
     } catch {
       // A canceled reverse still proceeds through deterministic cleanup.
@@ -1146,12 +1165,12 @@ export class HeroController {
     session.visual.dispose();
     this.clearBackgroundVisual();
 
-    const recordToRestore = restoreRecord ?? (
-      session.collapseRecord &&
+    const recordToRestore =
+      restoreRecord ??
+      (session.collapseRecord &&
       normalizeHeroHref(window.location.href) === session.collapseRecord.detailHref
         ? session.collapseRecord
-        : null
-    );
+        : null);
     if (recordToRestore) {
       await this.restorePreviousDetail(session, recordToRestore);
       return;
@@ -1165,9 +1184,40 @@ export class HeroController {
 
     const pending = this.pendingOpen;
     this.pendingOpen = null;
-    if (!pending || !onBackground) return;
-    if (!await this.waitForRouterCommit(backgroundHref(session.intent.background!))) return;
-    if (!this.foreground && this.runtime.phase === 'gallery-idle') this.startOpening(pending);
+    if (!pending) return;
+    /* Wait for the gallery to be idle rather than testing for it once.
+     *
+     * The queued tap used to be dropped on any of three single-shot conditions:
+     * `onBackground` false, the router commit not confirming inside its window,
+     * or `gallery-idle` not happening to hold at that instant. Tapping a second
+     * image while the first was flying home therefore did nothing at all about
+     * a third of the time — the flight unwound, the queue was cleared, and the
+     * tap vanished. Which is why it read as "it plays a little of the animation
+     * and then just goes back".
+     *
+     * `queuePendingOpen` already owns the "start it once the gate opens" shape,
+     * so this hands the intent straight to it instead of arbitrating again. */
+    if (!onBackground) {
+      this.queuePendingOpen(pending, this.waitForGalleryIdle());
+      return;
+    }
+    this.queuePendingOpen(
+      pending,
+      this.waitForRouterCommit(backgroundHref(session.intent.background!)),
+    );
+  }
+
+  /** Resolves as soon as nothing is flying and the gallery is the live view. */
+  private waitForGalleryIdle() {
+    return waitForSignal(this.events, {
+      timeout: HERO_ROUTE_TIMEOUT_MS,
+      read: () =>
+        this.lifecycleAbort.signal.aborted
+          ? false
+          : !this.foreground && this.runtime.phase === 'gallery-idle'
+            ? true
+            : null,
+    });
   }
 
   /**
@@ -1189,21 +1239,21 @@ export class HeroController {
 
     if (!onBackground && session.collapseRecord && !session.routeNavigationStarted) {
       // Never navigated: the only thing to undo is the collapse already started.
-      onBackground = await (
-        session.collapsePromise ?? imageHeroHistory.ensureBackground(session.collapseRecord)
-      );
+      onBackground = await (session.collapsePromise ??
+        imageHeroHistory.ensureBackground(session.collapseRecord));
       if (onBackground) imageHeroHistory.forget(session.collapseRecord);
     } else if (navigationHandled && session.provisionalClaimed) {
       // The browser moved us; collapse whatever ladder we managed to build.
       onBackground = await imageHeroHistory.ensureBackground(session.record);
     } else if (!navigationHandled && session.routeNavigationStarted) {
       // We moved ourselves and must undo it.
-      onBackground = session.historyRestore || session.provisionalClaimed
-        ? await imageHeroHistory.ensureBackground(session.record)
-        : await imageHeroHistory.returnUnmarkedToBackground(
-            session.intent.background!,
-            session.record.token,
-          );
+      onBackground =
+        session.historyRestore || session.provisionalClaimed
+          ? await imageHeroHistory.ensureBackground(session.record)
+          : await imageHeroHistory.returnUnmarkedToBackground(
+              session.intent.background!,
+              session.record.token,
+            );
     }
     return onBackground;
   }
@@ -1253,13 +1303,10 @@ export class HeroController {
       return 'handled';
     }
 
-    const route = this.routes.findByImage(
-      intent.imageId,
-      normalizeHeroHref(window.location.href),
-    );
+    const route = this.routes.findByImage(intent.imageId, normalizeHeroHref(window.location.href));
     const thumbnail = route?.target
-      ? findImageHeroThumbnail(intent.imageId, record.snapshot.sourceKey)
-        ?? findImageHeroThumbnail(intent.imageId)
+      ? (findImageHeroThumbnail(intent.imageId, record.snapshot.sourceKey) ??
+        findImageHeroThumbnail(intent.imageId))
       : null;
     const plane = thumbnail ? getGalleryScrollPlane() : null;
 
@@ -1267,12 +1314,13 @@ export class HeroController {
     if (!route?.target || !thumbnail || !plane) {
       const closed = await imageHeroHistory.ensureBackground(record);
       if (closed && this.isRecordBackground(record)) return 'closed';
-      return await this.restoreGuardStrict(record) ? 'restored' : 'handled';
+      return (await this.restoreGuardStrict(record)) ? 'restored' : 'handled';
     }
 
     // Capture what the detail is showing right now, so the return flight starts
     // from the real pixels rather than the stale activation snapshot.
-    const liveAsset = captureHeroFrame(getVisualMedia(route.target)) ?? record.snapshot.previewFrame;
+    const liveAsset =
+      captureHeroFrame(getVisualMedia(route.target)) ?? record.snapshot.previewFrame;
     const snapshot = { ...record.snapshot, previewFrame: liveAsset, createdAt: Date.now() };
     const id = ++this.sessionSequence;
 
@@ -1358,16 +1406,17 @@ export class HeroController {
       };
 
       await session.motion.landed;
-      if (!await this.guardClosing(session)) return;
+      if (!(await this.guardClosing(session))) return;
 
-      if (!await this.waitForInputTransfer(session)) {
+      if (!(await this.waitForInputTransfer(session))) {
         if (session.retired) await this.ensureRetirement(session);
         return;
       }
 
-      const closed = this.isRecordBackground(session.record) ||
-        await imageHeroHistory.ensureBackground(session.record);
-      if (!await this.guardClosing(session)) return;
+      const closed =
+        this.isRecordBackground(session.record) ||
+        (await imageHeroHistory.ensureBackground(session.record));
+      if (!(await this.guardClosing(session))) return;
       if (!closed || !this.isRecordBackground(session.record)) {
         await this.reverseClosing(session);
         return;
@@ -1377,12 +1426,12 @@ export class HeroController {
         backgroundHref(session.record.background),
         session.abort.signal,
       );
-      if (!await this.guardClosing(session)) return;
+      if (!(await this.guardClosing(session))) return;
       if (!committed) {
         await this.reverseClosing(session);
         return;
       }
-      if (!await this.waitForInputTransfer(session)) {
+      if (!(await this.waitForInputTransfer(session))) {
         if (session.retired) await this.ensureRetirement(session);
         return;
       }
@@ -1430,10 +1479,13 @@ export class HeroController {
       return;
     }
     const routeTarget = session.route.target;
-    const measurement = session.motion && routeTarget?.isConnected ? {
-      destination: getHeroRect(routeTarget),
-      pose: session.motion.measurePose(),
-    } : null;
+    const measurement =
+      session.motion && routeTarget?.isConnected
+        ? {
+            destination: getHeroRect(routeTarget),
+            pose: session.motion.measurePose(),
+          }
+        : null;
 
     session.reversing = true;
     session.abort.abort();
@@ -1507,10 +1559,11 @@ export class HeroController {
   private ensureRetirement(session: ClosingSession) {
     if (session.retirement) return session.retirement;
     const motion = session.motion;
-    session.retirement = (motion
-      ? motion.landed.then(() => motion.fadeRetiring())
-      : Promise.resolve()
-    ).catch(() => undefined).then(() => this.finishRetiring(session));
+    session.retirement = (
+      motion ? motion.landed.then(() => motion.fadeRetiring()) : Promise.resolve()
+    )
+      .catch(() => undefined)
+      .then(() => this.finishRetiring(session));
     return session.retirement;
   }
 
@@ -1575,9 +1628,8 @@ export class HeroController {
     let targetContent: HTMLElement | null = null;
     let heightLease: DomLease | null = null;
     let released = false;
-    const resizeObserver = typeof ResizeObserver === 'undefined'
-      ? null
-      : new ResizeObserver(() => syncHeight());
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => syncHeight());
 
     const sync = () => {
       if (released || !this.owns(session)) return;
@@ -1643,17 +1695,17 @@ export class HeroController {
   // Detail ↔ detail navigation
   // -------------------------------------------------------------------------
 
-  private async runDetailRouteChange(
-    intent: HeroDetailRouteChangeIntent,
-    signal: AbortSignal,
-  ) {
+  private async runDetailRouteChange(intent: HeroDetailRouteChangeIntent, signal: AbortSignal) {
     const sequence = ++this.routeChangeSequence;
     const record = this.detailRecord ?? imageHeroHistory.currentRecord();
     const currentImageId = this.runtime.imageId;
     const targetHref = normalizeHeroHref(intent.detailHref);
     if (signal.aborted) return false;
     if (normalizeHeroHref(window.location.href) !== this.observedHref) return false;
-    if (currentImageId === intent.imageId && normalizeHeroHref(window.location.href) === targetHref) {
+    if (
+      currentImageId === intent.imageId &&
+      normalizeHeroHref(window.location.href) === targetHref
+    ) {
       return true;
     }
 
@@ -1665,7 +1717,7 @@ export class HeroController {
       const observed = await waitForSignal(this.events, {
         signal,
         timeout: HERO_ROUTE_TIMEOUT_MS,
-        read: () => this.observedHref === targetHref ? true : null,
+        read: () => (this.observedHref === targetHref ? true : null),
       });
       return Boolean(observed);
     }
@@ -1674,10 +1726,7 @@ export class HeroController {
       record.imageId,
       normalizeHeroHref(window.location.href),
     );
-    const collapsed = await settleUnlessAborted(
-      imageHeroHistory.ensureBackground(record),
-      signal,
-    );
+    const collapsed = await settleUnlessAborted(imageHeroHistory.ensureBackground(record), signal);
     if (signal.aborted) return false;
     if (!collapsed || !this.isRecordBackground(record)) {
       await this.restoreDetailAfterFailedChange(record, currentRoute, signal);
@@ -1697,7 +1746,7 @@ export class HeroController {
     const observed = await waitForSignal(this.events, {
       signal,
       timeout: HERO_ROUTE_TIMEOUT_MS,
-      read: () => this.observedHref === targetHref ? true : null,
+      read: () => (this.observedHref === targetHref ? true : null),
     });
     if (!observed || signal.aborted || sequence !== this.routeChangeSequence) {
       const activeRoute = this.routes.findByImage(
@@ -1712,10 +1761,7 @@ export class HeroController {
     imageHeroHistory.forget(record);
     this.detailRecord = null;
     this.currentSnapshot = null;
-    const route = this.routes.findByImage(
-      intent.imageId,
-      normalizeHeroHref(window.location.href),
-    );
+    const route = this.routes.findByImage(intent.imageId, normalizeHeroHref(window.location.href));
     if (route) this.routes.reveal(route, route.sealOwner);
     this.setPhase('detail-idle', null, record.background, intent.imageId);
     return true;
@@ -1765,8 +1811,9 @@ export class HeroController {
           navigation.href !== foreground.record.detailHref
         ) {
           // Back skipped past the provisional barrier; recover the gallery entry.
-          foreground.backgroundRecovery ??=
-            imageHeroHistory.recoverSkippedBackground(foreground.record);
+          foreground.backgroundRecovery ??= imageHeroHistory.recoverSkippedBackground(
+            foreground.record,
+          );
         }
         void this.reverseOpening(foreground, true);
       }
@@ -1841,8 +1888,9 @@ export class HeroController {
 
   private replayHistoryOpen(navigation: HeroHistoryNavigation) {
     const record = navigation.record!;
-    const source = findImageHeroThumbnail(record.imageId, record.snapshot.sourceKey)
-      ?? findImageHeroThumbnail(record.imageId);
+    const source =
+      findImageHeroThumbnail(record.imageId, record.snapshot.sourceKey) ??
+      findImageHeroThumbnail(record.imageId);
     const provisional = navigation.position === 'provisional';
     const intent: HeroOpenIntent = {
       snapshot: record.snapshot,
@@ -1924,12 +1972,12 @@ export class HeroController {
   /** Reinstate the guard entry, retrying once history settles. */
   private async restoreGuardStrict(record: HeroHistoryRecord) {
     if (imageHeroHistory.isGuard(record)) return true;
-    if (await imageHeroHistory.restoreGuard(record) && imageHeroHistory.isGuard(record)) {
+    if ((await imageHeroHistory.restoreGuard(record)) && imageHeroHistory.isGuard(record)) {
       return true;
     }
-    if (!await imageHeroHistory.waitForStable()) return false;
+    if (!(await imageHeroHistory.waitForStable())) return false;
     if (imageHeroHistory.isGuard(record)) return true;
-    return await imageHeroHistory.restoreGuard(record) && imageHeroHistory.isGuard(record);
+    return (await imageHeroHistory.restoreGuard(record)) && imageHeroHistory.isGuard(record);
   }
 
   /** Derive phase purely from the observable location, with no session running. */
@@ -1962,10 +2010,7 @@ export class HeroController {
       this.detailRecord = null;
       this.currentSnapshot = null;
     }
-    const activeRoute = this.routes.findByImage(
-      activeId,
-      normalizeHeroHref(window.location.href),
-    );
+    const activeRoute = this.routes.findByImage(activeId, normalizeHeroHref(window.location.href));
     if (activeRoute) this.routes.reveal(activeRoute, activeRoute.sealOwner);
     this.routes.sealAllExcept(activeRoute);
     this.setPhase('detail-idle', null, record?.background ?? null, activeId);
@@ -2131,10 +2176,13 @@ export class HeroController {
       );
       if (!quiet || !this.owns(session)) return false;
       sync?.();
-      if (!await waitForFrame(
-        [session.abort.signal, this.lifecycleAbort.signal],
-        HERO_ROUTE_TIMEOUT_MS,
-      )) return false;
+      if (
+        !(await waitForFrame(
+          [session.abort.signal, this.lifecycleAbort.signal],
+          HERO_ROUTE_TIMEOUT_MS,
+        ))
+      )
+        return false;
       if (isHeroInteractionQuiet() && !hasActiveHeroInput()) return true;
     }
     return false;
@@ -2147,15 +2195,13 @@ export class HeroController {
     const observed = await waitForSignal(this.events, {
       signal,
       timeout: HERO_ROUTE_TIMEOUT_MS,
-      read: () => lifecycleSignal.aborted
-        ? false
-        : this.observedHref === expected ? true : null,
+      read: () => (lifecycleSignal.aborted ? false : this.observedHref === expected ? true : null),
     });
     if (observed !== true || lifecycleSignal.aborted) return false;
     // Two frames: one for the commit, one for the resulting paint.
     const signals = signal ? [signal, lifecycleSignal] : [lifecycleSignal];
     for (let frame = 0; frame < 2; frame += 1) {
-      if (!await waitForFrame(signals, HERO_ROUTE_TIMEOUT_MS)) return false;
+      if (!(await waitForFrame(signals, HERO_ROUTE_TIMEOUT_MS))) return false;
     }
     return !lifecycleSignal.aborted && !signal?.aborted && this.observedHref === expected;
   }
@@ -2166,9 +2212,7 @@ export class HeroController {
 
   private setStage(phase: ImageHeroStageState['phase'], session: OpeningSession | null) {
     this.updateRuntime({
-      stage: session
-        ? { phase, snapshot: session.snapshot, sessionId: session.id }
-        : EMPTY_STAGE,
+      stage: session ? { phase, snapshot: session.snapshot, sessionId: session.id } : EMPTY_STAGE,
     });
   }
 

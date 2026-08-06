@@ -59,7 +59,8 @@ function trimDetailCache(preserveId?: number) {
 
   for (const [imageId, entry] of detailCache) {
     if (detailCache.size <= MAX_CACHE_ENTRIES) break;
-    if (imageId === preserveId || detailListeners.has(imageId) || entry.value === undefined) continue;
+    if (imageId === preserveId || detailListeners.has(imageId) || entry.value === undefined)
+      continue;
     detailCache.delete(imageId);
   }
 }
@@ -76,9 +77,9 @@ function flushDetailNotifications() {
     scheduleDetailNotifications();
     return;
   }
-  const imageIds = Array.from(pendingNotifications).filter((imageId) => (
-    imageHeroController.isDetailDataPublishable(imageId)
-  ));
+  const imageIds = Array.from(pendingNotifications).filter((imageId) =>
+    imageHeroController.isDetailDataPublishable(imageId),
+  );
   imageIds.forEach((imageId) => {
     pendingNotifications.delete(imageId);
     const entry = detailCache.get(imageId);
@@ -172,11 +173,11 @@ function dequeue(queue: number[], priority: DetailRequestPriority) {
 function runDetailQueue() {
   while (activeRequests < MAX_CONCURRENT_REQUESTS) {
     const immediate = dequeue(immediateQueue, 'immediate');
-    const queued = immediate ?? (
-      activeBackgroundRequests < MAX_CONCURRENT_BACKGROUND_REQUESTS
+    const queued =
+      immediate ??
+      (activeBackgroundRequests < MAX_CONCURRENT_BACKGROUND_REQUESTS
         ? dequeue(backgroundQueue, 'background')
-        : null
-    );
+        : null);
     if (!queued) return;
 
     const { imageId, entry } = queued;
@@ -273,7 +274,11 @@ export function prefetchImageDetail(
   deleteExpiredEntries();
   const cached = detailCache.get(imageId);
   if (cached) {
-    if (priority === 'immediate' && cached.status !== 'resolved' && cached.priority === 'background') {
+    if (
+      priority === 'immediate' &&
+      cached.status !== 'resolved' &&
+      cached.priority === 'background'
+    ) {
       cached.priority = 'immediate';
       if (cached.status === 'queued') {
         enqueueImmediate(imageId);
@@ -308,9 +313,7 @@ export function prefetchImageDetail(
 export function cancelImageDetailPrefetch(id: number | string) {
   const imageId = normalizeId(id);
   const entry = detailCache.get(imageId);
-  return entry
-    ? cancelQueuedEntry(imageId, entry) || cancelLoadingEntry(imageId, entry)
-    : false;
+  return entry ? cancelQueuedEntry(imageId, entry) || cancelLoadingEntry(imageId, entry) : false;
 }
 
 /**

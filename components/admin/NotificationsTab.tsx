@@ -6,7 +6,11 @@ import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
 import { MdNotifications, MdSend, MdDelete } from 'react-icons/md';
-import { SectionHeader, EmptyState, Spinner } from './';
+import DataTable, { type Column } from '@/components/DataTable';
+import { SectionHeader } from './';
+import Button from '@/components/Button';
+import Card from '@/components/Card';
+import { Input, Textarea } from '@/components/Input';
 
 interface NotificationItem {
   id: number;
@@ -72,7 +76,9 @@ export default function NotificationsTab({ token }: { token: string }) {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [token, filter]);
 
   const handleSend = async () => {
@@ -121,65 +127,101 @@ export default function NotificationsTab({ token }: { token: string }) {
     });
   };
 
+  const notificationColumns: Column<NotificationItem>[] = [
+    { key: 'id', header: 'ID', render: (n) => n.id },
+    { key: 'target', header: '接收目标', render: (n) => n.receiver_name || `用户#${n.user_id}` },
+    {
+      key: 'title',
+      header: '标题',
+      primary: true,
+      render: (n) => <span className="font-medium">{n.title}</span>,
+    },
+    { key: 'content', header: '内容', className: 'max-w-xs truncate', render: (n) => n.content },
+    {
+      key: 'created',
+      header: '时间',
+      render: (n) => <span className="text-outline text-body-s">{n.created_at}</span>,
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      actions: true,
+      render: (n) => (
+        <button
+          onClick={() => handleDelete(n.id)}
+          className="touch-target state-layer rounded-full p-1.5 text-error"
+          title="删除"
+          aria-label={`删除通知「${n.title}」`}
+        >
+          {' '}
+          <MdDelete size={16} />{' '}
+        </button>
+      ),
+    },
+  ];
   return (
     <div className="space-y-6">
+      {' '}
       <SectionHeader
         icon={<MdNotifications className="text-primary" size={24} />}
         title="系统通知发送"
         onRefresh={loadNotifications}
-      />
-
-      <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700 space-y-4">
-        <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 p-3 rounded border-l-4 border-l-blue-500">
-          使用系统通知可以向特定用户或全站用户发送消息（信箱红点提醒）。用户ID填 0 代表全站广播。
-        </div>
-
+      />{' '}
+      <Card variant="outlined" className="space-y-4">
+        {' '}
+        <div className="text-body-s text-on-surface-variant bg-surface-container-low p-3 rounded border-l-on-accent-blue border-l-4">
+          {' '}
+          使用系统通知可以向特定用户或全站用户发送消息（信箱红点提醒）。用户ID填 0
+          代表全站广播。{' '}
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">接收用户 ID（0=全站广播）</label>
-          <input
+          {' '}
+          <Input
+            label="接收用户 ID（0=全站广播）"
+            id="notificationstab-f1"
             type="number"
             min={0}
             value={targetUserId}
             onChange={(e) => setTargetUserId(parseInt(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-          />
-        </div>
-
+          />{' '}
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">通知标题</label>
-          <input
+          {' '}
+          <Input
+            label="通知标题"
+            id="notificationstab-f2"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例如：您的稿件已被审核通过"
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-          />
-        </div>
-
+          />{' '}
+        </div>{' '}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">通知正文</label>
-          <textarea
+          {' '}
+          <label className="block text-label-l text-on-surface mb-1" htmlFor="notificationstab-f3">
+            通知正文
+          </label>{' '}
+          <Textarea
+            id="notificationstab-f3"
             rows={4}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="通知的详细内容..."
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 resize-y"
-          />
-        </div>
-
-        <button
+          />{' '}
+        </div>{' '}
+        <Button
           onClick={handleSend}
-          disabled={sending}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+          variant="filled"
+          loading={sending}
+          className="self-start"
+          icon={<MdSend size={16} />}
         >
-          <MdSend size={16} />
           {sending ? '发送中...' : '发送通知'}
-        </button>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+        </Button>
+      </Card>
+      <Card variant="outlined">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">历史通知记录</h3>
+          <h3 className="text-label-l-emphasized text-on-surface">历史通知记录</h3>
           <Select
             value={filter}
             onChange={(v) => setFilter(v)}
@@ -193,48 +235,14 @@ export default function NotificationsTab({ token }: { token: string }) {
           />
         </div>
 
-        {loading ? (
-          <Spinner />
-        ) : notifications.length === 0 ? (
-          <EmptyState message="暂无通知记录" />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700">
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">ID</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">接收目标</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">标题</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">内容</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">时间</th>
-                  <th className="text-left py-2 px-2 text-slate-500 font-medium">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notifications.map((n) => (
-                  <tr key={n.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="py-2 px-2">{n.id}</td>
-                    <td className="py-2 px-2">{n.receiver_name || `用户#${n.user_id}`}</td>
-                    <td className="py-2 px-2 font-medium">{n.title}</td>
-                    <td className="py-2 px-2 max-w-xs truncate">{n.content}</td>
-                    <td className="py-2 px-2 text-xs text-slate-400">{n.created_at}</td>
-                    <td className="py-2 px-2">
-                      <button
-                        onClick={() => handleDelete(n.id)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                        title="删除"
-                      >
-                        <MdDelete size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
+        <DataTable<NotificationItem>
+          columns={notificationColumns}
+          rows={notifications}
+          rowKey={(n) => n.id}
+          loading={loading}
+          empty="暂无通知记录"
+        />
+      </Card>
       <Modal
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
@@ -244,20 +252,17 @@ export default function NotificationsTab({ token }: { token: string }) {
           <>
             <button
               onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
             >
               取消
             </button>
-            <button
-              onClick={handleConfirm}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-            >
+            <Button variant="danger" onClick={handleConfirm}>
               确认
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400">确定要删除此通知？</p>
+        <p className="text-body-m text-on-surface-variant">确定要删除此通知？</p>
       </Modal>
     </div>
   );

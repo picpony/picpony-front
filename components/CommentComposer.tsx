@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MdClose, MdReply, MdSend } from 'react-icons/md';
-import Spinner from '@/components/Spinner';
+import Button from '@/components/Button';
 import { showToast } from '@/components/Toast';
 import { api, type Comment } from '@/lib/api';
 
@@ -93,23 +93,25 @@ export default function CommentComposer({
   return (
     <>
       {replyTo && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
+        <div className="mb-2 flex items-center gap-2 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-m text-on-surface-variant">
           <MdReply size={14} />
-          <span>回复 <strong className="text-primary">{replyTo.username}</strong>：</span>
-          <span className="flex-1 truncate text-xs opacity-70">
-            {replyTo.body.slice(0, 80)}{replyTo.body.length > 80 ? '...' : ''}
+          <span>
+            回复 <strong className="text-primary">{replyTo.username}</strong>：
+          </span>
+          <span className="flex-1 truncate text-body-s opacity-70">
+            {replyTo.body.slice(0, 80)}
+            {replyTo.body.length > 80 ? '...' : ''}
           </span>
           <button
             type="button"
             onClick={onCancelReply}
             aria-label="取消回复"
-            className="ml-auto text-red-400 hover:text-red-600"
+            className="ml-auto text-error transition-opacity hover:opacity-70"
           >
             <MdClose size={16} />
           </button>
         </div>
       )}
-
       {mounted ? (
         <RichTextEditor
           key={editorRevision}
@@ -119,29 +121,24 @@ export default function CommentComposer({
           disabled={isSubmitting}
         />
       ) : (
-        <div className="h-[360px] rounded-xl border border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/50" />
+        /* Roughly a 52px toolbar (6px padding + 40px buttons) + a 300px body +
+           2×1px border. `min-h` rather than a fixed height because the toolbar
+           wraps to a second row on narrow screens, and under-reserving is much
+           less disruptive than over-reserving: the editor grows into the space
+           instead of the page collapsing around it. */
+        <div className="min-h-[354px] rounded-sm border border-outline-variant bg-surface-container-low/70" />
       )}
-
       <div className="mt-2 flex justify-end">
-        <button
+        <Button
           type="button"
           onClick={handleSubmit}
-          disabled={isSubmitting || !trimmedComment}
-          data-ripple
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1 text-sm font-medium text-white shadow-none transition-all hover:bg-primary/90 hover:shadow-sm active:scale-95 disabled:bg-gray-500/10 disabled:text-gray-500/40"
+          variant="filled"
+          loading={isSubmitting}
+          disabled={!trimmedComment}
+          icon={<MdSend size={18} />}
         >
-          {isSubmitting ? (
-            <>
-              <Spinner size="sm" />
-              发送中...
-            </>
-          ) : (
-            <>
-              {replyTo ? '发送回复' : '发送评论'}
-              <MdSend size={18} />
-            </>
-          )}
-        </button>
+          {isSubmitting ? '发送中...' : replyTo ? '发送回复' : '发送评论'}
+        </Button>
       </div>
     </>
   );

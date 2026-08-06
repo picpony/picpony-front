@@ -7,6 +7,7 @@ import Spinner from '@/components/Spinner';
 import Button from '@/components/Button';
 import { useSlidingIndicator } from '@/lib/motion';
 import { MdEmojiEvents, MdCheckCircle, MdLock } from 'react-icons/md';
+import UserBadge from '@/components/UserBadge';
 
 interface TaskData {
   success: boolean;
@@ -63,7 +64,11 @@ export default function TasksPage() {
     setError(null);
     try {
       const stored = localStorage.getItem('user_info');
-      if (!stored) { setError('请先登录'); setLoading(false); return; }
+      if (!stored) {
+        setError('请先登录');
+        setLoading(false);
+        return;
+      }
       const user = JSON.parse(stored);
       const res = await api.getTasks(user.token);
       if (res.success) {
@@ -79,7 +84,9 @@ export default function TasksPage() {
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => { void loadTasks(); });
+    queueMicrotask(() => {
+      void loadTasks();
+    });
   }, [loadTasks]);
 
   const handleClaim = async (taskType: string) => {
@@ -111,9 +118,33 @@ export default function TasksPage() {
       const verifyApi = nt['verify_api'];
       const setBg = nt['set_bg'];
       return [
-        { id: 'novice_bind_api', name: '首次绑定 API Key', xp: 100, coins: 5, progress: bindApi?.progress || 0, target: 1, claimed: bindApi?.claimed || 0 },
-        { id: 'novice_verify_api', name: '首次验证 API Key', xp: 100, coins: 10, progress: verifyApi?.progress || 0, target: 1, claimed: verifyApi?.claimed || 0 },
-        { id: 'novice_set_bg', name: '首次设置背景图', xp: 30, coins: 2, progress: setBg?.progress || 0, target: 1, claimed: setBg?.claimed || 0 },
+        {
+          id: 'novice_bind_api',
+          name: '首次绑定 API Key',
+          xp: 100,
+          coins: 5,
+          progress: bindApi?.progress || 0,
+          target: 1,
+          claimed: bindApi?.claimed || 0,
+        },
+        {
+          id: 'novice_verify_api',
+          name: '首次验证 API Key',
+          xp: 100,
+          coins: 10,
+          progress: verifyApi?.progress || 0,
+          target: 1,
+          claimed: verifyApi?.claimed || 0,
+        },
+        {
+          id: 'novice_set_bg',
+          name: '首次设置背景图',
+          xp: 30,
+          coins: 2,
+          progress: setBg?.progress || 0,
+          target: 1,
+          claimed: setBg?.claimed || 0,
+        },
       ];
     }
     if (activeTab === 'daily') {
@@ -128,16 +159,56 @@ export default function TasksPage() {
         comment_claimed: 0,
       };
       return [
-        { id: 'login', name: '每日登录', xp: 5, coins: 1, progress: t.login_progress ?? 0, target: 1, claimed: t.login_claimed ?? 0 },
-        { id: 'fav', name: '每日收藏超过5张图片', xp: 10, coins: 2, progress: t.fav_progress ?? 0, target: 5, claimed: t.fav_claimed ?? 0 },
-        { id: 'share', name: '每日分享5张图片', xp: 10, coins: 3, progress: t.share_progress ?? 0, target: 5, claimed: t.share_claimed ?? 0 },
-        { id: 'comment', name: '每日5评论', xp: 10, coins: 3, progress: t.comment_progress ?? 0, target: 5, claimed: t.comment_claimed ?? 0 },
+        {
+          id: 'login',
+          name: '每日登录',
+          xp: 5,
+          coins: 1,
+          progress: t.login_progress ?? 0,
+          target: 1,
+          claimed: t.login_claimed ?? 0,
+        },
+        {
+          id: 'fav',
+          name: '每日收藏超过5张图片',
+          xp: 10,
+          coins: 2,
+          progress: t.fav_progress ?? 0,
+          target: 5,
+          claimed: t.fav_claimed ?? 0,
+        },
+        {
+          id: 'share',
+          name: '每日分享5张图片',
+          xp: 10,
+          coins: 3,
+          progress: t.share_progress ?? 0,
+          target: 5,
+          claimed: t.share_claimed ?? 0,
+        },
+        {
+          id: 'comment',
+          name: '每日5评论',
+          xp: 10,
+          coins: 3,
+          progress: t.comment_progress ?? 0,
+          target: 5,
+          claimed: t.comment_claimed ?? 0,
+        },
       ];
     }
     if (activeTab === 'weekly') {
       const wt = data.weekly_tasks || { upload_progress: 0, upload_claimed: 0 };
       return [
-        { id: 'weekly_upload', name: '每周通过 picpony 上传新作品5次', xp: 15, coins: 5, progress: wt.upload_progress ?? 0, target: 5, claimed: wt.upload_claimed ?? 0 },
+        {
+          id: 'weekly_upload',
+          name: '每周通过 picpony 上传新作品5次',
+          xp: 15,
+          coins: 5,
+          progress: wt.upload_progress ?? 0,
+          target: 5,
+          claimed: wt.upload_claimed ?? 0,
+        },
       ];
     }
     return [];
@@ -146,7 +217,7 @@ export default function TasksPage() {
   const renderTabContent = () => {
     if (activeTab === 'cumulative') {
       return (
-        <div key="cumulative" className="text-center text-slate-400 dark:text-slate-500 py-12 animate-page-transition">
+        <div key="cumulative" className="text-center text-outline py-12 animate-page-transition">
           <MdLock size={48} className="mx-auto mb-4 opacity-40" />
           <p>该类任务暂未开放，敬请期待</p>
         </div>
@@ -157,47 +228,52 @@ export default function TasksPage() {
     return (
       <div key={`items-${activeTab}`} className="space-y-3">
         {items.map((item, index) => {
-          const pct = item.target > 0 ? Math.min(item.progress, item.target) / item.target * 100 : 0;
+          const pct =
+            item.target > 0 ? (Math.min(item.progress, item.target) / item.target) * 100 : 0;
           const canClaim = item.progress >= item.target && !item.claimed;
           return (
             <div
               key={item.id}
-              className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 animate-fade-in"
+              className="flex items-center gap-4 p-4 rounded-md bg-surface-container border border-outline-variant animate-fade-in"
               style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</span>
-                  <span className="text-xs text-amber-500 dark:text-amber-400 whitespace-nowrap">
+                  <span className="text-label-l text-on-surface truncate">{item.name}</span>
+                  <span className="text-body-s text-warning whitespace-nowrap">
                     <MdEmojiEvents size={12} className="inline mr-0.5" />
                     经验+{item.xp}
-                    <span className="ml-1 text-yellow-600 dark:text-yellow-400">金币+{item.coins}</span>
+                    <span className="ml-1 text-warning">金币+{item.coins}</span>
                   </span>
                   {/* Sits at the bar's right edge; tabular figures stop the
                       digits shifting as progress ticks up. */}
-                  <span className="ml-auto shrink-0 text-xs tabular-nums text-slate-400 dark:text-slate-500">
+                  <span className="ml-auto shrink-0 text-body-s tabular-nums text-outline">
                     {Math.min(item.progress, item.target)}/{item.target}
                   </span>
                 </div>
-                <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                <div className="mt-2 h-2 rounded-full bg-surface-container-high overflow-hidden">
                   <div
                     className="h-full rounded-full origin-left animate-[bar-grow_0.6s_var(--ease-decelerate)] transition-[width,background-color] duration-500 ease-[var(--ease-standard)]"
                     style={{
                       width: `${pct}%`,
                       animationDelay: `${100 + index * 50}ms`,
                       animationFillMode: 'backwards',
-                      backgroundColor: item.claimed ? '#22c55e' : canClaim ? '#f59e0b' : 'var(--color-primary, #E06C9F)',
+                      backgroundColor: item.claimed
+                        ? 'var(--md-sys-color-success-fill)'
+                        : canClaim
+                          ? 'var(--md-sys-color-warning-fill)'
+                          : 'var(--md-sys-color-primary)',
                     }}
-                  />
-                </div>
-              </div>
-              {/* Fixed footprint: 领取 / 去完成 / 已领取 / loading all occupy the
-                  same box, so claiming never reflows the row. */}
+                  />{' '}
+                </div>{' '}
+              </div>{' '}
+              {/* Fixed footprint: 领取 / 去完成 / 已领取 / loading all occupy the same box, so claiming never reflows the row. */}{' '}
               <div className="flex w-20 shrink-0 justify-end">
+                {' '}
                 {item.claimed ? (
-                  <span className="flex h-8 items-center gap-1 text-xs font-medium text-green-500">
-                    <MdCheckCircle size={16} />
-                    已领取
+                  <span className="flex h-8 items-center gap-1 text-label-m text-success">
+                    {' '}
+                    <MdCheckCircle size={16} /> 已领取{' '}
                   </span>
                 ) : (
                   <Button
@@ -207,120 +283,126 @@ export default function TasksPage() {
                     onClick={() => handleClaim(item.id)}
                     disabled={!canClaim}
                     loading={claiming === item.id}
-                    className={canClaim
-                      ? 'animate-[control-pop_0.3s_var(--ease-spring)]'
-                      : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'}
+                    className={
+                      canClaim
+                        ? 'animate-[control-pop_0.3s_var(--ease-spring)]'
+                        : 'bg-surface-container-high text-outline  '
+                    }
                   >
-                    {canClaim ? '领取' : '去完成'}
+                    {canClaim ? '领取' : '去完成'}{' '}
                   </Button>
-                )}
-              </div>
+                )}{' '}
+              </div>{' '}
             </div>
           );
-        })}
+        })}{' '}
       </div>
     );
   };
-
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 animate-fade-in">
-      {/* Header */}
+      {' '}
+      {/* Header */}{' '}
       <div className="flex items-center gap-3 mb-8">
-        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">等级与任务</h1>
-      </div>
-
-      {/* User card */}
+        {' '}
+        <h1 className="text-title-l text-on-surface">等级与任务</h1>{' '}
+      </div>{' '}
+      {/* User card */}{' '}
       {data && (
-        <div className="mb-6 p-5 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border border-amber-200 dark:border-amber-800/30">
+        <div className="mb-6 p-5 rounded-md bg-warning-container/60 border border-warning/40">
+          {' '}
           <div className="flex items-center justify-between mb-3">
-            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              Lv.{data.level}
+            {' '}
+            <div className="text-headline-s-emphasized text-warning">
+              {' '}
+              Lv.{data.level}{' '}
               {data.equipped_badges?.map((b, i) => (
-                <span
+                <UserBadge
                   key={i}
-                  className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold text-white align-middle"
-                  style={{ backgroundColor: b.badge_color }}
-                >
-                  {b.badge_name}
-                </span>
-              ))}
-            </div>
-            <div className="text-sm text-amber-700 dark:text-amber-300">
-              <MdEmojiEvents size={14} className="inline mr-1" />
-              金币: <span className="font-bold">{data.coins?.toLocaleString() || 0}</span>
-            </div>
-          </div>
+                  name={b.badge_name}
+                  color={b.badge_color}
+                  className="ml-2 align-middle"
+                />
+              ))}{' '}
+            </div>{' '}
+            <div className="text-body-m text-warning">
+              {' '}
+              <MdEmojiEvents size={14} className="inline mr-1" /> 金币:{' '}
+              <span className="font-bold">{data.coins?.toLocaleString() || 0}</span>{' '}
+            </div>{' '}
+          </div>{' '}
           <div>
-            <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400 mb-1">
-              <span>当前经验进度</span>
-              <span>当前经验: {data.experience % 100} / 100</span>
-            </div>
-            <div className="h-2.5 rounded-full bg-amber-200 dark:bg-amber-900/40 overflow-hidden">
+            {' '}
+            <div className="flex justify-between text-label-m text-warning mb-1">
+              {' '}
+              <span>当前经验进度</span> <span>当前经验: {data.experience % 100} / 100</span>{' '}
+            </div>{' '}
+            <div className="h-2.5 rounded-full bg-warning-container overflow-hidden">
+              {' '}
               <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-400 transition-all duration-500"
+                className="h-full rounded-full bg-gradient-to-r from-warning to-tertiary transition-[width] duration-500 ease-[var(--ease-standard)]"
                 style={{ width: `${data.experience % 100}%` }}
-              />
-            </div>
-          </div>
+              />{' '}
+            </div>{' '}
+          </div>{' '}
         </div>
-      )}
-
+      )}{' '}
       {loading && (
         <div className="flex justify-center py-16">
-          <Spinner />
+          {' '}
+          <Spinner />{' '}
         </div>
-      )}
-
+      )}{' '}
       {error && (
         <div className="text-center py-12">
-          <p className="text-red-500 mb-4">{error}</p>
-          <button
-            onClick={loadTasks}
-            data-ripple className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:scale-95 transition-all duration-200"
-          >
+          {' '}
+          <p className="text-error mb-4">{error}</p>{' '}
+          <Button onClick={loadTasks} variant="filled">
             重试
-          </button>
+          </Button>
         </div>
-      )}
-
+      )}{' '}
       {!loading && !error && data && (
         <>
-          {/* Tabs */}
-          <div ref={containerRef} className="relative flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700">
+          {' '}
+          {/* Tabs */}{' '}
+          <div
+            ref={containerRef}
+            className="relative flex gap-1 mb-6 border-b border-outline-variant"
+          >
+            {' '}
             <span
               ref={indicatorRef}
               aria-hidden="true"
-              className="absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-amber-400"
-            />
-            {tabs.map(tab => (
+              className="absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-warning-fill"
+            />{' '}
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 data-tab={tab.id}
                 data-ripple
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 text-sm font-medium transition-colors rounded-t-lg ${
+                className={`px-4 py-2.5 text-label-l transition-ui rounded-t-lg ${
                   activeTab === tab.id
-                    ? 'text-amber-500'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    ? 'text-warning'
+                    : 'text-on-surface-variant hover:text-on-surface '
                 }`}
               >
                 {tab.label}
               </button>
             ))}
           </div>
-
           {/* Tab subtitle */}
           <div key={`subtitle-${activeTab}`} className="mb-4 animate-fade-in">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              {tabs.find(t => t.id === activeTab)?.label}
+            <span className="text-label-l-emphasized text-on-surface">
+              {tabs.find((t) => t.id === activeTab)?.label}
             </span>
-            {tabs.find(t => t.id === activeTab)?.subtitle && (
-              <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
-                {tabs.find(t => t.id === activeTab)?.subtitle}
+            {tabs.find((t) => t.id === activeTab)?.subtitle && (
+              <span className="ml-2 text-body-s text-outline">
+                {tabs.find((t) => t.id === activeTab)?.subtitle}
               </span>
             )}
           </div>
-
           {renderTabContent()}
         </>
       )}

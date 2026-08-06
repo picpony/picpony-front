@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import { MdReport, MdOpenInNew } from 'react-icons/md';
-import { SectionHeader, SearchInput, EmptyState, Spinner } from './';
+import DataTable, { type Column } from '@/components/DataTable';
+import Chip from '@/components/Chip';
+import { SectionHeader, SearchInput } from './';
 
 interface Report {
   id: number;
@@ -14,6 +16,14 @@ interface Report {
   status: 'pending' | 'processed' | 'rejected';
   created_at: string;
 }
+
+/** Label + chip tone per status, so the three branches aren't spelled out in JSX. */
+const STATUS: Record<Report['status'], { label: string; tone: 'warning' | 'success' | 'neutral' }> =
+  {
+    pending: { label: '待处理', tone: 'warning' },
+    processed: { label: '已处理', tone: 'success' },
+    rejected: { label: '已驳回', tone: 'neutral' },
+  };
 
 export default function ReportsTab({ token }: { token: string }) {
   const [reports, setReports] = useState<Report[]>([]);
@@ -36,7 +46,8 @@ export default function ReportsTab({ token }: { token: string }) {
 
   useEffect(() => {
     if (!token) return;
-    api.adminGetReports(token)
+    api
+      .adminGetReports(token)
       .then((data) => {
         if (data.success) {
           setReports(data.reports || []);
@@ -49,10 +60,9 @@ export default function ReportsTab({ token }: { token: string }) {
   const filteredReports = useMemo(() => {
     if (!searchKw) return reports;
     const kw = searchKw.toLowerCase();
-    return reports.filter(r =>
-      String(r.id) === kw ||
-      String(r.image_id) === kw ||
-      r.username?.toLowerCase().includes(kw)
+    return reports.filter(
+      (r) =>
+        String(r.id) === kw || String(r.image_id) === kw || r.username?.toLowerCase().includes(kw),
     );
   }, [searchKw, reports]);
 
@@ -71,6 +81,67 @@ export default function ReportsTab({ token }: { token: string }) {
     }
   };
 
+  const reportColumns: Column<Report>[] = [
+    { key: 'id', header: '单号', render: (r) => `#${r.id}` },
+    {
+      key: 'image',
+      header: '图片',
+      render: (r) => (
+        <a
+          href={`/pic/${r.image_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-link inline-flex items-center gap-1 hover:underline"
+        >
+          #{r.image_id} <MdOpenInNew size={14} />
+        </a>
+      ),
+    },
+    { key: 'user', header: '举报人', primary: true, render: (r) => r.username },
+    {
+      key: 'reason',
+      header: '原因',
+      className: 'max-w-xs truncate',
+      render: (r) => <span title={r.reason}>{r.reason}</span>,
+    },
+    {
+      key: 'status',
+      header: '状态',
+      render: (r) => (
+        <Chip variant="input" tone={STATUS[r.status].tone}>
+          {STATUS[r.status].label}
+        </Chip>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      actions: true,
+      render: (r) =>
+        r.status === 'pending' ? (
+          <>
+            <button
+              onClick={() => handleReport(r.id, 'processed')}
+              data-ripple
+              className="bg-success-fill text-on-fill rounded px-3 py-1 text-label-m transition-ui hover:bg-success-fill/90"
+            >
+              {' '}
+              完结{' '}
+            </button>{' '}
+            <button
+              onClick={() => handleReport(r.id, 'rejected')}
+              data-ripple
+              className="bg-secondary-container text-on-secondary-container rounded px-3 py-1 text-label-m transition-ui hover:bg-secondary-container/80"
+            >
+              驳回
+            </button>
+          </>
+        ) : (
+          <span className="text-outline text-body-m">已归档</span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -85,80 +156,13 @@ export default function ReportsTab({ token }: { token: string }) {
         placeholder="搜索举报ID、图片ID或举报人..."
       />
 
-      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-        <table className="w-full">
-          <thead className="bg-slate-50 dark:bg-slate-800">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">单号</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">图片</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">举报人</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">原因</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">状态</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <EmptyState colSpan={6} message="" icon={<Spinner label="" />} />
-            ) : filteredReports.length === 0 ? (
-              <EmptyState colSpan={6} message="暂无举报记录" />
-            ) : (
-              filteredReports.map((report) => (
-                <tr key={report.id} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="px-4 py-3 text-sm">#{report.id}</td>
-                  <td className="px-4 py-3">
-                    <a 
-                      href={`/pic/${report.image_id}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline text-sm flex items-center gap-1"
-                    >
-                      #{report.image_id} <MdOpenInNew size={14} />
-                    </a>
-                  </td>
-                  <td className="px-4 py-3 text-sm">{report.username}</td>
-                  <td className="px-4 py-3 text-sm max-w-xs truncate" title={report.reason}>{report.reason}</td>
-                  <td className="px-4 py-3">
-                    {report.status === 'pending' ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                        待处理
-                      </span>
-                    ) : report.status === 'processed' ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                        已处理
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        已驳回
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {report.status === 'pending' ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleReport(report.id, 'processed')}
-                          className="px-3 py-1 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded transition-colors"
-                        >
-                          完结
-                        </button>
-                        <button
-                          onClick={() => handleReport(report.id, 'rejected')}
-                          className="px-3 py-1 text-xs font-medium text-white bg-slate-400 hover:bg-slate-500 rounded transition-colors"
-                        >
-                          驳回
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-slate-400">已归档</span>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable<Report>
+        columns={reportColumns}
+        rows={filteredReports}
+        rowKey={(r) => r.id}
+        loading={isLoading}
+        empty="暂无举报记录"
+      />
     </div>
   );
 }

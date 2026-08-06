@@ -7,11 +7,28 @@ import Checkbox from '@/components/Checkbox';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
 import {
-  MdLibraryBooks, MdAdd, MdSearch, MdEdit, MdDelete, MdContentCopy,
-  MdTranslate, MdFileDownload, MdFileUpload, MdCloudDownload, MdClose,
-  MdFeedback, MdEmojiEvents, MdCheckCircle, MdOutlineWarning
+  MdLibraryBooks,
+  MdAdd,
+  MdSearch,
+  MdEdit,
+  MdDelete,
+  MdContentCopy,
+  MdTranslate,
+  MdFileDownload,
+  MdFileUpload,
+  MdCloudDownload,
+  MdClose,
+  MdFeedback,
+  MdEmojiEvents,
+  MdCheckCircle,
+  MdOutlineWarning,
 } from 'react-icons/md';
 import { Spinner } from './';
+import DataTable, { type Column } from '@/components/DataTable';
+import Pagination from '@/components/Pagination';
+import Button from '@/components/Button';
+import { tagCategoryChip, tagCategoryDot } from '@/lib/tagCategories';
+import { Input, Textarea } from '@/components/Input';
 
 interface Tag {
   id: number;
@@ -46,17 +63,6 @@ interface DerpiTag {
   images: number;
 }
 
-const categoryMap: Record<string, { label: string; color: string }> = {
-  character: { label: '角色', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
-  species: { label: '种族', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
-  rating: { label: '分级', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-  general: { label: '常规', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
-  origin: { label: '来源', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
-  'content-official': { label: '官方内容', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' },
-  'content-fanmade': { label: '同人内容', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
-  error: { label: '错误', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
-};
-
 export default function GlossaryTab() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,9 +83,16 @@ export default function GlossaryTab() {
         // ignore
       }
     }
-    const savedItemsPerPage = typeof window !== 'undefined' ? localStorage.getItem('picpony_items_per_page') : null;
+    const savedItemsPerPage =
+      typeof window !== 'undefined' ? localStorage.getItem('picpony_items_per_page') : null;
     const itemsPerPage = savedItemsPerPage ? parseInt(savedItemsPerPage, 10) : 100;
-    return { token, userRole: role, isAdmin: admin, itemsPerPage, initError: storedUser ? null : '请先登录' };
+    return {
+      token,
+      userRole: role,
+      isAdmin: admin,
+      itemsPerPage,
+      initError: storedUser ? null : '请先登录',
+    };
   };
 
   const initial = initFromStorage();
@@ -155,50 +168,54 @@ export default function GlossaryTab() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  const loadTags = useCallback(async (page = 1) => {
+  const loadTags = useCallback(
+    async (page = 1) => {
+      if (!token) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const data = await api.getDictionary(token, {
+          page,
+          limit: itemsPerPage,
+          keyword: searchKeyword,
+          sort: sortMode,
+          category: categoryFilter,
+          untranslated: showUntranslatedOnly ? 1 : 0,
+        });
+
+        if (data.success) {
+          setTags(data.tags || []);
+          setTotalMatches(data.total_matches || 0);
+          setTotalPages(Math.ceil((data.total_matches || 0) / itemsPerPage) || 1);
+          setCurrentPage(page);
+          if (data.stats) {
+            setStats(data.stats);
+          }
+        } else {
+          setError(data.error || '加载失败');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '网络错误');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly],
+  );
+
+  useEffect(() => {
     if (!token) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const data = await api.getDictionary(token, {
-        page,
+    api
+      .getDictionary(token, {
+        page: 1,
         limit: itemsPerPage,
         keyword: searchKeyword,
         sort: sortMode,
         category: categoryFilter,
         untranslated: showUntranslatedOnly ? 1 : 0,
-      });
-
-      if (data.success) {
-        setTags(data.tags || []);
-        setTotalMatches(data.total_matches || 0);
-        setTotalPages(Math.ceil((data.total_matches || 0) / itemsPerPage) || 1);
-        setCurrentPage(page);
-        if (data.stats) {
-          setStats(data.stats);
-        }
-      } else {
-        setError(data.error || '加载失败');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '网络错误');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly]);
-
-  useEffect(() => {
-    if (!token) return;
-    api.getDictionary(token, {
-      page: 1,
-      limit: itemsPerPage,
-      keyword: searchKeyword,
-      sort: sortMode,
-      category: categoryFilter,
-      untranslated: showUntranslatedOnly ? 1 : 0,
-    })
+      })
       .then((data) => {
         if (data.success) {
           setTags(data.tags || []);
@@ -379,7 +396,11 @@ export default function GlossaryTab() {
       let finalAliases: string[] = [];
 
       if (cn.trim()) {
-        const parts = cn.replace(/，/g, ',').split(',').map((s) => s.trim()).filter((s) => s);
+        const parts = cn
+          .replace(/，/g, ',')
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s);
         if (parts.length > 0) {
           finalCn = parts[0];
           finalAliases = parts.slice(1);
@@ -419,34 +440,30 @@ export default function GlossaryTab() {
   const deleteTag = async (id: number) => {
     if (!isAdmin || !token) return;
 
-    showGlossaryConfirm(
-      '确认删除',
-      '确定要永久删除这个词条吗？',
-      async () => {
-        try {
-          const res = await api.deleteDictionaryTag(token, id);
-          const data = await res.json();
+    showGlossaryConfirm('确认删除', '确定要永久删除这个词条吗？', async () => {
+      try {
+        const res = await api.deleteDictionaryTag(token, id);
+        const data = await res.json();
 
-          if (data.success) {
-            showToast('删除成功', 'success');
-            setSelectedIds((prev) => {
-              const next = new Set(prev);
-              next.delete(id);
-              return next;
-            });
-            if (isDuplicateMode) {
-              loadDuplicates();
-            } else {
-              loadTags(currentPage);
-            }
+        if (data.success) {
+          showToast('删除成功', 'success');
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          if (isDuplicateMode) {
+            loadDuplicates();
           } else {
-            showToast(data.error || '删除失败', 'error');
+            loadTags(currentPage);
           }
-        } catch (err) {
-          showToast(err instanceof Error ? err.message : '网络错误', 'error');
+        } else {
+          showToast(data.error || '删除失败', 'error');
         }
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : '网络错误', 'error');
       }
-    );
+    });
   };
 
   const batchDelete = async () => {
@@ -480,7 +497,7 @@ export default function GlossaryTab() {
         } else {
           loadTags(currentPage);
         }
-      }
+      },
     );
   };
 
@@ -513,7 +530,14 @@ export default function GlossaryTab() {
     if (!isAdmin || !token) return;
 
     const lines = batchInput.split('\n');
-    const tasks: { en: string; cn: string; aliases: string[]; cat: string; count: number; description: string }[] = [];
+    const tasks: {
+      en: string;
+      cn: string;
+      aliases: string[];
+      cat: string;
+      count: number;
+      description: string;
+    }[] = [];
     const batchEnTags = new Set<string>();
 
     for (const line of lines) {
@@ -524,7 +548,11 @@ export default function GlossaryTab() {
       const en = parts[0].trim().toLowerCase();
       const cnRaw = parts[1]?.trim() || '';
 
-      const cnParts = cnRaw.replace(/，/g, ',').split(',').map((s) => s.trim()).filter((s) => s);
+      const cnParts = cnRaw
+        .replace(/，/g, ',')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s);
       if (cnParts.length === 0 || !en) continue;
 
       if (batchEnTags.has(en)) continue;
@@ -580,7 +608,7 @@ export default function GlossaryTab() {
         setIsBatchModalOpen(false);
         setBatchInput('');
         loadTags(1);
-      }
+      },
     );
   };
 
@@ -600,7 +628,11 @@ export default function GlossaryTab() {
     let skippedCount = 0;
 
     for (let p = syncStartPage; p <= syncEndPage; p++) {
-      setSyncProgress({ current: p - syncStartPage + 1, total: totalPagesToFetch, message: `正在拉取第 ${p} 页...` });
+      setSyncProgress({
+        current: p - syncStartPage + 1,
+        total: totalPagesToFetch,
+        message: `正在拉取第 ${p} 页...`,
+      });
 
       try {
         const data = await api.getDerpiPopularTags(p);
@@ -721,146 +753,188 @@ export default function GlossaryTab() {
     showToast('导出成功', 'success');
   };
 
-  const renderTagRow = (tag: Tag) => {
-    const isSelected = selectedIds.has(tag.id);
-    const catInfo = categoryMap[tag.cat] || categoryMap.general;
+  const visibleTags = isDuplicateMode ? duplicateTags : tags;
+  const allSelected = visibleTags.length > 0 && visibleTags.every((t) => selectedIds.has(t.id));
 
-    return (
-      <tr
-        key={tag.id}
-        className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-      >
-        <td className="px-4 py-3 text-center">
-            {isAdmin && (
-              <Checkbox checked={isSelected} onChange={() => toggleRowSelection(tag.id)} />
-            )}
-        </td>
-              <td className="px-4 py-3">
-                {tag.cn === '未翻译' ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 whitespace-nowrap">
-                    <MdOutlineWarning size={14} />
-                    未翻译
-                  </span>
-                ) : (
-                  <div className="flex flex-wrap gap-1">
-                    <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary">
-                      {tag.cn}
-                    </span>
-                    {tag.aliases?.map((alias, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                      >
-                        {alias}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${catInfo.color}`}>
-                    {tag.cat}
-                  </span>
-                  <a
-                    href={`/search?q=${encodeURIComponent(tag.en)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-sm text-primary hover:underline flex items-center gap-1"
-                  >
-                    {tag.en} <MdSearch size={14} />
-                  </a>
-            {tag.count > 0 ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                原站 ({tag.count}图)
+  /* Built here rather than at module scope: every cell closes over `isAdmin`,
+     the selection set and the row handlers, and the header cell owns the
+     select-all checkbox. */
+  const tagColumns: Column<Tag>[] = [
+    {
+      key: 'select',
+      align: 'center',
+      headerClassName: 'w-12',
+      // The phone card has no row grid to select across, so the checkbox
+      // column would just be a stray control with no header to explain it.
+      hideOnMobile: true,
+      header: isAdmin ? (
+        <Checkbox checked={allSelected} onChange={toggleSelectAll} aria-label="全选本页标签" />
+      ) : (
+        ''
+      ),
+      render: (tag) =>
+        isAdmin ? (
+          <Checkbox
+            checked={selectedIds.has(tag.id)}
+            onChange={() => toggleRowSelection(tag.id)}
+            aria-label={`选择 ${tag.en}`}
+          />
+        ) : null,
+    },
+    {
+      key: 'cn',
+      header: '中文翻译',
+      primary: true,
+      render: (tag) =>
+        tag.cn === '未翻译' ? (
+          <span className="bg-error-container text-error inline-flex items-center gap-1 rounded px-2 py-1 text-label-m whitespace-nowrap">
+            {' '}
+            <MdOutlineWarning size={14} /> 未翻译{' '}
+          </span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {' '}
+            <span className="bg-primary-container text-on-primary-container inline-flex items-center rounded px-2 py-1 text-label-m ">
+              {' '}
+              {tag.cn}{' '}
+            </span>{' '}
+            {tag.aliases?.map((alias, idx) => (
+              <span
+                key={idx}
+                className="bg-surface-container-high text-on-surface-variant inline-flex items-center rounded px-2 py-1 text-label-m "
+              >
+                {' '}
+                {alias}{' '}
               </span>
-            ) : (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">
-                本地
-              </span>
-            )}
+            ))}{' '}
           </div>
-        </td>
-        <td className="px-4 py-3">
-          {tag.description ? (
-            <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2" title={tag.description}>
-              {tag.description}
-            </p>
+        ),
+    },
+    {
+      key: 'en',
+      header: '英文标签',
+      render: (tag) => (
+        <div className="flex flex-wrap items-center gap-2">
+          {' '}
+          <span
+            className={`inline-flex items-center rounded px-2 py-0.5 text-label-m ${tagCategoryChip(tag.cat)}`}
+          >
+            {' '}
+            {tag.cat}{' '}
+          </span>{' '}
+          <a
+            href={`/search?q=${encodeURIComponent(tag.en)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-link flex items-center gap-1 font-mono text-body-m hover:underline"
+          >
+            {' '}
+            {tag.en} <MdSearch size={14} />{' '}
+          </a>{' '}
+          {tag.count > 0 ? (
+            <span className="bg-accent-blue text-on-accent-blue inline-flex items-center rounded px-2 py-0.5 text-label-m ">
+              {' '}
+              原站 ({tag.count}图){' '}
+            </span>
           ) : (
-            <span className="text-sm text-slate-400 dark:text-slate-500">暂无简介</span>
-          )}
-        </td>
-        <td className="px-4 py-3">
-          {isAdmin ? (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => openEditModal(tag)}
-                className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
-                title="编辑"
-              >
-                <MdEdit size={18} />
-              </button>
-              <button
-                onClick={() => deleteTag(tag.id)}
-                className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
-                title="删除"
-              >
-                <MdDelete size={18} />
-              </button>
-            </div>
-          ) : (
-            <span className="text-sm text-slate-400">无权限</span>
-          )}
-        </td>
-      </tr>
-    );
-  };
+            <span className="bg-surface-container-high text-on-surface-variant inline-flex items-center rounded px-2 py-0.5 text-label-m ">
+              {' '}
+              本地{' '}
+            </span>
+          )}{' '}
+        </div>
+      ),
+    },
+    {
+      key: 'desc',
+      header: '标签简介',
+      render: (tag) =>
+        tag.description ? (
+          <p className="text-on-surface-variant line-clamp-2 text-body-m" title={tag.description}>
+            {tag.description}
+          </p>
+        ) : (
+          <span className="text-outline text-body-m">暂无简介</span>
+        ),
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      actions: true,
+      headerClassName: 'w-24',
+      render: (tag) =>
+        isAdmin ? (
+          <>
+            <button
+              onClick={() => openEditModal(tag)}
+              className="touch-target state-layer text-warning rounded-full p-1.5"
+              title="编辑"
+              aria-label={`编辑 ${tag.en}`}
+            >
+              <MdEdit size={18} />
+            </button>
+            <button
+              onClick={() => deleteTag(tag.id)}
+              className="touch-target state-layer rounded-full p-1.5 text-error"
+              title="删除"
+              aria-label={`删除 ${tag.en}`}
+            >
+              <MdDelete size={18} />
+            </button>
+          </>
+        ) : (
+          <span className="text-outline text-body-m">无权限</span>
+        ),
+    },
+  ];
 
-  const translationPercentage = stats.total > 0 ? ((stats.translated / stats.total) * 100).toFixed(2) : '0.00';
-
+  const translationPercentage =
+    stats.total > 0 ? ((stats.translated / stats.total) * 100).toFixed(2) : '0.00';
   if (error && !tags.length) {
     return (
       <div className="text-center py-12">
-        <p className="text-slate-500 dark:text-slate-400 mb-4">{error}</p>
+        {' '}
+        <p className="text-on-surface-variant mb-4">{error}</p>{' '}
         <button
           onClick={() => loadTags(1)}
-          className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+          className="px-4 py-2 text-label-l text-on-primary bg-primary hover:bg-primary/90 rounded-full transition-ui"
         >
-          重试
-        </button>
+          {' '}
+          重试{' '}
+        </button>{' '}
       </div>
     );
   }
-
   return (
     <div className="space-y-6">
+      {' '}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-          <MdLibraryBooks className="text-primary" size={24} />
-          中英标签词库管理 ({totalMatches} 条)
-        </h2>
+        {' '}
+        <h2 className="text-title-l text-on-surface flex items-center gap-2">
+          {' '}
+          <MdLibraryBooks className="text-primary" size={24} /> 中英标签词库管理 ({totalMatches}{' '}
+          条){' '}
+        </h2>{' '}
         {isAdmin && (
           <button
             onClick={() => openEditModal()}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors shrink-0"
+            className="inline-flex items-center gap-2 px-4 py-2 text-label-l text-on-primary bg-primary hover:bg-primary/90 rounded-full transition-ui shrink-0"
           >
-            <MdAdd size={18} />
-            添加新标签
+            {' '}
+            <MdAdd size={18} /> 添加新标签{' '}
           </button>
-        )}
-      </div>
-
+        )}{' '}
+      </div>{' '}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input
-            type="text"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            placeholder="搜索中文或英文标签..."
-            className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
-          />
-        </div>
+        {' '}
+        <Input
+          type="text"
+          icon={<MdSearch size={20} />}
+          value={searchKeyword}
+          onChange={(e) => setSearchKeyword(e.target.value)}
+          placeholder="搜索中文或英文标签..."
+          fieldClassName="flex-1 min-w-[200px]"
+        />
         <Select
           value={sortMode}
           onChange={(v) => setSortMode(v)}
@@ -889,136 +963,105 @@ export default function GlossaryTab() {
             { value: 'content-fanmade', label: '同人内容' },
             { value: 'error', label: '错误' },
           ]}
-        />
-      </div>
-
+        />{' '}
+      </div>{' '}
       {isAdmin && (
         <div className="flex flex-wrap gap-2">
+          {' '}
           <button
             onClick={() => setShowUntranslatedOnly(!showUntranslatedOnly)}
-            className={`inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors shrink-0 ${
+            className={`inline-flex items-center gap-1 px-3 py-2 text-label-l rounded-full transition-ui shrink-0 ${
               showUntranslatedOnly
-                ? 'bg-primary text-white hover:bg-primary/90'
+                ? 'bg-primary text-on-primary hover:bg-primary/90'
                 : 'bg-primary/10 text-primary hover:bg-primary/20'
             }`}
           >
             {showUntranslatedOnly ? <MdClose size={16} /> : <MdTranslate size={16} />}
-            {showUntranslatedOnly ? '取消未翻译过滤' : '只看未翻译'}
-          </button>
+            {showUntranslatedOnly ? '取消未翻译过滤' : '只看未翻译'}{' '}
+          </button>{' '}
           {selectedIds.size > 0 && (
             <button
               onClick={batchDelete}
-              className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors shrink-0"
+              className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-error-fill text-on-fill hover:bg-error-fill/90 rounded-full transition-ui shrink-0"
             >
-              <MdDelete size={16} />
-              批量删除 ({selectedIds.size})
+              {' '}
+              <MdDelete size={16} /> 批量删除 ({selectedIds.size}){' '}
             </button>
-          )}
+          )}{' '}
           <button
             onClick={toggleDuplicateMode}
-            className={`inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors shrink-0 ${
+            className={`inline-flex items-center gap-1 px-3 py-2 text-label-l rounded-full transition-ui shrink-0 ${
               isDuplicateMode
-                ? 'bg-primary text-white hover:bg-primary/90'
+                ? 'bg-primary text-on-primary hover:bg-primary/90'
                 : 'bg-primary/10 text-primary hover:bg-primary/20'
             }`}
           >
             <MdContentCopy size={16} />
-            {isDuplicateMode ? '退出查重' : '查重模式'}
-          </button>
+            {isDuplicateMode ? '退出查重' : '查重模式'}{' '}
+          </button>{' '}
           <button
             onClick={() => setIsFeedbackModalOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            <MdFeedback size={16} />
-            用户反馈
-          </button>
+            {' '}
+            <MdFeedback size={16} /> 用户反馈{' '}
+          </button>{' '}
           <button
             onClick={exportCurrentPage}
-            className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            <MdFileDownload size={16} />
-            导出当前页
-          </button>
+            {' '}
+            <MdFileDownload size={16} /> 导出当前页{' '}
+          </button>{' '}
           <button
             onClick={() => setIsBatchModalOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            <MdFileUpload size={16} />
-            批量导入
-          </button>
+            {' '}
+            <MdFileUpload size={16} /> 批量导入{' '}
+          </button>{' '}
           <button
             onClick={() => setIsSyncModalOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            <MdCloudDownload size={16} />
-            同步热门
-          </button>
+            {' '}
+            <MdCloudDownload size={16} /> 同步热门{' '}
+          </button>{' '}
           <button
             onClick={() => setIsDerpiModalOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            <MdSearch size={16} />
-            搜原站标签
-          </button>
+            {' '}
+            <MdSearch size={16} /> 搜原站标签{' '}
+          </button>{' '}
         </div>
-      )}
-
-      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-        <table className="w-full">
-          <thead className="bg-slate-50 dark:bg-slate-800">
-            <tr>
-              <th className="px-4 py-3 text-center w-12">
-              {isAdmin && (
-                  <Checkbox
-                    checked={
-                      (isDuplicateMode ? duplicateTags : tags).length > 0 &&
-                      (isDuplicateMode ? duplicateTags : tags).every((t) => selectedIds.has(t.id))
-                    }
-                    onChange={toggleSelectAll}
-                  />
-                )}
-              </th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">中文翻译</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">英文标签</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">标签简介</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 w-24">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center">
-                  <Spinner label="" />
-                </td>
-              </tr>
-            ) : (isDuplicateMode ? duplicateTags : tags).length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
-                  {isDuplicateMode ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <MdCheckCircle size={32} className="text-green-500" />
-                      <p className="flex items-center gap-2">
-                        <MdEmojiEvents size={20} className="text-green-500" />
-                        太棒了，当前词库没有发现重复英文标签！
-                      </p>
-                    </div>
-                  ) : (
-                    '未找到匹配的标签记录'
-                  )}
-                </td>
-              </tr>
-            ) : (
-              (isDuplicateMode ? duplicateTags : tags).map(renderTagRow)
-            )}
-          </tbody>
-        </table>
-      </div>
-
+      )}{' '}
+      <DataTable<Tag>
+        columns={tagColumns}
+        rows={visibleTags}
+        rowKey={(tag) => tag.id}
+        loading={isLoading}
+        empty={
+          isDuplicateMode ? (
+            <div className="flex flex-col items-center gap-2">
+              {' '}
+              <MdCheckCircle size={32} className="text-success" />{' '}
+              <p className="flex items-center gap-2">
+                {' '}
+                <MdEmojiEvents size={20} className="text-success" />{' '}
+                太棒了，当前词库没有发现重复英文标签！{' '}
+              </p>{' '}
+            </div>
+          ) : (
+            '未找到匹配的标签记录'
+          )
+        }
+      />
       {!isDuplicateMode && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-500 dark:text-slate-400">每页:</span>
-            <input
+            <span className="text-body-m text-on-surface-variant">每页:</span>
+            <Input
               type="number"
               min={1}
               max={150}
@@ -1030,49 +1073,39 @@ export default function GlossaryTab() {
                 localStorage.setItem('picpony_items_per_page', clamped.toString());
               }}
               onBlur={() => loadTags(1)}
-              className="w-16 px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+              className="rounded"
+              fieldClassName="w-16"
             />
-            <span className="text-sm text-slate-500 dark:text-slate-400">条</span>
+            <span className="text-body-m text-on-surface-variant">条</span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => loadTags(currentPage - 1)}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              上一页
-            </button>
-            <span className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg">
-              第 {currentPage} / {totalPages} 页 (共 {totalMatches} 条)
-            </span>
-            <button
-              onClick={() => loadTags(currentPage + 1)}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              下一页
-            </button>
+          <div className="flex flex-col items-center gap-1 sm:items-end">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={loadTags}
+              siblings={1}
+              className="mt-0"
+            />
+            <span className="text-on-surface-variant text-body-s">共 {totalMatches} 条</span>
           </div>
         </div>
       )}
-
-      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="p-4 bg-surface-container-low/50 rounded-md border border-outline-variant">
         <div className="text-center mb-3">
-          <span className="text-sm text-slate-600 dark:text-slate-400">
-            词库翻译进度：已翻译 <strong className="text-primary">{stats.translated}</strong> / 总标签{' '}
-            <strong>{stats.total}</strong> ({' '}
-            <strong className="text-green-500">{translationPercentage}%</strong> )
+          <span className="text-body-m text-on-surface-variant">
+            词库翻译进度：已翻译 <strong className="text-primary">{stats.translated}</strong> /
+            总标签 <strong>{stats.total}</strong> ({' '}
+            <strong className="text-success">{translationPercentage}%</strong> )
           </span>
         </div>
-        <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div className="w-full h-3 bg-surface-container-highest rounded-full overflow-hidden">
           <div
-            className="h-full bg-green-500 rounded-full transition-all duration-500"
+            className="h-full bg-success-fill rounded-full transition-[width] duration-500 ease-[var(--ease-standard)]"
             style={{ width: `${translationPercentage}%` }}
           />
         </div>
       </div>
-
       {/* Modals */}
       <Modal
         isOpen={isEditModalOpen}
@@ -1081,28 +1114,26 @@ export default function GlossaryTab() {
         maxWidth="max-w-lg"
         footer={
           <>
-            <button
-              onClick={closeEditModal}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
+            <Button variant="text" onClick={closeEditModal}>
               取消
-            </button>
-            <button
-              onClick={saveTag}
-              disabled={isSaving}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? '保存中...' : '保存'}
-            </button>
+            </Button>
+            <Button variant="filled" onClick={saveTag} disabled={isSaving}>
+              {isSaving ? '保存中...' : '保存'}{' '}
+            </Button>{' '}
           </>
         }
       >
+        {' '}
         <div className="space-y-4">
+          {' '}
           <div className="relative">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              英文原标签 {editingTag ? '(勿改动)' : ''}
-            </label>
-            <input
+            {' '}
+            <label className="block text-label-l text-on-surface mb-1" htmlFor="glossarytab-f1">
+              {' '}
+              英文原标签 {editingTag ? '(勿改动)' : ''}{' '}
+            </label>{' '}
+            <Input
+              id="glossarytab-f1"
               type="text"
               value={editForm.en}
               onChange={(e) => {
@@ -1111,45 +1142,53 @@ export default function GlossaryTab() {
               }}
               disabled={!!editingTag}
               placeholder="例如：twilight sparkle"
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm font-mono"
-            />
+              className="font-mono"
+            />{' '}
             {showSuggestions && derpiSuggestions.length > 0 && (
               <div
                 ref={suggestionsRef}
-                className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+                className="absolute z-10 w-full mt-1 bg-surface-container-lowest border border-outline-variant popover-scrollbar rounded-sm shadow-e3 max-h-48 overflow-y-auto"
               >
+                {' '}
                 {derpiSuggestions.map((tag) => (
                   <button
                     key={tag.name}
                     onClick={() => selectSuggestion(tag)}
-                    className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center justify-between"
+                    className="w-full px-3 py-2 text-left hover:bg-surface-container-high flex items-center justify-between"
                   >
+                    {' '}
                     <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${categoryMap[tag.category]?.color.split(' ')[0] || 'bg-slate-300'}`} />
-                      <span className="text-sm text-slate-700 dark:text-slate-200 font-mono">{tag.name}</span>
-                    </div>
-                    <span className="text-xs text-slate-400">{tag.images} 图</span>
+                      {' '}
+                      <span
+                        className={`w-2 h-2 rounded-full ${tagCategoryDot(tag.category)}`}
+                      />{' '}
+                      <span className="text-body-m text-on-surface font-mono">{tag.name}</span>{' '}
+                    </div>{' '}
+                    <span className="text-body-s text-outline">{tag.images} 图</span>{' '}
                   </button>
-                ))}
+                ))}{' '}
               </div>
-            )}
-          </div>
-
+            )}{' '}
+          </div>{' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              中文翻译 <span className="text-slate-400">(多重翻译请用英文逗号 , 隔开)</span>
-            </label>
-            <input
+            {' '}
+            <label className="block text-label-l text-on-surface mb-1" htmlFor="glossarytab-f2">
+              {' '}
+              中文翻译 <span className="text-outline">(多重翻译请用英文逗号 , 隔开)</span>{' '}
+            </label>{' '}
+            <Input
+              id="glossarytab-f2"
               type="text"
               value={editForm.cn}
               onChange={(e) => setEditForm({ ...editForm, cn: e.target.value })}
               placeholder="例如：紫悦,暮光闪闪,ts"
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
-            />
-          </div>
-
+            />{' '}
+          </div>{' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">分类</label>
+            {' '}
+            <label className="block text-label-l text-on-surface mb-1" htmlFor="glossarytab-f3">
+              分类
+            </label>{' '}
             <Select
               value={editForm.cat}
               onChange={(v) => setEditForm({ ...editForm, cat: v })}
@@ -1164,22 +1203,22 @@ export default function GlossaryTab() {
                 { value: 'content-fanmade', label: '同人内容 (content-fanmade)' },
                 { value: 'error', label: '错误 (error)' },
               ]}
-            />
-          </div>
-
+            />{' '}
+          </div>{' '}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">标签简介</label>
-            <textarea
+            {' '}
+            <label className="block text-label-l text-on-surface mb-1">标签简介</label>{' '}
+            <Textarea
+              id="glossarytab-f3"
               value={editForm.description}
               onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
               placeholder="例如：该角色首次登场于第X季..."
               rows={3}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm resize-none"
-            />
-          </div>
-        </div>
-      </Modal>
-
+              className="resize-none"
+            />{' '}
+          </div>{' '}
+        </div>{' '}
+      </Modal>{' '}
       <Modal
         isOpen={isBatchModalOpen}
         onClose={() => !isBatchImporting && setIsBatchModalOpen(false)}
@@ -1187,34 +1226,41 @@ export default function GlossaryTab() {
         maxWidth="max-w-xl"
         footer={
           <>
+            {' '}
             <button
               onClick={() => setIsBatchModalOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
             >
-              取消
-            </button>
+              {' '}
+              取消{' '}
+            </button>{' '}
             <button
               onClick={executeBatchImport}
               disabled={isBatchImporting}
-              className="px-4 py-2 text-sm font-medium text-white bg-cyan-500 hover:bg-cyan-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-label-l bg-tertiary-container text-on-tertiary-container hover:bg-tertiary-container/80 rounded-full transition-ui disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isBatchImporting ? '导入中...' : '开始导入'}
-            </button>
+              {' '}
+              {isBatchImporting ? '导入中...' : '开始导入'}{' '}
+            </button>{' '}
           </>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-          格式要求：<code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">英文标签 = 主中文名, 别名1, 别名2</code>
-        </p>
-        <textarea
+        {' '}
+        <p className="text-body-m text-on-surface-variant mb-3">
+          {' '}
+          格式要求：
+          <code className="bg-surface-container-high px-1 rounded">
+            英文标签 = 主中文名, 别名1, 别名2
+          </code>{' '}
+        </p>{' '}
+        <Textarea
           value={batchInput}
           onChange={(e) => setBatchInput(e.target.value)}
           placeholder="例如：&#10;twilight sparkle = 紫悦, 暮光闪闪, ts"
           rows={12}
-          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm font-mono resize-none"
-        />
-      </Modal>
-
+          className="font-mono resize-none"
+        />{' '}
+      </Modal>{' '}
       <Modal
         isOpen={isSyncModalOpen}
         onClose={() => !isSyncing && setIsSyncModalOpen(false)}
@@ -1223,200 +1269,221 @@ export default function GlossaryTab() {
         hideCloseButton={isSyncing}
         footer={
           <>
+            {' '}
             {!isSyncing && (
               <button
                 onClick={() => setIsSyncModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
               >
-                取消
+                {' '}
+                取消{' '}
               </button>
-            )}
+            )}{' '}
             <button
               onClick={isSyncing ? () => setIsSyncing(false) : executeSync}
-              className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+              className={`text-label-l rounded-sm px-4 py-2 transition-ui ${
                 isSyncing
-                  ? 'bg-red-500 hover:bg-red-600'
-                  : 'bg-emerald-500 hover:bg-emerald-600'
+                  ? 'bg-error-fill text-on-fill hover:bg-error-fill/90'
+                  : 'bg-success-fill text-on-fill hover:bg-success-fill/90'
               }`}
             >
-              {isSyncing ? '停止同步' : '开始同步'}
-            </button>
+              {isSyncing ? '停止同步' : '开始同步'}{' '}
+            </button>{' '}
           </>
         }
       >
+        {' '}
         <div className="space-y-4">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            系统将按原站<strong>图片总数</strong>从高到低自动拉取标签。
-            <br />
-            <span className="text-red-500">新拉取的标签会被标记为【未翻译】</span>
-          </p>
-
+          {' '}
+          <p className="text-body-m text-on-surface-variant">
+            {' '}
+            系统将按原站<strong>图片总数</strong>从高到低自动拉取标签。 <br />{' '}
+            <span className="text-error">新拉取的标签会被标记为【未翻译】</span>{' '}
+          </p>{' '}
           {isSyncing ? (
             <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">{syncProgress.message}</span>
-                <span className="text-primary font-medium">
-                  {syncProgress.current} / {syncProgress.total}
-                </span>
-              </div>
-              <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              {' '}
+              <div className="flex items-center justify-between text-body-m">
+                {' '}
+                <span className="text-on-surface-variant">{syncProgress.message}</span>{' '}
+                <span className="text-primary ">
+                  {' '}
+                  {syncProgress.current} / {syncProgress.total}{' '}
+                </span>{' '}
+              </div>{' '}
+              <div className="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+                {' '}
                 <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                  className="h-full bg-success-fill rounded-full transition-[width] duration-300 ease-[var(--ease-standard)]"
                   style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
-                />
-              </div>
+                />{' '}
+              </div>{' '}
             </div>
           ) : (
             <div className="flex items-center gap-4">
+              {' '}
               <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">起始页</label>
-                <input
+                {' '}
+                <Input
+                  label="起始页"
+                  id="glossarytab-f4"
                   type="number"
                   min={1}
                   value={syncStartPage}
                   onChange={(e) => setSyncStartPage(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
-                />
-              </div>
+                />{' '}
+              </div>{' '}
               <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">结束页</label>
-                <input
+                {' '}
+                <Input
+                  label="结束页"
+                  id="glossarytab-f5"
                   type="number"
                   min={1}
                   value={syncEndPage}
                   onChange={(e) => setSyncEndPage(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
-                />
-              </div>
+                />{' '}
+              </div>{' '}
             </div>
-          )}
-        </div>
-      </Modal>
-
+          )}{' '}
+        </div>{' '}
+      </Modal>{' '}
       <Modal
         isOpen={isDerpiModalOpen}
         onClose={() => setIsDerpiModalOpen(false)}
         title="搜索 Trixiebooru 原站标签"
         maxWidth="max-w-lg"
       >
+        {' '}
         <div className="space-y-4">
+          {' '}
           <div className="flex gap-2">
-            <input
+            {' '}
+            <Input
               type="text"
               value={derpiSearchQuery}
               onChange={(e) => setDerpiSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && executeDerpiSearch()}
               placeholder="输入英文标签名..."
-              className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
+              fieldClassName="flex-1"
             />
-            <button
-              onClick={executeDerpiSearch}
-              disabled={isDerpiSearching}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
-            >
+            <Button variant="filled" onClick={executeDerpiSearch} disabled={isDerpiSearching}>
               {isDerpiSearching ? '搜索中...' : '搜索'}
-            </button>
+            </Button>
           </div>
-
-          <div className="max-h-72 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+          <div className="popover-scrollbar max-h-72 overflow-y-auto border border-outline-variant rounded-md">
             {derpiResults.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+              <div className="p-8 text-center text-on-surface-variant">
                 {isDerpiSearching ? '搜索中...' : '搜索结果将显示在这里'}
               </div>
             ) : (
               derpiResults.map((tag) => (
                 <div
                   key={tag.name}
-                  className="flex items-center justify-between p-3 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                  className="flex items-center justify-between p-3 border-b border-outline-variant last:border-b-0 hover:bg-surface-container-high/50"
                 >
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded ${categoryMap[tag.category]?.color || categoryMap.general.color}`}>
-                      {tag.category || 'general'}
-                    </span>
-                    <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{tag.name}</span>
-                    <span className="text-xs text-slate-400">({tag.images} 图)</span>
-                  </div>
+                    <span
+                      className={`text-body-s px-2 py-0.5 rounded ${tagCategoryChip(tag.category)}`}
+                    >
+                      {tag.category || 'general'}{' '}
+                    </span>{' '}
+                    <span className="font-mono text-body-m text-on-surface">{tag.name}</span>{' '}
+                    <span className="text-body-s text-outline">({tag.images} 图)</span>{' '}
+                  </div>{' '}
                   <button
                     onClick={() => importFromDerpi(tag)}
-                    className="px-3 py-1 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded transition-colors shrink-0"
+                    className="px-3 py-1 text-label-m bg-success-fill text-on-fill hover:bg-success-fill/90 rounded transition-ui shrink-0"
                   >
-                    + 导入
-                  </button>
+                    {' '}
+                    + 导入{' '}
+                  </button>{' '}
                 </div>
               ))
-            )}
-          </div>
-        </div>
-      </Modal>
-
+            )}{' '}
+          </div>{' '}
+        </div>{' '}
+      </Modal>{' '}
       <Modal
         isOpen={isFeedbackModalOpen}
         onClose={() => setIsFeedbackModalOpen(false)}
         title="用户反馈与翻译申请"
         maxWidth="max-w-xl"
       >
-        <div className="max-h-[60vh] overflow-y-auto">
+        {' '}
+        <div className="popover-scrollbar max-h-[60vh] overflow-y-auto">
+          {' '}
           {isLoadingFeedback ? (
             <div className="flex items-center justify-center py-12">
-              <Spinner label="" size="md" />
+              {' '}
+              <Spinner label="" size="md" />{' '}
             </div>
           ) : feedbacks.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-              暂无任何反馈申请
-            </div>
+            <div className="text-center py-12 text-on-surface-variant"> 暂无任何反馈申请 </div>
           ) : (
             <div className="space-y-3">
+              {' '}
               {feedbacks.map((feedback) => (
                 <div
                   key={feedback.id}
-                  className={`p-4 rounded-lg border-l-4 ${
+                  className={`p-4 rounded-md border-l-4 ${
                     feedback.status === 'pending'
-                      ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-400'
+                      ? 'bg-warning-container border-warning/40'
                       : feedback.status === 'processed'
-                      ? 'bg-green-50 dark:bg-green-950/20 border-green-400'
-                      : 'bg-red-50 dark:bg-red-950/20 border-red-400'
+                        ? 'bg-success-container border-success/40'
+                        : 'bg-error-container border-error/40'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                    <span className="text-body-m text-on-surface-variant">
                       来自: {feedback.username} | {feedback.created_at}
                     </span>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded ${
+                      className={`text-body-s px-2 py-0.5 rounded ${
                         feedback.status === 'pending'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                          ? 'bg-warning-container text-warning'
                           : feedback.status === 'processed'
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                          : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                            ? 'bg-success-container text-success'
+                            : 'bg-error-container text-error'
                       }`}
                     >
-                      {feedback.status === 'pending' ? '待处理' : feedback.status === 'processed' ? '已采纳' : '已忽略'}
-                    </span>
-                  </div>
-                  <div className="font-mono text-sm font-semibold text-primary mb-2">{feedback.tag_name}</div>
-                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-3 bg-slate-100 dark:bg-slate-700/50 p-2 rounded">
-                    {feedback.content}
-                  </div>
+                      {feedback.status === 'pending'
+                        ? '待处理'
+                        : feedback.status === 'processed'
+                          ? '已采纳'
+                          : '已忽略'}{' '}
+                    </span>{' '}
+                  </div>{' '}
+                  <div className="font-mono text-label-l-emphasized text-primary mb-2">
+                    {feedback.tag_name}
+                  </div>{' '}
+                  <div className="text-body-m text-on-surface-variant mb-3 bg-surface-container-high/50 p-2 rounded">
+                    {' '}
+                    {feedback.content}{' '}
+                  </div>{' '}
                   <div className="flex justify-end gap-2">
+                    {' '}
                     {feedback.status === 'pending' ? (
                       <>
                         <button
                           onClick={() => handleFeedback(feedback.id, 'processed')}
-                          className="px-3 py-1 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded transition-colors"
+                          className="px-3 py-1 text-label-m bg-success-fill text-on-fill hover:bg-success-fill/90 rounded transition-ui"
                         >
-                          采纳
-                        </button>
+                          {' '}
+                          采纳{' '}
+                        </button>{' '}
                         <button
                           onClick={() => handleFeedback(feedback.id, 'rejected')}
-                          className="px-3 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded transition-colors"
+                          className="px-3 py-1 text-label-m bg-error-fill text-on-fill hover:bg-error-fill/90 rounded transition-ui"
                         >
-                          忽略
-                        </button>
+                          {' '}
+                          忽略{' '}
+                        </button>{' '}
                       </>
                     ) : (
                       <button
                         onClick={() => handleFeedback(feedback.id, 'pending')}
-                        className="px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
+                        className="px-3 py-1 text-label-m text-on-surface-variant hover:bg-surface-container-high rounded transition-ui"
                       >
                         标记为未处理
                       </button>
@@ -1428,7 +1495,6 @@ export default function GlossaryTab() {
           )}
         </div>
       </Modal>
-
       <Modal
         isOpen={glossaryConfirmModalOpen}
         onClose={() => setGlossaryConfirmModalOpen(false)}
@@ -1438,20 +1504,17 @@ export default function GlossaryTab() {
           <>
             <button
               onClick={() => setGlossaryConfirmModalOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
             >
               取消
             </button>
-            <button
-              onClick={handleGlossaryConfirmAction}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-            >
+            <Button variant="danger" onClick={handleGlossaryConfirmAction}>
               确认
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400">{glossaryConfirmMessage}</p>
+        <p className="text-body-m text-on-surface-variant">{glossaryConfirmMessage}</p>
       </Modal>
     </div>
   );

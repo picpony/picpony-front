@@ -6,10 +6,7 @@ import type {
   InteractionNotificationsResponse,
   UnreadCountsResponse,
 } from '@/lib/types/message';
-import type {
-  UserCommentsResponse,
-  UserPostsResponse,
-} from '@/lib/types/user';
+import type { UserCommentsResponse, UserPostsResponse } from '@/lib/types/user';
 import type {
   FavesResponse,
   SharedFavesResponse,
@@ -17,7 +14,7 @@ import type {
   Comment,
 } from '@/lib/types/image';
 import type { CaptchaGetResponse, CaptchaVerifyResponse } from '@/lib/types/captcha';
-import { proxyFetch } from './client';
+import { proxyFetch, readJson } from './client';
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 
 // ---------------------------------------------------------------------------
@@ -52,7 +49,7 @@ export async function getUser(token: string) {
 
 export async function getUserProfile(userId: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_user_profile&user_id=${userId}`);
-  return res.json();
+  return readJson(res);
 }
 
 export async function changeUsername(token: string, newUsername: string) {
@@ -71,12 +68,15 @@ export async function changePassword(token: string, data: Record<string, unknown
   });
 }
 
-export async function saveProfile(token: string, data: {
-  bio?: string;
-  gender?: string;
-  birthday?: string;
-  race?: string;
-}) {
+export async function saveProfile(
+  token: string,
+  data: {
+    bio?: string;
+    gender?: string;
+    birthday?: string;
+    race?: string;
+  },
+) {
   return fetch(`${PICPONY_API_BASE}?action=save_profile`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -108,7 +108,7 @@ export async function getFaves(token: string): Promise<FavesResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_faves`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function toggleFave(token: string, imageId: number) {
@@ -120,15 +120,19 @@ export async function toggleFave(token: string, imageId: number) {
 }
 
 export async function getSharedFaves(username: string): Promise<SharedFavesResponse> {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_shared_faves&username=${encodeURIComponent(username)}`);
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=get_shared_faves&username=${encodeURIComponent(username)}`,
+  );
   if (!res.ok) throw new Error('获取收藏夹失败');
-  return res.json();
+  return readJson(res);
 }
 
 export async function getSharedFavesByUsername(username: string): Promise<SharedFavesResponse> {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_shared_faves&username=${encodeURIComponent(username)}`);
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=get_shared_faves&username=${encodeURIComponent(username)}`,
+  );
   if (!res.ok) throw new Error('获取收藏夹失败');
-  return res.json();
+  return readJson(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +151,9 @@ export async function getComments(imageId: string): Promise<CommentsResponse> {
   try {
     const [picponyRes, trixieRes] = await Promise.all([
       fetch(`${PICPONY_API_BASE}?action=get_comments&image_id=${imageId}`).catch(() => null),
-      proxyFetch(`${DERPIBOORU_API_BASE}/search/comments?q=image_id:${imageId}&page=1&per_page=25`).catch(() => null),
+      proxyFetch(
+        `${DERPIBOORU_API_BASE}/search/comments?q=image_id:${imageId}&page=1&per_page=25`,
+      ).catch(() => null),
     ]);
 
     let comments: Comment[] = [];
@@ -168,15 +174,24 @@ export async function getComments(imageId: string): Promise<CommentsResponse> {
       const trixieData = await trixieRes.json();
       if (trixieData.comments) {
         comments = comments.concat(
-          trixieData.comments.map((c: { id: number; body: string; created_at: string; user_id: number; author: string; avatar: string | null }) => ({
-            id: c.id,
-            body: c.body,
-            created_at: c.created_at,
-            user_id: c.user_id,
-            username: c.author,
-            avatar: c.avatar,
-            source: 'trixiebooru' as const,
-          })),
+          trixieData.comments.map(
+            (c: {
+              id: number;
+              body: string;
+              created_at: string;
+              user_id: number;
+              author: string;
+              avatar: string | null;
+            }) => ({
+              id: c.id,
+              body: c.body,
+              created_at: c.created_at,
+              user_id: c.user_id,
+              username: c.author,
+              avatar: c.avatar,
+              source: 'trixiebooru' as const,
+            }),
+          ),
         );
       }
     }
@@ -190,20 +205,29 @@ export async function getComments(imageId: string): Promise<CommentsResponse> {
   }
 }
 
-export async function getUserComments(userId: string, page: number = 1): Promise<UserCommentsResponse> {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_user_comments&user_id=${userId}&page=${page}`, {
-    cache: 'no-store',
-  });
+export async function getUserComments(
+  userId: string,
+  page: number = 1,
+): Promise<UserCommentsResponse> {
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=get_user_comments&user_id=${userId}&page=${page}`,
+    {
+      cache: 'no-store',
+    },
+  );
   if (!res.ok) throw new Error('获取用户评论失败');
-  return res.json();
+  return readJson(res);
 }
 
 export async function getUserPosts(userId: string, page: number = 1): Promise<UserPostsResponse> {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_user_posts&user_id=${userId}&page=${page}`, {
-    cache: 'no-store',
-  });
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=get_user_posts&user_id=${userId}&page=${page}`,
+    {
+      cache: 'no-store',
+    },
+  );
   if (!res.ok) throw new Error('获取用户帖子失败');
-  return res.json();
+  return readJson(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -215,23 +239,32 @@ export async function getForumPosts(page: number = 1): Promise<ForumPostsRespons
     cache: 'no-store',
   });
   if (!res.ok) throw new Error('Failed to fetch forum posts');
-  return res.json();
+  return readJson(res);
 }
 
-export async function getForumPostDetail(id: string, page: number = 1): Promise<ForumPostDetailResponse> {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_forum_post_detail&id=${id}&page=${page}`, {
-    cache: 'no-store',
-  });
+export async function getForumPostDetail(
+  id: string,
+  page: number = 1,
+): Promise<ForumPostDetailResponse> {
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=get_forum_post_detail&id=${id}&page=${page}`,
+    {
+      cache: 'no-store',
+    },
+  );
   if (!res.ok) throw new Error('Failed to fetch forum post detail');
-  return res.json();
+  return readJson(res);
 }
 
-export async function createForumPost(token: string, data: {
-  title: string;
-  content: string;
-  cover_image?: string;
-  category?: string;
-}) {
+export async function createForumPost(
+  token: string,
+  data: {
+    title: string;
+    content: string;
+    cover_image?: string;
+    category?: string;
+  },
+) {
   return fetch(`${PICPONY_API_BASE}?action=create_forum_post`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -239,7 +272,13 @@ export async function createForumPost(token: string, data: {
   });
 }
 
-export async function createForumComment(token: string, postId: number, content: string, replyToUserId?: number, replyToCommentId?: number) {
+export async function createForumComment(
+  token: string,
+  postId: number,
+  content: string,
+  replyToUserId?: number,
+  replyToCommentId?: number,
+) {
   const body: Record<string, unknown> = { post_id: postId, content };
   if (replyToUserId) body.reply_to_user_id = replyToUserId;
   if (replyToCommentId) body.reply_to_comment_id = replyToCommentId;
@@ -276,7 +315,7 @@ export async function getNotifications(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_notifications`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function getInteractionNotifications(
@@ -288,28 +327,28 @@ export async function getInteractionNotifications(
     `${PICPONY_API_BASE}?action=get_notifications&type=interaction&page=${page}&_t=${timestamp}`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
-  return res.json();
+  return readJson(res);
 }
 
 export async function getRecentContacts(token: string): Promise<ContactsResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_recent_contacts`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function getMessages(token: string, withUserId: number): Promise<MessagesResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_messages&with_user_id=${withUserId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function getUnreadCounts(token: string): Promise<UnreadCountsResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_unread_counts`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function sendMessage(token: string, receiverId: number, content: string) {
@@ -328,7 +367,7 @@ export async function captchaGet(): Promise<CaptchaGetResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=captcha_get`, {
     cache: 'no-store',
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function captchaVerify(x: number, track?: string): Promise<CaptchaVerifyResponse> {
@@ -340,7 +379,7 @@ export async function captchaVerify(x: number, track?: string): Promise<CaptchaV
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return res.json();
+  return readJson(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -349,19 +388,22 @@ export async function captchaVerify(x: number, track?: string): Promise<CaptchaV
 
 export async function getAnnouncement() {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_announcement`);
-  return res.json();
+  return readJson(res);
 }
 
 export async function getAnnouncementHistory() {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_announcement_history`);
-  return res.json();
+  return readJson(res);
 }
 
 // ---------------------------------------------------------------------------
 // API Key / Derpibooru 帐号关联
 // ---------------------------------------------------------------------------
 
-export async function saveApikey(token: string, data: { api_key: string; derpi_user_id: string; derpi_username: string }) {
+export async function saveApikey(
+  token: string,
+  data: { api_key: string; derpi_user_id: string; derpi_username: string },
+) {
   return fetch(`${PICPONY_API_BASE}?action=save_apikey`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -471,7 +513,7 @@ export async function searchImage(imageFile: File, distance: number) {
     throw new Error('搜索请求失败');
   }
 
-  return response.json();
+  return readJson(response);
 }
 
 // ---------------------------------------------------------------------------
@@ -479,10 +521,13 @@ export async function searchImage(imageFile: File, distance: number) {
 // ---------------------------------------------------------------------------
 
 export async function getBrowsingHistory(token: string, page: number = 1) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_browsing_history&page=${page}&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.json();
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=get_browsing_history&page=${page}&_t=${Date.now()}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  return readJson(res);
 }
 
 export async function clearBrowsingHistory(token: string) {
@@ -505,10 +550,13 @@ export async function deleteBrowsingHistoryItem(token: string, imageId: number) 
 // ---------------------------------------------------------------------------
 
 export async function checkHasPrivacyPassword(token: string) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=check_has_privacy_password&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.json();
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=check_has_privacy_password&_t=${Date.now()}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  return readJson(res);
 }
 
 export async function setPrivacyPassword(token: string, password: string) {
@@ -531,10 +579,14 @@ export async function getPrivacyFaves(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_privacy_faves&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
-export async function addPrivacyFave(token: string, imageId: number, imageData: Record<string, unknown>) {
+export async function addPrivacyFave(
+  token: string,
+  imageId: number,
+  imageData: Record<string, unknown>,
+) {
   return fetch(`${PICPONY_API_BASE}?action=add_privacy_fave`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -558,7 +610,7 @@ export async function getMyBadges(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_my_badges&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function equipBadge(token: string, badgeName: string | null) {
@@ -577,7 +629,7 @@ export async function getTasks(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_tasks&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function claimTask(token: string, taskType: string) {
@@ -589,10 +641,13 @@ export async function claimTask(token: string, taskType: string) {
 }
 
 export async function getCoinTransactions(token: string, page: number = 1) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_coin_transactions&page=${page}&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.json();
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=get_coin_transactions&page=${page}&_t=${Date.now()}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  return readJson(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -603,13 +658,19 @@ export async function getBlockGroups(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_block_groups&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
-export async function saveBlockGroup(token: string, data: {
-  id?: number; name: string; tags: string[];
-  hidden_tags?: string | string[]; spoilered_tags?: string | string[];
-}) {
+export async function saveBlockGroup(
+  token: string,
+  data: {
+    id?: number;
+    name: string;
+    tags: string[];
+    hidden_tags?: string | string[];
+    spoilered_tags?: string | string[];
+  },
+) {
   return fetch(`${PICPONY_API_BASE}?action=save_block_group`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -641,10 +702,13 @@ export async function getGlossaryEntries(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_glossary_entries`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
-export async function createGlossaryEntry(token: string, data: { term: string; definition: string }) {
+export async function createGlossaryEntry(
+  token: string,
+  data: { term: string; definition: string },
+) {
   return fetch(`${PICPONY_API_BASE}?action=create_glossary_entry`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -652,7 +716,11 @@ export async function createGlossaryEntry(token: string, data: { term: string; d
   });
 }
 
-export async function updateGlossaryEntry(token: string, id: number, data: { term: string; definition: string }) {
+export async function updateGlossaryEntry(
+  token: string,
+  id: number,
+  data: { term: string; definition: string },
+) {
   return fetch(`${PICPONY_API_BASE}?action=update_glossary_entry`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -668,15 +736,18 @@ export async function deleteGlossaryEntry(token: string, id: number) {
   });
 }
 
-export async function getDictionary(token: string, params: {
-  page?: number;
-  limit?: number;
-  keyword?: string;
-  sort?: string;
-  category?: string;
-  untranslated?: number;
-  wiki_overlap?: number;
-}) {
+export async function getDictionary(
+  token: string,
+  params: {
+    page?: number;
+    limit?: number;
+    keyword?: string;
+    sort?: string;
+    category?: string;
+    untranslated?: number;
+    wiki_overlap?: number;
+  },
+) {
   const searchParams = new URLSearchParams();
   searchParams.append('action', 'get_dictionary');
   if (params.page) searchParams.append('page', params.page.toString());
@@ -684,32 +755,37 @@ export async function getDictionary(token: string, params: {
   if (params.keyword) searchParams.append('keyword', params.keyword);
   if (params.sort) searchParams.append('sort', params.sort);
   if (params.category) searchParams.append('category', params.category);
-  if (params.untranslated !== undefined) searchParams.append('untranslated', params.untranslated.toString());
-  if (params.wiki_overlap !== undefined) searchParams.append('wiki_overlap', params.wiki_overlap.toString());
+  if (params.untranslated !== undefined)
+    searchParams.append('untranslated', params.untranslated.toString());
+  if (params.wiki_overlap !== undefined)
+    searchParams.append('wiki_overlap', params.wiki_overlap.toString());
   searchParams.append('_t', Date.now().toString());
 
   const res = await fetch(`${PICPONY_API_BASE}?${searchParams.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
 export async function getDictionaryDuplicates(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_duplicates&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
-export async function saveDictionaryTag(token: string, data: {
-  id?: number;
-  cn: string;
-  en: string;
-  aliases: string[];
-  cat: string;
-  count: number;
-  description: string;
-}) {
+export async function saveDictionaryTag(
+  token: string,
+  data: {
+    id?: number;
+    cn: string;
+    en: string;
+    aliases: string[];
+    cat: string;
+    count: number;
+    description: string;
+  },
+) {
   return fetch(`${PICPONY_API_BASE}?action=save_dictionary_tag`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -727,7 +803,7 @@ export async function deleteDictionaryTag(token: string, id: number) {
 
 export async function getDictionaryLeaderboard() {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_dictionary_leaderboard&_t=${Date.now()}`);
-  return res.json();
+  return readJson(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -738,10 +814,13 @@ export async function getTagGroups(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_tag_groups&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return res.json();
+  return readJson(res);
 }
 
-export async function saveTagGroup(token: string, data: { id?: number; name: string; tags: string[] }) {
+export async function saveTagGroup(
+  token: string,
+  data: { id?: number; name: string; tags: string[] },
+) {
   return fetch(`${PICPONY_API_BASE}?action=save_tag_group`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

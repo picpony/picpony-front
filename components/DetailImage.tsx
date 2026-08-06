@@ -10,21 +10,12 @@ import {
   type SyntheticEvent,
 } from 'react';
 import { MdFullscreen } from 'react-icons/md';
-import {
-  getHeroMediaRenderedWidth,
-  getHeroMediaResponsiveSizes,
-} from '@/lib/hero/geometry';
+import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
 import { warmImageHeroFrame } from '@/lib/hero';
 
-type DetailMediaTargetCallback = (
-  surfaceId: string,
-  target: HTMLDivElement | null,
-) => void;
+type DetailMediaTargetCallback = (surfaceId: string, target: HTMLDivElement | null) => void;
 
-type DetailMediaReadyCallback = (
-  surfaceId: string,
-  target: HTMLDivElement,
-) => void;
+type DetailMediaReadyCallback = (surfaceId: string, target: HTMLDivElement) => void;
 
 type DetailImageProps = {
   imageId: number;
@@ -58,7 +49,12 @@ function shouldBypassImageOptimization(src: string) {
   return pathname.endsWith('.gif') || pathname.endsWith('.svg') || pathname.endsWith('.apng');
 }
 
-function getPrefetchCandidate(srcSet: string | undefined, fallback: string, width: number, height: number) {
+function getPrefetchCandidate(
+  srcSet: string | undefined,
+  fallback: string,
+  width: number,
+  height: number,
+) {
   if (!srcSet || typeof window === 'undefined') return fallback;
 
   const renderedWidth = getHeroMediaRenderedWidth(
@@ -75,9 +71,11 @@ function getPrefetchCandidate(srcSet: string | undefined, fallback: string, widt
     .filter((candidate): candidate is { url: string; width: number } => Boolean(candidate))
     .sort((a, b) => a.width - b.width);
 
-  return candidates.find((candidate) => candidate.width >= targetWidth)?.url
-    ?? candidates.at(-1)?.url
-    ?? fallback;
+  return (
+    candidates.find((candidate) => candidate.width >= targetWidth)?.url ??
+    candidates.at(-1)?.url ??
+    fallback
+  );
 }
 
 function createImagePrefetchLease(source: string, href: string): ImagePrefetchLease {
@@ -135,8 +133,12 @@ export default function DetailImage({
     const readySurfaceId = surfaceIdRef.current;
     const target = targetRef.current;
     const callback = onPreviewReadyRef.current;
-    if (!readySurfaceId || !target || !callback ||
-        publishedPreviewSurfaceRef.current === readySurfaceId) {
+    if (
+      !readySurfaceId ||
+      !target ||
+      !callback ||
+      publishedPreviewSurfaceRef.current === readySurfaceId
+    ) {
       return;
     }
     publishedPreviewSurfaceRef.current = readySurfaceId;
@@ -147,8 +149,12 @@ export default function DetailImage({
     const readySurfaceId = surfaceIdRef.current;
     const target = targetRef.current;
     const callback = onFinalReadyRef.current;
-    if (!readySurfaceId || !target || !callback ||
-        publishedFinalSurfaceRef.current === readySurfaceId) {
+    if (
+      !readySurfaceId ||
+      !target ||
+      !callback ||
+      publishedFinalSurfaceRef.current === readySurfaceId
+    ) {
       return;
     }
     publishedFinalSurfaceRef.current = readySurfaceId;
@@ -257,45 +263,59 @@ export default function DetailImage({
     };
   }, [alt, finalSrc, height, heroActive, mountFinal, preloadFinal, responsiveSizes, width]);
 
-  const markFinalDecoded = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
-    const element = event.currentTarget;
-    const loadedSrc = element.currentSrc;
-    void (async () => {
-      try {
-        await element.decode();
-      } catch {
-        if (!element.complete || element.naturalWidth === 0) return;
-      }
-      requestAnimationFrame(() => {
-        if (sourceRef.current.finalSrc !== finalSrc ||
-            !element.isConnected || element.currentSrc !== loadedSrc) return;
-        const lease = prefetchLeaseRef.current;
-        if (lease?.source === finalSrc) {
-          prefetchLeaseRef.current = null;
-          lease.release();
+  const markFinalDecoded = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      const element = event.currentTarget;
+      const loadedSrc = element.currentSrc;
+      void (async () => {
+        try {
+          await element.decode();
+        } catch {
+          if (!element.complete || element.naturalWidth === 0) return;
         }
-        markFinalReady();
-      });
-    })();
-  }, [finalSrc, markFinalReady]);
+        requestAnimationFrame(() => {
+          if (
+            sourceRef.current.finalSrc !== finalSrc ||
+            !element.isConnected ||
+            element.currentSrc !== loadedSrc
+          )
+            return;
+          const lease = prefetchLeaseRef.current;
+          if (lease?.source === finalSrc) {
+            prefetchLeaseRef.current = null;
+            lease.release();
+          }
+          markFinalReady();
+        });
+      })();
+    },
+    [finalSrc, markFinalReady],
+  );
 
-  const markPreviewDecoded = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
-    if (!previewSrc) return;
-    const element = event.currentTarget;
-    const loadedSrc = element.currentSrc;
-    void (async () => {
-      try {
-        await element.decode();
-      } catch {
-        if (!element.complete || element.naturalWidth === 0) return;
-      }
-      requestAnimationFrame(() => {
-        if (sourceRef.current.previewSrc !== previewSrc ||
-            !element.isConnected || element.currentSrc !== loadedSrc) return;
-        markPreviewReady();
-      });
-    })();
-  }, [markPreviewReady, previewSrc]);
+  const markPreviewDecoded = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      if (!previewSrc) return;
+      const element = event.currentTarget;
+      const loadedSrc = element.currentSrc;
+      void (async () => {
+        try {
+          await element.decode();
+        } catch {
+          if (!element.complete || element.naturalWidth === 0) return;
+        }
+        requestAnimationFrame(() => {
+          if (
+            sourceRef.current.previewSrc !== previewSrc ||
+            !element.isConnected ||
+            element.currentSrc !== loadedSrc
+          )
+            return;
+          markPreviewReady();
+        });
+      })();
+    },
+    [markPreviewReady, previewSrc],
+  );
 
   return (
     <div
@@ -303,7 +323,7 @@ export default function DetailImage({
       data-image-hero-role="detail"
       data-image-hero-id={imageId}
       data-image-detail-hero-active={heroActive ? 'true' : 'false'}
-      className="group relative flex-none cursor-zoom-in overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-900"
+      className="group relative flex-none cursor-zoom-in overflow-hidden rounded-lg bg-surface-container-low"
       style={style}
       onClick={onOpen}
     >
@@ -342,8 +362,8 @@ export default function DetailImage({
           className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
         />
       )}
-      <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/10">
-        <MdFullscreen size={32} className="text-white/0 transition-all group-hover:text-white/70" />
+      <div className="absolute inset-0 z-20 flex items-center justify-center bg-scrim/0 transition-ui group-hover:bg-scrim/10">
+        <MdFullscreen size={32} className="text-on-media/0 transition-ui group-hover:text-on-media/70" />
       </div>
     </div>
   );
