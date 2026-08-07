@@ -1013,7 +1013,7 @@ export default function GlossaryTab() {
     const workOrder = activeFeedbackWorkOrder;
     if (!workOrder) return null;
     return (
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-outline-variant bg-surface-container-low p-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md bg-surface-container-low p-3">
         <div className="min-w-0 flex-1">
           <p className="text-label-l text-primary">
             正在处理用户工单 #{workOrder.id} · {workOrder.username || '游客'}
