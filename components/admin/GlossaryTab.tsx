@@ -151,6 +151,8 @@ export default function GlossaryTab() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalMatches, setTotalMatches] = useState(0);
   const [searchKeyword, setSearchKeyword] = useState('');
+  // 搜索框草稿：仅在回车时提交到 searchKeyword 才触发请求
+  const [searchDraft, setSearchDraft] = useState('');
   const [sortMode, setSortMode] = useState('count_desc');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [showUntranslatedOnly, setShowUntranslatedOnly] = useState(false);
@@ -1347,9 +1349,18 @@ export default function GlossaryTab() {
         <Input
           type="text"
           icon={<MdSearch size={20} />}
-          value={searchKeyword}
-          onChange={(e) => setSearchKeyword(e.target.value)}
-          placeholder="搜索中文或英文标签..."
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            const kw = searchDraft.trim();
+            setSearchKeyword(kw);
+            // 与当前关键词相同时 useEffect 不会触发，显式刷新一次
+            if (kw === searchKeyword) {
+              void loadTags(1);
+            }
+          }}
+          placeholder="搜索标签"
           fieldClassName="flex-1 min-w-[200px]"
         />
         <Select
