@@ -150,6 +150,7 @@ export {
   saveDictionaryTag,
   deleteDictionaryTag,
   getDictionaryLeaderboard,
+  getDictionaryTagHistory,
   getTagGroups,
   saveTagGroup,
   deleteTagGroup,

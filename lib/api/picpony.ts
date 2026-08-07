@@ -826,6 +826,15 @@ export async function getDictionaryLeaderboard() {
   return readJson(res);
 }
 
+/** 获取某个词库标签的编辑历史（按时间倒序） */
+export async function getDictionaryTagHistory(token: string, tagId: number) {
+  const res = await fetch(
+    `${PICPONY_API_BASE}?action=get_dictionary_tag_history&tag_id=${encodeURIComponent(tagId)}&_t=${Date.now()}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return readJson(res);
+}
+
 // ---------------------------------------------------------------------------
 // 标签组
 // ---------------------------------------------------------------------------

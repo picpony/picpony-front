@@ -22,6 +22,7 @@ import {
   MdEmojiEvents,
   MdCheckCircle,
   MdOutlineWarning,
+  MdHistory,
 } from 'react-icons/md';
 import { Spinner } from './';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -57,6 +58,18 @@ interface TagStats {
   total: number;
   translated: number;
   leaderboard: { username: string; count: number }[];
+}
+
+/** 词库标签编辑历史记录（对应后端 get_dictionary_tag_history 返回项） */
+interface TagHistory {
+  editor_username?: string;
+  created_at?: string;
+  en_name?: string;
+  cn_name?: string;
+  aliases?: string[] | string | null;
+  category?: string;
+  search_count?: number | null;
+  description?: string;
 }
 
 interface Feedback {
@@ -191,6 +204,13 @@ export default function GlossaryTab() {
 
   const [stats, setStats] = useState<TagStats>({ total: 0, translated: 0, leaderboard: [] });
 
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [historyTag, setHistoryTag] = useState<Tag | null>(null);
+  const [historyRecords, setHistoryRecords] = useState<TagHistory[]>([]);
+  const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(-1);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
   const [glossaryConfirmModalOpen, setGlossaryConfirmModalOpen] = useState(false);
   const [glossaryConfirmTitle, setGlossaryConfirmTitle] = useState('');
   const [glossaryConfirmMessage, setGlossaryConfirmMessage] = useState('');
@@ -206,6 +226,62 @@ export default function GlossaryTab() {
   const handleGlossaryConfirmAction = () => {
     glossaryConfirmActionRef.current?.();
     setGlossaryConfirmModalOpen(false);
+  };
+
+  // 后端时间按 UTC 存储，转为 Asia/Shanghai 展示（精确到秒）
+  const formatHistoryTime = (value?: string) => {
+    if (!value) return '';
+    const utc = new Date(String(value).replace(' ', 'T') + 'Z');
+    if (Number.isNaN(utc.getTime())) return String(value);
+    const parts = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+      .formatToParts(utc)
+      .reduce<Record<string, string>>((o, x) => {
+        o[x.type] = x.value;
+        return o;
+      }, {});
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+  };
+
+  const formatAliases = (aliases?: string[] | string | null) => {
+    if (!aliases) return '无';
+    if (Array.isArray(aliases)) return aliases.length > 0 ? aliases.join('、') : '无';
+    return String(aliases) || '无';
+  };
+
+  // 打开编辑历史弹窗并拉取该标签的历史记录
+  const openTagHistory = async (tag: Tag) => {
+    if (!token) return;
+
+    setHistoryTag(tag);
+    setHistoryRecords([]);
+    setSelectedHistoryIndex(-1);
+    setHistoryError(null);
+    setIsHistoryModalOpen(true);
+    setIsHistoryLoading(true);
+
+    try {
+      const data = await api.getDictionaryTagHistory(token, tag.id);
+      if (data.success) {
+        const list: TagHistory[] = data.history || [];
+        setHistoryRecords(list);
+        setSelectedHistoryIndex(list.length > 0 ? 0 : -1);
+      } else {
+        setHistoryError(data.error || '加载失败');
+      }
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : '网络错误');
+    } finally {
+      setIsHistoryLoading(false);
+    }
   };
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -857,6 +933,8 @@ export default function GlossaryTab() {
 
   const visibleTags = isDuplicateMode ? duplicateTags : tags;
   const allSelected = visibleTags.length > 0 && visibleTags.every((t) => selectedIds.has(t.id));
+  const selectedHistory =
+    selectedHistoryIndex >= 0 ? historyRecords[selectedHistoryIndex] : null;
 
   const renderInlineEditor = (tag: Tag) => {
     if (editingTag?.id !== tag.id) return null;
@@ -878,9 +956,23 @@ export default function GlossaryTab() {
             <h3 className="text-title-m text-on-surface">编辑标签</h3>
             <p className="text-body-s text-on-surface-variant break-words">{tag.en}</p>
           </div>
-          <Button variant="text" size="sm" onClick={closeInlineEditor} disabled={isSaving}>
-            取消
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {tag.id > 0 && (
+              <Button
+                variant="text"
+                size="sm"
+                icon={<MdHistory size={16} />}
+                onClick={() => openTagHistory(tag)}
+                title="查看该标签的历史编辑记录"
+                className="text-primary"
+              >
+                查看编辑历史
+              </Button>
+            )}
+            <Button variant="text" size="sm" onClick={closeInlineEditor} disabled={isSaving}>
+              取消
+            </Button>
+          </div>
         </div>
 
         <div className="popover-scrollbar overflow-x-auto">
@@ -1780,6 +1872,110 @@ export default function GlossaryTab() {
         }
       >
         <p className="text-body-m text-on-surface-variant">{glossaryConfirmMessage}</p>
+      </Modal>
+      <Modal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        title={historyTag ? `编辑历史 · ${historyTag.en}` : '编辑历史'}
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4">
+          {/* 历史记录列表（行样式与设置页面 m3-row 一致） */}
+          <div className="popover-scrollbar max-h-56 overflow-y-auto rounded-md bg-surface">
+            {isHistoryLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Spinner label="" size="md" />
+              </div>
+            ) : historyError ? (
+              <div className="px-4 py-8 text-center text-error">{historyError}</div>
+            ) : historyRecords.length === 0 ? (
+              <div className="px-4 py-8 text-center text-on-surface-variant">暂无历史编辑记录</div>
+            ) : (
+              historyRecords.map((h, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelectedHistoryIndex(i)}
+                  className={`m3-row flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 text-left transition-ui sm:flex-nowrap sm:gap-x-4 ${
+                    i === selectedHistoryIndex
+                      ? 'bg-primary-container'
+                      : 'bg-surface-container-low hover:bg-surface-container-high'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`mb-1 text-body-m ${
+                        i === selectedHistoryIndex
+                          ? 'text-on-primary-container/70'
+                          : 'text-on-surface-variant'
+                      }`}
+                    >
+                      {h.editor_username || '未知用户'}
+                    </p>
+                    <p
+                      className={`font-medium ${
+                        i === selectedHistoryIndex
+                          ? 'text-on-primary-container'
+                          : 'text-on-surface'
+                      }`}
+                    >
+                      {formatHistoryTime(h.created_at)}
+                    </p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* 版本快照 */}
+          <div className="min-h-24 rounded-md bg-surface-container-low p-4">
+            {selectedHistory ? (
+              <dl className="space-y-3 text-body-m">
+                <div>
+                  <dt className="text-label-l text-on-surface-variant">英文标签</dt>
+                  <dd className="break-all font-mono text-on-surface">
+                    {selectedHistory.en_name || '-'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-label-l text-on-surface-variant">中文翻译</dt>
+                  <dd className="break-all text-on-surface">{selectedHistory.cn_name || '未翻译'}</dd>
+                </div>
+                <div>
+                  <dt className="text-label-l text-on-surface-variant">别名</dt>
+                  <dd className="break-all text-on-surface">{formatAliases(selectedHistory.aliases)}</dd>
+                </div>
+                <div className="flex flex-wrap gap-6">
+                  <div>
+                    <dt className="text-label-l text-on-surface-variant">分类</dt>
+                    <dd className="mt-1">
+                      <span
+                        className={`inline-flex items-center rounded px-2 py-0.5 text-label-m ${tagCategoryChip(selectedHistory.category || 'general')}`}
+                      >
+                        {selectedHistory.category || 'general'}
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-label-l text-on-surface-variant">数量</dt>
+                    <dd className="text-on-surface">{selectedHistory.search_count ?? '-'}</dd>
+                  </div>
+                </div>
+                <div>
+                  <dt className="text-label-l text-on-surface-variant">简介</dt>
+                  <dd className="whitespace-pre-wrap break-all text-on-surface-variant">
+                    {selectedHistory.description || '无'}
+                  </dd>
+                </div>
+                <div className="pt-1 text-body-s text-outline">
+                  编辑人：{selectedHistory.editor_username || '未知用户'}　时间：
+                  {formatHistoryTime(selectedHistory.created_at)}
+                </div>
+              </dl>
+            ) : (
+              <p className="text-body-m text-on-surface-variant">请选择一条编辑记录查看快照</p>
+            )}
+          </div>
+        </div>
       </Modal>
     </div>
   );
