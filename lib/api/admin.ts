@@ -452,11 +452,20 @@ export async function getTagFeedback(
   return readJson(res);
 }
 
-export async function handleTagFeedback(token: string, id: number, status: string) {
+export async function handleTagFeedback(
+  token: string,
+  id: number,
+  status: string,
+  note?: string,
+  expectedStatus?: string,
+) {
+  const body: Record<string, unknown> = { id, status };
+  if (note) body.note = note;
+  if (expectedStatus) body.expected_status = expectedStatus;
   return fetch(`${PICPONY_API_BASE}?action=admin_handle_tag_feedback`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, status }),
+    body: JSON.stringify(body),
   });
 }
 

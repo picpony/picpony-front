@@ -23,6 +23,7 @@ import {
   MdCheckCircle,
   MdOutlineWarning,
   MdHistory,
+  MdArrowDownward,
 } from 'react-icons/md';
 import { Spinner } from './';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -196,6 +197,8 @@ export default function GlossaryTab() {
   });
   const [feedbackPage, setFeedbackPage] = useState(1);
   const [feedbackTotalPages, setFeedbackTotalPages] = useState(1);
+  // 正在处理的用户工单（处理并编辑标签时挂起，保存成功后自动标记为已处理）
+  const [activeFeedbackWorkOrder, setActiveFeedbackWorkOrder] = useState<Feedback | null>(null);
 
   const [isDerpiModalOpen, setIsDerpiModalOpen] = useState(false);
   const [derpiSearchQuery, setDerpiSearchQuery] = useState('');
@@ -571,6 +574,22 @@ export default function GlossaryTab() {
 
       if (data.success) {
         showToast(id ? '更新成功' : '添加成功', 'success');
+        // 若有挂起的用户工单，保存成功后自动标记为已处理（与 ciku.html 行为一致）
+        if (activeFeedbackWorkOrder) {
+          const workOrder = activeFeedbackWorkOrder;
+          try {
+            await api.handleTagFeedback(
+              token,
+              workOrder.id,
+              'processed',
+              '已采纳并写入词库',
+              'pending',
+            );
+          } catch {
+            showToast('标签已保存，但工单仍保持待处理', 'warning');
+          }
+          setActiveFeedbackWorkOrder(null);
+        }
         if (id) {
           refreshAfterInlineCloseRef.current = true;
           closeInlineEditor();
@@ -885,15 +904,68 @@ export default function GlossaryTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 打开时按当前筛选加载一次
   }, [isFeedbackModalOpen]);
 
-  const handleFeedback = async (id: number, status: string) => {
+  // 直接处理工单状态（忽略 / 恢复待处理等，note 为处理备注）
+  const handleFeedback = async (id: number, status: string, note?: string) => {
     if (!token) return;
 
     try {
-      await api.handleTagFeedback(token, id, status);
+      await api.handleTagFeedback(token, id, status, note || undefined, 'pending');
       void loadFeedbacks();
     } catch {
       showToast('操作失败', 'error');
     }
+  };
+
+  // 处理并编辑标签：挂起工单 → 关反馈弹窗 → 展开词库列表内对应词语的编辑行（找不到则新建）
+  const handleFeedbackAndEdit = async (item: Feedback) => {
+    if (!token) return;
+
+    setActiveFeedbackWorkOrder(item);
+    setIsFeedbackModalOpen(false);
+
+    try {
+      let target = visibleTags.find(
+        (t) => t.en.toLowerCase() === (item.tag_name || '').toLowerCase(),
+      );
+      if (!target) {
+        const data = await api.getDictionary(token, {
+          keyword: item.tag_name,
+          page: 1,
+          limit: 100,
+        });
+        if (data.success && Array.isArray(data.tags)) {
+          target = data.tags.find(
+            (t: Tag) => t.en.toLowerCase() === (item.tag_name || '').toLowerCase(),
+          );
+        }
+      }
+
+      if (target) {
+        // 确保目标行出现在列表首行（无论当前页/查重模式），随后展开该行
+        setCurrentPage(1);
+        setTags((prev) => [target, ...prev.filter((t) => t.id !== target.id)]);
+        if (isDuplicateMode) {
+          setDuplicateTags((prev) => [target, ...prev.filter((t) => t.id !== target.id)]);
+        }
+        openInlineEditor(target);
+      } else {
+        // 词库中不存在该标签，进入新增模式并预填英文名
+        openCreateModal({ name: item.tag_name, category: 'general', images: 0 });
+      }
+    } catch {
+      openCreateModal({ name: item.tag_name, category: 'general', images: 0 });
+    }
+  };
+
+  // 把工单内容填入中文翻译框（保留已填内容时追加为别名）
+  const useFeedbackAsTranslation = () => {
+    const workOrder = activeFeedbackWorkOrder;
+    if (!workOrder?.content) return;
+    const content = workOrder.content.trim();
+    setEditForm((prev) => ({
+      ...prev,
+      cn: prev.cn.trim() ? `${prev.cn.trim()},${content}` : content,
+    }));
   };
 
   const changeFeedbackStatus = (status: 'all' | 'pending' | 'processed' | 'rejected') => {
@@ -936,6 +1008,32 @@ export default function GlossaryTab() {
   const selectedHistory =
     selectedHistoryIndex >= 0 ? historyRecords[selectedHistoryIndex] : null;
 
+  // 正在处理的用户工单引用条（与 ciku.html 的 feedbackEditReference 等价）
+  const renderFeedbackReference = () => {
+    const workOrder = activeFeedbackWorkOrder;
+    if (!workOrder) return null;
+    return (
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-outline-variant bg-surface-container-low p-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-label-l text-primary">
+            正在处理用户工单 #{workOrder.id} · {workOrder.username || '游客'}
+          </p>
+          <p className="mt-0.5 break-all text-body-m text-on-surface-variant">
+            {workOrder.content}
+          </p>
+        </div>
+        <Button
+          variant="tonal"
+          size="sm"
+          icon={<MdArrowDownward size={16} />}
+          onClick={useFeedbackAsTranslation}
+        >
+          填入中文翻译框
+        </Button>
+      </div>
+    );
+  };
+
   const renderInlineEditor = (tag: Tag) => {
     if (editingTag?.id !== tag.id) return null;
 
@@ -974,6 +1072,8 @@ export default function GlossaryTab() {
             </Button>
           </div>
         </div>
+
+        {renderFeedbackReference()}
 
         <div className="popover-scrollbar overflow-x-auto">
           <table className="w-full border-collapse">
@@ -1444,6 +1544,7 @@ export default function GlossaryTab() {
         {' '}
         <div className="space-y-4">
           {' '}
+          {renderFeedbackReference()}
           <div className="relative">
             {' '}
             <label className="block text-label-l text-on-surface mb-1" htmlFor="glossarytab-f1">
@@ -1813,21 +1914,25 @@ export default function GlossaryTab() {
                       {feedback.status === 'pending' ? (
                         <>
                           <button
-                            onClick={() => handleFeedback(feedback.id, 'processed')}
-                            className="px-3 py-1 text-label-m bg-success-fill text-on-fill hover:bg-success-fill/90 rounded transition-ui"
+                            onClick={() => handleFeedbackAndEdit(feedback)}
+                            className="px-3 py-1 text-label-m bg-primary text-on-primary hover:opacity-90 rounded transition-ui"
                           >
-                            采纳
+                            处理并编辑标签
                           </button>
                           <button
-                            onClick={() => handleFeedback(feedback.id, 'rejected')}
-                            className="px-3 py-1 text-label-m bg-error-fill text-on-fill hover:bg-error-fill/90 rounded transition-ui"
+                            onClick={() => {
+                              const note = window.prompt('可填写忽略原因（可留空）：', '');
+                              if (note === null) return;
+                              void handleFeedback(feedback.id, 'rejected', note.trim());
+                            }}
+                            className="px-3 py-1 text-label-m text-on-surface-variant hover:bg-surface-container-high rounded transition-ui"
                           >
                             忽略
                           </button>
                         </>
                       ) : (
                         <button
-                          onClick={() => handleFeedback(feedback.id, 'pending')}
+                          onClick={() => void handleFeedback(feedback.id, 'pending')}
                           className="px-3 py-1 text-label-m text-on-surface-variant hover:bg-surface-container-high rounded transition-ui"
                         >
                           标记为未处理
