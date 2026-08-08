@@ -368,13 +368,13 @@ export default function TasksPage() {
           {/* Tabs */}{' '}
           <div
             ref={containerRef}
-            className="relative flex gap-1 mb-6"
+            className="relative flex gap-1 mb-6 border-b border-outline-variant"
           >
             {' '}
             <span
               ref={indicatorRef}
               aria-hidden="true"
-              className="absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-warning-fill"
+              className="absolute bottom-0 left-0 h-0.5 rounded-full bg-warning-fill"
             />{' '}
             {tabs.map((tab) => (
               <button
