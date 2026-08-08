@@ -813,13 +813,14 @@ export default function AppLayout({
                         <div className="flex w-full flex-col items-center gap-4 md:w-auto md:items-start">
                           {' '}
                           <Logo className="h-8 w-auto opacity-60" />{' '}
-                          <nav aria-label="站内导航" className="flex flex-col items-center gap-2 md:items-start">
+                          <nav aria-label="站内导航" className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             {' '}
                             <Link href="/about" className="transition-ui hover:text-on-surface hover:underline">
                               关于本站
                             </Link>{' '}
-                            <Link href="/about" className="transition-ui hover:text-on-surface hover:underline">
-                              关于本站1
+                            <span aria-hidden="true" className="text-outline">·</span>
+                            <Link href="/policy" className="transition-ui hover:text-on-surface hover:underline">
+                              声明与政策
                             </Link>{' '}
                           </nav>{' '}
                           <div>
