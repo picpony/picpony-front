@@ -813,6 +813,15 @@ export default function AppLayout({
                         <div className="flex w-full flex-col items-center gap-4 md:w-auto md:items-start">
                           {' '}
                           <Logo className="h-8 w-auto opacity-60" />{' '}
+                          <nav aria-label="站内导航" className="flex flex-col items-center gap-2 md:items-start">
+                            {' '}
+                            <Link href="/about" className="transition-ui hover:text-on-surface hover:underline">
+                              关于本站
+                            </Link>{' '}
+                            <Link href="/about" className="transition-ui hover:text-on-surface hover:underline">
+                              关于本站1
+                            </Link>{' '}
+                          </nav>{' '}
                           <div>
                             {' '}
                             <p>© 2026 PicPony. All rights reserved. @黄昏夜雨</p>{' '}

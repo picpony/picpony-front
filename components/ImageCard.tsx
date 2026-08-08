@@ -125,6 +125,9 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
               quality={82}
               className="w-full h-auto"
               sizes="(max-width: 767px) 50vw, (max-width: 1023px) 33vw, (min-width: 1536px) 304px, 25vw"
+              /* 分层加载：加速代理→CDN→直连，失败自动降级（画廊缩略图） */
+              resilient
+              proxyThumb
             />
           )}
 

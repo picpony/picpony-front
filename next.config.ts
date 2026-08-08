@@ -51,6 +51,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'wsrv.nl',
       },
+      {
+        protocol: 'https',
+        hostname: '147052.xyz',
+      },
     ],
     unoptimized: process.env.NODE_ENV === 'development',
   },
