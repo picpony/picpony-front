@@ -55,6 +55,14 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: '147052.xyz',
       },
+      {
+        protocol: 'https',
+        hostname: 'qlogo1.store.qq.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'qlogo2.store.qq.com',
+      },
     ],
     unoptimized: process.env.NODE_ENV === 'development',
   },

@@ -4,10 +4,35 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { MdGroup } from 'react-icons/md';
 import Card from '@/components/Card';
-import FadeInImage from '@/components/FadeInImage';
 import Skeleton from '@/components/Skeleton';
 import { prefersReducedMotion } from '@/lib/motion';
 import { api } from '@/lib/api';
+
+/** 成员头像：原生 img 避开 next/image 域名白名单与 QQ 防盗链（Referer），失败降级为图标 */
+function MemberAvatar({ src, alt }: { src: string; alt: string }) {
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) {
+    return (
+      <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant">
+        <MdGroup size={24} />
+      </div>
+    );
+  }
+  return (
+    <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-full bg-surface-container-high">
+      {/* eslint-disable-next-line @next/next/no-img-element -- 头像含 QQ 等白名单外域名，且需 no-referrer 防防盗链 */}
+      <img
+        src={src}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        loading="lazy"
+        decoding="async"
+        onError={() => setBroken(true)}
+        className="h-full w-full object-cover"
+      />
+    </div>
+  );
+}
 
 function TraceHeader() {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -52,6 +77,7 @@ interface TeamMember {
   role: string;
   category: 'developer' | 'manager' | 'editor' | 'special';
   avatar_url: string | null;
+  account_avatar: string | null;
   link_url: string | null;
   order_num: number;
 }
@@ -63,8 +89,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   special: '特别鸣谢',
 };
 
-// 相对路径头像拼接 picpony.top 静态资源
-function resolveAvatar(url: string | null | undefined): string | null {
+// 头像选择：account_avatar 优先，为 null 时降级 avatar_url；相对路径拼接 picpony.top
+function resolveMemberAvatar(
+  m: Pick<TeamMember, 'account_avatar' | 'avatar_url'>,
+): string | null {
+  const url = m.account_avatar || m.avatar_url;
   if (!url) return null;
   return /^https?:\/\//.test(url) ? url : `https://picpony.top/${url}`;
 }
@@ -140,18 +169,10 @@ function TeamSection() {
               <div className="flex flex-wrap gap-x-4 gap-y-5">
                 {group.items.map((m) => {
                   const href = resolveMemberLink(m.link_url);
-                  const avatar = resolveAvatar(m.avatar_url);
+                  const avatar = resolveMemberAvatar(m);
                   const inner = (
                     <>
-                      {avatar ? (
-                        <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-full bg-surface-container-high">
-                          <FadeInImage src={avatar} alt={m.name} fill className="object-cover" />
-                        </div>
-                      ) : (
-                        <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant">
-                          <MdGroup size={24} />
-                        </div>
-                      )}
+                      <MemberAvatar src={avatar ?? ''} alt={m.name} />
                       <div className="min-w-0">
                         <p className="truncate text-label-l text-on-surface">{m.name}</p>
                         <p className="mt-0.5 text-body-s text-outline">{m.role}</p>
