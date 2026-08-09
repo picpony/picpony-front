@@ -159,6 +159,9 @@ export default function SettingsPage() {
   const [defaultHomeSort, setDefaultHomeSort] = useState('created_at');
   const [defaultSearchSort, setDefaultSearchSort] = useState('created_at');
 
+  // 云端配置获取完成前禁用整页交互（防止默认值误写 localStorage/云端）
+  const [settingsReady, setSettingsReady] = useState(false);
+
   const [userToken, setUserToken] = useState('');
   const [isDeveloper, setIsDeveloper] = useState(false);
 
@@ -302,6 +305,8 @@ export default function SettingsPage() {
     const storedUser = localStorage.getItem('user_info');
     if (!storedUser) {
       openAuth('login');
+      // 无云端配置可等，直接恢复交互
+      queueMicrotask(() => setSettingsReady(true));
       return;
     }
     try {
@@ -353,7 +358,9 @@ export default function SettingsPage() {
             }
           }
         })
-        .catch((err) => console.error('Failed to fetch user info', err));
+        .catch((err) => console.error('Failed to fetch user info', err))
+        // 云端配置获取结束（成功应用或失败）才解除页面锁定
+        .finally(() => setSettingsReady(true));
     } catch (e) {
       console.error('Failed to parse user info', e);
     }
@@ -867,8 +874,13 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto" aria-busy={!settingsReady}>
       <h1 className="text-headline-s text-on-surface mb-6 flex items-center gap-2">设置</h1>
+      <div
+        className={`transition-[opacity] duration-300 ease-[var(--ease-standard)] ${
+          settingsReady ? '' : 'opacity-50 pointer-events-none'
+        }`}
+      >
       <Reveal>
         <div className="bg-surface overflow-hidden rounded-md space-y-0 mb-6">
           <div className="p-6 border-b border-outline-variant">
@@ -1760,6 +1772,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </Modal>
+      </div>
     </div>
   );
 }

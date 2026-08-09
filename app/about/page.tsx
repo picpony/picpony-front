@@ -205,7 +205,7 @@ function TeamSection() {
 export default function AboutPage() {
   return (
     <div className="mx-auto max-w-4xl animate-fade-in px-4 py-8">
-      <h1 className="mb-6 text-headline-s text-on-surface">关于网站</h1>
+      <h1 className="mb-6 text-headline-s text-on-surface">关于本站</h1>
 
       <TraceHeader />
 
