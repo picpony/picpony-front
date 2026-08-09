@@ -394,6 +394,13 @@ export default function SettingsPage() {
     };
   }, []);
 
+  // 开发者模式激活/关闭后（关于页向导广播）即时刷新，让下拉框选项跟上
+  useEffect(() => {
+    const read = () => setIsDeveloper(localStorage.getItem('picpony_developer') === 'true');
+    window.addEventListener('developer_mode_changed', read);
+    return () => window.removeEventListener('developer_mode_changed', read);
+  }, []);
+
   useEffect(() => {
     const storedFilter = lsGet('trixie_content_filter', 'safe');
     let validFilter = storedFilter;

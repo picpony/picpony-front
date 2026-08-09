@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { MdGroup } from 'react-icons/md';
 import Card from '@/components/Card';
 import Skeleton from '@/components/Skeleton';
+import DeveloperGuideModal from '@/components/DeveloperGuideModal';
 import { prefersReducedMotion } from '@/lib/motion';
 import { api } from '@/lib/api';
 
@@ -34,8 +35,28 @@ function MemberAvatar({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function TraceHeader() {
+function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const clicksRef = useRef({ count: 0, last: 0 });
+
+  // 已登录状态下快速连点 10 次（点击间隔超 1.5s 重置）触发开发者向导
+  const handleClick = () => {
+    let token = '';
+    try {
+      token = JSON.parse(localStorage.getItem('user_info') || 'null')?.token || '';
+    } catch {
+      token = '';
+    }
+    if (!token) return;
+    const now = Date.now();
+    const ref = clicksRef.current;
+    ref.count = now - ref.last > 1500 ? 1 : ref.count + 1;
+    ref.last = now;
+    if (ref.count >= 10) {
+      ref.count = 0;
+      onActivate?.();
+    }
+  };
 
   useEffect(() => {
     // 动效偏好减弱时不加载动画
@@ -66,7 +87,9 @@ function TraceHeader() {
       ref={hostRef}
       role="img"
       aria-label="PicPony"
-      className="mx-auto w-44 sm:w-56"
+      className="mx-auto w-44 select-none sm:w-56"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={handleClick}
     />
   );
 }
@@ -203,11 +226,12 @@ function TeamSection() {
 }
 
 export default function AboutPage() {
+  const [guideOpen, setGuideOpen] = useState(false);
   return (
     <div className="mx-auto max-w-4xl animate-fade-in px-4 py-8">
       <h1 className="mb-6 text-headline-s text-on-surface">关于本站</h1>
 
-      <TraceHeader />
+      <TraceHeader onActivate={() => setGuideOpen(true)} />
 
       <div className="mt-8">
         <Card variant="filled" padding="lg">
@@ -219,6 +243,8 @@ export default function AboutPage() {
 
         <TeamSection />
       </div>
+
+      <DeveloperGuideModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   );
 }

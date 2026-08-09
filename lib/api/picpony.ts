@@ -797,6 +797,31 @@ export async function getTagTranslations(tags: string[]) {
   return readJson(res);
 }
 
+/** 开发者模式状态：返回 is_developer / is_developer_banned / prerequisites */
+export async function getDeveloperStatus(token: string) {
+  const res = await fetch(`${PICPONY_API_BASE}?action=get_developer_status&_t=${Date.now()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return readJson(res);
+}
+
+/** 输入 8 位维护密码开启开发者模式 */
+export async function enableDeveloperMode(token: string, password: string) {
+  return fetch(`${PICPONY_API_BASE}?action=enable_developer_mode`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+}
+
+/** 关闭开发者模式 */
+export async function disableDeveloperMode(token: string) {
+  return fetch(`${PICPONY_API_BASE}?action=disable_developer_mode`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export async function getDictionaryDuplicates(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_duplicates&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
