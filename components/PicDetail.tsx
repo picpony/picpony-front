@@ -47,6 +47,7 @@ import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
 import TagList, { groupTags } from '@/components/TagList';
 import { loadTagCounts } from '@/lib/tagCounts';
+import { loadTagTranslations } from '@/lib/tagTranslations';
 import CommentSection from '@/components/CommentSection';
 import Button, { buttonClasses } from '@/components/Button';
 import { Textarea } from '@/components/Input';
@@ -308,6 +309,41 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   // Tag count map: tag name → image count
   const [tagCounts, setTagCounts] = useState<Record<string, number | null>>({});
+
+  // 词库中文翻译：剥离前缀的小写标签名 → 中文（null = 词库未收录）
+  const [tagTranslations, setTagTranslations] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    if (!deferredBodyReady) return;
+    if (!image?.tags || image.tags.length === 0) return;
+    const groups = groupTags(image.tags);
+    const visibleTags = [
+      ...groups.artists.slice(0, visibleTagLimits.artists),
+      ...groups.ocs.slice(0, visibleTagLimits.ocs),
+      ...groups.regularTags.slice(0, visibleTagLimits.regular),
+    ];
+    /* 翻译 key 由 lib/tagTranslations 内部统一剥前缀转小写，这里只关心
+       画面上还没见过的标签。 */
+    const missingTags = visibleTags.filter(
+      (tag) => tagTranslations[tag.toLowerCase()] === undefined,
+    );
+    if (missingTags.length === 0) return;
+    let cancelled = false;
+    void loadTagTranslations(missingTags, (translations) => {
+      if (cancelled) return;
+      setTagTranslations((current) => ({ ...current, ...translations }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    deferredBodyReady,
+    image,
+    tagTranslations,
+    visibleTagLimits.artists,
+    visibleTagLimits.ocs,
+    visibleTagLimits.regular,
+  ]);
+
   useEffect(() => {
     if (!deferredBodyReady) return;
     if (!showTagCounts) return;
@@ -1238,6 +1274,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   visibleTagLimits={visibleTagLimits}
                   showTagCounts={showTagCounts}
                   tagCounts={tagCounts}
+                  tagTranslations={tagTranslations}
                   imageId={imageId}
                   onTagClick={handleTagClick}
                   onShowMore={setVisibleTags}

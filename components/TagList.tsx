@@ -35,6 +35,8 @@ interface TagListProps {
   visibleTagLimits: VisibleTagLimits;
   showTagCounts: boolean;
   tagCounts: Record<string, number | null>;
+  /** 词库中文翻译，key 为剥离前缀后的小写标签名；null = 未收录（见 lib/tagTranslations）。 */
+  tagTranslations?: Record<string, string | null>;
   imageId: number;
   onTagClick: (tag: string) => void;
   onShowMore: (limits: VisibleTagLimits) => void;
@@ -45,6 +47,7 @@ export default function TagList({
   visibleTagLimits,
   showTagCounts,
   tagCounts,
+  tagTranslations,
   onTagClick,
   onShowMore,
 }: TagListProps) {
@@ -53,6 +56,8 @@ export default function TagList({
   const visibleArtists = artists.slice(0, visibleTagLimits.artists);
   const visibleOcs = ocs.slice(0, visibleTagLimits.ocs);
   const visibleRegularTags = regularTags.slice(0, visibleTagLimits.regular);
+  /** 有翻译显示中文，否则回退英文。 */
+  const display = (name: string) => tagTranslations?.[name.toLowerCase()] ?? name;
 
   return (
     <div className="space-y-4">
@@ -70,7 +75,7 @@ export default function TagList({
                 className={`state-layer text-label-l cursor-pointer rounded-sm px-3 py-1.5 ${tagCategoryChip('artist')}`}
               >
                 {' '}
-                {artist}{' '}
+                {display(artist)}{' '}
               </span>
             ))}{' '}
           </div>{' '}
@@ -107,7 +112,7 @@ export default function TagList({
                 className={`state-layer text-label-l cursor-pointer rounded-sm px-3 py-1.5 ${tagCategoryChip('oc')}`}
               >
                 {' '}
-                {oc}{' '}
+                {display(oc)}{' '}
               </span>
             ))}{' '}
           </div>{' '}
@@ -144,7 +149,7 @@ export default function TagList({
               title="点击查看词库信息"
             >
               {' '}
-              {tag}{' '}
+              {display(tag)}{' '}
               {showTagCounts && typeof tagCounts[tag] === 'number' && (
                 <span className="ml-1 text-label-s text-outline">
                   {tagCounts[tag].toLocaleString()}

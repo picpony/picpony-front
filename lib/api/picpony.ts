@@ -787,6 +787,16 @@ export async function getDictionary(
   return readJson(res);
 }
 
+/** 批量获取词库中文翻译（旧前端 get_tag_translations 接口） */
+export async function getTagTranslations(tags: string[]) {
+  const res = await fetch(`${PICPONY_API_BASE}?action=get_tag_translations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags }),
+  });
+  return readJson(res);
+}
+
 export async function getDictionaryDuplicates(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_duplicates&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },

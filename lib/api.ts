@@ -146,6 +146,7 @@ export {
   updateGlossaryEntry,
   deleteGlossaryEntry,
   getDictionary,
+  getTagTranslations,
   getDictionaryDuplicates,
   saveDictionaryTag,
   deleteDictionaryTag,
