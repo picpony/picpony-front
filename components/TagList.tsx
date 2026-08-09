@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
+import Skeleton from '@/components/Skeleton';
 import { tagCategoryChip } from '@/lib/tagCategories';
 
 const TAG_BATCH_SIZE = 120;
@@ -150,11 +151,17 @@ export default function TagList({
             >
               {' '}
               {display(tag)}{' '}
-              {showTagCounts && typeof tagCounts[tag] === 'number' && (
-                <span className="ml-1 text-label-s text-outline">
-                  {tagCounts[tag].toLocaleString()}
-                </span>
-              )}
+              {showTagCounts &&
+                (typeof tagCounts[tag] === 'number' ? (
+                  <span className="ml-1 text-label-s text-outline">
+                    {tagCounts[tag].toLocaleString()}
+                  </span>
+                ) : tagCounts[tag] === undefined ? (
+                  /* 计数未加载时先占位，避免数字突然撑开布局 */
+                  <span className="ml-1 text-label-s text-outline">
+                    <Skeleton className="inline-block h-3 w-6 align-baseline" />
+                  </span>
+                ) : null)}
             </span>
           ))}
         </div>
