@@ -100,7 +100,9 @@ export function buildSearchQuery(search?: string): string {
     tags = tags ? `${search}, ${tags}` : search;
   }
 
-  return encodeURIComponent(tags);
+  // 开发者模式无附加过滤时，空关键词会请求 `q=`（Derpibooru 视为未指定）——
+  // 旧前端以 '*' 表示"全部内容"，此处保持一致
+  return encodeURIComponent(tags || '*');
 }
 
 function getSortParams(isSearch: boolean): string {
