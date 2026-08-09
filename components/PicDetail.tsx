@@ -46,6 +46,7 @@ import { useEscapeBack } from '@/lib/hooks';
 import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
 import TagList, { groupTags } from '@/components/TagList';
+import { loadTagCounts } from '@/lib/tagCounts';
 import CommentSection from '@/components/CommentSection';
 import Button, { buttonClasses } from '@/components/Button';
 import { Textarea } from '@/components/Input';
@@ -88,7 +89,6 @@ function getServerDetail() {
 const INITIAL_TAG_LIMIT = 80;
 const INITIAL_RELATION_TAG_LIMIT = 32;
 const commentsInFlight = new Map<string, Promise<Comment[]>>();
-const tagCountInFlight = new Map<string, Promise<{ tag: string; count: number | null }>>();
 
 function getCommentsOnce(imageId: string) {
   const existing = commentsInFlight.get(imageId);
@@ -105,26 +105,6 @@ function getCommentsOnce(imageId: string) {
       if (commentsInFlight.get(imageId) === request) commentsInFlight.delete(imageId);
     });
   commentsInFlight.set(imageId, request);
-  return request;
-}
-
-function getTagCountOnce(token: string, tag: string) {
-  const existing = tagCountInFlight.get(tag);
-  if (existing) return existing;
-
-  const request = api
-    .getDictionary(token, { keyword: tag, limit: 1 })
-    .then((response) => {
-      const match =
-        response.success && response.tags
-          ? response.tags.find((entry: DictionaryEntry) => entry.en === tag)
-          : undefined;
-      return { tag, count: match?.count ?? null };
-    })
-    .finally(() => {
-      if (tagCountInFlight.get(tag) === request) tagCountInFlight.delete(tag);
-    });
-  tagCountInFlight.set(tag, request);
   return request;
 }
 
@@ -332,29 +312,19 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     if (!deferredBodyReady) return;
     if (!showTagCounts) return;
     if (!image?.tags || image.tags.length === 0) return;
-    const token = tokenRef.current;
-    if (!token) return;
     const uniqueTags = [
       ...new Set(groupTags(image.tags).regularTags.slice(0, visibleTagLimits.regular)),
     ];
     const missingTags = uniqueTags.filter((tag) => tagCounts[tag] === undefined);
     if (missingTags.length === 0) return;
     let cancelled = false;
-    (async () => {
-      const results = await Promise.allSettled(
-        missingTags.map((tag) => getTagCountOnce(token, tag)),
-      );
+    /* Batched and cached in `lib/tagCounts`, and reported per batch — the
+       cached ones land in the same tick, so a tag list you have seen before
+       paints its numbers without a request. */
+    void loadTagCounts(missingTags, (counts) => {
       if (cancelled) return;
-      const map: Record<string, number | null> = {};
-      results.forEach((r) => {
-        if (r.status === 'fulfilled') {
-          map[r.value.tag] = r.value.count;
-        }
-      });
-      if (Object.keys(map).length > 0) {
-        setTagCounts((current) => ({ ...current, ...map }));
-      }
-    })();
+      setTagCounts((current) => ({ ...current, ...counts }));
+    });
     return () => {
       cancelled = true;
     };
