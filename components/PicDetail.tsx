@@ -307,6 +307,16 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     return () => window.removeEventListener('settings_updated', read);
   }, []);
 
+  // Read "显示中文标签" setting from localStorage (默认开启)
+  const [showChineseTags, setShowChineseTags] = useState(true);
+  useEffect(() => {
+    const read = () =>
+      setShowChineseTags(localStorage.getItem('picpony_show_chinese_tags') !== 'false');
+    read();
+    window.addEventListener('settings_updated', read);
+    return () => window.removeEventListener('settings_updated', read);
+  }, []);
+
   // Tag count map: tag name → image count
   const [tagCounts, setTagCounts] = useState<Record<string, number | null>>({});
 
@@ -314,6 +324,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const [tagTranslations, setTagTranslations] = useState<Record<string, string | null>>({});
   useEffect(() => {
     if (!deferredBodyReady) return;
+    if (!showChineseTags) return;
     if (!image?.tags || image.tags.length === 0) return;
     const groups = groupTags(image.tags);
     const visibleTags = [
@@ -338,6 +349,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   }, [
     deferredBodyReady,
     image,
+    showChineseTags,
     tagTranslations,
     visibleTagLimits.artists,
     visibleTagLimits.ocs,
@@ -1274,7 +1286,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   visibleTagLimits={visibleTagLimits}
                   showTagCounts={showTagCounts}
                   tagCounts={tagCounts}
-                  tagTranslations={tagTranslations}
+                  tagTranslations={showChineseTags ? tagTranslations : undefined}
                   imageId={imageId}
                   onTagClick={handleTagClick}
                   onShowMore={setVisibleTags}
