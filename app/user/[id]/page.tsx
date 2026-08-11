@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { api, PonyImage, UserComment, UserPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import RichTextRenderer from '@/components/RichTextRenderer';
+import Card from '@/components/Card';
 import {
   MdPerson,
   MdCake,
@@ -500,8 +502,10 @@ export default function UserProfilePage() {
           {profile.derpi_username ? (
             <div className="mb-8">
               {' '}
-              <div
-                className="bg-surface-container-low/50 border border-outline-variant rounded-md p-4 cursor-pointer hover:bg-surface-container-high transition-ui"
+              <Card
+                variant="filled"
+                interactive
+                className="bg-surface-container-low/50 hover:bg-surface-container-high transition-ui"
                 onClick={() => {
                   if (profile.derpi_user_id) {
                     window.open(
@@ -518,7 +522,14 @@ export default function UserProfilePage() {
                 title="点击查看 Derpibooru 个人主页"
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <MdCloudUpload size={16} className="text-primary" />
+                  <Image
+                    src="/img/derpi.svg"
+                    alt=""
+                    width={16}
+                    height={16}
+                    aria-hidden="true"
+                    className="shrink-0"
+                  />
                   <span className="text-label-m-emphasized text-on-surface-variant uppercase tracking-wider">
                     Derpibooru 账户
                   </span>
@@ -549,7 +560,7 @@ export default function UserProfilePage() {
                   </div>
                   <MdSearch size={18} className="text-outline shrink-0" />
                 </div>
-              </div>
+              </Card>
             </div>
           ) : null}
           {profile.derpi_username && (
