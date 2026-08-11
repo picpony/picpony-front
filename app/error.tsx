@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { MdRefresh, MdErrorOutline } from 'react-icons/md';
-import Button from '@/components/Button';
+import ErrorRetry from '@/components/ErrorRetry';
 
 /**
  * Route-level error boundary.
@@ -11,6 +10,14 @@ import Button from '@/components/Button';
  * screen — English, unstyled, and offering no way back. `reset()` re-renders
  * the segment, which is enough for the transient network failures that cause
  * most of these.
+ *
+ * It renders `ErrorRetry` rather than its own layout, because otherwise the app
+ * says "that did not load" in two different voices depending on how far up the
+ * failure happened: a fetch that rejects inside a page got the shared 48px
+ * glyph over `title-l` at 50vh with a staggered entrance, and a throw that
+ * reached the boundary got a 64px glyph over `headline-s` at 60vh with none.
+ * The user cannot tell those two events apart and should not be shown two
+ * designs for them.
  */
 export default function Error({
   error,
@@ -25,18 +32,23 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
-      <MdErrorOutline size={64} className="text-error mb-4" aria-hidden="true" />
-      <h1 className="text-headline-s text-on-surface mb-2">出了点问题</h1>
-      <p className="text-body-m text-on-surface-variant mb-6">
-        页面加载时发生错误，可以重试一次；如果反复出现，请稍后再来。
-      </p>
-      {error.digest && (
-        <p className="text-label-s text-outline mb-6 font-mono">错误编号：{error.digest}</p>
-      )}
-      <Button variant="filled" icon={<MdRefresh size={18} />} onClick={reset}>
-        重试
-      </Button>
-    </div>
+    <ErrorRetry
+      title="出了点问题"
+      message={
+        <>
+          页面加载时发生错误，可以重试一次；如果反复出现，请稍后再来。
+          {/* A `<span class="block">` rather than a second paragraph: this sits
+              inside `StatusView`'s own <p>, and a nested <p> is invalid and gets
+              hoisted out by the parser — which put the digest above the sentence
+              it belongs to. */}
+          {error.digest && (
+            <span className="text-label-s text-on-surface-variant mt-3 block font-mono">
+              错误编号：{error.digest}
+            </span>
+          )}
+        </>
+      }
+      onRetry={reset}
+    />
   );
 }

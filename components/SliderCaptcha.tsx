@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { encodeTrack } from '@/lib/utils';
 import { gsap, prefersReducedMotion } from '@/lib/motion';
 import Spinner from './Spinner';
+import Skeleton from './Skeleton';
 
 interface SliderCaptchaProps {
   onVerify: (token: string) => void;
@@ -374,16 +375,19 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   return (
     <div className="flex flex-col items-center gap-4 w-full">
       <div className="flex justify-center items-center w-full">
-        <span className="font-semibold text-on-surface">请完成安全验证</span>
+        <span className="text-title-s text-on-surface">请完成安全验证</span>
       </div>
       <div ref={containerRef} className="relative w-full max-w-[310px]">
         {loading && !bgImage && (
-          <div
-            className="w-full flex items-center justify-center bg-surface-container-lowest/80 rounded-md"
+          /* A `Skeleton` in the puzzle's own box, not a `Spinner` inside it. The
+             box is already reserved at the exact aspect ratio, so there is a
+             destination shape to load into — which is the whole test for which
+             of the two to use. A spinner here said "something is happening"
+             inside a frame that was already telling you where. */
+          <Skeleton
+            className="w-full rounded-md"
             style={{ aspectRatio: `${puzzleWidth} / ${puzzleHeight}` }}
-          >
-            <Spinner size="lg" />
-          </div>
+          />
         )}
 
         {bgImage && (
@@ -410,15 +414,15 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
               />
             )}
             {verifying && (
-              <div className="absolute inset-0 flex items-center justify-center bg-surface/70 z-20 animate-fade-in">
-                <Spinner size="lg" />
+              <div className="bg-media-plate animate-fade-in absolute inset-0 z-20 flex items-center justify-center">
+                <Spinner size="lg" white />
               </div>
             )}
             {errorMsg && !verifying && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-error/15 z-20 animate-fade-in px-3">
+              <div className="bg-error-container text-on-error-container animate-fade-in absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 px-3">
                 <svg
                   viewBox="0 0 24 24"
-                  className="w-12 h-12 text-error drop-shadow-md shrink-0"
+                  className="w-12 h-12 text-error shrink-0"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
@@ -446,7 +450,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
           style={{ touchAction: 'none' }}
         >
           <div
-            className="h-full bg-success-fill/20 rounded-full transition-none"
+            className="bg-success-container h-full rounded-full transition-none"
             style={{
               width: `${(sliderX / maxSliderX) * layout.barMaxX + layout.barButtonWidth}px`,
             }}
@@ -454,11 +458,16 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
 
           <div
             ref={sliderBtnRef}
-            className={`absolute top-[-1px] h-10 bg-surface-raised  border border-outline rounded-full flex items-center justify-center shadow-e2 select-none z-10 text-title-m transition-[color,background-color,border-color,scale,box-shadow] duration-200 ${
+            /* `duration-120` + `standard`, i.e. the motion table's press row.
+               Grabbing the handle is a press, and the 200ms this carried — with
+               no curve at all, so it fell through to the default — left the
+               fill and the scale still catching up after the handle had already
+               moved under the finger. */
+            className={`bg-surface-raised text-title-m absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline shadow-e2 transition-[color,background-color,border-color,scale,box-shadow] duration-120 ease-[var(--ease-standard)] select-none ${
               isDragging
                 ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill scale-110 shadow-e3'
                 : 'cursor-grab text-on-surface-variant'
-            } ${verifying ? 'pointer-events-none opacity-70' : ''}`}
+            } ${verifying ? 'pointer-events-none disabled-content' : ''}`}
             style={{
               left: `${(sliderX / maxSliderX) * layout.barMaxX}px`,
               width: `${layout.barButtonWidth}px`,

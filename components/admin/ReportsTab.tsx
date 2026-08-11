@@ -5,8 +5,9 @@ import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import { MdReport, MdOpenInNew } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
-import Chip from '@/components/Chip';
+import Badge from '@/components/Badge';
 import { SectionHeader, SearchInput } from './';
+import Button from '@/components/Button';
 
 interface Report {
   id: number;
@@ -91,7 +92,7 @@ export default function ReportsTab({ token }: { token: string }) {
           href={`/pic/${r.image_id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-link inline-flex items-center gap-1 hover:underline"
+          className="text-link inline-flex items-center gap-1 hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
         >
           #{r.image_id} <MdOpenInNew size={14} />
         </a>
@@ -108,9 +109,12 @@ export default function ReportsTab({ token }: { token: string }) {
       key: 'status',
       header: '状态',
       render: (r) => (
-        <Chip variant="input" tone={STATUS[r.status].tone}>
+        /* A `Badge`, not a `Chip`: no click handler and no dismiss cross, so it is
+           a mark. As a `Chip` it also rendered at `h-9` (36px), which is what made
+           this table's rows taller than every sibling tab's. */
+        <Badge tone={STATUS[r.status].tone} size="md">
           {STATUS[r.status].label}
-        </Chip>
+        </Badge>
       ),
     },
     {
@@ -120,24 +124,16 @@ export default function ReportsTab({ token }: { token: string }) {
       render: (r) =>
         r.status === 'pending' ? (
           <>
-            <button
-              onClick={() => handleReport(r.id, 'processed')}
-              data-ripple
-              className="bg-success-fill text-on-fill rounded px-3 py-1 text-label-m transition-ui hover:bg-success-fill/90"
-            >
+            <Button variant="success" size="xs" onClick={() => handleReport(r.id, 'processed')} data-ripple>
               {' '}
               完结{' '}
-            </button>{' '}
-            <button
-              onClick={() => handleReport(r.id, 'rejected')}
-              data-ripple
-              className="bg-secondary-container text-on-secondary-container rounded px-3 py-1 text-label-m transition-ui hover:bg-secondary-container/80"
-            >
+            </Button>{' '}
+            <Button variant="tonal" size="xs" onClick={() => handleReport(r.id, 'rejected')} data-ripple>
               驳回
-            </button>
+            </Button>
           </>
         ) : (
-          <span className="text-outline text-body-m">已归档</span>
+          <span className="text-on-surface-variant text-body-m">已归档</span>
         ),
     },
   ];

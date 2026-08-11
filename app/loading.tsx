@@ -17,7 +17,7 @@ export default function Loading() {
     <div
       role="status"
       aria-live="polite"
-      className="mx-auto max-w-7xl px-2 py-4 sm:px-4 sm:py-8 md:px-6 lg:px-8"
+      className="mx-auto max-w-4xl"
     >
       <span className="sr-only">加载中…</span>
       {/* Page title */}

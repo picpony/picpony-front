@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
 import TabBar, { type TabItem } from '@/components/TabBar';
+import TabPanes, { TabPane } from '@/components/TabPanes';
+import PageHeader from '@/components/PageHeader';
+import PageBack from '@/components/PageBack';
+import { useEscapeBack } from '@/lib/hooks';
+import SectionHeading from '@/components/SectionHeading';
 
 type PolicyKey = 'cookie' | 'agreement' | 'privacy' | 'faq';
 
@@ -16,16 +22,20 @@ const TABS: TabItem<PolicyKey>[] = [
 // 段落与列表项的通用排版
 function P({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <p className={`text-body-m leading-relaxed text-on-surface-variant ${className}`}>{children}</p>
+    <p className={`text-body-m text-on-surface-variant ${className}`}>{children}</p>
   );
 }
 
 function H3({ children }: { children: ReactNode }) {
-  return <h3 className="mt-6 mb-2 text-title-m text-on-surface">{children}</h3>;
+  return (
+    <SectionHeading as="h3" className="mt-6 mb-2">
+      {children}
+    </SectionHeading>
+  );
 }
 
 function UL({ children }: { children: ReactNode }) {
-  return <ul className="mt-2 space-y-2 text-body-m leading-relaxed text-on-surface-variant">{children}</ul>;
+  return <ul className="mt-2 space-y-2 text-body-m text-on-surface-variant">{children}</ul>;
 }
 
 function Code({ children }: { children: ReactNode }) {
@@ -42,7 +52,7 @@ function OutLink({ href, children }: { href: string; children: ReactNode }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-primary hover:underline"
+      className="text-link hover:text-link-hover hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
     >
       {children}
     </a>
@@ -53,7 +63,7 @@ function OutLink({ href, children }: { href: string; children: ReactNode }) {
 function CookiePolicy() {
   return (
     <div>
-      <p className="text-body-s text-outline">更新日期：2026年6月</p>
+      <p className="text-body-s text-on-surface-variant">更新日期：2026年6月</p>
       <div className="mt-3 space-y-3">
         <P>
           欢迎使用 PicPony（中文小马图站）。为了确保网站的正常运转、为您提供个性化的找图体验以及保障账号与系统安全，我们会在您的计算机或移动设备上存储少量的本地数据。本政策旨在向您清晰地说明我们如何使用 Cookie、Session 以及同类本地存储技术（Local Storage）。
@@ -125,7 +135,7 @@ function CookiePolicy() {
 function AgreementPolicy() {
   return (
     <div>
-      <p className="text-body-s text-outline">更新日期：2026年6月</p>
+      <p className="text-body-s text-on-surface-variant">更新日期：2026年6月</p>
       <div className="mt-3 space-y-3">
         <P>
           欢迎您使用 PicPony（中文小马图站，以下简称“本站”）！在您注册、登录及使用本站提供的各项服务之前，请您务必审慎阅读、充分理解本《PicPony 用户服务协议》（以下简称“本协议”）的各条款内容。您注册、登录或使用本站的行为，即视为您已阅读并同意接受本协议的全部约束。
@@ -191,7 +201,7 @@ function AgreementPolicy() {
 function PrivacyPolicy() {
   return (
     <div>
-      <p className="text-body-s text-outline">更新日期：2026年6月</p>
+      <p className="text-body-s text-on-surface-variant">更新日期：2026年6月</p>
       <div className="mt-3 space-y-3">
         <P>
           欢迎使用 PicPony（中文小马图站）。本隐私政策旨在向您说明在您使用本网站及其相关服务时，我们如何收集、使用、存储和保护您的个人信息。本站作为一个中文镜像客户端，已通过 Derpibooru 授权，数据与功能严格按照 Derpibooru API 文档进行开发与规范化同步。我们高度重视您的隐私，并致力于保护您的个人数据。
@@ -332,7 +342,7 @@ function Faq() {
           <dt className="text-title-s text-on-surface">
             Q: {item.q}
           </dt>
-          <dd className="mt-1 text-body-m leading-relaxed text-on-surface-variant">A: {item.a}</dd>
+          <dd className="mt-1 text-body-m text-on-surface-variant">A: {item.a}</dd>
         </div>
       ))}
     </dl>
@@ -341,10 +351,16 @@ function Faq() {
 
 export default function PolicyPage() {
   const [active, setActive] = useState<PolicyKey>('cookie');
+  const router = useRouter();
+  /* A footer destination, not a sidebar one, so it gets the back affordance. */
+  const handleBack = useCallback(() => router.back(), [router]);
+  useEscapeBack(handleBack);
 
   return (
-    <div className="mx-auto max-w-4xl animate-fade-in px-4 py-8">
-      <h1 className="mb-6 text-headline-s text-on-surface">声明与政策</h1>
+    <>
+      <PageBack onClick={handleBack} title="返回 (Esc)" />
+      <div className="mx-auto max-w-4xl pt-14">
+      <PageHeader title="声明与政策" />
 
       {/* 板块切换，样式与消息/通知页一致 */}
       <TabBar
@@ -355,12 +371,38 @@ export default function PolicyPage() {
         className="mb-6"
       />
 
-      <Card variant="filled" padding="lg">
-        {active === 'cookie' && <CookiePolicy />}
-        {active === 'agreement' && <AgreementPolicy />}
-        {active === 'privacy' && <PrivacyPolicy />}
-        {active === 'faq' && <Faq />}
-      </Card>
-    </div>
+      {/* `lean`: these four panes are static prose that never refetches, which is
+          the precondition for sampling the wave over a pane's own blocks — see
+          `TabPanes`. The card is *inside* each pane, not around all of them.
+          It reads like an inversion and it is the only arrangement that works:
+          the shared axis translates the panes a full window sideways, and a pane
+          nested inside a card would slide out of a surface that stayed put —
+          the border and background sitting still while their own contents left
+          the box. Every other screen slides content blocks *including* their
+          surfaces, so the card travels with the text it belongs to. */}
+      <TabPanes value={active} lean>
+        <TabPane value="cookie">
+          <Card variant="filled" padding="lg">
+            <CookiePolicy />
+          </Card>
+        </TabPane>
+        <TabPane value="agreement">
+          <Card variant="filled" padding="lg">
+            <AgreementPolicy />
+          </Card>
+        </TabPane>
+        <TabPane value="privacy">
+          <Card variant="filled" padding="lg">
+            <PrivacyPolicy />
+          </Card>
+        </TabPane>
+        <TabPane value="faq">
+          <Card variant="filled" padding="lg">
+            <Faq />
+          </Card>
+        </TabPane>
+      </TabPanes>
+      </div>
+    </>
   );
 }

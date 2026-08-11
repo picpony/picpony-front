@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, ForumPostDetail, ForumComment } from '@/lib/api';
 import {
   MdErrorOutline,
-  MdRefresh,
-  MdArrowBack,
   MdThumbUp,
   MdOutlineThumbUp,
   MdComment,
@@ -13,6 +11,7 @@ import {
   MdSend,
   MdContentCopy,
   MdReply,
+  MdLogin,
   MdClose,
 } from 'react-icons/md';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -24,12 +23,18 @@ import FadeInImage from '@/components/FadeInImage';
 import { showToast } from '@/components/Toast';
 import Pagination from '@/components/Pagination';
 import Skeleton, { SkeletonCircle, SkeletonText } from '@/components/Skeleton';
-import Button, { buttonClasses } from '@/components/Button';
+import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import PageBack from '@/components/PageBack';
+import RoleBadge from '@/components/RoleBadge';
+import Avatar from '@/components/Avatar';
+import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
 import { useEscapeBack } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 import { readForumOrigin, playForumContainerTransform } from '@/lib/forumTransition';
+import { scrollAppToElement } from '@/lib/motion';
+import SectionHeading from '@/components/SectionHeading';
 
 export default function ForumPostPage() {
   const params = useParams();
@@ -199,9 +204,14 @@ export default function ForumPostPage() {
         return;
       }
       setReplyTo({ userId, username, commentId, text });
-      // Scroll to comment input
+      /* One easing for every scroll in the app. `scrollIntoView({ behavior:
+         'smooth' })` used the browser's own curve, which is not `--ease-scroll`
+         and is not the curve pagination or "back to top" use — so the same page
+         glided three different ways depending on which control you pressed.
+         The timeout stays: the editor is only mounted once `replyTo` commits, so
+         there is nothing to scroll to on this tick. */
       setTimeout(() => {
-        document.getElementById('comment-input-area')?.scrollIntoView({ behavior: 'smooth' });
+        scrollAppToElement(document.getElementById('comment-input-area'), { offset: 72 });
       }, 100);
     },
     [isLoggedIn],
@@ -280,7 +290,7 @@ export default function ForumPostPage() {
     return (
       <>
         <PageBack onClick={handleBack} title="返回论坛 (Esc)" label="返回论坛" />
-        <div className="max-w-4xl mx-auto px-4 pt-14 pb-8">
+        <div className="max-w-4xl mx-auto pt-14">
           <div ref={cardRef} className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8">
             <div ref={cardBodyRef}>
               <Skeleton className="h-8 w-3/4 mb-4" />
@@ -297,28 +307,24 @@ export default function ForumPostPage() {
   }
 
   if (error || !post) {
+    /* `PageBack` here too, which is the point: the loading and loaded states
+       both draw it, so without it the top-left affordance vanished the moment a
+       post failed to load and reappeared on retry. The old layout compensated
+       with a 返回 button in the middle of the screen — a second back affordance,
+       in a different place, for the one state where the first one was missing.
+       Now the chrome is identical across all three states and the error block
+       only owns the thing that is actually specific to it. */
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-on-surface-variant animate-fade-in px-4 text-center">
-        <MdErrorOutline size={48} className="mb-4 text-outline" />
-        <h2 className="text-title-l mb-2 text-on-surface">帖子加载失败</h2>
-        <div className="mb-6 max-w-md">
-          <p className="text-body-m text-on-surface-variant mb-1">
-            {error?.message || '帖子不存在'}
-          </p>
+      <>
+        <PageBack onClick={handleBack} title="返回论坛 (Esc)" label="返回论坛" />
+        <div className="mx-auto max-w-4xl pt-14">
+          <ErrorRetry
+            title="帖子加载失败"
+            message={error?.message || '帖子不存在'}
+            onRetry={() => setRetryCount((c) => c + 1)}
+          />
         </div>
-        <div className="flex gap-4">
-          <Button onClick={handleBack} variant="tonal" icon={<MdArrowBack size={20} />}>
-            返回
-          </Button>
-          <Button
-            onClick={() => setRetryCount((c) => c + 1)}
-            variant="filled"
-            icon={<MdRefresh size={20} />}
-          >
-            重试
-          </Button>
-        </div>
-      </div>
+      </>
     );
   }
 
@@ -328,7 +334,7 @@ export default function ForumPostPage() {
           full-screen view — see `components/PageBack.tsx`, including why it
           sits outside the centred wrapper. */}
       <PageBack onClick={handleBack} title="返回论坛 (Esc)" label="返回论坛" />
-      <div className="max-w-4xl mx-auto px-4 pt-14 pb-8">
+      <div className="max-w-4xl mx-auto pt-14">
         <div ref={cardRef} className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8">
           <div ref={cardBodyRef}>
             <h1 className="text-title-l sm:text-headline-s text-on-surface mb-4">{post.title}</h1>
@@ -339,18 +345,16 @@ export default function ForumPostPage() {
             <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-outline-variant pb-4">
               <div className="flex min-w-0 items-center gap-3">
                 <Link href={`/user/${post.user_id}`} className="shrink-0">
-                  <FadeInImage
-                    src={
-                      post.avatar ? `https://picpony.top/${post.avatar}` : '/img/default-avatar.png'
-                    }
-                    alt={post.username}
-                    width={40}
-                    height={40}
-                    className="rounded-full object-cover border border-outline-variant"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/img/default-avatar.png';
-                    }}
-                  />
+                  {/* `Avatar`. Every avatar in the forum section fell back to
+                      `/img/default-avatar.png`, and that file does not exist —
+                      `public/img/` holds only the emoji folder and the two
+                      wordmarks. So a user without a picture got a broken image,
+                      and so did anyone whose avatar the CDN failed to serve. The
+                      `onError` handler "fixing" it pointed at the same missing
+                      file. `Avatar` falls back to the initial and then to a
+                      glyph, and resolves the host through `getAvatarUrl` instead
+                      of pasting it inline. */}
+                  <Avatar src={post.avatar} name={post.username} size={40} />
                 </Link>
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
@@ -360,13 +364,30 @@ export default function ForumPostPage() {
                     >
                       {post.username}
                     </Link>
-                    <span className="text-label-s px-1.5 py-0.5 rounded-xs bg-primary/10 text-primary uppercase tracking-wider shrink-0">
-                      {post.role}
-                    </span>
+                    {/* `lib/roles.ts` exists so that "the badge beside a
+                        username is the same badge wherever you meet that user",
+                        and this screen was the one that bypassed it — a
+                        hand-rolled `bg-primary` at 10% with `text-primary`, uppercase
+                        tracking-wider` pill, so a founder read purple on their
+                        profile and brand-pink here. `uppercase tracking-wider`
+                        also did nothing to a Chinese role label but widen it,
+                        over a tracking token already halved for Han glyphs. */}
+                    <RoleBadge role={post.role} className="shrink-0" />
                   </div>
-                  <div className="text-body-s text-on-surface-variant mt-0.5 truncate">
-                    发布于 {new Date(post.created_at).toLocaleString()}
-                  </div>
+                  <time
+                    dateTime={post.created_at}
+                    title={new Date(post.created_at).toLocaleString('zh-CN')}
+                    className="text-body-s text-on-surface-variant mt-0.5 block truncate tabular-nums"
+                  >
+                    发布于{' '}
+                    {new Date(post.created_at).toLocaleString('zh-CN', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </time>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-3 text-label-l text-on-surface-variant sm:gap-4">
@@ -395,7 +416,7 @@ export default function ForumPostPage() {
                 blocks around it — the cover, the body and the action row all
                 sat on the same 24dp gap, which reads as three peers rather than
                 a picture, an article and its controls. */}
-            <div className="max-w-none text-on-surface">
+            <div className="text-on-surface break-words">
               <RichTextRenderer content={post.content} />
             </div>
             {/* Action row, the same one the image detail has: unlabelled
@@ -426,40 +447,35 @@ export default function ForumPostPage() {
           </div>
         </div>
         <div className="mb-8">
-          <h2 className="text-title-m-emphasized text-on-surface mb-4">
-            全部回复 ({post.reply_count})
-          </h2>
-          <div className="space-y-4">
+          <SectionHeading>全部回复 ({post.reply_count})</SectionHeading>
+          <div>
             {comments.length === 0 ? (
-              <div className="text-center py-8 text-on-surface-variant bg-surface-container-lowest rounded-md">
-                暂无回复，快来抢沙发吧！
-              </div>
+              <EmptyState
+                size="pane"
+                icon={<MdComment size={48} />}
+                title="暂无回复"
+                description="来抢下沙发吧"
+              />
             ) : (
               comments.map((comment, index) => (
                 <article
                   key={comment.id}
-                  className="bg-surface-container-lowest flex gap-3 rounded-md p-3 sm:gap-4 sm:p-4"
+                  /* A grouped list, matching `ForumPostList` above it and the
+                     image detail's comment list. Eight replies as eight
+                     `rounded-md` cards on a `space-y-4` stack read as eight
+                     unrelated posts; `m3-row` cuts one block of material into
+                     rows, which is what a thread actually is.
+                     `surface-container-low`, one step in from the post card's
+                     `lowest`, so the post keeps its place as the focus and the
+                     replies read as the ground under it. */
+                  className="m3-row bg-surface-container-low flex gap-3 p-3 sm:gap-4 sm:p-4"
                 >
                   <Link
                     href={`/user/${comment.user_id}`}
-                    className="hover:ring-primary/40 block shrink-0 self-start rounded-full ring-2 ring-transparent transition-ui"
+                    className="block shrink-0 self-start rounded-full ring-2 ring-transparent transition-ui hover:ring-primary focus-visible:focus-ring"
                     title={`查看 ${comment.username} 的个人资料`}
                   >
-                    <FadeInImage
-                      src={
-                        comment.avatar
-                          ? `https://picpony.top/${comment.avatar}`
-                          : '/img/default-avatar.png'
-                      }
-                      alt=""
-                      width={40}
-                      height={40}
-                      shimmer={false}
-                      className="border-outline-variant h-10 w-10 rounded-full border object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/img/default-avatar.png';
-                      }}
-                    />
+                    <Avatar src={comment.avatar} name={comment.username} size={40} />
                   </Link>
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -469,14 +485,12 @@ export default function ForumPostPage() {
                       >
                         {comment.username}
                       </Link>
-                      <span className="text-label-s bg-primary/10 text-primary rounded-xs px-1.5 py-0.5 tracking-wider uppercase">
-                        {comment.role}
-                      </span>
+                      <RoleBadge role={comment.role} className="shrink-0" />
                       <span className="text-body-s text-on-surface-variant ms-auto shrink-0 tabular-nums">
                         #{(page - 1) * 20 + index + 1}
                       </span>
                     </div>
-                    <div className="text-on-surface text-body-m max-w-none">
+                    <div className="text-on-surface text-body-m break-words">
                       <RichTextRenderer content={comment.content} />
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -516,35 +530,53 @@ export default function ForumPostPage() {
               ))
             )}
           </div>
+          {/* Directly under the list it pages, which is where it was not: it
+              sat *below* the reply editor, so turning to page 2 of the replies
+              meant scrolling past the whole rich-text composer to find the
+              control and then scrolling back up to read the result. */}
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              className="mt-6"
+            />
+          )}
         </div>
         {/* Comment Input */}
         <div
           id="comment-input-area"
           className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8"
         >
-          <h3 className="text-title-m-emphasized text-on-surface mb-4">发表回复</h3>
+          <SectionHeading as="h3">发表回复</SectionHeading>
           {!isLoggedIn ? (
-            <div className="text-center py-8 bg-surface-container-low rounded-md border border-outline-variant">
-              <p className="text-on-surface-variant mb-4">登录后才能发表回复</p>
-              <button
-                type="button"
-                onClick={() => openAuth('login')}
-                className={buttonClasses({ variant: 'filled' })}
-              >
-                去登录
-              </button>
-            </div>
+            /* `EmptyState`, which takes an action for exactly this. The
+               hand-rolled block was a centred paragraph in a bordered div — the
+               sixteenth silhouette for "there is nothing here for you", in a
+               type scale none of the other fifteen used. */
+            <EmptyState
+              size="pane"
+              icon={<MdLogin size={48} />}
+              title="登录后才能发表回复"
+              action={
+                <Button variant="filled" onClick={() => openAuth('login')}>
+                  去登录
+                </Button>
+              }
+            />
           ) : (
             <div className="space-y-4">
               {/* Reply hint bar */}
               {replyTo && (
-                <div className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-md bg-primary/5 border border-primary/20 text-body-m">
+                <div className="bg-primary-container text-on-primary-container flex items-center justify-between gap-2 rounded-md px-4 py-2.5 text-body-m">
                   <div className="flex items-center gap-2 min-w-0">
-                    <MdReply size={16} className="text-primary flex-shrink-0" />
-                    <span className="text-on-surface-variant truncate">
-                      回复 <strong className="text-primary">{replyTo.username}</strong>：
-                      <span className="text-outline ml-1">
-                        {replyTo.text
+                    <MdReply size={16} className="shrink-0" />
+                    <span className="truncate">
+                      回复 <strong>{replyTo.username}</strong>：
+                      {/* Quieter by size, not by opacity — the same treatment
+                          `CommentComposer`'s reply bar uses, so the two 回复 X
+                          previews in this app finally match. */}
+                      <span className="ml-1 text-body-s">                        {replyTo.text
                           .replace(/\[quote=.*?\][\s\S]*?\[\/quote\]/gi, '')
                           .replace(/<[^>]+>/g, '')
                           .trim()
@@ -552,13 +584,14 @@ export default function ForumPostPage() {
                       </span>
                     </span>
                   </div>
-                  <button
+                  <IconButton
+                    size="sm"
                     onClick={handleCancelReply}
-                    className="touch-target flex-shrink-0 p-1 rounded-full hover:bg-surface-container-highest text-outline hover:text-on-surface-variant transition-ui"
                     title="取消回复"
-                  >
-                    <MdClose size={16} />
-                  </button>
+                    aria-label="取消回复"
+                    className="-me-1.5 shrink-0"
+                    icon={<MdClose size={16} />}
+                  />
                 </div>
               )}
               <RichTextEditor
@@ -586,9 +619,6 @@ export default function ForumPostPage() {
             </div>
           )}
         </div>
-        {totalPages > 1 && (
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} />
-        )}
       </div>
     </>
   );

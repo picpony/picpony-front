@@ -1,11 +1,12 @@
 'use client';
 
-import { cn } from '@/lib/utils';
+import Badge, { type BadgeSize } from './Badge';
 
 interface UserBadgeProps {
   name: string;
   /** Author-chosen hex from the admin panel; arbitrary, so not a token. */
   color: string;
+  size?: BadgeSize;
   className?: string;
 }
 
@@ -17,6 +18,11 @@ interface UserBadgeProps {
  * is picked per badge in the admin panel and cannot come from the token scale,
  * which is exactly why the *rest* of it needs to be shared: the one arbitrary
  * value should not drag the whole appearance out of the system with it.
+ *
+ * That is now literal — the shape, size and type role come from `Badge`, the
+ * same primitive `RoleBadge` renders, so the two marks in a profile header are
+ * one silhouette instead of a round pill under two square ones. Only the fill
+ * and its ink are computed here, because only they are outside the system.
  *
  * The ink is chosen from the fill's relative luminance rather than pinned to
  * white — a badge set to a pale yellow was previously white-on-pale and
@@ -35,16 +41,15 @@ function inkFor(hex: string): string {
   return luminance > 0.42 ? '#1e1a1c' : '#ffffff';
 }
 
-export default function UserBadge({ name, color, className = '' }: UserBadgeProps) {
+export default function UserBadge({ name, color, size = 'sm', className = '' }: UserBadgeProps) {
   return (
-    <span
-      className={cn(
-        'text-label-s-emphasized inline-flex max-w-full items-center rounded-full px-2 py-0.5',
-        className,
-      )}
+    <Badge
+      size={size}
+      tone="custom"
+      className={className}
       style={{ backgroundColor: color, color: inkFor(color) }}
     >
-      <span className="truncate">{name}</span>
-    </span>
+      {name}
+    </Badge>
   );
 }

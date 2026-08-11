@@ -58,9 +58,9 @@ export default function AnnouncementModal() {
       {announcement && (
         <>
           <h3 className="text-title-m-emphasized text-on-surface mb-2">{announcement.title}</h3>
-          <p className="text-label-m text-outline mb-4 pb-3">发布日期：{announcement.date}</p>
+          <p className="text-label-m text-on-surface-variant mb-4 pb-3">发布日期：{announcement.date}</p>
           <div
-            className="text-on-surface-variant text-body-m leading-relaxed space-y-2"
+            className="text-on-surface-variant text-body-m space-y-2"
             dangerouslySetInnerHTML={{ __html: announcement.content }}
           />
         </>

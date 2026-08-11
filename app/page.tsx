@@ -15,6 +15,7 @@ import { useDeferredLoading } from '@/lib/hooks';
 import { useTabPanes } from '@/lib/motion';
 import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
 import Button from '@/components/Button';
+import SectionHeading from '@/components/SectionHeading';
 
 type HomeTab = 'gallery' | 'forum';
 
@@ -253,18 +254,27 @@ function ForumTab() {
   );
 
   return (
-    <div>
-      <div data-tab-row className="flex justify-between items-center mb-4">
-        <h2 className="text-title-m-emphasized text-on-surface">论坛</h2>
-        <Button
-          onClick={() => router.push('/forum/create')}
-          variant="filled"
-          size="sm"
-          icon={<MdAdd size={16} />}
-        >
-          发帖
-        </Button>
-      </div>{' '}
+    /* The reading column. The gallery pane beside this one needs the full
+       `max-w-7xl` because it is a masonry grid; a list of text rows does not, and
+       at that width the same list was 1280px here and 896px on `/forum` — one
+       list, two widths, which is the thing that reads as sloppy rather than as
+       spacious. See the layout note in AGENTS.md. */
+    <div className="mx-auto max-w-4xl">
+      <SectionHeading
+        data-tab-row
+        actions={
+          <Button
+            onClick={() => router.push('/forum/create')}
+            variant="filled"
+            size="sm"
+            icon={<MdAdd size={16} />}
+          >
+            发帖
+          </Button>
+        }
+      >
+        论坛
+      </SectionHeading>{' '}
       <ForumPostList
         posts={posts}
         page={page}
@@ -319,7 +329,7 @@ function HomeContent() {
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8">
+      <div className="max-w-7xl mx-auto">
         {/* No `key` here: re-keying is what used to remount both tabs. */}
         <div ref={panelRef} data-tab-panel>
           {/* Marked, not unmounted, so state, scroll and fetched data all
@@ -353,7 +363,7 @@ export default function Home() {
        the real tree arrived. */
     <Suspense
       fallback={
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="max-w-7xl mx-auto">
           <FeaturedBannerSkeleton />
           <ImageGridSkeleton />
         </div>

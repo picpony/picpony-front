@@ -3,6 +3,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import Skeleton from './Skeleton';
+import EmptyState from './EmptyState';
 
 export interface Column<T> {
   key: string;
@@ -24,11 +25,20 @@ interface DataTableProps<T> {
   rows: T[];
   rowKey: (row: T, index: number) => string | number;
   loading?: boolean;
-  /** Shown when `rows` is empty and not loading. */
-  empty?: ReactNode;
+  /**
+   * Shown when `rows` is empty and not loading.
+   *
+   * A `string` is the common case and is wrapped in `EmptyState` — it is not
+   * rendered raw. That distinction is the whole point of the type: this used to
+   * be a bare `ReactNode` spliced in with `??`, and eleven of the fourteen admin
+   * tabs pass a plain string, so eleven tables rendered an unstyled, glyphless
+   * run of text inside the `m3-row` while the comment below claimed they went
+   * through `EmptyState`. Pass a node only when the empty body genuinely needs
+   * custom content.
+   */
+  empty?: string | ReactNode;
   skeletonRows?: number;
   className?: string;
-  onRowClick?: (row: T) => void;
   /** Renders an optional editor/details row immediately below its data row. */
   expandedRow?: (row: T, index: number) => ReactNode;
 }
@@ -55,6 +65,12 @@ interface DataTableProps<T> {
  * those handlers stage a confirm action in a ref, and passing one as an
  * argument to a function invoked during render trips `react-hooks/refs` —
  * referencing it from inside a `render` closure does not.
+ *
+ * There is deliberately no `onRowClick`. It existed, had no call sites in the
+ * whole app, and made the row a `<div onClick>` — a control no keyboard could
+ * reach, inside rows that already carry real buttons in their `actions` column.
+ * A row that needs to do something puts a button in that column; a row that
+ * needs to expand uses `expandedRow`.
  */
 export default function DataTable<T>({
   columns,
@@ -64,7 +80,6 @@ export default function DataTable<T>({
   empty,
   skeletonRows = 6,
   className = '',
-  onRowClick,
   expandedRow,
 }: DataTableProps<T>) {
   const leading = columns.filter((c) => c.hideOnMobile);
@@ -116,10 +131,20 @@ export default function DataTable<T>({
           </div>
         ))}
 
-      {/* ---- Empty ---- */}
+      {/* ---- Empty ----
+           `EmptyState`, like every other "nothing here" in the app. `inline`
+           because it sits in a table body that already has a header row above it.
+
+           A string `empty` is wrapped rather than spliced: `{empty ?? <EmptyState/>}`
+           meant the eleven tabs that pass a string bypassed the primitive entirely
+           and printed the text raw, with no glyph and no type role. */}
       {isEmpty && (
-        <div className="m3-row bg-surface-container-low px-4 py-12 text-center">
-          {empty ?? <span className="text-on-surface-variant">暂无数据</span>}
+        <div className="m3-row bg-surface-container-low">
+          {typeof empty === 'string' || empty == null ? (
+            <EmptyState size="inline" title={empty ?? '暂无数据'} />
+          ) : (
+            empty
+          )}
         </div>
       )}
 
@@ -128,12 +153,18 @@ export default function DataTable<T>({
         rows.map((row, i) => (
           <Fragment key={rowKey(row, i)}>
             <div
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
                 'm3-row flex flex-wrap items-center gap-x-4 gap-y-2 p-4',
-                'bg-surface-container-low transition-ui',
-                'hover:bg-surface-container-high',
-                onRowClick && 'cursor-pointer',
+                /* The tone is flat and stays flat: this row is not a control.
+                   It carried a hand-picked hover on the container-high tone,
+                   which made the admin table the one list in the app whose
+                   hover was a fill change instead of the M3 tinted overlay —
+                   and it ran on `transition-ui`'s 200ms against the state
+                   layer's 150ms, so tables and lists settled at different
+                   speeds. Nothing hovers here now, because nothing here is
+                   pressable except the buttons in the `actions` column, which
+                   carry their own state layer. */
+                'bg-surface-container-low',
               )}
             >
               {leading.length > 0 && (

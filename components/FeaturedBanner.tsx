@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api, PonyImage, applyCdn } from '@/lib/api';
 import { MdThumbUp, MdComment, MdPerson } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
+import Badge from '@/components/Badge';
 import Skeleton from '@/components/Skeleton';
 import { useHeroLink } from '@/lib/useHero';
 import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
@@ -195,17 +196,29 @@ export default function FeaturedBanner() {
           }}
         />{' '}
         <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8">
-          {' '}
-          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary/90 px-3 py-1.5 text-label-m-emphasized text-on-primary backdrop-blur-sm sm:mb-3">
-            {' '}
-            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
-              {' '}
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />{' '}
-            </svg>{' '}
-            近日推荐{' '}
-          </div>{' '}
+          {/* `Badge`, not a hand-rolled pill. It was `rounded-full px-3 py-1.5`
+              with its own container/ink pair written out — the exact silhouette
+              the primitive exists to stop from drifting, and the reason this
+              banner's mark was a capsule while every other mark in the app is a
+              rounded rectangle.
+              The fill stays `primary`/`on-primary` rather than a media role:
+              those two are documented as not inverting between schemes, so the
+              banner's own mark reads as one constant material over any
+              photograph — which is what a media role would otherwise buy. */}
+          <Badge
+            size="md"
+            colors="bg-primary text-on-primary"
+            className="mb-2 sm:mb-3"
+            icon={
+              <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+            }
+          >
+            近日推荐
+          </Badge>{' '}
           {featured.description && (
-            <p className="mb-2 max-w-2xl text-label-l leading-relaxed text-on-media/90 line-clamp-2 drop-shadow-lg sm:mb-3 sm:text-body-l">
+            <p className="text-body-m text-on-media-variant sm:text-body-l mb-2 line-clamp-2 max-w-2xl sm:mb-3">
               {' '}
               {featured.description
                 .split('\n')[0]
@@ -220,21 +233,21 @@ export default function FeaturedBanner() {
           {featured.tags && featured.tags.length > 0 && (
             <div className="mb-2 flex max-w-2xl flex-wrap gap-1.5 sm:mb-3">
               {featured.tags.slice(0, 6).map((tag) => (
-                <span
-                  key={tag}
-                  className="max-w-[140px] truncate rounded-full bg-scrim/40 px-2 py-0.5 text-body-s text-on-media/85 backdrop-blur-sm"
-                >
+                /* `tone="media"` — the plate/ink pair, which is what this wrote
+                   out by hand. `max-w-36` caps a long tag as the old `[140px]`
+                   did, on the spacing scale rather than as an arbitrary value. */
+                <Badge key={tag} tone="media" className="max-w-36">
                   {tag}
-                </span>
+                </Badge>
               ))}
               {featured.tags.length > 6 && (
-                <span className="px-2 py-0.5 text-body-s text-on-media/60">
+                <span className="text-body-s text-on-media-variant px-2 py-0.5">
                   +{featured.tags.length - 6}
                 </span>
               )}
             </div>
           )}
-          <div className="flex items-center gap-3 text-body-s text-on-media/80 sm:gap-4 sm:text-body-m">
+          <div className="text-body-s text-on-media-variant sm:text-body-m flex items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-1">
               <MdThumbUp size={14} />
               <span>{featured.score?.toLocaleString() || 0}</span>

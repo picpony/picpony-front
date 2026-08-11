@@ -2,6 +2,7 @@
 
 import { ReactNode, useRef } from 'react';
 import { spawnRipple } from '@/lib/motion';
+import { cn } from '@/lib/utils';
 
 interface ToggleSwitchProps {
   checked: boolean;
@@ -10,6 +11,20 @@ interface ToggleSwitchProps {
   label?: string | ReactNode;
   description?: string;
   colorClass?: string;
+  /**
+   * `inline` — switch first, then its label, sized to its content. Right inside
+   * a form, where the control is read left to right like a checkbox.
+   *
+   * `row` — label column first, switch trailing at the far edge, full width.
+   * This is the M3 list convention and what a settings row is, and it exists
+   * because /settings had both at once: its value rows put the label at the
+   * left and the control at the right, while its switch rows put the switch at
+   * the left and left the right-hand half of the row empty. Two opposite
+   * reading orders down one card. `/admin` had already worked around it by
+   * writing the label as a sibling `<div>` and passing no `label` at all —
+   * which is this layout, hand-rolled, with the description styled differently.
+   */
+  layout?: 'inline' | 'row';
   /** Needed when `label` is omitted — the wrapping label is then empty. */
   'aria-label'?: string;
 }
@@ -89,13 +104,23 @@ export default function ToggleSwitch({
   label,
   description,
   colorClass,
+  layout = 'inline',
   'aria-label': ariaLabel,
 }: ToggleSwitchProps) {
   const stateLayerRef = useRef<HTMLSpanElement>(null);
+  const isRow = layout === 'row';
 
   return (
     <label
-      className={`group flex items-center gap-3 select-none ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+      /* `flex-row-reverse` plus `justify-between`, not a reordered DOM: the
+         switch has to stay the first focusable node in the label so a click on
+         the text still lands on the input it labels, while the eye reads
+         label-then-control like every other row in the list. */
+      className={cn(
+        'group flex select-none',
+        isRow ? 'w-full flex-row-reverse items-center justify-between gap-4' : 'items-center gap-3',
+        disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
+      )}
     >
       <span className="group/switch relative inline-flex shrink-0 items-center">
         {/* The hit target, per the spec: the input itself, stretched over the
@@ -126,7 +151,7 @@ export default function ToggleSwitch({
         {/* Track */}
         <span
           aria-hidden="true"
-          className={`flex h-8 w-13 items-center justify-center rounded-full border-2 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 ${TRACK_TRANSITION} ${
+          className={`flex h-8 w-13 items-center justify-center rounded-full border-2 peer-focus-visible:ring-2 peer-focus-visible:focus-ring ${TRACK_TRANSITION} ${
             checked
               ? 'border-transparent bg-primary'
               : 'border-outline bg-surface-container-highest'
@@ -185,9 +210,11 @@ export default function ToggleSwitch({
         </span>
       </span>
       {label && (
-        <div>
-          <span className={`text-label-l ${colorClass || 'text-on-surface'}`}>{label}</span>
-          {description && <p className="text-body-s text-outline mt-0.5">{description}</p>}
+        <div className={isRow ? 'min-w-0 flex-1' : undefined}>
+          <span className={cn('text-label-l', colorClass || 'text-on-surface')}>{label}</span>
+          {/* `on-surface-variant`, the supporting-text ink role — not `outline`,
+              which is a *boundary* role for rules and field borders. */}
+          {description && <p className="text-body-s text-on-surface-variant mt-0.5">{description}</p>}
         </div>
       )}
     </label>

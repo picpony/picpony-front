@@ -17,27 +17,97 @@ import {
   MdAttachMoney,
 } from 'react-icons/md';
 import dynamic from 'next/dynamic';
-import Spinner from '@/components/Spinner';
+import ErrorRetry from '@/components/ErrorRetry';
+import Skeleton from '@/components/Skeleton';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 
-const WelcomeTab = dynamic(() => import('@/components/admin/WelcomeTab'), { ssr: false });
-const GlossaryTab = dynamic(() => import('@/components/admin/GlossaryTab'), { ssr: false });
-const UsersTab = dynamic(() => import('@/components/admin/UsersTab'), { ssr: false });
+/* One loading shape for all fourteen lazy tabs. Without it, the first switch to
+   a tab rendered nothing at all until its chunk arrived — an empty well the height
+   of the panel, then a jump. This is the panel's own geometry: a section heading,
+   a header row and a run of grouped rows, which is what every tab resolves to.
+
+   It used to call `SkeletonRows`, which emits bare `<tr>`/`<td>` — markup left
+   over from when `DataTable` was a real `<table>`. React does not drop those the
+   way an HTML parser would; it creates them and the UA stylesheet wraps them in
+   an anonymous table box, so the fallback rendered a five-column grid of stubs
+   in front of a list that is `.m3-row` blocks. The comment above claimed it was
+   the panel's own geometry and it was a different geometry entirely. */
+function AdminTabFallback() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-7 w-40" />
+      <div>
+        <div className="m3-row bg-surface-container-high px-4 py-3">
+          <Skeleton className="h-4 w-32" />
+        </div>
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="m3-row flex flex-col gap-2 bg-surface-container-low p-4">
+            <Skeleton className="h-4 w-2/5" delay={i * 80} />
+            <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
+            <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const WelcomeTab = dynamic(() => import('@/components/admin/WelcomeTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const GlossaryTab = dynamic(() => import('@/components/admin/GlossaryTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const UsersTab = dynamic(() => import('@/components/admin/UsersTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
 const NotificationsTab = dynamic(() => import('@/components/admin/NotificationsTab'), {
   ssr: false,
+  loading: AdminTabFallback,
 });
 const MessagesAuditTab = dynamic(() => import('@/components/admin/MessagesAuditTab'), {
   ssr: false,
+  loading: AdminTabFallback,
 });
-const BadgesTab = dynamic(() => import('@/components/admin/BadgesTab'), { ssr: false });
-const BlockTagsTab = dynamic(() => import('@/components/admin/BlockTagsTab'), { ssr: false });
-const DeveloperTab = dynamic(() => import('@/components/admin/DeveloperTab'), { ssr: false });
-const TeamTab = dynamic(() => import('@/components/admin/TeamTab'), { ssr: false });
-const ShopTab = dynamic(() => import('@/components/admin/ShopTab'), { ssr: false });
-const ReportsTab = dynamic(() => import('@/components/admin/ReportsTab'), { ssr: false });
-const BlacklistTab = dynamic(() => import('@/components/admin/BlacklistTab'), { ssr: false });
-const WealthTab = dynamic(() => import('@/components/admin/WealthTab'), { ssr: false });
-const OtherTab = dynamic(() => import('@/components/admin/OtherTab'), { ssr: false });
+const BadgesTab = dynamic(() => import('@/components/admin/BadgesTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const BlockTagsTab = dynamic(() => import('@/components/admin/BlockTagsTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const DeveloperTab = dynamic(() => import('@/components/admin/DeveloperTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const TeamTab = dynamic(() => import('@/components/admin/TeamTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const ShopTab = dynamic(() => import('@/components/admin/ShopTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const ReportsTab = dynamic(() => import('@/components/admin/ReportsTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const BlacklistTab = dynamic(() => import('@/components/admin/BlacklistTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const WealthTab = dynamic(() => import('@/components/admin/WealthTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const OtherTab = dynamic(() => import('@/components/admin/OtherTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
 
 type TabId =
   | 'welcome'
@@ -187,25 +257,23 @@ function AdminPanel() {
   };
 
   if (isLoading) {
-    return (
-      <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[400px]">
-        {' '}
-        <Spinner size="lg" label="" />{' '}
-      </div>
-    );
+    return null;
   }
   if (!isAdmin && !isEditor) {
     return (
-      <div className="max-w-6xl mx-auto text-center py-12">
-        {' '}
-        <p className="text-on-surface-variant">您没有权限访问此页面</p>{' '}
-      </div>
+      <ErrorRetry size="page" title="没有访问权限" message="您没有权限访问此页面" />
     );
   }
   return (
     <div className="max-w-6xl mx-auto">
       {' '}
-      <div className="bg-surface rounded-md overflow-hidden flex flex-col md:flex-row">
+      {/* `surface-container-low`, not `surface`. The app scroller behind this is
+          itself `bg-surface`, so a panel painted the same tone was a card the
+          exact colour of the page it sits on — the `rounded-md overflow-hidden`
+          reaching for a raised block and clipping nothing anyone could see. It
+          is the same fault the layout note in AGENTS.md records for /settings'
+          six invisible section wrappers. */}
+      <div className="bg-surface-container-low rounded-md overflow-hidden flex flex-col md:flex-row">
         {' '}
         <div className="md:w-48 shrink-0 border-b md:border-b-0 border-outline-variant">
           {' '}
@@ -217,14 +285,19 @@ function AdminPanel() {
                 onClick={() => handleTabChange(tab.id)}
                 data-ripple
                 aria-current={activeTab === tab.id}
-                className={`group flex items-center gap-2 rounded-full px-3 py-2.5 text-label-l transition-ui whitespace-nowrap shrink-0 ${
+                className={`group flex items-center gap-2 rounded-full px-3 py-3 text-label-l transition-ui whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-ring ${
                   activeTab === tab.id
-                    ? 'bg-primary/10 text-primary md:translate-x-1'
-                    : 'text-on-surface-variant hover:bg-surface-container-high'
+                    ? 'bg-secondary-container text-on-secondary-container'
+                    : 'text-on-surface-variant state-layer'
                 }`}
               >
+                {/* `standard`, not `spring`: the active icon *stays* scaled, and
+                    `--ease-spring` overshoots past 110% and settles back — which
+                    reads as a wobble on arrival rather than as a state change.
+                    `motion-reduce` because a named `transition-transform` is not
+                    covered by the keyframe enumeration. */}
                 <span
-                  className={`shrink-0 transition-transform duration-300 ease-[var(--ease-spring)] ${
+                  className={`shrink-0 transition-transform duration-300 ease-[var(--ease-standard)] motion-reduce:transition-none ${
                     activeTab === tab.id ? 'scale-110' : 'group-hover:scale-105'
                   }`}
                 >
@@ -235,8 +308,24 @@ function AdminPanel() {
             ))}
           </nav>
         </div>
-        <div className="flex-1 p-4 sm:p-6 min-h-[400px] md:min-h-[600px] relative">
-          <div key={activeTab} className="animate-page-transition">
+        <div className="flex-1 p-4 sm:p-6 min-h-96 md:min-h-150 relative">
+          {/* A fade, and deliberately *not* the tab shared axis.
+              `TabPanes` needs both panes alive to slide one out as the other comes
+              in, and these fourteen are `dynamic(..., { ssr: false })` — keeping
+              them mounted would mount fourteen admin tabs at once, each with its
+              own fetch. So the outgoing pane genuinely cannot survive here, and a
+              cross-fade is the honest transition for a swap where it can't.
+
+              What was here was `animate-page-transition`, which is the *route*
+              animation: `pageIn`, a 12px rise with an 80ms backwards-filled delay,
+              designed for a page arriving from another page. On a lateral move
+              between siblings it read as the panel dropping in from above.
+              `animate-fade-in` is the same 400ms `decelerate` without the travel.
+
+              The `key` stays: it is what restarts the animation on each switch,
+              and with `{cond && ...}` mounting there is nothing for it to destroy
+              that was not being destroyed anyway. */}
+          <div key={activeTab} className="animate-fade-in">
             {activeTab === 'welcome' && <WelcomeTab />}
             {activeTab === 'glossary' && <GlossaryTab />}
             {activeTab === 'users' && <UsersTab token={token} myRole={userRole} />}
@@ -264,8 +353,12 @@ export default function AdminPage() {
        own loading state so the shell does not jump. */
     <Suspense
       fallback={
-        <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[400px]">
-          <Spinner size="lg" label="" />
+        /* `AdminTabFallback`, not a centred dot. It is the panel's own
+           silhouette and it already exists two functions up — a spinner here
+           reflows the whole console when the real panel lands, which is the one
+           thing a fallback is for avoiding. */
+        <div className="mx-auto max-w-6xl p-4 sm:p-6">
+          <AdminTabFallback />
         </div>
       }
     >

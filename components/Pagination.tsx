@@ -37,6 +37,9 @@ interface PaginationProps {
  * banner. Pages with several independent pagers (the profile tabs) each get
  * their own anchor. With no anchor it falls back to the top.
  */
+/** Matches a caller-supplied top margin (`mt-*`, `my-*`, or a breakpoint form). */
+const HAS_TOP_MARGIN = /(?:^|\s|:)(?:mt|my)-/;
+
 export default function Pagination({
   currentPage,
   totalPages,
@@ -71,12 +74,12 @@ export default function Pagination({
   const pages = Array.from({ length: count }, (_, i) => start + i);
 
   const navBtn = cn(
-    'inline-flex h-10 min-w-10 cursor-pointer items-center justify-center rounded-full px-2',
+    // 44px below `sm` for the same reason as the number buttons above.
+    'inline-flex h-11 min-w-11 sm:h-10 sm:min-w-10 cursor-pointer items-center justify-center rounded-full px-2',
     'text-on-surface-variant state-layer outline-none',
     'transition-ui',
-    'focus-visible:ring-2 focus-visible:ring-primary/40',
-    'disabled:pointer-events-none disabled:opacity-40',
-    '',
+    'focus-visible:ring-2 focus-ring',
+    'disabled:pointer-events-none disabled:disabled-content',
   );
 
   return (
@@ -86,7 +89,17 @@ export default function Pagination({
       /* Takes part in the tab shared-axis cascade; see `paneRows`. Harmless
          outside a tab pane, which is the only place that attribute is read. */
       data-tab-row
-      className={cn('mt-12 flex items-center justify-center gap-1', className)}
+      className={cn(
+        /* The default gap stands down when the call site names its own, the same
+           guard `Skeleton` uses for its radius and for the same reason: `cn` is a
+           plain join, so `mt-12` plus a caller's `mt-8` emitted both and let the
+           stylesheet's order pick the winner — which is `mt-12`, so every
+           override silently lost. `ForumPostList` asks for `mt-8` and
+           `GlossaryTab` for `mt-0`; both were being ignored. */
+        !HAS_TOP_MARGIN.test(className) && 'mt-12',
+        'flex items-center justify-center gap-1',
+        className,
+      )}
     >
       {known && (
         <button
@@ -123,14 +136,22 @@ export default function Pagination({
               aria-current={active ? 'page' : undefined}
               data-ripple
               className={cn(
-                'inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full outline-none',
-                'text-label-l transition-ui',
-                'focus-visible:ring-2 focus-visible:ring-primary/40',
-                'disabled:pointer-events-none disabled:opacity-40',
-                '',
+                /* `h-11 w-11` below `sm`: this is the most-tapped chrome in the
+                   app and 40px is under the 44px minimum. `touch-target` cannot
+                   help here — `data-ripple` sets `overflow: hidden`, which clips
+                   the utility's pseudo-element out of hit-testing — so the box
+                   itself has to grow. It returns to 40px from `sm` up, where a
+                   pointer is doing the aiming. */
+                'inline-flex h-11 w-11 sm:h-10 sm:w-10 cursor-pointer items-center justify-center rounded-full outline-none',
+                'transition-ui',
+                'focus-visible:ring-2 focus-ring',
+                'disabled:pointer-events-none disabled:disabled-content',
+                /* One type role per branch — the active page used to add a bare
+                   `font-medium` over `text-label-l`, which is already weight 500,
+                   so the current page was distinguished by colour alone. */
                 active
-                  ? 'bg-primary text-on-primary font-medium shadow-e1'
-                  : 'text-on-surface-variant state-layer',
+                  ? 'bg-primary text-on-primary text-label-l-emphasized shadow-e1'
+                  : 'text-label-l text-on-surface-variant state-layer',
                 // Beyond five numbers the row overflows a 390px viewport, so
                 // the outer two collapse instead of wrapping to a second line.
                 Math.abs(page - currentPage) === siblings && 'max-sm:hidden',
@@ -185,8 +206,8 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
           'group flex cursor-pointer items-center gap-2 rounded-full px-8 py-3',
           'bg-secondary-container text-on-secondary-container text-label-l',
           'state-layer outline-none transition-ui',
-          'focus-visible:ring-2 focus-visible:ring-primary/40',
-          'disabled:cursor-not-allowed disabled:opacity-50',
+          'focus-visible:ring-2 focus-ring',
+          'disabled:cursor-not-allowed disabled:disabled-content',
           '',
         )}
       >
@@ -195,7 +216,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="bg-primary h-1.5 w-1.5 rounded-full animate-[dot-bounce_1s_ease-in-out_infinite]"
+                className="bg-primary h-1.5 w-1.5 rounded-full animate-[dot-bounce_1s_var(--ease-loop)_infinite]"
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}
@@ -203,7 +224,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
         ) : (
           <MdRefresh
             size={20}
-            className="transition-transform duration-500 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
+            className="transition-transform duration-300 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
           />
         )}
         <span>{isLoading ? '正在加载' : '加载更多'}</span>

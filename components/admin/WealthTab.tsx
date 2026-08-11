@@ -113,13 +113,13 @@ export default function WealthTab({ token }: { token: string }) {
       key: 'name',
       header: '用户名',
       primary: true,
-      render: (u) => <span className="text-primary font-medium">{u.username}</span>,
+      render: (u) => <span className="text-body-m-emphasized text-primary">{u.username}</span>,
     },
     { key: 'exp', header: '当前经验', render: (u) => u.experience || 0 },
     {
       key: 'coins',
       header: '当前金币',
-      render: (u) => <span className="text-warning font-medium">{u.coins || 0}</span>,
+      render: (u) => <span className="text-body-m-emphasized text-warning">{u.coins || 0}</span>,
     },
     {
       key: 'actions',
@@ -182,7 +182,7 @@ export default function WealthTab({ token }: { token: string }) {
           </div>{' '}
           <div>
             {' '}
-            <label className="block text-label-l text-on-surface mb-1">金币操作</label>{' '}
+            <p className="block text-label-l text-on-surface-variant mb-1">金币操作</p>{' '}
             <div className="flex gap-2">
               {' '}
               <Select

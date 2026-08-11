@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   MdStar,
   MdImage,
+  MdErrorOutline,
   MdSearch,
   MdOpenInNew,
   MdUpload,
@@ -14,7 +15,14 @@ import {
 import { api, DerpiProfileUser, PonyImage } from '@/lib/api';
 import Pagination from '@/components/Pagination';
 import Skeleton from '@/components/Skeleton';
-import Button from '@/components/Button';
+import Avatar from '@/components/Avatar';
+import Badge from '@/components/Badge';
+import StatusView from '@/components/StatusView';
+import PageBack from '@/components/PageBack';
+import { useEscapeBack } from '@/lib/hooks';
+import EmptyState from '@/components/EmptyState';
+import Button, { buttonClasses } from '@/components/Button';
+import SectionHeading from '@/components/SectionHeading';
 
 const PER_PAGE = 24;
 
@@ -93,49 +101,66 @@ export default function DerpiUserPage() {
   );
 
   // --- Loading skeleton ---
+  /* Not a sidebar destination, so it carries the shared back affordance — see
+     the rule in AGENTS.md. Drawn in all three states, which is what makes the
+     error branch's claim below true: it dropped its own 返回上一页 button on the
+     strength of "the leading back affordance is already chrome on this route",
+     and until now this route never rendered one — so a Derpibooru profile that
+     failed to load had no way out at all. */
+  const handleBack = useCallback(() => router.back(), [router]);
+  useEscapeBack(handleBack);
+
   if (isLoading) {
     return (
+      <>
+      <PageBack onClick={handleBack} title="返回 (Esc)" />
       <div className="bg-surface">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
+        <div className="max-w-5xl mx-auto">
           <div className="flex items-center gap-4 pb-6">
             <Skeleton className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface shrink-0" />
             <div className="flex-1 min-w-0">
-              <Skeleton className="h-8 rounded w-1/3 mb-4" />
-              <Skeleton className="h-4 rounded w-1/4" />
+              <Skeleton className="h-8 w-1/3 mb-4" />
+              <Skeleton className="h-4 w-1/4" />
             </div>
           </div>
           <div className="space-y-4">
-            <Skeleton className="h-4 rounded w-full" />
-            <Skeleton className="h-4 rounded w-5/6" />
-            <Skeleton className="h-4 rounded w-4/6" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-4/6" />
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   // --- Error state ---
   if (error || !profile) {
+    /* One action, and it is the one this screen alone can offer — the source
+       profile on Derpibooru. 返回上一页 is dropped because the leading back
+       affordance is already chrome on this route, the same call the forum
+       thread's error state makes. */
     return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <h2 className="text-headline-s text-on-surface mb-4">加载失败</h2>
-        <p className="text-on-surface-variant mb-6">{error || '用户可能不存在'}</p>
-        <div className="flex gap-4 justify-center">
-          <Button onClick={() => router.back()} variant="filled">
-            返回上一页
-          </Button>
-          {userId && (
+      <>
+      <PageBack onClick={handleBack} title="返回 (Esc)" />
+      <StatusView
+        icon={<MdErrorOutline size={48} />}
+        title="加载失败"
+        description={error || '用户可能不存在'}
+        action={
+          userId && (
             <a
               href={`https://derpibooru.org/profiles/${encodeURIComponent(userId)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-2 bg-surface-container-highest text-on-surface rounded-full hover:bg-surface-container-highest transition-ui inline-flex items-center gap-1.5"
+              className={buttonClasses({ variant: 'filled' })}
             >
-              <MdOpenInNew size={16} />在 Derpibooru 查看
+              <MdOpenInNew size={18} />在 Derpibooru 查看
             </a>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
+      </>
     );
   }
 
@@ -143,37 +168,33 @@ export default function DerpiUserPage() {
   const uploaderQuery = `uploader_id:${profile.id}`;
 
   return (
-    <div className="animate-fade-in bg-surface">
+    <>
+      <PageBack onClick={handleBack} title="返回 (Esc)" />
+      <div className="animate-fade-in bg-surface">
       {/* ===== Main Content ===== */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto">
         <div className="pb-8 pt-6 sm:pt-8">
           {/* Avatar + Username row */}
           <div className="flex items-center gap-4">
             <div className="shrink-0">
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- remote derpi avatar URL
-                <img
-                  src={avatarUrl}
-                  alt={profile.name}
-                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-surface shadow-e3"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                    const fb = (e.target as HTMLImageElement).nextElementSibling;
-                    if (fb) fb.classList.remove('hidden');
-                  }}
-                />
-              ) : null}
-              <div
-                className={`w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-primary/10 flex items-center justify-center text-primary text-headline-m-emphasized sm:text-display-s border-4 border-surface shadow-e3 ${avatarUrl ? 'hidden' : ''}`}
-              >
-                {profile.name.charAt(0).toUpperCase()}
-              </div>
+              {/* The fallback used to be swapped in from an `onError` handler
+                  that hid the `<img>` and stripped `hidden` off its sibling — an
+                  imperative DOM edit React does not know about. `Avatar` keeps the
+                  initial mounted underneath instead, so it is both the error state
+                  and the decode placeholder, and it cannot get out of step with a
+                  re-render. */}
+              <Avatar
+                src={avatarUrl}
+                name={profile.name}
+                size="w-24 h-24 sm:w-32 sm:h-32"
+                className="border-4 border-surface shadow-e3"
+              />
             </div>
 
             <div className="min-w-0">
               <h1 className="text-headline-s sm:text-headline-m text-on-surface flex items-center gap-3">
                 {profile.name}
-                <span className="text-body-m font-normal text-outline">#{profile.id}</span>
+                <span className="text-body-m text-on-surface-variant">#{profile.id}</span>
               </h1>
               <p className="text-body-m text-on-surface-variant mt-1">Derpibooru 用户</p>
             </div>
@@ -190,7 +211,7 @@ export default function DerpiUserPage() {
                     key={i}
                     src={badgeUrl}
                     title={award.title || '勋章'}
-                    className="h-7 rounded shadow-e1 hover:scale-110 transition-transform"
+                    className="h-7 rounded-xs shadow-e1 transition-transform duration-300 ease-[var(--ease-standard)] hover:scale-110"
                     alt=""
                   />
                 ) : null;
@@ -199,24 +220,24 @@ export default function DerpiUserPage() {
           )}
 
           {/* Stats row */}
-          <div className="flex items-center gap-5 mt-6 bg-surface-container-low/50 rounded-md px-5 py-3 text-body-m">
-            <div className="flex items-center gap-1.5 text-primary">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-6 bg-surface-container-low rounded-md px-5 py-3 text-body-m">
+            <div className="flex items-center gap-1.5 text-on-surface-variant">
               <MdUpload size={16} />
-              <span className="font-semibold text-on-surface">
+              <span className="text-title-m text-on-surface">
                 {(profile.uploads_count ?? 0).toLocaleString()}
               </span>
               <span className="text-on-surface-variant">上传</span>
             </div>
-            <div className="text-on-accent-blue flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 text-on-surface-variant">
               <MdChatBubbleOutline size={16} />
-              <span className="font-semibold text-on-surface">
+              <span className="text-title-m text-on-surface">
                 {(profile.comments_count ?? 0).toLocaleString()}
               </span>
               <span className="text-on-surface-variant">评论</span>
             </div>
-            <div className="flex items-center gap-1.5 text-warning">
+            <div className="flex items-center gap-1.5 text-on-surface-variant">
               <MdEdit size={16} />
-              <span className="font-semibold text-on-surface">
+              <span className="text-title-m text-on-surface">
                 {(profile.posts_count ?? 0).toLocaleString()}
               </span>
               <span className="text-on-surface-variant">发帖</span>
@@ -227,7 +248,7 @@ export default function DerpiUserPage() {
           {profile.description && (
             <div className="mt-6">
               <h3 className="text-label-l-emphasized text-on-surface mb-2">个人简介</h3>
-              <div className="text-body-m text-on-surface-variant bg-surface-container-low/50 p-4 rounded-md leading-relaxed whitespace-pre-wrap popover-scrollbar max-h-40 overflow-y-auto">
+              <div className="text-body-m text-on-surface-variant bg-surface-container-low p-4 rounded-md whitespace-pre-wrap popover-scrollbar max-h-40 overflow-y-auto">
                 {profile.description}
               </div>
             </div>
@@ -248,7 +269,7 @@ export default function DerpiUserPage() {
               href={`https://derpibooru.org/profiles/${encodeURIComponent(profile.name)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 px-5 py-3 border border-outline text-on-surface rounded-full hover:bg-surface-container-high transition-ui flex items-center justify-center gap-2 text-label-l"
+              className={buttonClasses({ variant: 'outlined', className: 'flex-1' })}
             >
               <MdOpenInNew size={18} />在 Derpibooru 查看主页
             </a>
@@ -256,20 +277,19 @@ export default function DerpiUserPage() {
 
           {/* ===== Uploads Tab ===== */}
           <div className="mt-10">
-            <h2 className="text-title-m-emphasized text-on-surface mb-4 flex items-center gap-2">
-              <MdImage size={20} className="text-primary" />
+            <SectionHeading
+              icon={<MdImage size={20} />}
+              aside={
+                uploadsTotal > 0 ? `（共 ${uploadsTotal.toLocaleString()} 张）` : undefined
+              }
+            >
               最近上传
-              {uploadsTotal > 0 && (
-                <span className="text-body-m font-normal text-outline">
-                  （共 {uploadsTotal.toLocaleString()} 张）
-                </span>
-              )}
-            </h2>
+            </SectionHeading>
 
             {isUploadsLoading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <Skeleton key={i} className="aspect-square rounded-md" />
+                  <Skeleton key={i} className="aspect-square rounded-lg" />
                 ))}
               </div>
             ) : uploads.length > 0 ? (
@@ -279,29 +299,52 @@ export default function DerpiUserPage() {
                     const thumbUrl =
                       img.representations?.small || img.representations?.thumb || img.view_url;
                     return (
-                      <div
+                      /* A `<button>`, not a `<div onClick>`: an image grid is
+                         navigation, and this one could not be reached by keyboard
+                         at all. (`/user/[id]` uses a `<Link>` for the same grid;
+                         here the handler resolves the target id first, so a button
+                         is the honest element.)
+
+                         `rounded-lg` (16dp) is the grid-tile step from the shape
+                         table — and the one pinned to `HERO_TARGET_RADIUS_PX`, so a
+                         tile at 12dp did not match the corner the flight lands on.
+
+                         The caption and score reveal on `sm` and up only. They were
+                         `opacity-0 group-hover:opacity-100`, and there is no hover
+                         on a touch device — so on the majority viewport the image id
+                         and score never appeared at all. */
+                      <button
+                        type="button"
                         key={img.id}
-                        className="group relative aspect-square rounded-md overflow-hidden bg-surface-container-high cursor-pointer"
                         onClick={() => handleUploadClick(img.id)}
+                        aria-label={img.name || `图片 #${img.id}`}
+                        className="group relative aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-surface-container-high outline-none focus-visible:ring-2 focus-ring"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element -- dynamic derpi thumbnail */}
                         <img
                           src={thumbUrl}
-                          alt={img.name || `#${img.id}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          alt=""
+                          className="w-full h-full object-cover transition-transform duration-300 ease-[var(--ease-standard)] group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                           loading="lazy"
                         />
-                        <div className="absolute inset-0 bg-scrim/0 group-hover:bg-scrim/20 transition-ui" />
-                        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="media-hover-scrim absolute inset-0" />
+                        <div className="media-caption-gradient absolute bottom-0 left-0 right-0 p-2 opacity-100 transition-opacity duration-300 ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100">
                           <span className="text-on-media text-label-m">#{img.id}</span>
                         </div>
                         {img.score !== undefined && (
-                          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-scrim/50 backdrop-blur-sm text-on-media text-body-s rounded flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MdStar size={10} />
+                          /* `Badge tone="media"`, not an inline span naming the
+                             plate/ink pair by hand — the same object as every
+                             other mark in the app, in the one tone that is
+                             legible on a photograph. */
+                          <Badge
+                            tone="media"
+                            icon={<MdStar size={14} />}
+                            className="absolute top-2 right-2 opacity-100 transition-opacity duration-300 ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100"
+                          >
                             {img.score}
-                          </div>
+                          </Badge>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -319,15 +362,17 @@ export default function DerpiUserPage() {
                 )}
               </>
             ) : (
-              <div className="text-center py-16">
-                <MdImage size={48} className="mx-auto text-outline mb-4" />
-                <p className="text-on-surface-variant text-title-m">暂无上传</p>
-                <p className="text-outline text-body-m mt-1">该用户尚未上传任何图片</p>
-              </div>
+              <EmptyState
+                size="pane"
+                icon={<MdImage size={48} />}
+                title="暂无上传"
+                description="该用户尚未上传任何图片"
+              />
             )}
           </div>
         </div>
       </div>
     </div>
+    </>
   );
 }

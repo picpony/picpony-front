@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
@@ -9,21 +9,25 @@ import { useAuthModal } from '@/components/AuthModal';
 import { MdCloudUpload, MdClose, MdInfoOutline, MdOpenInNew } from 'react-icons/md';
 import Button, { buttonClasses } from '@/components/Button';
 import { Input, Textarea } from '@/components/Input';
+import DropZone from '@/components/DropZone';
+import IconButton from '@/components/IconButton';
+import PageHeader from '@/components/PageHeader';
+import EmptyState from '@/components/EmptyState';
+import { useConfirm } from '@/components/ConfirmDialog';
 
 export default function UploadPage() {
   const { getUserInfo } = useAuth();
   const user = getUserInfo();
   const router = useRouter();
   const { openAuth } = useAuthModal();
+  const { confirm, confirmDialog } = useConfirm();
 
   const [file, setFile] = useState<File | null>(null);
   const [tags, setTags] = useState('');
   const [source, setSource] = useState('');
   const [description, setDescription] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ id: number } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const userApiKey = user
     ? ((user as Record<string, unknown>).api_key as string | undefined)
@@ -65,26 +69,10 @@ export default function UploadPage() {
     setUploadResult(null);
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) handleFileSelect(f);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  const handleDragLeave = () => setIsDragging(false);
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFileSelect(f);
-  };
-
   const removeFile = () => {
+    // No input to reset: `DropZone` clears its own `value` after each pick, which
+    // is also what makes re-selecting the same file fire `change` again.
     setFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   /** 清空整个表单（成功/已提交后复位，供继续发布） */
@@ -94,7 +82,6 @@ export default function UploadPage() {
     setSource('');
     setDescription('');
     setUploadResult(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   /** 记录每周上传任务进度，fire-and-forget（与完整版前端一致） */
@@ -114,16 +101,20 @@ export default function UploadPage() {
       return;
     }
 
-    if (
-      !confirm(
+    /* The one place in the app where a user affirms a legal condition, and it
+       used to be the browser's own `confirm()` — a system box in the OS font,
+       outside our scrim, our type scale and our focus trap. */
+    const agreed = await confirm({
+      title: '确认发布',
+      message:
         '请遵守 Derpibooru 上传准则：\n' +
-          '• 您必须拥有上传作品的版权或授权\n' +
-          '• 请正确添加分级标签（safe / suggestive / questionable / explicit）\n' +
-          '• 请勿上传重复图片\n' +
-          '确认发布？',
-      )
-    )
-      return;
+        '• 您必须拥有上传作品的版权或授权\n' +
+        '• 请正确添加分级标签（safe / suggestive / questionable / explicit）\n' +
+        '• 请勿上传重复图片',
+      confirmLabel: '确认发布',
+      tone: 'filled',
+    });
+    if (!agreed) return;
 
     setIsUploading(true);
     try {
@@ -183,53 +174,57 @@ export default function UploadPage() {
   // 未登录 → 引导
   if (!user || !user.token) {
     return (
-      <div className="max-w-lg mx-auto mt-12 p-8 text-center animate-fade-in">
-        <MdCloudUpload size={64} className="mx-auto mb-4 text-outline" />
-        <h1 className="text-title-l text-on-surface mb-2">需要登录</h1>
-        <p className="text-body-m text-on-surface-variant mb-6">请先登录后再发布图片</p>
-        <Button onClick={() => openAuth('login')} variant="filled">
-          前往登录
-        </Button>
-      </div>
+      <EmptyState
+        icon={<MdCloudUpload size={48} />}
+        title="需要登录"
+        description="请先登录后再发布图片"
+        action={
+          <Button onClick={() => openAuth('login')} variant="filled">
+            前往登录
+          </Button>
+        }
+      />
     );
   }
 
   if (!userApiKey) {
     return (
-      <div className="max-w-lg mx-auto mt-12 p-8 text-center animate-fade-in">
-        <MdInfoOutline size={64} className="mx-auto mb-4 text-warning" />
-        <h1 className="text-title-l text-on-surface mb-2">未配置 API Key</h1>
-        <p className="text-body-m text-on-surface-variant mb-6">
-          发布图片需要绑定 Derpibooru API Key，请先在设置中配置
-        </p>
-        <Button
-          onClick={() => router.push('/settings')}
-          variant="filled"
-          icon={<MdOpenInNew size={18} />}
-        >
-          前往设置
-        </Button>
-      </div>
+      <EmptyState
+        icon={<MdInfoOutline size={48} className="text-warning" />}
+        title="未配置 API Key"
+        description="发布图片需要绑定 Derpibooru API Key，请先在设置中配置"
+        action={
+          <Button
+            onClick={() => router.push('/settings')}
+            variant="filled"
+            icon={<MdOpenInNew size={18} />}
+          >
+            前往设置
+          </Button>
+        }
+      />
     );
   }
 
   // ---- 渲染 ----
 
-
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10 animate-fade-in">
-      <div className="mb-8">
-        <h1 className="text-headline-s text-on-surface flex items-center gap-2">
-          发布图片
-        </h1>
-      </div>
+    <div className="max-w-2xl mx-auto">
+      <PageHeader title="发布图片" />
 
       {uploadResult ? (
         /* ──── 上传成功 ──── */
-        <div className="bg-success-container border border-success/40 rounded-md p-8 text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success-container flex items-center justify-center">
+        /* The container tone is the separation; the `border-success` at 40% hairline
+           it carried was an alpha on a text role and did nothing the fill was
+           not already doing. The disc inside was `bg-success-container` on a
+           `bg-success-container` card — the same colour on itself, so the tick
+           floated with no disc behind it at all. `success-fill` gives it one
+           that is the same green in both schemes, which is what the fill roles
+           exist for. */
+        <div className="bg-success-container text-on-success-container rounded-md p-8 text-center">
+          <div className="bg-success-fill text-on-fill mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
             <svg
-              className="w-8 h-8 text-success"
+              className="w-8 h-8"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -242,9 +237,9 @@ export default function UploadPage() {
               />
             </svg>
           </div>
-          <h2 className="text-title-l text-on-surface mb-2">发布成功</h2>
-          <p className="text-body-m text-on-surface-variant mb-6">
-            图片 ID: <span className="font-mono font-medium text-primary">{uploadResult.id}</span>
+          <h2 className="text-title-l mb-2">发布成功</h2>
+          <p className="text-body-m mb-6">
+            图片 ID: <span className="text-body-m-emphasized font-mono">{uploadResult.id}</span>
           </p>
           <div className="flex items-center justify-center gap-3">
             <Button
@@ -262,26 +257,18 @@ export default function UploadPage() {
       ) : (
         <>
           {/* ──── 拖拽/点击选区 ──── */}
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`relative border-2 border-dashed rounded-md p-8 sm:p-12 text-center cursor-pointer transition-ui duration-300 ease-[var(--ease-standard)] mb-6 ${
-              isDragging
-                ? 'border-primary bg-primary/5 scale-[1.02] shadow-e3 shadow-primary/10'
-                : file
-                  ? 'border-success/40 bg-success-container/50'
-                  : 'border-outline hover:border-primary/50 hover:bg-surface-container-high/50'
-            }`}
+          {/* The drag state used to add `scale-[1.02]` — an arbitrary value, and a
+              transform on the container of the `<img>` preview inside it. The
+              border, tone and elevation change already read as "let go here", and
+              the two `/50` alphas on tokens are gone with it. */}
+          <DropZone
+            size="lg"
+            accept="image/*,video/webm,video/mp4"
+            onFile={handleFileSelect}
+            filled={Boolean(file)}
+            aria-label="选择或拖拽要上传的图片或视频"
+            className="mb-6"
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/webm,video/mp4"
-              className="hidden"
-              onChange={handleInputChange}
-            />
 
             {preview ? (
               <div className="relative inline-block max-w-full animate-pop-in">
@@ -291,16 +278,26 @@ export default function UploadPage() {
                   alt="Preview"
                   className="max-h-[50vh] max-w-full rounded-md object-contain mx-auto"
                 />
-                <button
+                {/* `IconButton` gives the box, the state layer, the ripple and the
+                    focus ring. What was here combined `touch-target` with a
+                    hand-sized `w-8 h-8` box — and `touch-target` cannot be
+                    combined with a ripple anyway, since `data-ripple`'s
+                    `overflow: hidden` clips the hit-area pseudo-element out of
+                    hit-testing. It also stacked `hover:rotate-90` *and*
+                    `hover:scale-110`, where the app's one precedent for a
+                    rotating dismiss (`Modal`'s close) uses the rotation alone. */}
+                <IconButton
+                  size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
                     removeFile();
                   }}
                   aria-label="移除文件"
-                  className="touch-target absolute -top-3 -right-3 w-8 h-8 bg-error-fill text-on-fill rounded-full flex items-center justify-center shadow-e3 hover:bg-error-fill/90 hover:rotate-90 hover:scale-110 transition-ui"
-                >
-                  <MdClose size={16} />
-                </button>
+                  title="移除文件"
+                  dismiss
+                  className="bg-error-fill text-on-fill absolute -top-3 -right-3 shadow-e3"
+                  icon={<MdClose size={16} />}
+                />
                 <p className="mt-2 text-body-s text-on-surface-variant">
                   {(file!.size / 1024 / 1024).toFixed(2)} MB — 点击更换
                 </p>
@@ -312,15 +309,18 @@ export default function UploadPage() {
                   className="max-h-[40vh] max-w-full rounded-md mx-auto"
                   controls
                 />
-                <button
+                <Button
+                  icon={<MdClose size={14} />}
+                  variant="danger-text"
+                  size="sm"
+                  className="mt-3"
                   onClick={(e) => {
                     e.stopPropagation();
                     removeFile();
                   }}
-                  className="state-layer mt-3 inline-flex items-center gap-1 rounded-full px-2 py-1 text-body-s text-error"
                 >
-                  <MdClose size={14} /> 移除
-                </button>
+                  移除
+                </Button>
                 <p className="mt-1 text-body-s text-on-surface-variant">
                   {(file!.size / 1024 / 1024).toFixed(2)} MB
                 </p>
@@ -328,15 +328,15 @@ export default function UploadPage() {
             ) : (
               <>
                 <MdCloudUpload size={56} className="mx-auto mb-4 text-outline" />
-                <p className="text-body-l font-medium text-on-surface-variant mb-1">
+                <p className="text-body-l-emphasized text-on-surface-variant mb-1">
                   点击选择或拖拽文件到此处
                 </p>
-                <p className="text-body-m text-outline">
+                <p className="text-body-m text-on-surface-variant">
                   支持 PNG / JPG / GIF / WebP / WebM / MP4（最大 50MB）
                 </p>
               </>
             )}
-          </div>
+          </DropZone>
 
           {/* ──── 表单 ──── */}
           <div className="space-y-5">
@@ -385,6 +385,7 @@ export default function UploadPage() {
           </div>
         </>
       )}
+      {confirmDialog}
     </div>
   );
 }

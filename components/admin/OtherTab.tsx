@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import ToggleSwitch from '@/components/ToggleSwitch';
-import Modal from '@/components/Modal';
 import { MdBuild, MdWarning, MdTranslate, MdBarChart, MdSync } from 'react-icons/md';
 import Button from '@/components/Button';
+import { useConfirm } from '@/components/ConfirmDialog';
 import Card from '@/components/Card';
 import { Textarea } from '@/components/Input';
 
@@ -17,21 +17,16 @@ export default function OtherTab({ token }: { token: string }) {
   const [stats, setStats] = useState({ images: 0, tags: 0, comments: 0, updated_at: '-' });
   const [isLoading, setIsLoading] = useState(false);
 
-  const [otherConfirmModalOpen, setOtherConfirmModalOpen] = useState(false);
-  const [otherConfirmTitle, setOtherConfirmTitle] = useState('');
-  const [otherConfirmMessage, setOtherConfirmMessage] = useState('');
-  const otherConfirmActionRef = useRef<(() => void) | null>(null);
+  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
+     ref per tab. The signature is kept so the call sites read unchanged; what
+     went away is the second copy of the Modal, its footer and its title/message
+     state — five admin tabs had built the identical thing. */
+  const { confirm, confirmDialog } = useConfirm();
 
   const showOtherConfirm = (title: string, message: string, action: () => void) => {
-    setOtherConfirmTitle(title);
-    setOtherConfirmMessage(message);
-    otherConfirmActionRef.current = action;
-    setOtherConfirmModalOpen(true);
-  };
-
-  const handleOtherConfirmAction = () => {
-    otherConfirmActionRef.current?.();
-    setOtherConfirmModalOpen(false);
+    void confirm({ title, message }).then((confirmed) => {
+      if (confirmed) action();
+    });
   };
 
   useEffect(() => {
@@ -137,28 +132,26 @@ export default function OtherTab({ token }: { token: string }) {
         <MdBuild className="text-primary" size={24} /> 其他功能{' '}
       </h2>{' '}
       <Card variant="filled">
-        {' '}
-        <div className="flex items-center justify-between">
-          {' '}
-          <div>
-            {' '}
-            <h3 className="font-semibold text-on-surface flex items-center gap-2">
-              {' '}
-              <MdWarning size={20} /> 维护模式{' '}
-            </h3>{' '}
-            <p className="text-body-m text-on-surface-variant mt-1">
-              {' '}
-              开启后，所有非管理员用户访问前台将看到全屏维护提示{' '}
-            </p>{' '}
-          </div>{' '}
-          <ToggleSwitch checked={maintenanceMode} onChange={toggleMaintenance} />{' '}
-        </div>{' '}
+        {/* `layout="row"` rather than a hand-built `justify-between` pair. Same
+            reading order, one description ink, and the whole row is now the
+            label element — so a click on the supporting text toggles the switch
+            it describes, which it did not before. */}
+        <ToggleSwitch
+          layout="row"
+          checked={maintenanceMode}
+          onChange={toggleMaintenance}
+          label={
+            <span className="flex items-center gap-2">
+              <MdWarning size={20} /> 维护模式
+            </span>
+          }
+          description="开启后，所有非管理员用户访问前台将看到全屏维护提示"
+        />
         {maintenanceMode && (
           <div className="mt-4">
-            {' '}
-            <label className="block text-label-l text-on-surface mb-1" htmlFor="othertab-f1">
+            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="othertab-f1">
               维护提示文字
-            </label>{' '}
+            </label>
             <Textarea
               id="othertab-f1"
               value={maintenanceMessage}
@@ -166,31 +159,26 @@ export default function OtherTab({ token }: { token: string }) {
               placeholder="例如：服务器正在升级维护..."
               rows={2}
               className="resize-none"
-            />{' '}
+            />
           </div>
-        )}{' '}
-      </Card>{' '}
+        )}
+      </Card>
       <Card variant="filled">
-        {' '}
-        <div className="flex items-center justify-between">
-          {' '}
-          <div>
-            {' '}
-            <h3 className="font-semibold text-on-surface flex items-center gap-2">
-              {' '}
-              <MdTranslate size={20} /> 图片翻译功能{' '}
-            </h3>{' '}
-            <p className="text-body-m text-on-surface-variant mt-1">
-              {' '}
-              控制前台大图模态框中是否展示&ldquo;一键图片翻译&rdquo;按钮{' '}
-            </p>{' '}
-          </div>{' '}
-          <ToggleSwitch checked={translateEnabled} onChange={toggleTranslate} />{' '}
-        </div>{' '}
-      </Card>{' '}
+        <ToggleSwitch
+          layout="row"
+          checked={translateEnabled}
+          onChange={toggleTranslate}
+          label={
+            <span className="flex items-center gap-2">
+              <MdTranslate size={20} /> 图片翻译功能
+            </span>
+          }
+          description="控制前台大图模态框中是否展示“一键图片翻译”按钮"
+        />
+      </Card>
       <Card variant="transparent">
         {' '}
-        <h3 className="font-semibold text-on-surface flex items-center gap-2 mb-4">
+        <h3 className="text-label-l text-on-surface mb-4 flex items-center gap-2">
           {' '}
           <MdBarChart size={20} /> 全站数据统计{' '}
         </h3>{' '}
@@ -224,38 +212,17 @@ export default function OtherTab({ token }: { token: string }) {
             {' '}
             上次同步: <span className="">{stats.updated_at || '未同步'}</span>{' '}
           </span>{' '}
-          <button
+          <Button
+            variant="accent"
             onClick={syncStats}
-            disabled={isLoading}
-            className="inline-flex items-center gap-2 px-4 py-2 text-label-l text-primary bg-primary/10 hover:bg-primary/20 rounded-full transition-ui disabled:opacity-50"
+            loading={isLoading}
+            icon={<MdSync size={18} />}
           >
-            {' '}
-            <MdSync size={18} className={isLoading ? 'animate-spin' : ''} />
             立即同步
-          </button>
+          </Button>
         </div>
       </Card>
-      <Modal
-        isOpen={otherConfirmModalOpen}
-        onClose={() => setOtherConfirmModalOpen(false)}
-        title={otherConfirmTitle}
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <button
-              onClick={() => setOtherConfirmModalOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
-              取消
-            </button>
-            <Button variant="danger" onClick={handleOtherConfirmAction}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">{otherConfirmMessage}</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

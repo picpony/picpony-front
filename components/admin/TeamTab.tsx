@@ -7,6 +7,7 @@ import Modal from '@/components/Modal';
 import Select from '@/components/Select';
 import { MdPeople, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
+import IconButton from '@/components/IconButton';
 import { SectionHeader } from './';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
@@ -199,7 +200,7 @@ export default function TeamTab({ token }: { token: string }) {
       key: 'name',
       header: '姓名',
       primary: true,
-      render: (m) => <span className="font-medium">{m.name}</span>,
+      render: (m) => <span className="text-body-m-emphasized">{m.name}</span>,
     },
     {
       key: 'role',
@@ -218,7 +219,7 @@ export default function TeamTab({ token }: { token: string }) {
     {
       key: 'order',
       header: '排序',
-      render: (m) => <span className="text-outline text-body-s">{m.order_num}</span>,
+      render: (m) => <span className="text-on-surface-variant text-body-s">{m.order_num}</span>,
     },
     {
       key: 'actions',
@@ -226,22 +227,20 @@ export default function TeamTab({ token }: { token: string }) {
       actions: true,
       render: (m) => (
         <>
-          <button
+          <IconButton
+            size="sm"
             onClick={() => handleEdit(m)}
-            className="touch-target state-layer text-primary rounded-full p-1.5"
+            icon={<MdEdit size={16} />}
             title="编辑"
-            aria-label={`编辑 ${m.name}`}
-          >
-            <MdEdit size={16} />
-          </button>
-          <button
+            aria-label={`编辑 ${m.name}`} className="text-primary"
+          />
+          <IconButton
+            size="sm"
             onClick={() => handleDelete(m.id)}
-            className="touch-target state-layer rounded-full p-1.5 text-error"
+            icon={<MdDelete size={16} />}
             title="删除"
-            aria-label={`删除 ${m.name}`}
-          >
-            <MdDelete size={16} />
-          </button>
+            aria-label={`删除 ${m.name}`} className="text-error"
+          />
         </>
       ),
     },
@@ -256,14 +255,14 @@ export default function TeamTab({ token }: { token: string }) {
       />
 
       <Card variant="transparent" className="space-y-4">
-        <h3 className="text-label-l-emphasized text-on-surface">
+        <h3 className="text-label-l text-on-surface">
           {editingMember ? '编辑团队成员' : '添加团队成员'}{' '}
         </h3>{' '}
-        <div className="flex items-end gap-3 p-3 rounded border border-dashed border-outline">
+        <div className="flex items-end gap-3 rounded-md border border-dashed border-outline p-3">
           {' '}
           <div className="flex-1">
             {' '}
-            <label className="block text-label-m text-on-surface-variant mb-1" htmlFor="teamtab-f1">
+            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f1">
               快捷导入：调用站内用户
             </label>{' '}
             <Input
@@ -272,7 +271,6 @@ export default function TeamTab({ token }: { token: string }) {
               value={importUserId}
               onChange={(e) => setImportUserId(e.target.value)}
               placeholder="输入用户 ID"
-              className="rounded"
             />{' '}
           </div>{' '}
           <Button onClick={handleImportUser} variant="filled">
@@ -281,7 +279,7 @@ export default function TeamTab({ token }: { token: string }) {
         </div>{' '}
         <div>
           {' '}
-          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f2">
+          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f2">
             成员姓名（必填）
           </label>{' '}
           <Input
@@ -294,7 +292,7 @@ export default function TeamTab({ token }: { token: string }) {
         </div>{' '}
         <div>
           {' '}
-          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f3">
+          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f3">
             角色/头衔
           </label>{' '}
           <Input
@@ -307,7 +305,7 @@ export default function TeamTab({ token }: { token: string }) {
         </div>{' '}
         <div>
           {' '}
-          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f4">
+          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f4">
             栏目分类
           </label>{' '}
           <Select
@@ -319,9 +317,9 @@ export default function TeamTab({ token }: { token: string }) {
         </div>{' '}
         <div>
           {' '}
-          <label className="block text-body-m text-on-surface mb-1">头像链接（选填）</label>{' '}
           <Input
             id="teamtab-f4"
+            label="头像链接（选填）"
             type="text"
             value={form.avatar_url}
             onChange={(e) => setForm((f) => ({ ...f, avatar_url: e.target.value }))}
@@ -330,7 +328,7 @@ export default function TeamTab({ token }: { token: string }) {
         </div>{' '}
         <div>
           {' '}
-          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f5">
+          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f5">
             个人主页链接（选填）
           </label>{' '}
           <Input
@@ -343,7 +341,7 @@ export default function TeamTab({ token }: { token: string }) {
         </div>{' '}
         <div>
           {' '}
-          <label className="block text-body-m text-on-surface mb-1" htmlFor="teamtab-f6">
+          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f6">
             排序号（值越小越靠前）
           </label>{' '}
           <Input
@@ -357,13 +355,10 @@ export default function TeamTab({ token }: { token: string }) {
         <div className="flex gap-3">
           {' '}
           {editingMember && (
-            <button
-              onClick={resetForm}
-              className="px-4 py-2 border border-outline rounded-full text-body-m text-on-surface-variant"
-            >
+            <Button variant="outlined" onClick={resetForm}>
               {' '}
               取消编辑{' '}
-            </button>
+            </Button>
           )}{' '}
           <Button onClick={handleSave} variant="filled" loading={saving} icon={<MdAdd size={16} />}>
             {saving ? '保存中...' : editingMember ? '更新成员' : '添加成员'}
@@ -372,7 +367,7 @@ export default function TeamTab({ token }: { token: string }) {
       </Card>
 
       <Card variant="transparent">
-        <h3 className="text-label-l-emphasized text-on-surface mb-4">成员列表</h3>
+        <h3 className="text-label-l text-on-surface mb-4">成员列表</h3>
         <DataTable<TeamMember>
           columns={teamColumns}
           rows={members}
@@ -389,12 +384,9 @@ export default function TeamTab({ token }: { token: string }) {
         maxWidth="max-w-sm"
         footer={
           <>
-            <button
-              onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setConfirmOpen(false)}>
               取消
-            </button>
+            </Button>
             <Button variant="danger" onClick={handleConfirm}>
               确认
             </Button>

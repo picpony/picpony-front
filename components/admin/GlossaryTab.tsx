@@ -17,21 +17,27 @@ import {
   MdFileDownload,
   MdFileUpload,
   MdCloudDownload,
-  MdClose,
   MdFeedback,
-  MdEmojiEvents,
   MdCheckCircle,
   MdOutlineWarning,
   MdHistory,
   MdArrowDownward,
 } from 'react-icons/md';
-import { Spinner } from './';
+import Badge from '@/components/Badge';
+import Card from '@/components/Card';
+import Skeleton from '@/components/Skeleton';
 import DataTable, { type Column } from '@/components/DataTable';
 import Pagination from '@/components/Pagination';
 import Button from '@/components/Button';
 import { tagCategoryChip, tagCategoryDot } from '@/lib/tagCategories';
+import Chip from '@/components/Chip';
+import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
 import { Input, Textarea } from '@/components/Input';
+import { useConfirm, usePrompt } from '@/components/ConfirmDialog';
 import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
+import SectionHeading from '@/components/SectionHeading';
+import Popover from '@/components/Popover';
 
 interface Tag {
   id: number;
@@ -216,21 +222,17 @@ export default function GlossaryTab() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  const [glossaryConfirmModalOpen, setGlossaryConfirmModalOpen] = useState(false);
-  const [glossaryConfirmTitle, setGlossaryConfirmTitle] = useState('');
-  const [glossaryConfirmMessage, setGlossaryConfirmMessage] = useState('');
-  const glossaryConfirmActionRef = useRef<(() => void) | null>(null);
+  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
+     ref per tab. The signature is kept so the call sites read unchanged; what
+     went away is the second copy of the Modal, its footer and its title/message
+     state — five admin tabs had built the identical thing. */
+  const { confirm, confirmDialog } = useConfirm();
+  const { prompt, promptDialog } = usePrompt();
 
   const showGlossaryConfirm = (title: string, message: string, action: () => void) => {
-    setGlossaryConfirmTitle(title);
-    setGlossaryConfirmMessage(message);
-    glossaryConfirmActionRef.current = action;
-    setGlossaryConfirmModalOpen(true);
-  };
-
-  const handleGlossaryConfirmAction = () => {
-    glossaryConfirmActionRef.current?.();
-    setGlossaryConfirmModalOpen(false);
+    void confirm({ title, message }).then((confirmed) => {
+      if (confirmed) action();
+    });
   };
 
   // 后端时间按 UTC 存储，转为 Asia/Shanghai 展示（精确到秒）
@@ -290,7 +292,8 @@ export default function GlossaryTab() {
   };
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
+  /* Anchors the Derpibooru suggestion popover. */
+  const enFieldRef = useRef<HTMLDivElement>(null);
   const refreshAfterInlineCloseRef = useRef(false);
 
   const loadTags = useCallback(
@@ -377,15 +380,9 @@ export default function GlossaryTab() {
     };
   }, [searchKeyword, sortMode, categoryFilter, showUntranslatedOnly, loadTags, isDuplicateMode]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  /* Outside-click dismissal is `Popover`'s. The listener that used to sit here
+     only tested the panel, never the field, so typing in the input that owns the
+     suggestions dismissed them on the first click. */
 
   const loadDuplicates = async () => {
     if (!token || !isAdmin) return;
@@ -1020,7 +1017,7 @@ export default function GlossaryTab() {
           <p className="text-label-l text-primary">
             正在处理用户工单 #{workOrder.id} · {workOrder.username || '游客'}
           </p>
-          <p className="mt-0.5 break-all text-body-m text-on-surface-variant">
+          <p className="mt-0.5 break-words text-body-m text-on-surface-variant">
             {workOrder.content}
           </p>
         </div>
@@ -1053,8 +1050,9 @@ export default function GlossaryTab() {
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-title-m text-on-surface">编辑标签</h3>
-            <p className="text-body-s text-on-surface-variant break-words">{tag.en}</p>
+            <SectionHeading as="h3" className="mb-0" subtitle={tag.en}>
+              编辑标签
+            </SectionHeading>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {tag.id > 0 && (
@@ -1108,7 +1106,7 @@ export default function GlossaryTab() {
                     <label htmlFor={cnId} className="text-label-l text-on-surface-variant">
                       中文翻译
                     </label>
-                    <span className="mt-1 block text-body-s text-outline">英文逗号分隔别名</span>
+                    <span className="mt-1 block text-body-s text-on-surface-variant">英文逗号分隔别名</span>
                   </th>
                   <td className="min-w-48 px-3 py-3">
                     <Input
@@ -1198,26 +1196,18 @@ export default function GlossaryTab() {
       primary: true,
       render: (tag) =>
         tag.cn === '未翻译' ? (
-          <span className="bg-error-container text-error inline-flex items-center gap-1 rounded px-2 py-1 text-label-m whitespace-nowrap">
-            {' '}
-            <MdOutlineWarning size={14} /> 未翻译{' '}
-          </span>
+          /* `Badge`, not an inline span with a container pair. Seven of these
+             lived in this one file, in one shape but three type roles, and each
+             one had to name both halves of its colour pair by hand. */
+          <Badge tone="error" icon={<MdOutlineWarning size={14} />} className="whitespace-nowrap">
+            未翻译
+          </Badge>
         ) : (
           <div className="flex flex-wrap gap-1">
-            {' '}
-            <span className="bg-primary-container text-on-primary-container inline-flex items-center rounded px-2 py-1 text-label-m ">
-              {' '}
-              {tag.cn}{' '}
-            </span>{' '}
-            {tag.aliases?.map((alias, idx) => (
-              <span
-                key={idx}
-                className="bg-surface-container-high text-on-surface-variant inline-flex items-center rounded px-2 py-1 text-label-m "
-              >
-                {' '}
-                {alias}{' '}
-              </span>
-            ))}{' '}
+            <Badge tone="primary">{tag.cn}</Badge>
+            {tag.aliases?.map((alias) => (
+              <Badge key={alias}>{alias}</Badge>
+            ))}
           </div>
         ),
     },
@@ -1226,33 +1216,20 @@ export default function GlossaryTab() {
       header: '英文标签',
       render: (tag) => (
         <div className="flex flex-wrap items-center gap-2">
-          {' '}
-          <span
-            className={`inline-flex items-center rounded px-2 py-0.5 text-label-m ${tagCategoryChip(tag.cat)}`}
-          >
-            {' '}
-            {tag.cat}{' '}
-          </span>{' '}
+          <Badge colors={tagCategoryChip(tag.cat)}>{tag.cat}</Badge>
           <a
             href={`/search?q=${encodeURIComponent(tag.en)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-link flex items-center gap-1 font-mono text-body-m hover:underline"
+            className="text-link flex items-center gap-1 font-mono text-body-m hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
-            {' '}
-            {tag.en} <MdSearch size={14} />{' '}
-          </a>{' '}
+            {tag.en} <MdSearch size={14} />
+          </a>
           {tag.count > 0 ? (
-            <span className="bg-accent-blue text-on-accent-blue inline-flex items-center rounded px-2 py-0.5 text-label-m ">
-              {' '}
-              原站 ({tag.count}图){' '}
-            </span>
+            <Badge colors="bg-accent-blue text-on-accent-blue">原站 ({tag.count}图)</Badge>
           ) : (
-            <span className="bg-surface-container-high text-on-surface-variant inline-flex items-center rounded px-2 py-0.5 text-label-m ">
-              {' '}
-              本地{' '}
-            </span>
-          )}{' '}
+            <Badge>本地</Badge>
+          )}
         </div>
       ),
     },
@@ -1265,7 +1242,7 @@ export default function GlossaryTab() {
             {tag.description}
           </p>
         ) : (
-          <span className="text-outline text-body-m">暂无简介</span>
+          <span className="text-on-surface-variant text-body-m">暂无简介</span>
         ),
     },
     {
@@ -1306,7 +1283,7 @@ export default function GlossaryTab() {
             />
           </>
         ) : (
-          <span className="text-outline text-body-m">无权限</span>
+          <span className="text-on-surface-variant text-body-m">无权限</span>
         ),
     },
   ];
@@ -1317,14 +1294,11 @@ export default function GlossaryTab() {
     return (
       <div className="text-center py-12">
         {' '}
-        <p className="text-on-surface-variant mb-4">{error}</p>{' '}
-        <button
-          onClick={() => loadTags(1)}
-          className="px-4 py-2 text-label-l text-on-primary bg-primary hover:bg-primary/90 rounded-full transition-ui"
-        >
+        <p className="text-body-m text-on-surface-variant mb-4">{error}</p>{' '}
+        <Button variant="filled" onClick={() => loadTags(1)}>
           {' '}
           重试{' '}
-        </button>{' '}
+        </Button>{' '}
       </div>
     );
   }
@@ -1396,72 +1370,71 @@ export default function GlossaryTab() {
       {isAdmin && (
         <div className="flex flex-wrap gap-2">
           {' '}
-          <button
+          <Chip
+            variant="filter"
+            tone="primary"
+            size="md"
+            selected={showUntranslatedOnly}
             onClick={() => setShowUntranslatedOnly(!showUntranslatedOnly)}
-            className={`inline-flex items-center gap-1 px-3 py-2 text-label-l rounded-full transition-ui shrink-0 ${
-              showUntranslatedOnly
-                ? 'bg-primary text-on-primary hover:bg-primary/90'
-                : 'bg-primary/10 text-primary hover:bg-primary/20'
-            }`}
+            icon={<MdTranslate size={16} />}
           >
-            {showUntranslatedOnly ? <MdClose size={16} /> : <MdTranslate size={16} />}
-            {showUntranslatedOnly ? '取消未翻译过滤' : '只看未翻译'}{' '}
-          </button>{' '}
+            {showUntranslatedOnly ? '取消未翻译过滤' : '只看未翻译'}
+          </Chip>{' '}
           {selectedIds.size > 0 && (
-            <button
-              onClick={batchDelete}
-              className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-error-fill text-on-fill hover:bg-error-fill/90 rounded-full transition-ui shrink-0"
-            >
-              {' '}
-              <MdDelete size={16} /> 批量删除 ({selectedIds.size}){' '}
-            </button>
+            <Button icon={<MdDelete size={16} />} variant="danger" size="sm" onClick={batchDelete}>
+              批量删除 ({selectedIds.size})
+            </Button>
           )}{' '}
-          <button
+          <Chip
+            variant="filter"
+            tone="primary"
+            size="md"
+            selected={isDuplicateMode}
             onClick={toggleDuplicateMode}
-            className={`inline-flex items-center gap-1 px-3 py-2 text-label-l rounded-full transition-ui shrink-0 ${
-              isDuplicateMode
-                ? 'bg-primary text-on-primary hover:bg-primary/90'
-                : 'bg-primary/10 text-primary hover:bg-primary/20'
-            }`}
+            icon={<MdContentCopy size={16} />}
           >
-            <MdContentCopy size={16} />
-            {isDuplicateMode ? '退出查重' : '查重模式'}{' '}
-          </button>{' '}
-          <button
+            {isDuplicateMode ? '退出查重' : '查重模式'}
+          </Chip>{' '}
+          <Button
+            icon={<MdFeedback size={16} />}
+            variant="accent"
+            size="sm"
             onClick={() => setIsFeedbackModalOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            {' '}
-            <MdFeedback size={16} /> 用户反馈{' '}
-          </button>{' '}
-          <button
+            用户反馈
+          </Button>
+          <Button
+            icon={<MdFileDownload size={16} />}
+            variant="accent"
+            size="sm"
             onClick={exportCurrentPage}
-            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            {' '}
-            <MdFileDownload size={16} /> 导出当前页{' '}
-          </button>{' '}
-          <button
+            导出当前页
+          </Button>
+          <Button
+            icon={<MdFileUpload size={16} />}
+            variant="accent"
+            size="sm"
             onClick={() => setIsBatchModalOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            {' '}
-            <MdFileUpload size={16} /> 批量导入{' '}
-          </button>{' '}
-          <button
+            批量导入
+          </Button>
+          <Button
+            icon={<MdCloudDownload size={16} />}
+            variant="accent"
+            size="sm"
             onClick={() => setIsSyncModalOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            {' '}
-            <MdCloudDownload size={16} /> 同步热门{' '}
-          </button>{' '}
-          <button
+            同步热门
+          </Button>
+          <Button
+            icon={<MdSearch size={16} />}
+            variant="accent"
+            size="sm"
             onClick={() => setIsDerpiModalOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 text-label-l bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-ui shrink-0"
           >
-            {' '}
-            <MdSearch size={16} /> 搜原站标签{' '}
-          </button>{' '}
+            搜原站标签
+          </Button>
         </div>
       )}{' '}
       <DataTable<Tag>
@@ -1472,15 +1445,14 @@ export default function GlossaryTab() {
         loading={isLoading}
         empty={
           isDuplicateMode ? (
-            <div className="flex flex-col items-center gap-2">
-              {' '}
-              <MdCheckCircle size={32} className="text-success" />{' '}
-              <p className="flex items-center gap-2">
-                {' '}
-                <MdEmojiEvents size={20} className="text-success" />{' '}
-                太棒了，当前词库没有发现重复英文标签！{' '}
-              </p>{' '}
-            </div>
+            /* `EmptyState`, not a bespoke centred stack — same silhouette as
+               every other "nothing here" in the app, and the only thing that
+               differs is the glyph, which is the point of the `icon` slot. */
+            <EmptyState
+              size="inline"
+              icon={<MdCheckCircle size={32} className="text-success" />}
+              title="太棒了，当前词库没有发现重复英文标签！"
+            />
           ) : (
             '未找到匹配的标签记录'
           )
@@ -1502,7 +1474,6 @@ export default function GlossaryTab() {
                 localStorage.setItem('picpony_items_per_page', clamped.toString());
               }}
               onBlur={() => loadTags(1)}
-              className="rounded"
               fieldClassName="w-16"
             />
             <span className="text-body-m text-on-surface-variant">条</span>
@@ -1530,7 +1501,7 @@ export default function GlossaryTab() {
         </div>
         <div className="w-full h-3 bg-surface-container-highest rounded-full overflow-hidden">
           <div
-            className="h-full bg-success-fill rounded-full transition-[width] duration-500 ease-[var(--ease-standard)]"
+            className="h-full bg-success-fill rounded-full transition-[width] duration-300 ease-[var(--ease-standard)]"
             style={{ width: `${translationPercentage}%` }}
           />
         </div>
@@ -1556,9 +1527,9 @@ export default function GlossaryTab() {
         <div className="space-y-4">
           {' '}
           {renderFeedbackReference()}
-          <div className="relative">
+          <div className="relative" ref={enFieldRef}>
             {' '}
-            <label className="block text-label-l text-on-surface mb-1" htmlFor="glossarytab-f1">
+            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="glossarytab-f1">
               {' '}
               英文原标签{' '}
             </label>{' '}
@@ -1573,17 +1544,18 @@ export default function GlossaryTab() {
               placeholder="例如：twilight sparkle"
               className="font-mono"
             />{' '}
-            {showSuggestions && derpiSuggestions.length > 0 && (
-              <div
-                ref={suggestionsRef}
-                className="absolute z-10 w-full mt-1 bg-surface-container-lowest border border-outline-variant popover-scrollbar rounded-sm shadow-e3 max-h-48 overflow-y-auto"
-              >
-                {' '}
+            <Popover
+              open={showSuggestions && derpiSuggestions.length > 0}
+              onClose={() => setShowSuggestions(false)}
+              anchorRef={enFieldRef}
+              maxHeight={192}
+              estimatedHeight={derpiSuggestions.length * 40}
+            >
                 {derpiSuggestions.map((tag) => (
                   <button
                     key={tag.name}
                     onClick={() => selectSuggestion(tag)}
-                    className="w-full px-3 py-2 text-left hover:bg-surface-container-high flex items-center justify-between"
+                    className="w-full px-3 py-2 text-left state-layer flex items-center justify-between outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
                   >
                     {' '}
                     <div className="flex items-center gap-2">
@@ -1593,17 +1565,16 @@ export default function GlossaryTab() {
                       />{' '}
                       <span className="text-body-m text-on-surface font-mono">{tag.name}</span>{' '}
                     </div>{' '}
-                    <span className="text-body-s text-outline">{tag.images} 图</span>{' '}
+                    <span className="text-body-s text-on-surface-variant">{tag.images} 图</span>{' '}
                   </button>
                 ))}{' '}
-              </div>
-            )}{' '}
+            </Popover>{' '}
           </div>{' '}
           <div>
             {' '}
-            <label className="block text-label-l text-on-surface mb-1" htmlFor="glossarytab-f2">
+            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="glossarytab-f2">
               {' '}
-              中文翻译 <span className="text-outline">(多重翻译请用英文逗号 , 隔开)</span>{' '}
+              中文翻译 <span className="text-on-surface-variant">(多重翻译请用英文逗号 , 隔开)</span>{' '}
             </label>{' '}
             <Input
               id="glossarytab-f2"
@@ -1615,7 +1586,7 @@ export default function GlossaryTab() {
           </div>{' '}
           <div>
             {' '}
-            <label className="block text-label-l text-on-surface mb-1" htmlFor="glossarytab-f3">
+            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="glossarytab-f3">
               分类
             </label>{' '}
             <Select
@@ -1627,9 +1598,9 @@ export default function GlossaryTab() {
           </div>{' '}
           <div>
             {' '}
-            <label className="block text-label-l text-on-surface mb-1">标签简介</label>{' '}
             <Textarea
               id="glossarytab-f3"
+              label="标签简介"
               value={editForm.description}
               onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
               placeholder="例如：该角色首次登场于第X季..."
@@ -1647,21 +1618,13 @@ export default function GlossaryTab() {
         footer={
           <>
             {' '}
-            <button
-              onClick={() => setIsBatchModalOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setIsBatchModalOpen(false)}>
               {' '}
               取消{' '}
-            </button>{' '}
-            <button
-              onClick={executeBatchImport}
-              disabled={isBatchImporting}
-              className="px-4 py-2 text-label-l bg-tertiary-container text-on-tertiary-container hover:bg-tertiary-container/80 rounded-full transition-ui disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {' '}
-              {isBatchImporting ? '导入中...' : '开始导入'}{' '}
-            </button>{' '}
+            </Button>{' '}
+            <Button variant="tonal" onClick={executeBatchImport} loading={isBatchImporting}>
+              开始导入
+            </Button>{' '}
           </>
         }
       >
@@ -1669,7 +1632,7 @@ export default function GlossaryTab() {
         <p className="text-body-m text-on-surface-variant mb-3">
           {' '}
           格式要求：
-          <code className="bg-surface-container-high px-1 rounded">
+          <code className="bg-surface-container-high px-1 rounded-xs">
             英文标签 = 主中文名, 别名1, 别名2
           </code>{' '}
         </p>{' '}
@@ -1691,24 +1654,17 @@ export default function GlossaryTab() {
           <>
             {' '}
             {!isSyncing && (
-              <button
-                onClick={() => setIsSyncModalOpen(false)}
-                className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-              >
+              <Button variant="text" onClick={() => setIsSyncModalOpen(false)}>
                 {' '}
                 取消{' '}
-              </button>
+              </Button>
             )}{' '}
-            <button
+            <Button
+              variant={isSyncing ? 'danger' : 'success'}
               onClick={isSyncing ? () => setIsSyncing(false) : executeSync}
-              className={`text-label-l rounded-sm px-4 py-2 transition-ui ${
-                isSyncing
-                  ? 'bg-error-fill text-on-fill hover:bg-error-fill/90'
-                  : 'bg-success-fill text-on-fill hover:bg-success-fill/90'
-              }`}
             >
-              {isSyncing ? '停止同步' : '开始同步'}{' '}
-            </button>{' '}
+              {isSyncing ? '停止同步' : '开始同步'}
+            </Button>{' '}
           </>
         }
       >
@@ -1787,8 +1743,8 @@ export default function GlossaryTab() {
               placeholder="输入英文标签名..."
               fieldClassName="flex-1"
             />
-            <Button variant="filled" onClick={executeDerpiSearch} disabled={isDerpiSearching}>
-              {isDerpiSearching ? '搜索中...' : '搜索'}
+            <Button variant="filled" onClick={executeDerpiSearch} loading={isDerpiSearching}>
+              搜索
             </Button>
           </div>
           <div className="popover-scrollbar max-h-72 overflow-y-auto border border-outline-variant rounded-md">
@@ -1800,24 +1756,19 @@ export default function GlossaryTab() {
               derpiResults.map((tag) => (
                 <div
                   key={tag.name}
-                  className="flex items-center justify-between p-3 border-b border-outline-variant last:border-b-0 hover:bg-surface-container-high/50"
+                  className="state-layer flex items-center justify-between border-b border-outline-variant p-3 last:border-b-0"
                 >
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`text-body-s px-2 py-0.5 rounded ${tagCategoryChip(tag.category)}`}
-                    >
-                      {tag.category || 'general'}{' '}
-                    </span>{' '}
+                    <Badge colors={tagCategoryChip(tag.category)}>
+                      {tag.category || 'general'}
+                    </Badge>
                     <span className="font-mono text-body-m text-on-surface">{tag.name}</span>{' '}
-                    <span className="text-body-s text-outline">({tag.images} 图)</span>{' '}
+                    <span className="text-body-s text-on-surface-variant">({tag.images} 图)</span>{' '}
                   </div>{' '}
-                  <button
-                    onClick={() => importFromDerpi(tag)}
-                    className="px-3 py-1 text-label-m bg-success-fill text-on-fill hover:bg-success-fill/90 rounded transition-ui shrink-0"
-                  >
+                  <Button variant="success" size="xs" onClick={() => importFromDerpi(tag)}>
                     {' '}
                     + 导入{' '}
-                  </button>{' '}
+                  </Button>{' '}
                 </div>
               ))
             )}{' '}
@@ -1860,28 +1811,38 @@ export default function GlossaryTab() {
           </span>
           <div className="ml-auto flex flex-wrap gap-1">
             {(['all', 'pending', 'processed', 'rejected'] as const).map((s) => (
-              <button
+              <Chip
                 key={s}
+                variant="filter"
+                tone="primary"
+                selected={feedbackStatus === s}
                 onClick={() => changeFeedbackStatus(s)}
-                className={`px-2.5 py-1 text-label-m rounded-full transition-ui ${
-                  feedbackStatus === s
-                    ? 'bg-primary text-on-primary'
-                    : 'text-on-surface-variant hover:bg-surface-container-high'
-                }`}
               >
                 {s === 'all' ? '全部' : s === 'pending' ? '待处理' : s === 'processed' ? '已采纳' : '已忽略'}
-              </button>
+              </Chip>
             ))}
           </div>
         </div>
 
         <div className="popover-scrollbar max-h-[60vh] overflow-y-auto">
           {isLoadingFeedback ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner label="" size="md" />
+            /* Feedback rows, in the shape they arrive in. A centred spinner
+               collapsed the 60vh box to nothing and then snapped three cards
+               back into it. */
+            <div className="space-y-3">
+              {[0, 1, 2].map((i) => (
+                <Card key={i} variant="filled" className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-2/5" delay={i * 90} />
+                    <Skeleton className="h-5 w-14 rounded-full" delay={i * 90 + 40} />
+                  </div>
+                  <Skeleton className="h-4 w-24" delay={i * 90 + 80} />
+                  <Skeleton className="h-9 w-full rounded-md" delay={i * 90 + 120} />
+                </Card>
+              ))}
             </div>
           ) : feedbacks.length === 0 ? (
-            <div className="text-center py-12 text-on-surface-variant"> 暂无任何反馈申请 </div>
+            <EmptyState size="inline" title="暂无任何反馈申请" />
           ) : (
             <>
               <div className="space-y-3">
@@ -1891,31 +1852,35 @@ export default function GlossaryTab() {
                       <span className="text-body-m text-on-surface-variant">
                         来自: {feedback.username} | {feedback.created_at}
                       </span>
-                      <span
-                        className={`text-body-s px-2 py-0.5 rounded ${
+                      <Badge
+                        tone={
                           feedback.status === 'pending'
-                            ? 'bg-warning-container text-warning'
+                            ? 'warning'
                             : feedback.status === 'processed'
-                              ? 'bg-success-container text-success'
-                              : 'bg-error-container text-error'
-                        }`}
+                              ? 'success'
+                              : 'error'
+                        }
                       >
                         {feedback.status === 'pending'
                           ? '待处理'
                           : feedback.status === 'processed'
                             ? '已采纳'
                             : '已忽略'}
-                      </span>
+                      </Badge>
                     </div>
                     <div className="font-mono text-label-l-emphasized text-primary mb-2">
                       {feedback.tag_name}
                     </div>
-                    <div className="text-body-m text-on-surface-variant mb-3 p-2 rounded">
+                    <Card
+                      variant="filled"
+                      padding="sm"
+                      className="text-body-m text-on-surface-variant mb-3"
+                    >
                       {feedback.content}
-                    </div>
+                    </Card>
                     {/* 已处理信息 */}
                     {feedback.status !== 'pending' && (
-                      <div className="text-body-s text-outline mb-3">
+                      <div className="text-body-s text-on-surface-variant mb-3">
                         已由 {feedback.handled_by_name || '管理员'} 处理
                         {feedback.handled_at ? ` · ${feedback.handled_at}` : ''}
                         {feedback.handling_note ? ` · 备注: ${feedback.handling_note}` : ''}
@@ -1924,30 +1889,35 @@ export default function GlossaryTab() {
                     <div className="flex justify-end gap-2">
                       {feedback.status === 'pending' ? (
                         <>
-                          <button
-                            onClick={() => handleFeedbackAndEdit(feedback)}
-                            className="px-3 py-1 text-label-m bg-primary text-on-primary hover:opacity-90 rounded transition-ui"
-                          >
+                          <Button variant="filled" size="xs" onClick={() => handleFeedbackAndEdit(feedback)}>
                             处理并编辑标签
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="text"
+                            size="xs"
                             onClick={() => {
-                              const note = window.prompt('可填写忽略原因（可留空）：', '');
-                              if (note === null) return;
-                              void handleFeedback(feedback.id, 'rejected', note.trim());
+                              /* The app's own dialog, not the browser's
+                                 `prompt()` — a system box in the OS font,
+                                 outside our scrim, type scale and focus trap. */
+                              void prompt({
+                                title: '忽略反馈',
+                                label: '忽略原因',
+                                message: '可留空。填写的内容会显示在处理记录里。',
+                                placeholder: '例如：标签已在其他条目中修正',
+                                confirmLabel: '忽略',
+                              }).then((note) => {
+                                if (note === null) return;
+                                void handleFeedback(feedback.id, 'rejected', note);
+                              });
                             }}
-                            className="px-3 py-1 text-label-m text-on-surface-variant hover:bg-surface-container-high rounded transition-ui"
                           >
                             忽略
-                          </button>
+                          </Button>
                         </>
                       ) : (
-                        <button
-                          onClick={() => void handleFeedback(feedback.id, 'pending')}
-                          className="px-3 py-1 text-label-m text-on-surface-variant hover:bg-surface-container-high rounded transition-ui"
-                        >
+                        <Button variant="text" size="xs" onClick={() => void handleFeedback(feedback.id, 'pending')}>
                           标记为未处理
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -1968,27 +1938,8 @@ export default function GlossaryTab() {
           )}
         </div>
       </Modal>
-      <Modal
-        isOpen={glossaryConfirmModalOpen}
-        onClose={() => setGlossaryConfirmModalOpen(false)}
-        title={glossaryConfirmTitle}
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <button
-              onClick={() => setGlossaryConfirmModalOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
-              取消
-            </button>
-            <Button variant="danger" onClick={handleGlossaryConfirmAction}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">{glossaryConfirmMessage}</p>
-      </Modal>
+      {confirmDialog}
+      {promptDialog}
       <Modal
         isOpen={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
@@ -1999,36 +1950,45 @@ export default function GlossaryTab() {
           {/* 历史记录列表（行样式与设置页面 m3-row 一致） */}
           <div className="popover-scrollbar max-h-56 overflow-y-auto rounded-md bg-surface">
             {isHistoryLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Spinner label="" size="md" />
-              </div>
+              /* `m3-row` bars, the geometry the records land in — the rows are
+                 siblings in a cut block, so the skeletons must be siblings too
+                 or the header above them takes the "last row" corner radius
+                 while the list is loading. */
+              <>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="m3-row flex flex-col gap-2 bg-surface-container-low p-4">
+                    <Skeleton className="h-4 w-1/2" delay={i * 80} />
+                    <Skeleton className="h-3.5 w-1/3" delay={i * 80 + 60} />
+                  </div>
+                ))}
+              </>
             ) : historyError ? (
-              <div className="px-4 py-8 text-center text-error">{historyError}</div>
+              <ErrorRetry size="inline" title="历史记录加载失败" message={historyError} />
             ) : historyRecords.length === 0 ? (
-              <div className="px-4 py-8 text-center text-on-surface-variant">暂无历史编辑记录</div>
+              <EmptyState size="inline" title="暂无历史编辑记录" />
             ) : (
               historyRecords.map((h, i) => (
                 <button
                   key={i}
                   onClick={() => setSelectedHistoryIndex(i)}
-                  className={`m3-row flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 text-left transition-ui sm:flex-nowrap sm:gap-x-4 ${
+                  className={`m3-row flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 text-left transition-ui sm:flex-nowrap sm:gap-x-4 outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
                     i === selectedHistoryIndex
                       ? 'bg-primary-container'
-                      : 'bg-surface-container-low hover:bg-surface-container-high'
+                      : 'bg-surface-container-low state-layer'
                   }`}
                 >
                   <div className="min-w-0 flex-1">
                     <p
                       className={`mb-1 text-body-m ${
                         i === selectedHistoryIndex
-                          ? 'text-on-primary-container/70'
+                          ? 'text-on-primary-container'
                           : 'text-on-surface-variant'
                       }`}
                     >
                       {h.editor_username || '未知用户'}
                     </p>
                     <p
-                      className={`font-medium ${
+                      className={`text-body-m-emphasized ${
                         i === selectedHistoryIndex
                           ? 'text-on-primary-container'
                           : 'text-on-surface'
@@ -2048,27 +2008,25 @@ export default function GlossaryTab() {
               <dl className="space-y-3 text-body-m">
                 <div>
                   <dt className="text-label-l text-on-surface-variant">英文标签</dt>
-                  <dd className="break-all font-mono text-on-surface">
+                  <dd className="break-words font-mono text-on-surface">
                     {selectedHistory.en_name || '-'}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">中文翻译</dt>
-                  <dd className="break-all text-on-surface">{selectedHistory.cn_name || '未翻译'}</dd>
+                  <dd className="break-words text-on-surface">{selectedHistory.cn_name || '未翻译'}</dd>
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">别名</dt>
-                  <dd className="break-all text-on-surface">{formatAliases(selectedHistory.aliases)}</dd>
+                  <dd className="break-words text-on-surface">{formatAliases(selectedHistory.aliases)}</dd>
                 </div>
                 <div className="flex flex-wrap gap-6">
                   <div>
                     <dt className="text-label-l text-on-surface-variant">分类</dt>
                     <dd className="mt-1">
-                      <span
-                        className={`inline-flex items-center rounded px-2 py-0.5 text-label-m ${tagCategoryChip(selectedHistory.category || 'general')}`}
-                      >
+                      <Badge colors={tagCategoryChip(selectedHistory.category || 'general')}>
                         {selectedHistory.category || 'general'}
-                      </span>
+                      </Badge>
                     </dd>
                   </div>
                   <div>
@@ -2078,11 +2036,11 @@ export default function GlossaryTab() {
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">简介</dt>
-                  <dd className="whitespace-pre-wrap break-all text-on-surface-variant">
+                  <dd className="whitespace-pre-wrap break-words text-on-surface-variant">
                     {selectedHistory.description || '无'}
                   </dd>
                 </div>
-                <div className="pt-1 text-body-s text-outline">
+                <div className="pt-1 text-body-s text-on-surface-variant">
                   编辑人：{selectedHistory.editor_username || '未知用户'}　时间：
                   {formatHistoryTime(selectedHistory.created_at)}
                 </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import Skeleton from '@/components/Skeleton';
 
 type ImageCardVideoProps = {
   src: string;
@@ -49,10 +50,10 @@ export default function ImageCardVideo({ src }: ImageCardVideoProps) {
   return (
     <>
       {!posterReady && (
-        <span
-          aria-hidden="true"
-          className="skeleton bg-surface-container-high absolute inset-0 block"
-        />
+        /* `Skeleton`, not a hand-built `.skeleton` span: same tone and sweep,
+           but one owner for the app's loading language. `rounded-none` because
+           the media container already clips this to its own corner. */
+        <Skeleton className="absolute inset-0 block rounded-none" />
       )}
       <video
         ref={videoRef}

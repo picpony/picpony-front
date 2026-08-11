@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
+import Badge from '@/components/Badge';
 import { MdMessage, MdSearch, MdRefresh } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
 import { SectionHeader } from './';
@@ -39,19 +40,13 @@ const AUDIT_COLUMNS: Column<AuditMessage>[] = [
     key: 'state',
     header: '状态',
     render: (m) => (
-      <span
-        className={`rounded-full px-2 py-0.5 text-body-s ${
-          m.is_read ? 'bg-success-container text-success' : 'bg-warning-container text-warning'
-        }`}
-      >
-        {m.is_read ? '已读' : '未读'}
-      </span>
+      <Badge tone={m.is_read ? 'success' : 'warning'}>{m.is_read ? '已读' : '未读'}</Badge>
     ),
   },
   {
     key: 'created',
     header: '时间',
-    render: (m) => <span className="text-outline text-body-s">{m.created_at}</span>,
+    render: (m) => <span className="text-on-surface-variant text-body-s">{m.created_at}</span>,
   },
 ];
 
@@ -86,7 +81,7 @@ export default function MessagesAuditTab({ token }: { token: string }) {
       />{' '}
       <Card variant="transparent">
         {' '}
-        <div className="text-body-s text-error mb-4 p-3 rounded">
+        <div className="text-body-s bg-error-container text-on-error-container mb-4 rounded-md p-3">
           {' '}
           警告：作为管理员，您有权审计全站私信以排查违规交易、辱骂或诈骗行为。请严格遵守用户隐私准则，切勿滥用此功能。{' '}
         </div>{' '}
@@ -110,15 +105,17 @@ export default function MessagesAuditTab({ token }: { token: string }) {
             >
               检索
             </Button>
-            <button
+            <Button
+              icon={<MdRefresh size={16} />}
+              variant="outlined"
+              className="flex-1 sm:flex-none"
               onClick={() => {
                 setSearchUserId('');
                 loadMessages();
               }}
-              className="flex flex-1 items-center justify-center gap-1 px-3 py-2 border border-outline rounded-full text-body-m text-on-surface-variant hover:bg-surface-container-high sm:flex-none"
             >
-              <MdRefresh size={16} /> 查全站
-            </button>
+              查全站
+            </Button>
           </div>
         </div>
         <DataTable<AuditMessage>

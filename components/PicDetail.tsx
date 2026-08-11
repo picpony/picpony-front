@@ -13,12 +13,12 @@ import {
 } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
+  MdErrorOutline,
   MdDownload,
   MdOpenInNew,
   MdStar,
   MdStarBorder,
   MdShare,
-  MdContentCopy,
   MdFlag,
   MdChevronLeft,
   MdChevronRight,
@@ -26,6 +26,7 @@ import {
   MdThumbDown,
 } from 'react-icons/md';
 import Modal from '@/components/Modal';
+import { copyText } from '@/lib/utils';
 import { useAuthModal } from '@/components/AuthModal';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
@@ -38,6 +39,7 @@ const Lightbox = dynamic(() => import('yet-another-react-lightbox'), { ssr: fals
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
 import IconButton from '@/components/IconButton';
+import Menu, { type MenuAction } from '@/components/Menu';
 import Skeleton from '@/components/Skeleton';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
@@ -50,8 +52,11 @@ import { loadTagCounts } from '@/lib/tagCounts';
 import { loadTagTranslations } from '@/lib/tagTranslations';
 import CommentSection from '@/components/CommentSection';
 import Button, { buttonClasses } from '@/components/Button';
+import StatusView from '@/components/StatusView';
+import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/Input';
 import { getHeroMediaStyle } from '@/lib/hero/geometry';
+import { scrollAppToElement } from '@/lib/motion';
 import { peekImageDetail, prefetchImageDetail, subscribeImageDetail } from '@/lib/detail';
 import {
   bindImageHeroDismissGesture,
@@ -88,6 +93,12 @@ function getServerDetail() {
 }
 
 const INITIAL_TAG_LIMIT = 80;
+
+/* One entry today. It is a `Menu` rather than a lone button because "分享"
+   already promised a menu — the trigger has carried `aria-haspopup="menu"` all
+   along — and because the next entry (复制图片直链, 举报) has an obvious home. */
+const SHARE_ITEMS: MenuAction[] = [{ value: 'copy-link', label: '复制链接' }];
+
 const INITIAL_RELATION_TAG_LIMIT = 32;
 const commentsInFlight = new Map<string, Promise<Comment[]>>();
 
@@ -179,6 +190,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const [isLoadingComments, setIsLoadingComments] = useState(true);
   const [commentsViewport, setCommentsViewport] = useState({ imageId, ready: false });
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const shareButtonRef = useRef<HTMLButtonElement>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [isReporting, setIsReporting] = useState(false);
@@ -724,7 +736,16 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Comment reply ---
   const handleReply = (comment: Comment) => {
     setReplyTo({ id: comment.id, username: comment.username, body: comment.body });
-    commentEditorMountRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    /* The overlay presentation scrolls its own container, not the app scroller,
+       which is why this used to be a bare `scrollIntoView({ behavior: 'smooth' })`
+       — there was no way to say *which* scroller. That handed the jump to the
+       browser's own curve, so the same action glided differently depending on
+       whether the picture had been opened from the gallery or reached directly.
+       `scrollAppToElement` already lands the target's top edge at the top, which
+       is what `block: 'start'` was asking for. */
+    scrollAppToElement(commentEditorMountRef.current, {
+      scroller: presentation === 'page' ? undefined : overlayScrollerRef.current,
+    });
   };
 
   const handleCancelReply = () => {
@@ -732,6 +753,15 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   };
 
   // --- Fave toggle ---
+  const handleShareSelect = useCallback((value: string) => {
+    if (value !== 'copy-link') return;
+    /* `copyText`, not `navigator.clipboard.writeText` — the latter has no
+       fallback on a non-secure origin and the toast then lied about it. */
+    void copyText(window.location.href).then((ok) =>
+      showToast(ok ? '链接已复制' : '复制失败，请手动复制地址栏链接', ok ? 'success' : 'error'),
+    );
+  }, []);
+
   const handleToggleFave = async () => {
     let token = null;
     try {
@@ -907,7 +937,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           data-image-hero-surface-id={surfaceId}
           role="region"
           aria-label="图片详情"
-          className="image-detail-route absolute inset-0 z-40 overflow-hidden"
+          className="image-detail-route absolute inset-0 z-detail-overlay overflow-hidden"
         >
           <div
             ref={overlaySurfaceRef}
@@ -942,17 +972,17 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Loading skeleton ---
   if (isLoading) {
     return renderDetailShell(
-      <div className="image-detail-page max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
+      <div className="image-detail-page max-w-5xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
         <div className="flex flex-col rounded-md bg-transparent">
           <div className="image-detail-header-route p-4 sm:p-6">
-            <Skeleton className="h-8 rounded w-1/2 mb-4" />
+            <Skeleton className="h-8 w-1/2 mb-4" />
             <div className="flex gap-4">
-              <Skeleton className="h-5 rounded w-20" delay={60} />
-              <Skeleton className="h-5 rounded w-20" delay={120} />
-              <Skeleton className="h-5 rounded w-20" delay={180} />
+              <Skeleton className="h-5 w-20" delay={60} />
+              <Skeleton className="h-5 w-20" delay={120} />
+              <Skeleton className="h-5 w-20" delay={180} />
             </div>
           </div>
-          <div className="relative flex min-h-[32vh] w-full items-start justify-center px-4 pb-4 pt-2 md:min-h-[48vh]">
+          <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
             <Skeleton className="w-full h-full rounded-md absolute inset-4" delay={90} />
           </div>
           <div
@@ -961,12 +991,12 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           >
             <div className="mx-auto w-full max-w-5xl space-y-4">
               <div className="mb-2 flex justify-between">
-                <Skeleton className="h-4 w-14 rounded" />
-                <Skeleton className="h-4 w-14 rounded" delay={60} />
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 w-14" delay={60} />
               </div>
-              <Skeleton className="h-2.5 w-full rounded" delay={120} />
-              <Skeleton className="h-4 w-2/3 rounded" delay={180} />
-              <Skeleton className="h-4 w-full rounded" delay={240} />
+              <Skeleton className="h-2.5 w-full" delay={120} />
+              <Skeleton className="h-4 w-2/3" delay={180} />
+              <Skeleton className="h-4 w-full" delay={240} />
             </div>
           </div>
         </div>
@@ -976,24 +1006,24 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   // --- Error state ---
   if (error || !image) {
+    /* The shared failure block. The 返回上一页 button is gone because this
+       overlay already draws `DetailBack` in its top-left corner, so the screen
+       was offering the same exit twice in two different places; what is left is
+       the one action that is specific to being mid-gallery. */
     return renderDetailShell(
-      <div className="max-w-7xl mx-auto px-4 py-16 text-center">
-        <h2 className="text-headline-s text-on-surface mb-4">加载失败</h2>
-        <p className="text-on-surface-variant mb-6">图片可能不存在或已被删除</p>
-        <div className="flex gap-4 justify-center">
-          <Button variant="filled" onClick={handleBackToGallery}>
-            返回上一页
-          </Button>
-          {navHistory.length > 0 && currentNavIndex > 0 && (
-            <button
-              onClick={() => handleNavigate(-1)}
-              className="px-6 py-2 bg-surface-container-highest text-on-surface rounded-full hover:bg-surface-container-highest transition-ui"
-            >
+      <StatusView
+        icon={<MdErrorOutline size={48} />}
+        title="加载失败"
+        description="图片可能不存在或已被删除"
+        action={
+          navHistory.length > 0 &&
+          currentNavIndex > 0 && (
+            <Button variant="tonal" onClick={() => handleNavigate(-1)}>
               上一张
-            </button>
-          )}
-        </div>
-      </div>,
+            </Button>
+          )
+        }
+      />,
     );
   }
 
@@ -1025,7 +1055,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   return renderDetailShell(
     <div
-      className={`image-detail-page max-w-7xl mx-auto px-2 sm:px-4 ${presentation === 'page' ? 'animate-fade-in' : ''}`}
+      className="image-detail-page max-w-5xl mx-auto px-2 sm:px-4"
     >
       <div className="bg-transparent flex flex-col rounded-md">
         {/* === Title & Meta ===
@@ -1039,7 +1069,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         />
 
         {/* === Image Display (clickable to open lightbox) === */}
-        <div className="relative flex min-h-[32vh] w-full items-start justify-center px-4 pb-4 pt-2 md:min-h-[48vh]">
+        <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
           {isVideo ? (
             <DetailVideo
               key={`${image.id}:${heroSeed?.createdAt ?? 0}`}
@@ -1080,7 +1110,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         {/* === Detail Info === */}
         <div
           data-image-detail-reveal="body"
-          className="image-detail-deferred flex min-h-[80dvh] flex-col bg-transparent p-4 sm:p-6"
+          className="image-detail-deferred flex min-h-[var(--image-detail-body-min-height)] flex-col bg-transparent p-4 sm:p-6"
           // Isolate deferred body paint so late mount cannot blank the gallery
           // compositor layer under the overlay (mid-scroll "background vanished").
           style={{ contentVisibility: 'visible', contain: 'none' }}
@@ -1094,8 +1124,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             {!prefetchedDetail ? (
               <div aria-hidden="true" data-image-detail-score-loading>
                 <div className="mb-1.5 flex justify-between">
-                  <Skeleton className="h-4 w-14 rounded" />
-                  <Skeleton className="h-4 w-14 rounded" delay={60} />
+                  <Skeleton className="h-4 w-14" />
+                  <Skeleton className="h-4 w-14" delay={60} />
                 </div>
                 <Skeleton className="h-2.5 w-full rounded-full" delay={120} />
               </div>
@@ -1113,26 +1143,36 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                       <MdThumbDown size={16} className="text-error-fill" aria-label="踩" />
                     </span>
                   </div>
-                  <div className="w-full h-2.5 bg-surface-container-high rounded-full overflow-hidden flex">
+                  <div className="relative w-full h-2.5 bg-surface-container-high rounded-full overflow-hidden">
                     {image.upvotes === 0 && image.downvotes === 0 ? (
                       <div className="bg-surface-container-highest h-full w-full" />
                     ) : (
                       <>
-                        {/* `transition-ui` does not list `width` — it is a
-                            layout property and the utility deliberately names
-                            only compositable ones — so this bar has never
-                            animated. Named explicitly, at the large-container
-                            duration the 500 was reaching for. */}
+                        {/* `scaleX` on two full-width absolute bars, not animated
+                            `width` on two flex items.
+                            Animating `width` reflows the row every frame, and this
+                            runs live while paging between images inside the
+                            overlay — exactly when the hero flight is finishing and
+                            least able to afford layout work. A meter settling in
+                            place is also the 300ms `standard` row; 500ms belongs to
+                            a large container transform and pairs with `emphasized`.
+
+                            Absolute rather than flex because a scaled flex item
+                            still occupies its unscaled basis: two items at
+                            `width: 100%` would shrink to 50/50 and the scale would
+                            be applied to the wrong box. Anchored at opposite edges
+                            they tile exactly — the up bar covers [0, r] and the
+                            down bar, scaled from its right edge, covers [r, 1]. */}
                         <div
-                          className="bg-success-fill h-full transition-[width] duration-500 ease-[var(--ease-standard)]"
+                          className="bg-success-fill absolute inset-y-0 left-0 w-full origin-left transition-transform duration-300 ease-[var(--ease-standard)] motion-reduce:transition-none"
                           style={{
-                            width: `${(image.upvotes / (image.upvotes + image.downvotes)) * 100}%`,
+                            transform: `scaleX(${image.upvotes / (image.upvotes + image.downvotes)})`,
                           }}
                         />
                         <div
-                          className="bg-error-fill h-full transition-[width] duration-500 ease-[var(--ease-standard)]"
+                          className="bg-error-fill absolute inset-y-0 left-0 w-full origin-right transition-transform duration-300 ease-[var(--ease-standard)] motion-reduce:transition-none"
                           style={{
-                            width: `${(image.downvotes / (image.upvotes + image.downvotes)) * 100}%`,
+                            transform: `scaleX(${image.downvotes / (image.upvotes + image.downvotes)})`,
                           }}
                         />
                       </>
@@ -1151,7 +1191,12 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                     colours, and every one of them wrote `p-2.5 rounded-full` by
                     hand — a 40dp box only because a 20px glyph happened to be
                     inside it. `IconButton` sizes the box, not the glyph. */}
-                <div className="flex items-center justify-center gap-2">
+                {/* `flex-wrap`: six `shrink-0` controls plus the divider come to
+                    ~249px, against a 240px content box on a 320px viewport in the
+                    page presentation — so the row overflowed rather than wrapping.
+                    The divider is decorative and goes first on a phone, where the
+                    wrap already separates the groups. */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   {navHistory.length > 0 && (
                     <>
                       <IconButton
@@ -1173,7 +1218,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   {/* Dividers are `outline-variant`. This was
                       `surface-container-highest`, which is a *surface* tone and
                       lands almost invisible on the container it divides. */}
-                  <div className="mx-1 h-6 w-px bg-outline-variant" />
+                  <div className="mx-1 h-6 w-px bg-outline-variant max-sm:hidden" />
                   <IconButton
                     onClick={handleToggleFave}
                     loading={isFaveLoading}
@@ -1184,7 +1229,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                       isFaved ? (
                         <MdStar
                           size={20}
-                          className="animate-[star-burst_0.45s_var(--ease-spring)]"
+                          className="animate-[star-burst_0.4s_var(--ease-decelerate)]"
                         />
                       ) : (
                         <MdStarBorder size={20} />
@@ -1193,6 +1238,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   />
                   <div className="relative">
                     <IconButton
+                      ref={shareButtonRef}
                       onClick={() => setIsShareOpen(!isShareOpen)}
                       title="分享"
                       aria-label="分享"
@@ -1200,27 +1246,20 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                       aria-haspopup="menu"
                       icon={<MdShare size={20} />}
                     />
-                    {isShareOpen && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setIsShareOpen(false)} />
-                        <div
-                          role="menu"
-                          className="absolute left-1/2 top-full z-20 mt-2 w-40 origin-top -translate-x-1/2 rounded-sm border border-outline-variant bg-surface-container py-1 shadow-e3 animate-pop-in"
-                        >
-                          <button
-                            role="menuitem"
-                            onClick={() => {
-                              navigator.clipboard.writeText(window.location.href);
-                              showToast('链接已复制', 'success');
-                              setIsShareOpen(false);
-                            }}
-                            className="state-layer flex w-full items-center gap-2 px-3 py-2 text-label-l text-on-surface-variant"
-                          >
-                            <MdContentCopy size={16} /> 复制链接
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    {/* `Menu`, not a hand-rolled panel. This one announced
+                        itself as `role="menu"` and then implemented none of the
+                        contract — no arrow keys, no Escape, no focus
+                        management — and caught outside clicks with a
+                        full-screen transparent div instead of the overlay hooks
+                        that already existed. */}
+                    <Menu
+                      open={isShareOpen}
+                      onClose={() => setIsShareOpen(false)}
+                      anchorRef={shareButtonRef}
+                      aria-label="分享"
+                      items={SHARE_ITEMS}
+                      onSelect={handleShareSelect}
+                    />
                   </div>
                   <IconButton
                     onClick={() => setIsReportModalOpen(true)}
@@ -1236,31 +1275,39 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                       tracking token, deliberately set to half the M3 figure
                       because Han glyphs fill the em box. Widening it here put
                       this one heading out of step with every other. */}
-                  <h3 className="mb-2 text-label-m-emphasized text-outline">简介</h3>
+                  <h3 className="mb-2 text-label-m-emphasized text-on-surface-variant">简介</h3>
                   {image.description ? (
                     image.description.length > 100 ||
                     (image.description.match(/\n/g) || []).length >= 3 ? (
-                      <div
-                        className="state-layer cursor-pointer rounded-md border border-outline-variant bg-surface-container-low p-4"
+                      /* A `<button>`, not a `<div onClick>`. The only way to read
+                         a long description was to click it, so on a keyboard the
+                         text below the third line was unreachable. `aria-expanded`
+                         is what makes the collapsed state readable rather than
+                         merely visible. Left-aligned explicitly — a button
+                         centres its text by default, which would have re-set the
+                         paragraph. */
+                      <button
+                        type="button"
+                        aria-expanded={isDescriptionExpanded}
                         onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                        className="state-layer block w-full cursor-pointer rounded-md border border-outline-variant bg-surface-container-low p-4 text-left outline-none focus-visible:ring-2 focus-ring"
                       >
-                        {' '}
                         <p
                           className={`text-on-surface whitespace-pre-wrap break-words ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}
                         >
                           {image.description}
                         </p>
-                        <div className="text-label-l text-primary mt-2 text-center">
+                        <span className="text-label-l text-primary mt-2 block text-center">
                           {isDescriptionExpanded ? '折叠简介' : '展开简介'}
-                        </div>
-                      </div>
+                        </span>
+                      </button>
                     ) : (
-                      <p className="text-on-surface whitespace-pre-wrap break-words bg-surface-container-low/50 p-4 rounded-md border border-outline-variant">
+                      <p className="text-body-m text-on-surface whitespace-pre-wrap break-words bg-surface-container-low p-4 rounded-md border border-outline-variant">
                         {image.description}
                       </p>
                     )
                   ) : (
-                    <p className="text-outline italic bg-surface-container-low/50 p-4 rounded-md border border-outline-variant">
+                    <p className="text-body-m text-on-surface-variant italic bg-surface-container-low p-4 rounded-md border border-outline-variant">
                       滚木
                     </p>
                   )}
@@ -1268,14 +1315,14 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                 {/* Source URL */}
                 {image.source_url && (
                   <div>
-                    <h3 className="text-label-m-emphasized text-outline uppercase tracking-wider mb-2">
+                    <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
                       来源
                     </h3>
                     <a
                       href={image.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-link inline-block break-all hover:underline"
+                      className="text-link touch-target inline-block break-words hover:text-link-hover hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
                     >
                       {image.source_url}
                     </a>
@@ -1398,7 +1445,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         onClose={() => setTagInfoModal({ open: false, tag: '', data: null, loading: false })}
         title={tagInfoModal.tag}
         maxWidth="max-w-md"
-        zIndex={9998}
       >
         {' '}
         {tagInfoModal.loading ? (
@@ -1409,16 +1455,16 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             {tagInfoModal.data.cn && (
               <div>
                 {' '}
-                <span className="text-body-s text-outline uppercase tracking-wider">
+                <span className="text-label-m-emphasized text-on-surface-variant">
                   中文翻译
                 </span>{' '}
-                <p className="text-on-surface mt-1 ">{tagInfoModal.data.cn}</p>{' '}
+                <p className="text-body-m text-on-surface mt-1">{tagInfoModal.data.cn}</p>{' '}
               </div>
             )}{' '}
             {tagInfoModal.data.description && (
               <div>
                 {' '}
-                <span className="text-body-s text-outline uppercase tracking-wider">
+                <span className="text-label-m-emphasized text-on-surface-variant">
                   标签简介
                 </span>{' '}
                 <p className="text-on-surface-variant mt-1 text-body-m">
@@ -1429,7 +1475,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             {tagInfoModal.data.cat && (
               <div>
                 {' '}
-                <span className="text-body-s text-outline uppercase tracking-wider">分类</span>{' '}
+                <span className="text-label-m-emphasized text-on-surface-variant">分类</span>{' '}
                 <p className="text-on-surface-variant mt-1 text-body-m">
                   {tagInfoModal.data.cat}
                 </p>{' '}
@@ -1438,7 +1484,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             {tagInfoModal.data.aliases && tagInfoModal.data.aliases.length > 0 && (
               <div>
                 {' '}
-                <span className="text-body-s text-outline uppercase tracking-wider">别名</span>{' '}
+                <span className="text-label-m-emphasized text-on-surface-variant">别名</span>{' '}
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {' '}
                   {tagInfoModal.data.aliases.map((alias, i) => (
@@ -1454,11 +1500,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             )}{' '}
           </div>
         ) : (
-          <div className="text-center py-6 text-on-surface-variant">
-            {' '}
-            <p>词库中暂无此标签的详细信息</p>{' '}
-            <p className="text-body-s mt-2">登录后可以查询更多标签信息</p>{' '}
-          </div>
+          <EmptyState
+            size="inline"
+            title="词库中暂无此标签的详细信息"
+            description="登录后可以查询更多标签信息"
+          />
         )}{' '}
         <div className="flex gap-3 mt-4">
           {' '}
@@ -1484,7 +1530,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           }
         }}
         title="举报图片"
-        zIndex={100}
         closeOnOverlayClick={!isReporting}
         footer={
           <>

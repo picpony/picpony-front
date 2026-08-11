@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import FadeInImage from '@/components/FadeInImage';
 import Checkbox from '@/components/Checkbox';
-import Modal from '@/components/Modal';
 import { MdStore, MdEdit, MdDelete, MdAdd } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
-import Chip from '@/components/Chip';
+import IconButton from '@/components/IconButton';
+import Badge from '@/components/Badge';
 import { SectionHeader } from './';
 import Button from '@/components/Button';
+import { useConfirm } from '@/components/ConfirmDialog';
 import Card from '@/components/Card';
 import { Input, Textarea } from '@/components/Input';
 
@@ -39,21 +40,16 @@ export default function ShopTab({ token }: { token: string }) {
     active: true,
   });
 
-  const [shopConfirmModalOpen, setShopConfirmModalOpen] = useState(false);
-  const [shopConfirmTitle, setShopConfirmTitle] = useState('');
-  const [shopConfirmMessage, setShopConfirmMessage] = useState('');
-  const shopConfirmActionRef = useRef<(() => void) | null>(null);
+  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
+     ref per tab. The signature is kept so the call sites read unchanged; what
+     went away is the second copy of the Modal, its footer and its title/message
+     state — five admin tabs had built the identical thing. */
+  const { confirm, confirmDialog } = useConfirm();
 
   const showShopConfirm = (title: string, message: string, action: () => void) => {
-    setShopConfirmTitle(title);
-    setShopConfirmMessage(message);
-    shopConfirmActionRef.current = action;
-    setShopConfirmModalOpen(true);
-  };
-
-  const handleShopConfirmAction = () => {
-    shopConfirmActionRef.current?.();
-    setShopConfirmModalOpen(false);
+    void confirm({ title, message }).then((confirmed) => {
+      if (confirmed) action();
+    });
   };
 
   const loadItems = useCallback(async () => {
@@ -165,11 +161,11 @@ export default function ShopTab({ token }: { token: string }) {
               alt=""
               width={40}
               height={40}
-              className="h-10 w-10 shrink-0 rounded object-cover"
+              className="h-10 w-10 shrink-0 rounded-sm object-cover"
             />
           )}
           <div className="min-w-0">
-            <div className="text-on-surface font-medium">{item.name}</div>
+            <div className="text-body-m-emphasized text-on-surface">{item.name}</div>
             <div className="text-on-surface-variant line-clamp-1 text-body-s">{item.description}</div>
           </div>
         </div>
@@ -178,16 +174,17 @@ export default function ShopTab({ token }: { token: string }) {
     {
       key: 'price',
       header: '价格',
-      render: (item) => <span className="text-warning font-medium">{item.price}</span>,
+      render: (item) => <span className="text-body-m-emphasized text-warning">{item.price}</span>,
     },
     { key: 'stock', header: '库存', render: (item) => item.stock },
     {
       key: 'state',
       header: '状态',
       render: (item) => (
-        <Chip variant="input" tone={item.active === 1 ? 'success' : 'neutral'}>
+        /* A mark, not a control — see the same note in `ReportsTab`. */
+        <Badge tone={item.active === 1 ? 'success' : 'neutral'} size="md">
           {item.active === 1 ? '上架中' : '已下架'}
-        </Chip>
+        </Badge>
       ),
     },
     {
@@ -196,22 +193,20 @@ export default function ShopTab({ token }: { token: string }) {
       actions: true,
       render: (item) => (
         <>
-          <button
+          <IconButton
+            size="sm"
             onClick={() => startEdit(item)}
-            className="touch-target state-layer text-warning rounded-full p-1.5"
+            icon={<MdEdit size={18} />}
             title="编辑"
-            aria-label={`编辑 ${item.name}`}
-          >
-            <MdEdit size={18} />
-          </button>
-          <button
+            aria-label={`编辑 ${item.name}`} className="text-primary"
+          />
+          <IconButton
+            size="sm"
             onClick={() => deleteItem(item.id)}
-            className="touch-target state-layer rounded-full p-1.5 text-error"
+            icon={<MdDelete size={18} />}
             title="删除"
-            aria-label={`删除 ${item.name}`}
-          >
-            <MdDelete size={18} />
-          </button>
+            aria-label={`删除 ${item.name}`} className="text-error"
+          />
         </>
       ),
     },
@@ -226,11 +221,11 @@ export default function ShopTab({ token }: { token: string }) {
       />
 
       <Card variant="transparent">
-        <h3 className="font-semibold text-on-surface mb-4 flex items-center gap-2">
+        <h3 className="text-label-l text-on-surface mb-4 flex items-center gap-2">
           {isEditing ? <MdEdit size={20} /> : <MdAdd size={20} />}
           {isEditing ? '编辑商品' : '添加新商品'}{' '}
         </h3>{' '}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           {' '}
           <div>
             {' '}
@@ -275,7 +270,7 @@ export default function ShopTab({ token }: { token: string }) {
         </div>{' '}
         <div className="mb-4">
           {' '}
-          <label className="block text-label-l text-on-surface mb-1" htmlFor="shoptab-f5">
+          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="shoptab-f5">
             商品简介
           </label>{' '}
           <Textarea
@@ -321,27 +316,7 @@ export default function ShopTab({ token }: { token: string }) {
         empty="暂无商品"
       />
 
-      <Modal
-        isOpen={shopConfirmModalOpen}
-        onClose={() => setShopConfirmModalOpen(false)}
-        title={shopConfirmTitle}
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <button
-              onClick={() => setShopConfirmModalOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
-              取消
-            </button>
-            <Button variant="danger" onClick={handleShopConfirmAction}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">{shopConfirmMessage}</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

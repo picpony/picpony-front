@@ -15,9 +15,25 @@ interface ChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'child
   /** `filter` chips show a leading check when selected and fill with the tone. */
   selected?: boolean;
   icon?: ReactNode;
-  /** Renders a trailing dismiss button. Implies `variant="input"` styling. */
+  /**
+   * Renders a trailing dismiss button, which is what makes this an *input* chip.
+   * It does not change the fill: M3's input chip is outlined unless it carries a
+   * tone, and `isFilled` below is what decides that. (This said "implies
+   * `variant="input"` styling", which it does not — the two are independent.)
+   */
   onRemove?: () => void;
   removeLabel?: string;
+  /**
+   * A container/on-container class pair for the *categorical* case — a tag
+   * coloured by its category, a staff role. Replaces the `tone` pair rather than
+   * joining it, because `cn` is a plain join and emitting both would let the
+   * stylesheet's order pick the winner.
+   *
+   * Only `lib/tagCategories.ts` and `lib/roles.ts` may choose a hue (the
+   * `accent-*` scale is categorical, not semantic), so this takes their output
+   * rather than a colour name.
+   */
+  colors?: string;
   children?: ReactNode;
 }
 
@@ -45,11 +61,26 @@ const TONE_TEXT: Record<ChipTone, string> = {
   error: 'text-error',
 };
 
-const SIZES: Record<ChipSize, string> = {
-  // 32px tall. M3 puts small chips at 32dp; below that they stop being
-  // comfortable touch targets in a wrapped tag cloud.
-  sm: 'h-8 gap-1 px-2.5 text-label-m',
-  md: 'h-9 gap-1.5 px-3 text-label-l',
+/* Split into the *box* and the *inside*, and that split is the whole point.
+ *
+ * The height, the type role and the border belong to the outer `<span>`; the
+ * padding and the gap belong to the inner `<button>`. All of it used to sit on
+ * the span, which left the button — the click target, and the element
+ * `data-ripple` paints into — shrink-wrapped to the icon and the label. So a
+ * chip's own padding was dead space: pressing 8px inside its left edge did
+ * nothing, and the ripple was a puddle in the middle of the text rather than a
+ * wave across the control. Moving the padding inward makes the button fill the
+ * box, which is what a filter chip has to be to read as pressable at all.
+ *
+ * Every horizontal step is spelled out per branch rather than composed from a
+ * base plus an override, because `cn` is a plain join: `px-3` next to `pr-1.5`
+ * emits both and lets Tailwind's output order decide the trailing edge.
+ *
+ * 32px tall at `sm`. M3 puts small chips at 32dp; below that they stop being
+ * comfortable touch targets in a wrapped tag cloud. */
+const SIZES: Record<ChipSize, { box: string; lead: string; solo: string; toCross: string; trail: string }> = {
+  sm: { box: 'h-8 text-label-m', lead: 'gap-1 pl-2.5', solo: 'pr-2.5', toCross: 'pr-1', trail: 'pr-1.5' },
+  md: { box: 'h-9 text-label-l', lead: 'gap-1.5 pl-3', solo: 'pr-3', toCross: 'pr-1.5', trail: 'pr-2' },
 };
 
 const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
@@ -61,6 +92,7 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
     icon,
     onRemove,
     removeLabel = '移除',
+    colors,
     className = '',
     disabled,
     onClick,
@@ -73,16 +105,22 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   // A chip with no click handler and no remove action is a label, not a
   // control — render it inert so it does not land in the tab order.
   const isInteractive = Boolean(onClick) || variant === 'filter';
+  const s = SIZES[size];
 
   return (
     <span
       className={cn(
         'inline-flex max-w-full items-center rounded-sm border transition-ui ease-[var(--ease-standard)]',
-        SIZES[size],
-        isFilled
-          ? cn(TONE_SELECTED[tone], 'border-transparent')
-          : cn('border-outline-variant bg-transparent', TONE_TEXT[tone]),
-        disabled && 'pointer-events-none opacity-50',
+        s.box,
+        // The only padding the span keeps: the gap between the dismiss cross and
+        // the trailing border, which the button below cannot supply.
+        onRemove && s.trail,
+        colors
+          ? cn(colors, 'border-transparent')
+          : isFilled
+            ? cn(TONE_SELECTED[tone], 'border-transparent')
+            : cn('border-outline-variant bg-transparent', TONE_TEXT[tone]),
+        disabled && 'pointer-events-none disabled-content',
         className,
       )}
     >
@@ -94,11 +132,18 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
         aria-pressed={variant === 'filter' ? selected : undefined}
         tabIndex={isInteractive ? undefined : -1}
         className={cn(
-          'inline-flex min-w-0 items-center gap-1 outline-none',
+          // `self-stretch` for the height, the size's padding for the width —
+          // together they make the press target, the state layer and the ripple
+          // cover the chip instead of hugging its text.
+          'inline-flex min-w-0 items-center self-stretch outline-none',
+          s.lead,
+          onRemove ? s.toCross : s.solo,
           isInteractive ? 'cursor-pointer' : 'cursor-default',
-          'focus-visible:ring-2 focus-visible:ring-primary/40 rounded-sm',
+          // Its own radius, matching the box: the ripple is clipped by this
+          // element, so a square one would paint into the chip's rounded corner.
+          'rounded-sm focus-visible:ring-2 focus-ring',
         )}
-        {...(isInteractive && !disabled ? { 'data-ripple': '' } : {})}
+        {...(isInteractive ? { 'data-ripple': '' } : {})}
         {...rest}
       >
         {variant === 'filter' && selected ? (
@@ -119,7 +164,7 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
           onClick={onRemove}
           aria-label={removeLabel}
           disabled={disabled}
-          className="-mr-1 ml-0.5 inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5 opacity-70 outline-none transition hover:opacity-100 focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="touch-target inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5 text-on-surface-variant outline-none transition-[color] duration-300 ease-[var(--ease-standard)] state-layer focus-visible:ring-2 focus-ring"
         >
           <MdClose size={size === 'sm' ? 13 : 15} />
         </button>

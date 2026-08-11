@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { MdCloudUpload } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import { showToast } from './Toast';
@@ -10,6 +10,7 @@ import { PonyImage } from '../lib/api';
 import FadeInImage from './FadeInImage';
 import Modal from './Modal';
 import Button from '@/components/Button';
+import DropZone from '@/components/DropZone';
 
 interface ImageSearchModalProps {
   isOpen: boolean;
@@ -26,7 +27,6 @@ export default function ImageSearchModal({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [distance, setDistance] = useState<number>(0.1);
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -49,22 +49,8 @@ export default function ImageSearchModal({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFileSelect(file);
-  };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFileSelect(file);
-  };
 
   const handleSubmit = async () => {
     if (!selectedFile) {
@@ -108,37 +94,28 @@ export default function ImageSearchModal({
             {' '}
             取消{' '}
           </Button>{' '}
-          <button
+          <Button
+            variant="filled"
             onClick={handleSubmit}
-            disabled={!selectedFile || isUploading}
-            className={`px-4 py-2 text-label-l text-on-primary rounded-full transition-ui flex items-center ${
-              !selectedFile || isUploading
-                ? 'bg-primary/50 cursor-not-allowed'
-                : 'bg-primary hover:bg-primary/90'
-            }`}
+            disabled={!selectedFile}
+            loading={isUploading}
           >
-            {isUploading ? '请稍后' : '开始搜索'}
-          </button>
+            开始搜索
+          </Button>
         </>
       }
     >
-      <div
-        className={`border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-ui mb-6 ${
-          selectedImage
-            ? 'border-primary/50 bg-primary/5'
-            : 'border-outline hover:border-primary hover:bg-surface-container-high'
-        }`}
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
+      {/* This zone previously handled `dragover` only — enough to stop the
+          browser navigating to the dropped file, but it gave no feedback at all
+          while one was held over it, so the affordance its dashed border promised
+          was invisible. `DropZone` owns the three states. */}
+      <DropZone
+        accept="image/*"
+        onFile={handleFileSelect}
+        filled={Boolean(selectedImage)}
+        aria-label="选择或拖拽要搜索的图片"
+        className="mb-6"
       >
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept="image/*"
-          className="hidden"
-        />
 
         {selectedImage ? (
           <div className="relative w-full h-48 flex items-center justify-center">
@@ -148,21 +125,21 @@ export default function ImageSearchModal({
               fill
               className="object-contain rounded-md shadow-e1"
             />
-            <div className="absolute inset-0 bg-scrim/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
-              <span className="text-on-media font-medium">更换图片</span>
+            <div className="bg-media-plate absolute inset-0 flex items-center justify-center rounded-md opacity-0 transition-opacity duration-300 ease-[var(--ease-standard)] hover:opacity-100">
+              <span className="text-on-media text-label-l">更换图片</span>
             </div>
           </div>
         ) : (
           <>
             <MdCloudUpload size={48} className="text-outline mb-3" />
-            <p className="text-on-surface font-medium mb-1">点击或拖拽图片到此处</p>
+            <p className="text-body-m-emphasized text-on-surface mb-1">点击或拖拽图片到此处</p>
           </>
         )}
-      </div>
+      </DropZone>
 
       <div className="mb-2 px-2">
         <div className="flex justify-between items-center mb-2">
-          <label className="text-label-l text-on-surface">容差</label>
+          <p className="text-label-l text-on-surface">容差</p>
           <span className="text-label-l-emphasized text-primary">{distance.toFixed(2)}</span>
         </div>
         <input

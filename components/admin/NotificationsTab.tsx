@@ -7,6 +7,7 @@ import Modal from '@/components/Modal';
 import Select from '@/components/Select';
 import { MdNotifications, MdSend, MdDelete } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
+import IconButton from '@/components/IconButton';
 import { SectionHeader } from './';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
@@ -134,28 +135,27 @@ export default function NotificationsTab({ token }: { token: string }) {
       key: 'title',
       header: '标题',
       primary: true,
-      render: (n) => <span className="font-medium">{n.title}</span>,
+      render: (n) => <span className="text-body-m-emphasized">{n.title}</span>,
     },
     { key: 'content', header: '内容', className: 'max-w-xs truncate', render: (n) => n.content },
     {
       key: 'created',
       header: '时间',
-      render: (n) => <span className="text-outline text-body-s">{n.created_at}</span>,
+      render: (n) => <span className="text-on-surface-variant text-body-s">{n.created_at}</span>,
     },
     {
       key: 'actions',
       header: '操作',
       actions: true,
       render: (n) => (
-        <button
+        <IconButton
+          size="sm"
           onClick={() => handleDelete(n.id)}
-          className="touch-target state-layer rounded-full p-1.5 text-error"
+          icon={<MdDelete size={16} />}
           title="删除"
           aria-label={`删除通知「${n.title}」`}
-        >
-          {' '}
-          <MdDelete size={16} />{' '}
-        </button>
+          className="text-error"
+        />
       ),
     },
   ];
@@ -169,11 +169,11 @@ export default function NotificationsTab({ token }: { token: string }) {
       />{' '}
       <Card variant="transparent" className="space-y-4">
         {' '}
-        <div className="text-body-s text-on-surface-variant p-3 rounded">
+        <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
           {' '}
           使用系统通知可以向特定用户或全站用户发送消息（信箱红点提醒）。用户ID填 0
           代表全站广播。{' '}
-        </div>{' '}
+        </Card>{' '}
         <div>
           {' '}
           <Input
@@ -198,7 +198,7 @@ export default function NotificationsTab({ token }: { token: string }) {
         </div>{' '}
         <div>
           {' '}
-          <label className="block text-label-l text-on-surface mb-1" htmlFor="notificationstab-f3">
+          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="notificationstab-f3">
             通知正文
           </label>{' '}
           <Textarea
@@ -216,16 +216,15 @@ export default function NotificationsTab({ token }: { token: string }) {
           className="self-start"
           icon={<MdSend size={16} />}
         >
-          {sending ? '发送中...' : '发送通知'}
+          发送通知
         </Button>
       </Card>
       <Card variant="transparent">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-label-l-emphasized text-on-surface">历史通知记录</h3>
+          <h3 className="text-label-l text-on-surface">历史通知记录</h3>
           <Select
             value={filter}
             onChange={(v) => setFilter(v)}
-            size="sm"
             aria-label="通知筛选"
             options={[
               { value: 'all', label: '全部通知' },
@@ -250,12 +249,9 @@ export default function NotificationsTab({ token }: { token: string }) {
         maxWidth="max-w-sm"
         footer={
           <>
-            <button
-              onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setConfirmOpen(false)}>
               取消
-            </button>
+            </Button>
             <Button variant="danger" onClick={handleConfirm}>
               确认
             </Button>

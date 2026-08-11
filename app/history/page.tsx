@@ -9,8 +9,12 @@ import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
 import Button from '@/components/Button';
+import IconButton from '@/components/IconButton';
 import Skeleton from '@/components/Skeleton';
+import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
 import { useAuthModal } from '@/components/AuthModal';
+import PageHeader from '@/components/PageHeader';
 
 interface HistoryItem {
   id: number;
@@ -120,19 +124,19 @@ export default function HistoryPage() {
   };
   if (isLoading && history.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto">
         {' '}
-        <h1 className="text-headline-s text-on-surface mb-6">浏览历史</h1>{' '}
+        <PageHeader title="浏览历史" />{' '}
         <div className="space-y-3">
           {' '}
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="m3-row flex gap-4 p-4 bg-surface-container-low">
               {' '}
-              <Skeleton className="w-20 h-16 rounded-md flex-shrink-0" />{' '}
+              <Skeleton className="w-20 h-16 rounded-md shrink-0" />{' '}
               <div className="flex-1 space-y-2">
                 {' '}
-                <Skeleton className="h-4 rounded w-1/3" />{' '}
-                <Skeleton className="h-3 rounded w-1/4" />{' '}
+                <Skeleton className="h-4 w-1/3" />{' '}
+                <Skeleton className="h-3 w-1/4" />{' '}
               </div>{' '}
             </div>
           ))}{' '}
@@ -143,41 +147,31 @@ export default function HistoryPage() {
   return (
     <>
       {' '}
-      <div className="max-w-4xl mx-auto px-4 py-8 animate-fade-in">
+      <div className="max-w-4xl mx-auto">
         {' '}
-        <div className="flex items-center justify-between mb-6">
-          {' '}
-          <h1 className="text-headline-s text-on-surface flex items-center gap-2">
-            {' '}
-            浏览历史{' '}
-          </h1>{' '}
-          {history.length > 0 && (
-            <button
-              onClick={handleClear}
-              className="flex items-center gap-2 px-4 py-2 text-label-l text-error hover:bg-error-container rounded-full transition-ui"
-            >
-              {' '}
-              <MdDeleteSweep size={18} /> 清空记录{' '}
-            </button>
-          )}{' '}
-        </div>{' '}
+        <PageHeader
+          title="浏览历史"
+          actions={
+            history.length > 0 ? (
+              <Button
+                variant="danger-text"
+                onClick={handleClear}
+                icon={<MdDeleteSweep size={18} />}
+                responsiveLabel
+              >
+                清空记录
+              </Button>
+            ) : undefined
+          }
+        />
         {error ? (
-          <div className="text-center py-20 text-on-surface-variant">
-            {' '}
-            <p>{error}</p>{' '}
-            <button
-              onClick={() => fetchHistory(page)}
-              className="mt-4 text-primary hover:underline"
-            >
-              重试
-            </button>{' '}
-          </div>
+          <ErrorRetry message={error} onRetry={() => fetchHistory(page)} />
         ) : history.length === 0 ? (
-          <div className="text-center py-20">
-            {' '}
-            <MdHistory size={48} className="mx-auto text-outline mb-4" />{' '}
-            <p className="text-on-surface-variant text-title-m">暂无浏览记录</p>{' '}
-          </div>
+          <EmptyState
+            icon={<MdHistory size={48} />}
+            title="暂无浏览记录"
+            description="看过的图片会出现在这里。"
+          />
         ) : (
           <>
             {' '}
@@ -186,12 +180,12 @@ export default function HistoryPage() {
               {history.map((item) => (
                 <div
                   key={item.id}
-                  className="m3-row flex items-center gap-4 p-4 bg-surface-container-low transition-ui hover:bg-surface-container-high group"
+                  className="m3-row flex items-center gap-4 p-4 bg-surface-container-low transition-ui state-layer group"
                 >
                   {' '}
                   <Link href={`/pic/${item.id}`} className="flex items-center gap-4 flex-1 min-w-0">
                     {' '}
-                    <div className="w-20 h-16 rounded-md overflow-hidden bg-surface-container-high flex-shrink-0">
+                    <div className="w-20 h-16 rounded-md overflow-hidden bg-surface-container-high shrink-0">
                       {' '}
                       {item.preview_url ? (
                         <FadeInImage src={item.preview_url} alt="" fill className="object-cover" />
@@ -204,17 +198,17 @@ export default function HistoryPage() {
                     </div>{' '}
                     <div className="flex-1 min-w-0">
                       {' '}
-                      <p className=" text-on-surface flex items-center gap-2">
+                      <p className="text-body-m text-on-surface flex items-center gap-2">
                         {' '}
                         #{item.id}{' '}
                         {item.uploader && (
-                          <span className="text-body-s text-outline flex items-center gap-1">
+                          <span className="text-body-s text-on-surface-variant flex items-center gap-1">
                             {' '}
                             <MdPerson size={12} /> {item.uploader}{' '}
                           </span>
                         )}{' '}
                       </p>{' '}
-                      <p className="text-body-s text-outline mt-1">
+                      <p className="text-body-s text-on-surface-variant mt-1">
                         {' '}
                         {item.last_view_time
                           ? new Date(item.last_view_time).toLocaleString('zh-CN')
@@ -222,14 +216,23 @@ export default function HistoryPage() {
                       </p>
                     </div>
                   </Link>
-                  <button
+                  {/* `IconButton`, not a hand-rolled padded box around a glyph.
+                      Three faults compounded: a 40% opacity until `group-hover`
+                      meant that on a touch device — where there is no hover —
+                      the only way to remove a record sat permanently at 40%,
+                      compositing `outline` down to roughly 1.5:1, under even the
+                      3:1 bar for a non-text control; the 34px box was under the
+                      44px touch rule; and it had no focus ring. Visible by
+                      default, hover-revealed from `sm` up, which is the rule the
+                      gallery tiles and the detail zoom already follow. */}
+                  <IconButton
                     onClick={() => handleDeleteItem(item.id)}
-                    className="p-2 text-outline hover:text-error opacity-40 group-hover:opacity-100 transition-ui"
+                    icon={<MdDelete size={18} />}
+                    size="sm"
                     title="移除此记录"
                     aria-label="删除浏览记录"
-                  >
-                    <MdDelete size={18} />
-                  </button>
+                    className="text-on-surface-variant hover:text-error opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                  />
                 </div>
               ))}
             </div>
@@ -250,19 +253,16 @@ export default function HistoryPage() {
         title="清空浏览历史"
         footer={
           <>
-            <button
-              onClick={() => setIsClearModalOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setIsClearModalOpen(false)}>
               取消
-            </button>
+            </Button>
             <Button variant="danger" onClick={handleClearConfirm}>
               确认清空
             </Button>
           </>
         }
       >
-        <p className="text-on-surface-variant">确定要清空所有浏览历史吗？此操作不可撤销。</p>
+        <p className="text-body-m text-on-surface-variant">确定要清空所有浏览历史吗？此操作不可撤销。</p>
       </Modal>
     </>
   );

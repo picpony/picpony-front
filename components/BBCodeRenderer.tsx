@@ -2,6 +2,8 @@
 
 import React, { useMemo } from 'react';
 
+import { safeColor, safeUrl } from '@/lib/bbcode';
+
 interface BBCodeRendererProps {
   content: string;
 }
@@ -30,7 +32,9 @@ function bbcodeToSafeHtml(bbcode: string): string {
     if (!src) return '';
     // Resolve relative paths
     const resolved = src.startsWith('/') ? `https://picpony.top${src}` : src;
-    return `<img src="${resolved}" alt="" style="max-width:100%;border-radius:8px;margin:8px 0;" />`;
+    const safe = safeUrl(resolved);
+    if (!safe) return '';
+    return `<img src="${safe}" alt="" style="max-width:100%;border-radius:8px;margin:8px 0;" />`;
   });
 
   // Bold
@@ -48,11 +52,13 @@ function bbcodeToSafeHtml(bbcode: string): string {
     '<span style="text-decoration:line-through;">$1</span>',
   );
 
-  // Color
-  html = html.replace(
-    /\[color=(.*?)\]([\s\S]*?)\[\/color\]/gi,
-    '<span style="color:$1;">$2</span>',
-  );
+  /* Colour — validated, not interpolated. `escapeHTML` leaves `;` and `:` alone,
+     so a raw capture here let `[color=red;position:fixed;inset:0;background:#000]`
+     paint a full-viewport plate over the app from inside a post body. */
+  html = html.replace(/\[color=(.*?)\]([\s\S]*?)\[\/color\]/gi, (_m, c: string, text: string) => {
+    const color = safeColor(c);
+    return color ? `<span style="color:${color};">${text}</span>` : text;
+  });
 
   // Center alignment
   html = html.replace(
@@ -60,38 +66,45 @@ function bbcodeToSafeHtml(bbcode: string): string {
     '<div style="text-align:center;margin:8px 0;">$1</div>',
   );
 
-  // URL with custom text [url=href]text[/url]
-  html = html.replace(
-    /\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi,
-    '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">$2</a>',
-  );
+  /* URL with custom text [url=href]text[/url].
+     `safeUrl` allowlists the scheme. `escapeHTML` escapes `& < > " '`, none of
+     which occur in `javascript:alert(document.cookie)`, so an unvalidated capture
+     here was a live script href authored from any post or comment. A rejected
+     href degrades to its own link text rather than vanishing. */
+  html = html.replace(/\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi, (_m, href: string, text: string) => {
+    const url = safeUrl(href);
+    return url
+      ? `<a href="${url}" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">${text}</a>`
+      : text;
+  });
 
   // Bare URL [url]href[/url]
-  html = html.replace(
-    /\[url\]([\s\S]*?)\[\/url\]/gi,
-    '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">$1</a>',
-  );
+  html = html.replace(/\[url\]([\s\S]*?)\[\/url\]/gi, (_m, href: string) => {
+    const url = safeUrl(href);
+    return url
+      ? `<a href="${url}" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">${url}</a>`
+      : href;
+  });
 
   // Quote with username [quote="username"]text[/quote]
   // Note: quotes are already escaped to &quot; by escapeHTML() above
+  //
+  // Semantic markup, no inline styles: both quote forms now emit a plain
+  // `<blockquote>` and the appearance comes from the single rule in globals.css.
+  // The inline version carried its own fill, its own border and a
+  // `margin-top:-20px` fudge to pull the attribution back over the padding it had
+  // just set — the sort of thing that only ever looks right in the one thread it
+  // was tuned against.
   html = html.replace(
     /\[quote=&quot;(.*?)&quot;\]([\s\S]*?)\[\/quote\]/gi,
-    (match, username: string, text: string) => {
-      const name = username.trim();
-      const content = text.trim();
-      return `<blockquote style="background:var(--md-sys-color-surface-container-low);border-radius:8px;border:none;padding:4px 16px;">
-        <div style="font-size:0.75rem;font-weight:600;color:var(--md-sys-color-primary);margin-bottom:-10px;margin-top:-20px;display:flex;align-items:center;gap:3px;">
-          ${name}：
-        </div>
-        <div style="font-size:0.875rem;color:var(--md-sys-color-on-surface-variant);line-height:1.6;">${content}</div>
-      </blockquote>`;
-    },
+    (match, username: string, text: string) =>
+      `<blockquote><cite>${username.trim()}</cite>${text.trim()}</blockquote>`,
   );
 
   // Quote (simple, no username)
   html = html.replace(
     /\[quote\]([\s\S]*?)\[\/quote\]/gi,
-    '<blockquote style="border-left:4px solid var(--md-sys-color-outline);padding-left:16px;margin:8px 0;font-style:italic;color:var(--md-sys-color-on-surface-variant);">$1</blockquote>',
+    '<blockquote>$1</blockquote>',
   );
 
   // Code block (preserve inner content exactly)
@@ -154,10 +167,16 @@ function bbcodeToSafeHtml(bbcode: string): string {
   // Span
   html = html.replace(/\[span\]([\s\S]*?)\[\/span\]/gi, '<span>$1</span>');
 
-  // Table tags
+  /* Table, in a scroll container.
+     `width:100%` does not stop a 4-column table's *min-content* width from
+     exceeding the post card — on a 360px phone the card's content box is ~296px,
+     and any table with real cell text blows past it and takes the page's
+     horizontal scrollbar with it. `MarkdownRenderer` already wraps its tables for
+     this reason; the BBCode path did not. `.popover-scrollbar` because the gutter
+     belongs to the table, not to the page. */
   html = html.replace(
     /\[table\]([\s\S]*?)\[\/table\]/gi,
-    '<table style="border-collapse:collapse;width:100%;margin:8px 0;">$1</table>',
+    '<div class="popover-scrollbar overflow-x-auto"><table style="border-collapse:collapse;width:100%;margin:8px 0;">$1</table></div>',
   );
   html = html.replace(/\[tr\]([\s\S]*?)\[\/tr\]/gi, '<tr>$1</tr>');
   html = html.replace(
@@ -190,5 +209,13 @@ export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
 
   if (!html) return null;
 
-  return <div className="bbcode-content" dangerouslySetInnerHTML={{ __html: html }} />;
+  /* `break-words` on the root, not just via the `@layer base` safety net.
+     That net covers `:where(p, li, blockquote, td, dd)`, and this converter emits
+     bare text nodes and `<br>` straight into the div — so a long URL or an
+     unbroken username in any post or comment body pushed past the column. The
+     app scroller is `overflow-y: scroll` with `overflow-x` computing to `auto`,
+     which meant one such post gave the *whole page* a horizontal scrollbar. */
+  return (
+    <div className="bbcode-content break-words" dangerouslySetInnerHTML={{ __html: html }} />
+  );
 }

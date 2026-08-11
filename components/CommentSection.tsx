@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { MdChatBubbleOutline, MdReply } from 'react-icons/md';
-import FadeInImage from '@/components/FadeInImage';
+import Avatar from '@/components/Avatar';
 import RichTextRenderer from '@/components/RichTextRenderer';
 import Skeleton, { SkeletonText, SkeletonCircle } from '@/components/Skeleton';
 import CommentComposer from '@/components/CommentComposer';
 import Button from '@/components/Button';
+import EmptyState from '@/components/EmptyState';
 import type { Comment } from '@/lib/api';
+import SectionHeading from '@/components/SectionHeading';
 
 interface ReplyTo {
   id: number;
@@ -47,26 +49,17 @@ function formatCommentTime(value: string) {
  *
  * The same markup existed three times inside the list — linked-with-image,
  * unlinked-with-image, and the initial fallback — so a change to the ring, the
- * size or the border had to be made in three places and had already drifted. */
+ * size or the border had to be made in three places and had already drifted.
+ *
+ * The face itself is now `Avatar`, which is the fourth place it existed. This
+ * one had its own fallback (a `primary-container` disc with a `primary/20`
+ * hairline) that no other avatar in the app wore, and it re-implemented
+ * `getAvatarUrl`'s host rule inline as a literal `https://picpony.top/${...}` —
+ * the same duplication `Avatar`'s own doc-comment was written about. A derpi
+ * avatar is already absolute and `getAvatarUrl` passes those straight through,
+ * so the source branch was only ever restating that. */
 function CommentAvatar({ comment }: { comment: Comment }) {
-  const face = comment.avatar ? (
-    <FadeInImage
-      src={
-        comment.source === 'trixiebooru'
-          ? comment.avatar
-          : `https://picpony.top/${comment.avatar}`
-      }
-      alt=""
-      width={40}
-      height={40}
-      shimmer={false}
-      className="border-outline-variant h-10 w-10 rounded-full border object-cover"
-    />
-  ) : (
-    <div className="bg-primary-container text-on-primary-container text-label-l-emphasized border-primary/20 flex h-10 w-10 items-center justify-center rounded-full border">
-      {comment.username.charAt(0).toUpperCase()}
-    </div>
-  );
+  const face = <Avatar src={comment.avatar} name={comment.username} size={40} />;
 
   if (!comment.user_id) return <div className="shrink-0">{face}</div>;
 
@@ -79,7 +72,7 @@ function CommentAvatar({ comment }: { comment: Comment }) {
       }
       title={`查看 ${comment.username} 的个人资料`}
       scroll={false}
-      className="hover:ring-primary/40 block shrink-0 rounded-full ring-2 ring-transparent transition-ui"
+      className="block shrink-0 rounded-full ring-2 ring-transparent transition-ui hover:ring-primary focus-visible:focus-ring"
     >
       {face}
     </Link>
@@ -101,10 +94,9 @@ export default function CommentSection({
 }: CommentSectionProps) {
   return (
     <div ref={commentsSectionRef} className="mt-8 border-t border-outline-variant pt-8">
-      <h3 className="text-title-m-emphasized text-on-surface mb-6 flex items-center gap-2">
-        <MdChatBubbleOutline className="text-primary" size={24} />
+      <SectionHeading as="h3" icon={<MdChatBubbleOutline size={24} />} className="mb-6">
         评论 ({comments.length})
-      </h3>
+      </SectionHeading>
 
       {/* 评论编辑器 */}
       <div className="mb-8 flex gap-3" id="comment-editor-area">
@@ -126,9 +118,9 @@ export default function CommentSection({
         /* Skeleton rather than a centred spinner: the spinner collapsed the
            section to one line and then snapped the full list in, so the page
            jumped by however many comments happened to load. */
-        <div className="space-y-4">
+        <div>
           {Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="bg-surface-container-low/50 flex gap-4 rounded-md p-4">
+            <div key={i} className="m3-row bg-surface-container-low flex gap-4 p-4">
               <SkeletonCircle size={40} delay={i * 120} />
               <div className="flex-1 space-y-2">
                 <Skeleton className="h-3.5 w-28" delay={i * 120 + 60} />
@@ -138,11 +130,24 @@ export default function CommentSection({
           ))}
         </div>
       ) : comments.length > 0 ? (
-        <div className="space-y-4">
+        <div>
           {comments.map((comment) => (
             <article
               key={`${comment.source}-${comment.id}`}
-              className="bg-surface-container-low/50 flex gap-3 rounded-md p-3 sm:gap-4 sm:p-4"
+              /* A grouped list, not a stack of floating cards.
+             `m3-row` (globals.css) is the app's shape for "a run of related
+             rows": outer corners large, every cut edge inside it `rounded-xs`, a
+             2px seam between. `ForumPostList` — the list of *threads* — already
+             uses it, so a thread list read as one block of material while the
+             replies inside a thread read as eight separate islands 16px apart.
+             That comment in globals.css is explicit about why: "the previous 16px
+             margin made each row read as its own floating card and lost the
+             grouping entirely."
+             The tone also drops the `/50`. An alpha on a container token is the
+             hand-picked second tint the colour rules exist to prevent — it has to
+             be eyeballed once per scheme, and every other `m3-row` in the app sits
+             on the plain `surface-container-low` step. */
+              className="m3-row bg-surface-container-low flex gap-3 p-3 sm:gap-4 sm:p-4"
             >
               <CommentAvatar comment={comment} />
 
@@ -190,9 +195,11 @@ export default function CommentSection({
           ))}
         </div>
       ) : (
-        <div className="text-center py-8 text-on-surface-variant bg-surface-container-low/50 rounded-md border border-outline-variant">
-          滚木
-        </div>
+        <EmptyState
+          size="inline"
+          icon={<MdChatBubbleOutline size={32} />}
+          title="还没有评论，来说第一句"
+        />
       )}
     </div>
   );

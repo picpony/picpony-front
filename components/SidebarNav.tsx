@@ -18,6 +18,7 @@ import {
   MdLogout,
 } from 'react-icons/md';
 import { useBackgroundSearchParams } from './BackgroundLocation';
+import { CountBadge } from './Badge';
 import { cn } from '@/lib/utils';
 import { isStaff } from '@/lib/roles';
 
@@ -41,7 +42,7 @@ interface SidebarNavProps {
 const ROW = cn(
   'flex h-12 w-full items-center gap-3 rounded-full px-4',
   'text-label-l outline-none transition-ui',
-  'focus-visible:ring-2 focus-visible:ring-primary/40',
+  'focus-visible:ring-2 focus-ring',
 );
 
 function NavItem({
@@ -72,21 +73,35 @@ function NavItem({
         {icon}
       </span>
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-      {!!badge && (
-        <span className="bg-error-fill text-on-fill text-label-s-emphasized leading-none tabular-nums flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1">
-          {badge > 99 ? '99+' : badge}
-        </span>
-      )}
+      {/* `CountBadge`, not a second copy of it. This span was byte-identical to
+          the primitive's class string — same 18px box, same `min-w`, same `99+`
+          clamp — minus the two things the primitive adds: the spring pop when
+          the count arrives, and an accessible name, so a screen reader read the
+          drawer as "消息 3" with no unit. */}
+      <CountBadge count={badge ?? 0} label={badge ? `${badge} 条未读` : undefined} />
     </>
   );
 
   const className = cn(
     ROW,
     active
-      ? // A filled pill at container strength dominated the drawer — the active
-        // row read louder than the page content beside it. Tinted at state-layer
-        // weight instead, so it marks position without competing.
-        'bg-primary/10 text-primary font-medium'
+      ? /* `secondary-container`, which is both M3's own navigation-drawer active
+           fill and the pair this app already uses everywhere else it means
+           "selected" — `IconButton`'s selected state, a selected `Chip`, the
+           messages contact list. The sidebar was the one holdout.
+
+           It also settles the concern the previous value was chosen for. That was
+           `bg-primary` at 10%, tinted at state-layer weight because "a filled pill at
+           container strength dominated the drawer — the active row read louder
+           than the page content beside it". True of `primary-container`, which is
+           the brand hue; `secondary` is the muted rose two steps off it, so its
+           container marks position without shouting.
+
+           And a 10% alpha could not do the job in both schemes: composited over
+           the dark surface it was very nearly invisible, which left `text-primary`
+           carrying "you are here" on its own. A tonal step reads in both — the
+           same argument the `*-fill` tokens in globals.css are built on. */
+        'bg-secondary-container text-on-secondary-container'
       : 'text-on-surface-variant state-layer',
   );
 
@@ -120,7 +135,7 @@ function NavItem({
 function Section({ label, children }: { label?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      {label && <h2 className="text-label-m text-outline px-4 pt-3 pb-1 tracking-wide">{label}</h2>}
+      {label && <h2 className="text-label-m text-on-surface-variant px-4 pt-3 pb-1">{label}</h2>}
       {children}
     </div>
   );

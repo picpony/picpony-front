@@ -1,15 +1,17 @@
 'use client';
 
 import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
-import { MdSearch, MdImageSearch, MdErrorOutline, MdArrowBack, MdExpandMore } from 'react-icons/md';
+import { MdSearch, MdImageSearch, MdSearchOff, MdArrowBack, MdExpandMore } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
+import Badge from '@/components/Badge';
 import { api, PonyImage, applyCdn } from '@/lib/api';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import Pagination from '@/components/Pagination';
 import ErrorRetry from '@/components/ErrorRetry';
+import EmptyState from '@/components/EmptyState';
 import ImageSearchModal from '@/components/ImageSearchModal';
 import LottieIcon from '@/components/LottieIcon';
 import Select from '@/components/Select';
@@ -18,9 +20,11 @@ import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 import { tagCategoryDot } from '@/lib/tagCategories';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
-import PageBack from '@/components/PageBack';
 import IconButton from '@/components/IconButton';
+import Chip from '@/components/Chip';
 import { useEscapeBack } from '@/lib/hooks';
+import SectionHeading from '@/components/SectionHeading';
+import Popover from '@/components/Popover';
 
 interface DictionaryEntry {
   id: number;
@@ -35,34 +39,33 @@ interface DictionaryEntry {
 function CustomImageList({ images, onBack }: { images: PonyImage[]; onBack: () => void }) {
   if (images.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-on-surface-variant animate-fade-in px-4 text-center">
-        <MdErrorOutline size={48} className="mb-4 text-outline" />
-        <h2 className="text-title-l mb-2 text-on-surface">没有找到匹配的图片</h2>
-        <button
-          onClick={onBack}
-          className="mt-6 flex items-center px-4 py-2 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-full transition-ui cursor-pointer"
-        >
-          <MdArrowBack size={20} className="mr-2" />
-          <span>返回</span>
-        </button>
-      </div>
+      <EmptyState
+        icon={<MdImageSearch size={48} />}
+        title="没有找到匹配的图片"
+        description="换一张图，或者放宽一点相似度再试。"
+        action={
+          <Button variant="tonal" onClick={onBack} icon={<MdArrowBack size={20} />}>
+            返回
+          </Button>
+        }
+      />
     );
   }
 
   return (
     <>
-      <div className="mb-6 flex items-center justify-between p-4 rounded-md">
+      <div className="mb-6 flex items-center justify-between rounded-md p-4">
         <div className="flex items-center gap-3">
-          <button
+          <IconButton
             onClick={onBack}
-            className="p-2 hover:bg-surface-container-highest text-on-surface-variant rounded-md transition-ui cursor-pointer flex items-center justify-center"
             title="返回"
-          >
-            <MdArrowBack size={20} />
-          </button>
+            aria-label="返回"
+            icon={<MdArrowBack size={20} />}
+          />
           <div>
-            <h2 className="text-title-m-emphasized text-on-surface">以图搜图</h2>
-            <p className="text-body-m text-on-surface-variant">找到 {images.length} 张相似图片</p>
+            <SectionHeading className="mb-0" subtitle={`找到 ${images.length} 张相似图片`}>
+              以图搜图
+            </SectionHeading>
           </div>
         </div>
       </div>
@@ -449,11 +452,8 @@ function SearchPageContent() {
 
   return (
     <>
-      {/* Same affordance, same pixel, same key as every other full-screen view.
-          Outside the centred wrapper on purpose — see `PageBack`. */}
-      <PageBack onClick={handleBack} title="返回 (Esc)" />
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 pt-14 pb-4 sm:pb-8 animate-fade-in">
-        <div className="mb-6 max-w-3xl mx-auto">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 max-w-2xl mx-auto">
           <form onSubmit={handleSearch} className="flex items-center gap-2">
             <div className="flex-1 relative" ref={inputWrapRef}>
               <Input
@@ -464,10 +464,19 @@ function SearchPageContent() {
                 onKeyDown={handleInputKeyDown}
                 placeholder="搜索图片..."
               />
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-surface-container border border-outline-variant rounded-sm shadow-e3 overflow-hidden">
-                  <div className="popover-scrollbar max-h-64 overflow-y-auto">
-                    {suggestions.map((tag, i) => (
+              {/* `Popover`, so the suggestion list wears the app's one floating
+                  surface (8dp, elevation 2, no outline) instead of a fourth
+                  hand-rolled recipe, and escapes any clipping ancestor by
+                  portalling rather than relying on this wrapper. */}
+              <Popover
+                open={showSuggestions && suggestions.length > 0}
+                onClose={() => setShowSuggestions(false)}
+                anchorRef={inputWrapRef}
+                role="listbox"
+                aria-label="搜索建议"
+                estimatedHeight={suggestions.length * 40}
+              >
+                {suggestions.map((tag, i) => (
                       <button
                         key={tag.id}
                         type="button"
@@ -476,10 +485,12 @@ function SearchPageContent() {
                           selectSuggestion(tag);
                         }}
                         onMouseEnter={() => setAcCursor(i)}
-                        className={`flex items-center justify-between w-full px-3 py-2 text-left transition-ui ${
+                        role="option"
+                        aria-selected={i === acCursor}
+                        className={`flex items-center justify-between w-full px-3 py-2 text-left transition-ui outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
                           i === acCursor
                             ? 'bg-primary-container text-on-primary-container'
-                            : 'hover:bg-surface-container-high'
+                            : 'state-layer'
                         }`}
                       >
                         {' '}
@@ -494,22 +505,20 @@ function SearchPageContent() {
                               <span className="text-body-m text-on-surface">
                                 {' '}
                                 <span className="text-primary ">{tag.cn}</span>{' '}
-                                <span className="ml-1.5 opacity-50">{tag.en}</span>{' '}
+                                <span className="ml-1.5 text-on-surface-variant">{tag.en}</span>{' '}
                               </span>
                             ) : (
                               <span className="text-body-m text-on-surface">{tag.en}</span>
                             )}{' '}
                           </div>{' '}
                         </div>{' '}
-                        <span className="text-body-s text-outline shrink-0 ml-2">
+                        <span className="text-body-s text-on-surface-variant shrink-0 ml-2">
                           {' '}
                           {tag.count?.toLocaleString()}{' '}
                         </span>{' '}
                       </button>
                     ))}{' '}
-                  </div>{' '}
-                </div>
-              )}{' '}
+              </Popover>{' '}
             </div>{' '}
             <Button type="submit" variant="filled" size="lg">
               搜索
@@ -527,7 +536,7 @@ function SearchPageContent() {
           </form>{' '}
         </div>{' '}
         {tagInfo.loading ? (
-          <div className="mb-6 flex items-center gap-2 text-body-m text-outline">
+          <div className="mb-6 flex items-center gap-2 text-body-m text-on-surface-variant">
             {' '}
             <Spinner size="sm" /> <span>查询中...</span>{' '}
           </div>
@@ -537,45 +546,39 @@ function SearchPageContent() {
             {tagInfo.data.cn && (
               <div>
                 {' '}
-                <span className="text-body-s text-outline">中文翻译</span>{' '}
-                <p className="text-on-surface ">{tagInfo.data.cn}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">中文翻译</span>{' '}
+                <p className="text-body-m text-on-surface">{tagInfo.data.cn}</p>{' '}
               </div>
             )}{' '}
             {tagInfo.data.count > 0 && (
               <div>
                 {' '}
-                <span className="text-body-s text-outline">使用量</span>{' '}
-                <p className="text-on-surface ">{tagInfo.data.count.toLocaleString()}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">使用量</span>{' '}
+                <p className="text-body-m text-on-surface">{tagInfo.data.count.toLocaleString()}</p>{' '}
               </div>
             )}{' '}
             {tagInfo.data.cat && (
               <div>
                 {' '}
-                <span className="text-body-s text-outline">分类</span>{' '}
-                <p className="text-on-surface">{tagInfo.data.cat}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">分类</span>{' '}
+                <p className="text-body-m text-on-surface">{tagInfo.data.cat}</p>{' '}
               </div>
             )}{' '}
             {tagInfo.data.aliases && tagInfo.data.aliases.length > 0 && (
               <div>
                 {' '}
-                <span className="text-body-s text-outline">别名</span>{' '}
+                <span className="text-body-s text-on-surface-variant">别名</span>{' '}
                 <div className="flex flex-wrap gap-1 mt-0.5">
-                  {' '}
-                  {tagInfo.data.aliases.map((alias, i) => (
-                    <span
-                      key={i}
-                      className="px-1.5 py-0.5 bg-surface-container-high text-on-surface-variant text-label-m rounded"
-                    >
-                      {alias}
-                    </span>
-                  ))}{' '}
+                  {tagInfo.data.aliases.map((alias) => (
+                    <Badge key={alias}>{alias}</Badge>
+                  ))}
                 </div>{' '}
               </div>
             )}{' '}
             {tagInfo.data.description && (
               <div className="sm:col-span-2">
                 {' '}
-                <span className="text-body-s text-outline">标签简介</span>{' '}
+                <span className="text-body-s text-on-surface-variant">标签简介</span>{' '}
                 <MarkdownRenderer content={tagInfo.data.description} />{' '}
               </div>
             )}{' '}
@@ -584,15 +587,28 @@ function SearchPageContent() {
         {customResults ? (
           <CustomImageList images={customResults} onBack={clearCustomResults} />
         ) : !q ? (
-          <div className="flex flex-col items-center justify-center min-h-[40vh] text-outline animate-fade-in">
-            {' '}
-            <LottieIcon
-              className="mb-4 w-156 max-w-full mt-14 mb-12"
-              load={() => import('@/lib/lottie/search.json').then((m) => m.default)}
-              fallback={null}
-            />{' '}
-            <p className="text-title-m">输入关键词搜索图片</p>{' '}
-          </div>
+          /* The Lottie rides in `StatusView`'s glyph slot rather than being its
+             own centred column, so the resting search screen has the same
+             geometry and the same staggered entrance as every empty list in the
+             app. Its own class string carried `mb-4` *and* `mb-12`, i.e. two
+             values for one property with Tailwind's output order deciding. */
+          <EmptyState
+            icon={
+              <LottieIcon
+                /* `max-w-full` cannot constrain this. It resolves against
+                   `StatusView`'s icon slot, which is a shrink-to-fit flex item
+                   whose own width comes from this element — so the percentage
+                   has no reference and the 624px composition ran off the right
+                   of a 390px screen. A viewport unit has a reference by
+                   definition. */
+                className="w-[min(39rem,88vw)]"
+                load={() => import('@/lib/lottie/search.json').then((m) => m.default)}
+                fallback={null}
+              />
+            }
+            title="输入关键词搜索图片"
+            description="支持标签、角色名与英文原名；也可以用右侧的相机按钮以图搜图。"
+          />
         ) : isLoading ? (
           <ImageGridSkeleton />
         ) : error ? (
@@ -608,10 +624,11 @@ function SearchPageContent() {
             onRetry={handleRetry}
           />
         ) : images.length === 0 ? (
-          <div className="flex flex-col items-center justify-center min-h-[40vh] text-outline animate-fade-in">
-            <MdErrorOutline size={48} className="mb-4" />
-            <p className="text-title-m">没有找到匹配的图片</p>
-          </div>
+          <EmptyState
+            icon={<MdSearchOff size={48} />}
+            title="没有找到匹配的图片"
+            description={<>没有与「{q}」相关的结果，换个关键词或检查一下拼写。</>}
+          />
         ) : (
           <>
             <div data-pagination-anchor>
@@ -645,48 +662,34 @@ function SearchPageContent() {
                   ]}
                 />
                 {sortBy !== 'random' && (
-                  <button
-                    onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
-                    data-ripple
-                    className="px-2.5 py-1.5 text-body-s bg-surface-container-high text-on-surface-variant rounded-full state-layer hover:text-primary transition-ui"
-                  >
+                  <Button variant="tonal" size="sm" onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))} data-ripple>
                     <span
                       key={sortDir}
                       className="inline-block animate-[icon-swap_0.3s_var(--ease-spring)]"
                     >
                       {sortDir === 'desc' ? '↓ 降序' : '↑ 升序'}
                     </span>
-                  </button>
+                  </Button>
                 )}
                 {(sortParam || sortBy !== defaultSort || sortDir !== 'desc') && (
-                  <button
-                    onClick={() => {
-                      setSortBy(defaultSort);
-                      setSortDir('desc');
-                      setPage(1);
-                    }}
-                    data-ripple
-                    className="px-2.5 py-1.5 text-body-s bg-surface-container-high text-on-surface-variant rounded-full state-layer hover:text-primary transition-ui animate-pop-in"
-                  >
+                  <Button variant="tonal" size="sm" className="animate-pop-in" onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }} data-ripple>
                     重置排序
-                  </button>
+                  </Button>
                 )}
-                <button
+                {/* `Chip variant="filter"`, not a third hand-rolled pill: this
+                    control is a filter that is on or off, which is the one thing
+                    a filter chip is for, and it was wearing `rounded-full` while
+                    every tag chip beside it wore the spec's 8dp. */}
+                <Chip
+                  variant="filter"
+                  tone="primary"
+                  selected={showAdvanced}
                   onClick={() => setShowAdvanced((prev) => !prev)}
-                  data-ripple
                   aria-expanded={showAdvanced}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-body-s rounded-full transition-ui ${
-                    showAdvanced
-                      ? 'bg-primary-container text-on-primary-container'
-                      : 'bg-surface-container-high text-on-surface-variant state-layer hover:text-primary'
-                  }`}
+                  icon={<MdExpandMore size={14} />}
                 >
                   高级排序
-                  <MdExpandMore
-                    size={14}
-                    className={`transition-transform duration-300 ease-[var(--ease-standard)] ${showAdvanced ? 'rotate-180' : ''}`}
-                  />
-                </button>
+                </Chip>
               </div>
             )}
 
@@ -698,13 +701,13 @@ function SearchPageContent() {
                 }`}
               >
                 <div className="min-h-0 overflow-hidden">
-                  <div className="mt-4 p-4 border border-outline-variant rounded-md bg-surface-container max-w-3xl mx-auto">
+                  <div className="mt-4 p-4 border border-outline-variant rounded-md bg-surface-container max-w-2xl mx-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {/* Upvotes */}
                       <div>
-                        <label className="block text-body-s text-on-surface-variant mb-1">
+                        <p className="block text-body-s text-on-surface-variant mb-1">
                           点赞数
-                        </label>
+                        </p>
                         <div className="flex gap-2">
                           <Select
                             value={advUpvoteOp}
@@ -727,9 +730,9 @@ function SearchPageContent() {
                       </div>
                       {/* Score */}
                       <div>
-                        <label className="block text-body-s text-on-surface-variant mb-1">
+                        <p className="block text-body-s text-on-surface-variant mb-1">
                           净得分
-                        </label>
+                        </p>
                         <div className="flex gap-2">
                           <Select
                             value={advScoreOp}
@@ -752,9 +755,9 @@ function SearchPageContent() {
                       </div>
                       {/* Aspect ratio */}
                       <div>
-                        <label className="block text-body-s text-on-surface-variant mb-1">
+                        <p className="block text-body-s text-on-surface-variant mb-1">
                           宽高比
-                        </label>
+                        </p>
                         <Select
                           value={advAspect}
                           onChange={setAdvAspect}
@@ -772,9 +775,9 @@ function SearchPageContent() {
                       </div>
                       {/* Media type */}
                       <div>
-                        <label className="block text-body-s text-on-surface-variant mb-1">
+                        <p className="block text-body-s text-on-surface-variant mb-1">
                           媒体类型
-                        </label>
+                        </p>
                         <Select
                           value={advMedia}
                           onChange={setAdvMedia}
@@ -794,9 +797,9 @@ function SearchPageContent() {
                       </div>
                       {/* Upload time */}
                       <div>
-                        <label className="block text-body-s text-on-surface-variant mb-1">
+                        <p className="block text-body-s text-on-surface-variant mb-1">
                           上传时间
-                        </label>
+                        </p>
                         <Select
                           value={advTime}
                           onChange={setAdvTime}
@@ -814,17 +817,13 @@ function SearchPageContent() {
                       </div>
                     </div>
                     <div className="flex justify-between items-center mt-4 pt-3 border-t border-outline-variant">
-                      <span className="text-label-s text-outline">
+                      <span className="text-label-s text-on-surface-variant">
                         点击&quot;应用&quot;后，筛选条件会拼接到搜索框并执行搜索。
                       </span>
                       <div className="flex gap-2">
-                        <button
-                          onClick={clearAdvancedFilters}
-                          data-ripple
-                          className="px-3 py-1.5 text-body-s border border-outline-variant bg-surface-container text-on-surface-variant rounded-full hover:bg-surface-container-high transition-ui"
-                        >
+                        <Button variant="outlined" size="sm" onClick={clearAdvancedFilters} data-ripple>
                           重置
-                        </button>
+                        </Button>
                         <Button onClick={applyAdvancedFilters} variant="filled" size="sm">
                           应用并搜索
                         </Button>

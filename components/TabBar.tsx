@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import { useSlidingIndicator } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { CountBadge } from './Badge';
 
 export interface TabItem<T extends string = string> {
   value: T;
@@ -64,19 +65,25 @@ export default function TabBar<T extends string = string>({
               onClick={() => onChange(tab.value)}
               className={cn(
                 'relative flex shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md px-4 py-3',
-                'text-label-l outline-none transition-ui',
-                'focus-visible:ring-2 focus-visible:ring-primary/40',
+                'outline-none transition-ui',
+                'focus-visible:ring-2 focus-ring',
+                /* The type role lives in the branches, not above them: the
+                   selected tab used to add a bare `font-medium` on top of
+                   `text-label-l`, whose own weight token is already 500 — so the
+                   active tab got no weight contrast at all, only colour. The
+                   emphasized twin is 700. Both roles must not be emitted on one
+                   element (`cn` is a plain join and resolves nothing), so each
+                   branch names exactly one. */
                 selected
-                  ? 'text-primary font-medium'
-                  : 'text-on-surface-variant hover:text-on-surface',
+                  ? 'text-label-l-emphasized text-primary'
+                  : 'text-label-l text-on-surface-variant hover:text-on-surface',
               )}
             >
               {tab.label}
-              {!!tab.badge && (
-                <span className="bg-error-fill text-on-fill text-label-s-emphasized leading-none tabular-nums flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 animate-[control-pop_0.3s_var(--ease-spring)]">
-                  {tab.badge > 99 ? '99+' : tab.badge}
-                </span>
-              )}
+              {/* The header's notification link carried a byte-identical copy of
+                  this, down to the `99+` clamp and the spring pop. `CountBadge`
+                  is that markup, once. */}
+              <CountBadge count={tab.badge ?? 0} />
             </button>
           );
         })}

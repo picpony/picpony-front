@@ -10,6 +10,7 @@ import {
   type SyntheticEvent,
 } from 'react';
 import { MdFullscreen } from 'react-icons/md';
+import IconButton from './IconButton';
 import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
 import { warmImageHeroFrame } from '@/lib/hero';
 
@@ -362,9 +363,32 @@ export default function DetailImage({
           className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
         />
       )}
-      <div className="absolute inset-0 z-20 flex items-center justify-center bg-scrim/0 transition-ui group-hover:bg-scrim/10">
-        <MdFullscreen size={32} className="text-on-media/0 transition-ui group-hover:text-on-media/70" />
-      </div>
+      {/* Hover veil, and nothing else — `pointer-events-none` so it never eats
+          the press the media box below it is listening for. */}
+      <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />
+      {/* The zoom affordance was a 32px glyph dead-centre over the subject,
+          revealed on `group-hover` — so on a touch device, where there is no
+          hover, the primary action of this screen had no affordance at all. And
+          the press target was the `<div onClick>` above: not focusable, no key
+          handler, so the screen's main action could not be reached from a
+          keyboard.
+
+          It is now a real control on the media plate, in the corner rather than
+          over the picture, present by default and hover-revealed from `sm` up —
+          the same rule the gallery tiles' captions follow. The box click stays as
+          a pointer convenience; this button is what makes it reachable. */}
+      <IconButton
+        variant="media"
+        icon={<MdFullscreen size={22} />}
+        aria-label="放大查看原图"
+        /* Stops the press reaching the media box's own handler underneath, which
+           would open the lightbox a second time in the same tick. */
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+        className="absolute right-3 bottom-3 z-30 cursor-zoom-in opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+      />
     </div>
   );
 }

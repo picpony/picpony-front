@@ -339,17 +339,17 @@ export default function ImageCropper({
             }}
           >
             <div
-              className="absolute inset-0 border border-white/70"
+              className="border-on-media-variant absolute inset-0 border"
               style={{ borderRadius: shape === 'circle' ? '9999px' : 12 }}
             />
             {/* Rule of thirds, rectangles only — on a circle the lines read as
                 clutter rather than as guides. */}
             {shape === 'rect' && (
               <>
-                <div className="absolute inset-y-0 left-1/3 w-px bg-on-media/25" />
-                <div className="absolute inset-y-0 left-2/3 w-px bg-on-media/25" />
-                <div className="absolute inset-x-0 top-1/3 h-px bg-on-media/25" />
-                <div className="absolute inset-x-0 top-2/3 h-px bg-on-media/25" />
+                <div className="absolute inset-y-0 left-1/3 w-px bg-media-outline" />
+                <div className="absolute inset-y-0 left-2/3 w-px bg-media-outline" />
+                <div className="absolute inset-x-0 top-1/3 h-px bg-media-outline" />
+                <div className="absolute inset-x-0 top-2/3 h-px bg-media-outline" />
               </>
             )}
           </div>
@@ -363,7 +363,7 @@ export default function ImageCropper({
             onClick={() => nudgeZoom(-ZOOM_STEP)}
             disabled={!ready || v.zoom <= 1}
             aria-label="缩小"
-            className="state-layer text-on-surface-variant rounded-full p-2 disabled:opacity-40"
+            className="state-layer text-on-surface-variant rounded-full p-2 disabled:disabled-content outline-none focus-visible:ring-2 focus-ring"
           >
             <MdZoomOut size={20} />
           </button>
@@ -383,7 +383,7 @@ export default function ImageCropper({
             onClick={() => nudgeZoom(ZOOM_STEP)}
             disabled={!ready || v.zoom >= MAX_ZOOM}
             aria-label="放大"
-            className="state-layer text-on-surface-variant rounded-full p-2 disabled:opacity-40"
+            className="state-layer text-on-surface-variant rounded-full p-2 disabled:disabled-content outline-none focus-visible:ring-2 focus-ring"
           >
             <MdZoomIn size={20} />
           </button>
