@@ -16,7 +16,6 @@ import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } fro
 import {
   MdMenu,
   MdSearch,
-  MdPerson,
   MdNotifications,
   MdDarkMode,
   MdLightMode,
@@ -784,10 +783,7 @@ export default function AppLayout({
                     className="state-layer group flex w-full cursor-pointer items-center gap-3 rounded-md p-2 text-left outline-none focus-visible:ring-2 focus-ring"
                   >
                     {' '}
-                    <span className="bg-surface-container-highest text-on-surface-variant flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
-                      {' '}
-                      <MdPerson size={24} />{' '}
-                    </span>{' '}
+                    <Avatar size={44} />{' '}
                     <span className="min-w-0">
                       {' '}
                       <span className="text-title-s text-on-surface block truncate ">
@@ -800,12 +796,14 @@ export default function AppLayout({
                   </button>
                 )}{' '}
               </div>{' '}
-              {/* Only under a *signed-in* block. Signed out, the thing above
-                  it is a 未登录 prompt, and a rule under it drew a boundary
-                  around nothing — the drawer opened with a stray line across
-                  it. Signed in, it separates identity from navigation, which is
-                  a real division. */}
-              {userInfo && <div className="bg-outline-variant mx-5 my-3 h-px" />}{' '}
+              {/* Always drawn, signed in or out. It was briefly conditional on
+                  the grounds that a rule under a 未登录 prompt bounds nothing —
+                  but the division it marks is structural, not conditional: above
+                  it is who you are, below it is where you can go. Present in one
+                  state and absent in the other, it also became a line that
+                  appears the moment you log in, which is a change in the shell's
+                  shape reported as a change in your account. */}
+              <div className="bg-outline-variant mx-5 my-3 h-px" />{' '}
               <SidebarNav
                 user={userInfo}
                 backgroundPathname={backgroundPathname}

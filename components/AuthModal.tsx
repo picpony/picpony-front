@@ -443,6 +443,13 @@ function RegisterForm({
             请输入 6 位验证码
           </p>
           <div className="flex items-center justify-center gap-2 sm:gap-3">
+            {/* Six one-character text fields, wearing the text field's own
+                geometry and the text field's own focus state rather than a
+                second set: 12dp, and a thickened `primary` outline on focus with
+                no ring beside it. It used to carry an 8dp corner — the chip's
+                step, not a field's — and *both* indicators at once, a border
+                colour change and a 2px ring around it, which is the one control
+                in the app where the keyboard's position was announced twice. */}
             {codeDigits.map((digit, i) => (
               <input
                 key={i}
@@ -479,7 +486,7 @@ function RegisterForm({
                   const nextIndex = Math.min(text.length, 5);
                   codeInputRefs.current[nextIndex]?.focus();
                 }}
-                className="w-10 h-12 sm:w-11 text-center text-title-m-emphasized rounded-sm border border-outline bg-surface-container-lowest text-on-surface outline-none focus:border-primary focus-visible:ring-2 focus-ring"
+                className="w-10 h-12 sm:w-11 text-center text-title-m-emphasized rounded-md border border-outline bg-surface-container-lowest text-on-surface outline-none transition-[border-color] duration-200 ease-[var(--ease-standard)] focus:border-2 focus:border-primary"
               />
             ))}
           </div>

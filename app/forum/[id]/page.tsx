@@ -412,11 +412,16 @@ export default function ForumPostPage() {
                 </div>
               </div>
             )}
-            {/* The body is the reading matter, so it gets more air than the
-                blocks around it — the cover, the body and the action row all
-                sat on the same 24dp gap, which reads as three peers rather than
-                a picture, an article and its controls. */}
-            <div className="text-on-surface break-words">
+            {/* `text-body-l`, and it is the type role that was missing rather
+                than a size bump. This container carried no role at all, so its
+                size and line-height came from whatever `@layer base` gives the
+                body — while the replies below it are `text-body-m`. Two blocks
+                of the same prose on one screen, set at two different measures,
+                with no rule saying which was which. A post is an article and a
+                reply is a remark; `body-l` says so, and because the rhythm in
+                globals.css is expressed in `em`, the replies' paragraphs fall
+                closer together on their own. */}
+            <div className="text-on-surface text-body-l break-words">
               <RichTextRenderer content={post.content} />
             </div>
             {/* Action row, the same one the image detail has: unlabelled
@@ -424,7 +429,7 @@ export default function ForumPostPage() {
                 divider. It used to be two outlined pill buttons carrying their
                 own text, which made the two detail screens in this app answer
                 the same question — like, share — in two different shapes. */}
-            <div className="mt-10 flex items-center justify-center gap-2 border-t border-outline-variant pt-6">
+            <div className="mt-8 flex items-center justify-center gap-2 border-t border-outline-variant pt-6">
               <IconButton
                 onClick={handleToggleLike}
                 loading={isLikeLoading}
@@ -493,7 +498,12 @@ export default function ForumPostPage() {
                     <div className="text-on-surface text-body-m break-words">
                       <RichTextRenderer content={comment.content} />
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {/* `mt-3`, the same 12px the rhythm in globals.css puts
+                        between this body's own paragraphs. At `mt-2` the row of
+                        controls sat closer to the last line of the reply than
+                        that line sat to the one above it, so it read as part of
+                        the sentence. */}
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
                       {isLoggedIn && (
                         <div className="-ms-2">
                           <Button

@@ -572,7 +572,7 @@ export default function BlockGroupsPage() {
             </div>
           </div>
           <div className="flex gap-3">
-            <Button variant="outlined" fullWidth onClick={() => setEditModalOpen(false)}>
+            <Button variant="tonal" fullWidth onClick={() => setEditModalOpen(false)}>
               取消
             </Button>
             <Button variant="danger" fullWidth onClick={handleSaveGroup}>

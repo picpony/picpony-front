@@ -110,16 +110,27 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center rounded-sm border transition-ui ease-[var(--ease-standard)]',
+        'inline-flex max-w-full items-center rounded-sm transition-ui ease-[var(--ease-standard)]',
         s.box,
         // The only padding the span keeps: the gap between the dismiss cross and
-        // the trailing border, which the button below cannot supply.
+        // the trailing edge, which the button below cannot supply.
         onRemove && s.trail,
+        /* Unselected is a *tone step*, not an outline.
+         *
+         * M3 draws an unselected filter chip with a 1dp outline, and that is
+         * what this was — but a row of them next to a filled `Button` reads as a
+         * row of buttons someone forgot to fill in, and the two admin filters
+         * (只看未翻译, 查重模式) sit exactly there. A container step says the
+         * same thing without a second kind of edge: the chip is separated from
+         * the surface by being lighter than it in the light scheme and darker in
+         * the dark one, which is the mechanism the rest of this app already uses
+         * for depth. Selected still takes the tone's container pair, so the two
+         * states differ by hue rather than by whether an edge exists. */
         colors
-          ? cn(colors, 'border-transparent')
+          ? colors
           : isFilled
-            ? cn(TONE_SELECTED[tone], 'border-transparent')
-            : cn('border-outline-variant bg-transparent', TONE_TEXT[tone]),
+            ? TONE_SELECTED[tone]
+            : cn('bg-surface-container-high', TONE_TEXT[tone]),
         disabled && 'pointer-events-none disabled-content',
         className,
       )}

@@ -249,7 +249,7 @@ export default function UploadPage() {
             >
               查看图片
             </Button>
-            <button onClick={resetForm} className={buttonClasses({ variant: 'outlined' })}>
+            <button onClick={resetForm} className={buttonClasses({ variant: 'tonal' })}>
               继续发布
             </button>
           </div>

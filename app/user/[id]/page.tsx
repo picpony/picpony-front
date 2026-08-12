@@ -605,8 +605,13 @@ export default function UserProfilePage() {
           <TabPanes value={tabValue}>
             <TabPane value="uploads">
               {isUploadsLoading ? (
+                /* `PER_PAGE`, which is the number the request actually asks
+                    for — not the 8 that was here. A full page is 12, so the
+                    placeholder was a row short on every desktop width and the
+                    pane grew by one row the moment the pictures landed, after
+                    the tab switch had visibly finished. */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Array.from({ length: 8 }).map((_, i) => (
+                  {Array.from({ length: PER_PAGE }).map((_, i) => (
                     <Skeleton key={i} className="aspect-square rounded-lg" />
                   ))}
                 </div>
@@ -664,8 +669,9 @@ export default function UserProfilePage() {
 
             <TabPane value="faves">
               {isFavesLoading && faveImages.length === 0 ? (
+                /* Same page size as the request — see the uploads pane. */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Array.from({ length: 8 }).map((_, i) => (
+                  {Array.from({ length: PER_PAGE }).map((_, i) => (
                     <Skeleton key={i} className="aspect-square rounded-lg" />
                   ))}
                 </div>

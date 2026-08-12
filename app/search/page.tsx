@@ -453,16 +453,40 @@ function SearchPageContent() {
   return (
     <>
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6 max-w-2xl mx-auto">
+        <div className="mb-6 max-w-3xl mx-auto">
           <form onSubmit={handleSearch} className="flex items-center gap-2">
             <div className="flex-1 relative" ref={inputWrapRef}>
               <Input
                 type="text"
-                icon={<MdSearch size={22} />}
+                size="lg"
+                icon={<MdSearch size={24} />}
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}
                 placeholder="搜索图片..."
+                aria-label="搜索图片"
+                /* The two actions live *inside* the box. Outside, a search box,
+                   a submit button and an image-search button were three objects
+                   in a row that the eye had to associate before it could tell
+                   which button belonged to which field — and on a phone the row
+                   was most of the screen wide. Inside, it is one control that
+                   does one job. The slot is in flow, so an icon button and a
+                   button with a word in it need no width reserved for them.
+                   Both stay pills: the field is a pill too, and a centred pill
+                   inside a pill is concentric without anyone doing arithmetic. */
+                trailing={
+                  <>
+                    <IconButton
+                      onClick={() => setIsImageSearchOpen(true)}
+                      title="以图搜图"
+                      aria-label="以图搜图"
+                      icon={<MdImageSearch size={22} />}
+                    />
+                    <Button type="submit" variant="filled">
+                      搜索
+                    </Button>
+                  </>
+                }
               />
               {/* `Popover`, so the suggestion list wears the app's one floating
                   surface (8dp, elevation 2, no outline) instead of a fourth
@@ -520,19 +544,6 @@ function SearchPageContent() {
                     ))}{' '}
               </Popover>{' '}
             </div>{' '}
-            <Button type="submit" variant="filled" size="lg">
-              搜索
-            </Button>
-            {/* Sits beside a `size="lg"` button, so it takes the matching 48dp
-                box. It used to be a hand-rolled `p-3 rounded-md`, which made it
-                the one square-cornered control in a row of pills. */}
-            <IconButton
-              size="lg"
-              onClick={() => setIsImageSearchOpen(true)}
-              title="以图搜图"
-              aria-label="以图搜图"
-              icon={<MdImageSearch size={22} />}
-            />
           </form>{' '}
         </div>{' '}
         {tagInfo.loading ? (
@@ -821,7 +832,7 @@ function SearchPageContent() {
                         点击&quot;应用&quot;后，筛选条件会拼接到搜索框并执行搜索。
                       </span>
                       <div className="flex gap-2">
-                        <Button variant="outlined" size="sm" onClick={clearAdvancedFilters} data-ripple>
+                        <Button variant="tonal" size="sm" onClick={clearAdvancedFilters} data-ripple>
                           重置
                         </Button>
                         <Button onClick={applyAdvancedFilters} variant="filled" size="sm">

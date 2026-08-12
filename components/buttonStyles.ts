@@ -4,7 +4,6 @@ export type ButtonVariant =
   | 'filled'
   | 'tonal'
   | 'accent'
-  | 'outlined'
   | 'text'
   | 'danger'
   | 'danger-text'
@@ -36,14 +35,21 @@ export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
  * same reason. Tinting it per variant also went wrong in practice, because
  * `danger` had grown `ring-error` at 50% around an `error-fill` fill, i.e. a red
  * ring drawn immediately outside a red button.
+ *
+ * **There is no outlined variant.** M3 does specify one, and this had it — but
+ * every one of the four places it was used was a secondary action beside a
+ * filled primary one (取消 next to 保存, 重置 next to 检索), and at that job a
+ * 1dp keyline reads as a button that lost its fill rather than as a quieter
+ * button. `tonal` is the step M3 puts directly below `filled` for exactly this
+ * pairing, and it separates from the surface the way everything else in this app
+ * does — by a container tone rather than by an edge. The variant is removed
+ * rather than merely unused, because a variant that exists gets reached for.
  */
 const VARIANTS: Record<ButtonVariant, string> = {
   filled:
     'bg-primary text-on-primary shadow-e1 enabled:hover:shadow-e2 focus-ring',
   tonal: 'bg-secondary-container text-on-secondary-container focus-ring',
   accent: 'bg-primary-container text-on-primary-container focus-ring',
-  outlined:
-    'border border-outline bg-transparent text-primary enabled:hover:border-primary focus-ring',
   text: 'bg-transparent text-on-surface-variant focus-ring',
   danger:
     'bg-error-fill text-on-fill shadow-e1 enabled:hover:shadow-e2 focus-ring',
@@ -126,6 +132,14 @@ export function buttonClasses({
     // M3 Expressive shape: buttons are pills. Reads friendlier than the
     // 8px rectangles and separates actions from cards at a glance.
     //
+    // It stays a pill even inside another rounded box — the /search bar puts
+    // two of these in a text field's trailing slot. A square 12dp button was
+    // tried there on the theory that an inner corner should echo its enclosure,
+    // and it is the wrong reading of that rule: concentric corners want
+    // `inner = outer - gap`, not `inner = outer`. The field is a pill, the gap
+    // is 8px, and `28 - 8` is exactly half a 40dp button — so the pill is
+    // already the concentric answer, and the square one was the mismatch.
+    //
     // No `font-medium`: every entry in SIZES carries a `text-label-*` role, and
     // those tokens are already weight 500. Restating it pinned the button's
     // weight to today's token value and made the primitive look like it was
@@ -137,7 +151,7 @@ export function buttonClasses({
     // the glyph above its own text, spilling out of the fixed height. M3 button
     // labels do not wrap; the button grows or the label truncates.
     'inline-flex shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-full outline-none',
-    'transition-[background-color,box-shadow,border-color] duration-200 ease-[var(--ease-standard)] focus-visible:ring-2',
+    'transition-[background-color,box-shadow] duration-200 ease-[var(--ease-standard)] focus-visible:ring-2',
     /* Hover/focus/press are the shared M3 state layer. There is no press
        *shrink*: M3 gives no size feedback on press — the state layer plus the
        ripple carry it — and a scaling button is one more thing that can be

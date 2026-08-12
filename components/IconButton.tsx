@@ -12,6 +12,15 @@ export type IconButtonVariant =
   | 'media'
   | 'on-primary';
 export type IconButtonSize = 'sm' | 'md' | 'lg';
+/**
+ * Round is the default and covers every icon button in a row of actions. Square
+ * exists for a control that has to answer to the *container* it sits in rather
+ * than to its neighbours: the back affordance is pinned to the top-left of the
+ * content section, whose own corner is 12dp, and a circle inside a rounded
+ * rectangle at that distance reads as a sticker rather than as part of the
+ * frame. M3 Expressive gives the icon button a shape axis for this.
+ */
+export type IconButtonShape = 'round' | 'square';
 
 /**
  * M3's icon button, as a primitive.
@@ -73,6 +82,14 @@ const SIZES: Record<IconButtonSize, string> = {
   lg: 'h-12 w-12',
 };
 
+/* Spelled per branch rather than as a default plus an override, because `cn` is
+   a plain join: emitting both radii would leave the stylesheet's order to pick
+   the corner. Same reason `Chip` writes out every horizontal step. */
+const SHAPES: Record<IconButtonShape, string> = {
+  round: 'rounded-full',
+  square: 'rounded-md',
+};
+
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   /** The glyph. Sized by the caller; the box comes from `size`. */
   icon: ReactNode;
@@ -80,6 +97,8 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   'aria-label': string;
   variant?: IconButtonVariant;
   size?: IconButtonSize;
+  /** `square` takes the 12dp step — see `IconButtonShape`. */
+  shape?: IconButtonShape;
   /** Swaps the glyph for a spinner and blocks interaction. */
   loading?: boolean;
   /** Marks a toggle as on. Reads out, and picks up the selected container. */
@@ -98,6 +117,7 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
 export interface IconButtonClassOptions {
   variant?: IconButtonVariant;
   size?: IconButtonSize;
+  shape?: IconButtonShape;
   selected?: boolean;
   disabled?: boolean;
   dismiss?: boolean;
@@ -116,14 +136,16 @@ export interface IconButtonClassOptions {
 export function iconButtonClasses({
   variant = 'standard',
   size = 'md',
+  shape = 'round',
   selected = false,
   disabled = false,
   dismiss = false,
   className = '',
 }: IconButtonClassOptions = {}): string {
   return cn(
-    'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full outline-none',
+    'inline-flex shrink-0 cursor-pointer items-center justify-center outline-none',
     'transition-[background-color,box-shadow,border-color,color,opacity,rotate] duration-200 ease-[var(--ease-standard)] focus-visible:ring-2',
+    SHAPES[shape],
     !disabled && 'state-layer',
     disabled && 'cursor-not-allowed disabled-content',
     dismiss && !disabled && 'hover:rotate-90 motion-reduce:hover:rotate-0',
@@ -142,6 +164,7 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
     icon,
     variant = 'standard',
     size = 'md',
+    shape = 'round',
     loading = false,
     selected = false,
     dismiss = false,
@@ -179,6 +202,7 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
       className={iconButtonClasses({
         variant,
         size,
+        shape,
         selected,
         disabled: isDisabled,
         dismiss,

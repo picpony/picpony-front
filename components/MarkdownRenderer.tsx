@@ -39,39 +39,20 @@ export default function MarkdownRenderer({ content, inline = false }: MarkdownRe
           img: ({ src, alt }) => {
             if (!src) return null;
             // eslint-disable-next-line @next/next/no-img-element -- remote/dynamic markdown images
-            return <img src={src} alt={alt || ''} className="max-w-full rounded-md my-2" />;
+            return <img src={src} alt={alt || ''} />;
           },
-          code: ({ children }) => (
-            <code className="bg-surface-container-high rounded-xs px-1.5 py-0.5 text-body-m">
-              {children}
-            </code>
-          ),
-          pre: ({ children }) => (
-            <pre className="popover-scrollbar bg-surface-container-high rounded-md p-4 overflow-x-auto my-2">
-              {children}
-            </pre>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote className="border-l-[3px] border-outline-variant pl-4 my-2 text-on-surface-variant italic">
-              {children}
-            </blockquote>
-          ),
+          /* The only override left is the table's *wrapper*, and it is here
+             because the element has to exist: a wide table has to scroll inside
+             its own box rather than widen the page, and `react-markdown` gives no
+             way to add a parent from CSS. Everything about how any of this looks
+             — the listing, the quote, the cell borders, the rule — is described
+             once in globals.css, alongside the BBCode path's, because the two
+             renderers were producing two appearances of the same document. */
           table: ({ children }) => (
-            <div className="popover-scrollbar overflow-x-auto my-2">
-              <table className="min-w-full border-collapse border border-outline-variant">
-                {children}
-              </table>
+            <div className="popover-scrollbar overflow-x-auto">
+              <table>{children}</table>
             </div>
           ),
-          th: ({ children }) => (
-            <th className="border border-outline-variant px-3 py-2 bg-surface-container-low text-title-s-emphasized">
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="border border-outline-variant px-3 py-2">{children}</td>
-          ),
-          hr: () => <hr className="my-4 border-outline-variant" />,
         }}
       >
         {content}

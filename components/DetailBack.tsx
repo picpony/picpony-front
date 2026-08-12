@@ -13,8 +13,23 @@ type DetailBackProps = ButtonHTMLAttributes<HTMLButtonElement> & {
  *
  * A Material 3 **filled tonal icon button**, which is what the spec uses for a
  * leading navigation action that has to sit on top of content rather than in a
- * top app bar: 40dp container, 24dp icon, full corner radius, secondary
- * container fill, and the standard state layer for hover/focus/press.
+ * top app bar: 40dp container, 24dp icon, secondary container fill, and the
+ * standard state layer for hover/focus/press.
+ *
+ * It takes the *square* shape rather than the full corner, and that is a
+ * response to where it sits rather than a preference. The button is pinned near
+ * the top-left of the content section, whose own corner is 12dp, and a pill
+ * sitting just inside a 12dp arc reads as something stuck on top of the frame
+ * instead of as part of it.
+ *
+ * Note what this is *not*: it is not a concentric pair. Nested corners are
+ * concentric when `inner = outer - gap`, and at a 16px inset that arithmetic
+ * gives 0 — a hard rectangle, which the shape scale has no role for on anything
+ * holding a glyph. The gap here is simply too large for the two corners to be
+ * read as one curve inside another; they are neighbours, not rings. 12dp is the
+ * shape table's own step for a square icon button and it matches the frame's
+ * vocabulary, which is all that is being claimed. The concentric rule is for
+ * boxes that genuinely nest — see the shape section in AGENTS.md.
  *
  * Earlier passes made this a labelled pill and then a translucent blurred chip.
  * Both were inventions. M3 back is icon-only — the arrow is the single most
@@ -51,6 +66,7 @@ const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function Detai
       {...props}
       variant="tonal"
       size="md"
+      shape="square"
       icon={<MdArrowBack size={24} aria-hidden="true" />}
       title={title}
       tabIndex={passive ? -1 : tabIndex}

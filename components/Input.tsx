@@ -20,22 +20,43 @@ import { cn } from '@/lib/utils';
  * helper/error/counter scaffolding lives in `Field` so an input and a textarea
  * cannot drift apart.
  *
- * **The label floats into the outline.** It used to sit stacked above the
- * control, and the note here argued for that on the grounds that M3 allows both
- * and changing ~40 forms bought nothing. It buys one thing, which is the whole
- * point of the pattern: an empty field and a filled one stop being different
- * objects. With a stacked label, a form of six empty fields is six blank boxes
- * and six captions floating between them — and the caption belonging to the box
- * *below* it sits exactly as close as the one belonging to the box above.
+ * **There are two fields, and the label decides which.**
  *
- * The geometry, the notch and the float live in `.m3-field` (globals.css),
- * because the whole thing turns on `:focus-within` and `:placeholder-shown`
- * matching against a *sibling*, and on a real `<legend>` to cut the hole.
+ * A *labelled* field is a slot in a form. It has a name, that name has to
+ * survive being filled, and it gets M3's outlined field with the label floating
+ * into the outline. It used to sit stacked above the control, and the note here
+ * argued for that on the grounds that M3 allows both and changing ~40 forms
+ * bought nothing. It buys one thing, which is the whole point of the pattern: an
+ * empty field and a filled one stop being different objects. With a stacked
+ * label, a form of six empty fields is six blank boxes and six captions floating
+ * between them — and the caption belonging to the box *below* it sits exactly as
+ * close as the one belonging to the box above.
+ *
+ * An *unlabelled* field is not a form slot — it is a search box, an admin
+ * filter, a chat composer, and its placeholder is its whole identity. It gets
+ * the filled treatment instead: a tone step, no border, no shadow. Dressed as an
+ * outlined field it read as a form control whose label had failed to load, and
+ * it put the heaviest boundary on the page around the least ceremonial thing on
+ * it. Same 12dp corner, same 44dp box — one family, two boundary treatments.
+ *
+ * The geometry, the notch, the float and both treatments live in `.m3-field`
+ * (globals.css), because the whole thing turns on `:focus-within` and
+ * `:placeholder-shown` matching against a *sibling*, and on a real `<legend>` to
+ * cut the hole.
+ *
+ * **An unlabelled field carries its own actions.** A search box with the submit
+ * button outside it is two objects the eye has to associate; inside, it is one
+ * control that does one job. Hence `trailing`, which is a flow item rather than
+ * an overlay so that one button, two buttons, or a button with a word in it all
+ * fit without a hand-typed reserve at the call site.
  *
  * Two heights, and the difference is content rather than density: a field with a
  * floating label needs a label row and a text row, so it takes M3's 56dp; a
- * field with no label — a search box, an admin filter — is one row and stays at
- * 44dp. Nothing else varies between them.
+ * field with no label is one row and stays at 44dp. A `Textarea` follows the
+ * same rule through its block padding rather than through a fixed height, since
+ * it grows: labelled, its first line clears the floated label; unlabelled, the
+ * padding is symmetric and a one-row field lands at the same 44dp as its
+ * single-line counterpart.
  */
 
 /** M3's outlined text field height, once there is a label to float. */
@@ -43,6 +64,25 @@ const LABELLED_HEIGHT = 'h-14';
 /** One row. 44px is the comfortable touch minimum, and most of this site's
  *  traffic is a phone. */
 const BARE_HEIGHT = 'h-11';
+/**
+ * `size="lg"` — M3's *search bar*, which is its own component in the spec: 56dp
+ * and fully rounded rather than 44dp and 12dp-cornered.
+ *
+ * It exists for one field, the one on /search, and the reason is that that field
+ * is the page. At the filter size it read as a filter — a 44dp box adrift in a
+ * 1280px column with the site's primary verb inside it — which is the wrong
+ * size for the only thing on the screen you are meant to touch first. The 44dp
+ * box stays the default precisely so this cannot spread: an admin filter and a
+ * hero search are not the same object.
+ *
+ * The pill is also what makes the buttons inside it work. Concentric corners
+ * want `inner = outer - gap`, and at 12dp with a 4px gap that is an 8dp corner
+ * on a 36dp control — a value someone has to remember. A centred pill inside a
+ * pill needs no arithmetic at all: 40dp button, 56dp box, 8px gap, and
+ * `28 - 8 = 20`, which *is* half the button's height. It is concentric for free,
+ * at any size, forever.
+ */
+const HERO_HEIGHT = 'h-14';
 
 /** The control's own ink and placeholder, shared by both primitives. */
 const CONTROL = 'text-body-l placeholder:text-on-surface-variant';
@@ -162,16 +202,21 @@ function FieldLabel({
 }
 
 /**
- * There is no focus *ring* on a text field, and that is not the old exception
- * coming back.
+ * Focus, on both fields, is the app's one indicator — painted twice, in the two
+ * places the two boundaries leave room for it.
  *
- * The rule is that focus looks identical on every control, and it still does:
- * the focused outline is `primary` at 2px, which is the ring's own colour at the
- * ring's own weight. What changed is where it is painted — as the control's own
- * boundary rather than as a second boundary 2px outside the first. A field whose
- * entire visual identity *is* a 1px outline cannot wear a 2px ring around that
- * outline without reading as two nested boxes, and M3 specifies the thickened
- * outline as this control's indicator for exactly that reason.
+ * An *outlined* field has no focus ring. That is not the old exception coming
+ * back: the focused outline is `primary` at 2px, which is the ring's own colour
+ * at the ring's own weight, and what changed is only where it is painted — as
+ * the control's boundary rather than as a second boundary 2px outside the first.
+ * A field whose entire visual identity *is* a 1px outline cannot wear a 2px ring
+ * around that outline without reading as two nested boxes, and M3 specifies the
+ * thickened outline as this control's indicator for exactly that reason.
+ *
+ * A *filled* field has no outline to nest inside, so that objection does not
+ * apply and it takes the ordinary ring. Both are `:focus-within`, not
+ * `:focus-visible` — the element wearing the indicator is the container, and it
+ * is reporting on the control inside it.
  *
  * (The alphas the old ring carried are described in prose, not spelled as class
  * names — see the note on comment-generated CSS in AGENTS.md.)
@@ -182,6 +227,7 @@ function shellProps(opts: {
   icon?: boolean;
   trailing?: boolean;
   multiline?: boolean;
+  hero?: boolean;
 }) {
   return {
     className: 'm3-field',
@@ -193,6 +239,7 @@ function shellProps(opts: {
     'data-lead': opts.icon ? '' : undefined,
     'data-trail': opts.trailing ? '' : undefined,
     'data-multiline': opts.multiline ? '' : undefined,
+    'data-size': opts.hero ? 'lg' : undefined,
   };
 }
 
@@ -202,6 +249,8 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> &
     icon?: ReactNode;
     /** Trailing adornment; may be interactive (clear button, visibility toggle). */
     trailing?: ReactNode;
+    /** `lg` is M3's search bar — 56dp and fully rounded. Unlabelled only. */
+    size?: 'md' | 'lg';
     fieldClassName?: string;
   };
 
@@ -214,6 +263,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     count,
     icon,
     trailing,
+    size = 'md',
     className = '',
     fieldClassName = '',
     id,
@@ -225,6 +275,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const autoId = useId();
   const inputId = id ?? autoId;
   const labelled = hasLabel(label);
+  const hero = !labelled && size === 'lg';
 
   return (
     <Field helper={helper} error={error} count={count} className={fieldClassName}>
@@ -234,13 +285,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           invalid: Boolean(error),
           icon: Boolean(icon),
           trailing: Boolean(trailing),
+          hero,
         })}
       >
         {icon && (
-          <span
-            aria-hidden="true"
-            className="text-on-surface-variant pointer-events-none absolute left-3 z-1 flex items-center"
-          >
+          <span aria-hidden="true" className="m3-field-lead">
             {icon}
           </span>
         )}
@@ -254,23 +303,27 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
              labelled field with nothing to suggest gets a single space, which
              the CSS keeps invisible until the label has floated clear. */
           placeholder={placeholder ?? (labelled ? ' ' : undefined)}
-          className={cn(CONTROL, labelled ? LABELLED_HEIGHT : BARE_HEIGHT, className)}
+          className={cn(
+            CONTROL,
+            labelled ? LABELLED_HEIGHT : hero ? HERO_HEIGHT : BARE_HEIGHT,
+            className,
+          )}
           {...rest}
         />
         {labelled && <FieldLabel label={label} required={required} htmlFor={inputId} />}
         {!labelled && <fieldset aria-hidden="true" />}
-        {trailing && (
-          <span className="text-on-surface-variant absolute right-2 z-1 flex items-center">
-            {trailing}
-          </span>
-        )}
+        {trailing && <span className="m3-field-trail">{trailing}</span>}
       </div>
     </Field>
   );
 });
 
 type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> &
-  FieldProps & { fieldClassName?: string };
+  FieldProps & {
+    /** Trailing controls, inside the box. See `Input`'s note. */
+    trailing?: ReactNode;
+    fieldClassName?: string;
+  };
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
   {
@@ -279,6 +332,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     error,
     required,
     count,
+    trailing,
     className = '',
     fieldClassName = '',
     id,
@@ -294,7 +348,14 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
 
   return (
     <Field helper={helper} error={error} count={count} className={fieldClassName}>
-      <div {...shellProps({ labelled, invalid: Boolean(error), multiline: true })}>
+      <div
+        {...shellProps({
+          labelled,
+          invalid: Boolean(error),
+          trailing: Boolean(trailing),
+          multiline: true,
+        })}
+      >
         <textarea
           ref={ref}
           id={areaId}
@@ -302,18 +363,30 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           aria-invalid={error ? true : undefined}
           required={required}
           placeholder={placeholder ?? (labelled ? ' ' : undefined)}
-          /* Asymmetric block padding on purpose: the floated label lands on the
-             top border and the first line of text has to clear it. */
+          /* Asymmetric block padding only when there is a label: the floated
+             label lands on the top border and the first line of text has to
+             clear it. Without one there is nothing to clear, and the 16px was
+             pure height — the direct-message composer is a single-row unlabelled
+             textarea, so it stood at 52px beside a 40px send button and read as
+             a box that had been stretched.
+
+             Symmetric 8px, measured rather than assumed: `body-l`'s line box is
+             28px here, not the 24px the type scale implies, because this app's
+             body line-heights run looser for Han glyphs. 10px each side landed a
+             one-row field at 48px — closer, but still not the 44px an unlabelled
+             single-line field stands at, which is the number this padding exists
+             to match. */
           className={cn(
             CONTROL,
             !HAS_RESIZE.test(className) && 'resize-y',
-            'pt-4 pb-3',
+            labelled ? 'pt-4 pb-3' : 'py-2',
             className,
           )}
           {...rest}
         />
         {labelled && <FieldLabel label={label} required={required} htmlFor={areaId} />}
         {!labelled && <fieldset aria-hidden="true" />}
+        {trailing && <span className="m3-field-trail">{trailing}</span>}
       </div>
     </Field>
   );

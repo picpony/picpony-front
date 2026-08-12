@@ -355,7 +355,7 @@ export default function TeamTab({ token }: { token: string }) {
         <div className="flex gap-3">
           {' '}
           {editingMember && (
-            <Button variant="outlined" onClick={resetForm}>
+            <Button variant="tonal" onClick={resetForm}>
               {' '}
               取消编辑{' '}
             </Button>

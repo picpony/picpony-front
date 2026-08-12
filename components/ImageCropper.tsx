@@ -376,7 +376,11 @@ export default function ImageCropper({
             disabled={!ready}
             aria-label="缩放"
             onChange={(e) => setView((prev) => clamp({ ...prev, zoom: Number(e.target.value) }))}
-            className="w-full min-w-[8rem] flex-1 sm:w-40"
+            /* `range-slider` is the app's slider — the track, the thumb and the
+               focus ring. Without it this was the browser's own control, so the
+               one in the image-search dialog and the one here were two different
+               sliders doing the same job on the same screen size. */
+            className="range-slider w-full min-w-[8rem] flex-1 sm:w-40"
           />
           <button
             type="button"

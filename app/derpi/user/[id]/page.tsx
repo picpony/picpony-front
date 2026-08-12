@@ -269,7 +269,7 @@ export default function DerpiUserPage() {
               href={`https://derpibooru.org/profiles/${encodeURIComponent(profile.name)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className={buttonClasses({ variant: 'outlined', className: 'flex-1' })}
+              className={buttonClasses({ variant: 'tonal', className: 'flex-1' })}
             >
               <MdOpenInNew size={18} />在 Derpibooru 查看主页
             </a>

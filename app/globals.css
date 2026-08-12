@@ -400,6 +400,63 @@
   text-decoration: underline;
 }
 
+/* The prose rhythm for rendered post and reply bodies.
+ *
+ * There was none. Tailwind's preflight resets every element's margin to 0, and
+ * nothing here put one back for a paragraph — so a Markdown body's `<p>`s ran
+ * straight into each other with no gap at all, while the image and the quote
+ * beside them carried 12px of their own. The result is what a thread actually
+ * looked like: text with no paragraphing, then a picture floating in a space
+ * that belonged to nothing, then a quote at a third spacing. `BBCodeRenderer`
+ * has its own half of this fixed in `lib/bbcode.ts` — it now emits real
+ * paragraphs instead of a run of `<br>`, so one rule set governs both renderers
+ * rather than one of them being outside the system.
+ *
+ * Every value is in `em`, so the whole rhythm scales with whatever type role the
+ * host names: the post body is `body-l` and a reply is `body-m`, and a reply's
+ * paragraphs should sit closer together than an article's for the same reason
+ * its glyphs are smaller. In `rem` they would have been identical.
+ *
+ * A block — a picture, a quote, a code listing, a table — takes more air than a
+ * paragraph break, because it is a change of material and not a pause. The
+ * heading is the mirror image: much more space above than below, so it binds to
+ * the section it introduces rather than floating between two.
+ */
+.bbcode-content p,
+.rich-text-content p {
+  margin-block: 0.75em;
+}
+
+.bbcode-content :is(h1, h2, h3, h4, h5, h6),
+.rich-text-content :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 1.25em 0.5em;
+}
+
+.bbcode-content :is(ul, ol),
+.rich-text-content :is(ul, ol) {
+  margin-block: 0.75em;
+  padding-inline-start: 1.5em;
+}
+
+.bbcode-content li,
+.rich-text-content li {
+  margin-block: 0.25em;
+}
+
+.bbcode-content :is(blockquote, pre, hr),
+.rich-text-content :is(blockquote, pre, hr) {
+  margin-block: 1em;
+}
+
+/* The table's scroll wrapper carries the table's margin. `overflow-x: auto`
+   makes the wrapper a block formatting context, so a margin on the table inside
+   it cannot collapse out through it — put the space on the table and a table has
+   no gap around it at all. */
+.bbcode-content .popover-scrollbar,
+.rich-text-content .popover-scrollbar {
+  margin-block: 1em;
+}
+
 /* User-supplied media in rendered post and reply bodies.
  *
  * These are arbitrary uploads — measured on one thread: 1648x5684, 3000x4500,
@@ -421,7 +478,7 @@
   height: auto;
   max-width: 100%;
   max-height: min(60vh, 26rem);
-  margin: 0.75rem 0;
+  margin-block: 1em;
   border-radius: var(--radius-sm);
   object-fit: contain;
 }
@@ -438,27 +495,36 @@
 
 /* Inline rich text — a direct message rather than a document. The renderer has
    already dropped the paragraph wrapper, which is what lets text and emoji sit
-   on one line; this keeps whatever else survives (a pasted code block, a list)
-   from adding document-sized margins inside a chat bubble, where the bubble's
-   own padding is the entire frame. */
-.rich-text-inline > :is(ul, ol, pre, blockquote, table) {
+   on one line; this keeps whatever else survives (a pasted code block, a list,
+   an image) from adding document-sized margins inside a chat bubble, where the
+   bubble's own padding is the entire frame.
+
+   It comes *after* the prose rhythm above and matches at the same specificity,
+   so source order is what makes it win — keep it here. */
+.rich-text-inline > :is(ul, ol, pre, blockquote, table, img, video),
+.rich-text-inline > .popover-scrollbar {
   margin-block: 0.375rem;
 }
 
 /* Quoted text, in one treatment.
  *
- * There were three. `BBCodeRenderer` alone emitted two — a named `[quote="x"]`
- * as a `surface-container-low` block with `border:none` and
- * `margin-top:-20px; margin-bottom:-10px` hacked in to fight its own spacing,
- * and a bare `[quote]` as a 4px `outline` rule with `font-style: italic` — while
- * this file styled a third at 3px `outline-variant` with no fill. So the same
- * thread showed two different quote shapes depending on whether the person had
- * been named, and neither matched the editor's own preview.
+ * There were four. `BBCodeRenderer` alone emitted two — a named `[quote="x"]`
+ * as a `surface-container-low` block with no border and negative margins hacked
+ * in to fight its own spacing, and a bare `[quote]` as a 4px rule with
+ * `font-style: italic` — this file styled a third with no fill, and
+ * `MarkdownRenderer` overrode a fourth inline, at a hairline width the shape
+ * scale has no step for. So the same thread showed a different quote shape
+ * depending on whether the person had been named and on which renderer had run.
  *
  * A quote is nested inside a reply, and a reply sits on `surface-container-low`,
  * so the quote steps *up* to `-high` rather than down — an inset block reads as
  * inset by being lighter than its host in the light scheme and darker in the
  * dark one, which is what a container step does and an alpha does not.
+ *
+ * The leading rule is `primary` at 4px: the same colour as the `<cite>` above
+ * it, so the mark and the name of the person being quoted read as one object
+ * rather than as a grey bar with a pink caption inside it; and 4px is a step on
+ * the spacing grid, where the 3px it replaced was a number.
  *
  * No `font-style: italic`. Han glyphs have no true italic, so a browser
  * synthesises one by shearing the glyph, which at body size reads as a rendering
@@ -467,10 +533,9 @@
 .bbcode-content blockquote,
 .rich-text-content blockquote {
   background: var(--md-sys-color-surface-container-high);
-  border-inline-start: 3px solid var(--md-sys-color-outline-variant);
+  border-inline-start: 4px solid var(--md-sys-color-primary);
   border-radius: var(--radius-sm);
-  padding: 0.5rem 0.875rem;
-  margin: 0.75rem 0;
+  padding: 0.625rem 0.875rem;
   color: var(--md-sys-color-on-surface-variant);
 }
 
@@ -500,7 +565,7 @@
 .rich-text-content code {
   background-color: var(--md-sys-color-surface-container-high);
   color: var(--md-sys-color-on-surface);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-xs);
   padding: 0.125rem 0.375rem;
   font-size: 0.875em;
 }
@@ -509,6 +574,49 @@
 .rich-text-content pre {
   padding: 0.75rem;
   overflow-x: auto;
+}
+
+/* A listing inside a listing has no second background of its own. */
+.bbcode-content pre > code,
+.rich-text-content pre > code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Tables in rendered bodies, in one appearance.
+ *
+ * There were two. The BBCode converter spelled the cell border, the padding and
+ * the header fill into every `<td>`/`<th>` it emitted, while `MarkdownRenderer`
+ * described the same three things as Tailwind classes on its own components — so
+ * a table pasted as Markdown and a table written in BBCode were different tables
+ * in the same thread, and neither could be changed without finding the other.
+ * The wrapper that makes a wide table scroll instead of widening the page is
+ * still the renderer's job (the element has to exist), but everything about how
+ * it looks is here. */
+.bbcode-content table,
+.rich-text-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bbcode-content :is(th, td),
+.rich-text-content :is(th, td) {
+  border: 1px solid var(--md-sys-color-outline-variant);
+  padding: 0.5rem 0.75rem;
+  text-align: start;
+}
+
+.bbcode-content th,
+.rich-text-content th {
+  background: var(--md-sys-color-surface-container-low);
+  font-weight: var(--text-title-s-emphasized--font-weight);
+}
+
+.bbcode-content hr,
+.rich-text-content hr {
+  border: 0;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
 }
 
 /* Announcement bodies arrive as server-rendered HTML whose paragraph breaks are
@@ -2388,8 +2496,11 @@ html[data-image-hero-transition] #nprogress {
   --field-lead: 2.5rem;
 }
 
+/* The trailing slot sits in the flow (see below), so this is not a reserve for
+   it — it is the gap between the last character and the first control. The
+   leading slot *is* an overlay, so its value is a real reserve. */
 .m3-field[data-trail] {
-  --field-trail: 2.5rem;
+  --field-trail: 0.5rem;
 }
 
 .m3-field > input,
@@ -2452,6 +2563,154 @@ html[data-image-hero-transition] #nprogress {
   transition-timing-function: var(--ease-standard);
 }
 
+/* ---------------------------------------------------------------------------
+ * The unlabelled field is a different object, and it now says so.
+ *
+ * There are exactly two kinds of text field in this app and they do different
+ * jobs. A **labelled** field is a slot in a form: it has a name, that name has
+ * to survive the field being filled, and M3's outlined field with a notched
+ * floating label is the answer — that is the language above.
+ *
+ * An **unlabelled** field is not a form slot. It is a search box, an admin
+ * filter, a chat composer: a thing you type into and act on immediately, whose
+ * placeholder is its whole identity. Dressed as an outlined field it read as a
+ * form control with a missing label — an empty box with a caption that never
+ * arrived — and, worse, the outline is the heaviest thing on those screens
+ * while the field is the least ceremonial thing on them.
+ *
+ * So it is *filled*: a tone step, no border, no shadow. Same 12dp corner and
+ * the same 44dp box, so the two languages are still one family; only the
+ * boundary treatment differs. `surface-container-high` is the same step the
+ * unselected filter chip takes, which is the other "neutral control you act
+ * through" on these screens.
+ *
+ * Two mechanical notes:
+ *
+ * The `inset` goes back to 0. The negative top inset above exists *only* to
+ * cancel the UA drawing the top border through the vertical centre of the
+ * `<legend>`, and there is no legend without a label — so the line was being
+ * painted 6px above the box: an unlabelled 44dp field stood 50dp tall and its
+ * text, centred in the 44dp control, sat 3px below the outline's own centre.
+ * Both measured on /search's box before this rule existed.
+ *
+ * And focus comes back to the *ring*. The reason a text field has none is that
+ * a control whose whole identity is a 1px outline cannot wear a second boundary
+ * 2px outside the first without reading as two nested boxes. A filled field has
+ * no outline to nest inside, so the objection does not apply and the app's one
+ * focus indicator is simply correct here. It is still `:focus-within` rather
+ * than `:focus-visible`, matching its outlined sibling: both are containers
+ * reporting on the control inside them.
+ */
+.m3-field:not([data-labelled]) > fieldset {
+  inset: 0;
+  border-color: transparent;
+  background-color: var(--md-sys-color-surface-container-high);
+  transition-property: background-color, box-shadow;
+}
+
+.m3-field:not([data-labelled]):hover:not(:focus-within) > fieldset {
+  background-color: var(--md-sys-color-surface-container-highest);
+}
+
+.m3-field:not([data-labelled])[data-invalid] > fieldset {
+  box-shadow: 0 0 0 2px var(--md-sys-color-error);
+}
+
+/* Last, so it wins over the invalid rule at equal specificity: a focus ring
+   answers "where is the keyboard", never "what is wrong". */
+.m3-field:not([data-labelled]):focus-within > fieldset {
+  box-shadow: 0 0 0 2px var(--md-sys-color-focus);
+}
+
+/* ---------------------------------------------------------------------------
+ * `size="lg"` — M3's search bar. Unlabelled only; see the note in `Input.tsx`.
+ *
+ * A pill rather than the 12dp step, and the corner is the reason the controls
+ * inside it need no compensation. Concentric corners want `inner = outer - gap`;
+ * a centred pill inside a pill satisfies that identically at every size, because
+ * `outer - gap` is always half the inner control's height.
+ *
+ * 9999px rather than a shape token because that is what `rounded-full` compiles
+ * to, and this is the same step — the shape table's "button, FAB, avatar" row,
+ * borrowed for the one control M3 also draws as a capsule.
+ */
+.m3-field[data-size='lg'] {
+  --field-lead: 1.5rem;
+  --field-trail: 1.5rem;
+}
+
+.m3-field[data-size='lg'][data-lead] {
+  --field-lead: 3.5rem;
+}
+
+/* The gap to the trailing controls: 8px, which with a 40dp control in a 56dp
+   box is the same 8px it has above and below. */
+.m3-field[data-size='lg'][data-trail] {
+  --field-trail: 0.75rem;
+}
+
+.m3-field[data-size='lg'] > fieldset {
+  border-radius: 9999px;
+}
+
+.m3-field[data-size='lg'] > .m3-field-lead {
+  inset-inline-start: 1.25rem;
+}
+
+.m3-field[data-size='lg'] > .m3-field-trail {
+  padding-inline-end: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * The trailing slot is a flow item, not an overlay.
+ *
+ * The leading slot is an overlay and stays one: it is decorative, it is always
+ * a single ~20px glyph, and the resting label and the notch both offset
+ * themselves by the same `--field-lead`, so its width has to be a known token.
+ *
+ * The trailing slot is the opposite on every count. It holds *controls* — the
+ * search submit, 以图搜图, the composer's emoji and send buttons — and there is
+ * no width to know: one button is 40px, two are 88px, one with a word in it is
+ * whatever the word is. As an overlay that meant a hand-typed reserve at each
+ * call site, which is the class of number this file exists to delete. In flow
+ * it needs no number at all: the control shrinks by exactly the slot's width,
+ * because the slot refuses to shrink and the control's `min-width: 0` lets it.
+ *
+ * (Limit, deliberately unfixed: `> label`'s `max-width` still reserves against
+ * `--field-trail`, so a *labelled* field with a wide trailing control could let
+ * a long resting label run under it. No such field exists — nothing used this
+ * slot at all until the search box and the composer moved into it — and the
+ * honest fix is to measure, which is a call-site-free problem to solve on the
+ * day one appears.)
+ */
+.m3-field > .m3-field-lead {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: 0.75rem;
+  display: flex;
+  align-items: center;
+  /* Clicking where the glyph sits still focuses the control underneath. */
+  pointer-events: none;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.m3-field > .m3-field-trail {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  padding-inline-end: 0.25rem;
+}
+
+/* A composer grows downward, so its buttons belong at the bottom of the box
+   rather than floating up the middle of it as the text wraps. */
+.m3-field[data-multiline] > .m3-field-trail {
+  align-self: flex-end;
+  padding-block-end: 0.25rem;
+}
+
 .m3-field > fieldset > legend {
   display: block;
   float: none;
@@ -2505,12 +2764,15 @@ html[data-image-hero-transition] #nprogress {
 }
 
 /* M3 darkens the outline on hover and thickens it to 2dp on focus. The focused
-   outline *is* this control's focus indicator — see the note in `Input.tsx`. */
-.m3-field:hover:not(:focus-within):not([data-invalid]) > fieldset {
+   outline *is* this control's focus indicator — see the note in `Input.tsx`.
+
+   Scoped to `[data-labelled]`, because these three rules *are* the outlined
+   language and an unlabelled field no longer speaks it (see below). */
+.m3-field[data-labelled]:hover:not(:focus-within):not([data-invalid]) > fieldset {
   border-color: var(--md-sys-color-on-surface);
 }
 
-.m3-field:focus-within > fieldset {
+.m3-field[data-labelled]:focus-within > fieldset {
   border-width: 2px;
   border-color: var(--md-sys-color-primary);
 }
@@ -2519,7 +2781,7 @@ html[data-image-hero-transition] #nprogress {
   color: var(--md-sys-color-primary);
 }
 
-.m3-field[data-invalid] > fieldset {
+.m3-field[data-labelled][data-invalid] > fieldset {
   border-color: var(--md-sys-color-error);
 }
 
@@ -2537,10 +2799,15 @@ html[data-image-hero-transition] #nprogress {
 /* A textarea's label belongs on its first line, not in the middle of the box,
    and the box grows — so `align-items: center` would drag the adornments down
    with it. 1.875rem is where that first line's centre actually is: 1rem of block
-   padding plus half a `body-l` line. */
+   padding plus half a `body-l` line.
+   Only when there *is* a label: an unlabelled multiline field has nothing to
+   float and takes the symmetric padding below instead. */
 .m3-field[data-multiline] {
-  --field-rest-y: 1.875rem;
   align-items: flex-start;
+}
+
+.m3-field[data-multiline][data-labelled] {
+  --field-rest-y: 1.875rem;
 }
 
 /* M3 state layer. A tinted overlay at a fixed alpha, painted from the

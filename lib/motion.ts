@@ -1482,6 +1482,74 @@ function clearPaneFlags(panel: HTMLElement) {
   });
 }
 
+/* How long after a switch a height change still counts as part of it.
+ *
+ * Long enough to cover the fetch the switch itself started; short enough that a
+ * change the *user* causes — turning a page, expanding a row — is not swept up
+ * and animated at them for no reason. */
+const PANE_GROWTH_WATCH_MS = 2500;
+
+/** Torn down by the next switch, so two watchers can never drive one box. */
+let stopPaneGrowthWatch: (() => void) | null = null;
+
+/**
+ * Keeps animating the panel's height for a moment after the slide has settled.
+ *
+ * The switch is not the last time the page's height changes, and on a profile it
+ * is not even the interesting one. Every pane there fetches when its tab is
+ * selected, so at the instant the box is measured the incoming pane is still a
+ * skeleton: the morph lands on the skeleton's height, the data arrives a few
+ * hundred milliseconds later, and the page jumps by however much the two differ
+ * — after the motion has visibly finished, which is exactly the shape of the
+ * jolt the morph was added to remove. Matching each skeleton to its page size
+ * shrinks that gap but cannot close it, because the real page can be short.
+ *
+ * So the arriving pane is watched for a moment and any further change is run
+ * through the same curve. The clip is applied per morph rather than held for the
+ * whole window: it is a clip context for absolutely positioned descendants, and
+ * a menu opened inside the pane a second after a switch must not be cropped by
+ * it.
+ */
+function watchPaneGrowth(panel: HTMLElement, pane: HTMLElement): () => void {
+  if (typeof ResizeObserver === 'undefined' || prefersReducedMotion()) return () => {};
+
+  let last = pane.offsetHeight;
+  let tween: gsap.core.Tween | null = null;
+
+  const release = () => {
+    panel.style.height = '';
+    panel.style.overflowY = '';
+  };
+
+  const observer = new ResizeObserver(() => {
+    const next = pane.offsetHeight;
+    if (Math.abs(next - last) <= 1) return;
+    /* Mid-morph the inline height is the animated value, not `last` — starting
+       the new tween from `last` would snap the box backwards first. */
+    const from = tween?.isActive() ? parseFloat(panel.style.height) || last : last;
+    last = next;
+    tween?.kill();
+    gsap.set(panel, { height: from, overflowY: 'clip' });
+    tween = gsap.to(panel, {
+      height: next,
+      duration: DURATION.emphasized,
+      ease: 'emphasized',
+      onComplete: release,
+    });
+  });
+  observer.observe(pane);
+
+  const timer = window.setTimeout(() => observer.disconnect(), PANE_GROWTH_WATCH_MS);
+
+  return () => {
+    window.clearTimeout(timer);
+    observer.disconnect();
+    tween?.kill();
+    tween = null;
+    release();
+  };
+}
+
 function runTabTransition(
   panel: HTMLElement,
   from: string,
@@ -1502,6 +1570,10 @@ function runTabTransition(
   if (heroOwnsScreen()) return false;
 
   activeTabRun?.finish();
+  /* A watcher from the previous switch is still holding the box; two of them
+     driving one `height` would fight frame by frame. */
+  stopPaneGrowthWatch?.();
+  stopPaneGrowthWatch = null;
   clearPaneFlags(panel);
 
   /* 1. Give both panes a box. They share one grid cell, so the row is now as
@@ -1578,29 +1650,49 @@ function runTabTransition(
      pixels, and did it *after* the motion had visibly finished. The switch
      read as a slide followed by an unrelated jolt.
      Driving `height` (not `min-height`) because the row's own height is the
-     max of the two panes and a floor under that has nothing to do. `overflow`
-     comes with it: whichever pane is taller than the current box has to be
-     clipped, which is what a container transform looks like anyway. Both are
-     cleared by `releaseBox`, on the settle path *and* on the interrupt path —
-     a residual inline height on an ancestor of a gallery card would freeze the
-     page at whatever it happened to be mid-run. */
+     max of the two panes and a floor under that has nothing to do.
+
+     The clip that comes with it is `overflow-y: clip`, and it must be *only*
+     the vertical axis and it must be `clip` rather than `hidden`. A plain
+     `overflow: hidden` was both axes, and this element is the centred content
+     column — so for the whole 500ms the shared axis was cropped to the column
+     instead of to the scroller, and the incoming pane appeared out of the
+     column's own edge rather than sliding in from the side of the content area.
+     That is the entire "it should come from the sides of the information area,
+     not from the sides of the content" report, and it was introduced by this
+     tween. `hidden` on one axis is not an option either: CSS computes a
+     `visible` on the other axis to `auto` when its partner is `hidden`, which
+     would make this a horizontal scroll container mid-slide. `clip` is the one
+     value allowed to sit beside `visible`, so the horizontal axis stays exactly
+     as it was and `[data-axis-running]` on the scroller keeps owning it.
+
+     Both are cleared by `releaseBox`, on the settle path *and* on the interrupt
+     path — a residual inline height on an ancestor of a gallery card would
+     freeze the page at whatever it happened to be mid-run. */
   const fromHeight = leaving.offsetHeight;
   const toHeight = entering.offsetHeight;
   let boxTween: gsap.core.Tween | null = null;
+  let growth: ResizeObserver | null = null;
   const releaseBox = () => {
     boxTween?.kill();
     boxTween = null;
+    growth?.disconnect();
+    growth = null;
     panel.style.height = '';
-    panel.style.overflow = '';
+    panel.style.overflowY = '';
   };
-  if (fromHeight > 0 && toHeight > 0 && Math.abs(fromHeight - toHeight) > 1) {
-    panel.style.height = `${fromHeight}px`;
-    panel.style.overflow = 'hidden';
+  const morphTo = (height: number) => {
+    boxTween?.kill();
     boxTween = gsap.to(panel, {
-      height: toHeight,
+      height,
       duration: DURATION.emphasized,
       ease: 'emphasized',
     });
+  };
+  if (fromHeight > 0 && toHeight > 0 && Math.abs(fromHeight - toHeight) > 1) {
+    panel.style.height = `${fromHeight}px`;
+    panel.style.overflowY = 'clip';
+    morphTo(toHeight);
   }
 
   /* The footer rides inside `[data-page-content]` and so travels with every
@@ -1639,6 +1731,10 @@ function runTabTransition(
       leaving.removeAttribute('data-tab-pane-animating');
       entering.removeAttribute('data-tab-pane-animating');
       restoreAnchor();
+      /* The leaving pane only drops out of layout on the line above, so this is
+         the first moment the panel's height is the arriving pane's alone — which
+         is the height the watcher has to start from. */
+      stopPaneGrowthWatch = watchPaneGrowth(panel, entering);
       panel.removeEventListener('pointerdown', settle, { capture: true });
       if (activeTabRun?.panel === panel) activeTabRun = null;
     },

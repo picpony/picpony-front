@@ -107,7 +107,7 @@ export default function MessagesAuditTab({ token }: { token: string }) {
             </Button>
             <Button
               icon={<MdRefresh size={16} />}
-              variant="outlined"
+              variant="tonal"
               className="flex-1 sm:flex-none"
               onClick={() => {
                 setSearchUserId('');

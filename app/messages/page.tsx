@@ -13,6 +13,7 @@ import {
   MdCampaign,
   MdNotificationsNone,
   MdSearchOff,
+  MdErrorOutline,
   MdChevronLeft,
   MdChevronRight,
 } from 'react-icons/md';
@@ -39,7 +40,7 @@ import IconButton from '@/components/IconButton';
 import { Input, Textarea } from '@/components/Input';
 import Avatar from '@/components/Avatar';
 import Badge, { CountBadge } from '@/components/Badge';
-import ChatBubble, { markRuns } from '@/components/ChatBubble';
+import ChatBubble, { ChatRun, markRuns } from '@/components/ChatBubble';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import Sheet from '@/components/Sheet';
@@ -51,6 +52,9 @@ import { cn } from '@/lib/utils';
 import Popover from '@/components/Popover';
 
 type MessagesTab = 'announcement' | 'notification' | 'interaction' | 'chat';
+
+/** What one tab knows about its own request. See `paneState`. */
+type PaneState = { loading: boolean; error: string | null };
 
 /**
  * What is worth keeping when this page unmounts.
@@ -118,37 +122,43 @@ function NotificationPane({
       {items.map((item) => (
         <div
           key={item.id}
-          /* Unread is carried by the *container tone*, not by a `primary/5` wash.
-             An alpha on a token has to be eyeballed once per scheme, and at 5% it
-             was very nearly invisible in the dark one — so "unread" was being
-             communicated by almost nothing. A container step plus a leading
-             marker reads in both.
+          /* Unread is carried by the row's own container pair, and by nothing
+             else.
 
-             That fix landed at `primary-container/40`, which is still an alpha,
-             and the honest end of the same argument is a real step. This one is
-             a *tone* step rather than the full `primary-container`: the rows are
-             a stack, and a saturated pink row repeated twenty times down an
-             inbox stops reading as "new" and starts reading as the list's
-             background. The colour signal is already on the 4px leading marker
-             beside it, which is the same device the contact list uses. */
+             It has been three things. First a `primary` wash at 5%, which is an
+             alpha on a token — eyeballed once per scheme, and at 5% composited
+             over the dark surface it was very nearly invisible, so "unread" was
+             being communicated by almost nothing. Then a tone step plus a 4px
+             leading bar, which read in both schemes but said the same thing
+             twice, in two languages: a rule down the leading edge is a *quote*
+             mark in this app (it is what a quoted reply wears), and M3 has no
+             list item that carries one.
+
+             `secondary-container` is the pair this app already means "this one"
+             with — the sidebar's current route, a selected chip, the selected
+             contact row. Reusing it here costs no new vocabulary, and secondary
+             is the muted rose two steps off the brand hue, so twenty unread rows
+             in a row still read as a list rather than as a pink screen. */
           className={cn(
-            'm3-row relative overflow-hidden p-5 transition-ui',
-            item.is_read === 0 ? 'bg-surface-container-high' : 'bg-surface-container-low',
+            'm3-row p-5 transition-ui',
+            item.is_read === 0
+              ? 'bg-secondary-container text-on-secondary-container'
+              : 'bg-surface-container-low text-on-surface-variant',
           )}
         >
-          {item.is_read === 0 && (
-            <span aria-hidden="true" className="bg-primary absolute inset-y-0 left-0 w-1" />
-          )}
           <div className="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-            <h3 className="text-title-m-emphasized text-on-surface min-w-0">
+            {/* No ink role on the heading or the body: they inherit the row's,
+                which is `on-secondary-container` while unread and
+                `on-surface-variant` once read. Naming a surface role here would
+                paint surface ink on a container background in one of the two
+                states. */}
+            <h3 className="text-title-m-emphasized min-w-0">
               {item.is_read === 0 && <span className="sr-only">未读：</span>}
               {item.title}
             </h3>
-            <time className="text-body-s text-on-surface-variant shrink-0 tabular-nums">
-              {item.created_at}
-            </time>
+            <time className="text-body-s shrink-0 tabular-nums">{item.created_at}</time>
           </div>
-          <div className="text-on-surface-variant text-body-m">{item.content}</div>
+          <div className="text-body-m">{item.content}</div>
         </div>
       ))}
       {children}
@@ -178,25 +188,37 @@ function MessageRowsSkeleton() {
  * content. A centred dot says "something is happening somewhere" and then
  * reflows the whole pane when the bubbles land; alternating bubble-shaped bars
  * say "a conversation is arriving here", in the geometry it will arrive in.
+ *
+ * The geometry is a *run*, not a row: one portrait at the head of a turn with
+ * that turn's bubbles beside it, which is how the real thread is laid out. Drawn
+ * as one portrait per bubble, the placeholder reserved a gutter for portraits
+ * the conversation would not have and the column shifted as it landed.
  */
-const THREAD_SKELETON_ROWS = [
-  { own: false, width: 'w-40' },
-  { own: false, width: 'w-24' },
-  { own: true, width: 'w-32' },
-  { own: false, width: 'w-52' },
-  { own: true, width: 'w-20' },
+const THREAD_SKELETON_RUNS = [
+  { own: false, widths: ['w-40', 'w-24'] },
+  { own: true, widths: ['w-32'] },
+  { own: false, widths: ['w-52'] },
+  { own: true, widths: ['w-20'] },
 ] as const;
 
 function ThreadSkeleton() {
   return (
     <div className="flex flex-1 flex-col justify-end gap-3" aria-hidden="true">
-      {THREAD_SKELETON_ROWS.map((row, i) => (
+      {THREAD_SKELETON_RUNS.map((run, i) => (
         <div
           key={i}
-          className={cn('flex items-end gap-2', row.own ? 'flex-row-reverse' : 'flex-row')}
+          className={cn('flex items-start gap-2', run.own ? 'flex-row-reverse' : 'flex-row')}
         >
           <SkeletonCircle size={32} delay={i * 80} />
-          <Skeleton className={cn('h-9 rounded-2xl', row.width)} delay={i * 80 + 40} />
+          <div className={cn('flex flex-1 flex-col gap-1', run.own ? 'items-end' : 'items-start')}>
+            {run.widths.map((width, j) => (
+              <Skeleton
+                key={width}
+                className={cn('h-9 rounded-2xl', width)}
+                delay={i * 80 + 40 + j * 40}
+              />
+            ))}
+          </div>
         </div>
       ))}
     </div>
@@ -291,8 +313,31 @@ export default function MessagesPage() {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [loading, setLoading] = useState(!snapshot);
-  const [error, setError] = useState<string | null>(null);
+  /* One `loading` and one `error` per tab, not one for the page.
+   *
+   * There was one of each, shared by all four panes and the contact list, and
+   * the panes are marked rather than unmounted — so a failure in any one of them
+   * put an error into every one of them, each under its own title. During a
+   * switch both panes are on screen at once, which is how "联系人加载失败"
+   * and "公告加载失败" ended up stacked one above the other for the same single
+   * failed request. The loading half was the same bug in a quieter form: a tab
+   * that already had its data went back to skeletons because a *different* tab
+   * was fetching.
+   *
+   * The initial value is per tab as well: a restored snapshot only vouches for
+   * the tabs it actually carries. */
+  const [paneState, setPaneState] = useState<Record<MessagesTab, PaneState>>(() => {
+    const start: PaneState = { loading: !snapshot, error: null };
+    return {
+      announcement: { ...start },
+      notification: { ...start },
+      interaction: { ...start },
+      chat: { ...start },
+    };
+  });
+  const setPane = useCallback((tab: MessagesTab, next: Partial<PaneState>) => {
+    setPaneState((prev) => ({ ...prev, [tab]: { ...prev[tab], ...next } }));
+  }, []);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -463,38 +508,36 @@ export default function MessagesPage() {
   /* `silent` on every loader, not just `fetchContacts`: the refresh that happens
      on arrival with a snapshot already showing must not blank the list back to
      skeletons, and must not replace something correct with an error banner if
-     the network is down. */
-  const fetchAnnouncements = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const data = await api.getAnnouncementHistory();
-      if (data.success) {
-        shown.current.add('announcement');
-        setAnnouncements(data.announcements);
-      } else if (!silent) {
-        setError('获取公告失败');
+     the network is down.
+     Each loader writes only its own tab's state — see `paneState`. */
+  const fetchAnnouncements = useCallback(
+    async (silent = false) => {
+      if (!silent) setPane('announcement', { loading: true, error: null });
+      try {
+        const data = await api.getAnnouncementHistory();
+        if (data.success) {
+          shown.current.add('announcement');
+          setAnnouncements(data.announcements);
+        } else if (!silent) {
+          setPane('announcement', { error: '获取公告失败' });
+        }
+      } catch (err) {
+        if (!silent) setPane('announcement', { error: '网络请求失败' });
+        console.error(err);
+      } finally {
+        if (!silent) setPane('announcement', { loading: false });
       }
-    } catch (err) {
-      if (!silent) setError('网络请求失败');
-      console.error(err);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
+    },
+    [setPane],
+  );
 
   const fetchNotifications = useCallback(
     async (silent = false) => {
-      if (!silent) {
-        setLoading(true);
-        setError(null);
-      }
+      if (!silent) setPane('notification', { loading: true, error: null });
       try {
         const storedUser = localStorage.getItem('user_info');
         if (!storedUser) {
-          if (!silent) setError('请先登录');
+          if (!silent) setPane('notification', { error: '请先登录' });
           return;
         }
         const user = JSON.parse(storedUser);
@@ -504,28 +547,25 @@ export default function MessagesPage() {
           setNotifications(data.notifications);
           fetchUnreadCounts();
         } else if (!silent) {
-          setError('获取通知失败');
+          setPane('notification', { error: '获取通知失败' });
         }
       } catch (err) {
-        if (!silent) setError('网络请求失败');
+        if (!silent) setPane('notification', { error: '网络请求失败' });
         console.error(err);
       } finally {
-        if (!silent) setLoading(false);
+        if (!silent) setPane('notification', { loading: false });
       }
     },
-    [fetchUnreadCounts],
+    [fetchUnreadCounts, setPane],
   );
 
   const fetchInteractionNotifications = useCallback(
     async (page: number = 1, silent = false) => {
-      if (!silent) {
-        setLoading(true);
-        setError(null);
-      }
+      if (!silent) setPane('interaction', { loading: true, error: null });
       try {
         const storedUser = localStorage.getItem('user_info');
         if (!storedUser) {
-          if (!silent) setError('请先登录');
+          if (!silent) setPane('interaction', { error: '请先登录' });
           return;
         }
         const user = JSON.parse(storedUser);
@@ -537,44 +577,44 @@ export default function MessagesPage() {
           setInteractionNotificationsPage(page);
           fetchUnreadCounts();
         } else if (!silent) {
-          setError('获取互动通知失败');
+          setPane('interaction', { error: '获取互动通知失败' });
         }
       } catch (err) {
-        if (!silent) setError('网络请求失败');
+        if (!silent) setPane('interaction', { error: '网络请求失败' });
         console.error(err);
       } finally {
-        if (!silent) setLoading(false);
+        if (!silent) setPane('interaction', { loading: false });
       }
     },
-    [fetchUnreadCounts],
+    [fetchUnreadCounts, setPane],
   );
 
-  const fetchContacts = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) {
-        if (!silent) setError('请先登录');
-        return;
+  const fetchContacts = useCallback(
+    async (silent = false) => {
+      if (!silent) setPane('chat', { loading: true, error: null });
+      try {
+        const storedUser = localStorage.getItem('user_info');
+        if (!storedUser) {
+          if (!silent) setPane('chat', { error: '请先登录' });
+          return;
+        }
+        const user = JSON.parse(storedUser);
+        const data = await api.getRecentContacts(user.token);
+        if (data.success) {
+          shown.current.add('chat');
+          setContacts(data.contacts);
+        } else if (!silent) {
+          setPane('chat', { error: '获取联系人失败' });
+        }
+      } catch (err) {
+        if (!silent) setPane('chat', { error: '网络请求失败' });
+        console.error(err);
+      } finally {
+        if (!silent) setPane('chat', { loading: false });
       }
-      const user = JSON.parse(storedUser);
-      const data = await api.getRecentContacts(user.token);
-      if (data.success) {
-        shown.current.add('chat');
-        setContacts(data.contacts);
-      } else {
-        if (!silent) setError('获取联系人失败');
-      }
-    } catch (err) {
-      if (!silent) setError('网络请求失败');
-      console.error(err);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
+    },
+    [setPane],
+  );
 
   const fetchMessages = useCallback(
     async (contactId: number, silent = false) => {
@@ -637,10 +677,13 @@ export default function MessagesPage() {
   ]);
 
   /* One writer for the whole snapshot rather than a write threaded through each
-     loader. Held back while the first load is in flight and while an error is
-     showing, so an empty or failed screen is never what a later visit restores. */
+     loader. Held back while the *active* tab's first load is in flight and while
+     its error is showing, so an empty or failed screen is never what a later
+     visit restores. Gated on the active tab rather than on the page, because
+     that is the tab the snapshot records as the one to reopen on. */
+  const activePane = paneState[activeTab];
   useEffect(() => {
-    if (loading || error) return;
+    if (activePane.loading || activePane.error) return;
     writeSnapshot<MessagesSnapshot>(MESSAGES_KEY, {
       tab: activeTab,
       announcements,
@@ -651,8 +694,8 @@ export default function MessagesPage() {
       contacts,
     });
   }, [
-    loading,
-    error,
+    activePane.loading,
+    activePane.error,
     activeTab,
     announcements,
     notifications,
@@ -832,6 +875,18 @@ export default function MessagesPage() {
     },
   );
 
+  /* The flags, turned into actual groups.
+     The thread renders one container per turn — a portrait beside the bubbles
+     that belong to it — so the boundaries `markRuns` marks have to become
+     nesting. That a run always ends at a day boundary is what lets the date
+     separator sit *between* two groups instead of having to be threaded through
+     the middle of one. */
+  const threadRuns: { lead: Message; items: { msg: Message; endOfRun: boolean }[] }[] = [];
+  for (const { item, startOfRun, endOfRun } of runs) {
+    if (startOfRun || threadRuns.length === 0) threadRuns.push({ lead: item, items: [] });
+    threadRuns[threadRuns.length - 1].items.push({ msg: item, endOfRun });
+  }
+
   /* The delivery mark goes on the newest outgoing message only. Under every own
      bubble it is a column of 已读 down the right-hand side; on the newest one it
      answers the only question a sender actually has. */
@@ -868,13 +923,13 @@ export default function MessagesPage() {
             switch because the `key` tore the subtree down. */}
         <TabPanes value={activeTab}>
           <TabPane value="announcement">
-            {loading ? (
+            {paneState.announcement.loading ? (
               <MessageRowsSkeleton />
-            ) : error ? (
+            ) : paneState.announcement.error ? (
               <ErrorRetry
                 size="pane"
                 title="公告加载失败"
-                message={error}
+                message={paneState.announcement.error}
                 onRetry={() => fetchAnnouncements()}
               />
             ) : announcements.length === 0 ? (
@@ -916,8 +971,8 @@ export default function MessagesPage() {
           <TabPane value="notification">
             <NotificationPane
               items={notifications}
-              loading={loading}
-              error={error}
+              loading={paneState.notification.loading}
+              error={paneState.notification.error}
               onRetry={() => fetchNotifications()}
               emptyTitle="暂无系统消息"
             />
@@ -926,8 +981,8 @@ export default function MessagesPage() {
           <TabPane value="interaction">
             <NotificationPane
               items={interactionNotifications}
-              loading={loading}
-              error={error}
+              loading={paneState.interaction.loading}
+              error={paneState.interaction.error}
               onRetry={() => fetchInteractionNotifications(interactionNotificationsPage)}
               emptyTitle="暂无互动消息"
             >
@@ -976,12 +1031,48 @@ export default function MessagesPage() {
                   selectedContact ? 'hidden md:flex' : 'flex',
                 )}
               >
-                <div className={cn('flex items-center gap-2 p-3', contactsCollapsed && 'md:px-2')}>
+                <div
+                  className={cn(
+                    'flex items-center gap-2 p-3',
+                    /* The gap is on the same 300ms clock as the rail's width.
+                       Collapsed it has to reach 0, or the toggle does not end up
+                       centred in the 80px rail: 12px of padding either side
+                       leaves 56px, and a 40px button with an 8px gap still in
+                       front of it can only sit 4px right of centre however the
+                       free space is shared out. Animated rather than switched,
+                       because an instant 8px hop at the start of a 300ms slide
+                       is exactly the kind of two-clock movement that made this
+                       control look like it jumped before it moved. */
+                    'transition-[gap] duration-300 ease-[var(--ease-standard)]',
+                    contactsCollapsed && 'md:gap-0',
+                  )}
+                >
                   {/* This was a fully-styled field with no `value`, no
                       `onChange` and no filtering behind it — a control that
                       looked live, took focus, accepted typing and did nothing
-                      with it. */}
-                  {!contactsCollapsed && (
+                      with it.
+
+                      Kept mounted and faded out rather than unmounted while the
+                      rail is collapsing: pulling it out of the row on the first
+                      frame made the toggle beside it jump the whole width of the
+                      field, 300ms before the rail had finished narrowing around
+                      it. `w-0` on the same clock as the rail so the row's own
+                      width goes with it, and `pointer-events-none` because an
+                      invisible search box must not still take clicks. */}
+                  <div
+                    className={cn(
+                      'min-w-0 transition-[width,opacity] duration-300 ease-[var(--ease-standard)]',
+                      contactsCollapsed
+                        ? /* `md:grow-0` matters as much as `md:w-0`: `flex-1` is
+                             grow *and* basis, so a zero-width box still claimed
+                             every spare pixel in the rail and pushed the toggle
+                             off centre. */
+                          'md:w-0 md:grow-0 md:opacity-0 md:pointer-events-none flex-1'
+                        : 'flex-1 opacity-100',
+                    )}
+                    aria-hidden={contactsCollapsed ? 'true' : undefined}
+                    inert={contactsCollapsed ? true : undefined}
+                  >
                     <Input
                       type="search"
                       icon={<MdSearch size={18} />}
@@ -989,9 +1080,9 @@ export default function MessagesPage() {
                       value={contactQuery}
                       onChange={(e) => setContactQuery(e.target.value)}
                       aria-label="搜索联系人"
-                      fieldClassName="min-w-0 flex-1"
+                      fieldClassName="min-w-0"
                     />
-                  )}
+                  </div>
                   {/* Below `md` the list and the thread are the same column and
                       swap, so there is nothing beside this to make room for —
                       collapsing it there would only hide the search. */}
@@ -1011,40 +1102,76 @@ export default function MessagesPage() {
                   />
                 </div>
                 <div className="popover-scrollbar flex-1 overflow-y-auto p-2">
-                  {loading && contacts.length === 0 ? (
+                  {paneState.chat.loading && contacts.length === 0 ? (
                     <div className="flex flex-col gap-1">
                       {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="flex items-center gap-3 p-2">
+                        /* `h-16 px-2`, the contact row's own box — the skeleton
+                           stood at a different height, so the list re-spaced as
+                           the contacts landed. */
+                        <div key={i} className="flex h-16 items-center gap-3 px-2">
                           <SkeletonCircle size={48} delay={i * 80} />
-                          <div className="flex min-w-0 flex-1 flex-col gap-2">
+                          <div
+                            className={cn(
+                              'flex min-w-0 flex-1 flex-col gap-2',
+                              contactsCollapsed && 'md:opacity-0',
+                            )}
+                          >
                             <Skeleton className="h-4 w-3/4" delay={i * 80 + 40} />
                             <Skeleton className="h-3 w-1/2" delay={i * 80 + 80} />
                           </div>
                         </div>
                       ))}
                     </div>
-                  ) : error ? (
-                    <ErrorRetry
-                      size="inline"
-                      title="联系人加载失败"
-                      message={error}
-                      onRetry={() => fetchContacts()}
-                    />
+                  ) : paneState.chat.error ? (
+                    /* Collapsed, the rail is 80px wide and `ErrorRetry` is a
+                       centred glyph over a title over a message over a button —
+                       it wrapped to a column of two-character lines. The state
+                       still has to be *reachable* there, though, or the only way
+                       to retry is to expand the rail first, so it becomes the
+                       one control the state is really about: a retry button, in
+                       the error colour, with the message as its tooltip. */
+                    contactsCollapsed ? (
+                      <div className="hidden justify-center pt-2 md:flex">
+                        <IconButton
+                          onClick={() => fetchContacts()}
+                          aria-label={`联系人加载失败：${paneState.chat.error}，点击重试`}
+                          title={`联系人加载失败：${paneState.chat.error}`}
+                          className="text-error"
+                          icon={<MdErrorOutline size={22} />}
+                        />
+                      </div>
+                    ) : (
+                      <ErrorRetry
+                        size="inline"
+                        title="联系人加载失败"
+                        message={paneState.chat.error}
+                        onRetry={() => fetchContacts()}
+                      />
+                    )
                   ) : contacts.length === 0 ? (
-                    <EmptyState
-                      size="inline"
-                      icon={<MdOutlineChatBubbleOutline size={32} />}
-                      title="还没有任何私信"
-                    />
+                    /* Both empty states are words, and words are the one thing
+                       an 80px rail has no room for. Collapsed it shows nothing,
+                       which is honest — an empty rail is an empty list. */
+                    !contactsCollapsed && (
+                      <EmptyState
+                        size="inline"
+                        icon={<MdOutlineChatBubbleOutline size={32} />}
+                        title="还没有任何私信"
+                      />
+                    )
                   ) : visibleContacts.length === 0 ? (
                     /* A filter that matches nothing is a different state from
                        having no contacts at all, and saying "还没有任何私信"
-                       there would be a lie. */
-                    <EmptyState
-                      size="inline"
-                      icon={<MdSearchOff size={32} />}
-                      title="没有匹配的联系人"
-                    />
+                       there would be a lie. (Unreachable while collapsed — the
+                       search field is out of reach — but the guard costs
+                       nothing and the two empty states should behave alike.) */
+                    !contactsCollapsed && (
+                      <EmptyState
+                        size="inline"
+                        icon={<MdSearchOff size={32} />}
+                        title="没有匹配的联系人"
+                      />
+                    )
                   ) : (
                     visibleContacts.map((contact) => {
                       const active = selectedContact?.id === contact.id;
@@ -1059,17 +1186,37 @@ export default function MessagesPage() {
                           /* A list row in the shape the rest of the app uses:
                              `rounded-full` like the sidebar's nav rows, the M3
                              state layer for hover and press instead of a
-                             hand-picked `hover:bg-[var(--sidebar-hover)]` — which
-                             reached for a *legacy alias* through an arbitrary
-                             value — and the selected row on the secondary
-                             container pair rather than on the hover colour, so
-                             "selected" and "hovered" stop looking identical.
-                             The `mb-4` between rows is gone: 16px between items
-                             in a list makes four contacts look like four cards. */
+                             hand-picked hover colour reached for through an
+                             arbitrary value, and the selected row on the
+                             secondary container pair rather than on the hover
+                             colour, so "selected" and "hovered" stop looking
+                             identical. The `mb-4` between rows is gone: 16px
+                             between items in a list makes four contacts look
+                             like four cards.
+
+                             **Fixed height, and nothing about the row's layout
+                             changes when the rail collapses.** It used to switch
+                             to centred with no gap and drop the name block on
+                             the same frame the toggle was pressed — so the
+                             portrait jumped to the middle of a rail that was
+                             still 288px wide, and the row lost the two lines of
+                             text under it and shortened, both instantly, while
+                             the width took 300ms to catch up. One gesture, three
+                             clocks. Now the row keeps its geometry and the rail
+                             simply narrows over it: the text is *clipped* by the
+                             shrinking box rather than removed from it, and `h-16`
+                             means the row's height never depended on the text in
+                             the first place.
+
+                             The portrait needs no centring rule either, which is
+                             what makes this work. The collapsed rail is 80px and
+                             the list's own inset takes 8px a side, so the row is
+                             64px — a 48px portrait at `px-2` sits 8px from both
+                             edges of it. It arrives in the centre by staying
+                             exactly where it was. */
                           className={cn(
-                            'flex w-full cursor-pointer items-center gap-3 rounded-full p-2 text-left outline-none',
+                            'flex h-16 w-full cursor-pointer items-center gap-3 overflow-hidden rounded-full px-2 text-left outline-none',
                             'transition-ui focus-visible:ring-2 focus-ring',
-                            contactsCollapsed && 'md:justify-center md:gap-0',
                             active
                               ? 'bg-secondary-container text-on-secondary-container'
                               : 'state-layer text-on-surface',
@@ -1084,11 +1231,16 @@ export default function MessagesPage() {
                               />
                             </span>
                           </div>
-                          {/* The name and the time are what the rail drops.
-                              `md:hidden` rather than unmounted, so collapsing
-                              does not tear the row's subtree down and back up on
-                              every toggle. */}
-                          <div className={cn('min-w-0 flex-1', contactsCollapsed && 'md:hidden')}>
+                          {/* Faded, never unmounted and never hidden. `md:hidden`
+                              removed it from the row on the first frame, which is
+                              what made the row change height the instant the
+                              toggle was pressed. */}
+                          <div
+                            className={cn(
+                              'min-w-0 flex-1 transition-opacity duration-300 ease-[var(--ease-standard)]',
+                              contactsCollapsed && 'md:opacity-0',
+                            )}
+                          >
                             <p className="text-label-l-emphasized truncate">{contact.username}</p>
                             <p className="text-body-s text-on-surface-variant mt-0.5 truncate">
                               {contact.last_msg_time}
@@ -1151,13 +1303,13 @@ export default function MessagesPage() {
                           className="flex-1"
                         />
                       ) : (
-                        runs.map(({ item: msg, endOfRun }, i) => {
-                          const isMe = msg.sender_id !== selectedContact.id;
-                          const previous = i > 0 ? runs[i - 1].item : null;
+                        threadRuns.map(({ lead, items }, i) => {
+                          const isMe = lead.sender_id !== selectedContact.id;
+                          const previous = i > 0 ? threadRuns[i - 1].lead : null;
                           const startsDay =
-                            !previous || dayKey(previous.created_at) !== dayKey(msg.created_at);
+                            !previous || dayKey(previous.created_at) !== dayKey(lead.created_at);
                           return (
-                            <Fragment key={msg.id}>
+                            <Fragment key={lead.id}>
                               {/* One date per day, in the thread, where the
                                   conversation actually turns over — rather than
                                   the same 19-character stamp repeated under every
@@ -1169,42 +1321,48 @@ export default function MessagesPage() {
                                   className="text-label-s text-on-surface-variant my-3 flex items-center gap-3 first:mt-0"
                                 >
                                   <span className="bg-outline-variant h-px flex-1" />
-                                  <span className="shrink-0">{dayLabel(msg.created_at)}</span>
+                                  <span className="shrink-0">{dayLabel(lead.created_at)}</span>
                                   <span className="bg-outline-variant h-px flex-1" />
                                 </div>
                               )}
-                              <ChatBubble
+                              {/* A run is tight inside and separated outside,
+                                  which is the other half of what makes turns
+                                  read as turns rather than as a stack. */}
+                              <ChatRun
                                 own={isMe}
-                                endOfRun={endOfRun}
-                                /* Avatar and timestamp only on the last bubble of a
-                                   run. Every message used to carry both, so four
-                                   messages in a row showed the same 32px portrait
-                                   four times under four separate timestamps and
-                                   read as four separate turns. */
-                                timestamp={endOfRun ? messageClock(msg.created_at) : undefined}
-                                status={
-                                  isMe && msg.id === lastOwnMessageId ? (
-                                    <span className={msg.is_read ? 'text-primary' : undefined}>
-                                      {msg.is_read ? '已读' : '已送达'}
-                                    </span>
-                                  ) : undefined
-                                }
+                                className="mb-3 last:mb-0"
                                 avatar={
-                                  endOfRun ? (
-                                    <Avatar
-                                      src={msg.sender_avatar}
-                                      name={msg.sender_name}
-                                      size={32}
-                                    />
-                                  ) : undefined
+                                  <Avatar
+                                    src={lead.sender_avatar}
+                                    name={lead.sender_name}
+                                    size={32}
+                                  />
                                 }
-                                /* A run is tight inside and separated outside, which
-                                   is the other half of what makes runs read as
-                                   turns rather than as a stack. */
-                                className={endOfRun ? 'mb-3 last:mb-0' : ''}
                               >
-                                {renderMessageContent(msg.content)}
-                              </ChatBubble>
+                                {items.map(({ msg, endOfRun }) => (
+                                  <ChatBubble
+                                    key={msg.id}
+                                    own={isMe}
+                                    endOfRun={endOfRun}
+                                    /* The clock belongs to the turn, not to each
+                                       message in it: four messages in a row used
+                                       to print four separate times and read as
+                                       four separate turns. */
+                                    timestamp={
+                                      endOfRun ? messageClock(msg.created_at) : undefined
+                                    }
+                                    status={
+                                      isMe && msg.id === lastOwnMessageId ? (
+                                        <span className={msg.is_read ? 'text-primary' : undefined}>
+                                          {msg.is_read ? '已读' : '已送达'}
+                                        </span>
+                                      ) : undefined
+                                    }
+                                  >
+                                    {renderMessageContent(msg.content)}
+                                  </ChatBubble>
+                                ))}
+                              </ChatRun>
                             </Fragment>
                           );
                         })
@@ -1220,6 +1378,14 @@ export default function MessagesPage() {
                         tab bar): on a phone this row sits at the bottom of the
                         viewport, over the home indicator. */}
                     <div className="bg-surface-container relative p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+                      {/* The two controls stay *outside* the field. They were
+                          briefly moved into its trailing slot, which is right
+                          for a search box — one field, one action, pressed once
+                          — and wrong here: the composer is the thing you live
+                          in while typing, and burying send inside it turned the
+                          row's three plain targets into one crowded box. They
+                          are bottom-aligned so they stay put as the field grows.
+                          `items-end`, not `items-center`. */}
                       <div className="flex items-end gap-2">
                         <div className="relative shrink-0">
                           <IconButton
@@ -1296,13 +1462,7 @@ export default function MessagesPage() {
                              blurs it, which closed the keyboard on every single
                              message sent from a phone. The double-submit is
                              already blocked by `loading` on the button below and
-                             by the `sending` re-check inside `handleSendMessage`.
-
-                             The `rounded-full border-none` that used to be here
-                             emitted a second radius against the primitive's own
-                             and killed the outline the focus state depends on. A
-                             pill composer would have to be a variant inside
-                             `Input`, not an override at the call site. */
+                             by the `sending` re-check inside `handleSendMessage`. */
                         />
                         <Button
                           onClick={handleSendMessage}
