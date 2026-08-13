@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { api, PonyImage, UserComment, UserPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import RichTextRenderer from '@/components/RichTextRenderer';
+import Card from '@/components/Card';
 import {
   MdPerson,
   MdCake,
@@ -24,7 +26,6 @@ import {
 import UserBadge from '@/components/UserBadge';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
-import Card from '@/components/Card';
 import RoleBadge from '@/components/RoleBadge';
 import Pagination from '@/components/Pagination';
 import TabBar from '@/components/TabBar';
@@ -529,7 +530,14 @@ export default function UserProfilePage() {
                 title="在 Derpibooru 查看个人主页"
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <MdCloudUpload size={16} className="text-primary" />
+                  <Image
+                    src="/img/derpi.svg"
+                    alt=""
+                    width={16}
+                    height={16}
+                    aria-hidden="true"
+                    className="shrink-0"
+                  />
                   <span className="text-label-m-emphasized text-on-surface-variant">
                     Derpibooru 账户
                   </span>
