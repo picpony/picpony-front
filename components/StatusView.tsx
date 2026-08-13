@@ -81,7 +81,7 @@ export default function StatusView({
       {/* Each of these is a direct child of `Reveal`, which staggers its own
           children — nesting them in a wrapper would collapse the cascade into
           one block, which is the thing the stagger exists to avoid. */}
-      {icon && <span className="text-outline mb-4 [&>svg]:block">{icon}</span>}
+      {icon && <span className="text-outline mb-12 [&>svg]:block">{icon}</span>}
       {inline ? (
         <p className="text-body-m text-on-surface-variant">{title}</p>
       ) : (
