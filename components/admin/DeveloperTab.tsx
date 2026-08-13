@@ -6,6 +6,7 @@ import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdBuild, MdRefresh, MdPersonAdd, MdRemoveCircle } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
+import IconButton from '@/components/IconButton';
 import { SectionHeader } from './';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
@@ -145,12 +146,12 @@ export default function DeveloperTab({ token }: { token: string }) {
       key: 'name',
       header: '用户名',
       primary: true,
-      render: (u) => <span className="font-medium">{u.username}</span>,
+      render: (u) => <span className="text-body-m-emphasized">{u.username}</span>,
     },
     {
       key: 'email',
       header: '邮箱',
-      render: (u) => <span className="text-outline text-body-s">{u.email}</span>,
+      render: (u) => <span className="text-on-surface-variant text-body-s">{u.email}</span>,
     },
     {
       key: 'derpi',
@@ -160,21 +161,20 @@ export default function DeveloperTab({ token }: { token: string }) {
     {
       key: 'created',
       header: '注册时间',
-      render: (u) => <span className="text-outline text-body-s">{u.created_at}</span>,
+      render: (u) => <span className="text-on-surface-variant text-body-s">{u.created_at}</span>,
     },
     {
       key: 'actions',
       header: '操作',
       actions: true,
       render: (u) => (
-        <button
-          onClick={() => handleRevokeDeveloper(u.id)}
-          className="touch-target state-layer rounded-full p-1.5 text-error"
-          title="关闭开发者模式"
-          aria-label={`关闭 ${u.username} 的开发者模式`}
-        >
-          <MdRemoveCircle size={16} />
-        </button>
+        <IconButton
+            size="sm"
+            onClick={() => handleRevokeDeveloper(u.id)}
+            icon={<MdRemoveCircle size={16} />}
+            title="关闭开发者模式"
+            aria-label={`关闭 ${u.username} 的开发者模式`} className="text-error"
+          />
       ),
     },
   ];
@@ -189,20 +189,20 @@ export default function DeveloperTab({ token }: { token: string }) {
 
       {/* Developer Password */}
       <Card variant="transparent" className="space-y-4">
-        <h3 className="text-label-l-emphasized text-on-surface">维护密码</h3>
+        <h3 className="text-label-l text-on-surface">维护密码</h3>
         <div className="text-body-s text-primary rounded-sm p-3">
           此密码为系统随机生成的8位纯数字，每3天自动更新一次。用户开启开发者模式需输入此密码。
         </div>
 
         <div className="flex items-center gap-4">
           <span className="text-body-m text-on-surface-variant">当前密码：</span>
-          <code className="text-title-l-emphasized tracking-widest px-4 py-2 bg-surface-container-high rounded text-primary">
+          <code className="text-title-l-emphasized tracking-widest px-4 py-2 bg-surface-container-high rounded-xs text-primary">
             {devPassword || '----'}
           </code>
         </div>
 
         {passwordUpdatedAt && (
-          <p className="text-body-s text-outline">上次更新：{passwordUpdatedAt}</p>
+          <p className="text-body-s text-on-surface-variant">上次更新：{passwordUpdatedAt}</p>
         )}
 
         <Button
@@ -217,10 +217,10 @@ export default function DeveloperTab({ token }: { token: string }) {
 
       {/* Developer Users */}
       <Card variant="transparent" className="space-y-4">
-        <h3 className="text-label-l-emphasized text-on-surface">开发者用户列表</h3>
-        <div className="text-body-s text-on-surface-variant p-3 rounded">
+        <h3 className="text-label-l text-on-surface">开发者用户列表</h3>
+        <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
           以下用户已开启开发者模式。管理员可随时关闭任一用户的开发者模式。
-        </div>
+        </Card>
 
         <div className="flex items-center gap-3">
           <Input
@@ -251,12 +251,9 @@ export default function DeveloperTab({ token }: { token: string }) {
         maxWidth="max-w-sm"
         footer={
           <>
-            <button
-              onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setConfirmOpen(false)}>
               取消
-            </button>
+            </Button>
             <Button variant="danger" onClick={handleConfirm}>
               确认
             </Button>

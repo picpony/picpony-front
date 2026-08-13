@@ -16,11 +16,11 @@ import {
   MdLinkOff,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
+import Badge from '@/components/Badge';
 import Spinner from '@/components/Spinner';
 import FadeInImage from '@/components/FadeInImage';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import Modal from '@/components/Modal';
-import Reveal from '@/components/Reveal';
 import Select from '@/components/Select';
 import Button from '@/components/Button';
 import ImageCropper from '@/components/ImageCropper';
@@ -28,17 +28,18 @@ import { api } from '@/lib/api';
 import { readJson } from '@/lib/api/client';
 import { useAuthModal } from '@/components/AuthModal';
 import { Input, Textarea } from '@/components/Input';
+import PageHeader from '@/components/PageHeader';
+import SectionHeading from '@/components/SectionHeading';
 
-const sectionTitle = 'text-title-m-emphasized text-on-surface mb-4 flex items-center gap-2';
 /* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run
    of rows as one cut block rather than as separate floating cards. */
 const rowClass =
-  'm3-row flex flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 sm:flex-nowrap sm:gap-x-4 bg-surface-container-low transition-ui hover:bg-surface-container-high';
+  'm3-row flex flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 sm:flex-nowrap sm:gap-x-4 bg-surface-container-low transition-ui state-layer';
 /* The label column of a row. `min-w-0` is what lets a long value truncate
    instead of pushing the action out of the card. */
 const rowLabelClass = 'min-w-0 flex-1';
 const labelClass = 'text-body-m text-on-surface-variant mb-1';
-const valueClass = 'font-medium text-on-surface ';
+const valueClass = 'text-body-m-emphasized text-on-surface';
 
 /** 计算年龄 */
 function calcAge(birthday: string): number {
@@ -882,22 +883,29 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto" aria-busy={!settingsReady}>
-      <h1 className="text-headline-s text-on-surface mb-6 flex items-center gap-2">设置</h1>
+      <PageHeader title="设置" />
+      {/* The cloud config gate, from master: until the fetch resolves the page
+          is dimmed and inert, so a default value cannot be written back over a
+          setting the server has not returned yet. Same 50% the gallery uses for
+          a list being replaced — one weight for "this content is in flight". */}
       <div
         className={`transition-[opacity] duration-300 ease-[var(--ease-standard)] ${
           settingsReady ? '' : 'opacity-50 pointer-events-none'
         }`}
       >
-      <Reveal>
-        <div className="bg-surface overflow-hidden rounded-md space-y-0 mb-6">
-          <div className="p-6 border-b border-outline-variant">
-            <h2 className={sectionTitle}>
-              <MdPerson size={20} /> 账户设置
-            </h2>
+      {/* No entrance animation. This is a settings form — rows of switches and
+          values the user came here to change, not content to be revealed. Both
+          the mount-time `<Reveal>` that used to wrap these sections and the
+          scroll reveal that replaced it made a control列 arrive like an article.
+          Entrance cascades are for picture content. */}
+      <div>
+        <section className="mb-8">
+          <div>
+            <SectionHeading icon={<MdPerson size={20} />}>账户设置</SectionHeading>
 
             <div className={rowClass}>
               <div className="flex items-center gap-4">
-                <div className="relative w-16 h-16 rounded-full overflow-hidden bg-surface-container-highest flex-shrink-0">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden bg-surface-container-highest shrink-0">
                   {currentAvatar ? (
                     <>
                       {!avatarLoaded && (
@@ -915,19 +923,19 @@ export default function SettingsPage() {
                       />
                     </>
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-outline text-headline-s-emphasized">
+                    <div className="w-full h-full flex items-center justify-center text-on-surface-variant text-headline-s-emphasized">
                       {currentUsername ? currentUsername.charAt(0).toUpperCase() : '?'}
                     </div>
                   )}
                   {isAvatarUploading && (
-                    <div className="absolute inset-0 bg-scrim/50 flex items-center justify-center">
+                    <div className="bg-media-plate absolute inset-0 flex items-center justify-center">
                       <Spinner white />
                     </div>
                   )}
                 </div>
                 <div className={rowLabelClass}>
                   <p className={labelClass}>用户头像</p>
-                  <p className="text-body-s text-outline">支持 JPG、PNG、GIF 格式，最大 5MB</p>
+                  <p className="text-body-s text-on-surface-variant">支持 JPG、PNG、GIF 格式，最大 5MB</p>
                 </div>
               </div>
               <input
@@ -950,7 +958,7 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <div className="flex items-center gap-4">
-                <div className="relative w-24 h-14 rounded-md overflow-hidden bg-surface-container-highest flex-shrink-0">
+                <div className="relative w-24 h-14 rounded-md overflow-hidden bg-surface-container-highest shrink-0">
                   {currentBanner ? (
                     <>
                       {!bannerLoaded && (
@@ -977,14 +985,14 @@ export default function SettingsPage() {
                     </div>
                   )}
                   {isBannerUploading && (
-                    <div className="absolute inset-0 bg-scrim/50 flex items-center justify-center">
+                    <div className="bg-media-plate absolute inset-0 flex items-center justify-center">
                       <Spinner white />
                     </div>
                   )}
                 </div>
                 <div className={rowLabelClass}>
                   <p className={labelClass}>个人 Banner</p>
-                  <p className="text-body-s text-outline">建议尺寸 1200×300，最大 10MB</p>
+                  <p className="text-body-s text-on-surface-variant">建议尺寸 1200×300，最大 10MB</p>
                 </div>
               </div>
               <input
@@ -1041,11 +1049,13 @@ export default function SettingsPage() {
                 <p className={valueClass}>
                   {currentEmail || '未设置'}
                   {currentEmail && (
-                    <span
-                      className={`ml-2 text-body-s px-1.5 py-0.5 rounded ${isEmailVerified ? 'bg-success-container text-success' : 'bg-warning-container text-warning'}`}
+                    <Badge
+                      tone={isEmailVerified ? 'success' : 'warning'}
+                      size="sm"
+                      className="ml-2"
                     >
                       {isEmailVerified ? '已验证' : '未验证'}
-                    </span>
+                    </Badge>
                   )}
                 </p>
               </div>
@@ -1065,7 +1075,7 @@ export default function SettingsPage() {
             <div className={rowClass}>
               <div className={rowLabelClass}>
                 <p className={labelClass}>个人资料</p>
-                <p className="text-body-s text-outline">
+                <p className="text-body-s text-on-surface-variant">
                   {profileBio
                     ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '...' : '')
                     : '点击编辑个人简介、性别、生日'}
@@ -1114,7 +1124,7 @@ export default function SettingsPage() {
                       icon={<MdLinkOff size={16} />}
                       title="解除绑定"
                       responsiveLabel
-                      className="text-error hover:bg-error-container hover:text-error"
+                      className="text-error hover:bg-error-container hover:text-on-error-container"
                     >
                       解除绑定
                     </Button>
@@ -1135,17 +1145,15 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </div>
-        <div className="bg-surface overflow-hidden rounded-md mb-6">
-          <div className="p-6">
-            <h2 className={sectionTitle}>
-              <MdFilterList size={20} /> 内容筛选
-            </h2>
+        </section>
+        <section className="mb-8">
+          <div>
+            <SectionHeading icon={<MdFilterList size={20} />}>内容筛选</SectionHeading>
 
             <div className={rowClass}>
               <div className={rowLabelClass}>
                 <p className={labelClass}>内容分级过滤器</p>
-                <p className="text-body-s text-outline mt-1">
+                <p className="text-body-s text-on-surface-variant mt-1">
                   {contentFilter === 'safe' && '仅显示安全内容'}
                   {contentFilter === 'spoilers' && '拦截限制级内容（需 16 岁以上）'}
                   {contentFilter === 'developer' && '开发者模式，显示所有内容'}
@@ -1166,6 +1174,7 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <ToggleSwitch
+                layout="row"
                 checked={banAnthro}
                 onChange={(v) => updateSetting('banAnthro', v, 'trixie_ban_anthro', setBanAnthro)}
                 label="禁止类人生物 (马头人)"
@@ -1175,6 +1184,7 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <ToggleSwitch
+                layout="row"
                 checked={banDiscomfort}
                 onChange={(v) =>
                   updateSetting('banDiscomfort', v, 'trixie_ban_discomfort', setBanDiscomfort)
@@ -1186,6 +1196,7 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <ToggleSwitch
+                layout="row"
                 checked={onlyPony}
                 onChange={(v) => updateSetting('onlyPony', v, 'trixie_only_pony', setOnlyPony)}
                 label="只看小马 (含类马)"
@@ -1193,15 +1204,14 @@ export default function SettingsPage() {
               />
             </div>
           </div>
-        </div>
-        <div className="bg-surface overflow-hidden rounded-md mb-6">
-          <div className="p-6">
-            <h2 className={sectionTitle}>
-              <MdVisibility size={20} /> 显示偏好
-            </h2>
+        </section>
+        <section className="mb-8">
+          <div>
+            <SectionHeading icon={<MdVisibility size={20} />}>显示偏好</SectionHeading>
 
             <div className={rowClass}>
               <ToggleSwitch
+                layout="row"
                 checked={showTagCounts}
                 onChange={(v) =>
                   updateSetting('showTagCounts', v, 'trixie_show_tag_counts', setShowTagCounts)
@@ -1213,6 +1223,7 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <ToggleSwitch
+                layout="row"
                 checked={showChineseTags}
                 onChange={(v) =>
                   updateSetting(
@@ -1267,15 +1278,14 @@ export default function SettingsPage() {
               />
             </div>
           </div>
-        </div>
-        <div className="bg-surface overflow-hidden rounded-md mb-6">
-          <div className="p-6">
-            <h2 className={sectionTitle}>
-              <MdSpeed size={20} /> 性能与加速
-            </h2>
+        </section>
+        <section className="mb-8">
+          <div>
+            <SectionHeading icon={<MdSpeed size={20} />}>性能与加速</SectionHeading>
 
             <div className={rowClass}>
               <ToggleSwitch
+                layout="row"
                 checked={useCdn}
                 onChange={(v) => updateSetting('useCdn', v, 'trixie_use_cdn', setUseCdn)}
                 label="启用图片 CDN 加速"
@@ -1285,6 +1295,7 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <ToggleSwitch
+                layout="row"
                 checked={usePicponyProxy}
                 onChange={handleUsePicponyProxyChange}
                 label="启用 PicPony 加速服务器 (beta)"
@@ -1294,6 +1305,7 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <ToggleSwitch
+                layout="row"
                 checked={useApiAccel}
                 onChange={handleUseApiAccelChange}
                 disabled={!currentApiKey}
@@ -1309,13 +1321,15 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
-        </div>
-        <div className="bg-surface overflow-hidden rounded-md mb-6">
-          <div className="p-6">
-            <h2 className={sectionTitle}>
-              <MdSecurity size={20} /> 隐私设置
-            </h2>
-            <p className="text-body-s text-outline mb-4">控制您的个人主页上对外显示的内容</p>
+        </section>
+        <section className="mb-8">
+          <div>
+            <SectionHeading
+              icon={<MdSecurity size={20} />}
+              subtitle="控制您的个人主页上对外显示的内容"
+            >
+              隐私设置
+            </SectionHeading>
 
             <div>
               {[
@@ -1350,6 +1364,7 @@ export default function SettingsPage() {
               ].map((item) => (
                 <div key={item.key} className={rowClass}>
                   <ToggleSwitch
+                    layout="row"
                     checked={item.val}
                     onChange={(v) => updateSetting(item.key, v, item.lsKey, item.setter)}
                     label={item.label}
@@ -1358,16 +1373,19 @@ export default function SettingsPage() {
               ))}
             </div>
           </div>
-        </div>
-        <div className="bg-surface overflow-hidden rounded-md mb-6">
-          <div className="p-6">
-            <h2 className={sectionTitle}>
-              <MdNotifications size={20} /> 通知偏好
-            </h2>
-            <p className="text-body-s text-outline mb-4">选择接收哪些邮件通知（需要先绑定邮箱）</p>
+        </section>
+        <section className="mb-8">
+          <div>
+            <SectionHeading
+              icon={<MdNotifications size={20} />}
+              subtitle="选择接收哪些邮件通知（需要先绑定邮箱）"
+            >
+              通知偏好
+            </SectionHeading>
             <div>
               <div className={rowClass}>
                 <ToggleSwitch
+                  layout="row"
                   checked={emailNotifMessage}
                   onChange={(v) =>
                     updateSetting(
@@ -1383,6 +1401,7 @@ export default function SettingsPage() {
               </div>
               <div className={rowClass}>
                 <ToggleSwitch
+                  layout="row"
                   checked={emailNotifReply}
                   onChange={(v) =>
                     updateSetting(
@@ -1394,12 +1413,12 @@ export default function SettingsPage() {
                   }
                   label="有人回复我的帖子/评论"
                   description="当帖子或评论被回复时发送邮件通知"
-                />{' '}
-              </div>{' '}
-            </div>{' '}
-          </div>{' '}
-        </div>{' '}
-      </Reveal>{' '}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
       <ImageCropper
         file={avatarPick}
         onClose={() => setAvatarPick(null)}
@@ -1570,20 +1589,16 @@ export default function SettingsPage() {
         footer={
           <>
             {' '}
-            <button
+            <Button
+              variant="text"
               onClick={() => setIsClearApiKeyModalOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui disabled:opacity-50"
               data-ripple
             >
               取消
-            </button>{' '}
-            <button
-              onClick={handleClearApiKeyConfirm}
-              data-ripple
-              className="px-4 py-2 text-label-l bg-error-fill text-on-fill hover:bg-error-fill/90 hover:shadow-e2 hover:shadow-error/25 rounded-full transition-ui"
-            >
+            </Button>{' '}
+            <Button variant="danger" onClick={handleClearApiKeyConfirm} data-ripple>
               确认解除
-            </button>{' '}
+            </Button>{' '}
           </>
         }
       >
@@ -1661,7 +1676,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleResendCode}
                 disabled={isResending}
-                className="text-body-m text-link hover:underline disabled:opacity-50"
+                className="text-body-m text-link hover:underline disabled:disabled-content"
               >
                 {' '}
                 {isResending ? '发送中...' : '重新发送'}
@@ -1726,11 +1741,11 @@ export default function SettingsPage() {
               className="resize-none"
               placeholder="介绍一下你自己..."
             />{' '}
-            <p className="text-body-s text-outline mt-1">{profileBio.length}/500</p>{' '}
+            <p className="text-body-s text-on-surface-variant mt-1">{profileBio.length}/500</p>{' '}
           </div>{' '}
           <div>
             {' '}
-            <label className="block text-label-l text-on-surface mb-2">性别</label>{' '}
+            <p className="block text-label-l text-on-surface mb-2">性别</p>{' '}
             <Select
               value={profileGender}
               onChange={setProfileGender}
@@ -1758,7 +1773,7 @@ export default function SettingsPage() {
           </div>{' '}
           <div>
             {' '}
-            <label className="block text-label-l text-on-surface mb-2">种族</label>{' '}
+            <p className="block text-label-l text-on-surface mb-2">种族</p>{' '}
             <Select
               value={profileRace}
               onChange={setProfileRace}

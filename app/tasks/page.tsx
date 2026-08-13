@@ -3,11 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
-import Spinner from '@/components/Spinner';
+import Skeleton from '@/components/Skeleton';
+import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
 import Button from '@/components/Button';
 import { useSlidingIndicator } from '@/lib/motion';
 import { MdEmojiEvents, MdCheckCircle, MdLock } from 'react-icons/md';
 import UserBadge from '@/components/UserBadge';
+import PageHeader from '@/components/PageHeader';
 
 interface TaskData {
   success: boolean;
@@ -217,10 +220,13 @@ export default function TasksPage() {
   const renderTabContent = () => {
     if (activeTab === 'cumulative') {
       return (
-        <div key="cumulative" className="text-center text-outline py-12 animate-page-transition">
-          <MdLock size={48} className="mx-auto mb-4 opacity-40" />
-          <p>该类任务暂未开放，敬请期待</p>
-        </div>
+        <EmptyState
+          key="cumulative"
+          size="pane"
+          icon={<MdLock size={48} />}
+          title="该类任务暂未开放"
+          description="敬请期待。"
+        />
       );
     }
 
@@ -247,13 +253,13 @@ export default function TasksPage() {
                   </span>
                   {/* Sits at the bar's right edge; tabular figures stop the
                       digits shifting as progress ticks up. */}
-                  <span className="ml-auto shrink-0 text-body-s tabular-nums text-outline">
+                  <span className="ml-auto shrink-0 text-body-s tabular-nums text-on-surface-variant">
                     {Math.min(item.progress, item.target)}/{item.target}
                   </span>
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-surface-container-high overflow-hidden">
                   <div
-                    className="h-full rounded-full origin-left animate-[bar-grow_0.6s_var(--ease-decelerate)] transition-[width,background-color] duration-500 ease-[var(--ease-standard)]"
+                    className="h-full rounded-full origin-left animate-[bar-grow_0.4s_var(--ease-decelerate)] transition-[width,background-color] duration-300 ease-[var(--ease-standard)]"
                     style={{
                       width: `${pct}%`,
                       animationDelay: `${100 + index * 50}ms`,
@@ -283,13 +289,18 @@ export default function TasksPage() {
                     onClick={() => handleClaim(item.id)}
                     disabled={!canClaim}
                     loading={claiming === item.id}
-                    className={
-                      canClaim
-                        ? 'animate-[control-pop_0.3s_var(--ease-spring)]'
-                        : 'bg-surface-container-high text-outline  '
-                    }
+                    /* No colour override on the disabled branch. It used to add
+                       a container background and an `outline` ink, which emitted a
+                       second background and a second ink over the `text`
+                       variant's own — `cn` is a plain join, so which one won came
+                       down to stylesheet order — and `outline` is a boundary
+                       role that measures 4.3:1 on the light surface, under AA
+                       for a button label. `disabled` already applies the
+                       primitive's own `disabled-content`, i.e. the 38% M3
+                       specifies for disabled content. */
+                    className={canClaim ? 'animate-[control-pop_0.3s_var(--ease-spring)]' : undefined}
                   >
-                    {canClaim ? '领取' : '去完成'}{' '}
+                    {canClaim ? '领取' : '去完成'}
                   </Button>
                 )}{' '}
               </div>{' '}
@@ -300,68 +311,83 @@ export default function TasksPage() {
     );
   };
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8 animate-fade-in">
-      {' '}
-      {/* Header */}{' '}
-      <div className="flex items-center gap-3 mb-8">
-        {' '}
-        <h1 className="text-title-l text-on-surface">等级与任务</h1>{' '}
-      </div>{' '}
+    <div className="max-w-4xl mx-auto">
+      <PageHeader title="等级与任务" />
       {/* User card */}{' '}
       {data && (
-        <div className="mb-6 p-5 rounded-md bg-warning-container/60">
+        /* `warning-container` with its own `on-` ink, not a 60% wash carrying
+           `text-warning`. Two faults compounded here: the alpha meant the panel
+           was a different weight in each scheme, and `warning` is the *text*
+           role — dark ochre on light, pale amber on dark — so on a diluted
+           amber card the heading was low-contrast in one scheme and glaring in
+           the other. The progress track underneath was full-strength
+           `warning-container` sitting on the same colour at 60%, i.e. an empty
+           bar you could barely find. */
+        <div className="bg-warning-container text-on-warning-container mb-6 rounded-md p-5">
           {' '}
           <div className="flex items-center justify-between mb-3">
             {' '}
-            <div className="text-headline-s-emphasized text-warning">
+            <div className="text-headline-s-emphasized">
               {' '}
               Lv.{data.level}{' '}
-              {data.equipped_badges?.map((b, i) => (
+              {data.equipped_badges?.map((b) => (
                 <UserBadge
-                  key={i}
+                  key={b.badge_name}
                   name={b.badge_name}
                   color={b.badge_color}
                   className="ml-2 align-middle"
                 />
               ))}{' '}
             </div>{' '}
-            <div className="text-body-m text-warning">
+            <div className="text-body-m">
               {' '}
               <MdEmojiEvents size={14} className="inline mr-1" /> 金币:{' '}
-              <span className="font-bold">{data.coins?.toLocaleString() || 0}</span>{' '}
+              <span className="text-body-m-emphasized">
+                {data.coins?.toLocaleString() || 0}
+              </span>{' '}
             </div>{' '}
           </div>{' '}
           <div>
             {' '}
-            <div className="flex justify-between text-label-m text-warning mb-1">
+            <div className="flex justify-between text-label-m mb-1">
               {' '}
               <span>当前经验进度</span> <span>当前经验: {data.experience % 100} / 100</span>{' '}
             </div>{' '}
-            <div className="h-2.5 rounded-full bg-warning-container overflow-hidden">
+            {/* The track is the scrim tone rather than another amber, so the
+                fill has something to read against inside its own card. */}
+            <div className="bg-surface-container-lowest h-2.5 overflow-hidden rounded-full">
               {' '}
               <div
-                className="h-full rounded-full bg-gradient-to-r from-warning to-tertiary transition-[width] duration-500 ease-[var(--ease-standard)]"
+                /* `*-fill`, not the `warning`/`tertiary` text roles: this is a
+                   graphic, and those two flip between schemes, so the meter
+                   visibly swapped shade with the theme. */
+                className="from-warning-fill to-tertiary h-full rounded-full bg-gradient-to-r transition-[width] duration-300 ease-[var(--ease-standard)]"
                 style={{ width: `${data.experience % 100}%` }}
               />{' '}
             </div>{' '}
           </div>{' '}
         </div>
       )}{' '}
+      {/* The destination's own shape, not a spinner in the middle of nothing.
+          Every other list in the app — history, forum, messages — loads as its
+          own rows, and a task row is a name over a bar with a fixed-width action
+          at the end, so that is what stands in for it. A centred spinner told
+          the user "something is happening somewhere" and then reflowed the whole
+          screen when the rows arrived. */}
       {loading && (
-        <div className="flex justify-center py-16">
-          {' '}
-          <Spinner />{' '}
+        <div>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="m3-row flex items-center gap-4 bg-surface-container-low p-4">
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-4 w-2/5" delay={i * 80} />
+                <Skeleton className="mt-2 h-2 w-full rounded-full" delay={i * 80 + 60} />
+              </div>
+              <Skeleton className="h-8 w-20 shrink-0 rounded-full" delay={i * 80 + 120} />
+            </div>
+          ))}
         </div>
       )}{' '}
-      {error && (
-        <div className="text-center py-12">
-          {' '}
-          <p className="text-error mb-4">{error}</p>{' '}
-          <Button onClick={loadTasks} variant="filled">
-            重试
-          </Button>
-        </div>
-      )}{' '}
+      {error && <ErrorRetry title="任务加载失败" message={error} onRetry={loadTasks} />}{' '}
       {!loading && !error && data && (
         <>
           {' '}
@@ -382,7 +408,7 @@ export default function TasksPage() {
                 data-tab={tab.id}
                 data-ripple
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 text-label-l transition-ui rounded-t-lg ${
+                className={`px-4 py-2.5 text-label-l transition-ui rounded-t-lg outline-none focus-visible:ring-2 focus-ring ${
                   activeTab === tab.id
                     ? 'text-warning'
                     : 'text-on-surface-variant hover:text-on-surface '
@@ -398,7 +424,7 @@ export default function TasksPage() {
               {tabs.find((t) => t.id === activeTab)?.label}
             </span>
             {tabs.find((t) => t.id === activeTab)?.subtitle && (
-              <span className="ml-2 text-body-s text-outline">
+              <span className="ml-2 text-body-s text-on-surface-variant">
                 {tabs.find((t) => t.id === activeTab)?.subtitle}
               </span>
             )}

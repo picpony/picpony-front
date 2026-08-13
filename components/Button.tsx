@@ -47,7 +47,18 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
     <button
       ref={ref}
       disabled={isDisabled}
-      data-ripple={isDisabled ? undefined : ''}
+      /* Always present, never conditional on `disabled`.
+         `[data-ripple]` in globals.css is what gives this element
+         `position: relative` and `overflow: hidden`, and the ripple span is an
+         absolutely-positioned child that depends on both. Dropping the attribute
+         when the button becomes disabled therefore does not merely stop *future*
+         ripples — it un-positions the one currently animating, which reflows to
+         the initial containing block and finishes in the top-left corner of the
+         page. That is reachable from a single click on any button whose own
+         handler sets `loading`: the 领取 button on /tasks is the one that showed
+         it. `RippleLayer` already refuses to spawn on a disabled target, so the
+         gate belongs there and only there. */
+      data-ripple=""
       className={buttonClasses({
         variant,
         size,

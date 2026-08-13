@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useState, useRef } from 'react';
 import { MdClose, MdEmail, MdLock, MdSend, MdArrowBack } from 'react-icons/md';
+import IconButton from './IconButton';
 import Modal from './Modal';
 import CaptchaModal from './CaptchaModal';
 import Button from './Button';
@@ -108,13 +109,13 @@ function AuthModal({
         </div>
         {/* flex-col + my-auto：内容短时垂直居中，超高时正常滚动 */}
         <div className="relative main-scrollbar flex w-full md:w-2/5 flex-col overflow-y-auto p-6 sm:p-8">
-          <button
+          <IconButton
             onClick={onClose}
             aria-label="关闭"
-            className="absolute right-1 top-5 z-10 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-on-surface-variant outline-none transition-ui hover:rotate-90 hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/40 motion-reduce:hover:rotate-0"
-          >
-            <MdClose size={22} />
-          </button>
+            dismiss
+            className="absolute right-1 top-5 z-10 hover:text-on-surface"
+            icon={<MdClose size={22} />}
+          />
           <div key={view} className="my-auto animate-page-transition">
             {view === 'login' && (
               <LoginForm
@@ -135,6 +136,24 @@ function AuthModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * "返回登录", which appeared three times byte-for-byte — in the register form,
+ * the reset form and the verify step. Identical enough that a change to one
+ * would silently have left the other two behind, and none of the three carried
+ * a focus ring.
+ */
+function BackToLogin({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSwitch('login')}
+      className="mb-8 flex items-center rounded-xs text-label-l text-on-surface-variant outline-none transition-ui hover:text-on-surface focus-visible:ring-2 focus-ring"
+    >
+      <MdArrowBack size={18} className="mr-1" /> 返回登录
+    </button>
   );
 }
 
@@ -252,7 +271,7 @@ function LoginForm({
           <button
             type="button"
             onClick={() => onSwitch('register')}
-            className="text-primary cursor-pointer hover:underline"
+            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             立即注册
           </button>
@@ -261,7 +280,7 @@ function LoginForm({
           <button
             type="button"
             onClick={() => onSwitch('reset')}
-            className="text-primary hover:underline"
+            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             忘记密码？
           </button>
@@ -410,26 +429,27 @@ function RegisterForm({
   if (step === 'verify') {
     return (
       <div>
-        <button
-          type="button"
-          onClick={() => onSwitch('login')}
-          className="flex items-center text-label-l text-on-surface-variant hover:text-on-surface mb-8 transition-ui"
-        >
-          <MdArrowBack size={18} className="mr-1" /> 返回登录
-        </button>
+        <BackToLogin onSwitch={onSwitch} />
         <div className="space-y-6">
         <div className="text-center">
           <h1 className="text-headline-s text-on-surface mb-2">验证邮箱</h1>
           <p className="text-body-m text-on-surface-variant">
             验证码已发送至 <span className="text-on-surface">{email}</span>
           </p>
-          <p className="text-body-s text-outline mt-1">有效期为 10 分钟，请及时查收</p>
+          <p className="text-body-s text-on-surface-variant mt-1">有效期为 10 分钟，请及时查收</p>
         </div>
         <div>
-          <label className="block text-label-l text-on-surface mb-3 text-center">
+          <p className="block text-label-l text-on-surface mb-3 text-center">
             请输入 6 位验证码
-          </label>
+          </p>
           <div className="flex items-center justify-center gap-2 sm:gap-3">
+            {/* Six one-character text fields, wearing the text field's own
+                geometry and the text field's own focus state rather than a
+                second set: 12dp, and a thickened `primary` outline on focus with
+                no ring beside it. It used to carry an 8dp corner — the chip's
+                step, not a field's — and *both* indicators at once, a border
+                colour change and a 2px ring around it, which is the one control
+                in the app where the keyboard's position was announced twice. */}
             {codeDigits.map((digit, i) => (
               <input
                 key={i}
@@ -466,7 +486,7 @@ function RegisterForm({
                   const nextIndex = Math.min(text.length, 5);
                   codeInputRefs.current[nextIndex]?.focus();
                 }}
-                className="w-9 h-10 sm:w-10 sm:h-11 text-center text-title-m-emphasized rounded-sm border border-outline bg-surface-container-lowest text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+                className="w-10 h-12 sm:w-11 text-center text-title-m-emphasized rounded-md border border-outline bg-surface-container-lowest text-on-surface outline-none transition-[border-color] duration-200 ease-[var(--ease-standard)] focus:border-2 focus:border-primary"
               />
             ))}
           </div>
@@ -485,7 +505,7 @@ function RegisterForm({
           <button
             onClick={handleResend}
             disabled={isResending}
-            className="text-body-m text-primary cursor-pointer hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-body-m text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring disabled:disabled-content disabled:cursor-not-allowed"
           >
             {isResending ? '发送中...' : '未收到？重新发送验证码'}
           </button>
@@ -497,13 +517,7 @@ function RegisterForm({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => onSwitch('login')}
-        className="flex items-center text-label-l text-on-surface-variant hover:text-on-surface mb-8 transition-ui"
-      >
-        <MdArrowBack size={18} className="mr-1" /> 返回登录
-      </button>
+      <BackToLogin onSwitch={onSwitch} />
       <h1 className="text-headline-s text-on-surface mb-8">注册</h1>
       <form className="space-y-4" onSubmit={handleSubmit}>
         <Input
@@ -553,7 +567,7 @@ function RegisterForm({
           <button
             type="button"
             onClick={() => onSwitch('login')}
-            className="text-primary cursor-pointer hover:underline"
+            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             立即登录
           </button>
@@ -642,13 +656,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => onSwitch('login')}
-        className="flex items-center text-label-l text-on-surface-variant hover:text-on-surface mb-8 transition-ui"
-      >
-        <MdArrowBack size={18} className="mr-1" /> 返回登录
-      </button>
+      <BackToLogin onSwitch={onSwitch} />
       <h1 className="text-headline-s text-on-surface mb-2">
         {step === 'request' ? '忘记密码' : '重置密码'}
       </h1>
@@ -680,8 +688,8 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
         </form>
       ) : (
         <form onSubmit={handleResetPassword} className="space-y-4">
-          <div className="p-3 bg-primary/5 rounded-md border border-primary/20">
-            <p className="text-body-m text-primary">验证码已发送至 {email}</p>
+          <div className="bg-primary-container text-on-primary-container rounded-md p-3">
+            <p className="text-body-m">验证码已发送至 {email}</p>
           </div>
           <Input
             type="text"
@@ -724,7 +732,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
             <button
               type="button"
               onClick={() => setStep('request')}
-              className="text-body-m text-primary hover:underline"
+              className="text-body-m text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
             >
               重新发送验证码
             </button>

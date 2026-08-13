@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
-import Modal from '@/components/Modal';
 import DataTable, { type Column } from '@/components/DataTable';
 import { MdBlock, MdAdd, MdOpenInNew } from 'react-icons/md';
 import { SectionHeader, SearchInput } from './';
 import Button from '@/components/Button';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { Input } from '@/components/Input';
 
 interface BlacklistItem {
@@ -25,21 +25,16 @@ export default function BlacklistTab({ token }: { token: string }) {
   const [imageId, setImageId] = useState('');
   const [reason, setReason] = useState('');
 
-  const [blacklistConfirmModalOpen, setBlacklistConfirmModalOpen] = useState(false);
-  const [blacklistConfirmTitle, setBlacklistConfirmTitle] = useState('');
-  const [blacklistConfirmMessage, setBlacklistConfirmMessage] = useState('');
-  const blacklistConfirmActionRef = useRef<(() => void) | null>(null);
+  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
+     ref per tab. The signature is kept so the call sites read unchanged; what
+     went away is the second copy of the Modal, its footer and its title/message
+     state — five admin tabs had built the identical thing. */
+  const { confirm, confirmDialog } = useConfirm();
 
   const showBlacklistConfirm = (title: string, message: string, action: () => void) => {
-    setBlacklistConfirmTitle(title);
-    setBlacklistConfirmMessage(message);
-    blacklistConfirmActionRef.current = action;
-    setBlacklistConfirmModalOpen(true);
-  };
-
-  const handleBlacklistConfirmAction = () => {
-    blacklistConfirmActionRef.current?.();
-    setBlacklistConfirmModalOpen(false);
+    void confirm({ title, message }).then((confirmed) => {
+      if (confirmed) action();
+    });
   };
 
   const loadBlacklist = useCallback(async () => {
@@ -120,7 +115,7 @@ export default function BlacklistTab({ token }: { token: string }) {
       key: 'id',
       header: '图片ID',
       primary: true,
-      render: (item) => <span className="font-medium">#{item.image_id}</span>,
+      render: (item) => <span className="text-body-m-emphasized">#{item.image_id}</span>,
     },
     {
       key: 'link',
@@ -130,7 +125,7 @@ export default function BlacklistTab({ token }: { token: string }) {
           href={`/pic/${item.image_id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-link inline-flex items-center gap-1 hover:underline"
+          className="text-link inline-flex items-center gap-1 hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
         >
           查看原帖 <MdOpenInNew size={14} />
         </a>
@@ -147,13 +142,9 @@ export default function BlacklistTab({ token }: { token: string }) {
       header: '操作',
       actions: true,
       render: (item) => (
-        <button
-          onClick={() => removeBlacklist(item.image_id)}
-          data-ripple
-          className="bg-success-fill text-on-fill rounded px-3 py-1 text-label-m transition-ui hover:bg-success-fill/90"
-        >
+        <Button variant="success" size="xs" onClick={() => removeBlacklist(item.image_id)} data-ripple>
           解除屏蔽
-        </button>
+        </Button>
       ),
     },
   ];
@@ -167,7 +158,7 @@ export default function BlacklistTab({ token }: { token: string }) {
       />
 
       <div className="p-4 rounded-md">
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <Input
               label="图片ID"
@@ -189,8 +180,7 @@ export default function BlacklistTab({ token }: { token: string }) {
             />
           </div>
           <div className="flex items-end">
-            <Button variant="danger" onClick={addBlacklist}>
-              <MdAdd size={18} className="inline mr-1" />
+            <Button icon={<MdAdd size={18} />} variant="danger" onClick={addBlacklist}>
               强制屏蔽
             </Button>
           </div>
@@ -207,27 +197,7 @@ export default function BlacklistTab({ token }: { token: string }) {
         empty="暂无屏蔽记录"
       />
 
-      <Modal
-        isOpen={blacklistConfirmModalOpen}
-        onClose={() => setBlacklistConfirmModalOpen(false)}
-        title={blacklistConfirmTitle}
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <button
-              onClick={() => setBlacklistConfirmModalOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
-              取消
-            </button>
-            <Button variant="danger" onClick={handleBlacklistConfirmAction}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">{blacklistConfirmMessage}</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

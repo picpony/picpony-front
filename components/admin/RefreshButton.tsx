@@ -1,6 +1,7 @@
 'use client';
 
 import { MdRefresh } from 'react-icons/md';
+import Button from '@/components/Button';
 
 interface RefreshButtonProps {
   onClick: () => void;
@@ -14,22 +15,30 @@ export default function RefreshButton({
   loading = false,
 }: RefreshButtonProps) {
   return (
-    <button
+    /* `loading`, not `disabled` plus a hand-spun glyph: the primitive already
+       swaps the icon for a real `Spinner` and blocks interaction, which is what
+       every other busy button in the console does. Doing it by hand here meant the
+       spinner was a rotating `MdRefresh` in one place and a `Spinner` everywhere
+       else, for the same state.
+
+       `motion-reduce:` on the hover rotate, which the identical idiom in
+       `Modal` and `AuthModal` already carries — the reduced-motion enumeration
+       covers `animate-*` keyframes and (now) `transition-ui`, but a named
+       `transition-transform` still needs its own opt-out. */
+    <Button
+      variant="accent"
+      className="group"
       onClick={onClick}
-      disabled={loading}
+      loading={loading}
+      icon={
+        <MdRefresh
+          size={18}
+          className="transition-transform duration-300 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:transition-none motion-reduce:group-hover:rotate-0"
+        />
+      }
       data-ripple
-      className="inline-flex items-center gap-2 px-4 py-2 text-label-l text-primary bg-primary/10 hover:bg-primary/20 rounded-full transition-ui shrink-0 disabled:opacity-50 group"
     >
-      {' '}
-      <MdRefresh
-        size={18}
-        className={
-          loading
-            ? 'animate-spin'
-            : 'group-hover:rotate-180 transition-transform duration-500 ease-[var(--ease-standard)]'
-        }
-      />
       {label}
-    </button>
+    </Button>
   );
 }

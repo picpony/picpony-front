@@ -1,26 +1,33 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MdGroup } from 'react-icons/md';
 import Card from '@/components/Card';
-import Skeleton from '@/components/Skeleton';
+import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import DeveloperGuideModal from '@/components/DeveloperGuideModal';
-import { prefersReducedMotion } from '@/lib/motion';
+import { useReducedMotion } from '@/lib/motion';
+import ErrorRetry from '@/components/ErrorRetry';
+import Logo from '@/components/Logo';
 import { api } from '@/lib/api';
+import PageHeader from '@/components/PageHeader';
+import PageBack from '@/components/PageBack';
+import { useEscapeBack } from '@/lib/hooks';
+import SectionHeading from '@/components/SectionHeading';
 
 /** 成员头像：原生 img 避开 next/image 域名白名单与 QQ 防盗链（Referer），失败降级为图标 */
 function MemberAvatar({ src, alt }: { src: string; alt: string }) {
   const [broken, setBroken] = useState(false);
   if (!src || broken) {
     return (
-      <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant">
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant">
         <MdGroup size={24} />
       </div>
     );
   }
   return (
-    <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-full bg-surface-container-high">
+    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-surface-container-high">
       {/* eslint-disable-next-line @next/next/no-img-element -- 头像含 QQ 等白名单外域名，且需 no-referrer 防防盗链 */}
       <img
         src={src}
@@ -35,9 +42,16 @@ function MemberAvatar({ src, alt }: { src: string; alt: string }) {
   );
 }
 
+/** The Lottie composition's own frame, so the reserved box matches what lands. */
+const TRACE_ASPECT = '3000 / 1053';
+
 function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const clicksRef = useRef({ count: 0, last: 0 });
+  /* Reactive, not the one-shot read this used to make: with the one-shot the
+     branch below was decided at mount, so turning the preference on mid-session
+     left the animation running until something else re-rendered the page. */
+  const reduced = useReducedMotion();
 
   // 已登录状态下快速连点 10 次（点击间隔超 1.5s 重置）触发开发者向导
   const handleClick = () => {
@@ -59,8 +73,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   };
 
   useEffect(() => {
-    // 动效偏好减弱时不加载动画
-    if (prefersReducedMotion()) return;
+    if (reduced) return;
     let animation: { destroy: () => void } | null = null;
     let cancelled = false;
     Promise.all([
@@ -80,14 +93,41 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
       cancelled = true;
       animation?.destroy();
     };
-  }, []);
+  }, [reduced]);
 
+  /* Under the preference this used to render an *empty* box: the effect
+     returned before loading anything and nothing else drew the mark, so the page
+     opened with a labelled 176px hole where the wordmark belongs. The static
+     mark is the honest fallback — reduced motion asks for less movement, not
+     less content. */
+  if (reduced) {
+    /* The static mark takes the same handler. Without it the developer guide
+       would be unreachable for anyone with the preference on — an easter egg is
+       still a feature, and reduced motion asks for less movement, not fewer
+       affordances. `Logo` renders the mark, not a box, so the handlers go on a
+       wrapper rather than through it. */
+    return (
+      <span
+        className="mx-auto block w-44 select-none sm:w-56"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={handleClick}
+      >
+        <Logo className="h-auto w-full" />
+      </span>
+    );
+  }
+
+  /* `aspect-ratio` reserves the box before the player injects its SVG. Without
+     it the host is 0px tall until the chunk resolves and then pushes the whole
+     page down — a layout shift on every visit, on the one element above the
+     fold. */
   return (
     <div
       ref={hostRef}
       role="img"
       aria-label="PicPony"
       className="mx-auto w-44 select-none sm:w-56"
+      style={{ aspectRatio: TRACE_ASPECT }}
       onMouseDown={(e) => e.preventDefault()}
       onClick={handleClick}
     />
@@ -133,9 +173,17 @@ function TeamSection() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    // Deferred so the reset is not a synchronous cascade inside the effect —
+    // the same shape `/derpi/user/[id]` and the forum thread already use.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(false);
+    });
     api
       .getTeamMembers()
       .then((data: { success: boolean; members?: TeamMember[] }) => {
@@ -152,7 +200,7 @@ function TeamSection() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryCount]);
 
   // 按分类分组，组内按 order_num 排序
   const groups = (['developer', 'manager', 'editor', 'special'] as const)
@@ -164,24 +212,44 @@ function TeamSection() {
 
   return (
     <Card variant="filled" padding="lg" className="mt-4">
-      <h2 className="mb-4 text-title-m text-on-surface">运营团队</h2>
+      <SectionHeading>运营团队</SectionHeading>
 
+      {/* The skeleton is the loaded state's own shape: group headings over
+          wrapped rows of member cards, on the same `space-y-5` and
+          `gap-x-4 gap-y-5` rhythm. It used to be a flat row with a different gap
+          and no headings at all, so the list re-spaced *and* grew two heading
+          rows the moment the data landed — the one thing a skeleton exists to
+          prevent. */}
       {loading && (
-        <div className="flex flex-wrap gap-5">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="flex w-44 items-center gap-3">
-              <Skeleton className="h-16 w-16 flex-shrink-0 rounded-full" />
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-16 rounded" />
-                <Skeleton className="h-3 w-20 rounded" />
+        <div className="space-y-5" aria-hidden="true">
+          {[0, 1].map((g) => (
+            <div key={g}>
+              <Skeleton className="mb-3 h-5 w-20" delay={g * 120} />
+              <div className="flex flex-wrap gap-x-4 gap-y-5">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="flex w-full items-center gap-3 p-2 sm:w-44">
+                    <SkeletonCircle size={64} delay={g * 120 + i * 80} />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton className="h-4 w-16" delay={g * 120 + i * 80 + 40} />
+                      <Skeleton className="h-3 w-20" delay={g * 120 + i * 80 + 80} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
         </div>
       )}
 
+      {/* `ErrorRetry`, with a retry that actually retries. This was a bare
+          sentence and no way to recover, so one transient network failure left
+          the section empty until a full page reload. */}
       {!loading && error && (
-        <p className="text-body-m text-on-surface-variant">运营团队信息加载失败，请稍后重试</p>
+        <ErrorRetry
+          size="inline"
+          title="运营团队信息加载失败"
+          onRetry={() => setRetryCount((c) => c + 1)}
+        />
       )}
 
       {!loading && !error && (
@@ -198,7 +266,7 @@ function TeamSection() {
                       <MemberAvatar src={avatar ?? ''} alt={m.name} />
                       <div className="min-w-0">
                         <p className="truncate text-label-l text-on-surface">{m.name}</p>
-                        <p className="mt-0.5 text-body-s text-outline">{m.role}</p>
+                        <p className="mt-0.5 text-body-s text-on-surface-variant">{m.role}</p>
                       </div>
                     </>
                   );
@@ -206,12 +274,16 @@ function TeamSection() {
                     <Link
                       key={m.id}
                       href={href}
-                      className="flex w-44 items-center gap-3 rounded-md p-2 transition-ui hover:bg-surface-container-high"
+                      data-ripple
+                      /* Focus ring and ripple, like every other interactive row
+                         in the app. Without them a keyboard user could reach
+                         this link and see no indication they had. */
+                      className="flex w-full items-center gap-3 rounded-md p-2 outline-none transition-ui state-layer focus-visible:ring-2 focus-ring sm:w-44"
                     >
                       {inner}
                     </Link>
                   ) : (
-                    <div key={m.id} className="flex w-44 items-center gap-3 p-2">
+                    <div key={m.id} className="flex w-full items-center gap-3 p-2 sm:w-44">
                       {inner}
                     </div>
                   );
@@ -226,25 +298,33 @@ function TeamSection() {
 }
 
 export default function AboutPage() {
+  const router = useRouter();
   const [guideOpen, setGuideOpen] = useState(false);
+  /* Reachable only from the footer, so it is not a sidebar destination and
+     carries the shared back affordance — see the rule in AGENTS.md. */
+  const handleBack = useCallback(() => router.back(), [router]);
+  useEscapeBack(handleBack);
+
   return (
-    <div className="mx-auto max-w-4xl animate-fade-in px-4 py-8">
-      <h1 className="mb-6 text-headline-s text-on-surface">关于本站</h1>
+    <>
+      <PageBack onClick={handleBack} title="返回 (Esc)" />
+      <div className="mx-auto max-w-4xl pt-14">
+      <PageHeader title="关于本站" />
 
       <TraceHeader onActivate={() => setGuideOpen(true)} />
 
       <div className="mt-8">
         <Card variant="filled" padding="lg">
-          <h2 className="mb-3 text-title-m text-on-surface">关于 PicPony</h2>
-          <p className="text-body-m leading-relaxed text-on-surface-variant">
+          <SectionHeading className="mb-3">关于 PicPony</SectionHeading>
+          <p className="text-body-m text-on-surface-variant">
             一个看图的网站，没了
           </p>
         </Card>
 
         <TeamSection />
       </div>
-
       <DeveloperGuideModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
-    </div>
+      </div>
+    </>
   );
 }

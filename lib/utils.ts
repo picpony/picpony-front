@@ -8,8 +8,19 @@ const API_BASE = 'https://picpony.top';
  *
  * Takes `unknown` so that `someReactNode && 'pl-10'` type-checks — a ReactNode
  * narrows to `0 | 0n | '' | false | null | undefined` on the falsy branch, none
- * of which a narrower signature would accept. It does not resolve Tailwind
- * conflicts: put the overridable classes first and let `className` land last.
+ * of which a narrower signature would accept.
+ *
+ * It does not resolve Tailwind conflicts, and **ordering the arguments does not
+ * resolve them either**. This used to advise putting the overridable classes
+ * first and letting `className` land last, which does not work: for two utilities
+ * that set the same property, the winner is decided by the order the rules appear
+ * in the generated stylesheet, not by the order the class names appear in the
+ * attribute. `mt-12` beats a caller's `mt-8` wherever you put it.
+ *
+ * So a primitive that hard-codes a property a call site might want to change has
+ * to detect the override and stand its own default down. `Skeleton` does this for
+ * its radius and `Pagination` for its top margin; both carry the regex and the
+ * reasoning. The alternative is to make the value a prop.
  */
 export function cn(...parts: unknown[]): string {
   return parts.filter((p): p is string => typeof p === 'string' && p !== '').join(' ');
@@ -24,6 +35,50 @@ export function getAvatarUrl(avatar: string | undefined | null): string {
 export function getAssetUrl(path: string): string {
   if (path.startsWith('http')) return path;
   return `${API_BASE}/${path}`;
+}
+
+/**
+ * Copies text, and reports whether it actually worked.
+ *
+ * There were two of these and neither was right. The image detail's share menu
+ * called `navigator.clipboard.writeText` bare and then showed 链接已复制
+ * unconditionally — but the Clipboard API is undefined outside a secure context
+ * and rejects on a denied permission, so on plain HTTP or with clipboard access
+ * blocked the toast claimed a copy that never happened, and the rejection went
+ * unhandled besides. The admin badge tab had the `execCommand` fallback but
+ * announced its own failure through the browser's `prompt()` — a system box in
+ * the OS font, outside the app's scrim, type scale and focus trap.
+ *
+ * `document.execCommand('copy')` is deprecated and is here on purpose: it is the
+ * only path that works on an insecure origin, and it returns `false` rather than
+ * throwing when the UA refuses, which is why its result is checked.
+ */
+export async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through — a denied permission is still worth one more attempt.
+    }
+  }
+  try {
+    const staging = document.createElement('textarea');
+    staging.value = text;
+    staging.setAttribute('readonly', '');
+    // Off-screen rather than hidden: `display:none` is not selectable, and a
+    // visible focus jump would scroll the page.
+    staging.style.position = 'fixed';
+    staging.style.top = '-9999px';
+    staging.style.opacity = '0';
+    document.body.appendChild(staging);
+    staging.select();
+    const ok = document.execCommand('copy');
+    staging.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 export function formatDate(date: string | Date, locale: string = 'zh-CN'): string {

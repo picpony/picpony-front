@@ -6,6 +6,7 @@ import { MdAdd } from 'react-icons/md';
 import { useSearchParams, useRouter } from 'next/navigation';
 import ForumPostList from '@/components/ForumPostList';
 import Button from '@/components/Button';
+import PageHeader from '@/components/PageHeader';
 
 export default function ForumPage() {
   const searchParams = useSearchParams();
@@ -56,18 +57,28 @@ export default function ForumPage() {
     }
   };
 
+  /* NOTE: this component is currently unreachable. `next.config.ts` redirects
+     `/forum` (exact) to `/?tab=forum`, so the home route's forum tab renders
+     instead and nothing here ever mounts. `/forum/[id]` and `/forum/create` are
+     unaffected — the redirect matches the bare path only. Kept rather than
+     deleted because removing the redirect is the other way to resolve it, and
+     that is a product call. It deliberately has no back affordance: the route it
+     resolves to is a sidebar destination. */
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-headline-s text-on-surface">论坛</h1>
-        <Button
-          onClick={() => router.push('/forum/create')}
-          variant="filled"
-          icon={<MdAdd size={18} />}
-        >
-          发帖
-        </Button>
-      </div>
+    <div className="max-w-4xl mx-auto">
+      <PageHeader
+        title="论坛"
+        actions={
+          <Button
+            onClick={() => router.push('/forum/create')}
+            variant="filled"
+            icon={<MdAdd size={18} />}
+            responsiveLabel
+          >
+            发帖
+          </Button>
+        }
+      />
 
       <ForumPostList
         posts={posts}

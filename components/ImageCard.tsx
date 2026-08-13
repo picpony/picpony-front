@@ -77,11 +77,9 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
     setIsSpoilered((current) => (current === next ? current : next));
   }, [image.tags]);
 
-  const handleReveal = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsRevealed(true);
-  };
+  /* No `preventDefault`/`stopPropagation` any more: this button is a sibling of
+     the link, not a child of it, so there is no navigation to suppress. */
+  const handleReveal = () => setIsRevealed(true);
 
   const aspectW = image.width || 1;
   const aspectH = image.height || 1;
@@ -90,7 +88,7 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
   return (
     <div
       data-tab-row
-      className="image-card w-full"
+      className="image-card relative w-full"
       style={{ containIntrinsicSize: `auto ${intrinsicH}px` }}
     >
       <Link
@@ -130,23 +128,6 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
               proxyThumb
             />
           )}
-
-          {/* Kept mounted through the reveal so the scrim can dissolve. It used
-              to unmount on click, which swapped a fully-opaque cover for the
-              image in a single frame — the one moment on the card where a
-              transition actually carries information. */}
-          {isSpoilered && (
-            <div
-              className={`absolute inset-0 z-10 flex cursor-pointer flex-col items-center justify-center bg-scrim/55 backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-300 ease-[var(--ease-standard)] select-none motion-reduce:transition-none ${
-                isRevealed ? 'pointer-events-none opacity-0 backdrop-blur-0' : 'opacity-100'
-              }`}
-              aria-hidden={isRevealed}
-              onClick={handleReveal}
-            >
-              <MdVisibility size={36} className="text-on-media mb-2 opacity-80" />
-              <span className="text-on-media text-label-l opacity-80">点击查看</span>
-            </div>
-          )}
         </div>
 
         {/* Stay at the card slot; CSS fades when the sibling thumb is hero-locked. */}
@@ -155,28 +136,58 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           className="pointer-events-none absolute inset-0 z-[2] rounded-lg"
           aria-hidden="true"
         >
-          <div className="absolute inset-0 rounded-lg bg-scrim/0 transition-ui group-hover:bg-scrim/10" />
+          <div className="media-hover-scrim absolute inset-0 rounded-lg" />
           {/* 贴角圆角 = 图片大圆角(--radius-lg) - 角标间距(top-2/left-2/right-2)，
               与图片外角同心弧，间距均匀、视觉平衡 */}
-          <div className="absolute top-2 right-2 rounded rounded-tr-[calc(var(--radius-lg)-var(--spacing)*2)] bg-scrim/55 px-3 py-1.5 text-label-m text-on-media">
+          <div className="absolute top-2 right-2 rounded-xs rounded-tr-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media">
             {format}
           </div>
           <div
             title="点赞数"
-            className="absolute bottom-2 left-2 flex items-center gap-1 rounded rounded-bl-[calc(var(--radius-lg)-var(--spacing)*2)] bg-scrim/55 px-3 py-1.5 text-label-m text-on-media"
+            className="absolute bottom-2 left-2 flex items-center gap-1 rounded-xs rounded-bl-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media"
           >
             <MdThumbUp size={12} />
             <span>{image.score}</span>
           </div>
           <div
             title="评论数"
-            className="absolute bottom-2 right-2 flex items-center gap-1 rounded rounded-br-[calc(var(--radius-lg)-var(--spacing)*2)] bg-scrim/55 px-3 py-1.5 text-label-m text-on-media"
+            className="absolute bottom-2 right-2 flex items-center gap-1 rounded-xs rounded-br-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media"
           >
             <MdComment size={12} />
             <span>{image.comment_count}</span>
           </div>
         </div>
       </Link>
+
+      {/* The spoiler cover is a sibling of the link, not a child of it.
+          Interactive content nested inside an `<a>` is invalid HTML, and it
+          behaved exactly as invalid HTML does: the cover was a `<div onClick>`,
+          so the only focusable thing on the card was the link — Tab landed on
+          it, Enter navigated straight to the picture the cover exists to hide,
+          and the reveal could not be reached from a keyboard at all. As a
+          sibling it is a real `<button>` in its own right, in front of the link
+          in both paint order and tab order.
+
+          Kept mounted through the reveal so the cover can dissolve; it used to
+          unmount on click, swapping a fully-opaque plate for the image in one
+          frame — the one moment on this card where a transition carries
+          information. `inert` (React 19) takes the faded remains out of the tab
+          order and the accessibility tree together, which `aria-hidden` alone
+          would not: that leaves a focusable element inside a hidden subtree. */}
+      {isSpoilered && (
+        <button
+          type="button"
+          onClick={handleReveal}
+          inert={isRevealed}
+          aria-label="显示被剧透标签遮住的图片"
+          className={`absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-lg bg-media-plate backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-300 ease-[var(--ease-standard)] outline-none select-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset motion-reduce:transition-none ${
+            isRevealed ? 'pointer-events-none opacity-0 backdrop-blur-0' : 'opacity-100'
+          }`}
+        >
+          <MdVisibility size={36} className="text-on-media mb-2" />
+          <span className="text-on-media-variant text-label-l">点击查看</span>
+        </button>
+      )}
     </div>
   );
 });

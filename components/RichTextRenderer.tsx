@@ -6,9 +6,12 @@ import MarkdownRenderer from './MarkdownRenderer';
 
 interface RichTextRendererProps {
   content: string;
+  /** Render as inline content — see `MarkdownRenderer`. BBCode is block-shaped
+   *  by construction ([quote], [list], [table]) and ignores this. */
+  inline?: boolean;
 }
 
-export default function RichTextRenderer({ content }: RichTextRendererProps) {
+export default function RichTextRenderer({ content, inline = false }: RichTextRendererProps) {
   const hasBBCode = (text: string): boolean => {
     const bbcodePatterns = [
       /\[\/?b\]/i, // [b] [/b]
@@ -41,5 +44,5 @@ export default function RichTextRenderer({ content }: RichTextRendererProps) {
     return <BBCodeRenderer content={content} />;
   }
 
-  return <MarkdownRenderer content={content} />;
+  return <MarkdownRenderer content={content} inline={inline} />;
 }

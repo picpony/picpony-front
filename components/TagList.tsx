@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
+import Chip from '@/components/Chip';
 import Skeleton from '@/components/Skeleton';
 import { tagCategoryChip } from '@/lib/tagCategories';
 
@@ -61,30 +62,34 @@ export default function TagList({
   const display = (name: string) => tagTranslations?.[name.toLowerCase()] ?? name;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Artists */}
       {artists.length > 0 && (
         <div>
-          <h3 className="text-label-m-emphasized text-outline uppercase tracking-wider mb-2">
+          <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
             艺术家
           </h3>
           <div className="flex flex-wrap gap-2">
-            {visibleArtists.map((artist, index) => (
-              <span
-                key={index}
-                onClick={() => router.push(`/search?q=${encodeURIComponent(`artist:${artist}`)}`)}
-                className={`state-layer text-label-l cursor-pointer rounded-sm px-3 py-1.5 ${tagCategoryChip('artist')}`}
+            {visibleArtists.map((artist) => (
+              <Chip
+                key={artist}
+                size="md"
+                colors={tagCategoryChip('artist')}
+                onClick={() =>
+                  router.push(`/search?q=${encodeURIComponent(`artist:${artist}`)}`, {
+                    scroll: false,
+                  })
+                }
               >
-                {' '}
-                {display(artist)}{' '}
-              </span>
+                {display(artist)}
+              </Chip>
             ))}{' '}
           </div>{' '}
           {visibleArtists.length < artists.length && (
             <Button
               variant="text"
               size="sm"
-              className="mt-3 text-primary"
+              className="mt-3"
               onClick={() =>
                 onShowMore({
                   ...visibleTagLimits,
@@ -101,27 +106,29 @@ export default function TagList({
       {ocs.length > 0 && (
         <div>
           {' '}
-          <h3 className="text-label-m-emphasized text-outline uppercase tracking-wider mb-2">
+          <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
             图中包含的 OC
           </h3>{' '}
           <div className="flex flex-wrap gap-2">
             {' '}
-            {visibleOcs.map((oc, index) => (
-              <span
-                key={index}
-                onClick={() => router.push(`/search?q=${encodeURIComponent(`oc:${oc}`)}`)}
-                className={`state-layer text-label-l cursor-pointer rounded-sm px-3 py-1.5 ${tagCategoryChip('oc')}`}
+            {visibleOcs.map((oc) => (
+              <Chip
+                key={oc}
+                size="md"
+                colors={tagCategoryChip('oc')}
+                onClick={() =>
+                  router.push(`/search?q=${encodeURIComponent(`oc:${oc}`)}`, { scroll: false })
+                }
               >
-                {' '}
-                {display(oc)}{' '}
-              </span>
+                {display(oc)}
+              </Chip>
             ))}{' '}
           </div>{' '}
           {visibleOcs.length < ocs.length && (
             <Button
               variant="text"
               size="sm"
-              className="mt-3 text-primary"
+              className="mt-3"
               onClick={() =>
                 onShowMore({
                   ...visibleTagLimits,
@@ -135,52 +142,51 @@ export default function TagList({
         </div>
       )}{' '}
       {/* Regular Tags */}{' '}
-      <div>
-        {' '}
-        <h3 className="text-label-m-emphasized text-outline uppercase tracking-wider mb-2">
-          标签 (Tag)
-        </h3>{' '}
-        <div className="flex flex-wrap gap-2">
+      {regularTags.length > 0 && (
+        <div>
           {' '}
-          {visibleRegularTags.map((tag, index) => (
-            <span
-              key={index}
-              onClick={() => onTagClick(tag)}
-              className="state-layer px-2.5 py-1 bg-surface-container-high text-on-surface-variant text-label-l rounded-sm cursor-pointer max-w-full truncate"
-              title="点击查看词库信息"
+          <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
+            标签 (Tag)
+          </h3>{' '}
+          <div className="flex flex-wrap gap-2">
+            {visibleRegularTags.map((tag) => (
+              <Chip key={tag} size="md" onClick={() => onTagClick(tag)} title="点击查看词库信息">
+                {display(tag)}
+                {/* `on-surface-variant`, not `outline`: a count is supporting
+                    *text*, and `outline` is the boundary role — 4.3:1 on the
+                    light surface, under the AA floor. The placeholder keeps the
+                    chip from growing when the number lands. */}
+                {showTagCounts &&
+                  (typeof tagCounts[tag] === 'number' ? (
+                    <span className="ml-1 text-label-s text-on-surface-variant tabular-nums">
+                      {tagCounts[tag].toLocaleString()}
+                    </span>
+                  ) : tagCounts[tag] === undefined ? (
+                    <span className="ml-1 text-label-s">
+                      <Skeleton className="inline-block h-3 w-6 align-baseline" />
+                    </span>
+                  ) : null)}
+              </Chip>
+            ))}
+          </div>
+          {visibleRegularTags.length < regularTags.length && (
+            <Button
+              variant="text"
+              size="sm"
+              className="mt-3"
+              onClick={() =>
+                onShowMore({
+                  ...visibleTagLimits,
+                  regular: visibleTagLimits.regular + TAG_BATCH_SIZE,
+                })
+              }
             >
-              {' '}
-              {display(tag)}{' '}
-              {showTagCounts &&
-                (typeof tagCounts[tag] === 'number' ? (
-                  <span className="ml-1 text-label-s text-outline">
-                    {tagCounts[tag].toLocaleString()}
-                  </span>
-                ) : tagCounts[tag] === undefined ? (
-                  /* 计数未加载时先占位，避免数字突然撑开布局 */
-                  <span className="ml-1 text-label-s text-outline">
-                    <Skeleton className="inline-block h-3 w-6 align-baseline" />
-                  </span>
-                ) : null)}
-            </span>
-          ))}
+              显示更多标签（剩余{' '}
+              {(regularTags.length - visibleRegularTags.length).toLocaleString()}）
+            </Button>
+          )}
         </div>
-        {visibleRegularTags.length < regularTags.length && (
-          <Button
-            variant="text"
-            size="sm"
-            className="mt-3 text-primary"
-            onClick={() =>
-              onShowMore({
-                ...visibleTagLimits,
-                regular: visibleTagLimits.regular + TAG_BATCH_SIZE,
-              })
-            }
-          >
-            显示更多标签（剩余 {(regularTags.length - visibleRegularTags.length).toLocaleString()}）
-          </Button>
-        )}
-      </div>
+      )}
     </div>
   );
 }

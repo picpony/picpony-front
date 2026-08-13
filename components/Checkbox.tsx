@@ -26,8 +26,15 @@ export default function Checkbox({
   'aria-labelledby': ariaLabelledBy,
 }: CheckboxProps) {
   return (
+    /* `touch-target` because the label *is* the whole hit area: the input is
+       `sr-only` and both the box and the tick are `pointer-events-none`, so the
+       control was a 20px target — under M3's 48dp checkbox target, under WCAG
+       2.5.8's 24px floor, and under this app's own 44px rule, on its most-used
+       form control. The utility expands the hit area without changing the 20px
+       box, which is what keeps the row heights it sits in unchanged. Safe here
+       because there is no `data-ripple` to clip it. */
     <label
-      className={`relative flex items-center justify-center w-5 h-5 shrink-0 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${className}`}
+      className={`touch-target relative flex items-center justify-center w-5 h-5 shrink-0 ${disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer'} ${className}`}
     >
       <input
         type="checkbox"
@@ -38,10 +45,19 @@ export default function Checkbox({
         onChange={(e) => onChange(e.target.checked)}
         className="peer sr-only"
       />
+      {/* `rounded-xs` (4dp): the shape table gives a 12dp step to cards and
+          section surfaces, and at 12dp on a 20px box this read as a radio button
+          rather than a checkbox. M3 specs the extra-small corner here.
+
+          `peer-focus-visible:focus-ring`, not `peer-focus-ring`: a Tailwind
+          variant needs the colon. Without it the string is not a utility at all,
+          emits nothing, and the 2px ring fell back to `currentColor` — taking the
+          colour of whatever text happened to surround the control, which is the
+          exact failure the `focus-ring` utility was added to end. */}
       <div
-        className={`w-5 h-5 rounded-md border-2 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30 transition-ui pointer-events-none ${
+        className={`w-5 h-5 rounded-xs border-2 peer-focus-visible:ring-2 peer-focus-visible:focus-ring transition-ui pointer-events-none ${
           checked
-            ? 'bg-primary border-primary animate-[control-pop_0.25s_var(--ease-spring)]'
+            ? 'bg-primary border-primary animate-[control-pop_0.2s_var(--ease-spring)]'
             : 'bg-surface-raised border-outline'
         }`}
       />

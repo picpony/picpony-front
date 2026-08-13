@@ -82,7 +82,7 @@ export function ToastContainer() {
 
   return createPortal(
     <div
-      className="pointer-events-none fixed top-6 left-1/2 z-[9999] flex -translate-x-1/2 flex-col items-center"
+      className="pointer-events-none fixed top-6 left-1/2 z-toast flex -translate-x-1/2 flex-col items-center"
       // Announced politely so a screen reader hears the result of an action
       // without interrupting whatever it is currently reading.
       role="status"

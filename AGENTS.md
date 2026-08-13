@@ -13,17 +13,235 @@ card radii, five scrollbar appearances and 29 hand-copied primary buttons.
 
 ## Use the primitive, not the class string
 
-| Need                   | Use                                                        | Never                                             |
-| ---------------------- | ---------------------------------------------------------- | ------------------------------------------------- |
-| Button                 | `components/Button.tsx`                                    | a `<button>` with `bg-primary text-on-primary …`  |
-| Text input / textarea  | `Input` / `Textarea` / `Field` from `components/Input.tsx` | a bare `<input>` with border + focus-ring classes |
-| Card / section surface | `components/Card.tsx`                                      | `bg-surface-container-low rounded-… p-4`          |
-| Dropdown               | `components/Select.tsx`                                    | a hand-rolled absolutely-positioned menu          |
-| Dialog                 | `components/Modal.tsx`                                     | a hand-rolled scrim + panel                       |
-| Bottom sheet           | `components/Sheet.tsx`                                     | —                                                 |
-| Tag / status pill      | `components/Chip.tsx`                                      | —                                                 |
-| Press feedback         | `usePressable` (`lib/motion.ts`)                           | `active:scale-95`                                 |
-| Scroll-in reveal       | `useScrollReveal` (`lib/motion.ts`)                        | mount-time fades                                  |
+| Need                     | Use                                                        | Never                                             |
+| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------- |
+| Button                   | `components/Button.tsx`                                    | a `<button>` with `bg-primary text-on-primary …`  |
+| Text input / textarea    | `Input` / `Textarea` / `Field` from `components/Input.tsx` | a bare `<input>` with border + focus-ring classes |
+| Colour picker            | `ColorSwatch` (`components/Input.tsx`)                     | a bare `<input type="color">`                     |
+| Radio button             | `components/Radio.tsx`                                     | a bare `<input type="radio">`                     |
+| On/off setting           | `components/ToggleSwitch.tsx` — `layout="row"` in a list   | a `justify-between` div with a bare switch in it  |
+| Card / section surface   | `components/Card.tsx`                                      | `bg-surface-container-low rounded-… p-4`          |
+| Dropdown (picks a value) | `components/Select.tsx`                                    | a hand-rolled absolutely-positioned menu          |
+| Menu (runs a command)    | `components/Menu.tsx`                                      | a `role="menu"` div with no keyboard support      |
+| Any other floating panel | `components/Popover.tsx`                                   | a fifth recipe for corner + elevation + border    |
+| Dialog                   | `components/Modal.tsx`                                     | a hand-rolled scrim + panel                       |
+| "Are you sure?"          | `useConfirm` (`components/ConfirmDialog.tsx`)              | `window.confirm`, or a `Modal` + 4 useStates      |
+| Asking for one value     | `usePrompt` (`components/ConfirmDialog.tsx`)               | `window.prompt`                                   |
+| Copying to the clipboard | `copyText` (`lib/utils.ts`)                                | `navigator.clipboard.writeText` with no fallback  |
+| Bottom sheet             | `components/Sheet.tsx`                                     | a `Modal` on a phone                              |
+| Icon-only control        | `components/IconButton.tsx` — `variant="media"` on a photo | `p-2.5 rounded-full` around a glyph               |
+| Icon control on the app bar | `IconButton` `variant="on-primary"`                     | a 44px box repeating `focus-ring-on-primary`      |
+| A close / dismiss control | `IconButton` `dismiss`                                    | hand-writing the quarter-turn hover               |
+| Heading above a card or list | `components/SectionHeading.tsx`                         | an `<h2 class="text-title-m-…">` written out      |
+| Tag / status pill        | `components/Chip.tsx`                                      | —                                                 |
+| Mark beside a name       | `components/Badge.tsx` — `tone="media"` on a photo          | an inline `<span>` with a container pair          |
+| Unread count             | `CountBadge` (`components/Badge.tsx`)                       | a hand-clamped `99+` pill                         |
+| Role beside a username   | `components/RoleBadge.tsx`                                 | `roleInfo(x).chip` on your own `<span>`           |
+| Nothing here / it failed | `EmptyState` / `ErrorRetry`                                 | a centred `<p>` in a `<div>`                      |
+| Tabbed panes             | `TabPanes` / `TabPane` (`components/TabPanes.tsx`)          | `{active === 'x' && …}`, or a `key` on the panel   |
+| Chat message             | `components/ChatBubble.tsx`                                | `rounded-2xl` picked by eye                       |
+| Overlay behaviour        | `lib/overlay.ts` hooks                                     | a second copy of the focus trap / scroll lock     |
+| Press feedback           | `data-ripple` + `state-layer`                              | an active-scale utility                           |
+| Scroll-in reveal         | `useScrollReveal` (`lib/motion.ts`) — see note below       | mount-time fades                                  |
+| Scrolling to an element  | `scrollAppToElement` (`lib/motion.ts`)                     | `el.scrollIntoView({ behavior: 'smooth' })`       |
+
+Press feedback is `data-ripple` plus the `state-layer` utility. This table used to
+name a `usePressable` hook; nothing in the repo has ever defined one — the row was
+the only occurrence of the string. Press lives in `spawnRipple` (`lib/motion.ts`)
+and the `state-layer` utility in `globals.css`, and `Button`/`IconButton` already
+carry both.
+
+`useScrollReveal` (`lib/motion.ts`) is wired into the long-content screens —
+/about's team groups, /settings' six sections, a forum thread's reply list. Pick
+by *position*, not preference: on screen at commit uses `<Reveal>`, further down
+uses this. /settings is the worked example of getting that wrong — it wrapped all
+six sections in one mount-time `<Reveal>`, so the three below the fold had
+finished revealing before you ever scrolled to them.
+
+Four places it must **not** go, and the last two are why the list of call sites
+is shorter than the list of long pages:
+
+- **Above a gallery card.** It parks its targets at a `y` offset and the hero
+  flight reads `getBoundingClientRect` on press.
+- **Inside a `TabPanes` pane running `lean`** (i.e. /policy). The shared axis is
+  already sampling the same nodes' `autoAlpha` and `y`.
+- **Inside any tab pane whose content swaps**, `lean` or not — /user/[id],
+  /messages, /favorites, the home route. The pane transition and the reveal would
+  animate the same nodes on two different clocks.
+- **Over content that already cascades on mount** — /tasks' rows stagger via
+  their own delays, /admin's panel cross-fades as one block. A second entrance on
+  top of the first is the "动画重叠" failure, not extra polish.
+
+The hook owns three things a call site would otherwise get wrong. It refreshes
+ScrollTrigger through a debounced `ResizeObserver`, because trigger positions are
+computed once and ScrollTrigger auto-refreshes on resize and `load` and nothing
+else — an image decoding after the batch is built moves every start line below
+it. Its `batchMax` is a *function*, re-evaluated per refresh, because a flat
+value put a whole phone screen into one batch and left the stagger nothing to
+stagger. And it takes `useReducedMotion` rather than the one-shot read, because
+this is one of the two hooks that keeps firing all session (the other is
+`useStaggerGrid`) and so is one of the two where changing the preference midway
+still has something to affect. It deliberately has no `refreshPriority`: that
+option orders refreshes when one trigger's recalculation moves another's
+measurements, which means pinning, and nothing here pins.
+
+**An interactive element may not be nested inside another one.** A `<button>`
+inside an `<a>` is invalid HTML, and it fails in exactly the way invalid HTML
+does rather than in a way you can see: the gallery card's spoiler cover was a
+click-handled `<div>` inside the card's `<Link>`, so the only focusable node on
+the card was the link — Tab landed on it and Enter navigated to the picture the
+cover exists to hide. Lift the second control out to be a *sibling* of the link
+and position it over the top. Where the enclosing element is genuinely the
+convenience target (the image detail's media box, which zooms on click), keep
+the container's handler as a pointer affordance and put a real control inside
+it, so the pointer path and the keyboard path both exist.
+
+For an overlay that has to stay mounted through its own fade-out, `inert`
+(React 19) is the one attribute that removes it from the tab order and the
+accessibility tree together. `aria-hidden` alone leaves a focusable element
+inside a hidden subtree, which is its own violation.
+
+`EmptyState` and `ErrorRetry` are two presets over one `StatusView`, so a list
+that is empty and a list that failed have one silhouette. Both take
+`size="page" | "pane" | "inline"` — match the enclosure, because a half-viewport
+block inside a 120px well makes the well scroll.
+
+**Every** "nothing here" / "that failed" goes through them, including the ones
+that do not look like a list: the 404, the route error boundary, the image
+detail's failure, an admin table's empty body. There were nineteen hand-rolled
+ones at the last count, in three type scales — `headline-s` for errors,
+`title-m` for empties, bare `on-surface-variant` inside panels — and the reason
+there were nineteen is that each was written next to the thing it belonged to
+rather than reached for.
+
+**Loading is the destination's own shape, not a spinner.** A list loads as
+`Skeleton` rows in the row's own geometry, a grid as `ImageGridSkeleton`, a card
+as a card. A `Spinner` is for an action in flight — a submit button, an upload,
+an inline "querying…" — not for a page, because a centred dot says "something is
+happening somewhere" and then reflows the whole screen when the content lands.
+
+The test is whether there is a destination shape *yet*. A puzzle image loading
+into a box already sized to its own aspect ratio has one; a lightbox waiting on
+an image whose dimensions are unknown does not. And the shape has to actually
+match: the profile page's post placeholder was `space-y-4` with no thumbnail
+against a `space-y-3` card that opens with an 80px cover, so the list re-spaced
+vertically *and* shifted sideways the moment the posts landed — which is the one
+thing a skeleton exists to prevent.
+
+`Badge` is a *mark* and `Chip` is a *control*. If it has no click handler and no
+dismiss cross, it is a `Badge`.
+
+**There are two text fields, and the label decides which.** They are one family
+— same 12dp corner, same tone vocabulary, same `.m3-field` shell — and they
+differ in exactly one thing, the boundary.
+
+A **labelled** field is a slot in a form: it has a name, that name has to survive
+being filled, and it gets M3's *outlined* field with the label floating into the
+outline. The label used to sit stacked above the control, and the argument for
+that was that M3 allows both and changing ~40 forms bought nothing. It buys one
+thing, which is the whole point of the pattern: an empty field and a filled one
+stop being different objects. With a stacked label, a form of six empty fields is
+six blank boxes and six captions floating between them — and the caption
+belonging to the box *below* it is exactly as close as the one belonging to the
+box above.
+
+An **unlabelled** field is not a form slot. It is a search box, an admin filter,
+a chat composer — a thing you type into and act on immediately, whose placeholder
+is its whole identity. It gets the *filled* treatment: `surface-container-high`,
+no border, no shadow. Dressed as an outlined field it read as a form control
+whose label had failed to load, and it put the heaviest boundary on the screen
+around the least ceremonial thing on it. The tone step is the same one the
+unselected filter chip takes and the same one `Select`'s trigger already had, so
+a filter bar of a search box and two dropdowns is now one material rather than
+three.
+
+The notch is a real `<fieldset>`/`<legend>` pair, not a label painted over the
+border with a matching background: an M3 outlined field has no fill, so there is
+no colour to paint with, and a `<legend>` is the only thing in CSS that removes a
+section of a border. Two elements therefore carry the same words — the `<label>`
+the user reads and an invisible copy inside the `<legend>` whose only job is to
+be the right width. They stay in step because the legend's font-size is exactly
+0.75x the label's and the label scales to 0.75 as it floats, 0.75 of `body-l`
+being `body-s`. All of that lives in `.m3-field` in globals.css, because it turns
+on `:focus-within` and `:placeholder-shown` matching against a *sibling*.
+
+That `<fieldset>` carries a negative top inset whose entire job is to cancel the
+UA drawing the top border through the vertical centre of the `<legend>` — so it
+must be zeroed when there is no legend. It was not, and the cost was invisible in
+review and obvious once measured: an unlabelled 44dp field painted its line 6px
+above its own box, standing 50dp tall with its text 3px off the outline's centre.
+When a field's geometry looks *slightly* wrong, measure the painted line, not the
+element's rect.
+
+**Focus is the same indicator on both, painted in the two places each boundary
+leaves room for.** The outlined field has no ring: its focused outline is
+`primary` at 2px, which is the ring's colour at the ring's weight, drawn as the
+control's boundary instead of as a second boundary 2px outside the first — a
+control whose whole identity *is* a 1px outline cannot wear a ring around that
+outline without reading as two nested boxes. The filled field has no outline to
+nest inside, so that objection does not apply and it takes the ordinary ring.
+Both key off `:focus-within`, because the element wearing the indicator is the
+container and it is reporting on the control inside it.
+
+**An unlabelled field can carry its own actions.** `trailing` puts controls
+inside the box — /search's submit and 以图搜图 live there. It is a flow item, not
+an overlay, so one button, two, or a button with a word in it all fit with no
+width reserved at the call site; the control shrinks by exactly the slot's width
+because the slot refuses to shrink and the control's `min-width: 0` lets it.
+
+Judge it per field, though, and the composer is the counter-example: /messages
+briefly had send and emoji inside the field and it was worse. A search box is one
+field and one action pressed once, so collapsing them into a single object helps.
+A composer is the thing you live in while typing, and burying send in it turns
+three plain targets into one crowded box.
+
+`Input` therefore has three heights, and the difference is content rather than
+density: a floating label needs a label row and a text row, so a labelled field
+takes M3's 56dp; an unlabelled one is one row at 44dp; and `size="lg"` is M3's
+*search bar*, 56dp and a pill, which exists for the single field on /search that
+is the whole point of its page. The default stays 44dp precisely so that cannot
+spread — an admin filter and a hero search are not the same object. A labelled
+field with nothing to suggest is given a single-space placeholder, because
+`:placeholder-shown` is what tells the label whether the field is empty and it
+only matches while a placeholder exists.
+
+A `Textarea` follows the same rule through its block padding rather than a fixed
+height, since it grows. Get the number by measuring: symmetric 10px was reasoned
+out as landing a one-row unlabelled field at 44dp and actually landed it at 48,
+because this app's `body-l` line box is 28px rather than the scale's 24 — the
+body line-heights run looser for Han glyphs, which is a documented divergence
+several sections down. It is 8px.
+
+Both are easy to write out by hand without noticing, because the class string is
+short and looks harmless: `rounded-full px-2 py-0.5 text-label-m` plus a
+container/ink pair was pasted at fifteen sites, in three type roles, and each one
+had to name both halves of its colour. The tell is `rounded-full` on something
+holding text that is not a button — for a dismissible tag that is also the wrong
+shape twice over, since a chip is 8dp.
+
+`Button` variants, so a semantic action never has to be hand-rolled:
+`filled` · `tonal` · `accent` · `text` · `danger` · `danger-text` ·
+`success` · `warning`. The four semantic ones take the scheme-independent
+`*-fill` pair rather than the `error`/`success`/`warning` *text* roles, which flip
+between schemes — a filled confirm button wearing a text role visibly swapped
+shade with the theme. `danger-text` exists because `variant="text"` plus a
+`className="text-error"` emits two colour utilities and lets Tailwind's output
+order decide which wins; `cn` is a plain join and resolves nothing.
+
+**There is no outlined button**, and M3 does specify one. This had it, and all
+four uses were a secondary action beside a filled primary one (取消 next to 保存,
+重置 next to 检索) — at that job a 1dp keyline reads as a button that lost its
+fill rather than as a quieter button. `tonal` is the step M3 puts directly below
+`filled` for exactly this pairing, and it separates from the surface the way
+everything else here does, by a container tone rather than by an edge. Removed
+rather than left unused, because a variant that exists gets reached for. The same
+reasoning retired the filled field's border and the filter chip's: this app
+separates by tone.
+
+`IconButton` keeps its `outlined` variant, and that is not an inconsistency — it
+is the one "switch that is currently off", which is what M3's outlined icon
+button means. It also owns the shape axis: `shape="square"` is the back
+affordance's 12dp corner.
 
 ## Colour
 
@@ -38,11 +256,126 @@ container/on-container pair instead of hand-picking a second tint.
 Pair only within a role — `primary`/`on-primary`, `surface-container`/`on-surface`.
 Dividers use `outline-variant`; text-field borders use `outline`.
 
+**An alpha on a token is a bug.** `bg-primary/10`, `border-error/40`,
+`text-on-media/60` — each one has to be eyeballed once per scheme, and each one
+drifts, because nothing makes the next call site pick the same number. The
+symptom is always the same: the tint that looked right on the light surface is
+nearly invisible composited over the dark one. Use the tone scale
+(`surface-container-*`) or the container/on-container pair instead. If you need a
+weight that no token has, add the token.
+
+Three alphas are legitimate and all of them are M3 numbers, not taste:
+`bg-on-surface-variant/40` (sheet drag handle), the `--md-sys-state-*`
+opacities, and `bg-scrim/50` (the dim behind a dialog, sheet or drawer — one
+value, three call sites).
+
+**An element `opacity-NN` used as an ink weight is the same bug.** The rule above
+only ever named alphas *on tokens*, so the identical drift grew back through the
+other door: a quoted reply preview dimmed to 70% in two components that had each
+picked that number alone, an English tag name at 50%, a footer wordmark at 60%,
+a banner icon at 80%. None of them agreed and none of them could, because there
+was nothing to agree with. Reach for a *type role* first (a supporting line is
+`body-s` under a `body-m`, not a faded copy of it), then for
+`on-surface-variant`, then add a token. Element opacity is legitimate for motion
+(a fade, a hover reveal, a collapsing `grid-rows-[0fr]`), for the gallery's
+paging dim (one value, two matched call sites), and for `disabled-content`.
+
+**Disabled content is `disabled-content` (38%), and nothing else.** M3 specifies
+38% and the app used five weights — 40 on `IconButton` and `Pagination`'s arrows,
+50 on `Button`, `Chip`, `Checkbox`, `ToggleSwitch`, `Select`'s trigger and
+`DropZone`, 60 on `Input`, 70 on the captcha handle, and a lone 38 inside
+`Select`'s menu. Two files disagreed with *themselves*: `Pagination` faded its
+arrows and its numbers differently, and `Select`'s trigger and the menu it opens
+did not match. It is a `@utility` in globals.css rather than a colour so that a
+control's border, glyph, label and container fade together in one declaration,
+and it composes with the variant: `disabled:disabled-content`.
+
+**Text and marks on photography** have their own three roles, mirroring
+`on-surface` / `on-surface-variant` / `outline-variant`, because a picture is not
+a surface and none of the surface roles apply over one:
+
+| On media                            | Role                 |
+| ----------------------------------- | -------------------- |
+| Primary ink — a title, a tag chip   | `text-on-media`      |
+| Secondary ink — caption, meta, +N   | `text-on-media-variant` |
+| A rule or track — crop guides, bars | `bg-media-outline`   |
+| The plate ink sits on               | `bg-media-plate`     |
+
+`bg-media-plate` is the one answer for a format badge, a score pill, a caption
+bar or a hover veil. It replaced `bg-scrim/40`, `/50`, `/55` and `/60` — four
+weights for one object, with the two that sat closest together on screen the
+furthest apart.
+
+**Focus** is one ring for the whole app: `focus-visible:ring-2 focus-ring`, or
+`focus-ring-on-primary` for chrome on the app bar. Never tint it per variant —
+a focus ring answers "where is the keyboard", so it has to look identical on
+every control. It is solid, not tinted: `primary/40` composites to about 1.4:1
+against a light surface, under the 3:1 WCAG 2.4.11 asks of a focus indicator.
+
+The third form is `focus-visible:inset-ring-2 focus-visible:focus-ring-inset`,
+and it is the same ring painted inward rather than a second style. A ring is a
+`box-shadow`, so an ancestor that paint-contains throws it away entirely — and
+the app has two kinds that do: a gallery card (`.image-card` is
+`contain: layout paint style`) and any media box clipping its corners with
+`overflow-hidden rounded-*`. A full-bleed control inside one of those — the
+spoiler cover, a zoom target — was rendering a focus indicator that was then
+discarded. Reach for it only when the enclosure clips; everywhere else the ring
+goes outside, where it does not eat 2px of the control.
+
+The **outlined text field** has no ring, and that is not an exception to the rule
+above so much as a fourth place the same ring is painted. Its focused state is
+its own outline at `primary` and 2px — the ring's colour, at the ring's weight,
+drawn as the control's boundary instead of as a second boundary 2px outside the
+first. A control whose entire visual identity *is* a 1px outline cannot wear a
+ring around that outline without reading as two nested boxes, and M3 specifies
+the thickened outline as this control's indicator for that reason. The *filled*
+field has no outline to nest inside, so it takes the ordinary ring — same
+indicator, different place to put it. Everything else about both is unchanged,
+including that the colour is the same on an error field: a focus ring answers
+"where is the keyboard", never "what is wrong".
+
+**`outline` is a boundary role, not an ink role.** It is built for a rule or a
+text-field border and is specified to 3:1, which is the bar for a *non-text*
+element. Measured against this app's own light surface it lands at 4.3:1 —
+under the 4.5:1 WCAG AA asks of normal-size text — while in the dark scheme it
+reaches 5.8:1 and passes. That asymmetry is why `text-outline` spread to 57
+pieces of supporting text before anyone noticed: it is only wrong in one of the
+two schemes, and it is the scheme people ship from less often. Supporting text
+is `on-surface-variant` (8.5–9:1 light, 10:1 dark). `text-outline` on a *glyph*
+is fine — 4.3:1 clears the 3:1 non-text bar.
+
+**A state is a container, not a rule down the side.** An unread notification, a
+selected row, a quoted reply — the reflex is a 3–4px coloured bar at the leading
+edge, and the app had it in several places. M3 has no such element: the way a
+list item says "unread" or "selected" is that it wears a container pair, and the
+way a block of text says "quoted" is `<blockquote>`'s own treatment. So an unread
+system message is `secondary-container` / `on-secondary-container` across the
+whole row, and the bar is gone. Note the ink half is not optional: the row's
+title and body have to *inherit* the on-container colour, so write
+`text-on-surface`/`text-on-surface-variant` into the read branch only — a hard
+`text-on-surface` on the heading survives the container change and leaves you
+with a coloured row whose text still belongs to the old one.
+
+The reply quote keeps its rule, because there the bar is not a state — it is the
+one thing distinguishing quoted text from the reply around it, and it is what
+`<blockquote>` has looked like for thirty years. It is 4px `primary` (the same
+colour as the `<cite>` under it, so the quote and its attribution read as one
+object) over a `surface-container-high` fill, which is the same tone step as
+everything else in this file that means "a distinct block inside this one".
+
+**A filter control that is not selected is a tone step, not a keyline.** The
+unselected `Chip`, `Select`'s trigger and the filled text field all sit at
+`surface-container-high` with no border and no shadow, so a filter bar reads as
+one material. This is the same decision as the outlined `Button`'s removal, and
+the shape section's concentric-corner note is its geometric half: this app
+separates things by tone and by corner, not by edges.
+
 Deliberate divergences from the spec, all commented in `globals.css`. Do not
 "fix" them:
 
-- `primary`, `*-fill` and `media-stage` do not invert between schemes. A brand
-  colour and a graphic fill must read as one constant material; only text roles flip.
+- `primary`, `*-fill`, `media-stage`, `on-media*` and `media-plate` do not invert
+  between schemes. A brand colour, a graphic fill and anything sitting on a
+  photograph must read as one constant material; only text roles flip.
 - Body/label line-heights run looser and tracking runs at half the spec value,
   because Han glyphs fill the em box.
 - `accent-*` is a _categorical_ scale (tag categories, staff roles), not a
@@ -54,11 +387,80 @@ The step is decided by the role, never by eye:
 
 | Role                                            | Class          | Value |
 | ----------------------------------------------- | -------------- | ----- |
-| Button, Chip, FAB, avatar, circular icon button | `rounded-full` | —     |
-| Card, grouped-list block, section surface       | `rounded-md`   | 12dp  |
-| Text field, Select menu, small tag              | `rounded-sm`   | 8dp   |
-| Dialog, Sheet, large media container            | `rounded-2xl`  | 28dp  |
+| Button, FAB, avatar, circular icon button       | `rounded-full` | —     |
+| Unread count pill, list row in a nav            | `rounded-full` | —     |
+| Search bar (`Input size="lg"`)                  | `rounded-full` | —     |
+| Card, section surface, text field, colour swatch | `rounded-md`  | 12dp  |
+| Square icon button (the back affordance)        | `rounded-md`   | 12dp  |
+| Chip, small tag                                 | `rounded-sm`   | 8dp   |
+| Menu, popover, autocomplete                     | `rounded-sm`   | 8dp   |
+| Badge, inline code, seam in a grouped list      | `rounded-xs`   | 4dp   |
+| Dialog, Sheet, chat bubble, large media         | `rounded-2xl`  | 28dp  |
 | Gallery thumbnail / grid tile                   | `rounded-lg`   | 16dp  |
+| Profile hero banner, `sm` and up                | `rounded-3xl`  | 36dp  |
+
+**A box inside another box does not take its own row of this table.** Nested
+corners are concentric when `inner = outer - gap`, and the eye reads a violation
+of that immediately: an inner corner rounder than `outer - gap` bulges toward the
+frame, a squarer one leaves a visible crescent of dead space. So look up the
+enclosure's radius, subtract the gap, and use that — the table gives you the
+*outermost* box's step, not every box's.
+
+The rule only bites while the gap is small. Two corners 16px apart are not a ring
+inside a ring, they are neighbours, and forcing the arithmetic there produces a
+0dp corner on something that should not have one — which is exactly what
+`DetailBack` documents about itself. Treat roughly 8px as the line.
+
+The shortcut worth knowing: **a centred pill inside a pill is concentric for
+free, at every size.** `outer - gap` is always half the inner control's height
+when the inner control is a capsule, so the arithmetic can never be wrong. That
+is why /search's field is a 56dp pill rather than a 12dp box: the submit button
+and 以图搜图 sit in its trailing slot, and at 12dp with a 4px gap they would each
+have needed a remembered 8dp corner, whereas two ordinary pills in a pill are
+correct by construction. A square-cornered `Button` variant was added for the
+12dp version and then removed with it — `inner = outer` is the misreading of this
+rule, not the rule.
+
+A **chip is 8dp, not a pill.** This table used to say `rounded-full`, which
+contradicted `Chip.tsx` — the primitive has always rendered the spec's 8dp — and
+the contradiction had a cost: four filter chips in `/search` and the admin
+console were hand-rolled as `rounded-full px-3 py-2` pills, presumably by
+someone reading this table rather than the component.
+
+The same accident then happened in reverse. `Select` rendered its menu at 4dp
+with a comment arguing for it, while the emoji picker rendered 8dp with a comment
+arguing the opposite, so the two pieces of prose in the codebase contradicted
+each other and this table agreed with neither implementation. The M3 shape scale
+settles it: `small` (8dp) is specified for "text fields, **menus**", and 4dp
+`extra-small` is for chips and snackbars. The code was wrong and the table was
+right — which is the argument for reading the spec rather than measuring one
+reference implementation and generalising from it.
+
+Write the step you mean. A bare `rounded` resolves to `--radius` (4dp, the same
+as `rounded-xs`) but says nothing about *why*, which is how 92 call sites ended
+up at 4dp with no role between them — icon buttons that wanted `full`, badges
+that wanted `full`, skeleton bars that wanted whatever the thing they stand in
+for wants. `rounded-xs` is the step; use it where 4dp is the answer.
+
+A **badge is a rounded rectangle and a count is a pill**, which is one row of
+this table split in two. M3's badge shape is round because M3's badge is a
+*number* — a dot, or a count no wider than it is tall, which is what `CountBadge`
+renders. A badge carrying a word (Lv.13, 已核验, an earned badge's name) is a
+short block of text, and a full pill around text reads as a button that has lost
+its handler, which is the same confusion `Chip` sits on the other side of. 4dp
+rather than the chip's 8dp because the box is only ~20px tall at `sm`, where an
+8dp corner is 40% of the height and is a capsule again — pick the radius against
+the box, don't inherit it from a bigger relative.
+
+A **chat bubble** takes the 28dp step, which is the one place a small element
+legitimately takes the largest one: roundness *is* the semantics of a speech
+bubble. Its tail corner is `rounded-sm`, and only the last bubble of a run has
+one — see `ChatBubble`.
+
+A **placeholder inherits the radius of the thing it replaces**, so `Skeleton`
+stands its own default down when the call site names one. `cn` is a plain join
+and does not resolve Tailwind conflicts, so passing a radius used to emit two and
+let output order decide.
 
 `rounded-lg` is pinned to `HERO_TARGET_RADIUS_PX` in `lib/hero/constants.ts` —
 the shared-element flyer morphs its corner to that value on landing, so the two
@@ -72,6 +474,33 @@ a white page and are invisible on the dark scheme's near-black surfaces.
 Depth comes from the `surface-container-*` tone scale first; a shadow is for
 things that genuinely float (dialogs, popovers, the FAB).
 
+The level is decided by the object, not by how much it should stand out:
+
+| Object                                   | Level |
+| ---------------------------------------- | ----- |
+| Elevated card, modal bottom sheet        | `e1`  |
+| **Menu, popover, autocomplete**, nav bar | `e2`  |
+| Dialog, FAB, search                      | `e3`  |
+
+Four floating surfaces sat at `e3` — the share menu, the emoji picker and two
+autocompletes — which put a tray of emoji above `Modal`. `Popover` owns this now;
+if you are typing an elevation onto a floating panel, you are hand-rolling one.
+
+## Stacking order
+
+App-level layers are the `--z-*` tokens in globals.css, used through their
+utilities (`z-dialog`, `z-popover`, `z-toast`, …). The order is stated once,
+there, with the reason for each step. Fourteen raw values were in use before,
+and two of them collided: `Toast` and `LoadingOverlay` were both at 9999, so
+which covered which was decided by DOM order. The image detail's tag dialog
+carried a hand-typed 9998 meaning "above everything", which in fact put it one
+step *below* the lightbox and therefore behind it.
+
+Layering *inside* one component — a preview over its own final image, a switch
+handle over its own ripple — stays a small integer. Those neighbours are the
+component's own children, and giving them tokens would imply they take part in
+the global order, which is the one thing they must not do.
+
 ## Typography
 
 The fifteen M3 roles: `text-display-*`, `text-headline-*`, `text-title-*`,
@@ -80,6 +509,64 @@ The fifteen M3 roles: `text-display-*`, `text-headline-*`, `text-title-*`,
 `title-*` and `label-*` carry their own `font-weight` token, and `@layer base`
 gives `h1`–`h6` theirs. Adding `font-bold`/`font-semibold` on top of those
 overrides the token — don't.
+
+A bare `font-medium` / `font-semibold` on an element with **no** type role is the
+same bug wearing different clothes: the size then comes from whatever the parent
+happens to be. Reach for the role's `-emphasized` twin instead — but check the
+weight you are actually getting, because the twins are **not** all one value:
+`label-*` and `title-m`/`title-s` step 500 → **700**, while `display-*`,
+`headline-*`, `title-l` and `body-*` step 400 → **500**. This matters because
+Tailwind's `font-medium` *is* 500: on `text-label-l`, whose own token is already
+500, adding it changes nothing at all. Three pieces of shared chrome — the home
+tab bar, `TabBar` and `Pagination` — marked their active item that way and so had
+no weight contrast whatsoever, only colour.
+
+Never emit two type roles on one element (`text-label-l` plus
+`text-label-l-emphasized`). `cn` is a plain join; the winner is decided by
+stylesheet order, not by which you wrote last. Put the role inside each branch of
+the conditional so exactly one is ever applied.
+
+The heading roles deliberately carry no weight token — `@layer base` owns h1–h6's
+weight — so a `display-*`/`headline-*` utility must not fight the element. The
+body roles are the opposite and *do* declare 400, because they land on spans
+anywhere, including inside a heading, where they were inheriting the h1's 700 and
+being beaten back with a bare `font-normal` at the call site.
+
+## Rich-text rhythm
+
+Two renderers put user prose on screen — `MarkdownRenderer` and
+`BBCodeRenderer` — and the rule is that **they emit the same document**, so one
+set of rules can space both. `.bbcode-content` and `.rich-text-content` are
+styled together in globals.css and neither renderer styles its own output.
+
+This was the source of the forum's spacing complaints, and neither cause was
+where it looked. First, nothing gave a paragraph a margin: Tailwind's preflight
+zeroes `p`, only `img`/`blockquote`/`pre` were given one back, and so consecutive
+paragraphs touched while the space around a picture was set by something else
+entirely. Second, BBCode did not *have* paragraphs — every `\n` became a `<br>`,
+so a "paragraph break" was one line-height, and next to an image's own margin
+plus the stray `<br>` beside it the two gaps could not agree. `bbcodeToSafeHtml`
+now splits on blank lines into real `<p>`s, keeps single newlines as `<br>`, and
+eats the line breaks that end up adjacent to a block element.
+
+The spacing is in `em`, so it scales with the container and a reply's rhythm is
+automatically tighter than an article's:
+
+| Element      | `margin-block`             |
+| ------------ | -------------------------- |
+| `p`          | `0.75em`                   |
+| `h1`–`h6`    | `1.25em 0.5em`             |
+| `ul` / `ol`  | `0.75em` (+1.5em start pad)|
+| `li`         | `0.25em`                   |
+| img, video, blockquote, pre, table | `1em`    |
+
+Which means **the container has to name a type role**, or the `em` is whatever it
+inherited: a forum post's body is `body-l` (it is an article) and a reply's is
+`body-m`. The post body carried no role at all and took its line-height from
+`@layer base`, so the two blocks of prose on one page were set differently.
+
+The `> :first-child` / `> :last-child` margin resets stay — they are what keeps
+the last paragraph from pushing the action row down by a stray line.
 
 ## Motion
 
@@ -127,14 +614,63 @@ Durations: `DURATION` in `lib/motion.ts`, mirrored by Tailwind's `duration-*`.
 | Begins and ends on screen (hover, colour, indicator) | 300ms    | `standard`   |
 | Large container transform                            | 500ms    | `emphasized` |
 | Press down                                           | 120ms    | `standard`   |
+| State layer settling in or out                       | 150ms    | `standard`   |
+
+Those six are the whole scale. A duration outside it is a bug — `duration-150`
+is the state layer's and nothing else's, and it belongs to the `state-layer`
+utility rather than to a call site.
+
+Two systems are exempt and both are commented where they live. The
+shared-element flight (`lib/hero/constants.ts`) is spring-driven: its 340/280ms
+are the envelope a sampled `HERO_FLIGHT_RESPONSE` is fitted to, and its reveal
+cascade (270/285ms at 45/65/95ms offsets) is timed against that envelope, so
+rounding any one of them to a token value desynchronises the rest. The other is
+`transition-ui`, which is 200ms because it is the app-wide UI transition and
+every hover in the app settles on it together; a lone element moved to 300 is
+the bug, not the utility. Where a hover has more than one moving part, make them
+agree — the tile veil was 200ms against its own image's 300ms scale, so one
+gesture arrived in two instalments.
 
 Always name the properties: `transition-[opacity,transform]`, never
 `transition-all` — it animates layout properties too, and it is what made a
 button's hover jitter while its shadow grew.
 
+And always name the curve, even for a one-property fade. A bare
+`transition-opacity` inherits `--default-transition-timing-function`, which is a
+safety net pointed at `standard`, not a decision — it cannot know whether the
+thing is arriving, leaving, or settling in place.
+
 Anything decorative must collapse under `prefers-reduced-motion: reduce`. The
 enumeration lives at the bottom of `globals.css`; GSAP helpers branch on
-`prefersReducedMotion()`.
+`prefersReducedMotion()`. Note that the enumeration has to cover **transitions**
+as well as `@keyframes`: `transition-ui` lists `transform, translate, scale,
+rotate` (it must — Tailwind compiles `translate-x-*` and `scale-*` to those
+standalone properties), so for a long time the drawer still slid 288px, the tab
+pill still translated, the switch handle still travelled and `Select`'s chevron
+still rotated under the preference. One rule re-declaring `transition-property`
+now drops every moving property while keeping colour, opacity and shadow, because
+losing those would turn hover and focus into a flicker rather than a state.
+
+## Two traps that make a fix look applied when it is not
+
+**A Tailwind variant needs its colon.** `peer-focus-ring` is not "the `focus-ring`
+utility under the `peer-focus` variant" — it is a class name that matches no
+utility, so it emits nothing at all. `Checkbox` and `ToggleSwitch` both carried it
+next to `peer-focus-visible:ring-2`, which meant a 2px ring painted in
+`currentColor` — taking the colour of whatever text happened to surround the
+control, which is the exact failure `focus-ring` was added to end. The form that
+works is `peer-focus-visible:focus-ring`. When you add one of these, grep the
+built CSS for the escaped selector (`.focus-visible\:focus-ring`) rather than
+assuming; a class that compiles to nothing looks identical in the source.
+
+**Comments generate CSS.** Tailwind scans raw file text for class candidates and
+does not skip comments, so a comment naming a class you just deleted puts it
+straight back into the stylesheet. 13 of the classes this document and the code
+comments describe as removed or forbidden were still being shipped — including two
+Tailwind palette classes and the `active:scale` utilities this file says "should not come
+back". The cost is not weight, it is that you can no longer grep the CSS to prove
+a class is gone. When documenting a value you removed, spell it in prose ("a 25%
+alpha on `ring-primary`") rather than as the class.
 
 ## Transitions between screens
 
@@ -146,13 +682,76 @@ Three mechanisms, in order of how much they own:
 | Gallery <-> forum, profile tabs | Shared axis (X), 500ms `emphasized`   | `playSharedAxis` / `useTabPanes` |
 | Any other route                 | Cross-fade over an inert clone, 400ms | `lib/routeCrossFade.ts`          |
 
-**Tabs.** Panes are marked, never unmounted — `data-tab-pane="name"` plus
-`data-tab-pane-active` — and stack in one CSS grid cell so both can be on screen
-at once. Never gate a pane on `hidden` or `{cond && ...}`: the outgoing one has
-to survive the commit or there is nothing to fade out. Never put a `key` on
-`[data-tab-panel]`; that deletes the animation's own targets in the commit that
-starts it. Call `startTabTransition` and `router.push(..., { scroll: false })`
-in the same tick — there is nothing to wait for.
+**Tabs.** Render `TabPanes` / `TabPane`; do not wire this by hand. Panes are
+marked, never unmounted — `data-tab-pane="name"` plus `data-tab-pane-active` —
+and stack in one CSS grid cell so both can be on screen at once. Never gate a
+pane on `hidden` or `{cond && ...}`: the outgoing one has to survive the commit
+or there is nothing to fade out. Never put a `key` on `[data-tab-panel]`; that
+deletes the animation's own targets in the commit that starts it. Panes must be
+written in the same order as the tabs above them — direction is derived from DOM
+order. On the home page, call `startTabTransition` and
+`router.push(..., { scroll: false })` in the same tick; screens whose tabs live
+in local state need nothing beyond `TabPanes`, because the state update and its
+layout effect are the same commit.
+
+`lean` samples the wave over the blocks *inside* each pane, which requires those
+blocks to survive the run — so it is **off by default**. A pane that fetches when
+its tab is selected replaces its whole subtree within a few frames of the switch
+starting, and GSAP is then animating detached nodes while the visible new ones
+sit still: measured on the messages tabs as pane height collapsing 1887px → a
+288px skeleton inside 70ms, with zero transformed descendants for the whole 500ms
+run — a switch with no animation at all. Turn `lean` on only for panes that are
+static once mounted (`/policy`).
+
+**The pane height tween must clip on one axis only, and with `clip`.** While
+`[data-tab-panel]` is being morphed from the outgoing pane's height to the
+incoming one's, it has to hide the overflow — but that panel *is* the centred
+`max-w-*` content column, and `overflow: hidden` therefore cropped the shared
+axis to the column for the whole 500ms: panes appeared and vanished at the text's
+own edge instead of sliding past the information area's. It is `overflow-y`, and
+the value is `clip` rather than `hidden` because `overflow-x: visible` beside
+`overflow-y: hidden` is *computed to `auto`* by the spec — which would quietly
+turn the panel into a horizontal scroll container — while `visible` beside `clip`
+is legal and leaves the x axis alone. The horizontal clip is then back where it
+belongs, on the scroller's `[data-axis-running='x']` rule.
+
+The other half of the same complaint is that the height was measured once, at the
+moment of the switch, when the entering pane still held its skeleton — so the
+data landing a beat later moved the height again after the tween had finished.
+`runTabTransition` now watches the entering pane with a `ResizeObserver` for a
+couple of seconds and re-tweens on the same curve if it grows. Skeletons should
+still be the right *length* (`PER_PAGE` rows, not eight), because a watcher that
+has to correct by a whole row is a visible correction.
+
+**A page gets a back affordance if, and only if, it is not in the sidebar.**
+There was no rule, and the distribution showed it: `/search` and `/messages` had
+one despite being one tap away in the drawer, while `/favorites`, `/history`,
+`/tasks`, `/block-groups`, `/settings`, `/upload` and `/forum/create` — equally
+top-level — had none, and `/about` and `/policy`, which are reachable only from
+the footer and therefore need it most, had none either. So it now sits on exactly
+the routes with no permanent entry point: both profiles, the forum thread,
+`/about`, `/policy` and the image detail.
+
+`/forum` looks like it belongs on that list and does not: `next.config.ts`
+redirects the bare path to `/?tab=forum`, so `app/forum/page.tsx` never mounts
+and the route you actually land on is the sidebar's own. (`/forum/[id]` and
+`/forum/create` are unaffected — the redirect matches the exact path.) Check for
+a redirect before deciding a route is deep.
+
+Draw it in every state, including loading and error. `/derpi/user/[id]` is the
+cautionary case: its error branch dropped its own 返回上一页 button on the
+grounds that "the leading back affordance is already chrome on this route", and
+that route had never rendered one — so a Derpibooru profile that failed to load
+was a dead end with no way out but the browser's own button.
+
+**The back affordance is chrome, not content.** `PageBack` portals into
+`[data-page-back-slot]`, a shim the shell renders as a sibling of the scroller.
+Rendered inside `[data-page-content]` it was cloned by the route snapshot and
+translated by the shared axis, so /search → /messages carried it a full window
+out and back to the pixel it started on. It has no entrance animation on purpose:
+between two screens that both have one, the node is remounted at the same
+coordinate looking identical, and a fade would put a flash on every one of those
+moves to smooth the rarer case where it genuinely appears.
 
 **Routes.** `RouteCrossFade` snapshots the outgoing page in
 `getSnapshotBeforeUpdate` (the only lifecycle that runs before React mutates the
@@ -162,11 +761,24 @@ backwards fill.
 
 **The hero owns the same pixels.** Every other transition stands down while a
 flight is in progress — gate on
-`getImageHeroRuntime().phase === 'gallery-idle' && !background`. And nothing may
-leave a residual `transform` on an ancestor of a gallery card: the flight reads
-`getBoundingClientRect` on press, and only a transform on
+`getImageHeroRuntime().phase === 'gallery-idle' && !background`. Inside
+`lib/motion.ts` that gate is the registered `setHeroBusyCheck` predicate (a seam
+rather than an import, so `lib/motion` does not drag the hero controller into
+every bundle); the theme wipe and the tab shared axis both consult it, because the
+first freezes rendering to snapshot a frame the flyer is moving through and the
+second sets `overflow-x: clip` on the very scroller that hosts the flight layer.
+
+And nothing may leave a residual `transform` on an ancestor of a gallery card: the
+flight reads `getBoundingClientRect` on press, and only a transform on
 `[data-image-detail-background-visual]` is compensated for. Always settle with
-`clearProps`, never `translate3d(0,0,0)`.
+`clearProps`, never `translate3d(0,0,0)`. This is easy to breach from a distance —
+`pageIn` is a fade *plus a 12px rise* under a `both` fill, and
+`[data-page-content]` is an ancestor of every card, so for as long as the plain
+route cross-fade relied on that keyframe to bring the new page in, arriving at `/`
+from any route outside `ROUTE_CELL` left a ~400ms window in which a tap launched
+the flyer from a box up to 12px above the thumbnail. The plain branch now drives
+the entrance itself, on opacity alone.
+
 
 ## State layers
 
@@ -179,6 +791,60 @@ has to be written twice (light + dark) and drifts.
 Spacing is the 4dp grid (Tailwind's default scale). Half-steps (`gap-1.5`,
 `py-0.5`) are fine for dense chrome; arbitrary values are not.
 
+**The page column is decided by what is in it, and there are two answers.**
+
+| Content                                     | Width         |
+| ------------------------------------------- | ------------- |
+| A list of rows, or an article                | `max-w-4xl`   |
+| A masonry / image grid                       | `max-w-7xl`   |
+
+Ten screens are lists — forum, messages, history, tasks, policy, about,
+settings, block-groups and both forum sub-pages — and they all sit at `4xl`.
+Three are grids and sit at `7xl`. Nothing else is a page column.
+
+The trap is a screen that holds both. The home page's two tabs share one panel,
+so the forum pane inherited the gallery's `7xl` and the *same list* was 1280px
+there and 896px on `/forum`: a row's title at the far left and its reply count
+1100px away with nothing in between. A pane whose content is a list takes the
+list width regardless of what its neighbour needs.
+
+A form is neither, and may be narrower — `/upload` is `2xl` on purpose, because a
+560px field column is easier to fill in than a 900px one. The admin console is
+`6xl` because it is data tables.
+
+`5xl` is the fifth and last: a **media-led detail column** — both profile pages
+and the image detail, where a banner or a picture is the subject and the text
+sits under it. It is not a general-purpose middle width; a screen that is a list
+still takes `4xl` even if it happens to be 1000px of list.
+
+**A page has one gutter and the shell already draws it.**
+`[data-page-content]` is `p-4 sm:p-6`, so a screen that wraps its sections in
+another `p-6` insets them 40px on a phone and 48px on a desktop — and it is
+invisible in review because nothing looks broken, the column is just narrower
+than every other screen's. /settings had six of them, each also painted
+`bg-surface`, which is the scroller's own colour: six "cards" the exact tone of
+the page behind them, doing nothing but the padding. A section is a heading and
+the block under it; the block's own tone (`.m3-row`, `Card`) is what makes it a
+surface.
+
+**A structural divider is drawn in every state.** The sidebar's rule between the
+user block and the navigation was conditional on being signed in, on the
+reasoning that signed out there is no account for it to enclose. That is reading
+the line as a box around the user; it is not one. It is the seam between two
+regions of the drawer, both of which are there either way — signed out the top
+block is still a block, it just says 未登录 — so the drawer lost its only
+horizontal structure in exactly the state where a new visitor sees it first. If a
+rule separates two regions, it does not blink on and off with the contents of one
+of them. (The rule *inside* the nav, between 我的 and the settings group, is a
+different thing and stays conditional: signed out there is no group above it.)
+
+**A row has one reading order.** Label at the leading edge, control at the
+trailing edge — that is what M3's list is, and it is what every value row
+already did. A switch dropped into such a list *without* `layout="row"` renders
+control-then-label and leaves the right-hand half of the row empty, so a
+settings card alternated between two opposite reading orders down its own
+length.
+
 Touch targets: `Button`'s own scale (36 / 40 / 48px) is the sanctioned one —
 use the primitive and the question does not arise. Anything with a custom box
 under 44px needs the `touch-target` utility, which expands the _hit area_ with a
@@ -190,7 +856,7 @@ box. `Chip` at `h-8` is a documented exception.
 — use it in any row that would otherwise overflow on a phone.
 
 No press-shrink. M3 gives no size feedback on press; the state layer and the
-ripple carry it. `active:scale-*` is not used anywhere and should not come back
+ripple carry it. `active:scale` utilities is not used anywhere and should not come back
 — besides being off-spec, a control mid-transform corrupts the rect the hero
 flight reads on press.
 

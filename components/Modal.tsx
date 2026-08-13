@@ -1,10 +1,17 @@
 'use client';
 
-import { useEffect, useCallback, useRef, useState, useId, useSyncExternalStore } from 'react';
+import { useCallback, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose } from 'react-icons/md';
+import IconButton from './IconButton';
 import { cn } from '@/lib/utils';
-import { getAppScroller } from '@/lib/motion';
+import {
+  useEscapeToClose,
+  useExitAnimation,
+  useFocusTrap,
+  useMounted,
+  useScrollLock,
+} from '@/lib/overlay';
 
 interface ModalProps {
   isOpen: boolean;
@@ -12,6 +19,8 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   maxWidth?: string;
+  /** Overrides the shared dialog layer. Only for a dialog opened *from* another
+   *  dialog, which has to sit above its parent. */
   zIndex?: number;
   hideCloseButton?: boolean;
   footer?: React.ReactNode;
@@ -28,62 +37,21 @@ interface ModalProps {
 const CLOSE_ANIM_DURATION = 200;
 
 /**
- * Scroll lock is refcounted. Each modal used to set `body.overflow` on open and
- * blindly reset it to `unset` on unmount, so closing an inner dialog unlocked
- * the page while an outer one was still open.
+ * The centred dialog.
  *
- * It also has to target the *app scroller*, not `<body>`. The shell already
- * sets `overflow: hidden` on the body and scrolls a `<main>` inside it, so
- * locking the body was a no-op — the gallery went on scrolling behind every
- * open dialog. `.main-scrollbar` reserves a stable gutter, so switching the
- * scroller to `hidden` does not reflow the content underneath.
- *
- * `getAppScroller()` names one fixed element, which is wrong whenever the
- * dialog was opened from somewhere that scrolls independently — an image-detail
- * overlay brings its own scroller and covers the gallery entirely, so a
- * confirm dialog opened inside it froze the hidden page and left the visible
- * one scrolling. The element that actually scrolls under the trigger is found
- * by walking up from it instead.
+ * Focus trapping, the refcounted scroll lock, Esc handling and the exit-animation
+ * hold now live in `lib/overlay.ts`, because `Sheet` needs all four and had no
+ * way to reach them from here. What is left in this file is what makes a dialog a
+ * dialog rather than a sheet: it is centred, it is `rounded-2xl` on all four
+ * corners, and it grows from 93% scale rather than rising from the bottom edge.
  */
-let scrollLocks = 0;
-let lockedEl: HTMLElement | null = null;
-
-/** Nearest scrollable ancestor of `from`, falling back to the app scroller. */
-function findScroller(from: Element | null): HTMLElement {
-  for (let el = from; el instanceof HTMLElement; el = el.parentElement) {
-    const overflowY = getComputedStyle(el).overflowY;
-    if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
-      return el;
-    }
-  }
-  return getAppScroller() ?? document.body;
-}
-
-function lockScroll(from: Element | null) {
-  if (scrollLocks === 0) {
-    lockedEl = findScroller(from);
-    lockedEl.style.overflow = 'hidden';
-  }
-  scrollLocks += 1;
-}
-function releaseScroll() {
-  scrollLocks = Math.max(0, scrollLocks - 1);
-  if (scrollLocks === 0 && lockedEl) {
-    lockedEl.style.overflow = '';
-    lockedEl = null;
-  }
-}
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 export default function Modal({
   isOpen,
   onClose,
   title,
   children,
   maxWidth = 'max-w-md',
-  zIndex = 100,
+  zIndex,
   hideCloseButton = false,
   footer,
   closeOnOverlayClick = true,
@@ -91,90 +59,14 @@ export default function Modal({
   bodyClassName = '',
   panelClassName = '',
 }: ModalProps) {
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
-  const [rendering, setRendering] = useState(isOpen);
-  const everOpened = useRef(isOpen);
+  const mounted = useMounted();
+  const rendering = useExitAnimation(isOpen, CLOSE_ANIM_DURATION);
   const panelRef = useRef<HTMLDivElement>(null);
-  const returnFocusTo = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
-  useEffect(() => {
-    if (isOpen) {
-      everOpened.current = true;
-      queueMicrotask(() => setRendering(true));
-    } else if (everOpened.current) {
-      const timer = setTimeout(() => setRendering(false), CLOSE_ANIM_DURATION);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    // The element that opened the dialog is still focused at this point, which
-    // is what tells us which scroller the user was actually looking at.
-    lockScroll(document.activeElement);
-    return releaseScroll;
-  }, [isOpen]);
-
-  // Move focus in on open and hand it back to whatever opened the dialog.
-  // Without this the keyboard caret stayed on the page behind the overlay.
-  useEffect(() => {
-    if (!isOpen) return;
-    returnFocusTo.current = document.activeElement as HTMLElement | null;
-    const raf = requestAnimationFrame(() => {
-      const panel = panelRef.current;
-      if (!panel) return;
-      // The panel itself, not its first control. Focusing the close button
-      // would land a visible focus ring on it the instant the dialog opens,
-      // and it reads oddly as"the dismiss button is what you want". The panel
-      // is labelled by its heading, so a screen reader still announces the
-      // dialog; Tab from here goes to the first real control.
-      const autoFocus = panel.querySelector<HTMLElement>('[data-autofocus]');
-      (autoFocus ?? panel).focus({ preventScroll: true });
-    });
-    return () => {
-      cancelAnimationFrame(raf);
-      returnFocusTo.current?.focus?.({ preventScroll: true });
-    };
-  }, [isOpen]);
-
-  // Esc to dismiss, and Tab cycling kept inside the panel.
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && closeOnEscape) {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key !== 'Tab') return;
-      const panel = panelRef.current;
-      if (!panel) return;
-      const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => el.offsetParent !== null || el === document.activeElement,
-      );
-      if (items.length === 0) {
-        e.preventDefault();
-        panel.focus({ preventScroll: true });
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      } else if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [isOpen, closeOnEscape, onClose]);
+  useScrollLock(isOpen);
+  useFocusTrap(isOpen, panelRef);
+  useEscapeToClose(isOpen, onClose, closeOnEscape);
 
   const handleClose = useCallback(() => onClose(), [onClose]);
 
@@ -185,6 +77,9 @@ export default function Modal({
       className={cn(
         'fixed inset-0 flex items-center justify-center p-4 sm:p-6',
         'bg-scrim/50',
+        /* The shared dialog layer, unless the caller names one — see the
+           stacking-order block in globals.css. */
+        zIndex === undefined && 'z-dialog',
         isOpen ? 'animate-modal-overlay' : 'animate-modal-overlay-out',
       )}
       style={{ zIndex, pointerEvents: isOpen ? 'auto' : 'none' }}
@@ -213,13 +108,13 @@ export default function Modal({
               </h2>
             )}
             {!hideCloseButton && (
-              <button
+              <IconButton
                 onClick={handleClose}
                 aria-label="关闭"
-                className="text-on-surface-variant hover:text-on-surface -mr-2 ml-auto inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full outline-none transition-ui hover:rotate-90 focus-visible:ring-2 focus-visible:ring-primary/40 motion-reduce:hover:rotate-0"
-              >
-                <MdClose size={22} />
-              </button>
+                dismiss
+                className="-mr-2 ml-auto hover:text-on-surface"
+                icon={<MdClose size={22} />}
+              />
             )}
           </div>
         )}

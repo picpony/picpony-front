@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
@@ -18,17 +18,24 @@ import {
   MdImage,
   MdArticle,
   MdSearch,
+  MdOpenInNew,
   MdMessage,
   MdVerified,
   MdCloudUpload,
 } from 'react-icons/md';
-import { roleInfo } from '@/lib/roles';
 import UserBadge from '@/components/UserBadge';
+import Avatar from '@/components/Avatar';
+import Badge from '@/components/Badge';
+import RoleBadge from '@/components/RoleBadge';
 import Pagination from '@/components/Pagination';
 import TabBar from '@/components/TabBar';
-import { useTabPanes } from '@/lib/motion';
+import PageBack from '@/components/PageBack';
+import { useEscapeBack } from '@/lib/hooks';
 import Skeleton from '@/components/Skeleton';
-import Button, { buttonClasses } from '@/components/Button';
+import TabPanes, { TabPane } from '@/components/TabPanes';
+import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
+import { buttonClasses } from '@/components/Button';
 
 type ProfileTab = 'uploads' | 'faves' | 'posts' | 'comments';
 
@@ -119,7 +126,6 @@ export default function UserProfilePage() {
   });
 
   const [tabValue, setTabValue] = useState<ProfileTab>('uploads');
-  const panelRef = useTabPanes<HTMLDivElement>(tabValue);
 
   const [faveIds, setFaveIds] = useState<number[]>([]);
   const [faveImages, setFaveImages] = useState<PonyImage[]>([]);
@@ -315,35 +321,46 @@ export default function UserProfilePage() {
 
   const isOwnProfile = currentUserId !== null && profile && currentUserId === profile.id;
 
+  /* Not a sidebar destination, so it carries the shared back affordance — see
+     the rule in AGENTS.md. Drawn in all three states for the same reason the
+     forum thread draws it in all three: an affordance that disappears when a
+     request fails is worse than one that was never there. No `pt-14`, because
+     what is at the top of this page is the banner, not text. */
+  const handleBack = useCallback(() => router.back(), [router]);
+  useEscapeBack(handleBack);
+
   if (isLoading) {
     return (
+      <>
+      <PageBack onClick={handleBack} title="返回 (Esc)" />
       <div className="bg-surface">
         <Skeleton className="h-48 sm:h-64 md:h-80 w-full rounded-2xl sm:rounded-3xl mt-4 sm:mt-6 mx-auto max-w-[96%] sm:max-w-[98%]" />
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+        <div className="max-w-5xl mx-auto relative">
           <div className="pb-8 relative pt-12 sm:pt-16">
             <Skeleton className="absolute -top-12 sm:-top-16 left-0 w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface" />
-            <Skeleton className="h-8 rounded w-1/3 mb-4 mt-2 sm:mt-4" />
-            <Skeleton className="h-4 rounded w-1/4 mb-6" />
+            <Skeleton className="h-8 w-1/3 mb-4 mt-2 sm:mt-4" />
+            <Skeleton className="h-4 w-1/4 mb-6" />
             <div className="space-y-4">
-              <Skeleton className="h-4 rounded w-full" />
-              <Skeleton className="h-4 rounded w-5/6" />
-              <Skeleton className="h-4 rounded w-4/6" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-4/6" />
             </div>
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   if (error || !profile) {
+    /* `ErrorRetry`, so a profile that fails to load looks like every other
+       failure in the app — 48px glyph over `title-l` — instead of announcing
+       itself in `headline-s`, which is the page-title role. */
     return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <h2 className="text-headline-s text-on-surface mb-4">加载失败</h2>
-        <p className="text-on-surface-variant mb-6">{error || '用户可能不存在'}</p>
-        <Button onClick={() => router.back()} variant="filled">
-          返回上一页
-        </Button>
-      </div>
+      <>
+        <PageBack onClick={handleBack} title="返回 (Esc)" />
+        <ErrorRetry title="加载失败" message={error || '用户可能不存在'} />
+      </>
     );
   }
 
@@ -370,7 +387,9 @@ export default function UserProfilePage() {
   ];
 
   return (
-    <div className="animate-fade-in bg-surface">
+    <>
+      <PageBack onClick={handleBack} title="返回 (Esc)" />
+      <div className="animate-fade-in bg-surface">
       <div className="h-48 sm:h-64 md:h-80 relative bg-surface-container-high rounded-2xl sm:rounded-3xl overflow-hidden mt-4 sm:mt-6 mx-auto max-w-full sm:max-w-[98%] px-2 sm:px-0">
         {profile.banner ? (
           <FadeInImage
@@ -386,13 +405,13 @@ export default function UserProfilePage() {
           </div>
         )}{' '}
         {level !== null && (
-          <div className="absolute bottom-3 left-0 bg-scrim/60 text-warning-fill px-2 py-1 rounded-r-lg text-label-m-emphasized backdrop-blur-sm border border-warning/30 border-l-0 shadow-e3">
+          <div className="bg-media-plate text-warning-fill text-label-m-emphasized absolute bottom-3 left-0 rounded-r-lg px-2 py-1 backdrop-blur-sm">
             {' '}
             Lv.{level}{' '}
           </div>
         )}{' '}
         {profile.experience !== undefined && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-on-media/30">
+          <div className="bg-media-outline absolute inset-x-0 bottom-0 h-1">
             {' '}
             <div
               className="h-full bg-warning-fill transition-[width] duration-300 ease-[var(--ease-standard)]"
@@ -401,52 +420,45 @@ export default function UserProfilePage() {
           </div>
         )}{' '}
       </div>{' '}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+      <div className="max-w-5xl mx-auto relative">
         {' '}
         <div className="pb-8 relative pt-12 sm:pt-16">
           {' '}
           <div className="absolute -top-12 sm:-top-16 left-0">
             {' '}
-            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface overflow-hidden bg-surface-container shadow-e3">
-              {' '}
-              {profile.avatar ? (
-                <FadeInImage
-                  src={`https://picpony.top/${profile.avatar}`}
-                  alt={`${profile.username}'s avatar`}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-headline-m sm:text-display-s text-primary font-bold">
-                    {profile.username.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
-            </div>
+            {/* `Avatar`, not a fourth hand-rolled copy of it. The URL was
+                built inline as `https://picpony.top/${avatar}` rather than
+                through `getAvatarUrl`, which is the rule that module exists to
+                hold. */}
+            <Avatar
+              src={profile.avatar}
+              name={profile.username}
+              size="w-24 h-24 sm:w-32 sm:h-32"
+              className="border-4 border-surface shadow-e3"
+            />
           </div>
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 mt-2 sm:mt-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-1 flex-wrap">
-                <h1 className="text-headline-s sm:text-headline-m text-on-surface break-all">
+                <h1 className="text-headline-s sm:text-headline-m text-on-surface break-words">
                   {profile.username}
                 </h1>
-                <span
-                  className={`text-label-m rounded-sm px-2 py-1 ${roleInfo(profile.role).chip}`}
-                >
-                  {roleInfo(profile.role).label}
-                </span>
+                {/* Three marks used to sit in this row in three shapes: the
+                    role and 已核验 as `rounded-sm px-2 py-1 text-label-m`, and
+                    the earned badges below as round `text-label-s-emphasized`
+                    pills — so the header read square, square, round. `Badge`
+                    owns the silhouette for all three now. */}
+                <RoleBadge role={profile.role} showUser size="md" />
                 {profile.has_api_key && profile.derpi_username && (
-                  <span className="text-label-m bg-success-container text-on-success-container inline-flex items-center gap-1 rounded-sm px-2 py-1">
-                    <MdVerified size={12} />
+                  <Badge tone="success" size="md" icon={<MdVerified size={12} />}>
                     已核验
-                  </span>
+                  </Badge>
                 )}
               </div>
               {badges.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  {badges.map((b, i) => (
-                    <UserBadge key={i} name={b.badge_name} color={b.badge_color} />
+                  {badges.map((b) => (
+                    <UserBadge key={b.badge_name} name={b.badge_name} color={b.badge_color} />
                   ))}
                 </div>
               )}
@@ -468,7 +480,7 @@ export default function UserProfilePage() {
                   注册于 {new Date(profile.created_at).toLocaleDateString('zh-CN')}{' '}
                 </span>{' '}
                 {profile.last_online && (
-                  <span className="flex items-center gap-1.5 text-outline">
+                  <span className="flex items-center gap-1.5 text-on-surface-variant">
                     {' '}
                     <MdAccessTime size={18} /> 上次在线：
                     {formatLastOnline(profile.last_online)}{' '}
@@ -478,12 +490,12 @@ export default function UserProfilePage() {
               <div className="mt-4">
                 {' '}
                 {profile.bio ? (
-                  <p className="text-on-surface-variant whitespace-pre-wrap leading-relaxed text-body-m">
+                  <p className="text-on-surface-variant whitespace-pre-wrap text-body-m">
                     {' '}
                     {profile.bio}{' '}
                   </p>
                 ) : (
-                  <p className="text-outline italic text-body-m">该用户很懒，什么都没有留下。</p>
+                  <p className="text-on-surface-variant italic text-body-m">该用户很懒，什么都没有留下。</p>
                 )}{' '}
               </div>{' '}
             </div>{' '}
@@ -501,25 +513,21 @@ export default function UserProfilePage() {
           </div>{' '}
           {profile.derpi_username ? (
             <div className="mb-8">
-              {' '}
-              <Card
-                variant="filled"
-                interactive
-                className="bg-surface-container-low/50 hover:bg-surface-container-high transition-ui"
-                onClick={() => {
-                  if (profile.derpi_user_id) {
-                    window.open(
-                      `https://derpibooru.org/profiles/${profile.derpi_user_id}`,
-                      '_blank',
-                    );
-                  } else {
-                    window.open(
-                      `https://derpibooru.org/profiles/${profile.derpi_username}`,
-                      '_blank',
-                    );
-                  }
-                }}
-                title="点击查看 Derpibooru 个人主页"
+              {/* An anchor, not a click-handled container. The card opens an
+                  external profile, so it is a link and always was: as a plain
+                  div it could not be tabbed to, middle-clicked, copied, or
+                  previewed in the status bar, and the `window.open` behind it is
+                  what a popup blocker stops. The trailing glyph is `MdOpenInNew`
+                  for the same reason — the magnifier promised a search this card
+                  never performed. */}
+              <a
+                href={`https://derpibooru.org/profiles/${encodeURIComponent(
+                  profile.derpi_user_id ? String(profile.derpi_user_id) : profile.derpi_username,
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="state-layer transition-ui block rounded-md border border-outline-variant bg-surface-container-low p-4 outline-none focus-visible:ring-2 focus-ring"
+                title="在 Derpibooru 查看个人主页"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Image
@@ -530,37 +538,38 @@ export default function UserProfilePage() {
                     aria-hidden="true"
                     className="shrink-0"
                   />
-                  <span className="text-label-m-emphasized text-on-surface-variant uppercase tracking-wider">
+                  <span className="text-label-m-emphasized text-on-surface-variant">
                     Derpibooru 账户
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container-highest flex-shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- remote derpi avatar */}
-                    <img
-                      src={`https://derpicdn.net/img/${profile.derpi_user_id}/avatar.png`}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />{' '}
-                  </div>{' '}
+                  {/* `Avatar`, not a bare `<img>` whose `onError` set
+                      `style.display = 'none'` — an imperative DOM edit React
+                      does not know about, and one that left a blank circle
+                      rather than a fallback. */}
+                  <Avatar
+                    src={
+                      profile.derpi_user_id
+                        ? `https://derpicdn.net/img/${profile.derpi_user_id}/avatar.png`
+                        : undefined
+                    }
+                    name={profile.derpi_username}
+                    size="w-10 h-10"
+                    className="shrink-0"
+                  />
                   <div className="flex-1 min-w-0">
-                    {' '}
-                    <div className=" text-on-surface text-label-l truncate">
-                      {' '}
+                    <div className="text-on-surface text-label-l truncate">
                       {profile.has_api_key ? profile.derpi_username : '该用户暂未核验账户'}
                     </div>
-                    <div className="text-body-s text-outline">
+                    <div className="text-body-s text-on-surface-variant">
                       {profile.has_api_key
-                        ? '点击查看 Derpibooru 个人主页'
+                        ? '在 Derpibooru 查看个人主页'
                         : '请在设置中绑定 API Key 以核验身份'}
                     </div>
                   </div>
-                  <MdSearch size={18} className="text-outline shrink-0" />
+                  <MdOpenInNew size={18} className="text-outline shrink-0" />
                 </div>
-              </Card>
+              </a>
             </div>
           ) : null}
           {profile.derpi_username && (
@@ -592,15 +601,26 @@ export default function UserProfilePage() {
               className="mb-6"
             />
           </div>
-          <div ref={panelRef} data-tab-panel>
-            <div
-              data-tab-pane="uploads"
-              data-tab-pane-active={tabValue === 'uploads' ? '' : undefined}
-            >
+          {/* `TabPanes`, not the `data-tab-panel` / `data-tab-pane` trio written
+              out by hand — and the difference is not only tidiness. Written out,
+              this was passing `lean` by default, and `lean` requires the blocks
+              inside a pane to survive the run. Every tab here fetches when it is
+              *selected* (`if (tabValue !== 'posts') return`), so within a few
+              frames of a switch starting the incoming pane's subtree has been
+              replaced by a skeleton and GSAP is shearing detached nodes while
+              the visible ones sit still. The primitive defaults it off, which is
+              the correct setting for this screen. */}
+          <TabPanes value={tabValue}>
+            <TabPane value="uploads">
               {isUploadsLoading ? (
+                /* `PER_PAGE`, which is the number the request actually asks
+                    for — not the 8 that was here. A full page is 12, so the
+                    placeholder was a row short on every desktop width and the
+                    pane grew by one row the moment the pictures landed, after
+                    the tab switch had visibly finished. */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-square rounded-md" />
+                  {Array.from({ length: PER_PAGE }).map((_, i) => (
+                    <Skeleton key={i} className="aspect-square rounded-lg" />
                   ))}
                 </div>
               ) : uploads.length > 0 ? (
@@ -610,7 +630,7 @@ export default function UserProfilePage() {
                       <Link
                         key={item.id}
                         href={`/pic/${item.id}`}
-                        className="block relative aspect-square rounded-md overflow-hidden bg-surface-container-high hover:ring-2 hover:ring-primary transition-ui group"
+                        className="block relative aspect-square rounded-lg overflow-hidden bg-surface-container-high transition-ui group"
                       >
                         <FadeInImage
                           src={
@@ -625,7 +645,7 @@ export default function UserProfilePage() {
                           className="object-cover"
                           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         />
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="media-caption-gradient absolute inset-x-0 bottom-0 p-2 opacity-0 transition-opacity duration-300 ease-[var(--ease-standard)] group-hover:opacity-100">
                           <p className="text-on-media text-body-s truncate">
                             {item.name || `#${item.id}`}
                           </p>
@@ -646,19 +666,21 @@ export default function UserProfilePage() {
                   )}
                 </>
               ) : (
-                <div className="text-center py-16">
-                  <MdCloudUpload size={48} className="mx-auto text-outline mb-4" />
-                  <p className="text-on-surface-variant text-title-m">暂无上传记录</p>
-                  <p className="text-outline text-body-m mt-1">该用户还没有上传过任何作品</p>
-                </div>
+                <EmptyState
+                  size="pane"
+                  icon={<MdCloudUpload size={48} />}
+                  title="暂无上传记录"
+                  description="该用户还没有上传过任何作品"
+                />
               )}
-            </div>
+            </TabPane>
 
-            <div data-tab-pane="faves" data-tab-pane-active={tabValue === 'faves' ? '' : undefined}>
+            <TabPane value="faves">
               {isFavesLoading && faveImages.length === 0 ? (
+                /* Same page size as the request — see the uploads pane. */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-square rounded-md" />
+                  {Array.from({ length: PER_PAGE }).map((_, i) => (
+                    <Skeleton key={i} className="aspect-square rounded-lg" />
                   ))}
                 </div>
               ) : faveImages.length > 0 ? (
@@ -668,7 +690,7 @@ export default function UserProfilePage() {
                       <Link
                         key={img.id}
                         href={`/pic/${img.id}`}
-                        className="block relative aspect-square rounded-md overflow-hidden bg-surface-container-high hover:ring-2 hover:ring-primary transition-ui"
+                        className="block relative aspect-square rounded-lg overflow-hidden bg-surface-container-high transition-ui group"
                       >
                         <FadeInImage
                           src={
@@ -698,27 +720,36 @@ export default function UserProfilePage() {
                   )}
                 </>
               ) : (
-                <div className="text-center py-16">
-                  <MdFavorite size={48} className="mx-auto text-outline mb-4" />
-                  <p className="text-on-surface-variant text-title-m">暂无收藏</p>
-                  <p className="text-outline text-body-m mt-1">该用户还没有添加任何收藏</p>
-                </div>
+                <EmptyState
+                  size="pane"
+                  icon={<MdFavorite size={48} />}
+                  title="暂无收藏"
+                  description="该用户还没有添加任何收藏"
+                />
               )}
-            </div>
+            </TabPane>
 
-            <div data-tab-pane="posts" data-tab-pane-active={tabValue === 'posts' ? '' : undefined}>
+            <TabPane value="posts">
               {' '}
               {isPostsLoading ? (
-                <div className="space-y-4">
-                  {' '}
+                /* The card these stand in for is `space-y-3`, opens with an
+                   80px cover thumbnail and puts a two-line title beside it. The
+                   placeholder was `space-y-4` with no thumbnail at all, so the
+                   list re-spaced vertically *and* shifted sideways the moment
+                   the posts landed — which is the one thing a skeleton exists to
+                   prevent. */
+                <div className="space-y-3">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="bg-surface-container-low/50 rounded-md p-4">
-                      {' '}
-                      <Skeleton className="h-4 rounded w-1/4 mb-3" />{' '}
-                      <Skeleton className="h-3 rounded w-full mb-2" />{' '}
-                      <Skeleton className="h-3 rounded w-3/4" />{' '}
-                    </div>
-                  ))}{' '}
+                    <Card key={i} variant="filled">
+                      <div className="flex items-start gap-3">
+                        <Skeleton className="h-16 w-16 shrink-0 rounded-md sm:h-20 sm:w-20" delay={i * 80} />
+                        <div className="min-w-0 flex-1">
+                          <Skeleton className="mb-2 h-5 w-3/5" delay={i * 80 + 40} />
+                          <Skeleton className="h-3.5 w-2/5" delay={i * 80 + 80} />
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
                 </div>
               ) : posts.length > 0 ? (
                 <>
@@ -729,13 +760,13 @@ export default function UserProfilePage() {
                       <Link
                         key={post.id}
                         href={`/forum/${post.id}`}
-                        className="block bg-surface-container-low/50 rounded-md p-4 hover:bg-surface-container-high transition-ui"
+                        className="state-layer block rounded-md bg-surface-container-low p-4 transition-ui"
                       >
                         {' '}
                         <div className="flex items-start gap-3">
                           {' '}
                           {post.cover_image ? (
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-surface-container-highest flex-shrink-0">
+                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-surface-container-highest shrink-0">
                               {' '}
                               <FadeInImage
                                 src={`https://picpony.top/${post.cover_image}`}
@@ -751,7 +782,7 @@ export default function UserProfilePage() {
                               {' '}
                               {post.title}{' '}
                             </h3>{' '}
-                            <div className="flex items-center gap-4 text-label-m text-outline">
+                            <div className="flex items-center gap-4 text-label-m text-on-surface-variant">
                               {' '}
                               <span>
                                 {new Date(post.created_at).toLocaleString('zh-CN', {
@@ -789,30 +820,36 @@ export default function UserProfilePage() {
                   )}
                 </>
               ) : (
-                <div className="text-center py-16">
-                  <MdArticle size={48} className="mx-auto text-outline mb-4" />
-                  <p className="text-on-surface-variant text-title-m">暂无帖子</p>
-                  <p className="text-outline text-body-m mt-1">该用户还没有发表过任何帖子</p>
-                </div>
+                <EmptyState
+                  size="pane"
+                  icon={<MdArticle size={48} />}
+                  title="暂无帖子"
+                  description="该用户还没有发表过任何帖子"
+                />
               )}
-            </div>
+            </TabPane>
 
-            <div
-              data-tab-pane="comments"
-              data-tab-pane-active={tabValue === 'comments' ? '' : undefined}
-            >
+            <TabPane value="comments">
               {' '}
               {isCommentsLoading ? (
-                <div className="space-y-4">
-                  {' '}
+                /* The card these stand in for is `space-y-3`, opens with an
+                   80px cover thumbnail and puts a two-line title beside it. The
+                   placeholder was `space-y-4` with no thumbnail at all, so the
+                   list re-spaced vertically *and* shifted sideways the moment
+                   the posts landed — which is the one thing a skeleton exists to
+                   prevent. */
+                <div className="space-y-3">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="bg-surface-container-low/50 rounded-md p-4">
-                      {' '}
-                      <Skeleton className="h-4 rounded w-1/4 mb-3" />{' '}
-                      <Skeleton className="h-3 rounded w-full mb-2" />{' '}
-                      <Skeleton className="h-3 rounded w-3/4" />{' '}
-                    </div>
-                  ))}{' '}
+                    <Card key={i} variant="filled">
+                      <div className="flex items-start gap-3">
+                        <Skeleton className="h-16 w-16 shrink-0 rounded-md sm:h-20 sm:w-20" delay={i * 80} />
+                        <div className="min-w-0 flex-1">
+                          <Skeleton className="mb-2 h-5 w-3/5" delay={i * 80 + 40} />
+                          <Skeleton className="h-3.5 w-2/5" delay={i * 80 + 80} />
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
                 </div>
               ) : comments.length > 0 ? (
                 <>
@@ -825,13 +862,13 @@ export default function UserProfilePage() {
                         <Link
                           key={`${comment.type}-${comment.id}-${index}`}
                           href={getCommentTargetLink(comment)}
-                          className="block bg-surface-container-low/50 rounded-md p-4 hover:bg-surface-container-high transition-ui"
+                          className="state-layer block rounded-md bg-surface-container-low p-4 transition-ui"
                         >
                           {' '}
                           <div className="flex items-start gap-3">
                             {' '}
                             {comment.cover_image ? (
-                              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-surface-container-highest flex-shrink-0">
+                              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-surface-container-highest shrink-0">
                                 {' '}
                                 <FadeInImage
                                   src={`https://picpony.top/${comment.cover_image}`}
@@ -845,11 +882,11 @@ export default function UserProfilePage() {
                               {' '}
                               <div className="flex items-center gap-2 mb-1.5">
                                 {' '}
-                                <span className="inline-flex items-center gap-1 text-label-m text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                                <Badge tone="primary">
                                   {' '}
                                   {typeInfo.icon} {typeInfo.label}{' '}
-                                </span>{' '}
-                                <span className="text-body-s text-outline">
+                                </Badge>{' '}
+                                <span className="text-body-s text-on-surface-variant">
                                   {' '}
                                   {new Date(comment.created_at).toLocaleString('zh-CN', {
                                     year: 'numeric',
@@ -860,7 +897,7 @@ export default function UserProfilePage() {
                                   })}
                                 </span>
                               </div>
-                              <div className="text-body-m text-on-surface line-clamp-3 leading-relaxed">
+                              <div className="text-body-m text-on-surface line-clamp-3">
                                 <RichTextRenderer content={comment.body} />
                               </div>
                             </div>
@@ -882,16 +919,18 @@ export default function UserProfilePage() {
                   )}
                 </>
               ) : (
-                <div className="text-center py-16">
-                  <MdChatBubbleOutline size={48} className="mx-auto text-outline mb-4" />
-                  <p className="text-on-surface-variant text-title-m">暂无评论</p>
-                  <p className="text-outline text-body-m mt-1">该用户还没有发表过任何评论</p>
-                </div>
+                <EmptyState
+                  size="pane"
+                  icon={<MdChatBubbleOutline size={48} />}
+                  title="暂无评论"
+                  description="该用户还没有发表过任何评论"
+                />
               )}
-            </div>
-          </div>
+            </TabPane>
+          </TabPanes>
         </div>
       </div>
     </div>
+    </>
   );
 }

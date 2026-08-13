@@ -6,11 +6,16 @@ import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdEmojiEvents, MdAdd, MdEdit, MdDelete, MdContentCopy, MdLink } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
+import IconButton from '@/components/IconButton';
 import { SectionHeader } from './';
 import UserBadge from '@/components/UserBadge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import { Input } from '@/components/Input';
+import TabBar from '@/components/TabBar';
+import TabPanes, { TabPane } from '@/components/TabPanes';
+import { Input, ColorSwatch } from '@/components/Input';
+import Radio from '@/components/Radio';
+import { copyText } from '@/lib/utils';
 
 interface Badge {
   id: number;
@@ -239,23 +244,8 @@ export default function BadgesTab({ token }: { token: string }) {
 
   const copyBadgeLink = async (link: BadgeLink) => {
     const url = `${window.location.origin}/claim-badge?token=${link.token}`;
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(url);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = url;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = '0';
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-      }
-      showToast('领取链接已复制', 'success');
-    } catch {
-      prompt('复制失败，请手动复制:', url);
-    }
+    if (await copyText(url)) showToast('领取链接已复制', 'success');
+    else showToast('复制失败，请手动选中链接复制', 'error');
   };
 
   const subTabs = [
@@ -269,7 +259,7 @@ export default function BadgesTab({ token }: { token: string }) {
       key: 'name',
       header: '名称',
       primary: true,
-      render: (b) => <span className="font-medium">{b.badge_name}</span>,
+      render: (b) => <span className="text-body-m-emphasized">{b.badge_name}</span>,
     },
     {
       key: 'color',
@@ -282,22 +272,22 @@ export default function BadgesTab({ token }: { token: string }) {
       actions: true,
       render: (b) => (
         <>
-          <button
+          <IconButton
+            size="sm"
             onClick={() => handleEditBadge(b)}
-            className="touch-target state-layer text-primary rounded-full p-1.5"
+            icon={<MdEdit size={16} />}
             title="编辑"
             aria-label={`编辑徽章 ${b.badge_name}`}
-          >
-            <MdEdit size={16} />
-          </button>
-          <button
+            className="text-primary"
+          />
+          <IconButton
+            size="sm"
             onClick={() => handleDeleteBadge(b.id)}
-            className="touch-target state-layer rounded-full p-1.5 text-error"
+            icon={<MdDelete size={16} />}
             title="删除"
             aria-label={`删除徽章 ${b.badge_name}`}
-          >
-            <MdDelete size={16} />
-          </button>
+            className="text-error"
+          />
         </>
       ),
     },
@@ -316,10 +306,10 @@ export default function BadgesTab({ token }: { token: string }) {
       render: (l) => (
         <button
           onClick={() => handleToggleBadgeLink(l.id, l.is_active)}
-          className={`rounded px-2 py-1 text-body-s transition-ui ${
+          className={`state-layer rounded-sm px-2 py-1 text-label-m transition-ui outline-none focus-visible:ring-2 focus-ring ${
             l.is_active
-              ? 'bg-success-container text-success hover:bg-success-container/70'
-              : 'bg-error-container text-error hover:bg-error-container/70'
+              ? 'bg-success-container text-on-success-container'
+              : 'bg-error-container text-on-error-container'
           }`}
         >
           {l.is_active ? '已启用' : '已停用'}
@@ -330,7 +320,7 @@ export default function BadgesTab({ token }: { token: string }) {
       key: 'expiry',
       header: '有效期',
       render: (l) => (
-        <span className="text-outline text-body-s">
+        <span className="text-on-surface-variant text-body-s">
           {l.link_expires_at ? `链接: ${l.link_expires_at}` : '永久'}
           {l.badge_expires_at && ` / 徽章: ${l.badge_expires_at}`}
         </span>
@@ -341,15 +331,14 @@ export default function BadgesTab({ token }: { token: string }) {
       header: '操作',
       actions: true,
       render: (l) => (
-        <button
+        <IconButton
+          size="sm"
           onClick={() => copyBadgeLink(l)}
-          className="touch-target state-layer text-primary rounded-full p-1.5"
+          icon={<MdContentCopy size={16} />}
           title="复制链接"
           aria-label={`复制 ${l.badge_name} 的领取链接`}
-        >
-          {' '}
-          <MdContentCopy size={16} />{' '}
-        </button>
+          className="text-primary"
+        />
       ),
     },
   ];
@@ -361,32 +350,29 @@ export default function BadgesTab({ token }: { token: string }) {
         title="徽章管理"
         onRefresh={loadData}
       />{' '}
-      <div className="flex gap-2 mb-4">
-        {' '}
-        {subTabs.map((st) => (
-          <button
-            key={st.id}
-            onClick={() => setActiveSubTab(st.id)}
-            className={`px-4 py-2 rounded-full text-label-l transition-ui ${
-              activeSubTab === st.id
-                ? 'bg-primary/10 text-primary'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            {st.label}
-          </button>
-        ))}
-      </div>
-      {activeSubTab === 'grant' && (
-        <>
+      {/* The app's fifth tab row, and the last one that was not `TabBar`. It
+          was a pair of `rounded-full` pills with a `secondary-container`
+          selected fill — close enough to the real thing to look deliberate, but
+          with no sliding indicator, and its panes were gated on
+          `{activeSubTab === 'x' && …}`, which unmounts the outgoing pane so
+          there is nothing left for the transition to animate out. */}
+      <TabBar
+        className="mb-4"
+        value={activeSubTab}
+        onChange={setActiveSubTab}
+        label="徽章管理分区"
+        tabs={subTabs.map((st) => ({ value: st.id, label: st.label }))}
+      />
+      <TabPanes value={activeSubTab}>
+        <TabPane value="grant">
           {' '}
           <Card variant="transparent" className="space-y-4">
             {' '}
-            <div className="text-body-s text-on-surface-variant p-3 rounded">
+            <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
               {' '}
               您可以向特定用户
               ID，或在某日期区间注册的用户批量授予专属徽章。徽章将在用户的发言、个人主页等多处显示。{' '}
-            </div>{' '}
+            </Card>{' '}
             <div>
               {' '}
               <Input
@@ -400,15 +386,15 @@ export default function BadgesTab({ token }: { token: string }) {
             </div>{' '}
             <div>
               {' '}
-              <label className="block text-label-l text-on-surface mb-1">徽章颜色</label>{' '}
+              <p className="block text-label-l text-on-surface-variant mb-1">
+                徽章颜色
+              </p>{' '}
               <div className="flex items-center gap-3">
-                {' '}
-                <input
-                  type="color"
+                <ColorSwatch
+                  aria-label="选择徽章颜色"
                   value={badgeColor}
                   onChange={(e) => setBadgeColor(e.target.value)}
-                  className="w-10 h-10 p-0.5 border rounded cursor-pointer"
-                />{' '}
+                />
                 <Input
                   type="text"
                   value={badgeColor}
@@ -451,37 +437,41 @@ export default function BadgesTab({ token }: { token: string }) {
               </div>{' '}
             </div>{' '}
             <div>
-              {' '}
-              <label className="block text-label-l text-on-surface mb-1">有效期</label>{' '}
-              <div className="flex items-center gap-4">
-                {' '}
-                <label className="flex items-center gap-2 text-label-l cursor-pointer">
-                  {' '}
-                  <input
-                    type="radio"
+              {/* `fieldset`/`legend`, because this caption names a *group* of
+                  radios rather than one control. A bare `<label>` with no
+                  `htmlFor` labels nothing at all — it is inert styled text — so
+                  a screen reader announced "永久徽章, radio, 1 of 2" with no
+                  indication of what the choice was about. The UA's border,
+                  padding and margin are reset; `min-w-0` because a fieldset's
+                  default `min-width: min-content` stops flex children shrinking. */}
+              <fieldset className="m-0 min-w-0 border-0 p-0">
+                <legend className="mb-1 text-label-l text-on-surface-variant">有效期</legend>
+                <div className="flex items-center gap-4">
+                  <Radio
+                    name="badge-duration"
+                    value="permanent"
                     checked={isPermanent}
                     onChange={() => setIsPermanent(true)}
-                  />{' '}
-                  永久徽章{' '}
-                </label>{' '}
-                <label className="flex items-center gap-2 text-label-l cursor-pointer">
-                  {' '}
-                  <input
-                    type="radio"
+                    label="永久徽章"
+                  />
+                  <Radio
+                    name="badge-duration"
+                    value="expiring"
                     checked={!isPermanent}
                     onChange={() => setIsPermanent(false)}
-                  />{' '}
-                  设定有效期至{' '}
-                </label>{' '}
-                {!isPermanent && (
-                  <Input
-                    type="date"
-                    value={expiresAt}
-                    onChange={(e) => setExpiresAt(e.target.value)}
+                    label="设定有效期至"
                   />
-                )}{' '}
-              </div>{' '}
-            </div>{' '}
+                  {!isPermanent && (
+                    <Input
+                      type="date"
+                      aria-label="徽章有效期至"
+                      value={expiresAt}
+                      onChange={(e) => setExpiresAt(e.target.value)}
+                    />
+                  )}
+                </div>
+              </fieldset>
+            </div>
             <Button
               onClick={handleGrantBadge}
               variant="filled"
@@ -493,7 +483,7 @@ export default function BadgesTab({ token }: { token: string }) {
           </Card>
           {/* Badges list */}
           <Card variant="transparent">
-            <h3 className="text-label-l-emphasized text-on-surface mb-4">已有徽章列表</h3>
+            <h3 className="text-label-l text-on-surface mb-4">已有徽章列表</h3>
             <DataTable<Badge>
               columns={badgeColumns}
               rows={badges}
@@ -502,17 +492,15 @@ export default function BadgesTab({ token }: { token: string }) {
               empty="暂无徽章"
             />
           </Card>
-        </>
-      )}
-      {activeSubTab === 'links' && (
-        <>
+        </TabPane>
+        <TabPane value="links">
           {' '}
           <Card variant="transparent" className="space-y-4">
             {' '}
-            <div className="text-body-s text-on-surface-variant p-3 rounded">
+            <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
               {' '}
               生成一个包含徽章信息的专属链接，用户点击链接即可自动领取指定的徽章。{' '}
-            </div>{' '}
+            </Card>{' '}
             <div className="flex gap-4">
               {' '}
               <div className="flex-1">
@@ -527,15 +515,15 @@ export default function BadgesTab({ token }: { token: string }) {
               </div>{' '}
               <div className="flex-1">
                 {' '}
-                <label className="block text-label-l text-on-surface mb-1">徽章颜色</label>{' '}
+                <p className="block text-label-l text-on-surface-variant mb-1">
+                  徽章颜色
+                </p>{' '}
                 <div className="flex items-center gap-2">
-                  {' '}
-                  <input
-                    type="color"
+                  <ColorSwatch
+                    aria-label="选择领取链接徽章颜色"
                     value={linkBadgeColor}
                     onChange={(e) => setLinkBadgeColor(e.target.value)}
-                    className="w-10 h-10 p-0.5 border rounded cursor-pointer"
-                  />{' '}
+                  />
                   <Input
                     type="text"
                     value={linkBadgeColor}
@@ -567,18 +555,18 @@ export default function BadgesTab({ token }: { token: string }) {
                 />{' '}
               </div>{' '}
             </div>{' '}
-            <button
+            <Button
+              icon={<MdLink size={16} />}
+              variant="warning"
               onClick={handleCreateBadgeLink}
-              disabled={creatingLink}
-              className="flex items-center gap-2 px-4 py-2 bg-warning-fill text-on-fill rounded-full text-label-l hover:bg-warning-fill/90 disabled:opacity-50"
+              loading={creatingLink}
             >
-              {' '}
-              <MdLink size={16} /> {creatingLink ? '生成中...' : '生成领取链接'}
-            </button>
+              生成领取链接
+            </Button>
           </Card>
           {/* Existing badge links */}
           <Card variant="transparent">
-            <h3 className="text-label-l-emphasized text-on-surface mb-4">已生成的链接</h3>
+            <h3 className="text-label-l text-on-surface mb-4">已生成的链接</h3>
             <DataTable<BadgeLink>
               columns={badgeLinkColumns}
               rows={badgeLinks}
@@ -586,8 +574,8 @@ export default function BadgesTab({ token }: { token: string }) {
               empty="暂无领取链接"
             />
           </Card>
-        </>
-      )}
+        </TabPane>
+      </TabPanes>
       {/* Edit badge modal */}
       <Modal
         isOpen={editModalOpen}
@@ -596,12 +584,9 @@ export default function BadgesTab({ token }: { token: string }) {
         maxWidth="max-w-md"
         footer={
           <>
-            <button
-              onClick={() => setEditModalOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setEditModalOpen(false)}>
               取消
-            </button>
+            </Button>
             <Button onClick={handleSaveEdit} variant="filled">
               保存
             </Button>
@@ -610,7 +595,10 @@ export default function BadgesTab({ token }: { token: string }) {
       >
         <div className="space-y-4">
           <div>
-            <label htmlFor="badge-edit-name" className="block text-label-l text-on-surface mb-1">
+            <label
+              htmlFor="badge-edit-name"
+              className="block text-label-l text-on-surface-variant mb-1"
+            >
               名称
             </label>
             <Input
@@ -621,16 +609,17 @@ export default function BadgesTab({ token }: { token: string }) {
             />
           </div>
           <div>
-            <label htmlFor="badge-edit-color" className="block text-label-l text-on-surface mb-1">
+            <label
+              htmlFor="badge-edit-color"
+              className="block text-label-l text-on-surface-variant mb-1"
+            >
               颜色
             </label>
             <div className="flex items-center gap-3">
-              <input
-                type="color"
+              <ColorSwatch
+                aria-label="选择徽章颜色"
                 value={editColor}
                 onChange={(e) => setEditColor(e.target.value)}
-                aria-label="选择徽章颜色"
-                className="h-10 w-10 shrink-0 cursor-pointer rounded border border-outline p-0.5"
               />
               <Input
                 id="badge-edit-color"
@@ -650,12 +639,9 @@ export default function BadgesTab({ token }: { token: string }) {
         maxWidth="max-w-sm"
         footer={
           <>
-            <button
-              onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setConfirmOpen(false)}>
               取消
-            </button>
+            </Button>
             <Button variant="danger" onClick={handleConfirm}>
               确认
             </Button>

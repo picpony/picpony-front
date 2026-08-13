@@ -9,7 +9,15 @@ export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   variant?: CardVariant;
   padding?: CardPadding;
-  /** Adds ripple, a hover state layer and a press scale. Use for whole-card links/buttons. */
+  /**
+   * Adds the ripple and the hover state layer. Use for whole-card links/buttons.
+   *
+   * No press *scale*, despite what this line used to promise: M3 gives no size
+   * feedback on press — the state layer and the ripple carry it — and a card
+   * mid-transform corrupts the rect the hero flight reads on press. The doc was
+   * describing behaviour the implementation had never had and the design rules
+   * forbid, which is the kind of stale comment that gets "fixed" back in.
+   */
   interactive?: boolean;
   children?: ReactNode;
 }
@@ -21,10 +29,10 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
  * palette change meant editing all of them.
  *
  * Depth comes from the surface-container tone scale rather than from shadows.
- * That is what makes the three variants survive dark mode: Tailwind's own
- * `shadow-md` is nearly invisible on a near-black background, whereas a tonal
- * step is not. The `shadow-e*` scale in globals.css deepens its alphas under
- * `.dark` for the same reason — use those, never the raw Tailwind ones.
+ * That is what makes the four variants survive dark mode: Tailwind's mid shadow
+ * step is nearly invisible on a near-black background, whereas a tonal step is
+ * not. The `shadow-e*` scale in globals.css deepens its alphas under `.dark`
+ * for the same reason — use those, never the raw Tailwind ones.
  */
 const VARIANTS: Record<CardVariant, string> = {
   // Default. Sits on `surface` and reads as a distinct plane without a border.

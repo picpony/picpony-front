@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { MdAccessTime, MdImage, MdPerson, MdSdStorage, MdStar } from 'react-icons/md';
 import type { ReactNode } from 'react';
 import type { PonyImage } from '@/lib/types/image';
+import Skeleton from '@/components/Skeleton';
 
 type DetailHeaderProps = {
   image: PonyImage;
@@ -27,10 +28,9 @@ function MetaValue({
 }) {
   if (ready) return children;
   return (
-    <span
-      aria-hidden="true"
+    <Skeleton
       data-image-detail-meta-loading
-      className={`skeleton inline-block h-4 rounded bg-surface-container-high ${width}`}
+      className={`inline-block h-4 rounded-xs ${width}`}
     />
   );
 }

@@ -1,45 +1,57 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
-import { MdCollectionsBookmark } from 'react-icons/md';
+import { MdCollectionsBookmark, MdKey } from 'react-icons/md';
 import { api, PonyImage } from '@/lib/api';
 import { useAuth, useDeferredLoading } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import ErrorRetry from '@/components/ErrorRetry';
+import EmptyState from '@/components/EmptyState';
 import Button from '@/components/Button';
 import { LoadMoreButton } from '@/components/Pagination';
 import TabBar from '@/components/TabBar';
+import TabPanes, { TabPane } from '@/components/TabPanes';
 import { useRouter } from 'next/navigation';
 import { readJson } from '@/lib/api/client';
+import PageHeader from '@/components/PageHeader';
 
 const PAGE_SIZE = 50;
 const DERPI_SEARCH = 'https://trixiebooru.org/api/v1/json/search/images';
 const DERPI_FAVES_QUERY =
   '(my:faves), -explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, -anthro, -humanized, pony';
 
+type FaveSource = 'picpony' | 'derpibooru';
+
 /** Shared chrome, so the loading, error and content states cannot drift apart. */
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-7xl px-2 py-4 sm:px-4 sm:py-8 md:px-6 lg:px-8">
-      <h1 className="text-headline-s text-on-surface mb-6">我的收藏</h1>
+    <div className="mx-auto max-w-7xl">
+      <PageHeader title="我的收藏" />
       {children}
     </div>
   );
 }
 
-function EmptyState({ title, children }: { title: string; children?: React.ReactNode }) {
-  return (
-    <div className="text-on-surface-variant flex min-h-[40vh] flex-col items-center justify-center px-4 text-center">
-      <MdCollectionsBookmark size={48} className="text-outline mb-4" />
-      <h2 className="text-title-l text-on-surface-variant mb-2">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function FavoritesList() {
+/**
+ * One tab's worth of favourites, with its own fetch state.
+ *
+ * It used to be a single component holding one `images` array and an `activeTab`
+ * that decided which endpoint filled it. That made the shared-axis tab
+ * transition impossible rather than merely absent: the slide needs the outgoing
+ * pane to still be showing what it was showing, and with one shared list the
+ * moment you switched tabs the old content was already gone — replaced by the
+ * new tab's skeleton. There was nothing left to slide out.
+ *
+ * Parameterising by `source` and mounting it twice is the whole fix. Every piece
+ * of the fetch machinery below — the generation counter, the abort controller,
+ * the dedupe in `commit` — is unchanged; it simply now guards one tab's requests
+ * instead of arbitrating between two tabs'. Each pane keeps its own images, page
+ * number and error, which also means switching back no longer refetches a list
+ * you already have, and no longer re-reads `/user` to get the API key.
+ */
+function FavoritesPane({ source }: { source: FaveSource }) {
   const [images, setImages] = useState<PonyImage[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -48,7 +60,6 @@ function FavoritesList() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [faveIds, setFaveIds] = useState<number[]>([]);
-  const [activeTab, setActiveTab] = useState<'picpony' | 'derpibooru'>('picpony');
   const [apiKey, setApiKey] = useState<string | null>(null);
   const router = useRouter();
   const { getUserInfo } = useAuth();
@@ -188,7 +199,7 @@ function FavoritesList() {
         const currentApiKey = userData.success && userData.user ? userData.user.api_key : null;
         setApiKey(currentApiKey);
 
-        if (activeTab === 'picpony') {
+        if (source === 'picpony') {
           const res = await api.getFaves(userInfo.token);
           if (isStale(run)) return;
           if (!res.success || !res.faves) throw new Error(res.message || '收藏列表读取失败');
@@ -225,14 +236,14 @@ function FavoritesList() {
       generation.current += 1;
       controller.abort();
     };
-  }, [retryCount, activeTab, router, getUserInfo, openAuth, isStale, loadImages, loadDerpibooruFaves]);
+  }, [retryCount, source, router, getUserInfo, openAuth, isStale, loadImages, loadDerpibooruFaves]);
 
   const loadMore = () => {
     if (isLoadingMore || !hasMore) return;
     const controller = abortRef.current;
     if (!controller || controller.signal.aborted) return;
     setIsLoadingMore(true);
-    if (activeTab === 'picpony') {
+    if (source === 'picpony') {
       void loadImages(faveIds, page + 1, generation.current, controller.signal);
     } else if (apiKey) {
       void loadDerpibooruFaves(apiKey, page + 1, generation.current, controller.signal);
@@ -244,72 +255,104 @@ function FavoritesList() {
   // it cannot appear for a single frame.
   const showSkeleton = useDeferredLoading(isLoading);
 
-  const tabs = (
-    <TabBar
-      className="mb-4"
-      value={activeTab}
-      onChange={setActiveTab}
-      tabs={[
-        { value: 'picpony' as const, label: 'PicPony' },
-        { value: 'derpibooru' as const, label: 'Derpibooru' },
-      ]}
-    />
-  );
-
+  /* Every branch below returns pane content only — no `PageShell`, no tab bar.
+     Those are the parent's, and they have to be, because both panes are mounted
+     at once: rendering the shell per branch would have put two page headings and
+     two tab bars on screen for the length of a switch.
+     `size="pane"` on the two status blocks for the same reason — a `page`-sized
+     block sits under a heading and a tab row here, not on a bare route. */
   if (error && !hasContent) {
     return (
-      <PageShell>
-        {tabs}
-        <ErrorRetry
-          title="收藏加载失败"
-          message={error.message}
-          onRetry={() => setRetryCount((c) => c + 1)}
-        />
-      </PageShell>
+      <ErrorRetry
+        size="pane"
+        title="收藏加载失败"
+        message={error.message}
+        onRetry={() => setRetryCount((c) => c + 1)}
+      />
     );
   }
 
   // Only a first load swaps in the placeholder. Once there is content it stays
   // mounted and dims, so the grid never unmounts mid-session — unmounting it
   // collapses the scroll container and the browser clamps scrollTop.
-  //
-  // The tabs render above it either way: they are the control you just used to
-  // get here, and having them vanish under the placeholder made the page look
-  // like it had navigated somewhere else.
   if (!hasContent && isLoading) {
+    return showSkeleton ? <ImageGridSkeleton /> : null;
+  }
+
+  if (source === 'derpibooru' && !apiKey) {
     return (
-      <PageShell>
-        {tabs}
-        {showSkeleton && <ImageGridSkeleton />}
-      </PageShell>
+      <EmptyState
+        size="pane"
+        icon={<MdKey size={48} />}
+        title="未绑定 API Key"
+        description="您需要绑定 Derpibooru API Key 才能查看 Derpibooru 的收藏数据"
+        action={
+          <Button variant="filled" onClick={() => router.push('/settings')}>
+            去绑定
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (!hasContent) {
+    return (
+      <EmptyState
+        size="pane"
+        icon={<MdCollectionsBookmark size={48} />}
+        title="还没有收藏任何图片"
+        description="在图片详情页点一下收藏，就会出现在这里"
+      />
     );
   }
 
   return (
+    <div
+      aria-busy={isLoading || undefined}
+      className={`transition-opacity duration-200 ease-[var(--ease-standard)] ${
+        isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
+      }`}
+    >
+      <MasonryGrid images={images} />
+      {hasMore && <LoadMoreButton onClick={loadMore} isLoading={isLoadingMore} />}
+    </div>
+  );
+}
+
+function FavoritesTabs() {
+  const [activeTab, setActiveTab] = useState<FaveSource>('picpony');
+  /* The Derpibooru pane is mounted on first use rather than up front, so a page
+     load costs one list request instead of two — and then stays mounted, which
+     is what keeps its results and scroll position across later switches. Its
+     place in the sequence is fixed either way: `useTabPanes` derives the slide's
+     direction from pane order in the DOM. */
+  const [derpiMounted, setDerpiMounted] = useState(false);
+
+  return (
     <PageShell>
-      {tabs}
-      {activeTab === 'derpibooru' && !apiKey ? (
-        <EmptyState title="未绑定 API Key">
-          <p className="text-body-m text-on-surface-variant mb-6">
-            您需要绑定 Derpibooru API Key 才能查看 Derpibooru 的收藏数据
-          </p>
-          <Button variant="filled" onClick={() => router.push('/settings')}>
-            去绑定
-          </Button>
-        </EmptyState>
-      ) : !hasContent ? (
-        <EmptyState title="还没有收藏任何图片" />
-      ) : (
-        <div
-          aria-busy={isLoading || undefined}
-          className={`transition-opacity duration-200 ease-[var(--ease-standard)] ${
-            isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
-          }`}
-        >
-          <MasonryGrid images={images} />
-          {hasMore && <LoadMoreButton onClick={loadMore} isLoading={isLoadingMore} />}
-        </div>
-      )}
+      <TabBar
+        className="mb-4"
+        value={activeTab}
+        onChange={(next) => {
+          if (next === 'derpibooru') setDerpiMounted(true);
+          setActiveTab(next);
+        }}
+        label="收藏来源"
+        tabs={[
+          { value: 'picpony' as const, label: 'PicPony' },
+          { value: 'derpibooru' as const, label: 'Derpibooru' },
+        ]}
+      />
+      <TabPanes value={activeTab}>
+        <TabPane value="picpony">
+          <FavoritesPane source="picpony" />
+        </TabPane>
+        {(derpiMounted || activeTab === 'derpibooru') && (
+          <TabPane value="derpibooru">
+            <FavoritesPane source="derpibooru" />
+          </TabPane>
+        )}
+      </TabPanes>
     </PageShell>
   );
 }
@@ -323,7 +366,7 @@ export default function Favorites() {
         </PageShell>
       }
     >
-      <FavoritesList />
+      <FavoritesTabs />
     </Suspense>
   );
 }

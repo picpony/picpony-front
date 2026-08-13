@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
-import Spinner from '@/components/Spinner';
+import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { MdCheckCircle, MdCancel, MdConstruction } from 'react-icons/md';
@@ -25,11 +25,14 @@ function PreqRow({ label, met }: { label: string; met: boolean }) {
   return (
     <div className="flex items-center gap-2 text-body-m">
       {met ? (
-        <MdCheckCircle className="text-primary" size={18} />
+        <MdCheckCircle className="text-success" size={18} />
       ) : (
         <MdCancel className="text-error" size={18} />
       )}
-      <span className={met ? 'text-on-surface' : 'text-outline'}>{label}</span>
+      {/* `on-surface-variant`, not `outline`: this is a label, and `outline` is
+          the boundary role — 4.3:1 on the light surface, under the AA floor for
+          text. */}
+      <span className={met ? 'text-on-surface' : 'text-on-surface-variant'}>{label}</span>
     </div>
   );
 }
@@ -153,9 +156,18 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       closeOnOverlayClick={false}
     >
       <div className="space-y-4">
+        {/* The destination's own shape — three prerequisite rows — rather than a
+            centred spinner. A dot says "something is happening somewhere" and
+            then reflows the whole dialog when the rows land; three bars say "a
+            checklist is arriving here", in the geometry it arrives in. */}
         {status === 'loading' && (
-          <div className="flex justify-center py-8">
-            <Spinner />
+          <div className="space-y-2" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-2">
+                <SkeletonCircle size={18} delay={i * 90} />
+                <Skeleton className="h-4 w-40" delay={i * 90 + 45} />
+              </div>
+            ))}
           </div>
         )}
 
@@ -171,8 +183,8 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                   <MdConstruction size={20} />
                   当前已处于开发者模式
                 </div>
-                <Button variant="tonal" size="sm" onClick={handleDisable} disabled={submitting}>
-                  {submitting ? '处理中...' : '关闭开发者模式'}
+                <Button variant="tonal" onClick={handleDisable} loading={submitting}>
+                  关闭开发者模式
                 </Button>
               </div>
             ) : (
@@ -196,19 +208,19 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                       autoComplete="current-password"
                       placeholder="请输入 8 位维护密码"
                       aria-label="维护密码"
+                      error={error || undefined}
                     />
-                    {error && <p className="text-body-s text-error">{error}</p>}
                     <Button
                       variant="filled"
-                      size="sm"
                       onClick={handleSubmit}
-                      disabled={submitting || password.length < 8}
+                      loading={submitting}
+                      disabled={password.length < 8}
                     >
-                      {submitting ? '验证中...' : '确认开启'}
+                      确认开启
                     </Button>
                   </div>
                 ) : (
-                  <p className="text-body-s text-outline">
+                  <p className="text-body-s text-on-surface-variant">
                     满足以上条件后，方可开启开发者模式（不过滤任何标签内容）。
                   </p>
                 )}

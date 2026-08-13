@@ -6,6 +6,7 @@ import {
   DURATION,
   playSharedAxis,
   setThemeWipeGuard,
+  setHeroBusyCheck,
   beginPageTransit,
 } from '@/lib/motion';
 import { getImageHeroRuntime, subscribeImageHeroRuntime } from '@/lib/hero';
@@ -128,9 +129,25 @@ export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot |
   const hero = getImageHeroRuntime();
   if (hero.phase !== 'gallery-idle' || hero.background) return null;
 
-  const source = document.querySelector<HTMLElement>('[data-page-content]');
+  /* Leaving an image detail fades the *detail*, not the gallery behind it.
+   *
+   * The intercepted `/pic/:id` route renders as an overlay above
+   * `[data-page-content]`, which still holds the gallery — so snapshotting the
+   * page content meant the picture vanished in one frame while the gallery it
+   * was covering cross-faded to the new route. Going from a forum post to
+   * /search faded properly and going from an image to /search cut, and the two
+   * are the same kind of move: leaving a detail view for a sibling screen.
+   *
+   * The overlay is the truer "what was on screen a moment ago", so it wins when
+   * one is mounted. `data-route-fade-only` rides along on the clone because the
+   * *direction* has to change too — see `playRouteCrossFade`.
+   */
+  const overlay = document.querySelector<HTMLElement>('[data-image-detail-overlay]');
+  const source = overlay ?? document.querySelector<HTMLElement>('[data-page-content]');
   if (!source) return null;
-  return captureVisualClone(source, layer);
+  const snapshot = captureVisualClone(source, layer);
+  if (snapshot && overlay) snapshot.node.dataset.routeFadeOnly = '';
+  return snapshot;
 }
 
 export function playRouteCrossFade(
@@ -150,7 +167,17 @@ export function playRouteCrossFade(
   const page = document.querySelector<HTMLElement>('[data-page-content]');
   layer.appendChild(snapshot.node);
 
-  const move = from === to ? null : routeMove(from, to);
+  /* An image detail leaves on a plain fade, never on the shared axis.
+   *
+   * The axis is a move *within* the app's plane, and the pathnames it is handed
+   * here are the background's — while the overlay is open that is `/`, so
+   * closing an image straight into /search would have read as the *gallery*
+   * sliding up, with the picture pasted on top of it. A detail view is a layer
+   * above the plane rather than a cell in it, so leaving one is a fade. That is
+   * also exactly what a forum post already does, and the two screens are the
+   * same kind of thing. */
+  const fadeOnly = snapshot.node.dataset.routeFadeOnly !== undefined;
+  const move = from === to || fadeOnly ? null : routeMove(from, to);
   /* Holds the incoming page's footer out until the move settles, so the mark
      never arrives ahead of the page it belongs to. Both branches below arm it;
      both release it when they finish. */
@@ -189,10 +216,38 @@ export function playRouteCrossFade(
     .set(snapshot.node, { willChange: 'transform, opacity' })
     /* The outgoing leg is the mirror of `pageIn`: it leaves upward over the
        full duration while its opacity is spent in the first 120ms, so the
-       incoming page (held transparent for 80ms by `pageIn`'s backwards fill)
-       takes over inside the overlap rather than after it. */
+       incoming page takes over inside the overlap rather than after it. */
     .to(snapshot.node, { opacity: 0, duration: 0.12, ease: 'accelerate' }, 0)
     .to(snapshot.node, { y: -12, duration: DURATION.long, ease: 'standard' }, 0);
+
+  /* The incoming page's entrance is driven here, on opacity alone, instead of
+     being left to `pageIn`.
+     `pageIn` interpolates `translateY(12px) → none` under a `both` fill, so it
+     holds a real transform on `[data-page-content]` for its 80ms delay plus its
+     320ms run. `[data-page-content]` is an ancestor of every gallery card, and
+     the hero flight measures the pressed card with a plain
+     `getBoundingClientRect` on press — so for ~400ms after arriving at `/` the
+     flyer launched from a box up to 12px above the thumbnail it grew out of.
+     The shared-axis branch above already strips the keyframe for its own
+     reasons; it was only this branch, which is the one most routes take to reach
+     the gallery, that still relied on it.
+     A fade with no transform is also the honest description of what this
+     transition is: the 12px rise belonged to the axis move, which has its own. */
+  if (page) {
+    page.style.animation = 'none';
+    settleEntryAnimations(page);
+    timeline.fromTo(
+      page,
+      { autoAlpha: 0 },
+      {
+        autoAlpha: 1,
+        duration: DURATION.long,
+        ease: 'decelerate',
+        clearProps: 'opacity,visibility',
+      },
+      0.08,
+    );
+  }
 
   arm(layer, () => {
     timeline.kill();
@@ -221,3 +276,14 @@ export function cancelRouteCrossFade() {
 
 // The theme wipe must not snapshot a half-faded clone.
 setThemeWipeGuard(cancelRouteCrossFade);
+
+/* Registered here because this module already depends on both `lib/motion` and
+   `lib/hero`, so it is the one place the two can be joined without giving
+   `lib/motion` a dependency on the hero controller. `background` is part of the
+   condition for the same reason the route cross-fade checks it: a detail overlay
+   open over the gallery means the flight still owns the layer even when its phase
+   has settled. */
+setHeroBusyCheck(() => {
+  const hero = getImageHeroRuntime();
+  return hero.phase !== 'gallery-idle' || Boolean(hero.background);
+});

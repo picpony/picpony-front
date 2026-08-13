@@ -5,8 +5,12 @@ import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdShield, MdAdd } from 'react-icons/md';
-import { SectionHeader, Spinner } from './';
+import { SectionHeader } from './';
 import Button from '@/components/Button';
+import Card from '@/components/Card';
+import Chip from '@/components/Chip';
+import Skeleton from '@/components/Skeleton';
+import EmptyState from '@/components/EmptyState';
 import { Input } from '@/components/Input';
 
 interface BlockTag {
@@ -128,35 +132,53 @@ export default function BlockTagsTab({ token }: { token: string }) {
         title="底层屏蔽标签管理"
         onRefresh={loadBlockTags}
       />{' '}
-      <div className="text-body-s text-on-surface-variant p-3 rounded">
-        {' '}
+      <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
         此处管理网站全局底层屏蔽规则，影响所有用户的搜索过滤结果。 <b>safe</b> 与 <b>spoilers</b>{' '}
         中的标签会作为排除项（-标签）加入搜索。 <b>onlyPony</b> 中的标签会作为可选物种范围（OR
-        关系）。{' '}
-      </div>{' '}
+        关系）。
+      </Card>
       {loading ? (
-        <Spinner />
+        /* The destination's own shape — three section cards each with a heading
+           row and a run of tag chips — not a spinner. A centred dot said
+           "something is happening somewhere" and then reflowed three cards' worth
+           of layout in when the list landed. */
+        <div className="space-y-6">
+          {filterKeys.map((key, i) => (
+            <Card key={key} variant="filled">
+              <div className="mb-3 flex items-center justify-between">
+                <Skeleton className="h-5 w-24" delay={i * 90} />
+                <Skeleton className="h-8 w-16 rounded-full" delay={i * 90 + 40} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[64, 88, 72, 96, 56].map((w, j) => (
+                  <Skeleton
+                    key={j}
+                    className="h-8 rounded-sm"
+                    style={{ width: w }}
+                    delay={i * 90 + 80 + j * 40}
+                  />
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
       ) : (
         <div className="space-y-6">
-          {' '}
           {filterKeys.map((key) => {
             const tags = blockTags[key] || [];
             return (
-              <div key={key} className="bg-surface-container-low rounded-md p-4">
-                {' '}
+              <Card key={key} variant="filled">
                 <div className="flex items-center justify-between mb-3">
-                  {' '}
-                  <h3 className="text-label-l-emphasized text-on-surface">
-                    {filterLabels[key]}
-                  </h3>{' '}
-                  <button
+                  <h3 className="text-label-l text-on-surface">{filterLabels[key]}</h3>
+                  <Button
+                    icon={<MdAdd size={14} />}
+                    variant="accent"
+                    size="sm"
                     onClick={() => setAddingKey(addingKey === key ? null : key)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-label-m bg-primary/10 text-primary rounded-full hover:bg-primary/20"
                   >
-                    {' '}
-                    <MdAdd size={14} /> 添加{' '}
-                  </button>{' '}
-                </div>{' '}
+                    添加
+                  </Button>
+                </div>
                 {addingKey === key && (
                   <div className="flex items-center gap-2 mb-3">
                     {' '}
@@ -165,7 +187,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
                       value={newTagName}
                       onChange={(e) => setNewTagName(e.target.value)}
                       placeholder="输入标签名..."
-                      className="rounded" fieldClassName="flex-1"
+                      fieldClassName="flex-1"
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTag(key)}
                     />
                     <Button onClick={() => handleAddTag(key)} variant="filled" size="sm">
@@ -174,26 +196,27 @@ export default function BlockTagsTab({ token }: { token: string }) {
                   </div>
                 )}
                 {tags.length === 0 ? (
-                  <p className="text-body-s text-outline">暂无标签</p>
+                  <EmptyState size="inline" title="暂无标签" />
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {tags.map((tag: BlockTag) => (
-                      <span
+                      /* `Chip` with `onRemove`, not a hand-rolled `rounded-full`
+                         pill with a literal `×` in it. The pill was the exact
+                         shape the shape table warns about — a chip is 8dp, not a
+                         pill — and its dismiss was an unlabelled `<button>`
+                         containing a multiplication sign, which a screen reader
+                         reads out as "times". */
+                      <Chip
                         key={tag.id}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded bg-surface-container-high text-body-s text-on-surface border border-outline-variant"
+                        onRemove={() => handleRemoveTag(key, tag.id)}
+                        removeLabel={`移除标签 ${tag.tag_name}`}
                       >
                         {tag.tag_name}
-                        <button
-                          onClick={() => handleRemoveTag(key, tag.id)}
-                          className="state-layer ml-1 rounded-full p-0.5 text-error"
-                        >
-                          ×
-                        </button>
-                      </span>
+                      </Chip>
                     ))}
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -205,12 +228,9 @@ export default function BlockTagsTab({ token }: { token: string }) {
         maxWidth="max-w-sm"
         footer={
           <>
-            <button
-              onClick={() => setConfirmOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setConfirmOpen(false)}>
               取消
-            </button>
+            </Button>
             <Button variant="danger" onClick={handleConfirm}>
               确认
             </Button>

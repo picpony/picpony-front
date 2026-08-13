@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 
+/* Tailwind's automatic source detection scans every non-ignored file, including
+   markdown — which is how `bg-slate-800` and `text-red-500` ended up in the
+   bundle: they appear in AGENTS.md's "Never" column. Prose about a class is not a
+   use of it, so the docs are excluded. Code comments are still scanned (Tailwind
+   sees file text, not syntax), so a comment naming a class you deleted still
+   resurrects it — spell removed values in prose. See AGENTS.md. */
+@source not "../**/*.md";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* `lib/tagCategories.ts` composes these by interpolating a hue name, which the
@@ -53,6 +61,32 @@
      dark scheme. Links are blue in both schemes; controls are pink in both. */
   --md-sys-color-link: #1d4fd8;
   --md-sys-color-link-hover: #17389f;
+
+  /* — Focus ————————————————————————————————————————————————————————————
+     The keyboard focus ring, as one value.
+
+     It was `focus-visible:ring-primary/NN` written out at 31 call sites with
+     six different alphas — 40, 30, 45, 25, plus `on-primary/50` and one
+     `current/40`. Not across the app, either: `IconButton` alone carried four,
+     one per variant, and `buttonStyles` three, so the same key press drew a
+     different ring depending on which button it landed on.
+
+     Solid, not the 40% the majority used. `primary` is 3.08:1 against a light
+     surface — the figure the link block above was written around — and at 40%
+     it composites to roughly 1.4:1, under the 3:1 that WCAG 2.4.11 asks of a
+     focus indicator. So the alpha was not only inconsistent, it was the reason
+     the ring was hard to see at all. M3 draws this solid for the same reason.
+
+     `focus-on-primary` is the app bar's: a pink ring on the pink bar is
+     invisible, and this is the one piece of chrome that does not sit on a
+     surface. Same shape, same width, inverted for its background — the
+     documented exception rather than a fifth alpha.
+
+     Both are indirections rather than literals, so they follow the brand
+     through a re-seed and through the dark scheme's own `primary`. Solid, they
+     clear the bar in both: 3.08:1 light, 4.3:1 dark. */
+  --md-sys-color-focus: var(--md-sys-color-primary);
+  --md-sys-color-focus-on-primary: var(--md-sys-color-on-primary);
 
   /* — Secondary / tertiary ———————————————————————————————————————————— */
   --md-sys-color-secondary: #755360;
@@ -160,8 +194,46 @@
      picture, not the app's surface, so nothing about it should follow the
      theme. This was 39 hand-typed `text-white` / `bg-black/55` pairs, which is
      also why a spoiler scrim and the app's own `bg-scrim/50` overlay never
-     quite matched. Pair it with `bg-scrim/NN`. */
+     quite matched. Its container partner is `media-plate`, below. */
   --md-sys-color-on-media: #ffffff;
+
+  /* The plate `on-media` ink sits on: a format badge, a score pill, the caption
+     bar over the featured banner, the hover veil on a thumbnail.
+
+     This role existed only as the instruction "pair it with `bg-scrim/NN`",
+     which is not a role — it is a decision handed to every call site, and the
+     call sites duly chose four different answers: `/55` on the four gallery
+     card plates, `/60` on the profile's warning ribbon, `/50` on the derpi
+     grid's score pill and `/40` on the featured banner's caption. Same object,
+     same job, four weights, and the two that sit closest together on screen —
+     a card plate at 55 and a banner caption at 40 — were the furthest apart.
+
+     55% is the gallery cards' value because that is the one the most surfaces
+     already agreed on and the one tuned against real photography: below ~50 a
+     white label loses its edge over a pale sky, and above ~60 the plate starts
+     reading as a hole punched in the picture rather than a label laid on it.
+
+     Scheme-independent, like the ink it carries and for the same reason: what
+     is behind it is the photograph, not the app's surface. */
+  --md-sys-color-media-plate: color-mix(in oklab, #000000 55%, transparent);
+
+  /* Secondary ink on media, and the faint rule below it.
+
+     A surface has three levels of mark — `on-surface`, `on-surface-variant`,
+     `outline-variant` — and media had exactly one, so every screen that needed
+     a quieter white invented its own alpha. The featured banner alone ran three
+     within one text block: description at 90%, the stats row at 80%, the "+3
+     more tags" at 60%. Three greys nobody chose relative to each other, on the
+     largest thing on the home page.
+
+     78% is not a new number: it is what the lightbox already dims its inactive
+     controls to, further down this file. Adopting it here is what makes the
+     banner's caption and the lightbox's chrome the same grey instead of two
+     that are four percent apart. 28% is the rule level — the cropper's
+     rule-of-thirds guides and the profile banner's experience track, which want
+     to be structure rather than content. */
+  --md-sys-color-on-media-variant: color-mix(in oklab, #ffffff 78%, transparent);
+  --md-sys-color-media-outline: color-mix(in oklab, #ffffff 28%, transparent);
 
   /* — Categorical accents ——————————————————————————————————————————————
      Derpibooru tag categories (角色 / 种族 / 分级 / 来源 / 官方内容 / 同人内容)
@@ -284,7 +356,7 @@
 
 /* State-layer opacities — M3 draws hover/focus/press as a tinted overlay at a
    fixed alpha rather than as a hand-picked colour per component, which is what
-   the scattered `hover:bg-primary/10` pairs were approximating. */
+   the scattered hover tints on `primary` at 10% were approximating. */
 :root {
   --md-sys-state-hover-opacity: 0.08;
   --md-sys-state-focus-opacity: 0.1;
@@ -328,6 +400,63 @@
   text-decoration: underline;
 }
 
+/* The prose rhythm for rendered post and reply bodies.
+ *
+ * There was none. Tailwind's preflight resets every element's margin to 0, and
+ * nothing here put one back for a paragraph — so a Markdown body's `<p>`s ran
+ * straight into each other with no gap at all, while the image and the quote
+ * beside them carried 12px of their own. The result is what a thread actually
+ * looked like: text with no paragraphing, then a picture floating in a space
+ * that belonged to nothing, then a quote at a third spacing. `BBCodeRenderer`
+ * has its own half of this fixed in `lib/bbcode.ts` — it now emits real
+ * paragraphs instead of a run of `<br>`, so one rule set governs both renderers
+ * rather than one of them being outside the system.
+ *
+ * Every value is in `em`, so the whole rhythm scales with whatever type role the
+ * host names: the post body is `body-l` and a reply is `body-m`, and a reply's
+ * paragraphs should sit closer together than an article's for the same reason
+ * its glyphs are smaller. In `rem` they would have been identical.
+ *
+ * A block — a picture, a quote, a code listing, a table — takes more air than a
+ * paragraph break, because it is a change of material and not a pause. The
+ * heading is the mirror image: much more space above than below, so it binds to
+ * the section it introduces rather than floating between two.
+ */
+.bbcode-content p,
+.rich-text-content p {
+  margin-block: 0.75em;
+}
+
+.bbcode-content :is(h1, h2, h3, h4, h5, h6),
+.rich-text-content :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 1.25em 0.5em;
+}
+
+.bbcode-content :is(ul, ol),
+.rich-text-content :is(ul, ol) {
+  margin-block: 0.75em;
+  padding-inline-start: 1.5em;
+}
+
+.bbcode-content li,
+.rich-text-content li {
+  margin-block: 0.25em;
+}
+
+.bbcode-content :is(blockquote, pre, hr),
+.rich-text-content :is(blockquote, pre, hr) {
+  margin-block: 1em;
+}
+
+/* The table's scroll wrapper carries the table's margin. `overflow-x: auto`
+   makes the wrapper a block formatting context, so a margin on the table inside
+   it cannot collapse out through it — put the space on the table and a table has
+   no gap around it at all. */
+.bbcode-content .popover-scrollbar,
+.rich-text-content .popover-scrollbar {
+  margin-block: 1em;
+}
+
 /* User-supplied media in rendered post and reply bodies.
  *
  * These are arbitrary uploads — measured on one thread: 1648x5684, 3000x4500,
@@ -349,7 +478,7 @@
   height: auto;
   max-width: 100%;
   max-height: min(60vh, 26rem);
-  margin: 0.75rem 0;
+  margin-block: 1em;
   border-radius: var(--radius-sm);
   object-fit: contain;
 }
@@ -364,12 +493,70 @@
   margin-bottom: 0;
 }
 
+/* Inline rich text — a direct message rather than a document. The renderer has
+   already dropped the paragraph wrapper, which is what lets text and emoji sit
+   on one line; this keeps whatever else survives (a pasted code block, a list,
+   an image) from adding document-sized margins inside a chat bubble, where the
+   bubble's own padding is the entire frame.
+
+   It comes *after* the prose rhythm above and matches at the same specificity,
+   so source order is what makes it win — keep it here. */
+.rich-text-inline > :is(ul, ol, pre, blockquote, table, img, video),
+.rich-text-inline > .popover-scrollbar {
+  margin-block: 0.375rem;
+}
+
+/* Quoted text, in one treatment.
+ *
+ * There were four. `BBCodeRenderer` alone emitted two — a named `[quote="x"]`
+ * as a `surface-container-low` block with no border and negative margins hacked
+ * in to fight its own spacing, and a bare `[quote]` as a 4px rule with
+ * `font-style: italic` — this file styled a third with no fill, and
+ * `MarkdownRenderer` overrode a fourth inline, at a hairline width the shape
+ * scale has no step for. So the same thread showed a different quote shape
+ * depending on whether the person had been named and on which renderer had run.
+ *
+ * A quote is nested inside a reply, and a reply sits on `surface-container-low`,
+ * so the quote steps *up* to `-high` rather than down — an inset block reads as
+ * inset by being lighter than its host in the light scheme and darker in the
+ * dark one, which is what a container step does and an alpha does not.
+ *
+ * The leading rule is `primary` at 4px: the same colour as the `<cite>` above
+ * it, so the mark and the name of the person being quoted read as one object
+ * rather than as a grey bar with a pink caption inside it; and 4px is a step on
+ * the spacing grid, where the 3px it replaced was a number.
+ *
+ * No `font-style: italic`. Han glyphs have no true italic, so a browser
+ * synthesises one by shearing the glyph, which at body size reads as a rendering
+ * fault rather than as emphasis.
+ */
 .bbcode-content blockquote,
 .rich-text-content blockquote {
-  border-left: 3px solid var(--md-sys-color-outline-variant);
-  padding-left: 0.75rem;
-  margin: 0.5rem 0;
+  background: var(--md-sys-color-surface-container-high);
+  border-inline-start: 4px solid var(--md-sys-color-primary);
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 0.875rem;
   color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Who is being quoted. `<cite>` is the element for it and defaults to italic,
+   which the rule above explains away. */
+.bbcode-content blockquote > cite,
+.rich-text-content blockquote > cite {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-style: normal;
+  font-size: var(--text-label-m);
+  font-weight: var(--text-label-m-emphasized--font-weight);
+  letter-spacing: var(--text-label-m--letter-spacing);
+  color: var(--md-sys-color-primary);
+}
+
+/* A quote nested in a quote is a reply chain. It steps back down rather than
+   climbing further, so a three-deep chain does not walk off the tone scale. */
+.bbcode-content blockquote blockquote,
+.rich-text-content blockquote blockquote {
+  background: var(--md-sys-color-surface-container);
 }
 
 .bbcode-content pre,
@@ -378,7 +565,7 @@
 .rich-text-content code {
   background-color: var(--md-sys-color-surface-container-high);
   color: var(--md-sys-color-on-surface);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-xs);
   padding: 0.125rem 0.375rem;
   font-size: 0.875em;
 }
@@ -387,6 +574,65 @@
 .rich-text-content pre {
   padding: 0.75rem;
   overflow-x: auto;
+}
+
+/* A listing inside a listing has no second background of its own. */
+.bbcode-content pre > code,
+.rich-text-content pre > code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Tables in rendered bodies, in one appearance.
+ *
+ * There were two. The BBCode converter spelled the cell border, the padding and
+ * the header fill into every `<td>`/`<th>` it emitted, while `MarkdownRenderer`
+ * described the same three things as Tailwind classes on its own components — so
+ * a table pasted as Markdown and a table written in BBCode were different tables
+ * in the same thread, and neither could be changed without finding the other.
+ * The wrapper that makes a wide table scroll instead of widening the page is
+ * still the renderer's job (the element has to exist), but everything about how
+ * it looks is here. */
+.bbcode-content table,
+.rich-text-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bbcode-content :is(th, td),
+.rich-text-content :is(th, td) {
+  border: 1px solid var(--md-sys-color-outline-variant);
+  padding: 0.5rem 0.75rem;
+  text-align: start;
+}
+
+.bbcode-content th,
+.rich-text-content th {
+  background: var(--md-sys-color-surface-container-low);
+  font-weight: var(--text-title-s-emphasized--font-weight);
+}
+
+.bbcode-content hr,
+.rich-text-content hr {
+  border: 0;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+/* Announcement bodies arrive as server-rendered HTML whose paragraph breaks are
+ * bare `<br>` runs rather than `<p>` elements, so there is nothing with a margin
+ * to space them. Giving the break itself a box is the only hook available.
+ *
+ * This lived in a `<style jsx global>` block at the bottom of
+ * `app/messages/page.tsx`, alongside a second, conflicting copy of the emoji
+ * picker's keyframes — which is why it is here now. A page-local `<style jsx
+ * global>` is still global; it simply loads later than this file and therefore
+ * silently outranks it, which is how the picker ended up running on 0.2s curves
+ * while every other popover in the app used the 0.24s/0.16s token pair. */
+.announcement-content br {
+  display: block;
+  content: '';
+  margin-bottom: 0.5rem;
 }
 
 @theme inline {
@@ -443,6 +689,9 @@
   --color-on-fill: var(--md-sys-color-on-fill);
   --color-media-stage: var(--md-sys-color-media-stage);
   --color-on-media: var(--md-sys-color-on-media);
+  --color-media-plate: var(--md-sys-color-media-plate);
+  --color-on-media-variant: var(--md-sys-color-on-media-variant);
+  --color-media-outline: var(--md-sys-color-media-outline);
 
   /* Categorical, not semantic — see the accent block above before reaching for
      one of these. `bg-accent-blue text-on-accent-blue` is the whole API. */
@@ -522,15 +771,25 @@
   --text-title-s--line-height: 1.4286;
   --text-title-s--letter-spacing: 0.05px;
   --text-title-s--font-weight: 500;
+  /* The body roles declare their weight; the heading roles deliberately do not.
+     `@layer base` owns h1–h6's weight (700/600/600) as a documented decision, so
+     `display-*`/`headline-*` must stay weight-free or a utility would fight the
+     element. Body text is the opposite case: it lands on spans and paragraphs
+     anywhere, including *inside* a heading, where it was inheriting the h1's 700
+     and had to be beaten back with a bare `font-normal` at the call site. With
+     400 on the role, `text-body-m` renders the same wherever it is put. */
   --text-body-l: 1rem;
   --text-body-l--line-height: 1.75;
   --text-body-l--letter-spacing: 0.25px;
+  --text-body-l--font-weight: 400;
   --text-body-m: 0.875rem;
   --text-body-m--line-height: 1.65;
   --text-body-m--letter-spacing: 0.125px;
+  --text-body-m--font-weight: 400;
   --text-body-s: 0.75rem;
   --text-body-s--line-height: 1.6;
   --text-body-s--letter-spacing: 0.2px;
+  --text-body-s--font-weight: 400;
   --text-label-l: 0.875rem;
   --text-label-l--line-height: 1.4286;
   --text-label-l--letter-spacing: 0.05px;
@@ -663,6 +922,15 @@
      (0.34, 1.56, 0.64, 1) overshot on a different curve, so scripted and
      declarative springs did not settle alike. */
   --ease-spring: cubic-bezier(0.18, 1.36, 0.5, 1);
+  /* The one curve for an *infinite, alternating* loop — a bouncing dot, a
+     pulsing arc. Every M3 token is one-sided by design: it spends its travel at
+     one end so a thing that arrives or leaves reads as decisive. A loop has no
+     arrival, so a one-sided curve makes its velocity discontinuous once per
+     cycle — the sweep eases into the far edge and then restarts at full speed.
+     Symmetric at both ends is what a repeating motion actually wants, and this
+     is the value three call sites had each spelled out by hand. Not for anything
+     that begins or ends on screen; those have their own rows in the table. */
+  --ease-loop: cubic-bezier(0.4, 0, 0.6, 1);
   /* M3's emphasized curve is two cubic segments, not one, so it has no
      `cubic-bezier()` form — the pair below were aliases of `standard` and
      `decelerate`, which quietly made "emphasized" mean nothing. This is the
@@ -962,11 +1230,27 @@ textarea {
 }
 
 /* Press ripple: spawned by <RippleLayer /> on any [data-ripple] element.
-   The attribute also supplies clipping, so badges must live inside the box. */
-[data-ripple] {
-  position: relative;
-  overflow: hidden;
-  -webkit-tap-highlight-color: transparent;
+   The attribute also supplies clipping, so badges must live inside the box.
+
+   **Inside `@layer base`, and that is load-bearing.** Unlayered CSS outranks
+   every cascade layer no matter how specific — the same rule this file states
+   for `h1`–`h6` further down — so while these three declarations sat outside a
+   layer, `position: relative` beat the `absolute` utility on any element
+   carrying the attribute. `IconButton` always sets it, so *every* absolutely
+   positioned icon button in the app was silently `relative` and fell back to
+   its static position: the upload page's remove-file badge, the forum
+   composer's, the image detail's zoom control and the sign-in dialog's close.
+   Each looked plausible enough in place that none of them was ever queried.
+
+   Layered, a positioning utility wins and the attribute still supplies
+   `relative` to everything that names no position of its own, which is what the
+   ripple actually needs — a containing block, `absolute` being one too. */
+@layer base {
+  [data-ripple] {
+    position: relative;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 .ripple {
@@ -1020,38 +1304,11 @@ textarea {
   }
 }
 
-/* Emoji picker popover (messages page) — grows from its anchor corner.
-   Self-contained keyframes: `@theme` keyframes are only emitted when their
-   `--animate-*` utility is used, so a plain class must not depend on them. */
-.emoji-picker-animate-in {
-  animation: emoji-picker-in 0.24s var(--ease-decelerate) forwards;
-}
-
-.emoji-picker-animate-out {
-  animation: emoji-picker-out 0.16s var(--ease-accelerate) forwards;
-}
-
-@keyframes emoji-picker-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes emoji-picker-out {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateY(4px) scale(0.96);
-  }
-}
+/* The emoji picker's own keyframes lived here — a fifth entrance for a floating
+   panel, on its own durations. It renders through `Popover` now and takes the
+   shared container transform with every other menu and autocomplete, so the
+   rules are gone rather than merely unused. Spelled in prose because Tailwind
+   scans comment text and a class named here would be re-emitted. */
 
 /* Favourite star: overshoot with a quarter turn as it fills in. */
 @keyframes star-burst {
@@ -1084,7 +1341,7 @@ textarea {
     color-mix(in oklab, var(--foreground) 7%, transparent),
     transparent
   );
-  animation: shimmer 1.6s var(--ease-standard) infinite;
+  animation: shimmer 1.6s linear infinite;
   /* Pseudo-elements do not inherit animation-delay implicitly; the explicit
      keyword lets a per-tile inline delay on .skeleton stagger the sweep. */
   animation-delay: inherit;
@@ -1132,9 +1389,7 @@ html[data-theme-vt]::view-transition-new(root) {
   .animate-modal-overlay,
   .animate-modal-content,
   .animate-modal-overlay-out,
-  .animate-modal-content-out,
-  .emoji-picker-animate-in,
-  .emoji-picker-animate-out {
+  .animate-modal-content-out {
     animation-duration: 1ms !important;
   }
 
@@ -1152,6 +1407,33 @@ html[data-theme-vt]::view-transition-new(root) {
     animation: none !important;
   }
 
+  /* Transitions, not just animations.
+   *
+   * The enumeration above covers every `@keyframes` in the app and none of the
+   * *transitions*, and `transition-ui` deliberately lists `transform, translate,
+   * scale, rotate` (it has to — Tailwind compiles `translate-x-*` and `scale-*`
+   * to those standalone properties). So under this preference the nav drawer
+   * still slid 288px, the home tab pill still translated 8px, the switch handle
+   * still travelled and resized, `Select`'s chevron still rotated 180°, and two
+   * tab icons still scaled to 110%. Only a handful of components carried a
+   * `motion-reduce:` guard, each for one property.
+   *
+   * Re-declaring `transition-property` keeps the feedback that reduced motion
+   * does not object to — colour, opacity, shadow — and drops everything that
+   * moves or resizes. Deliberately not `transition: none`: losing the colour
+   * fade would make hover and focus read as a flicker rather than as a state.
+   *
+   * The JS-driven systems are untouched, as above: they branch on the preference
+   * themselves and a blanket override would fight them. */
+  .transition-ui,
+  .m3-field > label,
+  .m3-field > fieldset > legend,
+  [class*='transition-['] {
+    transition-property:
+      color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow,
+      opacity !important;
+  }
+
   .ripple,
   .skeleton::after {
     display: none;
@@ -1167,6 +1449,55 @@ html[data-theme-vt]::view-transition-new(root) {
     translate: none;
     transition: none;
   }
+}
+
+/* Hover feedback over photography.
+ *
+ * Three surfaces answered this question three ways — a gallery tile at
+ * `scrim/10`, the detail image at `scrim/10`, the Derpibooru grid at `scrim/20` —
+ * so moving the pointer across a page that mixed them changed how strongly a
+ * thumbnail responded. One value, named once.
+ *
+ * `scrim`, not `on-media`, and that is the one place this deliberately diverges
+ * from the lightbox controls further up this file (which tint with `on-media` at
+ * 12%). They are different objects: a *button* over media has to read as a
+ * control, so it lightens and lifts; a *tile* has to read as targeted, so it
+ * dims. Both are scheme-independent for the same reason — what is behind them is
+ * the picture, not the app's surface.
+ *
+ * 10% is `--md-sys-state-hover-opacity` rounded to the nearest whole percent
+ * (0.08) plus the two points a photograph needs over a flat surface to register
+ * at all. Written as `color-mix` rather than `bg-scrim/10` so the call sites stop
+ * carrying a number that can drift.
+ *
+ * Driven by `.group:hover` rather than by its own `:hover`: the feedback belongs
+ * to the whole card, and the overlay this lands on is `pointer-events-none` so it
+ * can never be hovered itself. That is also why `state-layer` cannot be used
+ * here — it keys on the element's own `:hover` and paints from `currentColor`.
+ */
+.media-hover-scrim {
+  background-color: transparent;
+  /* 300ms, not 200: this veil is a change that begins and ends on screen, and it
+     shares its hover with the tile's own `duration-300` scale and caption fade.
+     At 200 the darkening finished a third of the way before the picture stopped
+     moving — one gesture arriving in two instalments. */
+  transition: background-color 300ms var(--ease-standard);
+}
+
+.group:hover .media-hover-scrim {
+  background-color: color-mix(in oklab, var(--md-sys-color-scrim) 10%, transparent);
+}
+
+/* Caption gradient over a thumbnail. Was `bg-gradient-to-t from-black/60` at two
+   call sites — a raw Tailwind palette colour, which is the one thing the colour
+   rules forbid outright, and it sat next to `FeaturedBanner`'s own scrim helper
+   doing the identical job through the token. */
+.media-caption-gradient {
+  background-image: linear-gradient(
+    to top,
+    color-mix(in oklab, var(--md-sys-color-scrim) 60%, transparent),
+    transparent
+  );
 }
 
 /* Material 3 circular progress indicator.
@@ -1346,7 +1677,7 @@ html[data-theme-vt]::view-transition-new(root) {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
-  z-index: 46;
+  z-index: var(--z-hero-back);
   pointer-events: auto;
 }
 
@@ -1371,10 +1702,12 @@ html[data-theme-vt]::view-transition-new(root) {
  * ------------------------------------------------------------------------ */
 
 .yarl__portal {
+  /* See the stacking-order block near the top of this file. */
+  --yarl__portal_zindex: var(--z-lightbox);
   /* `media-stage`, not `scrim`: this is a photo-viewing backdrop, which the
      token was defined for, and it is scheme-independent for the same reason. */
   --yarl__color_backdrop: var(--md-sys-color-media-stage);
-  --yarl__color_button: color-mix(in oklab, var(--md-sys-color-on-media) 78%, transparent);
+  --yarl__color_button: var(--md-sys-color-on-media-variant);
   --yarl__color_button_active: var(--md-sys-color-on-media);
   --yarl__color_button_disabled: color-mix(in oklab, var(--md-sys-color-on-media) 38%, transparent);
   /* M3 icon buttons are 24dp glyphs in a 40dp container, and they read against
@@ -1424,7 +1757,7 @@ html[data-theme-vt]::view-transition-new(root) {
 /* The counter is a label, not a control. It exposes its own tokens, so this
    goes through those rather than fighting the plugin's declarations. */
 .yarl__portal {
-  --yarl__counter_color: color-mix(in oklab, var(--md-sys-color-on-media) 78%, transparent);
+  --yarl__counter_color: var(--md-sys-color-on-media-variant);
   --yarl__counter_filter: none;
   --yarl__counter_padding: 8px 12px;
 }
@@ -1441,10 +1774,19 @@ html[data-theme-vt]::view-transition-new(root) {
  * `handleOpenLightbox`; without it the fallback is the middle of the screen.
  * A one-shot animation rather than a transition, so nothing is left holding a
  * transform once it has played — `.yarl__slide` is an ancestor of the zoom
- * plugin's own transforms and must not compound with them. */
+ * plugin's own transforms and must not compound with them.
+ *
+ * `backwards`, not `both`, and that is the whole point. A `both` fill keeps
+ * applying the last keyframe after the animation finishes, so `transform: none`
+ * outranked every declaration *and every inline style* the zoom and swipe
+ * plugins wrote to this node for the rest of its life — the exact compounding the
+ * paragraph above says this rule exists to avoid, caused by the rule itself. With
+ * no delay on the animation, `backwards` gives a byte-identical first frame and
+ * releases the element the instant it ends. (`AuthModal` hit the same
+ * `forwards`-fill lock and worked around it with a standalone `scale` instead.) */
 .yarl__slide {
   transform-origin: var(--m3-lightbox-origin-x, 50%) var(--m3-lightbox-origin-y, 50%);
-  animation: m3-lightbox-in 300ms var(--ease-decelerate) both;
+  animation: m3-lightbox-in 400ms var(--ease-decelerate) backwards;
 }
 
 @keyframes m3-lightbox-in {
@@ -1790,8 +2132,25 @@ html[data-image-hero-transition] .image-detail-header-route {
   contain: none;
 }
 
+/* One reservation for the detail body, used by both sides of the hero handoff.
+ *
+ * `HeroStage` and the `/pic/[id]` route must render pixel-identical at the
+ * atomic swap (lib/hero/constants.ts says so in as many words), and they were
+ * reserving 100dvh and 80dvh respectively — so the scroll height changed by
+ * 20dvh at exactly the moment nothing was allowed to move. Both now read this.
+ *
+ * `dvh` rather than the `min-h-full` the layout rules prescribe: this is the one
+ * block that genuinely wants the viewport as its floor, because it is holding
+ * space for content that has not mounted yet and its parent's height is
+ * content-driven, so a percentage would resolve against nothing. The subtraction
+ * is what keeps it from forcing a permanent scrollbar the way a bare 100dvh on a
+ * child of the scroller does. */
+:root {
+  --image-detail-body-min-height: calc(100dvh - 8rem);
+}
+
 .image-detail-stage-body {
-  min-height: 100dvh;
+  min-height: var(--image-detail-body-min-height);
 }
 
 /* The Canvas owns only the Hero flight. Once the native preview has decoded,
@@ -1829,7 +2188,7 @@ html[data-image-hero-transition] #nprogress {
 /* The foreground flyer sits above Stage and route surfaces without a fixed layer. */
 .image-hero-flight-layer {
   position: absolute;
-  z-index: 45;
+  z-index: var(--z-hero-flight);
   overflow: visible;
   pointer-events: none;
   contain: layout style;
@@ -1839,7 +2198,7 @@ html[data-image-hero-transition] #nprogress {
    newly opened foreground flyer. The Stage surface starts transparent, so the
    retiring layer still receives real overlapping paint before it fades out. */
 .image-hero-flight-layer[data-image-hero-role='retiring'] {
-  z-index: 43;
+  z-index: var(--z-hero-retiring);
 }
 
 .image-hero-flyer {
@@ -2074,9 +2433,524 @@ html[data-image-hero-transition] #nprogress {
   margin-top: 2px;
 }
 
+/* ---------------------------------------------------------------------------
+ * M3 outlined text field, with a notched floating label.
+ *
+ * The label used to sit stacked above the control, and the comment in
+ * `Input.tsx` argued for it on the grounds that changing ~40 forms bought
+ * nothing. It buys one thing: a field that is empty and a field that is filled
+ * stop looking like different controls. A stacked label leaves the box blank at
+ * rest, so a form of six empty fields is six unlabelled boxes with six captions
+ * floating above them, and the caption belonging to the box below it is exactly
+ * as close as the one belonging to the box above.
+ *
+ * Why this is CSS rather than classes at the call site: the whole thing turns on
+ * `:focus-within` and `:placeholder-shown` on a *sibling*, and the notch has to
+ * be cut by a real `<legend>`.
+ *
+ * **The notch is a fieldset, not a painted-over border.** The usual shortcut is
+ * to give the label the container's own background colour and let it cover the
+ * border it crosses. That cannot work here: an M3 outlined field has no fill, so
+ * there is no colour to paint with — the label would have to know what surface
+ * the form happens to be sitting on. A `<legend>` removes exactly its own width
+ * from a `<fieldset>`'s border, which is the only mechanism in CSS that cuts a
+ * real hole. The fieldset is `aria-hidden` and purely decorative; the label the
+ * user reads (and the one the input is `for`-associated with) is the `<label>`.
+ *
+ * Two elements therefore hold the same text: the visible `<label>`, and an
+ * invisible copy inside the `<legend>` whose only job is to be the right width.
+ * They stay in step because the legend's font-size is exactly 0.75x the label's
+ * and the label scales to 0.75 when it floats — 0.75 of `body-l` being `body-s`,
+ * a real step on the type scale rather than a factor chosen to look right.
+ *
+ * Everything that moves is a `transform`, never `top`/`left`, so floating the
+ * label costs no layout. The legend's `max-width` is the one exception and it is
+ * on a 0-height decorative box.
+ */
+.m3-field {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+
+  /* The leading and trailing insets, as properties rather than as padding
+     written three times: the control's padding, the resting label's offset and
+     the notch's offset all read them, so an adornment moves all three together
+     and they cannot drift. */
+  --field-lead: 1rem;
+  --field-trail: 1rem;
+  /* Distance from the field's top edge to the resting label's centre — i.e.
+     half the control's height. Overridden for a textarea, whose label sits on
+     the first line rather than in the middle of the box. */
+  --field-rest-y: 1.75rem;
+  --field-label-size: var(--text-body-l);
+  /* Height of the hole in the border. Only has to exceed the border width; it
+     is expressed against the floated label so the gap grows with the type. */
+  --field-notch-h: calc(var(--field-label-size) * 0.75);
+}
+
+/* An adornment moves the text, the resting label and the notch together,
+   because all three read the same property. */
+.m3-field[data-lead] {
+  --field-lead: 2.5rem;
+}
+
+/* The trailing slot sits in the flow (see below), so this is not a reserve for
+   it — it is the gap between the last character and the first control. The
+   leading slot *is* an overlay, so its value is a real reserve. */
+.m3-field[data-trail] {
+  --field-trail: 0.5rem;
+}
+
+.m3-field > input,
+.m3-field > textarea {
+  /* Above the outline overlay, or the overlay would eat the caret and text
+     selection. A small integer, not a `--z-*` token: these are siblings inside
+     one component and take no part in the app's stacking order. */
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  padding-inline: var(--field-lead) var(--field-trail);
+  color: var(--md-sys-color-on-surface);
+}
+
+.m3-field > input:disabled,
+.m3-field > textarea:disabled {
+  cursor: not-allowed;
+}
+
+/* The visible label. `pointer-events: none` so clicking where it sits still
+   focuses the control underneath — at rest it covers the whole text row. */
+.m3-field > label {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: var(--field-lead);
+  top: 0;
+  max-width: calc(100% - var(--field-lead) - var(--field-trail));
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  font-size: var(--field-label-size);
+  line-height: 1;
+  color: var(--md-sys-color-on-surface-variant);
+  transform: translateY(calc(var(--field-rest-y) - 50%));
+  transform-origin: left center;
+  transition-property: transform, color;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-standard);
+}
+
+/* The outline. `min-inline-size` because a fieldset's UA default is
+   `min-content`, which would stop it from ever being narrower than its legend. */
+.m3-field > fieldset {
+  position: absolute;
+  inset: calc(var(--field-notch-h) / -2) 0 0;
+  margin: 0;
+  padding-block: 0;
+  padding-inline: calc(var(--field-lead) - 0.25rem);
+  min-inline-size: 0;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+  transition-property: border-color;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-standard);
+}
+
+/* ---------------------------------------------------------------------------
+ * The unlabelled field is a different object, and it now says so.
+ *
+ * There are exactly two kinds of text field in this app and they do different
+ * jobs. A **labelled** field is a slot in a form: it has a name, that name has
+ * to survive the field being filled, and M3's outlined field with a notched
+ * floating label is the answer — that is the language above.
+ *
+ * An **unlabelled** field is not a form slot. It is a search box, an admin
+ * filter, a chat composer: a thing you type into and act on immediately, whose
+ * placeholder is its whole identity. Dressed as an outlined field it read as a
+ * form control with a missing label — an empty box with a caption that never
+ * arrived — and, worse, the outline is the heaviest thing on those screens
+ * while the field is the least ceremonial thing on them.
+ *
+ * So it is *filled*: a tone step, no border, no shadow. Same 12dp corner and
+ * the same 44dp box, so the two languages are still one family; only the
+ * boundary treatment differs. `surface-container-high` is the same step the
+ * unselected filter chip takes, which is the other "neutral control you act
+ * through" on these screens.
+ *
+ * Two mechanical notes:
+ *
+ * The `inset` goes back to 0. The negative top inset above exists *only* to
+ * cancel the UA drawing the top border through the vertical centre of the
+ * `<legend>`, and there is no legend without a label — so the line was being
+ * painted 6px above the box: an unlabelled 44dp field stood 50dp tall and its
+ * text, centred in the 44dp control, sat 3px below the outline's own centre.
+ * Both measured on /search's box before this rule existed.
+ *
+ * And focus comes back to the *ring*. The reason a text field has none is that
+ * a control whose whole identity is a 1px outline cannot wear a second boundary
+ * 2px outside the first without reading as two nested boxes. A filled field has
+ * no outline to nest inside, so the objection does not apply and the app's one
+ * focus indicator is simply correct here. It is still `:focus-within` rather
+ * than `:focus-visible`, matching its outlined sibling: both are containers
+ * reporting on the control inside them.
+ */
+.m3-field:not([data-labelled]) > fieldset {
+  inset: 0;
+  border-color: transparent;
+  background-color: var(--md-sys-color-surface-container-high);
+  transition-property: background-color, box-shadow;
+}
+
+.m3-field:not([data-labelled]):hover:not(:focus-within) > fieldset {
+  background-color: var(--md-sys-color-surface-container-highest);
+}
+
+.m3-field:not([data-labelled])[data-invalid] > fieldset {
+  box-shadow: 0 0 0 2px var(--md-sys-color-error);
+}
+
+/* Last, so it wins over the invalid rule at equal specificity: a focus ring
+   answers "where is the keyboard", never "what is wrong". */
+.m3-field:not([data-labelled]):focus-within > fieldset {
+  box-shadow: 0 0 0 2px var(--md-sys-color-focus);
+}
+
+/* ---------------------------------------------------------------------------
+ * `size="lg"` — M3's search bar. Unlabelled only; see the note in `Input.tsx`.
+ *
+ * A pill rather than the 12dp step, and the corner is the reason the controls
+ * inside it need no compensation. Concentric corners want `inner = outer - gap`;
+ * a centred pill inside a pill satisfies that identically at every size, because
+ * `outer - gap` is always half the inner control's height.
+ *
+ * 9999px rather than a shape token because that is what `rounded-full` compiles
+ * to, and this is the same step — the shape table's "button, FAB, avatar" row,
+ * borrowed for the one control M3 also draws as a capsule.
+ */
+.m3-field[data-size='lg'] {
+  --field-lead: 1.5rem;
+  --field-trail: 1.5rem;
+}
+
+.m3-field[data-size='lg'][data-lead] {
+  --field-lead: 3.5rem;
+}
+
+/* The gap to the trailing controls: 8px, which with a 40dp control in a 56dp
+   box is the same 8px it has above and below. */
+.m3-field[data-size='lg'][data-trail] {
+  --field-trail: 0.75rem;
+}
+
+.m3-field[data-size='lg'] > fieldset {
+  border-radius: 9999px;
+}
+
+.m3-field[data-size='lg'] > .m3-field-lead {
+  inset-inline-start: 1.25rem;
+}
+
+.m3-field[data-size='lg'] > .m3-field-trail {
+  padding-inline-end: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * The trailing slot is a flow item, not an overlay.
+ *
+ * The leading slot is an overlay and stays one: it is decorative, it is always
+ * a single ~20px glyph, and the resting label and the notch both offset
+ * themselves by the same `--field-lead`, so its width has to be a known token.
+ *
+ * The trailing slot is the opposite on every count. It holds *controls* — the
+ * search submit, 以图搜图, the composer's emoji and send buttons — and there is
+ * no width to know: one button is 40px, two are 88px, one with a word in it is
+ * whatever the word is. As an overlay that meant a hand-typed reserve at each
+ * call site, which is the class of number this file exists to delete. In flow
+ * it needs no number at all: the control shrinks by exactly the slot's width,
+ * because the slot refuses to shrink and the control's `min-width: 0` lets it.
+ *
+ * (Limit, deliberately unfixed: `> label`'s `max-width` still reserves against
+ * `--field-trail`, so a *labelled* field with a wide trailing control could let
+ * a long resting label run under it. No such field exists — nothing used this
+ * slot at all until the search box and the composer moved into it — and the
+ * honest fix is to measure, which is a call-site-free problem to solve on the
+ * day one appears.)
+ */
+.m3-field > .m3-field-lead {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: 0.75rem;
+  display: flex;
+  align-items: center;
+  /* Clicking where the glyph sits still focuses the control underneath. */
+  pointer-events: none;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.m3-field > .m3-field-trail {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  padding-inline-end: 0.25rem;
+}
+
+/* A composer grows downward, so its buttons belong at the bottom of the box
+   rather than floating up the middle of it as the text wraps. */
+.m3-field[data-multiline] > .m3-field-trail {
+  align-self: flex-end;
+  padding-block-end: 0.25rem;
+}
+
+.m3-field > fieldset > legend {
+  display: block;
+  float: none;
+  width: auto;
+  max-width: 0;
+  height: var(--field-notch-h);
+  padding: 0;
+  font-size: calc(var(--field-label-size) * 0.75);
+  line-height: 1;
+  white-space: nowrap;
+  /* Hidden but still measured: the legend exists to have a width. */
+  visibility: hidden;
+  transition-property: max-width;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-standard);
+}
+
+/* 0.25rem each side, matching the 0.25rem the fieldset's own inline padding was
+   reduced by — together they put the hole's text area exactly at `--field-lead`,
+   where the floated label lands. */
+.m3-field > fieldset > legend > span {
+  display: inline-block;
+  padding-inline: 0.25rem;
+  opacity: 0;
+  visibility: visible;
+}
+
+/* Floated: focused, or holding a value. `:placeholder-shown` is the test for
+   "empty" and it needs a non-empty placeholder to work against, which is why
+   `Input` falls back to a single space. */
+.m3-field:focus-within > label,
+.m3-field:has(> :is(input, textarea):not(:placeholder-shown)) > label {
+  transform: translateY(-50%) scale(0.75);
+}
+
+.m3-field:focus-within > fieldset > legend,
+.m3-field:has(> :is(input, textarea):not(:placeholder-shown)) > fieldset > legend {
+  max-width: 100%;
+}
+
+/* A placeholder alongside a label would sit on top of the resting label, so it
+   waits until the label is out of the way. */
+.m3-field[data-labelled] > input::placeholder,
+.m3-field[data-labelled] > textarea::placeholder {
+  color: transparent;
+}
+
+.m3-field[data-labelled]:focus-within > input::placeholder,
+.m3-field[data-labelled]:focus-within > textarea::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* M3 darkens the outline on hover and thickens it to 2dp on focus. The focused
+   outline *is* this control's focus indicator — see the note in `Input.tsx`.
+
+   Scoped to `[data-labelled]`, because these three rules *are* the outlined
+   language and an unlabelled field no longer speaks it (see below). */
+.m3-field[data-labelled]:hover:not(:focus-within):not([data-invalid]) > fieldset {
+  border-color: var(--md-sys-color-on-surface);
+}
+
+.m3-field[data-labelled]:focus-within > fieldset {
+  border-width: 2px;
+  border-color: var(--md-sys-color-primary);
+}
+
+.m3-field:focus-within > label {
+  color: var(--md-sys-color-primary);
+}
+
+.m3-field[data-labelled][data-invalid] > fieldset {
+  border-color: var(--md-sys-color-error);
+}
+
+.m3-field[data-invalid] > label,
+.m3-field[data-invalid]:focus-within > label {
+  color: var(--md-sys-color-error);
+}
+
+/* One declaration fades the border, the label and the text together — which is
+   the reason `disabled-content` is a utility rather than a colour. */
+.m3-field:has(> :is(input, textarea):disabled) {
+  opacity: 0.38;
+}
+
+/* A textarea's label belongs on its first line, not in the middle of the box,
+   and the box grows — so `align-items: center` would drag the adornments down
+   with it. 1.875rem is where that first line's centre actually is: 1rem of block
+   padding plus half a `body-l` line.
+   Only when there *is* a label: an unlabelled multiline field has nothing to
+   float and takes the symmetric padding below instead. */
+.m3-field[data-multiline] {
+  align-items: flex-start;
+}
+
+.m3-field[data-multiline][data-labelled] {
+  --field-rest-y: 1.875rem;
+}
+
 /* M3 state layer. A tinted overlay at a fixed alpha, painted from the
    element's own `color`, replacing the hand-picked `hover:bg-*` pairs that
    had to be written twice (light + dark) at every call site. */
+/* The keyboard focus indicator's colour, as one class.
+ *
+ * A `--color-focus` entry in `@theme` would have been the obvious home for this
+ * and it does not work: `focus` is a variant name, so Tailwind never emits a
+ * `ring-focus` utility for it and `ring-2` silently falls back to
+ * `currentcolor` — a ring that takes the colour of whatever text it is wrapped
+ * around, which is worse than the six alphas it replaced. Setting
+ * `--tw-ring-color` is what `ring-<color>` itself compiles to, so this composes
+ * with `ring-2` and with `shadow-e*` exactly as a normal ring colour would.
+ *
+ * Pair with `focus-visible:ring-2`. Use `focus-ring-on-primary` for chrome that
+ * sits on the app bar, where a pink ring on pink is invisible; see the token
+ * block at the top of this file for why both are solid rather than tinted. */
+@utility focus-ring {
+  --tw-ring-color: var(--md-sys-color-focus);
+}
+
+@utility focus-ring-on-primary {
+  --tw-ring-color: var(--md-sys-color-focus-on-primary);
+}
+
+/* The same ring, painted inward. Pair with `focus-visible:inset-ring-2`.
+ *
+ * Not a second focus style — an outset ring is a `box-shadow`, so it is clipped
+ * away entirely by any ancestor that paints-contains, and the app has two kinds
+ * that do: a gallery card (`.image-card` is `contain: layout paint style`) and
+ * any media box that clips its own corners with `overflow-hidden rounded-*`. A
+ * full-bleed control inside one of those — the spoiler cover, a zoom target —
+ * had a focus indicator that rendered and was then thrown away. Reach for this
+ * only when the enclosure clips; everywhere else the ring goes outside, where it
+ * does not eat 2px of the control. */
+@utility focus-ring-inset {
+  --tw-inset-ring-color: var(--md-sys-color-focus);
+}
+
+/* ---------------------------------------------------------------------------
+ * Stacking order
+ *
+ * Fourteen z-index values were in use — 0, 1, 2, 10, 20, 30, 40, 43, 44, 45,
+ * 46, 50, 100, 200, 9999 — spread across this file and twenty components, with
+ * no single place recording what sits above what. The cost was not theoretical:
+ * `Toast` and `LoadingOverlay` were BOTH 9999, so which one covered the other
+ * came down to DOM order, and `Select`'s menu carried a bare 200 whose only
+ * justification was "more than the dialog's 100" written nowhere.
+ *
+ * Two kinds of layering, and only one of them belongs here:
+ *
+ *   App-level  — things that stack against *other components*: the app bar, the
+ *                drawer, a dialog, a popover, a toast. These get a token, and
+ *                the order below is the whole contract.
+ *   Local      — layering *inside* one component, where the neighbours are the
+ *                component's own children (the detail image's preview over its
+ *                final, a switch handle over its ripple). Those stay as small
+ *                integers. Giving them tokens would imply they participate in
+ *                the global order, which is exactly what they must not do.
+ *
+ * The hero flight's four values are load-bearing against each other and are
+ * documented where they live; they are absorbed here unchanged so the global
+ * picture is complete.
+ * ------------------------------------------------------------------------ */
+:root {
+  --z-page-chrome: 30;
+  /* The routed image-detail surface and the drawer's scrim share this level:
+     both dim the page, neither is ever on screen with the other. */
+  --z-detail-overlay: 40;
+  --z-hero-retiring: 43;
+  --z-hero-stage: 44;
+  --z-hero-flight: 45;
+  --z-hero-back: 46;
+  /* The app bar and the drawer are one piece of chrome in two parts. */
+  --z-app-bar: 50;
+  --z-dialog: 100;
+  /* Above `dialog` because a `Select` inside a `Modal` is the common case and
+     its menu has to escape the panel. */
+  --z-popover: 200;
+  /* The lightbox is a full-screen photo viewer and the library ships its own
+     9999. Pulling it into the scale is what makes the order *stated* rather
+     than a race — the image detail's tag-info dialog carried a hand-typed 9998
+     to clear "everything", which in fact put it one below the lightbox and
+     therefore behind it. Nothing in the app opens a dialog from inside the
+     viewer, so the viewer sits above dialogs and popovers. */
+  --z-lightbox: 250;
+  /* The boot splash covers the app, so it outranks anything the app can put up.
+     It does not outrank a toast: a failure raised while the splash is still
+     showing is the one message that must survive it. */
+  --z-app-loading: 300;
+  --z-toast: 400;
+}
+
+@utility z-page-chrome {
+  z-index: var(--z-page-chrome);
+}
+@utility z-detail-overlay {
+  z-index: var(--z-detail-overlay);
+}
+@utility z-app-bar {
+  z-index: var(--z-app-bar);
+}
+@utility z-dialog {
+  z-index: var(--z-dialog);
+}
+@utility z-popover {
+  z-index: var(--z-popover);
+}
+@utility z-app-loading {
+  z-index: var(--z-app-loading);
+}
+@utility z-toast {
+  z-index: var(--z-toast);
+}
+
+/* The disabled state, as one value.
+ *
+ * M3 draws disabled content at 38% opacity. The app had five weights: 40 on
+ * `IconButton`, `Pagination`'s prev/next and the cropper's rotate pair, 50 on
+ * `Button`, `Chip`, `Checkbox`, `ToggleSwitch`, `Select`'s trigger, `DropZone`
+ * and `Pagination`'s *page* button, 60 on `Input` and `Textarea`, 70 on the
+ * captcha handle, and a lone 38 on `Select`'s menu option.
+ *
+ * The tell that this drifted rather than being chosen is that two files
+ * disagreed with *themselves*: `Pagination` used 40 for its arrows and 50 for
+ * its numbers, and `Select` used 50 on the trigger and 38 inside the menu it
+ * opens. So tabbing from a disabled arrow to a disabled number changed how
+ * disabled the row looked.
+ *
+ * Opacity on the element, not an alpha on a colour token, and that is
+ * deliberate: a disabled control has to fade its border, its glyph, its label
+ * and its container together, which is one declaration here and four
+ * hand-picked values per variant the other way. It is the same reason the
+ * colour rules call an alpha on a token a bug — the number has to live in one
+ * place or every call site picks its own.
+ *
+ * Pair with `pointer-events-none` or a real `disabled` attribute; this only
+ * governs appearance. */
+@utility disabled-content {
+  opacity: 0.38;
+}
+
 @utility state-layer {
   position: relative;
   isolation: isolate;

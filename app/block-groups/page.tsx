@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
-import Spinner from '@/components/Spinner';
+import Skeleton from '@/components/Skeleton';
+import EmptyState from '@/components/EmptyState';
 import {
   MdAdd,
-  MdClose,
   MdShield,
   MdSearch,
   MdEdit,
@@ -16,8 +16,14 @@ import {
   MdVisibility,
 } from 'react-icons/md';
 import Button from '@/components/Button';
+import IconButton from '@/components/IconButton';
+import ToggleSwitch from '@/components/ToggleSwitch';
 import { Input } from '@/components/Input';
 import { useAuthModal } from '@/components/AuthModal';
+import PageHeader from '@/components/PageHeader';
+import Radio from '@/components/Radio';
+import Chip from '@/components/Chip';
+import Popover from '@/components/Popover';
 
 const TRIXIE_SEARCH = 'https://trixiebooru.org/api/v1/json/search/tags';
 const MAX_GROUPS = 50;
@@ -70,7 +76,9 @@ export default function BlockGroupsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<{ name: string; images: number }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const autocompleteRef = useRef<HTMLDivElement>(null);
+  /* Anchors the suggestion popover. `Popover` measures this to place itself
+     and to decide which way to open. */
+  const searchFieldRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,21 +172,9 @@ export default function BlockGroupsPage() {
     };
   }, [searchQuery]);
 
-  // Click outside autocomplete
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (
-        autocompleteRef.current &&
-        !autocompleteRef.current.contains(e.target as Node) &&
-        searchInputRef.current &&
-        !searchInputRef.current.contains(e.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    }
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, []);
+  /* The outside-click listener that used to live here is `Popover`'s now — it
+     already knows both the panel and the anchor, which is what this had to be
+     handed two refs to reconstruct. */
 
   const addTag = useCallback(
     (tagName: string) => {
@@ -306,45 +302,56 @@ export default function BlockGroupsPage() {
       showToast('网络错误', 'error');
     }
   }, [userInfo?.token, loadGroups]);
-  const sectionTitle = 'text-title-m-emphasized text-on-surface mb-4 flex items-center gap-2';
   if (!userInfo) return null;
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      {' '}
-      {/* Page header */}{' '}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        {' '}
-        <h2 className={sectionTitle}>屏蔽组</h2>{' '}
-        <div className="flex items-center gap-2">
-          {' '}
-          <button
+    <div className="max-w-4xl mx-auto">
+      <PageHeader
+        title="屏蔽组"
+        subtitle={`已创建屏蔽组 ${groups.length} / ${MAX_GROUPS}`}
+        actions={
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => openEditModal()}
-            className="px-3 py-1.5 text-label-m text-on-primary bg-primary hover:bg-primary/90 rounded-full transition-ui flex items-center gap-1"
+            icon={<MdAdd size={16} />}
           >
-            {' '}
-            <MdAdd size={14} /> 新建{' '}
-          </button>{' '}
-        </div>{' '}
-      </div>{' '}
-      {/* Stats bar */}{' '}
-      <p className="text-body-m text-on-surface-variant mb-4">
-        {' '}
-        已创建屏蔽组: <strong className="text-on-surface">{groups.length}</strong> /{' '}
-        {MAX_GROUPS}{' '}
-      </p>{' '}
+            新建
+          </Button>
+        }
+      />
       {/* Loading */}{' '}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          {' '}
-          <Spinner />{' '}
+        /* Cards in the grid they will land in, rather than one centred spinner
+           that then reflows into a three-column layout. */
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="bg-surface-container border-outline-variant flex flex-col gap-3 rounded-md border p-4 shadow-e1"
+            >
+              <div className="border-outline-variant flex items-center justify-between border-b border-dashed pb-3">
+                <Skeleton className="h-4 w-24" delay={i * 90} />
+                <Skeleton className="h-8 w-28 rounded-full" delay={i * 90 + 60} />
+              </div>
+              <Skeleton className="h-3.5 w-3/4" delay={i * 90 + 120} />
+              <Skeleton className="h-3.5 w-1/2" delay={i * 90 + 180} />
+            </div>
+          ))}
         </div>
       ) : groups.length === 0 ? (
-        /* Empty state */ <div className="text-center py-20 text-outline">
-          {' '}
-          <MdShield size={64} className="mx-auto mb-4 opacity-30" />{' '}
-          <p className="mb-2">还没有任何屏蔽组，快去创建一个吧！</p>{' '}
-          <p className="text-body-s text-outline">开启后，主页将自动处理包含这些标签的图片。</p>{' '}
-        </div>
+        /* The shared empty state. This was the sixteenth hand-rolled one — a
+           64px glyph at 30% opacity over two untyped paragraphs — and the only
+           one of the sixteen with an opacity on its icon. */
+        <EmptyState
+          icon={<MdShield size={48} />}
+          title="还没有任何屏蔽组"
+          description="创建一个后，主页会自动处理包含这些标签的图片。"
+          action={
+            <Button variant="filled" icon={<MdAdd size={18} />} onClick={() => openEditModal()}>
+              新建屏蔽组
+            </Button>
+          }
+        />
       ) : (
         /* Group grid */ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {' '}
@@ -355,58 +362,86 @@ export default function BlockGroupsPage() {
             return (
               <div
                 key={group.id}
-                className={`bg-surface-container rounded-md border p-4 flex flex-col gap-3 shadow-e1 transition-ui ${isActive ? 'border-error/40' : 'border-outline-variant opacity-60'}`}
+                /* One signal per meaning — the note on the switch below says
+                   exactly this, and the card was doing the opposite four times:
+                   a soft 40%-alpha error edge, a card-wide 60% opacity, an
+                   `outline` name colour, and then a *nested* 40% opacity on the
+                   tag preview. The two opacities multiply, so an inactive
+                   group's tags rendered at 24% — unreadable, and the one part of
+                   the card that says what the rule actually does.
+
+                   What is left: the switch is the control, the name colour is
+                   the state, and the border is `error` only while the rule is in
+                   force. The tag lines below drop to `on-surface-variant` when
+                   it is not, because the red and amber *mean* "being blocked
+                   right now"; off, they are just a list of words. */
+                className={`bg-surface-container flex flex-col gap-3 rounded-md border p-4 shadow-e1 transition-ui ${isActive ? 'border-error' : 'border-outline-variant'}`}
               >
                 {' '}
                 {/* Header */}{' '}
                 <div className="flex items-center justify-between border-b border-dashed border-outline-variant pb-3">
                   {' '}
                   <span
-                    className={`text-label-l-emphasized truncate ${isActive ? 'text-error' : 'text-outline'}`}
+                    className={`text-label-l-emphasized truncate ${isActive ? 'text-error' : 'text-on-surface-variant'}`}
                   >
                     {group.name}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Toggle switch */}
-                    <label className="relative inline-block w-9 h-5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isActive}
-                        onChange={(e) => handleToggleGroup(group.id, e.target.checked)}
-                        className="opacity-0 w-0 h-0 peer"
-                      />
-                      <span className="absolute inset-0 bg-surface-container-highest rounded-full transition-ui peer-checked:bg-error-fill after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-surface-raised after:rounded-full after:transition-transform peer-checked:after:translate-x-4" />
-                    </label>
-                    <button
+                    {/* The real switch. This was a hand-rolled 36x20 box — an
+                        `opacity-0` checkbox under a `peer-checked:` span with an
+                        `after:` pseudo-element for the handle — sitting two routes
+                        away from the settings page's full M3 switches, which have
+                        the spec's two handle clocks, a press swell, a state layer
+                        and a check glyph. Same control, two levels of finish.
+
+                        Its track was `error-fill` when on. That is dropped rather
+                        than ported: an M3 switch is `primary` when enabled, and
+                        error on a *track* reads as "this control is in an error
+                        state" rather than "this rule is active". The row already
+                        says blocking three times over — the group name goes
+                        `text-error`, and the hidden-tag line under it is error
+                        too. One signal per meaning. */}
+                    <ToggleSwitch
+                      checked={isActive}
+                      onChange={(v) => handleToggleGroup(group.id, v)}
+                      aria-label={`启用屏蔽组 ${group.name}`}
+                    />
+                    {/* `IconButton size="sm"` is the sanctioned 36dp box. The
+                        pair used to be `p-1.5 rounded` with `touch-target` — a
+                        bare `rounded` (4dp) on a control whose role is
+                        `rounded-full`, and a hit-area shim standing in for a box
+                        the primitive already gives. */}
+                    <IconButton
+                      size="sm"
                       onClick={() => openEditModal(group)}
-                      className="touch-target p-1.5 text-body-s text-outline hover:text-primary rounded transition-ui"
                       title="编辑"
-                    >
-                      <MdEdit size={14} />
-                    </button>
-                    <button
+                      aria-label={`编辑屏蔽组 ${group.name}`}
+                      icon={<MdEdit size={16} />}
+                    />
+                    <IconButton
+                      size="sm"
                       onClick={() => confirmDeleteGroup(group.id)}
-                      className="touch-target p-1.5 text-body-s text-outline hover:text-error rounded transition-ui"
                       title="删除"
-                    >
-                      <MdDelete size={14} />
-                    </button>
+                      aria-label={`删除屏蔽组 ${group.name}`}
+                      className="hover:text-error"
+                      icon={<MdDelete size={16} />}
+                    />
                   </div>
                 </div>
                 {/* Tags preview */}
-                <div className="text-body-s space-y-1" style={{ opacity: isActive ? 1 : 0.4 }}>
+                <div className="text-body-s space-y-1">
                   {hTags.length > 0 && (
-                    <div className="text-error">
+                    <div className={isActive ? 'text-error' : 'text-on-surface-variant'}>
                       <MdBlock size={12} className="inline mr-0.5" /> 隐藏: {hTags.join(', ')}
                     </div>
                   )}
                   {sTags.length > 0 && (
-                    <div className="text-warning">
+                    <div className={isActive ? 'text-warning' : 'text-on-surface-variant'}>
                       <MdVisibility size={12} className="inline mr-0.5" /> 遮挡: {sTags.join(', ')}
                     </div>
                   )}
                   {hTags.length === 0 && sTags.length === 0 && (
-                    <span className="text-outline">空屏蔽组</span>
+                    <span className="text-on-surface-variant">空屏蔽组</span>
                   )}
                 </div>
               </div>
@@ -435,138 +470,114 @@ export default function BlockGroupsPage() {
               maxLength={30}
             />{' '}
           </div>{' '}
-          <div className="flex items-center gap-4 text-body-m">
-            {' '}
-            <label className="flex items-center gap-1.5 cursor-pointer text-error ">
-              {' '}
-              <input
-                type="radio"
-                name="tagActionType"
-                value="hide"
-                checked={tagActionType === 'hide'}
-                onChange={() => setTagActionType('hide')}
-              />
-              <MdBlock size={16} /> 彻底隐藏
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer text-warning font-medium">
-              <input
-                type="radio"
-                name="tagActionType"
-                value="spoiler"
-                checked={tagActionType === 'spoiler'}
-                onChange={() => setTagActionType('spoiler')}
-              />{' '}
-              <MdVisibility size={16} /> 遮挡打码{' '}
-            </label>{' '}
-          </div>{' '}
-          <div className="relative">
-            {' '}
-            <label className="block text-body-m text-on-surface mb-1">
-              {' '}
-              搜索并添加标签（支持联想）{' '}
-            </label>{' '}
-            <div className="relative">
-              <Input
-                ref={searchInputRef}
-                type="text"
-                icon={<MdSearch size={16} />}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="输入英文标签..."
-              />
-            </div>
-            {showSuggestions && suggestions.length > 0 && (
-              <div
-                ref={autocompleteRef}
-                className="absolute z-50 top-full left-0 right-0 mt-1 bg-surface-container border border-outline-variant popover-scrollbar rounded-sm shadow-e3 max-h-48 overflow-y-auto"
-              >
-                {' '}
+          <div className="flex flex-wrap items-center gap-4">
+            <Radio
+              name="tagActionType"
+              value="hide"
+              checked={tagActionType === 'hide'}
+              onChange={() => setTagActionType('hide')}
+              labelClassName="text-error"
+              label={
+                <span className="flex items-center gap-1.5">
+                  <MdBlock size={16} /> 彻底隐藏
+                </span>
+              }
+            />
+            <Radio
+              name="tagActionType"
+              value="spoiler"
+              checked={tagActionType === 'spoiler'}
+              onChange={() => setTagActionType('spoiler')}
+              labelClassName="text-warning"
+              label={
+                <span className="flex items-center gap-1.5">
+                  <MdVisibility size={16} /> 遮挡打码
+                </span>
+              }
+            />
+          </div>
+          <div className="relative" ref={searchFieldRef}>
+            {/* The caption is the field's own `label`, not a bare `<label>` next
+                to it. Without `htmlFor` a `<label>` labels nothing: clicking it
+                did not focus the input, and the input's only accessible name was
+                its placeholder, which disappears the moment you type. */}
+            <Input
+              ref={searchInputRef}
+              label="搜索并添加标签（支持联想）"
+              type="text"
+              icon={<MdSearch size={16} />}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="输入英文标签..."
+            />
+            {/* `Popover` — the app's one floating surface. This was a fourth
+                hand-rolled recipe (an outline on top of the tonal step and the
+                elevation, which is a third signal for one edge) and it was
+                clipped by any scrolling ancestor because it was absolutely
+                positioned rather than portalled. */}
+            <Popover
+              open={showSuggestions && suggestions.length > 0}
+              onClose={() => setShowSuggestions(false)}
+              anchorRef={searchFieldRef}
+              maxHeight={192}
+              estimatedHeight={suggestions.length * 40}
+            >
                 {suggestions.map((s) => (
                   <button
                     key={s.name}
                     onClick={() => addTag(s.name)}
-                    className="w-full text-left px-3 py-2 text-body-m hover:bg-surface-container-high flex justify-between items-center border-b border-outline-variant last:border-0"
+                    className="w-full text-left px-3 py-2 text-body-m state-layer flex justify-between items-center border-b border-outline-variant last:border-0 outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
                   >
                     {' '}
                     <span className="text-on-surface">{s.name}</span>{' '}
-                    <span className="text-body-s text-outline">{s.images}</span>{' '}
+                    <span className="text-body-s text-on-surface-variant">{s.images}</span>{' '}
                   </button>
                 ))}{' '}
-              </div>
-            )}{' '}
+            </Popover>{' '}
           </div>{' '}
           <div>
             {' '}
-            <label className="block text-body-m text-error mb-1">
+            <p className="block text-body-m text-error mb-1">
               <MdBlock size={14} className="inline mr-0.5" /> 隐藏标签列表：
-            </label>{' '}
-            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low/50 popover-scrollbar min-h-[40px] max-h-[120px] overflow-y-auto">
+            </p>{' '}
+            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-[40px] max-h-[120px] overflow-y-auto">
               {' '}
               {hiddenTags.length === 0 ? (
-                <span className="text-body-s text-outline">暂无标签</span>
+                <EmptyState size="inline" title="暂无标签" />
               ) : (
                 hiddenTags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-1 text-label-m rounded bg-surface-container-lowest border border-outline-variant border-l-[3px] border-l-error"
-                  >
-                    {' '}
-                    {tag}{' '}
-                    <button
-                      onClick={() => removeTag(tag, 'hide')}
-                      aria-label={`移除 ${tag}`}
-                      className="state-layer ml-0.5 rounded-full p-0.5 text-error"
-                    >
-                      {' '}
-                      <MdClose size={14} />{' '}
-                    </button>{' '}
-                  </span>
+                  <Chip key={tag} onRemove={() => removeTag(tag, 'hide')} removeLabel={`移除 ${tag}`}>
+                    {tag}
+                  </Chip>
                 ))
               )}{' '}
             </div>{' '}
           </div>{' '}
           <div>
             {' '}
-            <label className="block text-body-m text-warning mb-1">
+            <p className="block text-body-m text-warning mb-1">
               <MdVisibility size={14} className="inline mr-0.5" /> 遮挡标签列表：
-            </label>{' '}
-            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low/50 popover-scrollbar min-h-[40px] max-h-[120px] overflow-y-auto">
+            </p>{' '}
+            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-[40px] max-h-[120px] overflow-y-auto">
               {' '}
               {spoileredTags.length === 0 ? (
-                <span className="text-body-s text-outline">暂无标签</span>
+                <EmptyState size="inline" title="暂无标签" />
               ) : (
                 spoileredTags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-1 text-label-m rounded bg-surface-container-lowest border border-outline-variant border-l-[3px] border-l-warning"
-                  >
-                    {' '}
-                    {tag}{' '}
-                    <button
-                      onClick={() => removeTag(tag, 'spoiler')}
-                      aria-label={`移除 ${tag}`}
-                      className="state-layer ml-0.5 rounded-full p-0.5 text-warning"
-                    >
-                      <MdClose size={14} />
-                    </button>
-                  </span>
+                  <Chip key={tag} onRemove={() => removeTag(tag, 'spoiler')} removeLabel={`移除 ${tag}`}>
+                    {tag}
+                  </Chip>
                 ))
               )}
             </div>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={() => setEditModalOpen(false)}
-              className="flex-1 px-4 py-2 border border-outline rounded-full text-body-m text-on-surface-variant hover:bg-surface-container-high transition-ui"
-            >
+            <Button variant="tonal" fullWidth onClick={() => setEditModalOpen(false)}>
               取消
-            </button>
-            <button
-              onClick={handleSaveGroup}
-              className="flex-1 px-4 py-2 bg-error-fill text-on-fill rounded-full text-label-l hover:bg-error-fill/90 transition-ui"
-            >
+            </Button>
+            <Button variant="danger" fullWidth onClick={handleSaveGroup}>
               保存屏蔽组
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
@@ -578,12 +589,9 @@ export default function BlockGroupsPage() {
         maxWidth="max-w-sm"
         footer={
           <>
-            <button
-              onClick={() => setDeleteConfirmOpen(false)}
-              className="px-4 py-2 text-label-l text-on-surface-variant hover:bg-surface-container-high rounded-full transition-ui"
-            >
+            <Button variant="text" onClick={() => setDeleteConfirmOpen(false)}>
               取消
-            </button>
+            </Button>
             <Button variant="danger" onClick={handleDeleteGroup}>
               确认删除
             </Button>

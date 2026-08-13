@@ -10,6 +10,7 @@ import {
   resolveNextAttempt,
   type LoadAttempt,
 } from '@/lib/imageLoader';
+import Skeleton from '@/components/Skeleton';
 
 interface FadeInImageProps extends ImageProps {
   fallbackSrc?: string;
@@ -145,10 +146,10 @@ function FadeInImageInner({
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden contain-paint">
       {shimmer && !isLoaded && (
-        <span
-          aria-hidden="true"
-          className="skeleton bg-surface-container-high absolute inset-0 block"
-        />
+        /* `Skeleton`, not a hand-built `.skeleton` span: same tone and sweep,
+           but one owner for the app's loading language. `rounded-none` because
+           the media container already clips this to its own corner. */
+        <Skeleton className="absolute inset-0 block rounded-none" />
       )}
       <Image
         {...props}

@@ -65,7 +65,7 @@ export default function LoadingOverlay() {
 
   return (
     <div
-      className={`bg-surface fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-400 ease-[var(--ease-accelerate)] ${
+      className={`bg-surface fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-400 ease-[var(--ease-accelerate)] ${
         isVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
       }`}
     >

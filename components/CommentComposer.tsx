@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { MdClose, MdReply, MdSend } from 'react-icons/md';
 import Button from '@/components/Button';
+import IconButton from '@/components/IconButton';
 import { useAuthModal } from '@/components/AuthModal';
 import { showToast } from '@/components/Toast';
 import { api, type Comment } from '@/lib/api';
@@ -98,18 +99,27 @@ export default function CommentComposer({
           <span>
             回复 <strong className="text-primary">{replyTo.username}</strong>：
           </span>
-          <span className="flex-1 truncate text-body-s opacity-70">
+          {/* Quieter by *size*, not by a dimmed copy of the same role. An
+              eyeballed opacity is the same bug as an alpha on a token — nothing
+              makes the next reply bar pick the same number, and the forum
+              thread's copy duly picked its own. `body-s` against the bar's
+              `body-m` says "supporting" through the type scale instead. */}
+          <span className="flex-1 truncate text-body-s">
             {replyTo.body.slice(0, 80)}
             {replyTo.body.length > 80 ? '...' : ''}
           </span>
-          <button
-            type="button"
+          {/* `IconButton`, not a bare glyph with a hover opacity: this is the
+              same 取消回复 control the forum thread renders, and that one is
+              already an `IconButton`. The hand-rolled version had no focus ring,
+              no state layer and a 16px hit area. */}
+          <IconButton
+            size="sm"
             onClick={onCancelReply}
+            title="取消回复"
             aria-label="取消回复"
-            className="ml-auto text-error transition-opacity hover:opacity-70"
-          >
-            <MdClose size={16} />
-          </button>
+            className="-me-1.5 ml-auto shrink-0 text-error"
+            icon={<MdClose size={16} />}
+          />
         </div>
       )}
       {mounted ? (
@@ -126,7 +136,7 @@ export default function CommentComposer({
            wraps to a second row on narrow screens, and under-reserving is much
            less disruptive than over-reserving: the editor grows into the space
            instead of the page collapsing around it. */
-        <div className="min-h-[354px] rounded-sm border border-outline-variant bg-surface-container-low/70" />
+        <div className="min-h-[354px] rounded-sm border border-outline-variant bg-surface-container-low" />
       )}
       <div className="mt-2 flex justify-end">
         <Button

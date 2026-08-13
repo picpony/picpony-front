@@ -3,16 +3,18 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
+import { default as StatusBadge } from '@/components/Badge';
 import Checkbox from '@/components/Checkbox';
-import Modal from '@/components/Modal';
-import { roleInfo } from '@/lib/roles';
+import RoleBadge from '@/components/RoleBadge';
 import Select from '@/components/Select';
 import { MdPeople, MdEdit, MdDelete, MdCheckCircle, MdBlock } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
 import { SectionHeader, SearchInput } from './';
 import Button from '@/components/Button';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { Input, Textarea } from '@/components/Input';
 import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
+import SectionHeading from '@/components/SectionHeading';
 
 interface Badge {
   id: number;
@@ -124,21 +126,16 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
     }
   };
 
-  const [usersConfirmModalOpen, setUsersConfirmModalOpen] = useState(false);
-  const [usersConfirmTitle, setUsersConfirmTitle] = useState('');
-  const [usersConfirmMessage, setUsersConfirmMessage] = useState('');
-  const usersConfirmActionRef = useRef<(() => void) | null>(null);
+  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
+     ref per tab. The signature is kept so the call sites read unchanged; what
+     went away is the second copy of the Modal, its footer and its title/message
+     state — five admin tabs had built the identical thing. */
+  const { confirm, confirmDialog } = useConfirm();
 
   const showUsersConfirm = (title: string, message: string, action: () => void) => {
-    setUsersConfirmTitle(title);
-    setUsersConfirmMessage(message);
-    usersConfirmActionRef.current = action;
-    setUsersConfirmModalOpen(true);
-  };
-
-  const handleUsersConfirmAction = () => {
-    usersConfirmActionRef.current?.();
-    setUsersConfirmModalOpen(false);
+    void confirm({ title, message }).then((confirmed) => {
+      if (confirmed) action();
+    });
   };
 
   const loadUsers = useCallback(async () => {
@@ -264,10 +261,9 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-title-m text-on-surface">编辑用户</h3>
-            <p className="text-body-s text-on-surface-variant break-words">
-              #{user.id} · {user.username}
-            </p>
+            <SectionHeading as="h3" className="mb-0" subtitle={`#${user.id} · ${user.username}`}>
+              编辑用户
+            </SectionHeading>
           </div>
           <Button variant="text" size="sm" onClick={closeInlineEditor} disabled={isSavingUser}>
             取消
@@ -462,18 +458,17 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       key: 'name',
       header: '用户名',
       primary: true,
-      render: (u) => <span className="text-primary font-medium">{u.username}</span>,
+      render: (u) => <span className="text-body-m-emphasized text-primary">{u.username}</span>,
     },
     {
       key: 'role',
       header: '角色',
       render: (u) => (
-        <span
-          className={`inline-flex items-center rounded px-2 py-0.5 text-label-m ${roleInfo(u.role).chip}`}
-        >
-          {' '}
-          {roleInfo(u.role).label}{' '}
-        </span>
+        /* `showUser`: a table column has to say something in every row, which
+           is the one place the neutral "普通用户" pill belongs. `rounded` (4dp)
+           here against `rounded-sm` on the profile was the third shape for the
+           same mark. */
+        <RoleBadge role={u.role} showUser size="md" />
       ),
     },
     {
@@ -485,15 +480,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       key: 'state',
       header: '状态',
       render: (u) => (
-        <span
-          className={`inline-flex items-center rounded px-2 py-0.5 text-label-m ${
-            u.is_banned
-              ? 'bg-error-container text-on-error-container'
-              : 'bg-success-container text-on-success-container'
-          }`}
-        >
-          {u.is_banned ? '已封禁' : '正常'}
-        </span>
+        <StatusBadge tone={u.is_banned ? 'error' : 'success'}>{u.is_banned ? '已封禁' : '正常'}</StatusBadge>
       ),
     },
     {
@@ -569,24 +556,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
         empty="没有找到匹配的用户"
       />
 
-      <Modal
-        isOpen={usersConfirmModalOpen}
-        onClose={() => setUsersConfirmModalOpen(false)}
-        title={usersConfirmTitle}
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setUsersConfirmModalOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleUsersConfirmAction}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">{usersConfirmMessage}</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

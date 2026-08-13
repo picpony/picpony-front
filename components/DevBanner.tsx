@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { MdClose, MdConstruction } from 'react-icons/md';
 import { LS_KEYS } from '@/lib/constants';
+import { iconButtonClasses } from './IconButton';
 
 /**
  * The "site is in development" notice.
@@ -43,16 +44,33 @@ export default function DevBanner() {
   return (
     <div
       role="status"
-      className="bg-warning-container text-on-warning-container animate-fade-in relative z-50 flex shrink-0 items-center gap-2 px-4 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]"
+      className="bg-warning-container text-on-warning-container animate-fade-in relative z-app-bar flex shrink-0 items-center gap-2 px-4 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]"
     >
-      <MdConstruction size={16} className="shrink-0 opacity-80" aria-hidden="true" />
-      <p className="text-body-s min-w-0 flex-1 text-center font-medium">
+      <MdConstruction size={16} className="shrink-0" aria-hidden="true" />
+      <p className="text-body-s-emphasized min-w-0 flex-1 text-center">
         网站处于开发阶段，不代表最终品质
       </p>
+      {/* `iconButtonClasses`, not the `IconButton` component, and the ripple is
+          deliberately absent.
+          This control has to keep a 44px hit area inside a 32px-tall banner, and
+          `touch-target` is the utility for exactly that — it grows the hit area
+          without changing layout. It cannot be combined with `data-ripple`,
+          whose `overflow: hidden` clips the pseudo-element out of hit-testing,
+          and the component always sets that attribute. Elsewhere the app answers
+          this by growing the box (`Pagination` goes to 44px below `sm`); here the
+          box cannot grow without pushing the banner down the page on the one
+          viewport where vertical space is scarcest. So it takes the shared look
+          and opts out of the press wave — the state layer still carries the
+          press. */}
       <button
+        type="button"
         onClick={dismiss}
         aria-label="不再显示此提示"
-        className="touch-target -mr-1.5 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full outline-none transition-transform duration-200 ease-[var(--ease-standard)] hover:rotate-90 focus-visible:ring-2 focus-visible:ring-current/40 motion-reduce:hover:rotate-0"
+        className={iconButtonClasses({
+          size: 'sm',
+          dismiss: true,
+          className: 'touch-target -mr-1.5 h-8 w-8',
+        })}
       >
         <MdClose size={16} />
       </button>

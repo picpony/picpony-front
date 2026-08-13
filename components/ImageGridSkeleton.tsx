@@ -1,6 +1,7 @@
 'use client';
 
 import { useMasonryColumns } from '@/lib/hooks';
+import Skeleton from '@/components/Skeleton';
 
 /**
  * Aspect ratios, not pixel heights, and a fixed sequence rather than random
@@ -41,9 +42,9 @@ export default function ImageGridSkeleton() {
           {Array.from({ length: rows }, (_, rowIndex) => {
             const ratio = RATIOS[(colIndex * rows + rowIndex) % RATIOS.length];
             return (
-              <div
+              <Skeleton
                 key={rowIndex}
-                className="skeleton bg-surface-container-high w-full rounded-lg"
+                className="w-full rounded-lg"
                 style={{
                   aspectRatio: `1 / ${ratio}`,
                   /* Diagonal stagger, so the shimmer sweeps across the grid as

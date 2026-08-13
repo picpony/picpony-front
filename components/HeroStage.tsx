@@ -116,7 +116,7 @@ export default function HeroStage() {
         data-image-hero-stage
         data-image-hero-stage-state={state.phase}
         aria-hidden="true"
-        className="pointer-events-auto absolute inset-0 z-[44] overflow-hidden"
+        className="pointer-events-auto absolute inset-0 z-[var(--z-hero-stage)] overflow-hidden"
       >
         <div
           ref={surfaceRef}
@@ -136,10 +136,10 @@ export default function HeroStage() {
             inert
             className="image-detail-overlay-content pointer-events-none relative min-h-full w-full"
           >
-            <div className="image-detail-page mx-auto max-w-7xl px-2 sm:px-4">
+            <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
               <div className="flex flex-col rounded-md bg-transparent">
                 <DetailHeader key={image.id} image={image} layout="stage" metadataReady={false} />
-                <div className="relative flex min-h-[32vh] w-full items-start justify-center px-4 pb-4 pt-2 md:min-h-[48vh]">
+                <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
                   <div className="pointer-events-none absolute inset-x-4 top-2 z-20 flex justify-center">
                     <div
                       ref={targetRef}
@@ -162,10 +162,10 @@ export default function HeroStage() {
                   <div className="mx-auto w-full max-w-5xl">
                     <div aria-hidden="true" className="mb-6">
                       <div className="mb-2 flex justify-between">
-                        <Skeleton className="h-4 w-14 rounded" />
-                        <Skeleton className="h-4 w-14 rounded" delay={60} />
+                        <Skeleton className="h-4 w-14" />
+                        <Skeleton className="h-4 w-14" delay={60} />
                       </div>
-                      <Skeleton className="h-2.5 w-full rounded" delay={120} />
+                      <Skeleton className="h-2.5 w-full" delay={120} />
                     </div>
                   </div>
                 </div>

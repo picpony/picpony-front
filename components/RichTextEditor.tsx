@@ -238,7 +238,7 @@ export default function RichTextEditor({
   }, [disabled]);
 
   return (
-    <div className="w-full overflow-hidden rounded-sm border border-outline-variant transition-ui focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+    <div className="w-full overflow-hidden rounded-sm border border-outline-variant transition-ui focus-within:border-primary focus-within:ring-2 focus-within:focus-ring">
       <style>{`
         /* wangEditor is themed entirely through its own \`--w-e-*\` variables.
            These used to be set only under \`.dark\`, and to a cold slate palette:

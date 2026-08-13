@@ -16,7 +16,6 @@ import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } fro
 import {
   MdMenu,
   MdSearch,
-  MdPerson,
   MdNotifications,
   MdDarkMode,
   MdLightMode,
@@ -30,6 +29,7 @@ const AnnouncementModal = dynamic(() => import('./AnnouncementModal'), { ssr: fa
 const Modal = dynamic(() => import('./Modal'), { ssr: false });
 import Logo from './Logo';
 import Avatar from './Avatar';
+import { CountBadge } from './Badge';
 import DevBanner from './DevBanner';
 import SidebarNav from './SidebarNav';
 import { useAuthModal } from './AuthModal';
@@ -44,8 +44,10 @@ import {
   subscribeImageHeroRuntime,
 } from '@/lib/hero';
 import HeroStage from '@/components/HeroStage';
+import Badge from '@/components/Badge';
 import RouteCrossFade from '@/components/RouteCrossFade';
 import Button from '@/components/Button';
+import IconButton, { iconButtonClasses } from '@/components/IconButton';
 import {
   circularReveal,
   setTabIntent,
@@ -54,6 +56,7 @@ import {
   useSlidingIndicator,
 } from '@/lib/motion';
 import { useMediaQuery } from '@/lib/hooks';
+import { cn } from '@/lib/utils';
 import { MEDIA } from '@/lib/constants';
 
 function SearchBar() {
@@ -66,15 +69,16 @@ function SearchBar() {
 
   return (
     <form onSubmit={handleSearch}>
-      <button
+      {/* `type="submit"` is the whole reason this is an `IconButton` rather
+          than a `Link`: the form is what owns the navigation. */}
+      <IconButton
         type="submit"
+        variant="on-primary"
+        size="lg"
         title="搜索"
         aria-label="搜索"
-        data-ripple
-        className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-on-primary state-layer transition-ui outline-none focus-visible:ring-2 focus-visible:ring-on-primary/50"
-      >
-        <MdSearch size={24} />
-      </button>
+        icon={<MdSearch size={24} />}
+      />
     </form>
   );
 }
@@ -182,11 +186,14 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
     }, TAB_PUSH_COALESCE_MS);
   };
 
+  /* The type role sits in the branches so only one is ever emitted — the active
+     tab used to carry a bare `font-medium` over `text-label-l`, whose weight
+     token is already 500, so it read identically to the inactive tabs. */
   const tabClass = (tab: string) =>
-    `relative z-10 flex items-center gap-2 px-5 py-2.5 rounded-full text-label-l transition-ui ${
+    `relative z-10 flex items-center gap-2 px-5 py-2.5 rounded-full transition-ui outline-none focus-visible:ring-2 focus-ring ${
       activeTab === tab
-        ? 'text-primary font-medium'
-        : 'text-on-surface-variant hover:text-on-surface'
+        ? 'text-label-l-emphasized text-primary'
+        : 'text-label-l text-on-surface-variant hover:text-on-surface'
     }`;
 
   return (
@@ -196,16 +203,17 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
        instead, on the same 220ms the hero flight uses for card chrome, so the
        two leave together.
        `data-image-detail-chrome` was previously set here and consumed nowhere —
-       the pill just sat at z-50 on top of the overlay.
-       z-30 keeps it under the drawer scrim (z-40): the host `<section>` is
+       the pill just sat on the app-bar layer on top of the overlay.
+       `z-page-chrome` keeps it under the drawer scrim: the host `<section>` is
        positioned but not a stacking context, so the pill's z competes directly
-       with the shell's. At z-50 it floated over the open drawer. */
+       with the shell's. On the app-bar layer it floated over the open drawer.
+       See the stacking-order block in globals.css. */
     <div
       data-image-detail-chrome
       data-chrome-hidden={hidden || undefined}
       aria-hidden={hidden || undefined}
       inert={hidden ? true : undefined}
-      className={`pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-center py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[opacity,translate] duration-200 ease-[var(--ease-accelerate)] ${
+      className={`pointer-events-none absolute inset-x-0 bottom-0 z-page-chrome flex items-center justify-center py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[opacity,translate] duration-200 ease-[var(--ease-accelerate)] ${
         hidden ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'
       }`}
     >
@@ -312,11 +320,31 @@ export default function AppLayout({
   const backgroundPathname = imageHeroBackground?.pathname ?? (isImageDetailOpen ? '/' : pathname);
   /* The hero owns the same pixels during a flight — it transforms the
      background, freezes this very pathname, and paints a flyer over the lot —
-     so the route cross-fade stands down entirely while one is in progress. */
+     so the route cross-fade stands down entirely while one is in progress.
+     That is what the first two conditions say, and they say all of it.
+
+     The third used to be `!isImageDetailRoute`, which is much broader: it stood
+     the cross-fade down for the whole time you were *on* an image detail, not
+     just while one was flying. So leaving a picture for /search was the one
+     navigation in the app with no transition at all — a hard cut, from the
+     screen a user is most likely to leave sideways.
+
+     `!isImageDetailOpen` is the narrow version, and the distinction is load
+     bearing. `isImageDetailOpen` means the intercepted **overlay** is mounted,
+     and in that case `backgroundPathname` is `/` and the snapshot source
+     (`[data-page-content]`) is the *gallery underneath the overlay* — so a fade
+     there would dissolve a page the user cannot even see. A direct visit to
+     `/pic/123` has no overlay: the detail page *is* `[data-page-content]`, the
+     existing machinery clones the right thing, and the fade is simply correct.
+
+     The overlay case therefore stays a cut on purpose. Fixing it needs the clone
+     to carry the overlay's own `scrollTop` — the overlay scrolls an inner
+     element, so unlike a page inside the app scroller its offset is not encoded
+     in `getBoundingClientRect`, and a clone starts at zero. */
   const crossFadeEnabled =
     imageHeroRuntime.phase === 'gallery-idle' &&
     !imageHeroRuntime.background &&
-    !isImageDetailRoute;
+    !isImageDetailOpen;
   const frozenBackgroundSearch = imageHeroBackground?.search ?? (isImageDetailOpen ? '' : null);
 
   useEffect(() => {
@@ -578,40 +606,52 @@ export default function AppLayout({
     <BackgroundLocationProvider frozenSearch={frozenBackgroundSearch}>
       <div className="h-full flex flex-col overflow-hidden">
         <DevBanner />
-        <header className="h-16 bg-primary text-on-primary flex items-center px-4 sm:px-26 shrink-0 relative z-50">
-          <button
+        <header className="h-16 bg-primary text-on-primary flex items-center px-4 sm:px-26 shrink-0 relative z-app-bar">
+          {/* `IconButton variant="on-primary"`. The app bar's four controls
+              were each a hand-rolled 44px box repeating the same eight classes,
+              because the primitive had no variant whose focus ring survives a
+              pink background. */}
+          <IconButton
+            variant="on-primary"
+            size="lg"
             onClick={toggleSidebar}
             aria-label={isCollapsed ? '展开侧边栏' : '收起侧边栏'}
             aria-expanded={!isCollapsed}
             aria-controls="app-sidebar"
-            data-ripple
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full mr-1 sm:mr-3 state-layer text-on-primary transition-ui outline-none focus-visible:ring-2 focus-visible:ring-on-primary/50"
-          >
-            <MdMenu size={24} />
-          </button>
+            className="mr-1 sm:mr-3"
+            icon={<MdMenu size={24} />}
+          />
           <Link
             href="/"
             aria-label="PicPony 主页"
-            className="relative mr-2 hidden shrink-0 items-center sm:flex"
+            /* Visible on a phone too, which it was not — `hidden sm:flex` cost
+               the brand its only appearance on the majority viewport *and* the
+               one-tap route home, leaving the drawer as the only way back to the
+               gallery. The space was always there: every control in this bar is a
+               fixed 44dp box and `SearchBar` is an icon button that never expands,
+               so at 390px the row needs 276px and has 358. `shrink-0` keeps the
+               mark intact if anything else ever grows. */
+            className="relative mr-2 flex shrink-0 items-center"
           >
             {/* The header used to carry its own copy of the wordmark and its own
                 copy of the hover — same idea as `Logo.tsx`, drifted to a
                 different width and a keyline the other never had. One component
                 now; `keyline` is the part that was genuinely header-specific. */}
-            <Logo className="h-auto w-25" keyline />
+            <Logo className="h-auto w-20 sm:w-25" keyline />
           </Link>
-          <button
+          <IconButton
             ref={themeButtonRef}
+            variant="on-primary"
+            size="lg"
             onClick={cycleThemeMode}
             aria-label="切换主题模式"
             title={followSystem ? '跟随系统' : darkMode ? '深色模式' : '浅色模式'}
-            data-ripple
-            className="ml-1 inline-flex h-11 w-11 items-center justify-center rounded-full state-layer text-on-primary transition-ui outline-none focus-visible:ring-2 focus-visible:ring-on-primary/50"
-          >
-            <span
+            className="ml-1"
+            icon={
+              <span
               ref={themeIconRef}
               key={followSystem ? 'system' : String(darkMode)}
-              className="block animate-[icon-swap_0.35s_var(--ease-spring)]"
+              className="block animate-[icon-swap_0.3s_var(--ease-spring)]"
             >
               {/* The glyph shows the mode you are *in*, not the one you would
                 switch to — which is what the tooltip beside it already says.
@@ -624,24 +664,26 @@ export default function AppLayout({
               ) : (
                 <MdLightMode size={24} />
               )}
-            </span>
-          </button>
+              </span>
+            }
+          />
           <div className="flex-1" />
-          <Suspense fallback={<div className="h-11 w-11 rounded-full bg-on-primary/10" />}>
+          <Suspense fallback={<div className="h-11 w-11" aria-hidden="true" />}>
             <SearchBar />
           </Suspense>
+          {/* A `<Link>`, so it cannot be an `IconButton` — but it wears the
+              same recipe from `iconButtonClasses` rather than a fifth copy of
+              it. Same reason `buttonClasses` exists beside `Button`. */}
           <Link
             href="/messages"
             aria-label={totalUnread > 0 ? `消息（${totalUnread} 条未读）` : '消息'}
             data-ripple
-            className="relative ml-1 inline-flex h-11 w-11 items-center justify-center rounded-full state-layer text-on-primary transition-ui outline-none focus-visible:ring-2 focus-visible:ring-on-primary/50"
+            className={cn(iconButtonClasses({ variant: 'on-primary', size: 'lg' }), 'relative ml-1')}
           >
             <MdNotifications size={24} />
-            {totalUnread > 0 && (
-              <span className="absolute top-1 right-1 bg-error-fill text-on-fill text-label-s-emphasized leading-none tabular-nums min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 animate-[control-pop_0.3s_var(--ease-spring)]">
-                {totalUnread > 99 ? '99+' : totalUnread}
-              </span>
-            )}
+            <span className="absolute top-1 right-1">
+              <CountBadge count={totalUnread} />
+            </span>
           </Link>
         </header>
 
@@ -655,7 +697,7 @@ export default function AppLayout({
               movement. */}
           <div
             ref={scrimRef}
-            className={`fixed inset-0 bg-scrim/50 z-40 md:hidden transition-opacity ${
+            className={`fixed inset-0 bg-scrim/50 z-detail-overlay md:hidden transition-opacity ${
               isCollapsed
                 ? 'opacity-0 pointer-events-none duration-200 ease-[var(--ease-standard)]'
                 : 'opacity-100 duration-400 ease-[var(--ease-decelerate)]'
@@ -694,7 +736,7 @@ export default function AppLayout({
                out of frame instead of snapping, and 300ms keeps it shorter than
                the 400ms entry. The swipe-close already landed softly on its own
                velocity-scaled `decelerate`; this makes the tap agree with it. */
-            className={`bg-surface-container-low flex flex-col shrink-0 transition-[width,translate] overflow-hidden absolute md:relative h-full z-50 md:z-auto ${
+            className={`bg-surface-container-low flex flex-col shrink-0 transition-[width,translate] overflow-hidden absolute md:relative h-full z-app-bar md:z-auto ${
               isCollapsed
                 ? '-translate-x-full md:translate-x-0 md:w-0 duration-300 ease-[var(--ease-standard)]'
                 : 'translate-x-0 w-72 duration-400 ease-[var(--ease-decelerate)]'
@@ -707,7 +749,7 @@ export default function AppLayout({
                     href={`/user/${userInfo.id}`}
                     onClick={handleMobileNavigation}
                     data-ripple
-                    className="state-layer flex w-full items-center gap-3 rounded-md p-2 outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="state-layer flex w-full items-center gap-3 rounded-md p-2 outline-none focus-visible:ring-2 focus-ring"
                   >
                     <Avatar src={userInfo.avatar} name={userInfo.username} size={44} />
                     <div className="min-w-0 flex-1">
@@ -715,9 +757,9 @@ export default function AppLayout({
                         {userInfo.username}
                       </p>
                       <div className="mt-0.5 flex items-center gap-1.5">
-                        <span className="text-label-s bg-primary-container text-on-primary-container rounded px-1.5 py-0.5">
-                          Lv.{userInfo.level ?? '?'}{' '}
-                        </span>{' '}
+                        <Badge tone="primary" size="sm">
+                          Lv.{userInfo.level ?? '?'}
+                        </Badge>{' '}
                         {userInfo.derpi_username && (
                           <span
                             className="text-label-s text-success max-w-[100px] truncate"
@@ -738,13 +780,10 @@ export default function AppLayout({
                       handleMobileNavigation();
                     }}
                     data-ripple
-                    className="state-layer group flex w-full cursor-pointer items-center gap-3 rounded-md p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="state-layer group flex w-full cursor-pointer items-center gap-3 rounded-md p-2 text-left outline-none focus-visible:ring-2 focus-ring"
                   >
                     {' '}
-                    <span className="bg-surface-container-highest text-on-surface-variant flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
-                      {' '}
-                      <MdPerson size={24} />{' '}
-                    </span>{' '}
+                    <Avatar size={44} />{' '}
                     <span className="min-w-0">
                       {' '}
                       <span className="text-title-s text-on-surface block truncate ">
@@ -757,6 +796,13 @@ export default function AppLayout({
                   </button>
                 )}{' '}
               </div>{' '}
+              {/* Always drawn, signed in or out. It was briefly conditional on
+                  the grounds that a rule under a 未登录 prompt bounds nothing —
+                  but the division it marks is structural, not conditional: above
+                  it is who you are, below it is where you can go. Present in one
+                  state and absent in the other, it also became a line that
+                  appears the moment you log in, which is a change in the shell's
+                  shape reported as a change in your account. */}
               <div className="bg-outline-variant mx-5 my-3 h-px" />{' '}
               <SidebarNav
                 user={userInfo}
@@ -812,7 +858,14 @@ export default function AppLayout({
                         {' '}
                         <div className="flex w-full flex-col items-center gap-4 md:w-auto md:items-start">
                           {' '}
-                          <Logo className="h-8 w-auto opacity-60" />{' '}
+                          {/* `text-outline`, not a dimmed copy of the footer's
+                              own ink. `Logo` paints through a mask from
+                              `currentColor`, so it takes whatever text role it
+                              is given — and `outline` is the documented role for
+                              a *graphic* that should read quieter than the prose
+                              beside it (4.3:1 clears the 3:1 non-text bar). An
+                              opacity here was a number nothing else shared. */}
+                          <Logo className="h-8 w-auto text-outline" />{' '}
                           <nav aria-label="站内导航" className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             {' '}
                             <Link href="/about" className="transition-ui hover:text-on-surface hover:underline">
@@ -840,6 +893,28 @@ export default function AppLayout({
                 />{' '}
               </main>{' '}
               <RouteCrossFade pathname={backgroundPathname} enabled={crossFadeEnabled} />
+              {/* Where `PageBack` lands.
+                  The back affordance is chrome, not content. Rendered inside
+                  `[data-page-content]` it was cloned by the route snapshot and
+                  translated by the shared axis along with everything else — so
+                  going /search -> /messages, which is an X-axis slide, carried
+                  the button a whole window out and a whole window back to the
+                  same pixel it started on. Four screens have one at the same
+                  coordinate; it should simply stay there.
+                  A portal keeps the page as the owner of the handler and the
+                  label while the node lives out here, so no page had to change.
+                  `z-page-chrome` is load-bearing in both directions: above the
+                  cross-fade layer, because the clone no longer contains a button
+                  and the live one has to be visible over it; below the
+                  image-detail overlay and the Stage, because those bring their
+                  own and a background page's must not float on top of them.
+                  See the stacking-order block in globals.css. */}
+              <div
+                data-page-back-slot
+                /* No `aria-hidden` here, despite this being a positioning shim:
+                   what gets portalled into it is a real, focusable control. */
+                className="pointer-events-none absolute inset-0 z-page-chrome"
+              />
               <Suspense fallback={null}>
                 {' '}
                 <HeroStage />{' '}
@@ -875,7 +950,7 @@ export default function AppLayout({
             </>
           }
         >
-          <p className="text-on-surface-variant">确定要登出当前账号吗？</p>
+          <p className="text-body-m text-on-surface-variant">确定要登出当前账号吗？</p>
         </Modal>
       </div>
     </BackgroundLocationProvider>
