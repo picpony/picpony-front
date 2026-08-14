@@ -37,7 +37,7 @@ export function FeaturedBannerSkeleton() {
   );
 }
 
-export default function FeaturedBanner() {
+export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }) {
   const heroElementRef = useRef<HTMLDivElement>(null);
   /* The banner is the first thing on the page, so its skeleton is the one you
      cannot miss. Seeded from the last load, refreshed underneath — see
@@ -46,11 +46,30 @@ export default function FeaturedBanner() {
   const [featured, setFeatured] = useState<PonyImage | null>(snapshot?.value ?? null);
   const [loading, setLoading] = useState(!snapshot);
   const [error, setError] = useState(false);
-  const served = useRef(Boolean(snapshot && !snapshot.stale));
+  /* Whether a render has already been served. Once it has, the banner only
+     re-requests when the parent bumps `reloadKey` — which the home feed's
+     retry does, so clicking 重试 reloads the 近日推荐 banner alongside the
+     信息流. Served is flagged on delivery (not dispatch), the same reason as
+     `app/page.tsx`. */
+  const served = useRef(snapshot && !snapshot.stale ? 'snap' : '');
+  const lastReload = useRef(reloadKey);
+  /* True the moment there is something to put on screen, so a reload of an
+     already-loaded banner refreshes underneath without flashing its skeleton,
+     while a reload of an errored (blank) banner shows the placeholder again. */
+  const hasContent = useRef<boolean>(Boolean(snapshot?.value));
 
   useEffect(() => {
-    if (served.current) return;
+    /* An explicit reload is the difference from the other served paths: the
+       guard below normally drinks the snapshot result to keep a remount from
+       re-requesting, but a retry must break through it. */
+    const reloadRequested = lastReload.current !== reloadKey;
+    lastReload.current = reloadKey;
+    if (served.current && !reloadRequested) return;
     let isMounted = true;
+    if (reloadRequested && !hasContent.current) {
+      setLoading(true);
+      setError(false);
+    }
     // Flagged on delivery, not on dispatch — see `app/page.tsx` for why.
     const getApiKey = (): string | undefined => {
       try {
@@ -67,8 +86,9 @@ export default function FeaturedBanner() {
       .getFeatured(getApiKey())
       .then((data) => {
         if (isMounted) {
-          served.current = true;
+          served.current = 'snap';
           if (data && data.image) {
+            hasContent.current = true;
             let img = data.image;
             // 应用 CDN
             if (localStorage.getItem('trixie_use_cdn') === 'true') {
@@ -88,10 +108,10 @@ export default function FeaturedBanner() {
       })
       .catch(() => {
         if (isMounted) {
-          served.current = true;
+          served.current = 'snap';
           // A refresh that fails leaves the snapshot on screen rather than
           // replacing something correct with an error.
-          if (!snapshot) setError(true);
+          if (!hasContent.current) setError(true);
           setLoading(false);
         }
       });
@@ -99,7 +119,7 @@ export default function FeaturedBanner() {
     return () => {
       isMounted = false;
     };
-  }, [snapshot]);
+  }, [reloadKey, snapshot]);
 
   const fullUrl = featured?.representations?.full || featured?.view_url || '';
   const imgFormat = (

@@ -35,7 +35,10 @@ interface ForumSnapshot {
 const GALLERY_KEY = 'home:gallery';
 const FORUM_KEY = 'home:forum';
 
-function ImageList() {
+/* Notifies the caller when its 重试 is pressed. The home pane uses this to
+   reload the 近日推荐 banner in the same retry, so a failed load does not
+   come back with just the feed. */
+function ImageList({ onRetry }: { onRetry?: () => void }) {
   /* Seeded from whatever this tab was showing when it was last unmounted, so a
      trip to /search and back paints the same grid on the first frame instead of
      an empty page, a skeleton and a fresh request. A stale snapshot is still
@@ -116,7 +119,10 @@ function ImageList() {
     };
   }, [page, retryCount, snapshot]);
 
-  const handleRetry = useCallback(() => setRetryCount((c) => c + 1), []);
+  const handleRetry = useCallback(() => {
+    setRetryCount((c) => c + 1);
+    onRetry?.();
+  }, [onRetry]);
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1) {
       setIsLoading(true);
@@ -313,6 +319,10 @@ function HomeContent() {
      empty list and a spinner. Idle rather than immediate so it never competes
      with the gallery's own images for bandwidth on the initial load. */
   const [forumMounted, setForumMounted] = useState(tab === 'forum');
+  /* Bumped by the feed's retry so the 近日推荐 banner re-requests alongside
+     the 信息流 — see `FeaturedBanner`'s `reloadKey` prop. */
+  const [bannerReloadKey, setBannerReloadKey] = useState(0);
+  const handleBannerReload = useCallback(() => setBannerReloadKey((k) => k + 1), []);
   useEffect(() => {
     if (forumMounted) return;
     const w = window as typeof window & {
@@ -338,8 +348,8 @@ function HomeContent() {
               motion layer's `-leaving` / `-entering` flag, which is what lets
               both panes be on screen at once during the cross-fade. */}
           <div data-tab-pane="gallery" data-tab-pane-active={tab === 'gallery' ? '' : undefined}>
-            <FeaturedBanner />
-            <ImageList />
+            <FeaturedBanner reloadKey={bannerReloadKey} />
+            <ImageList onRetry={handleBannerReload} />
           </div>
           {/* `|| tab === 'forum'` so a deep link to /?tab=forum, or a tap that
               beats the idle callback, still produces the pane to fade into. */}
