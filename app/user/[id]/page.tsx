@@ -26,16 +26,21 @@ import {
 import UserBadge from '@/components/UserBadge';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
+import ProgressBar from '@/components/ProgressBar';
 import RoleBadge from '@/components/RoleBadge';
 import Pagination from '@/components/Pagination';
-import TabBar from '@/components/TabBar';
+import Tabs from '@/components/Tabs';
 import PageBack from '@/components/PageBack';
-import { useEscapeBack } from '@/lib/hooks';
+import { readToken, readUserInfo, useEscapeBack } from '@/lib/hooks';
 import Skeleton from '@/components/Skeleton';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import { buttonClasses } from '@/components/Button';
+import { ICON } from '@/lib/icons';
+import { formatDate, formatDateTime, formatLastOnline } from '@/lib/format';
+import { PICPONY_API_BASE } from '@/lib/constants';
+import { getAssetUrl } from '@/lib/utils';
 
 type ProfileTab = 'uploads' | 'faves' | 'posts' | 'comments';
 
@@ -82,28 +87,6 @@ interface UploadItem {
 
 const PER_PAGE = 12;
 
-function formatLastOnline(lastOnline: string): string {
-  const lastTime = new Date(lastOnline.replace(/-/g, '/')).getTime();
-  const now = Date.now();
-  const diffMs = now - lastTime;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return '在线';
-  if (diffMins < 5) return '刚刚';
-  if (diffMins < 60) return `${diffMins}分钟前`;
-  if (diffHours < 24) {
-    const remainMins = diffMins % 60;
-    return `${diffHours}小时${remainMins}分前`;
-  }
-  if (diffDays <= 5) {
-    const remainHours = diffHours % 24;
-    return `${diffDays}天${remainHours}小时前`;
-  }
-  if (diffDays <= 30) return `${diffDays}天前`;
-  return lastOnline.split(' ')[0];
-}
 
 export default function UserProfilePage() {
   const params = useParams();
@@ -113,17 +96,12 @@ export default function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const stored = localStorage.getItem('user_info');
-      if (stored) {
-        const user = JSON.parse(stored);
-        return user.id ?? null;
-      }
-    } catch {}
-    return null;
-  });
+  /* Bumped by the error state's 重试, which re-runs the profile fetch. Same
+     shape the forum thread uses. */
+  const [retryCount, setRetryCount] = useState(0);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(
+    () => (readUserInfo()?.id as number) ?? null,
+  );
 
   const [tabValue, setTabValue] = useState<ProfileTab>('uploads');
 
@@ -149,13 +127,8 @@ export default function UserProfilePage() {
   const [totalUploadPages, setTotalUploadPages] = useState(1);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('user_info');
-      if (stored) {
-        const user = JSON.parse(stored);
-        queueMicrotask(() => setCurrentUserId(user.id));
-      }
-    } catch {}
+    const user = readUserInfo();
+    if (user) queueMicrotask(() => setCurrentUserId(user.id as number));
   }, []);
 
   useEffect(() => {
@@ -183,7 +156,7 @@ export default function UserProfilePage() {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, retryCount]);
 
   useEffect(() => {
     if (!profile) return;
@@ -280,11 +253,15 @@ export default function UserProfilePage() {
 
     const fetchUploads = async () => {
       try {
-        const storedUser = localStorage.getItem('user_info');
-        const token = storedUser ? JSON.parse(storedUser).token : null;
+        const token = readToken();
 
+        /* `PICPONY_API_BASE`, not a hard-coded origin. This was the only PicPony
+           endpoint reached by a literal `https://picpony.top/api.php`, which
+           bypasses the `/api.php` route handler the rest of the app goes through —
+           and that handler is what rewrites the backend's `Secure` session cookie
+           so it survives plain HTTP. */
         const res = await fetch(
-          `https://picpony.top/api.php?action=get_user_uploads&user_id=${id}&page=${uploadsPage}&per_page=${PER_PAGE}${token ? `&token=${encodeURIComponent(token)}` : ''}`,
+          `${PICPONY_API_BASE}?action=get_user_uploads&user_id=${id}&page=${uploadsPage}&per_page=${PER_PAGE}${token ? `&token=${encodeURIComponent(token)}` : ''}`,
         );
         const data = await res.json();
         if (isMounted) {
@@ -315,8 +292,8 @@ export default function UserProfilePage() {
   const getCommentTypeLabel = (
     type: 'post' | 'image',
   ): { label: string; icon: React.ReactNode } => {
-    if (type === 'post') return { label: '论坛帖子', icon: <MdForum size={16} /> };
-    return { label: '图片', icon: <MdImage size={16} /> };
+    if (type === 'post') return { label: '论坛帖子', icon: <MdForum size={ICON.dense} /> };
+    return { label: '图片', icon: <MdImage size={ICON.dense} /> };
   };
 
   const isOwnProfile = currentUserId !== null && profile && currentUserId === profile.id;
@@ -333,8 +310,8 @@ export default function UserProfilePage() {
     return (
       <>
       <PageBack onClick={handleBack} title="返回 (Esc)" />
-      <div className="bg-surface">
-        <Skeleton className="h-48 sm:h-64 md:h-80 w-full rounded-2xl sm:rounded-3xl mt-4 sm:mt-6 mx-auto max-w-[96%] sm:max-w-[98%]" />
+      <div>
+        <Skeleton className="h-48 sm:h-64 md:h-80 w-full rounded-2xl sm:rounded-3xl mt-4 sm:mt-6 mx-auto max-w-full px-2 sm:max-w-[98%] sm:px-0" />
         <div className="max-w-5xl mx-auto relative">
           <div className="pb-8 relative pt-12 sm:pt-16">
             <Skeleton className="absolute -top-12 sm:-top-16 left-0 w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface" />
@@ -359,7 +336,16 @@ export default function UserProfilePage() {
     return (
       <>
         <PageBack onClick={handleBack} title="返回 (Esc)" />
-        <ErrorRetry title="加载失败" message={error || '用户可能不存在'} />
+        {/* `onRetry`, because this was the one `ErrorRetry` in the app with an
+            empty action slot — a failure that offered no way forward at all. */}
+        <ErrorRetry
+          title="加载失败"
+          message={error || '用户可能不存在'}
+          onRetry={() => {
+            setError(null);
+            setRetryCount((c) => c + 1);
+          }}
+        />
       </>
     );
   }
@@ -389,37 +375,41 @@ export default function UserProfilePage() {
   return (
     <>
       <PageBack onClick={handleBack} title="返回 (Esc)" />
-      <div className="animate-fade-in bg-surface">
+      {/* No entrance animation. The route transition already fades this page in
+          (`playRouteCrossFade`, 400ms `decelerate`); an `animate-fade-in` here was a
+          second 400ms fade nested inside the first, i.e. the arrival happening twice
+          on two clocks. Only two routes in the app did this. */}
+      <div>
       <div className="h-48 sm:h-64 md:h-80 relative bg-surface-container-high rounded-2xl sm:rounded-3xl overflow-hidden mt-4 sm:mt-6 mx-auto max-w-full sm:max-w-[98%] px-2 sm:px-0">
         {profile.banner ? (
           <FadeInImage
-            src={`https://picpony.top/${profile.banner}`}
-            alt={`${profile.username}'s banner`}
+            src={getAssetUrl(profile.banner)}
+            alt={`${profile.username} 的个人横幅`}
             fill
             className="object-cover"
           />
         ) : (
           <div className="w-full h-full bg-surface-container-highest flex items-center justify-center">
-            {' '}
-            <MdPerson size={64} className="text-outline" />{' '}
+            
+            <MdPerson size={ICON.display} className="text-outline" />
           </div>
-        )}{' '}
-        {level !== null && (
-          <div className="bg-media-plate text-warning-fill text-label-m-emphasized absolute bottom-3 left-0 rounded-r-lg px-2 py-1 backdrop-blur-sm">
-            {' '}
-            Lv.{level}{' '}
-          </div>
-        )}{' '}
-        {profile.experience !== undefined && (
-          <div className="bg-media-outline absolute inset-x-0 bottom-0 h-1">
-            {' '}
-            <div
-              className="h-full bg-warning-fill transition-[width] duration-300 ease-[var(--ease-standard)]"
-              style={{ width: `${xpProgress * 100}%` }}
-            />{' '}
-          </div>
-        )}{' '}
-      </div>{' '}
+        )}
+        {/* **The level is not on the banner, and that is the third answer to it.**
+            It was a `Badge` at `bottom-3 left-0` beside a full-width bar at
+            `inset-x-4 bottom-2` — two objects that never lined up (343px against
+            359px), with the bar clipped by the banner's `overflow-hidden` and both
+            sitting exactly where the avatar hangs off the corner. Moving them into
+            one bottom-right flex row fixed the alignment and the collision, and left
+            the real problem: a 4dp meter over a photograph has no ground. `on-media`
+            ink needs a plate, the track cannot take `secondary-container` because
+            nothing over a picture can take a surface role, and the indicator sits
+            straight on pixels the app does not choose — so its contrast was whatever
+            the user's banner happened to be.
+
+            Level is identity metadata, so it lives in the identity column with the
+            name, the role and the badges, where the surface roles apply and the meter
+            can carry its own value. The banner is a photograph again. */}
+      </div>
       <div className="max-w-5xl mx-auto relative">
         {' '}
         <div className="pb-8 relative pt-12 sm:pt-16">
@@ -433,8 +423,8 @@ export default function UserProfilePage() {
             <Avatar
               src={profile.avatar}
               name={profile.username}
-              size="w-24 h-24 sm:w-32 sm:h-32"
-              className="border-4 border-surface shadow-e3"
+              size="hero"
+              className="border-4 border-surface"
             />
           </div>
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 mt-2 sm:mt-4">
@@ -450,11 +440,37 @@ export default function UserProfilePage() {
                     owns the silhouette for all three now. */}
                 <RoleBadge role={profile.role} showUser size="md" />
                 {profile.has_api_key && profile.derpi_username && (
-                  <Badge tone="success" size="md" icon={<MdVerified size={12} />}>
+                  <Badge tone="success" size="md" icon={<MdVerified />}>
                     已核验
                   </Badge>
                 )}
               </div>
+              {/* The level, as a labelled meter rather than a chip and a stub of
+                  track. This is the shape /tasks already gives the same value — a
+                  label row over a determinate bar — so the two screens report
+                  experience the same way instead of each inventing a layout.
+                  It carries the number, which the banner version could not: 68/100
+                  and 70/100 are the same 64px of pink otherwise.
+                  Capped at 320px because a meter as wide as the column reads as a
+                  divider under the name, which is what the full-width banner bar
+                  read as. */}
+              {level !== null && (
+                <div className="mt-3 max-w-xs">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-label-l text-on-surface">Lv.{level}</span>
+                    {profile.experience !== undefined && (
+                      <span className="text-label-m tabular-nums text-on-surface-variant">
+                        经验：{xpInLevel} / 100
+                      </span>
+                    )}
+                  </div>
+                  <ProgressBar
+                    value={xpProgress * 100}
+                    label={`等级 ${level} 经验进度`}
+                    className="mt-1.5"
+                  />
+                </div>
+              )}
               {badges.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {badges.map((b) => (
@@ -465,28 +481,28 @@ export default function UserProfilePage() {
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-body-m text-on-surface-variant mt-4">
                 {profile.gender && profile.gender !== '保密' && (
                   <span className="flex items-center gap-1.5">
-                    <MdPerson size={18} />
+                    <MdPerson size={ICON.dense} />
                     {profile.gender}
                   </span>
                 )}
                 {profile.birthday && (
                   <span className="flex items-center gap-1.5">
-                    <MdCake size={18} />
+                    <MdCake size={ICON.dense} />
                     {profile.birthday}
                   </span>
                 )}
                 <span className="flex items-center gap-1.5">
-                  <MdAccessTime size={18} />
-                  注册于 {new Date(profile.created_at).toLocaleDateString('zh-CN')}{' '}
-                </span>{' '}
+                  <MdAccessTime size={ICON.dense} />
+                  注册于 {formatDate(profile.created_at)}
+                </span>
                 {profile.last_online && (
                   <span className="flex items-center gap-1.5 text-on-surface-variant">
-                    {' '}
-                    <MdAccessTime size={18} /> 上次在线：
-                    {formatLastOnline(profile.last_online)}{' '}
+                    
+                    <MdAccessTime size={ICON.dense} /> 上次在线：
+                    {formatLastOnline(profile.last_online)}
                   </span>
-                )}{' '}
-              </div>{' '}
+                )}
+              </div>
               <div className="mt-4">
                 {' '}
                 {profile.bio ? (
@@ -497,19 +513,19 @@ export default function UserProfilePage() {
                 ) : (
                   <p className="text-on-surface-variant italic text-body-m">该用户很懒，什么都没有留下。</p>
                 )}{' '}
-              </div>{' '}
-            </div>{' '}
+              </div>
+            </div>
             <div className="flex items-center gap-2 shrink-0 mt-2 sm:mt-0">
-              {' '}
+              
               {!isOwnProfile && currentUserId !== null && (
                 <Link
                   href={`/messages?to=${profile.id}`}
                   className={buttonClasses({ variant: 'filled' })}
                 >
-                  <MdMessage size={16} aria-hidden="true" /> 发送私信
+                  <MdMessage size={ICON.dense} aria-hidden="true" /> 发送私信
                 </Link>
-              )}{' '}
-            </div>{' '}
+              )}
+            </div>
           </div>{' '}
           {profile.derpi_username ? (
             <div className="mb-8">
@@ -527,7 +543,7 @@ export default function UserProfilePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="state-layer transition-ui block rounded-md border border-outline-variant bg-surface-container-low p-4 outline-none focus-visible:ring-2 focus-ring"
-                title="在 Derpibooru 查看个人主页"
+                aria-label="在 Derpibooru 查看个人主页"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Image
@@ -554,7 +570,7 @@ export default function UserProfilePage() {
                         : undefined
                     }
                     name={profile.derpi_username}
-                    size="w-10 h-10"
+                    size={40}
                     className="shrink-0"
                   />
                   <div className="flex-1 min-w-0">
@@ -567,7 +583,7 @@ export default function UserProfilePage() {
                         : '请在设置中绑定 API Key 以核验身份'}
                     </div>
                   </div>
-                  <MdOpenInNew size={18} className="text-outline shrink-0" />
+                  <MdOpenInNew size={ICON.dense} className="text-outline shrink-0" />
                 </div>
               </a>
             </div>
@@ -580,11 +596,11 @@ export default function UserProfilePage() {
                 rel="noopener noreferrer"
                 className={buttonClasses({
                   variant: 'text',
-                  size: 'sm',
+                  size: 'xs',
                   className: 'text-primary',
                 })}
               >
-                <MdSearch size={16} />
+                <MdSearch size={ICON.dense} />
                 搜索 TA 在 Derpibooru 的所有作品
               </a>
             </div>
@@ -593,7 +609,7 @@ export default function UserProfilePage() {
               page inside any tab should land on the first new row, not replay
               the banner and the whole profile header. */}
           <div data-pagination-anchor>
-            <TabBar<ProfileTab>
+            <Tabs<ProfileTab>
               tabs={navTabs}
               value={tabValue}
               onChange={setTabValue}
@@ -639,7 +655,7 @@ export default function UserProfilePage() {
                             item.representations?.thumb_small ||
                             item.view_url
                           }
-                          alt={item.name || `Upload #${item.id}`}
+                          alt={item.name || `图片 #${item.id}`}
                           fill
                           quality={82}
                           className="object-cover"
@@ -668,7 +684,7 @@ export default function UserProfilePage() {
               ) : (
                 <EmptyState
                   size="pane"
-                  icon={<MdCloudUpload size={48} />}
+                  icon={<MdCloudUpload size={ICON.display} />}
                   title="暂无上传记录"
                   description="该用户还没有上传过任何作品"
                 />
@@ -698,7 +714,7 @@ export default function UserProfilePage() {
                             img.representations.thumb ||
                             img.representations.thumb_small
                           }
-                          alt={img.name || `Image #${img.id}`}
+                          alt={img.name || `图片 #${img.id}`}
                           fill
                           quality={82}
                           className="object-cover"
@@ -722,7 +738,7 @@ export default function UserProfilePage() {
               ) : (
                 <EmptyState
                   size="pane"
-                  icon={<MdFavorite size={48} />}
+                  icon={<MdFavorite size={ICON.display} />}
                   title="暂无收藏"
                   description="该用户还没有添加任何收藏"
                 />
@@ -740,9 +756,9 @@ export default function UserProfilePage() {
                    prevent. */
                 <div className="space-y-3">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <Card key={i} variant="filled">
+                    <Card key={i} variant="transparent" className="rounded-md bg-surface-container-low p-4">
                       <div className="flex items-start gap-3">
-                        <Skeleton className="h-16 w-16 shrink-0 rounded-md sm:h-20 sm:w-20" delay={i * 80} />
+                        <Skeleton className="size-14 shrink-0 rounded-sm" delay={i * 80} />
                         <div className="min-w-0 flex-1">
                           <Skeleton className="mb-2 h-5 w-3/5" delay={i * 80 + 40} />
                           <Skeleton className="h-3.5 w-2/5" delay={i * 80 + 80} />
@@ -760,45 +776,44 @@ export default function UserProfilePage() {
                       <Link
                         key={post.id}
                         href={`/forum/${post.id}`}
+                        /* `Card as="a" interactive`, not the recipe written out.
+                           This exact string appeared twice in this file — once here and
+                           once on the comments tab — because `Card` could render only a
+                           `div` or a `button`, so a card-shaped link had no way in. It
+                           has an `'a'` now. */
                         className="state-layer block rounded-md bg-surface-container-low p-4 transition-ui"
                       >
                         {' '}
                         <div className="flex items-start gap-3">
-                          {' '}
+                          
                           {post.cover_image ? (
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-surface-container-highest shrink-0">
+                            <div className="size-14 rounded-sm overflow-hidden bg-surface-container-highest shrink-0">
                               {' '}
                               <FadeInImage
-                                src={`https://picpony.top/${post.cover_image}`}
+                                src={getAssetUrl(post.cover_image)}
                                 alt=""
                                 fill
                                 className="object-cover"
-                              />{' '}
+                              />
                             </div>
-                          ) : null}{' '}
+                          ) : null}
                           <div className="flex-1 min-w-0">
-                            {' '}
+                            
                             <h3 className="text-title-m-emphasized text-on-surface mb-1.5 line-clamp-2">
                               {' '}
                               {post.title}{' '}
-                            </h3>{' '}
+                            </h3>
                             <div className="flex items-center gap-4 text-label-m text-on-surface-variant">
-                              {' '}
+                              
                               <span>
-                                {new Date(post.created_at).toLocaleString('zh-CN', {
-                                  year: 'numeric',
-                                  month: '2-digit',
-                                  day: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
+                                {formatDateTime(post.created_at)}
                               </span>
                               <span className="flex items-center gap-1">
-                                <MdChatBubbleOutline size={14} />
+                                <MdChatBubbleOutline size={ICON.dense} />
                                 {post.reply_count}
                               </span>
                               <span className="flex items-center gap-1">
-                                <MdFavorite size={14} />
+                                <MdFavorite size={ICON.dense} />
                                 {post.like_count}
                               </span>
                             </div>
@@ -822,7 +837,7 @@ export default function UserProfilePage() {
               ) : (
                 <EmptyState
                   size="pane"
-                  icon={<MdArticle size={48} />}
+                  icon={<MdArticle size={ICON.display} />}
                   title="暂无帖子"
                   description="该用户还没有发表过任何帖子"
                 />
@@ -842,7 +857,7 @@ export default function UserProfilePage() {
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Card key={i} variant="filled">
                       <div className="flex items-start gap-3">
-                        <Skeleton className="h-16 w-16 shrink-0 rounded-md sm:h-20 sm:w-20" delay={i * 80} />
+                        <Skeleton className="size-14 shrink-0 rounded-sm" delay={i * 80} />
                         <div className="min-w-0 flex-1">
                           <Skeleton className="mb-2 h-5 w-3/5" delay={i * 80 + 40} />
                           <Skeleton className="h-3.5 w-2/5" delay={i * 80 + 80} />
@@ -866,35 +881,29 @@ export default function UserProfilePage() {
                         >
                           {' '}
                           <div className="flex items-start gap-3">
-                            {' '}
+                            
                             {comment.cover_image ? (
-                              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-surface-container-highest shrink-0">
+                              <div className="size-14 rounded-sm overflow-hidden bg-surface-container-highest shrink-0">
                                 {' '}
                                 <FadeInImage
-                                  src={`https://picpony.top/${comment.cover_image}`}
+                                  src={getAssetUrl(comment.cover_image)}
                                   alt=""
                                   fill
                                   className="object-cover"
-                                />{' '}
+                                />
                               </div>
-                            ) : null}{' '}
+                            ) : null}
                             <div className="flex-1 min-w-0">
-                              {' '}
+                              
                               <div className="flex items-center gap-2 mb-1.5">
-                                {' '}
+                                
                                 <Badge tone="primary">
                                   {' '}
                                   {typeInfo.icon} {typeInfo.label}{' '}
-                                </Badge>{' '}
+                                </Badge>
                                 <span className="text-body-s text-on-surface-variant">
                                   {' '}
-                                  {new Date(comment.created_at).toLocaleString('zh-CN', {
-                                    year: 'numeric',
-                                    month: '2-digit',
-                                    day: '2-digit',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
+                                  {formatDateTime(comment.created_at)}
                                 </span>
                               </div>
                               <div className="text-body-m text-on-surface line-clamp-3">
@@ -921,7 +930,7 @@ export default function UserProfilePage() {
               ) : (
                 <EmptyState
                   size="pane"
-                  icon={<MdChatBubbleOutline size={48} />}
+                  icon={<MdChatBubbleOutline size={ICON.display} />}
                   title="暂无评论"
                   description="该用户还没有发表过任何评论"
                 />

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
-import { encodeTrack } from '@/lib/utils';
-import { gsap, prefersReducedMotion } from '@/lib/motion';
+import { encodeTrack, clamp, clamp01 } from '@/lib/utils';
+import { gsap, prefersReducedMotion, spring } from '@/lib/motion';
 import Spinner from './Spinner';
 import Skeleton from './Skeleton';
 
@@ -33,6 +33,9 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   const puzzleHeight = 155;
   const pieceSize = 50;
   const maxSliderX = puzzleWidth - pieceSize;
+/** `long1` on M3's scale — the shake is a pre-sampled keyframe track, so this is
+ *  its whole clock and the curve is `none`. */
+const SHAKE_SECONDS = 0.45;
 
   const [bgImage, setBgImage] = useState('');
   const [pieceImage, setPieceImage] = useState('');
@@ -119,8 +122,10 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     const proxy = { x: from };
     snapTweenRef.current = gsap.to(proxy, {
       x: 0,
-      duration: 0.5,
-      ease: 'expo.out',
+      /* `fast-spatial`, the spring `Switch.kt` gives a handle. It ran `expo.out` at
+         0.5s — a GSAP built-in that is not one of the app's eight ease names, on a
+         hand-typed copy of `DURATION.emphasized`. */
+      ...spring('fastSpatial'),
       onUpdate: () => {
         sliderXRef.current = proxy.x;
         setSliderX(proxy.x);
@@ -146,8 +151,12 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     if (!el) return;
     const tween = gsap.to(el, {
       keyframes: { x: [0, -9, 8, -5, 3, 0] },
-      duration: 0.45,
-      ease: 'power2.out',
+      duration: SHAKE_SECONDS,
+      /* `none`, because the amplitudes are already in the keyframe list: laying a
+         curve over an explicit track re-shapes the whole shake, so the numbers above
+         were not the ones that played. `power2.out` was also outside the app's ease
+         vocabulary. This is the pre-sampled-track case AGENTS.md allows `linear` for. */
+      ease: 'none',
     });
     return () => {
       tween.kill();
@@ -188,7 +197,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
         setErrorMsg('获取验证码失败');
       }
     } catch {
-      setErrorMsg('网络错误，请重试');
+      setErrorMsg('网络错误，请稍后再试');
     }
     setLoading(false);
     loadingRef.current = false;
@@ -223,7 +232,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       const buttonRect = button?.getBoundingClientRect();
       grabRatioRef.current =
         buttonRect && buttonRect.width > 0
-          ? Math.max(0, Math.min(1, (clientX - buttonRect.left) / buttonRect.width))
+          ? clamp01((clientX - buttonRect.left) / buttonRect.width)
           : 0.5;
       startXRef.current = clientX;
       startYRef.current = clientY;
@@ -247,7 +256,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
             getClientX(moveEvent) - contentLeft - buttonWidth * grabRatioRef.current;
           x = (visualLeft / visualMaxX) * maxSliderX;
         }
-        x = Math.max(0, Math.min(maxSliderX, x));
+        x = clamp(x, 0, maxSliderX);
 
         sliderXRef.current = x;
         setSliderX(x);
@@ -332,7 +341,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
         } catch {
           snapBack();
           trackRef.current = [];
-          setErrorMsg('网络错误，请重试');
+          setErrorMsg('网络错误，请稍后再试');
           setTimeout(() => {
             void fetchCaptchaRef.current();
           }, 500);
@@ -377,7 +386,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       <div className="flex justify-center items-center w-full">
         <span className="text-title-s text-on-surface">请完成安全验证</span>
       </div>
-      <div ref={containerRef} className="relative w-full max-w-[310px]">
+      <div ref={containerRef} className="relative w-full max-w-78">
         {loading && !bgImage && (
           /* A `Skeleton` in the puzzle's own box, not a `Spinner` inside it. The
              box is already reserved at the exact aspect ratio, so there is a
@@ -403,7 +412,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
               <img
                 src={pieceImage}
                 alt="滑动拼图"
-                className="absolute drop-shadow-[0_0_5px_color-mix(in_oklab,var(--md-sys-color-scrim)_50%,transparent)] pointer-events-none"
+                className="absolute pointer-events-none drop-shadow-[var(--md-sys-elevation-drop-1)]"
                 style={{
                   top: `${(pieceY * layout.imageWidth) / puzzleWidth}px`,
                   left: `${(sliderX * layout.imageMaxX) / maxSliderX}px`,
@@ -415,7 +424,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
             )}
             {verifying && (
               <div className="bg-media-plate animate-fade-in absolute inset-0 z-20 flex items-center justify-center">
-                <Spinner size="lg" white />
+                <Spinner size="lg" tone="on-primary" />
               </div>
             )}
             {errorMsg && !verifying && (
@@ -446,7 +455,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       {bgImage && (
         <div
           ref={trackRefElement}
-          className="relative w-full max-w-[310px] h-10 bg-surface-container-high rounded-full border border-outline-variant mt-2"
+          className="relative w-full max-w-78 h-10 bg-surface-container-high rounded-full border border-outline-variant mt-2"
           style={{ touchAction: 'none' }}
         >
           <div
@@ -458,14 +467,24 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
 
           <div
             ref={sliderBtnRef}
-            /* `duration-120` + `standard`, i.e. the motion table's press row.
+            /* `duration-100` + `standard`, i.e. the motion table's press row.
                Grabbing the handle is a press, and the 200ms this carried — with
                no curve at all, so it fell through to the default — left the
                fill and the scale still catching up after the handle had already
-               moved under the finger. */
-            className={`bg-surface-raised text-title-m absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline shadow-e2 transition-[color,background-color,border-color,scale,box-shadow] duration-120 ease-[var(--ease-standard)] select-none ${
+               moved under the finger. (It was 120ms for a pass; 120 is not a step
+               on the M3 duration scale, 100 is.)
+
+               No scale on grab, and no elevation at all. AGENTS.md lists a slider
+               handle among the things that are level 0, and `components/Slider.tsx`
+               — the primitive — gives its handle no shadow either, so a `shadow-e1`
+               here was a second answer for one object. The state layer is what
+               reports the press. Growing the handle 10% *and* lifting it two
+               elevation steps was three simultaneous answers to one gesture — and
+               in M3 Expressive a pressed slider handle narrows rather than grows,
+               so the direction was wrong as well as the amount. */
+            className={`bg-surface-raised text-title-m state-layer absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline transition-[color,background-color,border-color] duration-100 ease-[var(--ease-standard)] select-none ${
               isDragging
-                ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill scale-110 shadow-e3'
+                ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill'
                 : 'cursor-grab text-on-surface-variant'
             } ${verifying ? 'pointer-events-none disabled-content' : ''}`}
             style={{

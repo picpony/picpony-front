@@ -2,8 +2,10 @@
 
 import { useRef } from 'react';
 import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from 'react-icons/md';
+import Button from './Button';
 import { scrollAppToTop, scrollAppToElement } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { ICON } from '@/lib/icons';
 
 interface PaginationProps {
   currentPage: number;
@@ -74,8 +76,21 @@ export default function Pagination({
   const pages = Array.from({ length: count }, (_, i) => start + i);
 
   const navBtn = cn(
-    // 44px below `sm` for the same reason as the number buttons above.
-    'inline-flex h-11 min-w-11 sm:h-10 sm:min-w-10 cursor-pointer items-center justify-center rounded-full px-2',
+    /* **40dp, with `touch-size` for the floor.** The 40 is the button step; the floor
+       is `--touch-floor`, which is 48 under a coarse pointer and 24 under a fine one.
+       `touch-size` rather than `touch-target` because `data-ripple` sets
+       `overflow: hidden` to clip the wave and would clip a pseudo-element out of
+       hit-testing with it, so this control's floor has to be a real box.
+
+       It was 56 below `sm` and 40 above, keyed on the viewport — which had the right
+       idea and the wrong axis. A viewport width is not a pointer: a 1024px tablet is a
+       finger and a 600px desktop window is not, so the phone branch was reaching a
+       mouse and the desktop branch was reaching a thumb. (The four classes that
+       expressed it are described rather than named: the extractor lifts a class out of
+       a comment, and two of them have no other call site.)
+       The height itself has been 44 (Apple's figure), then 48, then 56, all three
+       chosen to *be* the floor rather than to be a step with a floor under it. */
+    'inline-flex h-10 min-w-10 touch-size cursor-pointer items-center justify-center rounded-full px-2',
     'text-on-surface-variant state-layer outline-none',
     'transition-ui',
     'focus-visible:ring-2 focus-ring',
@@ -109,7 +124,7 @@ export default function Pagination({
           data-ripple
           className={cn(navBtn, 'max-sm:hidden')}
         >
-          <MdFirstPage size={20} />
+          <MdFirstPage size={ICON.control} />
         </button>
       )}
 
@@ -120,7 +135,7 @@ export default function Pagination({
         data-ripple
         className={navBtn}
       >
-        <MdChevronLeft size={20} />
+        <MdChevronLeft size={ICON.control} />
         <span className="max-sm:hidden text-label-l pr-1">上一页</span>
       </button>
 
@@ -136,21 +151,24 @@ export default function Pagination({
               aria-current={active ? 'page' : undefined}
               data-ripple
               className={cn(
-                /* `h-11 w-11` below `sm`: this is the most-tapped chrome in the
-                   app and 40px is under the 44px minimum. `touch-target` cannot
-                   help here — `data-ripple` sets `overflow: hidden`, which clips
-                   the utility's pseudo-element out of hit-testing — so the box
-                   itself has to grow. It returns to 40px from `sm` up, where a
-                   pointer is doing the aiming. */
-                'inline-flex h-11 w-11 sm:h-10 sm:w-10 cursor-pointer items-center justify-center rounded-full outline-none',
+                /* 40dp with `touch-size`, for the reason spelled out on `navBtn`
+                   above: this is the most-tapped chrome in the app, `data-ripple`
+                   rules out `touch-target`'s pseudo-element, and the floor belongs on
+                   the pointer rather than on the viewport width. */
+                'inline-flex h-10 w-10 touch-size cursor-pointer items-center justify-center rounded-full outline-none',
                 'transition-ui',
                 'focus-visible:ring-2 focus-ring',
                 'disabled:pointer-events-none disabled:disabled-content',
                 /* One type role per branch — the active page used to add a bare
-                   `font-medium` over `text-label-l`, which is already weight 500,
-                   so the current page was distinguished by colour alone. */
+                   medium-weight utility over `text-label-l`, which is already
+                   500, so the current page was distinguished by colour alone.
+                   `state-layer` on both branches: the current page is still a
+                   button, and it was the one control in this row with no hover
+                   feedback. No elevation either — M3 gives a pagination item
+                   level 0, and this was the app's only shadow on something that
+                   does not float. */
                 active
-                  ? 'bg-primary text-on-primary text-label-l-emphasized shadow-e1'
+                  ? 'bg-primary text-on-primary text-label-l-emphasized state-layer'
                   : 'text-label-l text-on-surface-variant state-layer',
                 // Beyond five numbers the row overflows a 390px viewport, so
                 // the outer two collapse instead of wrapping to a second line.
@@ -171,7 +189,7 @@ export default function Pagination({
         className={navBtn}
       >
         <span className="max-sm:hidden text-label-l pl-1">下一页</span>
-        <MdChevronRight size={20} />
+        <MdChevronRight size={ICON.control} />
       </button>
 
       {known && (
@@ -182,7 +200,7 @@ export default function Pagination({
           data-ripple
           className={cn(navBtn, 'max-sm:hidden')}
         >
-          <MdLastPage size={20} />
+          <MdLastPage size={ICON.control} />
         </button>
       )}
     </nav>
@@ -195,40 +213,53 @@ interface LoadMoreButtonProps {
   disabled?: boolean;
 }
 
+/**
+ * The "load more" affordance under a cursor-paged list.
+ *
+ * `Button`, not a hand-rolled one. This was the last button in the app still
+ * spelling out its own container, its own state layer, its own focus ring and
+ * its own geometry — `rounded-full px-8 py-3` on the secondary-container pair,
+ * which is `variant="tonal"` at a size that was on no scale (about 44dp tall
+ * with 32dp of padding). It is `lg` now, the M3 medium step, which is the size
+ * this button's job actually asks for: it is the only control on its row and the
+ * one thing you are meant to press.
+ *
+ * The three bouncing dots stay. They are not a `Spinner` and should not be one —
+ * `loading` on `Button` swaps in the circular indicator, which is right for a
+ * submit that blocks and wrong for appending to a list you are still reading.
+ * They ride in the `icon` slot so the label keeps its place instead of being
+ * replaced.
+ */
 export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonProps) {
   return (
     <div className="mt-12 flex justify-center">
-      <button
+      <Button
+        variant="tonal"
+        size="lg"
         onClick={onClick}
         disabled={isLoading || disabled}
-        data-ripple
-        className={cn(
-          'group flex cursor-pointer items-center gap-2 rounded-full px-8 py-3',
-          'bg-secondary-container text-on-secondary-container text-label-l',
-          'state-layer outline-none transition-ui',
-          'focus-visible:ring-2 focus-ring',
-          'disabled:cursor-not-allowed disabled:disabled-content',
-          '',
-        )}
+        className="group"
+        icon={
+          isLoading ? (
+            <span className="flex items-center gap-1">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="bg-primary animate-dot-bounce h-1.5 w-1.5 rounded-full"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </span>
+          ) : (
+            <MdRefresh
+              size={ICON.control}
+              className="transition-transform duration-200 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
+            />
+          )
+        }
       >
-        {isLoading ? (
-          <div className="flex items-center gap-1">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="bg-primary h-1.5 w-1.5 rounded-full animate-[dot-bounce_1s_var(--ease-loop)_infinite]"
-                style={{ animationDelay: `${i * 0.15}s` }}
-              />
-            ))}
-          </div>
-        ) : (
-          <MdRefresh
-            size={20}
-            className="transition-transform duration-300 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
-          />
-        )}
-        <span>{isLoading ? '正在加载' : '加载更多'}</span>
-      </button>
+        {isLoading ? '正在加载' : '加载更多'}
+      </Button>
     </div>
   );
 }

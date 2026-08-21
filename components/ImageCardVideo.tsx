@@ -67,7 +67,7 @@ export default function ImageCardVideo({ src }: ImageCardVideoProps) {
         onPointerLeave={coolVideo}
         onFocus={warmVideo}
         onBlur={coolVideo}
-        className={`absolute left-0 top-0 h-full w-full object-cover transition-opacity duration-200 ease-[var(--ease-standard)] motion-reduce:transition-none ${
+        className={`absolute left-0 top-0 h-full w-full object-cover transition-opacity duration-200 ease-[var(--ease-standard)] ${
           posterReady ? 'opacity-100' : 'opacity-0'
         }`}
       />

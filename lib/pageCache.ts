@@ -40,12 +40,6 @@ export function writeSnapshot<T>(key: string, value: T) {
   store.set(key, { value, at: performance.now() });
 }
 
-/** Drops a snapshot so the next mount loads from scratch — after a post, a
- *  deletion, anything that makes what we kept a lie. */
-export function dropSnapshot(key: string) {
-  store.delete(key);
-}
-
 /**
  * Empties the store.
  *

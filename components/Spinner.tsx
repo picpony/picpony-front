@@ -6,14 +6,21 @@ interface SpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   label?: string;
   className?: string;
-  /** For buttons on filled/brand backgrounds — inherits `on-primary`. */
-  white?: boolean;
   /**
-   * Take the surrounding `color` instead of a token. For surfaces that are
-   * neither the page nor a brand fill — the lightbox sits on `media-stage` and
-   * needs `on-media`, which is not one of the two the flag above can pick.
+   * Which ink the arc takes.
+   *
+   * `primary` on a surface, `on-primary` inside a filled or brand-coloured control,
+   * and `inherit` where the surrounding `color` is the only correct answer — the
+   * lightbox sits on `media-stage` and needs `on-media`, which is neither of the
+   * other two.
+   *
+   * One axis, not two booleans. It was `white?: boolean` plus
+   * `inheritColor?: boolean` — a raw colour name as a prop in a system that forbids
+   * raw colours, and an illegal fourth state (`white` *and* `inheritColor`) that
+   * nothing stopped a call site reaching. `Button` also derived `white` from its own
+   * variant, which is a mapping the primitive should own.
    */
-  inheritColor?: boolean;
+  tone?: 'primary' | 'on-primary' | 'inherit';
   /** 0–100. Omit for the indeterminate sweep. */
   value?: number;
   /** Draw the faint full-circle track behind the arc (M3 Expressive). */
@@ -31,7 +38,8 @@ const sizeConfig = {
 /**
  * Material 3 circular progress indicator.
  *
- * The previous implementation was a conic-gradient ring spun by `animate-spin`:
+ * The previous implementation was a conic-gradient ring spun by Tailwind's spin
+ * utility:
  * a wheel turning at a constant rate. The Material indicator composes two
  * motions — a steady rotation of the whole ring plus an arc that grows and
  * shrinks — so the head runs ahead and the tail catches up. That second motion
@@ -45,8 +53,7 @@ export default function Spinner({
   size = 'md',
   label,
   className = '',
-  white = false,
-  inheritColor = false,
+  tone = 'primary',
   value,
   track = false,
 }: SpinnerProps) {
@@ -56,11 +63,23 @@ export default function Spinner({
 
   // Inset by half the stroke so the ring is not clipped by the viewBox.
   const r = 50 - ((cfg.ring / cfg.width) * 100) / 2;
-  const color = inheritColor
-    ? undefined
-    : white
-      ? 'var(--md-sys-color-on-primary)'
-      : 'var(--md-sys-color-primary)';
+  const color =
+    tone === 'inherit'
+      ? undefined
+      : tone === 'on-primary'
+        ? 'var(--md-sys-color-on-primary)'
+        : 'var(--md-sys-color-primary)';
+  /* The track is a *role*, not an alpha of the active indicator. It was
+     `strokeOpacity={0.16}` — an alpha on a token, which the colour rules call a
+     bug precisely because it has to be eyeballed once per scheme and drifts.
+     M3 gives the circular indicator a `secondary-container` track; over a
+     photograph or a brand fill no surface role applies, so it takes
+     `media-outline`, which is this app's documented role for a rule or a track
+     on media and is already the value the cropper's guides use. */
+  const trackColor =
+    tone === 'primary'
+      ? 'var(--md-sys-color-secondary-container)'
+      : 'var(--md-sys-color-media-outline)';
 
   const circle = (
     <svg
@@ -81,8 +100,7 @@ export default function Spinner({
           cy="50"
           r={r}
           fill="none"
-          stroke="currentColor"
-          strokeOpacity={0.16}
+          stroke={trackColor}
           strokeWidth={(cfg.ring / cfg.width) * 100}
         />
       )}
@@ -109,7 +127,7 @@ export default function Spinner({
       <div
         className={cn(
           'flex items-center justify-center gap-2',
-          white ? 'text-on-primary' : 'text-on-surface-variant',
+          tone === 'on-primary' ? 'text-on-primary' : 'text-on-surface-variant',
           className,
         )}
       >
@@ -122,44 +140,7 @@ export default function Spinner({
   return <span className={className}>{circle}</span>;
 }
 
-/**
- * Material 3 linear progress indicator. Used where a spinner would sit alone in
- * a wide empty area — a bar communicates"this region is loading" better than a
- * dot floating in the middle of it.
- */
-export function LinearProgress({
-  value,
-  className = '',
-  label,
-}: {
-  value?: number;
-  className?: string;
-  label?: string;
-}) {
-  const determinate = typeof value === 'number';
-  const pct = determinate ? Math.min(100, Math.max(0, value)) : 0;
-
-  return (
-    <div
-      role="progressbar"
-      aria-label={label || '加载中'}
-      aria-valuenow={determinate ? pct : undefined}
-      aria-valuemin={determinate ? 0 : undefined}
-      aria-valuemax={determinate ? 100 : undefined}
-      className={cn(
-        'bg-primary-container relative h-1 w-full overflow-hidden rounded-full',
-        className,
-      )}
-    >
-      <div
-        className={cn(
-          'bg-primary h-full rounded-full',
-          determinate
-            ? 'transition-[width] duration-300 ease-[var(--ease-standard)]'
-            : 'm3-linear-bar w-full',
-        )}
-        style={determinate ? { width: `${pct}%` } : undefined}
-      />
-    </div>
-  );
-}
+/* The linear progress indicator moved to `components/ProgressBar.tsx`.
+   It lived here as `LinearProgress` with zero call sites while six hand-rolled
+   bars shipped across four files, so it grew a tone axis, `StopSize`, the spring
+   the spec assigns and a home of its own. A bar is not a spinner. */

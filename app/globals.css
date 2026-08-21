@@ -10,6 +10,21 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* The density axis, expressible at a call site the way `dark:` is.
+ *
+ * Every number M3 publishes is specified for a touch-first phone, and this app is
+ * used through a mouse on a desktop. That is not a licence to shrink things by
+ * eye: it means the *touch floor* — 48dp, WCAG 2.5.5's AAA figure — answers a
+ * finger, and a pointer's floor is WCAG 2.2 SC 2.5.8's 24x24 CSS px. Repeated
+ * chrome therefore takes one step down under a fine pointer and grows back under
+ * a coarse one, and `--touch-floor` below is the single place that switch lives.
+ *
+ * Keyed on the pointer, never on the viewport: a 1024px tablet is a finger and a
+ * 600px desktop window is not. `Pagination` keyed its own two sizes on `sm:` for
+ * exactly this purpose and got the axis wrong. */
+@custom-variant pointer-coarse (@media (pointer: coarse));
+@custom-variant pointer-fine (@media (pointer: fine));
+
 /* `lib/tagCategories.ts` composes these by interpolating a hue name, which the
    source scanner cannot see. Safelisted here rather than as a dummy class list
    in the module, so the reason lives next to the tokens. */
@@ -20,45 +35,87 @@
 /* ===========================================================================
  * Material 3 colour system
  *
- * Every tone below is generated from the brand seed #E06C9F by holding its
- * OKLCH hue (354.33°) and varying lightness across the M3 tone scale, exactly
- * the way the previous dark-mode brand tone was derived by hand. Chroma per
- * palette: primary .154 (the seed's own), secondary .048, tertiary .100 at
- * hue +60°, neutral .006, neutral-variant .016.
+ * **`scripts/palette.mjs` generates every tonal role below. Run it, don't edit
+ * them.** `node scripts/palette.mjs` prints a diff and the contrast table;
+ * `--write` substitutes the declarations in place, leaving every comment alone.
+ * It is idempotent against this file, which is the check that these values are
+ * still the recipe's output rather than someone's edit.
  *
- * The neutral palette carries that same rose hue at near-zero chroma. That is
- * the one decision the whole re-skin rests on: the old greys were `slate`,
- * a blue-tinted ramp (hue ~250°) sitting under a rose brand, and the two
- * fought each other on every screen. Warm greys make the chrome read as one
- * material with the logo.
+ * The seed is #E06C9F and the basis is **HCT**, which is the space M3 quotes its
+ * own numbers in: "neutral chroma 6" means 6 in HCT, and there is no fixed OKLCH
+ * chroma that means the same thing at every lightness. Role → tone comes verbatim
+ * from AOSP's generated `ColorLightTokens.kt` / `ColorDarkTokens.kt` (v0_210).
+ * Chroma per palette: primary the seed's own (56.8), secondary 8.7 and tertiary
+ * 30.6 — both deliberately below TonalSpot's 16/24, see the focus-ring note —
+ * neutral **6**, neutral-variant 6.6.
  *
- * Regenerate with the OKLCH ramp described above if the seed ever changes;
- * tones are plain hex here so the browser's own gamut mapping can't drift
- * the out-of-gamut ends between engines.
+ * The recipe used to live in this comment as prose, in OKLCH, and that is exactly
+ * what went wrong: the neutral palette had drifted to chroma ~1.5–2.2 against the
+ * 6 the prose called for, at a hue of ~305° rather than the brand's ~356°, and
+ * nothing could have caught it. The surfaces were near-grey where they were
+ * supposed to carry a trace of the brand. Neutral-variant, by contrast, was
+ * already in place and the script asserts it stays there — `outline` and the
+ * supporting-text role are the two most repeated non-brand colours in the app.
+ *
+ * That neutral hue is the one decision the whole re-skin rests on: the old greys
+ * were `slate`, a blue-tinted ramp (hue ~250°) sitting under a rose brand, and
+ * the two fought each other on every screen. Warm greys make the chrome read as
+ * one material with the logo.
+ *
+ * Tones are plain hex here rather than `hct()`/`oklch()` so the browser's own
+ * gamut mapping can't drift the out-of-gamut ends between engines. `accent-*`
+ * further down is the exception and stays in OKLCH, because an even hue sweep at
+ * fixed lightness and chroma is the whole point of that scale.
  * ======================================================================== */
 
 :root {
   /* — Primary ————————————————————————————————————————————————————————— */
-  /* The brand pink itself, unchanged, and bright in BOTH modes. M3's own
-     scheme would put tone 50 here in light and tone 80 in dark, which flips a
-     filled button from dark-pink-on-light to pale-pink-on-dark — correct by
-     the spec, wrong for a brand colour, which should read as one constant
-     material. Fills, switches, the app bar and active pills all use this. */
+  /* The brand pink itself — **tone 61 light, 54 dark** — and the only role in this
+     file that is off AOSP's tone map. M3 puts primary at P40 light and P80 dark, and
+     that direction is not arbitrary: the brand has to separate from the surface it
+     sits on, and that surface is near-white in one scheme and near-black in the
+     other, so the spec's *light* tone is the darker of the two. This app inverts it
+     because it holds the brand pink rather than a tone of it — a filled button that
+     swaps shade with the theme does not read as one material — and 61/54 are close
+     enough to read as the same colour while each keeps a little separation from its
+     own ground. Fills, switches, the app bar and active pills all use this.
+     `scripts/palette.mjs` is where the two tones are set.
+
+     **What that costs, stated once, because it is real and not fixable in place.**
+     White ink measures 3.08:1 on the light tone and 3.87:1 on the dark one, both under
+     the 4.5:1 AA floor for 14px text — that is the label of every `filled` button
+     (77 call sites), the active pagination number and the featured badge. Contrast is
+     a function of two colours, so the only levers are the fill and the ink, and both
+     have a visible price: a single tone at 48 clears it at 4.81:1 in both schemes but
+     reads as a deeper, duller brand, and darkening `on-primary` to P10 clears it at
+     5.71:1 / 4.54:1 but puts a dark wordmark and dark glyphs on the app bar. Neither
+     is taken. Note the app bar itself is *not* the failing case — it carries glyphs
+     and a wordmark, which are non-text and need 3:1.
+
+     As **ink on a surface** the same tone is 2.94:1 light and 4.79:1 dark, so
+     `text-primary` is for a glyph or an emphasis mark rather than for prose; body and
+     supporting text take `on-surface-variant`, and navigable text takes `link` — which
+     is exactly why that token exists. Three more pairs sit under 3:1 and are recorded
+     rather than hidden: `primary` on `surface-container-highest` (2.39 light),
+     `secondary` — the focus ring — drawn *on* a primary fill (2.09, which is the app
+     bar's case and is what `focus-ring-on-primary` is for), and `ProgressBar`'s
+     `primary` tone against its `secondary-container` track (2.34 light, 2.47 dark). */
   --md-sys-color-primary: #e06c9f;
   --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #ffd5e5;
-  --md-sys-color-on-primary-container: #39001e;
+  --md-sys-color-primary-container: #ffd9e5;
+  --md-sys-color-on-primary-container: #3e0022;
 
   /* — Links ————————————————————————————————————————————————————————————
      Navigable text gets its own hue rather than the brand rose. Two reasons:
      rose collides with the accent used for controls, so a link and an active
-     tab looked like the same affordance; and the brand tone is only 3.08:1 on
-     a light surface, under the AA floor for body-sized text.
+     tab looked like the same affordance; and the brand tone is 2.94:1 on a light
+     surface, under the AA floor for body-sized text. Links are blue in both schemes;
+     controls are pink in both.
 
      This replaces `--md-sys-color-primary-ink`, which had been doing both jobs
      and neither well — as a link colour it was a muted rose that read as
      "disabled brand", and as an active-state colour it inverted against the
-     dark scheme. Links are blue in both schemes; controls are pink in both. */
+     dark scheme. */
   --md-sys-color-link: #1d4fd8;
   --md-sys-color-link-hover: #17389f;
 
@@ -71,76 +128,145 @@
      one per variant, and `buttonStyles` three, so the same key press drew a
      different ring depending on which button it landed on.
 
-     Solid, not the 40% the majority used. `primary` is 3.08:1 against a light
-     surface — the figure the link block above was written around — and at 40%
-     it composites to roughly 1.4:1, under the 3:1 that WCAG 2.4.11 asks of a
-     focus indicator. So the alpha was not only inconsistent, it was the reason
-     the ring was hard to see at all. M3 draws this solid for the same reason.
+     Solid, not the 40% the majority used: at 40% `primary` composites to roughly
+     1.4:1, well under the 3:1 WCAG 2.4.11 asks of a focus indicator. M3 draws
+     this solid for the same reason.
 
-     `focus-on-primary` is the app bar's: a pink ring on the pink bar is
-     invisible, and this is the one piece of chrome that does not sit on a
-     surface. Same shape, same width, inverted for its background — the
-     documented exception rather than a fifth alpha.
+     **`secondary`, not `primary`** — which is what M3 names it
+     (`MenuTokens.FocusIndicatorColor` = `SearchBarTokens.FocusIndicatorColor` =
+     `Secondary`), and the measurement says why. Contrast of the ring against the
+     surfaces it is drawn on, light scheme:
 
-     Both are indirections rather than literals, so they follow the brand
-     through a re-seed and through the dark scheme's own `primary`. Solid, they
-     clear the bar in both: 3.08:1 light, 4.3:1 dark. */
-  --md-sys-color-focus: var(--md-sys-color-primary);
+                        surface   container-highest   on a primary fill
+       primary          2.94:1        2.39:1               1:1
+       secondary        6.15:1        5.00:1               2.09:1
+
+     `primary` fails the 3:1 bar on both light surfaces, and on a filled button —
+     `primary` on `primary` — the ring was the same colour as the thing it was
+     ringing, so the app's most prominent control had no visible focus state at all.
+
+     Note the last column and where it does *not* apply. An outset `ring-2` is a
+     `box-shadow`: it paints just *outside* the control's border box, so on a filled
+     button the ring sits on the page surface behind it, not on the fill — 6.15:1,
+     not 2.09. The column matters only where the ring is genuinely drawn *on* a
+     primary-coloured surface, which is the app bar, and that is what
+     `focus-on-primary` is for. Do not "fix" `Button variant="filled"` to use it.
+
+     `focus-on-primary` is the only exception: `secondary` on the pink app bar is
+     2.09:1, where `on-primary` is 3.08:1. Same shape, same width, inverted for its
+     background.
+
+     Both are indirections rather than literals, so they follow the brand through
+     a re-seed and through the dark scheme. */
+  --md-sys-color-focus: var(--md-sys-color-secondary);
   --md-sys-color-focus-on-primary: var(--md-sys-color-on-primary);
+  /* The third and last: a control sitting on a *photograph*, where neither
+     `secondary` nor the brand ink has any guaranteed contrast because there is no
+     surface underneath to measure against. Same argument as `focus-on-primary`,
+     one role along. It existed only as a hand-written `outline: 2px solid
+     on-media` on the lightbox's buttons, which is how the app ended up with two
+     focus tokens and one control drawing its own. */
+  --md-sys-color-focus-on-media: var(--md-sys-color-on-media);
 
   /* — Secondary / tertiary ———————————————————————————————————————————— */
-  --md-sys-color-secondary: #755360;
+  --md-sys-color-secondary: #775562;
   --md-sys-color-on-secondary: #ffffff;
-  --md-sys-color-secondary-container: #fed6e4;
-  --md-sys-color-on-secondary-container: #2c111d;
-  --md-sys-color-tertiary: #894d1f;
+  --md-sys-color-secondary-container: #ffd9e5;
+  --md-sys-color-on-secondary-container: #2d131f;
+  --md-sys-color-tertiary: #8c4f21;
   --md-sys-color-on-tertiary: #ffffff;
-  --md-sys-color-tertiary-container: #ffdac3;
-  --md-sys-color-on-tertiary-container: #2f1300;
+  --md-sys-color-tertiary-container: #ffdcc6;
+  --md-sys-color-on-tertiary-container: #311300;
 
   /* — Surfaces ———————————————————————————————————————————————————————— */
   /* Five container levels replace the shadow-sm/md/lg/xl mix that used to
      stand in for depth. Tonal steps survive dark mode; shadows don't. */
-  --md-sys-color-surface: #fdf8f9;
-  --md-sys-color-surface-dim: #ddd8da;
-  --md-sys-color-surface-bright: #fdf8f9;
+  --md-sys-color-surface: #fff8f8;
+  --md-sys-color-surface-dim: #e6d6da;
+  --md-sys-color-surface-bright: #fff8f8;
   --md-sys-color-surface-container-lowest: #ffffff;
-  --md-sys-color-surface-container-low: #f7f2f4;
-  --md-sys-color-surface-container: #f1ecee;
-  --md-sys-color-surface-container-high: #ece7e8;
-  --md-sys-color-surface-container-highest: #e6e1e3;
-  --md-sys-color-on-surface: #1e1a1c;
-  --md-sys-color-on-surface-variant: #4e4347;
-  --md-sys-color-outline: #7f7378;
-  --md-sys-color-outline-variant: #d0c2c7;
-  --md-sys-color-inverse-surface: #332f30;
-  --md-sys-color-inverse-on-surface: #f4eff1;
-  --md-sys-color-inverse-primary: #ffa9cb;
+  --md-sys-color-surface-container-low: #fff0f3;
+  --md-sys-color-surface-container: #faeaed;
+  --md-sys-color-surface-container-high: #f4e4e8;
+  --md-sys-color-surface-container-highest: #eedfe2;
+  --md-sys-color-on-surface: #21191c;
+  --md-sys-color-on-surface-variant: #4e4449;
+  --md-sys-color-outline: #807479;
+  --md-sys-color-outline-variant: #d1c3c8;
+
+  /* Two low-chroma tones that exist only for the /about plate's character texture,
+     which needs more than one colour region or it reads as a wash rather than as a
+     composition. A *documented divergence*: `lib/tagCategories.ts` is otherwise the
+     only thing allowed to pick a hue, and the rule holds because these are not
+     categories — nothing means "sage" — they are two halves of one decoration, and
+     naming them is what keeps a hex out of the component. Both are picked to sit
+     beside `outline` in value — L* 53.0 and 52.4 against its 49.7 — so the texture
+     reads as a rule rather than as prose and never out-contrasts the text beside it.
+     This note claimed they sat "a step or two off `on-surface-variant`", which is
+     29.6: they are more than twenty points off it, and `outline` is the neighbour
+     they were actually tuned against. */
+  --md-sys-color-plate-cool: #6f8285;
+  --md-sys-color-plate-warm: #8d7a63;
+  --md-sys-color-inverse-surface: #372e31;
+  --md-sys-color-inverse-on-surface: #fdedf0;
+  --md-sys-color-inverse-primary: #ffb0ce;
   --md-sys-color-scrim: #000000;
+
+  /* The dim behind a dialog, a sheet or a modal drawer, as a *colour* rather than
+     as an alpha at the call site.
+     32% is `ScrimTokens.ContainerOpacity`. It read 50 at three hand-written call
+     sites — `bg-scrim/50` on `Modal`, `Sheet` and the drawer — which is 56% heavier
+     than the spec and, being written three times, was three chances to drift. The
+     number lives here now and the call sites name `bg-scrim-veil`.
+     Both schemes get the same value, because `scrim` itself does: a dim is the
+     absence of light rather than a surface, so it does not follow the tone scale.
+
+     Written as a `color-mix` rather than as `bg-scrim/32` so the weight is part of
+     the token instead of part of 3 class strings. The engine fallback for a failed
+     `color-mix` is its *first* colour, which is why `scrim` is named first here
+     only in the sense of being the tinted half — see the crop mask below for the
+     case where the ordering actually matters. */
+  --md-sys-color-scrim-veil: color-mix(in srgb, var(--md-sys-color-scrim) 32%, transparent);
+
+  /* Not a scrim, and giving it its own name is the point. A crop mask has to make
+     "outside the crop" unmistakably inactive while the picture underneath stays
+     legible enough to aim with, so it is deliberately heavier than the dialog dim.
+     M3 has no token for it. This was a fourth hand-picked scrim weight buried in an
+     arbitrary `shadow-[…]` value in `ImageCropper`, which is exactly why nobody
+     noticed the app had four. */
+  --md-sys-color-crop-mask: color-mix(in srgb, var(--md-sys-color-scrim) 62%, transparent);
 
   /* Something that sits *on top of* a filled track and must read as raised:
      a switch thumb, a segmented-control pill, a slider knob. M3 has no slot
      for this because the direction flips — in light mode raised means lighter
      than the track, in dark mode it also means lighter, but the track is
      already dark. A single surface-container level cannot do both, so this is
-     its own token. */
-  --md-sys-color-surface-raised: #ffffff;
+     its own token.
+
+     An *indirection*, not a hex. It read `#ffffff` here and `#45403f` in the dark
+     block, which made it the one raw colour in the app hiding behind a token name —
+     it would not have followed a re-seed, and "no hex" was quietly false. Pointing
+     it at the two ends of the tone scale keeps exactly the behaviour the paragraph
+     above describes: `-lowest` is the lightest step in the light scheme and
+     `-highest` is the lightest in the dark one, so "raised" resolves correctly in
+     both without a `dark:` variant at any call site. */
+  --md-sys-color-surface-raised: var(--md-sys-color-surface-container-lowest);
 
   /* — Semantic ———————————————————————————————————————————————————————— */
   /* success / warning are not M3 slots; the site needs them, so they are
      generated the same way rather than left as ad-hoc green-600 / amber-400. */
-  --md-sys-color-error: #a62a2c;
+  --md-sys-color-error: #ae3031;
   --md-sys-color-on-error: #ffffff;
-  --md-sys-color-error-container: #ffd8d4;
-  --md-sys-color-on-error-container: #3c0004;
-  --md-sys-color-success: #256f3b;
+  --md-sys-color-error-container: #ffdad7;
+  --md-sys-color-on-error-container: #410004;
+  --md-sys-color-success: #216c38;
   --md-sys-color-on-success: #ffffff;
-  --md-sys-color-success-container: #adf8bc;
-  --md-sys-color-on-success-container: #003c17;
-  --md-sys-color-warning: #7f5400;
+  --md-sys-color-success-container: #a7f4b3;
+  --md-sys-color-on-success-container: #00210a;
+  --md-sys-color-warning: #815602;
   --md-sys-color-on-warning: #ffffff;
-  --md-sys-color-warning-container: #ffddae;
-  --md-sys-color-on-warning-container: #432b00;
+  --md-sys-color-warning-container: #ffddb2;
+  --md-sys-color-on-warning-container: #291800;
 
   /* — Semantic *fills* —————————————————————————————————————————————————
      The roles above are text roles: dark in the light scheme, pale in the dark
@@ -252,7 +378,8 @@
      would be invisible and impossible to keep true when one hue is retuned.
      `on-accent-*` doubles as the standalone ink for that hue — it clears 4.5:1
      against `surface` as well as against its own container, in both schemes.
-     Contrast within each pair is ~6:1, comfortably past AA for chip text. */
+     Contrast within each pair measures 7.98–8.81 light and 7.31–7.57 dark; this
+     note said "~6:1", which understated it by more than two points. */
   --md-sys-color-accent-red: oklch(0.92 0.055 25);
   --md-sys-color-on-accent-red: oklch(0.36 0.095 25);
   --md-sys-color-accent-orange: oklch(0.92 0.055 62);
@@ -272,68 +399,79 @@
 
   /* — Legacy aliases ————————————————————————————————————————————————— */
   /* Kept so the pre-migration call sites keep working while pages move over.
-     `--card-bg` / `--card-border` are gone: they were defined in both modes
-     and referenced nowhere. */
+     `--card-bg` / `--card-border` were removed for being defined in both modes and
+     referenced nowhere, and `--sidebar-text` / `--sidebar-hover` have now gone the
+     same way — a grep of the whole repo found no consumer of either. `--background`
+     and `--foreground` do have consumers (the `@theme` bridge below, and two rules
+     further down in this file), and `--primary` is kept beside them for symmetry. */
   --background: var(--md-sys-color-surface);
   --foreground: var(--md-sys-color-on-surface);
-  --sidebar-text: var(--md-sys-color-on-surface-variant);
-  --sidebar-hover: var(--md-sys-color-surface-container-high);
   --primary: var(--md-sys-color-primary);
 }
 
 .dark {
-  /* Same hue and chroma as the light brand tone, lightness dropped to M3
-     tone ~54. Holding the hue is what keeps it reading as the same brand;
-     a naive HSL darken drifts ~5° toward coral. */
-  --md-sys-color-primary: #cc5a8d;
+  /* Tone 54 against the light scheme's 61 — same hue, same chroma, seven tones deeper
+     so the brand keeps a little separation from a near-black ground while still reading
+     as the same colour. Holding the hue is the part that matters: a naive HSL darken
+     drifts about 5° toward coral. This is the inverse of AOSP's direction and the
+     reasoning is in the light block. */
+  --md-sys-color-primary: #cb5b8d;
   --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #7f0c4c;
-  --md-sys-color-on-primary-container: #ffd5e5;
-  /* Text-only accent, lifted well clear of the dark surfaces (8.8:1). */
+  --md-sys-color-primary-container: #811f51;
+  --md-sys-color-on-primary-container: #ffd9e5;
+  /* Text-only accent, lifted well clear of the dark surfaces: 10.1:1 against
+     `surface`, 8.9:1 against `surface-container`, 6.8:1 against the highest step.
+     This said 8.8:1 without naming a ground, which is the middle of that range. */
   --md-sys-color-link: #9dc0ff;
   --md-sys-color-link-hover: #c6dbff;
 
-  --md-sys-color-secondary: #e1bac8;
-  --md-sys-color-on-secondary: #432632;
-  --md-sys-color-secondary-container: #5c3c48;
-  --md-sys-color-on-secondary-container: #fed6e4;
-  --md-sys-color-tertiary: #fab588;
-  --md-sys-color-on-tertiary: #4d2300;
-  --md-sys-color-tertiary-container: #6e3500;
-  --md-sys-color-on-tertiary-container: #ffdac3;
+  --md-sys-color-secondary: #e6bbca;
+  --md-sys-color-on-secondary: #442834;
+  --md-sys-color-secondary-container: #5d3e4a;
+  --md-sys-color-on-secondary-container: #ffd9e5;
+  --md-sys-color-tertiary: #ffb786;
+  --md-sys-color-on-tertiary: #502400;
+  --md-sys-color-tertiary-container: #6f380a;
+  --md-sys-color-on-tertiary-container: #ffdcc6;
 
-  --md-sys-color-surface: #161213;
-  --md-sys-color-surface-dim: #161213;
-  --md-sys-color-surface-bright: #3c3839;
-  --md-sys-color-surface-container-lowest: #100d0e;
-  --md-sys-color-surface-container-low: #1e1a1c;
-  --md-sys-color-surface-container: #221e20;
-  --md-sys-color-surface-container-high: #2d292a;
-  --md-sys-color-surface-container-highest: #373335;
-  --md-sys-color-on-surface: #e6e1e3;
-  --md-sys-color-on-surface-variant: #d0c2c7;
-  --md-sys-color-outline: #998d91;
-  --md-sys-color-outline-variant: #4e4347;
-  --md-sys-color-inverse-surface: #e6e1e3;
-  --md-sys-color-inverse-on-surface: #332f30;
-  --md-sys-color-inverse-primary: #b9497d;
+  --md-sys-color-surface: #191114;
+  --md-sys-color-surface-dim: #191114;
+  --md-sys-color-surface-bright: #40373a;
+  --md-sys-color-surface-container-lowest: #130c0f;
+  --md-sys-color-surface-container-low: #21191c;
+  --md-sys-color-surface-container: #261d20;
+  --md-sys-color-surface-container-high: #30282a;
+  --md-sys-color-surface-container-highest: #3c3235;
+  --md-sys-color-on-surface: #eedfe2;
+  --md-sys-color-on-surface-variant: #d1c3c8;
+  --md-sys-color-outline: #9a8d92;
+  --md-sys-color-outline-variant: #4e4449;
+  /* See the light scheme for why these two exist. They lighten rather than invert,
+     the way every ink role here does. */
+  --md-sys-color-plate-cool: #9db0b3;
+  --md-sys-color-plate-warm: #bda88e;
+  --md-sys-color-inverse-surface: #eedfe2;
+  --md-sys-color-inverse-on-surface: #372e31;
+  --md-sys-color-inverse-primary: #9f3869;
   --md-sys-color-scrim: #000000;
 
-  /* Lighter than every container level, so a thumb still reads as lifted. */
-  --md-sys-color-surface-raised: #45403f;
+  /* Lighter than every container level, so a thumb still reads as lifted — which
+     in this scheme is the *top* of the tone scale rather than the bottom. See the
+     note on the light value. */
+  --md-sys-color-surface-raised: var(--md-sys-color-surface-container-highest);
 
-  --md-sys-color-error: #ffaea7;
-  --md-sys-color-on-error: #61000a;
-  --md-sys-color-error-container: #890113;
-  --md-sys-color-on-error-container: #ffd8d4;
-  --md-sys-color-success: #91dba1;
-  --md-sys-color-on-success: #003c17;
-  --md-sys-color-success-container: #005624;
-  --md-sys-color-on-success-container: #adf8bc;
-  --md-sys-color-warning: #f8ba5e;
-  --md-sys-color-on-warning: #432b00;
-  --md-sys-color-warning-container: #613f00;
-  --md-sys-color-on-warning-container: #ffddae;
+  --md-sys-color-error: #ffb3ae;
+  --md-sys-color-on-error: #68000c;
+  --md-sys-color-error-container: #8c161c;
+  --md-sys-color-on-error-container: #ffdad7;
+  --md-sys-color-success: #8cd798;
+  --md-sys-color-on-success: #003916;
+  --md-sys-color-success-container: #005324;
+  --md-sys-color-on-success-container: #a7f4b3;
+  --md-sys-color-warning: #f6bc66;
+  --md-sys-color-on-warning: #442b00;
+  --md-sys-color-warning-container: #624000;
+  --md-sys-color-on-warning-container: #ffddb2;
 
   /* Same eight hues, lightness swapped for the dark scheme. */
   --md-sys-color-accent-red: oklch(0.37 0.075 25);
@@ -356,20 +494,56 @@
 
 /* State-layer opacities — M3 draws hover/focus/press as a tinted overlay at a
    fixed alpha rather than as a hand-picked colour per component, which is what
-   the scattered hover tints on `primary` at 10% were approximating. */
+   the scattered hover tints on `primary` at 10% were approximating.
+
+   The four values are M3's own, from the generated token set (`StateTokens`):
+   hover .08, focus .10, pressed .10, dragged .16. Pressed used to read .12 here
+   — the figure the older Material Web token set shipped — which made every
+   press in the app 20% heavier than the spec's, on the one utility that is
+   reused by every control. Note focus and pressed are deliberately EQUAL in M3;
+   they are distinguished by the focus ring, not by tint weight. */
 :root {
   --md-sys-state-hover-opacity: 0.08;
   --md-sys-state-focus-opacity: 0.1;
-  --md-sys-state-pressed-opacity: 0.12;
+  --md-sys-state-pressed-opacity: 0.1;
   --md-sys-state-dragged-opacity: 0.16;
 
-  /* Elevation. Two-layer shadows per M3; in dark mode the tonal surface steps
-     carry most of the depth, so the shadows soften rather than darken. */
-  --md-sys-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 1px rgb(0 0 0 / 0.06);
-  --md-sys-elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.06), 0 2px 6px 2px rgb(0 0 0 / 0.08);
-  --md-sys-elevation-3: 0 4px 8px 3px rgb(0 0 0 / 0.08), 0 1px 3px 0 rgb(0 0 0 / 0.1);
-  --md-sys-elevation-4: 0 6px 10px 4px rgb(0 0 0 / 0.09), 0 2px 3px 0 rgb(0 0 0 / 0.1);
-  --md-sys-elevation-5: 0 8px 12px 6px rgb(0 0 0 / 0.1), 0 4px 4px 0 rgb(0 0 0 / 0.12);
+  /* Elevation. Two-layer shadows per M3.
+   *
+   * **The alpha is constant and only the geometry grows.** That is how M3
+   * specifies the ladder, and getting it wrong is invisible one level at a time
+   * and obvious across the set: the previous values ramped the key shadow
+   * 0.05 → 0.10 while also growing the blur, so five levels spanned a factor of
+   * two in alpha and `e1` against `e2` was indistinguishable on a light
+   * surface. A button's hover lift therefore rendered and could not be seen.
+   *
+   * 0.15 / 0.10 rather than the spec's 0.30 / 0.15: those are tuned for a pure
+   * white page, and this app's surfaces are a warm off-white that a 30% black
+   * key shadow reads as dirt on. Halved, held constant, the ladder is a ladder.
+   *
+   * In dark mode the tonal surface steps already carry most of the depth, so
+   * the shadows there are about separation from a near-black ground rather than
+   * about height — they keep their own ramp. */
+  --md-sys-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.15), 0 1px 3px 1px rgb(0 0 0 / 0.1);
+  --md-sys-elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.15), 0 2px 6px 2px rgb(0 0 0 / 0.1);
+  --md-sys-elevation-3: 0 4px 8px 3px rgb(0 0 0 / 0.1), 0 1px 3px 0 rgb(0 0 0 / 0.15);
+  --md-sys-elevation-4: 0 6px 10px 4px rgb(0 0 0 / 0.1), 0 2px 3px 0 rgb(0 0 0 / 0.15);
+  --md-sys-elevation-5: 0 8px 12px 6px rgb(0 0 0 / 0.1), 0 4px 4px 0 rgb(0 0 0 / 0.15);
+
+  /* A single-layer shadow for `filter: drop-shadow()`.
+   *
+   * `drop-shadow()` follows a shape's alpha rather than its box, which is what a
+   * cut-out over a photograph needs — a `box-shadow` there outlines the
+   * rectangle instead of the shape. But it takes exactly one layer and no spread
+   * radius, so none of the elevation tokens above can be handed to it, and the
+   * one caller (the slider captcha's puzzle piece) was spelling out its own
+   * `0 0 5px` at half `scrim` instead.
+   *
+   * Scheme-independent and deliberately heavier than level 1's surface shadow,
+   * for the reason every `media-*` role in this file is: what is behind it is a
+   * photograph, which can be any luminance, so the shadow has to read against a
+   * pale sky as well as a dark one. */
+  --md-sys-elevation-drop-1: 0 1px 3px rgb(0 0 0 / 0.3);
 }
 
 .dark {
@@ -664,10 +838,14 @@
   --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
   --color-outline: var(--md-sys-color-outline);
   --color-outline-variant: var(--md-sys-color-outline-variant);
+  --color-plate-cool: var(--md-sys-color-plate-cool);
+  --color-plate-warm: var(--md-sys-color-plate-warm);
   --color-inverse-surface: var(--md-sys-color-inverse-surface);
   --color-inverse-on-surface: var(--md-sys-color-inverse-on-surface);
   --color-inverse-primary: var(--md-sys-color-inverse-primary);
   --color-scrim: var(--md-sys-color-scrim);
+  --color-scrim-veil: var(--md-sys-color-scrim-veil);
+  --color-crop-mask: var(--md-sys-color-crop-mask);
   --color-surface-raised: var(--md-sys-color-surface-raised);
 
   --color-error: var(--md-sys-color-error);
@@ -745,24 +923,31 @@
   --text-display-l: 3.5625rem;
   --text-display-l--line-height: 1.1228;
   --text-display-l--letter-spacing: -0.25px;
+  --text-display-l--font-weight: 400;
   --text-display-m: 2.8125rem;
   --text-display-m--line-height: 1.1556;
   --text-display-m--letter-spacing: 0;
+  --text-display-m--font-weight: 400;
   --text-display-s: 2.25rem;
   --text-display-s--line-height: 1.2222;
   --text-display-s--letter-spacing: 0;
+  --text-display-s--font-weight: 400;
   --text-headline-l: 2rem;
   --text-headline-l--line-height: 1.25;
   --text-headline-l--letter-spacing: 0;
+  --text-headline-l--font-weight: 400;
   --text-headline-m: 1.75rem;
   --text-headline-m--line-height: 1.2857;
   --text-headline-m--letter-spacing: 0;
+  --text-headline-m--font-weight: 400;
   --text-headline-s: 1.5rem;
   --text-headline-s--line-height: 1.3333;
   --text-headline-s--letter-spacing: 0;
+  --text-headline-s--font-weight: 400;
   --text-title-l: 1.375rem;
   --text-title-l--line-height: 1.2727;
   --text-title-l--letter-spacing: 0;
+  --text-title-l--font-weight: 400;
   --text-title-m: 1rem;
   --text-title-m--line-height: 1.5;
   --text-title-m--letter-spacing: 0.075px;
@@ -771,23 +956,53 @@
   --text-title-s--line-height: 1.4286;
   --text-title-s--letter-spacing: 0.05px;
   --text-title-s--font-weight: 500;
-  /* The body roles declare their weight; the heading roles deliberately do not.
-     `@layer base` owns h1–h6's weight (700/600/600) as a documented decision, so
-     `display-*`/`headline-*` must stay weight-free or a utility would fight the
-     element. Body text is the opposite case: it lands on spans and paragraphs
-     anywhere, including *inside* a heading, where it was inheriting the h1's 700
-     and had to be beaten back with a bare `font-normal` at the call site. With
-     400 on the role, `text-body-m` renders the same wherever it is put. */
+  /* **Every role declares its own weight, including the headings.**
+     `TypeScaleTokens` gives all fifteen one: `DisplayLargeWeight`,
+     `HeadlineSmallWeight` and `TitleLargeWeight` are `WeightRegular`, `TitleMedium`
+     and the label roles are `WeightMedium`.
+
+     Seven of them used to declare none, on the reasoning that `@layer base` owned
+     h1–h6's weight and a utility would fight the element. It does not survive
+     contact with a role landing on a *different* element than the one it was
+     imagined on: `text-headline-s` rendered 700 on `AuthModal`'s `<h1>` and 600 on
+     `Modal`'s `<h2>` — the same dialog-title role at two weights — 400 on a
+     `<span>`, and its `-emphasized` twin at 500 came out *lighter* than either
+     heading. Three weights for one role, and the emphasized one the lightest.
+     Utilities sit in a later layer than `@layer base`, so declaring the weight is
+     what makes a role render the same wherever it is put. */
+  /* **The Han-glyph leading divergence, and how far it actually goes.**
+
+     M3's body line-heights are 24 / 20 / 16 against 16 / 14 / 12px type, i.e.
+     1.5 / 1.4286 / 1.3333, and they are set for Latin. A Han glyph fills its em
+     box where a lowercase Latin one leaves the ascender and descender bands
+     empty, so the same ratio reads tighter in Chinese and body text needs more.
+
+     What that argument does *not* cover is UI chrome. `body-m` and `body-s` ran
+     1.65 and 1.6 — a 23.1px and a 19.2px line box — and they are the app's
+     metadata, list bodies and supporting lines, so every settings row, every
+     list item and every caption in the app carried 3px it did not need. Both are
+     1.5 now, which is still looser than the spec at `m` and `s` and keeps the
+     divergence; it halves it rather than removing it.
+
+     `body-l` stays at 1.75. It is the *prose* role — a forum post's body, which
+     `.rich-text-content` and `.bbcode-content` derive their whole `em` rhythm
+     from — and it is where the argument for extra leading is strongest. It is
+     also load-bearing: `Textarea`'s symmetric 14px block padding is derived from
+     its 28px line box, so moving it silently unsizes a one-row composer.
+
+     The `label-*` roles are at the spec exactly and always were, which is worth
+     stating because the rule was written down as "body and label run looser". A
+     label is one line in a control; there is nothing for the leading to help. */
   --text-body-l: 1rem;
   --text-body-l--line-height: 1.75;
   --text-body-l--letter-spacing: 0.25px;
   --text-body-l--font-weight: 400;
   --text-body-m: 0.875rem;
-  --text-body-m--line-height: 1.65;
+  --text-body-m--line-height: 1.5;
   --text-body-m--letter-spacing: 0.125px;
   --text-body-m--font-weight: 400;
   --text-body-s: 0.75rem;
-  --text-body-s--line-height: 1.6;
+  --text-body-s--line-height: 1.5;
   --text-body-s--letter-spacing: 0.2px;
   --text-body-s--font-weight: 400;
   --text-label-l: 0.875rem;
@@ -814,9 +1029,11 @@
      defined a weight, which silently overrode the token and left the same kind
      of heading rendering at 600 on one page and 700 on the next.
 
-     Headings are the exception and do not need these: `@layer base` below gives
-     h1–h6 their own weights, so an `<h2 class="text-headline-s">` is already
-     emphasized by virtue of being an h2. */
+     Headings need these like everything else. They used to be exempt on the
+     grounds that an `<h2 class="text-headline-s">` was "already emphasized by
+     virtue of being an h2" — which was true only for as long as the base rules
+     invented a weight, and it made the emphasized twin the lightest of the
+     three renderings. See the note above the body roles. */
   --text-display-l-emphasized: 3.5625rem;
   --text-display-l-emphasized--line-height: 1.1228;
   --text-display-l-emphasized--letter-spacing: -0.25px;
@@ -858,11 +1075,11 @@
   --text-body-l-emphasized--letter-spacing: 0.25px;
   --text-body-l-emphasized--font-weight: 500;
   --text-body-m-emphasized: 0.875rem;
-  --text-body-m-emphasized--line-height: 1.65;
+  --text-body-m-emphasized--line-height: 1.5;
   --text-body-m-emphasized--letter-spacing: 0.125px;
   --text-body-m-emphasized--font-weight: 500;
   --text-body-s-emphasized: 0.75rem;
-  --text-body-s-emphasized--line-height: 1.6;
+  --text-body-s-emphasized--line-height: 1.5;
   --text-body-s-emphasized--letter-spacing: 0.2px;
   --text-body-s-emphasized--font-weight: 500;
   --text-label-l-emphasized: 0.875rem;
@@ -888,24 +1105,37 @@
 
      The role → step mapping is fixed; do not pick a step by eye:
 
-       rounded-full  Button / Chip / FAB / avatar / circular icon button
-       rounded-md    Card, grouped-list block, section surface     (12dp)
-       rounded-sm    Text field, Select menu, small tag             (8dp)
+       rounded-full  Button / FAB / avatar / circular icon button / count pill
        rounded-2xl   Dialog, bottom sheet, large media container   (28dp)
-       rounded-lg    Gallery thumbnail / grid tile                 (16dp,
+       rounded-lg    Gallery thumbnail / grid tile, chat row       (16dp,
                      pinned to HERO_TARGET_RADIUS_PX — see above)
+       rounded-md    Card, grouped-list block, section surface     (12dp)
+       rounded-sm    Chip, small tag                                (8dp)
+       rounded-xs    Text field, Select menu, popover, badge,       (4dp)
+                     snackbar, tooltip, inline code, list seam
+
+     The `rounded-sm` line used to read "Text field, Select menu, small tag (8dp)",
+     which is wrong for the first two: `OutlinedTextFieldTokens.ContainerShape` and
+     `MenuTokens.ContainerShape` are both `CornerExtraSmall`. A summary table said
+     `small` covered "text fields, menus" and the token files say otherwise — read
+     the token file. This surviving copy of the retired answer is very likely what
+     put an 8dp corner on `RichTextEditor`'s shell and on two hand-rolled badges.
 
      `--radius` is the bare `rounded` utility. It was never defined, so 100+
      call sites silently fell through to Tailwind's built-in 4px and would not
      have followed the scale if any of it moved. */
   --radius: 0.25rem; /* 4, == --radius-xs */
-  --radius-xs: 0.25rem; /* 4  */
-  --radius-sm: 0.5rem; /* 8  */
-  --radius-md: 0.75rem; /* 12 */
-  --radius-lg: 1rem; /* 16 */
-  --radius-xl: 1.25rem; /* 20 */
-  --radius-2xl: 1.75rem; /* 28 */
-  --radius-3xl: 2.25rem; /* 36 */
+  --radius-xs: 0.25rem; /* 4  extra-small */
+  --radius-sm: 0.5rem; /* 8  small */
+  --radius-md: 0.75rem; /* 12 medium */
+  --radius-lg: 1rem; /* 16 large */
+  --radius-xl: 1.25rem; /* 20 large-increased */
+  --radius-2xl: 1.75rem; /* 28 extra-large */
+  /* 32, extra-large-increased. Was 36, which is not a step on the M3 scale at
+     all — the scale runs 28 / 32 / 48 and there is nothing between. Only the two
+     profile hero banners use it, so the token moved rather than the call sites. */
+  --radius-3xl: 2rem;
+  --radius-4xl: 3rem; /* 48 extra-extra-large */
 
   /* — Elevation utilities ————————————————————————————————————————————— */
   --shadow-e1: var(--md-sys-elevation-1);
@@ -914,23 +1144,26 @@
   --shadow-e4: var(--md-sys-elevation-4);
   --shadow-e5: var(--md-sys-elevation-5);
 
-  /* Material 3 motion curves — mirrored in lib/motion.ts for GSAP. */
+  /* ── Material 3 motion curves ───────────────────────────────────────────
+   *
+   * M3 ships **two** easing sets and they are not interchangeable:
+   *
+   *   emphasized  for a large container transform or anything crossing the
+   *               screen. Front-loaded and hard, with a long tail into rest.
+   *   standard    for a small, utilitarian change — a hover, a chip selecting,
+   *               a chevron turning. Gentler, and it does not overstay.
+   *
+   * Only `standard` and the *emphasized* decelerate/accelerate pair existed
+   * here, under the bare names `--ease-decelerate` / `--ease-accelerate` — so
+   * every small utility transition in the app was reaching for a curve shaped
+   * for a full-window slide. The canonical names are spelled out below and the
+   * bare pair is kept as an alias of the emphasized one, which is what the 46
+   * existing call sites already meant.
+   *
+   * Mirrored in lib/motion.ts for GSAP; change one and change the other. */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
-  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
-  /* Matches GSAP's `back.out(1.55)` in lib/motion.ts. The previous value
-     (0.34, 1.56, 0.64, 1) overshot on a different curve, so scripted and
-     declarative springs did not settle alike. */
-  --ease-spring: cubic-bezier(0.18, 1.36, 0.5, 1);
-  /* The one curve for an *infinite, alternating* loop — a bouncing dot, a
-     pulsing arc. Every M3 token is one-sided by design: it spends its travel at
-     one end so a thing that arrives or leaves reads as decisive. A loop has no
-     arrival, so a one-sided curve makes its velocity discontinuous once per
-     cycle — the sweep eases into the far edge and then restarts at full speed.
-     Symmetric at both ends is what a repeating motion actually wants, and this
-     is the value three call sites had each spelled out by hand. Not for anything
-     that begins or ends on screen; those have their own rows in the table. */
-  --ease-loop: cubic-bezier(0.4, 0, 0.6, 1);
+  --ease-standard-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-standard-accelerate: cubic-bezier(0.3, 0, 1, 1);
   /* M3's emphasized curve is two cubic segments, not one, so it has no
      `cubic-bezier()` form — the pair below were aliases of `standard` and
      `decelerate`, which quietly made "emphasized" mean nothing. This is the
@@ -967,10 +1200,273 @@
     0.9998 95.83%,
     1 100%
   );
-  /* These two the spec does give as single cubics, and they match the
-     decelerate/accelerate pair above by definition. */
+  /* These two the spec does give as single cubics. */
   --ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ease-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  /* Aliases. Every existing `ease-[var(--ease-decelerate)]` means "something is
+     entering the screen", which is the emphasized pairing — so these point
+     there rather than at the standard set. Reach for the fully-qualified name in
+     new code, so which set is meant is stated rather than inherited. */
+  --ease-decelerate: var(--ease-emphasized-decelerate);
+  --ease-accelerate: var(--ease-emphasized-accelerate);
+  /* **Symmetric: eases in as well as out.** M3 ships nothing like this, and that
+     is a gap in what its *curve* vocabulary models rather than an oversight — both
+     M3 easing sets spend their travel at one end, on purpose, so a thing that
+     arrives or leaves reads as decisive. Percentage of travel covered in each tenth
+     of the duration:
+
+       emphasized-decelerate   62 16  8  5  3  2  1  1  0  0   half-travel by 7%
+       standard                16 34 19 11  8  5  3  2  1  0   half-travel by 20%
+       emphasized-accelerate    1  2  3  4  6  8 11 14 20 32   half-travel by 82%
+       symmetric                2  7 11 14 16 16 14 11  7  2   half-travel by 50%
+
+     **One role, and it is the loop.** A repeating animation has no arrival at all,
+     so a one-sided curve makes its velocity discontinuous once per cycle: the sweep
+     eases into the far edge and then restarts at full speed. `.m3-progress-arc`,
+     `.m3-linear-bar`, `--animate-dot-bounce` and the theme wipe are the call sites,
+     and they reach it through `--ease-loop` — the role name, which is what to write.
+     Nothing else uses it: the seven determinate progress bars that once did were the
+     travelling-in-place case, and that case is a spring (see `ProgressBar`).
+
+     It briefly had a second role — a panel travelling in place, both ends of its
+     journey on screen, which no M3 curve fits either (on `standard` such a panel's
+     fastest tenth carries 97x its last, read correctly as a jump then a stall). That
+     was the wrong conclusion from the right measurement: the answer for a panel is
+     not a better bezier, it is that M3 stopped using beziers for component motion.
+     `NavigationDrawer.kt` opens on a `DefaultSpatial` spring and closes on
+     `FastEffects`, and a spring leaves and arrives at zero velocity by construction —
+     no curve has to be invented for it. Inventing one is what this codebase already
+     did with `cubic-bezier(0.18, 1.36, 0.5, 1)` before the springs existed.
+
+     Vuetify remains the reference for the *arrangement* of a drawer — one gesture,
+     one clock, the scrim sharing it (`$navigation-drawer-transition-duration: 0.2s`,
+     timing function shared with the panel) — but not for the physics: its own curve
+     is Material 2's `cubic-bezier(0.4, 0, 0.2, 1)`, which does ease in and still
+     tails off at 43:1. */
+  --ease-symmetric: cubic-bezier(0.4, 0, 0.6, 1);
+  /* The role name at the call sites. A loop wants symmetry for the reason above,
+     and `--ease-loop` is what `.m3-progress-arc`, `.m3-linear-bar` and the theme
+     wipe actually write. */
+  --ease-loop: var(--ease-symmetric);
+
+  /* ── M3 Expressive motion: springs ──────────────────────────────────────
+   *
+   * The curves above are M3's *transition* system — the thing it still
+   * specifies as easing + duration, for something entering, leaving or
+   * crossing the screen. Its *component* motion is a different system, and
+   * since May 2025 the spec's answer there is spring physics rather than a
+   * curve: a damping ratio and a stiffness, per `MotionScheme`.
+   *
+   * That distinction is why this app's motion had no weight. A bezier is a
+   * shape someone drew; a spring is a mass being pulled to a target, and the
+   * eye can tell. The only real spring in the codebase was the shared-element
+   * flight's (`lib/hero/spring.ts`), which no component could reach — so
+   * "spring" everywhere else meant `back.out(1.55)` and a cubic tuned to
+   * approximate it, i.e. two guesses at the same physics.
+   *
+   * The nine values are M3's own, from the generated token sets
+   * (`StandardMotionTokens` / `ExpressiveMotionTokens`):
+   *
+   *              damping   stiffness            damping   stiffness
+   *   standard                          expressive
+   *     spatial  fast  0.9   1400         spatial  fast  0.6    800
+   *              def   0.9    700                  def   0.8    380
+   *              slow  0.9    300                  slow  0.8    200
+   *     effects  fast  1.0   3800         effects  identical to standard
+   *              def   1.0   1600
+   *              slow  1.0    800
+   *
+   * **spatial** is for anything that moves or changes size. Damping is below 1,
+   * so it may overshoot — that is the point, and it is what reads as mass.
+   * **effects** is for anything that only fades or recolours. Damping is
+   * exactly 1, critically damped, so it can never overshoot: a colour that
+   * overshoots is a flash, and an opacity that overshoots is clipped and
+   * therefore just a stall.
+   *
+   * There are nine springs but only **four shapes**, and that is not a
+   * simplification — it is what the maths says. With the timeline normalised to
+   * the settle time, the curve depends only on the damping ratio; stiffness sets
+   * how long it takes and nothing else. Verified numerically across every
+   * stiffness that shares a damping ratio: max deviation 7e-5, i.e. floating
+   * point noise. So the shape is a token keyed by damping and the duration is a
+   * token keyed by the pair.
+   *
+   * Sampled as `linear()` at 32 points from the closed form
+   *   damping < 1:  p(t) = 1 − e^(−ζωt)·[cos(ω_d t) + (ζω/ω_d)·sin(ω_d t)]
+   *   damping = 1:  p(t) = 1 − e^(−ωt)·(1 + ωt)
+   * with ω = √k (M3's unit-mass convention) and ω_d = ω√(1−ζ²), normalised so
+   * the last stop is exactly 1. `linear()` is the one CSS easing that can carry
+   * values above 1, which is what makes the overshoot expressible at all —
+   * a `cubic-bezier` cannot, which is why the retired approximation had to
+   * cheat its control points past the unit square.
+   *
+   * The settle time is where the spring is within 1% of its target, which is
+   * Compose's own displacement threshold. Everything after that is sub-pixel.
+   *
+   * `lib/spring.ts` holds the same maths for GSAP, where the closed form is
+   * registered directly rather than sampled. Change one and change the other. */
+
+  /* Critically damped, ζ=1. Never overshoots. Fades, colours, state layers. */
+  --ease-spring-effects: linear(
+    0 0%,
+    0.0201 3.23%,
+    0.07 6.45%,
+    0.1375 9.68%,
+    0.2139 12.9%,
+    0.2933 16.13%,
+    0.3716 19.35%,
+    0.4464 22.58%,
+    0.5161 25.81%,
+    0.5799 29.03%,
+    0.6374 32.26%,
+    0.6888 35.48%,
+    0.7342 38.71%,
+    0.774 41.94%,
+    0.8087 45.16%,
+    0.8389 48.39%,
+    0.8648 51.61%,
+    0.8872 54.84%,
+    0.9063 58.06%,
+    0.9226 61.29%,
+    0.9365 64.52%,
+    0.9483 67.74%,
+    0.9582 70.97%,
+    0.9667 74.19%,
+    0.9738 77.42%,
+    0.9798 80.65%,
+    0.9848 83.87%,
+    0.989 87.1%,
+    0.9925 90.32%,
+    0.9955 93.55%,
+    0.9979 96.77%,
+    1 100%
+  );
+  /* ζ=0.9. Its first peak falls outside the 1% settle window, so within the
+     window it is monotonic — the standard scheme is meant to read as
+     purposeful rather than playful, and this is how that is achieved without a
+     second curve. */
+  --ease-spring-standard-spatial: linear(
+    0 0%,
+    0.0125 3.23%,
+    0.0454 6.45%,
+    0.0925 9.68%,
+    0.1492 12.9%,
+    0.2116 16.13%,
+    0.2768 19.35%,
+    0.3425 22.58%,
+    0.4071 25.81%,
+    0.4692 29.03%,
+    0.5282 32.26%,
+    0.5833 35.48%,
+    0.6343 38.71%,
+    0.681 41.94%,
+    0.7235 45.16%,
+    0.7618 48.39%,
+    0.7961 51.61%,
+    0.8267 54.84%,
+    0.8536 58.06%,
+    0.8774 61.29%,
+    0.8981 64.52%,
+    0.9162 67.74%,
+    0.9318 70.97%,
+    0.9453 74.19%,
+    0.9568 77.42%,
+    0.9666 80.65%,
+    0.9749 83.87%,
+    0.9819 87.1%,
+    0.9878 90.32%,
+    0.9927 93.55%,
+    0.9967 96.77%,
+    1 100%
+  );
+  /* ζ=0.8. Overshoots 0.51% at 82% of the run — a settle you feel rather than
+     see, which is the difference between "expressive" and "bouncy". */
+  --ease-spring-expressive-spatial: linear(
+    0 0%,
+    0.0186 3.23%,
+    0.0667 6.45%,
+    0.1343 9.68%,
+    0.2136 12.9%,
+    0.2984 16.13%,
+    0.3842 19.35%,
+    0.4676 22.58%,
+    0.5464 25.81%,
+    0.6189 29.03%,
+    0.6845 32.26%,
+    0.7426 35.48%,
+    0.7933 38.71%,
+    0.8368 41.94%,
+    0.8737 45.16%,
+    0.9044 48.39%,
+    0.9295 51.61%,
+    0.9498 54.84%,
+    0.9659 58.06%,
+    0.9783 61.29%,
+    0.9877 64.52%,
+    0.9946 67.74%,
+    0.9993 70.97%,
+    1.0024 74.19%,
+    1.0042 77.42%,
+    1.005 80.65%,
+    1.0051 83.87%,
+    1.0045 87.1%,
+    1.0037 90.32%,
+    1.0026 93.55%,
+    1.0013 96.77%,
+    1 100%
+  );
+  /* ζ=0.6, the expressive scheme's *fast* spatial spring and the only visibly
+     bouncy curve in the system: it overshoots 8.4%, peaking at 63% of the run.
+     Reserved for a small mark arriving in place — an unread count, a favourite
+     filling in. Anything large wearing this reads as a wobble. */
+  --ease-spring-expressive-spatial-fast: linear(
+    0 0%,
+    0.0186 3.23%,
+    0.0682 6.45%,
+    0.1405 9.68%,
+    0.2278 12.9%,
+    0.3238 16.13%,
+    0.4233 19.35%,
+    0.5218 22.58%,
+    0.616 25.81%,
+    0.7034 29.03%,
+    0.7823 32.26%,
+    0.8518 35.48%,
+    0.9113 38.71%,
+    0.9609 41.94%,
+    1.0008 45.16%,
+    1.0318 48.39%,
+    1.0546 51.61%,
+    1.0701 54.84%,
+    1.0795 58.06%,
+    1.0836 61.29%,
+    1.0834 64.52%,
+    1.0799 67.74%,
+    1.0739 70.97%,
+    1.0662 74.19%,
+    1.0574 77.42%,
+    1.0481 80.65%,
+    1.0387 83.87%,
+    1.0295 87.1%,
+    1.0209 90.32%,
+    1.0131 93.55%,
+    1.0061 96.77%,
+    1 100%
+  );
+
+  /* Settle times. Not a scale to pick from by eye — each one is the solution of
+     its own spring, so they are what they are. Pair them with the shape above
+     that shares their damping ratio; the `spring-*` utilities further down do
+     that pairing for you and are what a call site should reach for. */
+  --duration-spring-fast-spatial: 137ms; /* ζ0.9 k1400 */
+  --duration-spring-default-spatial: 194ms; /* ζ0.9 k700  */
+  --duration-spring-slow-spatial: 296ms; /* ζ0.9 k300  */
+  --duration-spring-fast-effects: 108ms; /* ζ1.0 k3800 */
+  --duration-spring-default-effects: 166ms; /* ζ1.0 k1600 */
+  --duration-spring-slow-effects: 235ms; /* ζ1.0 k800  */
+  --duration-spring-expressive-fast-spatial: 221ms; /* ζ0.6 k800  */
+  --duration-spring-expressive-default-spatial: 326ms; /* ζ0.8 k380  */
+  --duration-spring-expressive-slow-spatial: 449ms; /* ζ0.8 k200  */
 
   /* What a bare `transition-opacity` / `transition-transform` gets when the call
      site names no curve. Tailwind's own default is Material *2*'s
@@ -981,23 +1477,77 @@
   --default-transition-timing-function: var(--ease-standard);
   --default-transition-duration: 200ms;
 
-  --animate-fade-in: fadeIn 0.3s var(--ease-decelerate) forwards;
-  /* `0.08s both`, not `forwards`. The backwards fill holds the incoming page at
-     opacity 0 for the first 80ms, which is what lets the outgoing clone's own
-     fade (0–120ms, see lib/routeCrossFade.ts) genuinely overlap it instead of
-     merely abutting it. Total is still 400ms door to door. */
+  /* 400ms, the "enters the screen" step, paired with the decelerate it already
+     had. It was 0.3s — which is `standard`'s step, not `emphasized-decelerate`'s, so
+     the curve and the clock came from two different rows of the table. M3 pairs
+     emphasized-decelerate with medium-4 and nothing else. */
+  --animate-fade-in: fadeIn 0.4s var(--ease-decelerate) forwards;
+  /* `0.08s both`, not `forwards`, and the 80ms hold is what makes a cold mount
+     read like the scripted path.
+     It used to be credited with letting the outgoing clone's fade overlap the
+     incoming page. That is no longer what happens here: `playRouteCrossFade` sets
+     `animation: none` on *both* of its branches and drives the entrance itself, so
+     this keyframe now runs only on a cold mount and when the cross-fade stands
+     down — where there is no clone to overlap. The GSAP path offsets its own
+     entrance by the same 80ms, so the two arrive alike. (The clone's fade is
+     `DURATION.press`, 100ms, not the 120 this comment used to name.)
+     Total is still 400ms door to door. */
   --animate-page-transition: pageIn 0.32s var(--ease-decelerate) 0.08s both;
-  --animate-pop-in: popIn 0.22s var(--ease-decelerate) forwards;
-  /* Durations are the M3 scale, paired as the spec prescribes: something
-     entering the screen uses medium-4 (400ms) with emphasized-decelerate,
-     something leaving uses short-4 (200ms) with emphasized-accelerate. The
-     overlay scrim is a utility fade, so it takes medium-2 (300ms) in and
-     short-4 out. These were 250/320/180 — close enough to look right and
-     wrong enough that nothing in the app shared a timing. */
-  --animate-modal-overlay: modalOverlay 0.3s var(--ease-decelerate) forwards;
+  /* 250ms on **standard**-decelerate. It was 200ms on emphasized-decelerate, which
+     is a mismatched pair twice over: 200 is the *exit* step, and
+     emphasized-decelerate covers 62% of its travel in the first tenth — so a 200ms
+     pop was effectively over in 14ms and the remaining 186 were a crawl. This is a
+     small utility entrance, which is the standard set's medium-1 pairing. */
+  --animate-pop-in: popIn 0.25s var(--ease-standard-decelerate) forwards;
+  /* Durations are the M3 scale, paired as the spec prescribes: something entering
+     the screen uses medium-4 (400ms) with emphasized-decelerate, something leaving
+     uses short-4 (200ms) with emphasized-accelerate. These were 250/320/180 — close
+     enough to look right and wrong enough that nothing in the app shared a timing.
+
+     **The scrim is on the panel's clock, not its own.** It ran 300ms in against the
+     panel's 400, on the reasoning that a scrim is "a utility fade". It is not a
+     component fading in place — it is the other half of the panel arriving, and a
+     dialog that dims for 300ms and then keeps growing for another 100 arrives in
+     two instalments. The exit pair was already shared at 200; now both halves of
+     both directions agree, which is the arrangement Vuetify's drawer uses and the
+     one the app's own nav drawer follows. */
+  --animate-modal-overlay: modalOverlay 0.4s var(--ease-decelerate) forwards;
   --animate-modal-content: modalContent 0.4s var(--ease-decelerate) forwards;
   --animate-modal-overlay-out: modalOverlayOut 0.2s var(--ease-accelerate) forwards;
   --animate-modal-content-out: modalContentOut 0.2s var(--ease-accelerate) forwards;
+
+  /* ── Micro-interactions, as named animations ────────────────────────────
+   *
+   * These were five hand-assembled `animate-[name_duration_curve]` arbitrary
+   * values across seven call sites, and the assembly is where they drifted:
+   * `control-pop` ran at 0.3s in three places and 0.2s in a fourth, and every
+   * one of them named a curve token that was itself an approximation of a
+   * spring. Named here, the duration and the curve travel with the animation.
+   *
+   * The three that are a control or a mark *arriving in place* take the
+   * expressive fast spatial spring — 0.6 damping, the one visibly bouncy curve
+   * in the system, which is what "it popped in" means. `star-burst` keeps
+   * `decelerate` because its overshoot is written into its own keyframes, and
+   * layering a spring on top of that would compound the two. `dot-bounce` keeps
+   * `--ease-loop` because it repeats and has no arrival at all.
+   *
+   * Keep the names in step with the reduced-motion enumeration at the bottom of
+   * this file, which now matches on these classes rather than on the bracket
+   * syntax they replaced. */
+  --animate-control-pop: control-pop var(--duration-spring-expressive-fast-spatial)
+    var(--ease-spring-expressive-spatial-fast) both;
+  /* Two animations on one class, because the glyph's *geometry* and its *fade*
+     belong to the two different spring families and a single `animation` shorthand
+     can only carry one clock. `opacity` on ζ0.6 was the bug: that `linear()` table
+     is above 1 from 45% to 97% of the run, and a value above 1 on an opacity is
+     clipped — so more than half of every icon swap was the glyph sitting at full
+     opacity waiting for its rotation to finish. */
+  --animate-icon-swap:
+    icon-swap-turn var(--duration-spring-expressive-fast-spatial)
+      var(--ease-spring-expressive-spatial-fast) both,
+    icon-swap-fade var(--duration-spring-fast-effects) var(--ease-spring-effects) both;
+  --animate-star-burst: star-burst 0.4s var(--ease-decelerate) both;
+  --animate-dot-bounce: dot-bounce 1s var(--ease-loop) infinite;
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -1007,16 +1557,23 @@
     }
   }
 
+  /* Opacity only. The 12px rise is gone, and this is the one animation in the file
+     whose *absence of a transform* is the whole point.
+     `[data-page-content]` is an ancestor of every gallery card, and the hero flight
+     reads `getBoundingClientRect()` on press. `playRouteCrossFade` neutralises this
+     keyframe on the branch it drives (`page.style.animation = 'none'`), but only on
+     an *update* — so the cold mount of `/`, and every navigation where the cross-fade
+     stands down (a flight already in progress, an overlay open), still ran the rise
+     and left a window in which a tap launched the flyer from a box up to 12px above
+     the thumbnail it was aiming at. A fade with no transform is also the honest
+     description of what this transition is: the rise belonged to the shared axis,
+     which has its own. */
   @keyframes pageIn {
     from {
       opacity: 0;
-      transform: translateY(12px);
     }
     to {
       opacity: 1;
-      /* `none`, not translateY(0): a retained transform would create a
-         containing block for fixed/absolute descendants of the page. */
-      transform: none;
     }
   }
 
@@ -1098,8 +1655,15 @@
 
 /* The colour mark that draws itself on over the base. Its own opacity is
    animated rather than the base's, so the base never leaves — there is no
-   frame where the wordmark is absent. Leaves on the exit curve, which is why
-   pulling away is quick where arriving is not.
+   frame where the wordmark is absent.
+
+   Arrives on `decelerate` over 400ms and leaves on `accelerate` over 200 — the
+   table's own two rows. A transition is governed by the *after-change* style, so
+   the clock on `[data-shown]` is the arrival and the one on the base rule is the
+   departure; this comment used to claim the opposite ("pulling away is quick where
+   arriving is not") while the code did exactly that, and the arrival was 100ms —
+   the press row — on a curve that spends 62% of its travel in the first tenth, so
+   the fade-in was effectively over in 10ms.
 
    The base and the trace are now the SAME drawing, which is the only thing
    that ever made this align. `picpony-g.svg` is generated: it is the Lottie's
@@ -1143,7 +1707,7 @@
 
 .logo-trace[data-shown] {
   opacity: 1;
-  transition: opacity 120ms var(--ease-decelerate);
+  transition: opacity 400ms var(--ease-decelerate);
 }
 
 /* The hairline that keeps the colour mark legible where its own hues sit close
@@ -1253,11 +1817,15 @@ textarea {
   }
 }
 
+/* The press wave. Its opacity IS the pressed state layer — a ripple is that
+   layer spreading from the point of contact, not a separate effect with its own
+   weight — so the value lives here, once, and `spawnRipple` only drives the
+   scale and the fade-out. */
 .ripple {
   position: absolute;
   border-radius: 9999px;
   background: currentColor;
-  opacity: 0;
+  opacity: var(--md-sys-state-pressed-opacity);
   pointer-events: none;
 }
 
@@ -1271,13 +1839,20 @@ textarea {
   }
 }
 
-@keyframes icon-swap {
+@keyframes icon-swap-turn {
   from {
     transform: rotate(-90deg) scale(0.6);
-    opacity: 0;
   }
   to {
     transform: none;
+  }
+}
+
+@keyframes icon-swap-fade {
+  from {
+    opacity: 0;
+  }
+  to {
     opacity: 1;
   }
 }
@@ -1292,15 +1867,6 @@ textarea {
   40% {
     transform: translateY(-4px);
     opacity: 1;
-  }
-}
-
-@keyframes bar-grow {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: none;
   }
 }
 
@@ -1324,7 +1890,7 @@ textarea {
 }
 
 /* Skeleton shimmer — a light sweep reads as "loading" better than a flat
-   pulse. Applied via .skeleton in place of animate-pulse. */
+   pulse. Applied via .skeleton in place of Tailwind's own pulse utility. */
 .skeleton {
   position: relative;
   overflow: hidden;
@@ -1382,7 +1948,14 @@ html[data-theme-vt]::view-transition-new(root) {
 @media (prefers-reduced-motion: reduce) {
   /* Everything decorative collapses to a cut. Enumerated rather than a blanket
      `* { animation: none }` because the hero flight and the theme wipe already
-     branch on this preference in JS, and a global override would fight them. */
+     branch on this preference in JS, and a global override would fight them.
+
+     `animation-delay` has to be zeroed alongside the duration, and leaving it out
+     was not harmless: `--animate-page-transition` is `320ms` behind an `80ms both`
+     delay, and a backwards fill during the delay holds the element at the
+     keyframe's *from* state. So collapsing only the duration left every route
+     change under this preference showing a blank page for 80ms — a cut is
+     supposed to be instant, and this one arrived late. */
   .animate-page-transition,
   .animate-fade-in,
   .animate-pop-in,
@@ -1391,19 +1964,28 @@ html[data-theme-vt]::view-transition-new(root) {
   .animate-modal-overlay-out,
   .animate-modal-content-out {
     animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
   }
 
   /* Continuous loops: a spinner still has to read as "busy", so it slows down
-     rather than stopping. Purely ambient loops stop outright. */
-  .animate-spin {
+     rather than stopping. Purely ambient loops stop outright.
+
+     Tailwind's own pulse utility is listed alongside it even though nothing in the
+     app applies it: the cost of covering a class that never appears is zero, and the
+     cost of the reverse is a loop that keeps running under the preference. */
+  .animate-spin,
+  .animate-pulse {
     animation-duration: 2.4s !important;
   }
 
-  [class*='animate-[dot-bounce'],
-  [class*='animate-[star-burst'],
-  [class*='animate-[control-pop'],
-  [class*='animate-[icon-swap'],
-  [class*='animate-[bar-grow'] {
+  /* The micro-interactions. Matched by class name now that each is a named
+     animation token; they used to be `animate-[…]` arbitrary values and this
+     block had to match on a substring of the bracket syntax, which meant adding
+     a sixth one silently opted it out of reduced motion. */
+  .animate-control-pop,
+  .animate-icon-swap,
+  .animate-star-burst,
+  .animate-dot-bounce {
     animation: none !important;
   }
 
@@ -1413,7 +1995,7 @@ html[data-theme-vt]::view-transition-new(root) {
    * *transitions*, and `transition-ui` deliberately lists `transform, translate,
    * scale, rotate` (it has to — Tailwind compiles `translate-x-*` and `scale-*`
    * to those standalone properties). So under this preference the nav drawer
-   * still slid 288px, the home tab pill still translated 8px, the switch handle
+   * still slid its full width, the home tab pill still translated 8px, the switch handle
    * still travelled and resized, `Select`'s chevron still rotated 180°, and two
    * tab icons still scaled to 110%. Only a handful of components carried a
    * `motion-reduce:` guard, each for one property.
@@ -1424,11 +2006,38 @@ html[data-theme-vt]::view-transition-new(root) {
    * fade would make hover and focus read as a flicker rather than as a state.
    *
    * The JS-driven systems are untouched, as above: they branch on the preference
-   * themselves and a blanket override would fight them. */
+   * themselves and a blanket override would fight them.
+   *
+   * **Two selectors, because Tailwind emits two forms.** `transition-[a,b]` is the
+   * arbitrary *value* form and compiles to a class containing `transition-[`;
+   * `[transition:a_1s,b_1s]` is the arbitrary *property* form and compiles to a
+   * class containing `[transition:` and nothing else. Matching only the first left
+   * `ToggleSwitch`'s handle — the one element in the app that needs the shorthand,
+   * because its width, height and colour run on three different clocks — resizing
+   * 16→24dp and swelling to 28dp on press under this preference, which is exactly
+   * the motion the rule exists to remove. Verified in the built stylesheet rather
+   * than by reading the source: grep the escaped selectors, both must be present.
+   *
+   * Tailwind's *named* transition utilities are a third form and are listed by
+   * hand, because their class names share no substring with either bracket form.
+   * All four are listed, in use or not: `transition-transform` has seven call
+   * sites, `transition-opacity` fifteen, `transition-shadow` one and
+   * `transition-all` none. Listing the two that only carry `opacity` and
+   * `box-shadow` changes nothing about what moves — the replacement list keeps both
+   * — and it is what makes the four behave identically, which is the part that was
+   * wrong: `transition-opacity` being absent left two image cross-fades as the only
+   * fades in the app that a `motion-reduce:transition-none` could still stop, so the
+   * same gesture answered the preference two ways depending on the component. */
   .transition-ui,
   .m3-field > label,
   .m3-field > fieldset > legend,
-  [class*='transition-['] {
+  [class*='transition-['],
+  [class*='[transition:'],
+  .transition-transform,
+  .transition-opacity,
+  .transition-colors,
+  .transition-shadow,
+  .transition-all {
     transition-property:
       color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow,
       opacity !important;
@@ -1485,7 +2094,14 @@ html[data-theme-vt]::view-transition-new(root) {
 }
 
 .group:hover .media-hover-scrim {
-  background-color: color-mix(in oklab, var(--md-sys-color-scrim) 10%, transparent);
+  /* The hover token plus the documented two points, rather than a flat 10: the
+     base now follows `--md-sys-state-hover-opacity` if that ever moves, and the
+     delta stays visible as a delta instead of being baked into a round number. */
+  background-color: color-mix(
+    in oklab,
+    var(--md-sys-color-scrim) calc(var(--md-sys-state-hover-opacity) * 100% + 2%),
+    transparent
+  );
 }
 
 /* Caption gradient over a thumbnail. Was `bg-gradient-to-t from-black/60` at two
@@ -1517,9 +2133,12 @@ html[data-theme-vt]::view-transition-new(root) {
 }
 
 /* The arc grows and shrinks, so it has to ease at BOTH ends; `--ease-standard`
-   is one-sided and left the arc snapping to a stop at full length. */
+   is one-sided and left the arc snapping to a stop at full length.
+   `--ease-loop` is the token for exactly that — a repeating motion with no
+   arrival — and this rule was spelling out Material *2*'s standard curve
+   longhand instead, which is the one curve family this design system replaced. */
 .m3-progress-arc {
-  animation: m3-progress-dash 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: m3-progress-dash 1.4s var(--ease-loop) infinite;
   transform-origin: center;
 }
 
@@ -1554,9 +2173,17 @@ html[data-theme-vt]::view-transition-new(root) {
 }
 
 /* Indeterminate linear indicator — the bar sweeps its track, widening through
-   the middle of the pass. */
+   the middle of the pass.
+
+   `--ease-loop`, not `--ease-standard`. Every M3 curve is one-sided, so on an
+   *infinite* animation the velocity is discontinuous once per cycle: the bar eased
+   into the right edge, vanished, and reappeared at the left already at full speed.
+   This is the identical bug `.m3-progress-arc` thirty lines up was fixed for, and
+   it survived because a sweep that restarts off-screen hides the seam better than a
+   rotating arc does. A repeating motion has no arrival, which is exactly what
+   `--ease-loop` (symmetric at both ends) is for. */
 .m3-linear-bar {
-  animation: m3-linear-sweep 1.8s var(--ease-standard) infinite;
+  animation: m3-linear-sweep 1.8s var(--ease-loop) infinite;
   transform-origin: left center;
 }
 
@@ -1589,73 +2216,12 @@ html[data-theme-vt]::view-transition-new(root) {
   }
 }
 
-/* Range slider styling */
-.range-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--md-sys-color-surface-container-highest);
-  outline: none;
-  cursor: pointer;
-}
-
-.range-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--md-sys-color-primary);
-  cursor: pointer;
-  border: 2px solid var(--md-sys-color-surface);
-  box-shadow: var(--md-sys-elevation-1);
-  transition: box-shadow 0.2s var(--ease-standard);
-}
-
-/* The halo is the M3 state layer, so it has to be derived from the live
-   primary. It used to be a literal rgba() of the light-mode brand pink and
-   stayed that colour in dark mode. */
-.range-slider::-webkit-slider-thumb:hover {
-  box-shadow:
-    0 0 0 8px color-mix(in oklab, var(--md-sys-color-primary) 16%, transparent),
-    var(--md-sys-elevation-1);
-}
-
-.range-slider::-webkit-slider-thumb:active {
-  box-shadow:
-    0 0 0 14px color-mix(in oklab, var(--md-sys-color-primary) 16%, transparent),
-    var(--md-sys-elevation-1);
-}
-
-.range-slider::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--md-sys-color-primary);
-  cursor: pointer;
-  border: 2px solid var(--md-sys-color-surface);
-  box-shadow: var(--md-sys-elevation-1);
-  transition: box-shadow 0.2s var(--ease-standard);
-}
-
-.range-slider::-moz-range-thumb:hover {
-  box-shadow:
-    0 0 0 8px color-mix(in oklab, var(--md-sys-color-primary) 16%, transparent),
-    var(--md-sys-elevation-1);
-}
-
-.range-slider::-moz-range-thumb:active {
-  box-shadow:
-    0 0 0 14px color-mix(in oklab, var(--md-sys-color-primary) 16%, transparent),
-    var(--md-sys-elevation-1);
-}
-
-.range-slider::-moz-range-track {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--md-sys-color-surface-container-highest);
-}
+/* The range slider's styling lived here — a 6px track, a 3px corner, a 50%
+   thumb radius and a hover halo at the dragged state's 16% rather than hover's
+   8%, none of which is an M3 value. It is `components/Slider.tsx` now, at the
+   Expressive geometry (16dp track, a 4x44dp handle in a 6dp gap), and the
+   pseudo-element rules it needed are arbitrary variants inside that component
+   rather than a global class two call sites had to remember. */
 
 /* A cross-fade clone is a still frame: every animation and transition inside it
    would otherwise restart from its first keyframe the moment it is appended. */
@@ -1725,33 +2291,60 @@ html[data-theme-vt]::view-transition-new(root) {
   --yarl__slide_icon_error_color: var(--md-sys-color-error-fill);
 }
 
-/* Give every control the M3 icon-button container it was missing: a 40dp
-   circle with a state layer, so hover/focus/press read the same here as
-   everywhere else in the app. */
+/* Give every control the M3 icon-button container it was missing: a 48dp circle
+   with a state layer, so hover/focus/press read the same here as everywhere else
+   in the app. 48dp is `touch-target`'s figure and M3's minimum; it read 44, which
+   is Apple's, and the comment above it claimed 40. */
 .yarl__button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 48px;
+  min-height: 48px;
   border-radius: var(--radius-full, 9999px);
   transition:
     background-color 200ms var(--ease-standard),
     color 200ms var(--ease-standard);
 }
 
-.yarl__button:hover,
+/* The three state weights, from the tokens rather than by hand. They were 12% for
+   hover *and* focus and 16% for press: 12 is the stale Material Web figure this
+   app corrected to .10 everywhere else, and 16 is `dragged` — nothing here is
+   being dragged. Focus and pressed are deliberately equal in M3 (.10); the focus
+   *ring* below is what separates them, not the tint. */
+.yarl__button:hover {
+  background-color: color-mix(
+    in oklab,
+    var(--md-sys-color-on-media) calc(var(--md-sys-state-hover-opacity) * 100%),
+    transparent
+  );
+}
+
+/* One rule for one state. The state layer and the ring used to be two
+   `.yarl__button:focus-visible` blocks nineteen lines apart, which is the "same
+   object, two places" pattern the rest of this file polices.
+   The ring is drawn *inward*, which is the app's third form of the one ring: the
+   lightbox clips, and a `box-shadow` ring outside a clipped control is thrown
+   away. Spelled as a raw `box-shadow` rather than through
+   `focus-ring-on-media` because this is a plugin's class in a plain rule, with
+   none of Tailwind's ring machinery to read `--tw-inset-ring-color` — the token
+   is the same one, so the two cannot drift. */
 .yarl__button:focus-visible {
-  background-color: color-mix(in oklab, var(--md-sys-color-on-media) 12%, transparent);
+  background-color: color-mix(
+    in oklab,
+    var(--md-sys-color-on-media) calc(var(--md-sys-state-focus-opacity) * 100%),
+    transparent
+  );
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--md-sys-color-focus-on-media);
 }
 
 .yarl__button:active {
-  background-color: color-mix(in oklab, var(--md-sys-color-on-media) 16%, transparent);
-}
-
-.yarl__button:focus-visible {
-  outline: 2px solid var(--md-sys-color-on-media);
-  outline-offset: -2px;
+  background-color: color-mix(
+    in oklab,
+    var(--md-sys-color-on-media) calc(var(--md-sys-state-pressed-opacity) * 100%),
+    transparent
+  );
 }
 
 /* The counter is a label, not a control. It exposes its own tokens, so this
@@ -1957,37 +2550,40 @@ html[data-theme-vt]::view-transition-new(root) {
 
   /* Tailwind's preflight zeroes heading sizes and nothing put them back, so
      every heading in the app was carrying its own ad-hoc `text-2xl font-bold`.
-     These give the document a default hierarchy; utilities still override. */
+     These give the document a default hierarchy; utilities still override.
+
+     **Size and leading only — no weight.** They used to set 700/600, neither of
+     which is a value in the type scale, and the roles those sizes come from now
+     declare their own (`WeightRegular`, per `TypeScaleTokens`). Setting it here as
+     well is what made one role render at three weights depending on which element
+     it landed on, with the `-emphasized` twin lighter than both. The heavier line
+     is the `-emphasized` role, which is a decision at the call site rather than a
+     property of the tag. `letter-spacing` went with it for the same reason: h1's
+     `-0.01em` was off-token and applied to no other heading. */
   h1 {
     font-size: var(--text-headline-m);
     line-height: var(--text-headline-m--line-height);
-    font-weight: 700;
-    letter-spacing: -0.01em;
   }
 
   h2 {
     font-size: var(--text-headline-s);
     line-height: var(--text-headline-s--line-height);
-    font-weight: 600;
   }
 
   h3 {
     font-size: var(--text-title-l);
     line-height: var(--text-title-l--line-height);
-    font-weight: 600;
   }
 
   h4 {
     font-size: var(--text-title-m);
     line-height: var(--text-title-m--line-height);
-    font-weight: 600;
   }
 
   h5,
   h6 {
     font-size: var(--text-title-s);
     line-height: var(--text-title-s--line-height);
-    font-weight: 600;
   }
 
   /* Chinese text has no ascender/descender slack, so unbroken runs of Latin
@@ -2017,7 +2613,7 @@ html[data-theme-vt]::view-transition-new(root) {
 /* Card chrome is leased only by the active session; avoid permanent layers. */
 .image-hero-card-link [data-image-hero-chrome] {
   opacity: 1;
-  transition: opacity 220ms var(--ease-standard);
+  transition: opacity 200ms var(--ease-standard);
 }
 
 /*
@@ -2066,10 +2662,31 @@ a:has([data-image-hero-role='thumbnail']):-moz-focusring {
   box-shadow: none !important;
 }
 
-a:has([data-image-hero-role='thumbnail']):focus-visible {
-  outline: none !important;
-  outline-offset: 0 !important;
-  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--foreground) 55%, transparent) !important;
+/* The ring itself, on a pseudo-element rather than on the anchor's own
+   `box-shadow`.
+ *
+ * Two things were wrong with the `box-shadow` form. It was
+ * `color-mix(--foreground 55%)` — an alpha on a token, and `on-surface` rather
+ * than the focus role, so the app's most-tapped control had the one ring in the
+ * app that was neither solid nor `--md-sys-color-focus`. And an inset shadow is
+ * painted with the element's own background, i.e. *below* its descendants, while
+ * the thumbnail box and its image fill the anchor exactly — so the 2px band it
+ * occupied was covered, and what showed through depended on the picture's own
+ * transparency.
+ *
+ * `::after` at `inset: 0` paints above both, `pointer-events: none` keeps it out
+ * of hit testing, and `z-index: 3` clears `ImageCard`'s chrome layer at 2 — a
+ * small local integer, since this stacks against the card's own children rather
+ * than against other components. `border-radius: inherit` tracks the anchor's
+ * corner so the ring follows a tile and a banner alike. */
+a:has([data-image-hero-role='thumbnail']):focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--md-sys-color-focus);
+  pointer-events: none;
 }
 
 /* Shared image transition: a single flyer stays inside the app content area. */
@@ -2179,6 +2796,38 @@ html[data-image-hero-transition] .image-detail-header-route {
 html[data-image-hero-transition] #nprogress {
   opacity: 0 !important;
   transition: none !important;
+}
+
+/* The zoom affordance stands down for the length of a flight.
+ *
+ * It is `opacity-100` below `sm` and hover-revealed above it, while `HeroStage`'s landing
+ * target renders no children whatsoever — so on a phone the frame that hands the picture
+ * over to the routed detail also conjured a 40dp control into its bottom-right corner, and
+ * the frame that starts a close took it away again. Two pieces of chrome appearing out of
+ * nothing at the two moments the transition is trying to say "this is one object". */
+html[data-image-hero-transition] [data-image-detail-zoom] {
+  opacity: 0 !important;
+  transition: none !important;
+}
+
+/* The gallery's own blurs stand down for the length of a flight.
+ *
+ * Every thumbnail carries three `Badge tone="media"` marks and that tone includes a
+ * backdrop blur, so a 50-card grid holds on the order of 150 backdrop-filter regions.
+ * A backdrop filter has to re-sample what is behind it whenever that moves, and for
+ * the whole flight the grid *is* moving — `[data-image-detail-background-visual]`
+ * carries the depth sink's translate and scale. Measured on presented compositor
+ * frames (a CDP screencast, so this is what the display got rather than what the main
+ * thread attempted): 28fps with the blurs live, 31fps without, reproducible across
+ * three runs each. Nothing else in the flight moved the number — cancelling the
+ * flyer's corner track, the container mask, the content fit and every skeleton
+ * shimmer, together, was worth one frame per second.
+ *
+ * Invisible while it lasts: the plate under each mark is `media-plate`, an opaque 55%
+ * black, so what the blur contributes is the softness of a thumbnail's own pixels
+ * behind a 20px pill — on a grid that is sinking away under a growing mask. */
+html[data-image-hero-transition] [data-image-detail-background-visual] * {
+  backdrop-filter: none !important;
 }
 
 .image-detail-route {
@@ -2334,7 +2983,8 @@ html[data-image-hero-transition] #nprogress {
 
 /* The app's default transition set.
  *
- * Replaces `transition-all`, which was used at 84 call sites. `all` animates
+ * Replaces the all-properties transition, which was used at 84 call sites. `all`
+ * animates
  * every animatable property, layout included — so a control that grew its
  * padding on hover animated the reflow, and anything inside a card being
  * measured by the hero flight could be caught mid-tween. This lists only the
@@ -2350,7 +3000,7 @@ html[data-image-hero-transition] #nprogress {
      standalone CSS properties, NOT to `transform` — so a list naming only
      `transform` silently animates none of them. That is what broke the
      sidebar's slide and every hover-lift in the app when this replaced
-     `transition-all`. Tailwind's own `transition-transform` lists all four for
+     the all-properties shorthand. Tailwind's own transform transition lists all four for
      exactly this reason. */
   transition-property:
     color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity,
@@ -2359,18 +3009,117 @@ html[data-image-hero-transition] #nprogress {
   transition-duration: 200ms;
 }
 
-/* Expands an element's *hit area* to the 44px minimum without changing what it
- * looks like or how it lays out.
+/* The nine M3 motion-scheme springs, each as one class that carries its shape
+ * and its settle time together.
+ *
+ * Two tokens have to agree for a spring to be a spring, and handing a call site
+ * two knobs is how they come apart — a 0.6-damping shape on a 449ms clock is not
+ * a slower bounce, it is a different object. So the pairing lives here and a
+ * call site names the *spring*, not its parts:
+ *
+ *     transition-[translate] spring-fast-spatial
+ *
+ * Compose with `transition-[…]`, which is still the thing that decides *what*
+ * moves — and which is also what puts these inside the reduced-motion rule at
+ * the bottom of this file, since that matches on the transition utility rather
+ * than on the timing.
+ *
+ * Pick by what is changing, then by how far:
+ *   spatial   it moves or resizes  →  may overshoot
+ *   effects   it fades or recolours →  never overshoots
+ *   fast / default / slow — a switch handle, a menu growing, a sheet settling.
+ * Use the expressive trio only where a flourish is the point.
+ *
+ * Not for anything a press opens or closes across a distance. A spring starts
+ * from rest, which is right for a value released toward a target and wrong for
+ * one a discrete press starts — the press is the impulse, so the motion has to
+ * begin at speed. The navigation drawer is the worked example: on ζ0.9 its first
+ * quarter of travel took 62ms and the toggle felt lagged. Those belong to the
+ * easing + duration table, which is the transition/component split M3 draws and
+ * AGENTS.md restates. */
+@utility spring-fast-spatial {
+  transition-timing-function: var(--ease-spring-standard-spatial);
+  transition-duration: var(--duration-spring-fast-spatial);
+}
+@utility spring-default-spatial {
+  transition-timing-function: var(--ease-spring-standard-spatial);
+  transition-duration: var(--duration-spring-default-spatial);
+}
+@utility spring-slow-spatial {
+  transition-timing-function: var(--ease-spring-standard-spatial);
+  transition-duration: var(--duration-spring-slow-spatial);
+}
+@utility spring-fast-effects {
+  transition-timing-function: var(--ease-spring-effects);
+  transition-duration: var(--duration-spring-fast-effects);
+}
+@utility spring-default-effects {
+  transition-timing-function: var(--ease-spring-effects);
+  transition-duration: var(--duration-spring-default-effects);
+}
+@utility spring-slow-effects {
+  transition-timing-function: var(--ease-spring-effects);
+  transition-duration: var(--duration-spring-slow-effects);
+}
+@utility spring-expressive-fast-spatial {
+  transition-timing-function: var(--ease-spring-expressive-spatial-fast);
+  transition-duration: var(--duration-spring-expressive-fast-spatial);
+}
+@utility spring-expressive-default-spatial {
+  transition-timing-function: var(--ease-spring-expressive-spatial);
+  transition-duration: var(--duration-spring-expressive-default-spatial);
+}
+@utility spring-expressive-slow-spatial {
+  transition-timing-function: var(--ease-spring-expressive-spatial);
+  transition-duration: var(--duration-spring-expressive-slow-spatial);
+}
+
+/* ---------------------------------------------------------------------------
+ * The touch floor, and why it is not one number
+ *
+ * 48dp is what a finger needs — M3's minimum and WCAG 2.5.5's AAA figure. It is
+ * not what a mouse needs, and applying it to a mouse is not a free safety margin:
+ * `state-layer` keys on `:hover`, so a hit area wider than the painted box lights
+ * the control up while the cursor is visibly outside it, and neighbouring targets
+ * in a dense row start answering for each other. Measured on this app: a 20px
+ * chip cross wearing a 48px region overlaps its neighbour's, and an 18px checkbox
+ * answers a click 15px above itself.
+ *
+ * The pointer floor is WCAG 2.2 SC 2.5.8 — **24x24 CSS px**, AA. `Checkbox`'s own
+ * comment already cited it, so this is that citation applied rather than a new
+ * argument. Note what this does *not* do: it never drops a finger below 48, so a
+ * touchscreen laptop reporting a fine pointer still gets 24 — which its trackpad
+ * wants — and a tablet gets 48.
+ *
+ * One custom property, two utilities, so the two can never disagree.
+ * --------------------------------------------------------------------------- */
+:root {
+  --touch-floor: 48px;
+}
+
+@media (pointer: fine) {
+  :root {
+    --touch-floor: 24px;
+  }
+}
+
+/* Expands an element's *hit area* to the floor without changing what it looks
+ * like or how it lays out.
  *
  * Dense chrome — an admin table's edit/delete pair, a chip's dismiss cross —
- * genuinely wants a 28px glyph; scaling the box to 44px would double the row
- * height of every table in the app. A centred pseudo-element takes the hit
- * instead, which is the M3 "touch target may extend beyond the component
- * bounds" rule.
+ * genuinely wants a 28px glyph; scaling the box would double the row height of
+ * every table in the app. A centred pseudo-element takes the hit instead, which
+ * is the M3 "touch target may extend beyond the component bounds" rule.
  *
  * Do not combine with `data-ripple`: that sets `overflow: hidden` (to clip the
  * ripple), which would clip the pseudo-element out of hit-testing too. Those
- * controls need a genuinely larger box.
+ * controls take `touch-size` below.
+ *
+ * And do not reach for it on an inline target inside prose. SC 2.5.8 exempts a
+ * target "in a sentence or whose size is otherwise constrained by the line-height
+ * of non-target text", because a 48px band on a line in a 28px-leading paragraph
+ * takes clicks from the lines above and below it on every device. `PicDetail`'s
+ * body links had this; the exemption is the answer, not a smaller floor.
  */
 @utility touch-target {
   position: relative;
@@ -2380,10 +3129,29 @@ html[data-image-hero-transition] #nprogress {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: max(100%, 44px);
-    height: max(100%, 44px);
+    width: max(100%, var(--touch-floor));
+    height: max(100%, var(--touch-floor));
     translate: -50% -50%;
   }
+}
+
+/* The same floor, taken as a real box.
+ *
+ * For a control that carries `data-ripple` and therefore cannot use the
+ * pseudo-element: a drawer row, a menu row, a pagination number. Those lay out at
+ * the pointer step and grow back to 48 under a finger, so the number written at
+ * the call site is the desktop one.
+ *
+ * A transparent border plus `background-clip: padding-box` would give a 48px hit
+ * box around a smaller painted circle, and the state layer and the ripple clip
+ * would both still be right — `::before { inset: 0 }` and `overflow: hidden` both
+ * resolve against the padding box. The focus ring is what rules it out:
+ * `focus-visible:ring-2` is a `box-shadow`, which follows the *border* box, so the
+ * ring would sit detached from the container it is ringing.
+ */
+@utility touch-size {
+  min-height: var(--touch-floor);
+  min-width: var(--touch-floor);
 }
 
 /* Used by the admin rail and any horizontally-scrolled chip row. Was
@@ -2547,7 +3315,17 @@ html[data-image-hero-transition] #nprogress {
 }
 
 /* The outline. `min-inline-size` because a fieldset's UA default is
-   `min-content`, which would stop it from ever being narrower than its legend. */
+   `min-content`, which would stop it from ever being narrower than its legend.
+
+   4dp, which is `OutlinedTextFieldTokens.ContainerShape` = `CornerExtraSmall` (and
+   `FilledTextFieldTokens.ContainerShape` = `CornerExtraSmallTop`, the same step).
+   It read 12dp, and the shape table called that "the text field's step" as though
+   it were the spec's — it is the *card* step. Two consequences worth knowing:
+   a field no longer shares a corner with the card it sits in, which is correct
+   (they are not the same object and were never meant to be concentric), and the
+   notch's arithmetic is unaffected because the legend sits along the top edge, not
+   in a corner. `size="lg"` keeps its pill: `SearchBarTokens.ContainerShape` is
+   `CornerFull`, so the search bar is genuinely a different shape from a field. */
 .m3-field > fieldset {
   position: absolute;
   inset: calc(var(--field-notch-h) / -2) 0 0;
@@ -2556,7 +3334,7 @@ html[data-image-hero-transition] #nprogress {
   padding-inline: calc(var(--field-lead) - 0.25rem);
   min-inline-size: 0;
   border: 1px solid var(--md-sys-color-outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xs);
   pointer-events: none;
   transition-property: border-color;
   transition-duration: 200ms;
@@ -2580,9 +3358,9 @@ html[data-image-hero-transition] #nprogress {
  *
  * So it is *filled*: a tone step, no border, no shadow. Same 12dp corner and
  * the same 44dp box, so the two languages are still one family; only the
- * boundary treatment differs. `surface-container-high` is the same step the
- * unselected filter chip takes, which is the other "neutral control you act
- * through" on these screens.
+ * boundary treatment differs. `surface-container-highest` is
+ * `FilledTextFieldTokens.ContainerColor`, and it is also the step the unselected
+ * filter chip takes — the other "neutral control you act through" on these screens.
  *
  * Two mechanical notes:
  *
@@ -2604,12 +3382,33 @@ html[data-image-hero-transition] #nprogress {
 .m3-field:not([data-labelled]) > fieldset {
   inset: 0;
   border-color: transparent;
-  background-color: var(--md-sys-color-surface-container-high);
+  background-color: var(--md-sys-color-surface-container-highest);
   transition-property: background-color, box-shadow;
 }
 
+/* Hover is a **state layer**, not the next tone step.
+ *
+ * This used to paint `-high` at rest and swap to `-highest` on hover, which is the
+ * two roles transposed: `FilledTextFieldTokens.ContainerColor` *is*
+ * `SurfaceContainerHighest`, so the resting field was a step light and its hover
+ * value was its own resting value. M3 never moves a field's container tone; it
+ * composites `on-surface` at the hover opacity over it, which is what every other
+ * hover in this app does through the `state-layer` utility. That utility cannot be
+ * used here — it keys on the element's own `:hover` and this rule keys on the
+ * *wrapper's* — so the layer is mixed into the background instead, from the same
+ * two tokens the utility would have used.
+ *
+ * The container is named *first* in the mix, and that ordering is load-bearing: a
+ * `color-mix()` gets an automatic fallback declaration for engines without it, and
+ * the fallback is the first colour. Written the other way round the fallback was
+ * `on-surface` — a near-black fill over the whole field on hover. This way the
+ * worst case is simply no hover tint. */
 .m3-field:not([data-labelled]):hover:not(:focus-within) > fieldset {
-  background-color: var(--md-sys-color-surface-container-highest);
+  background-color: color-mix(
+    in srgb,
+    var(--md-sys-color-surface-container-highest) calc(100% - var(--md-sys-state-hover-opacity) * 100%),
+    var(--md-sys-color-on-surface)
+  );
 }
 
 .m3-field:not([data-labelled])[data-invalid] > fieldset {
@@ -2657,8 +3456,38 @@ html[data-image-hero-transition] #nprogress {
   inset-inline-start: 1.25rem;
 }
 
-.m3-field[data-size='lg'] > .m3-field-trail {
-  padding-inline-end: 0.5rem;
+/* The `lg` field's own trailing inset used to be declared here, at 8dp against the
+   base rule's 4dp. The base rule is 8dp now — one inset for every field size, since
+   the number is `(field height - control height) / 2` and both are the same at every
+   size the app ships. Left as a comment rather than deleted silently: a rule that
+   only ever restated its default is worth knowing was considered. */
+
+/* ---------------------------------------------------------------------------
+ * `data-size='sm'` — the dense field, 40dp.
+ *
+ * The one height in this file M3 does not name, and the reason is in `Input`'s
+ * docblock: a field in a filter bar or a settings row is chrome, its neighbours are
+ * a 40dp `Select` and a 32dp chip, and matching them is what stops one row from
+ * running at two heights. Unlabelled only — the notch's geometry below is derived
+ * from 56dp — and it accepts no trailing control, which is what keeps the "one
+ * inset for every field size" claim above true rather than forking it.
+ *
+ * 12px inline, which is `Select size="sm"`'s own `px-3`, so a field and a dropdown
+ * side by side put their text on the same two columns. The leading glyph's overlay
+ * moves in with it: 8px from the edge against the base rule's 12, since the box is
+ * 16px shorter and the glyph is the same 20px.
+ * --------------------------------------------------------------------------- */
+.m3-field[data-size='sm'] {
+  --field-lead: 0.75rem;
+  --field-trail: 0.75rem;
+}
+
+.m3-field[data-size='sm'][data-lead] {
+  --field-lead: 2.25rem;
+}
+
+.m3-field[data-size='sm'] > .m3-field-lead {
+  inset-inline-start: 0.5rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2700,8 +3529,15 @@ html[data-image-hero-transition] #nprogress {
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 0.25rem;
-  padding-inline-end: 0.25rem;
+  /* One gap, and it is the same 8dp the slot keeps from the field's own boundary.
+     It was 4dp between the controls against 8dp at the edge, which is the thing
+     that reads as "the button is not centred in the field": two different insets
+     around one object, and the eye takes the smaller one as the intended margin
+     and the larger one as an error. A pill inside a pill is concentric when
+     `inner = outer - gap`, so the gap has to be a single number to be checkable
+     at all — here 8dp all round a 40dp control in a 56dp field. */
+  gap: 0.5rem;
+  padding-inline-end: 0.5rem;
 }
 
 /* A composer grows downward, so its buttons belong at the bottom of the box
@@ -2790,10 +3626,33 @@ html[data-image-hero-transition] #nprogress {
   color: var(--md-sys-color-error);
 }
 
-/* One declaration fades the border, the label and the text together — which is
-   the reason `disabled-content` is a utility rather than a colour. */
-.m3-field:has(> :is(input, textarea):disabled) {
+/* Disabled, per part rather than as one blanket fade.
+ *
+ * This was `opacity: 0.38` on the whole wrapper, and 0.38 is the *ink* weight —
+ * M3 gives the three parts three weights, because they start at three different
+ * strengths: `DisabledLabelTextOpacity` / input ink 0.38,
+ * `OutlinedTextFieldTokens.DisabledOutlineOpacity` **0.12**, and
+ * `FilledTextFieldTokens.DisabledContainerOpacity` **0.04**. Fading everything at
+ * 0.38 therefore left the outline three times heavier than the spec, so a disabled
+ * field read as a *bordered* field with faint text rather than as an inactive one.
+ *
+ * Split out, each part fades from its own resting value, which also means the
+ * labelled and unlabelled variants stay correct without a second rule: the one has
+ * an outline and no fill, the other has a fill and no outline. */
+.m3-field:has(> :is(input, textarea):disabled) > label,
+.m3-field:has(> :is(input, textarea):disabled) > input,
+.m3-field:has(> :is(input, textarea):disabled) > textarea,
+.m3-field:has(> :is(input, textarea):disabled) > .m3-field-lead,
+.m3-field:has(> :is(input, textarea):disabled) > .m3-field-trail {
   opacity: 0.38;
+}
+
+.m3-field[data-labelled]:has(> :is(input, textarea):disabled) > fieldset {
+  border-color: color-mix(in srgb, transparent 88%, var(--md-sys-color-on-surface));
+}
+
+.m3-field:not([data-labelled]):has(> :is(input, textarea):disabled) > fieldset {
+  background-color: color-mix(in srgb, transparent 96%, var(--md-sys-color-on-surface));
 }
 
 /* A textarea's label belongs on its first line, not in the middle of the box,
@@ -2832,6 +3691,24 @@ html[data-image-hero-transition] #nprogress {
 
 @utility focus-ring-on-primary {
   --tw-ring-color: var(--md-sys-color-focus-on-primary);
+}
+
+/* The ring for a control sitting on a photograph.
+ *
+ * Documented in AGENTS.md long before it existed: the token was here, one raw
+ * `box-shadow` in the lightbox block consumed it, and the utility the docs told
+ * you to write emitted nothing at all — which is the trap that section warns
+ * about, since a class that compiles to nothing looks identical in the source.
+ *
+ * **Pair it with `inset-ring-2`, and with a plate.** `focus-on-media` resolves to
+ * `on-media`, i.e. white in both schemes, and an *outset* white ring puts its
+ * outer edge on the picture, where a bright subject takes it to 1:1. Painted
+ * inward over `bg-media-plate` (black at 55%) the worst case is a pure-white
+ * subject, which composites to 4.8:1 — clear of the 3:1 WCAG 2.4.11 asks — and it
+ * only improves over anything darker. `IconButton variant="media"` supplies that
+ * plate; anything else reaching for this needs one too. */
+@utility focus-ring-on-media {
+  --tw-inset-ring-color: var(--md-sys-color-focus-on-media);
 }
 
 /* The same ring, painted inward. Pair with `focus-visible:inset-ring-2`.
@@ -2895,6 +3772,13 @@ html[data-image-hero-transition] #nprogress {
      therefore behind it. Nothing in the app opens a dialog from inside the
      viewer, so the viewer sits above dialogs and popovers. */
   --z-lightbox: 250;
+  /* A plain tooltip is the one overlay that has to clear everything it can
+     describe, and it can describe a control inside a menu or on top of the
+     lightbox. It borrowed `--z-popover`, which tied it with every `Select` menu —
+     resolved only by portal order — and put it *below* the viewer. M3 puts the
+     plain tooltip above menus. It is never interactive, so nothing can be trapped
+     under it. */
+  --z-tooltip: 260;
   /* The boot splash covers the app, so it outranks anything the app can put up.
      It does not outrank a toast: a failure raised while the splash is still
      showing is the one message that must survive it. */
@@ -2916,6 +3800,16 @@ html[data-image-hero-transition] #nprogress {
 }
 @utility z-popover {
   z-index: var(--z-popover);
+}
+@utility z-tooltip {
+  z-index: var(--z-tooltip);
+}
+/* The hero stage is the only one of the four flight-layer steps a component reaches
+   for, and without a utility it did so through `z-[var(--z-hero-stage)]` — the one
+   bracket z-index in the app. The other three are consumed from CSS rules in this
+   file and need none. */
+@utility z-hero-stage {
+  z-index: var(--z-hero-stage);
 }
 @utility z-app-loading {
   z-index: var(--z-app-loading);
@@ -2982,5 +3876,35 @@ html[data-image-hero-transition] #nprogress {
   &:disabled::before,
   &[aria-disabled='true']::before {
     opacity: 0;
+  }
+}
+
+/* The same layer, painted unconditionally at the focus weight.
+ *
+ * `state-layer` keys on the element's own `:hover` / `:focus-visible` /
+ * `:active`, which covers everything the pointer or the tab key can reach — and
+ * misses the one state a **roving cursor** creates: a row that is the keyboard's
+ * current item without being focused itself, because focus is on the control and
+ * `aria-activedescendant` names the row.
+ *
+ * `Select`'s listbox and /search's autocomplete both have exactly that cursor,
+ * and both marked it with `state-layer` — a class that paints nothing at all
+ * until a pointer happens to be over the row. So arrowing through either list
+ * moved the scroll and announced the item correctly and showed the sighted
+ * keyboard user no cursor whatsoever. The focus weight rather than hover's,
+ * because that is what this state *is*: the keyboard is here. */
+@utility state-layer-active {
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: var(--md-sys-state-focus-opacity);
+    pointer-events: none;
+    z-index: -1;
   }
 }

@@ -44,6 +44,27 @@ import { cn } from '@/lib/utils';
  */
 const ActiveTabContext = createContext<string | null>(null);
 
+/**
+ * The `id` pair that ties a tab to its panel.
+ *
+ * Derived from the tab's own value rather than passed in, because a prop that has
+ * to be remembered at nine call sites is a prop that gets forgotten — and this
+ * one was: `Tabs` shipped `aria-controls={panelId?.(value)}` and not one caller
+ * supplied `panelId`, so every tablist in the app declared `role="tab"` and named
+ * no panel, while `role="tabpanel"` appeared nowhere at all. A screen reader was
+ * told "tab, 1 of 4, selected" and then found nothing the tab controlled.
+ *
+ * Values are unique across the app's tab groups, so one namespace is enough; if
+ * two groups ever share one, pass `Tabs`' `panelId` explicitly at the inner one.
+ */
+export function tabPanelId(value: string) {
+  return `tabpanel-${value}`;
+}
+
+export function tabId(value: string) {
+  return `tab-${value}`;
+}
+
 export function TabPanes<T extends string = string>({
   value,
   children,
@@ -107,10 +128,20 @@ export function TabPane({
   className?: string;
 }) {
   const active = useContext(ActiveTabContext);
+  const isActive = active === value;
   return (
     <div
       data-tab-pane={value}
-      data-tab-pane-active={active === value ? '' : undefined}
+      data-tab-pane-active={isActive ? '' : undefined}
+      /* The other half of `role="tab"`'s promise. `aria-labelledby` points back at
+         the tab, so the panel announces itself by the tab's own label rather than
+         needing a second copy of it. `tabIndex` only while active: a panel that is
+         `display: none` must not be a tab stop, and giving every pane one would put
+         four dead stops in the order. */
+      id={tabPanelId(value)}
+      role="tabpanel"
+      aria-labelledby={tabId(value)}
+      tabIndex={isActive ? 0 : undefined}
       className={cn(className)}
     >
       {children}

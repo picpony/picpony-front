@@ -44,9 +44,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   // Matches the app bar so the mobile browser chrome blends into the header
   // instead of framing it with a white or black strip.
+  //
+  // The two literals here are the app's only unavoidable ones, and they are unavoidable
+  // rather than tolerated: Next serialises this into a `<meta name="theme-color">` tag,
+  // which the browser reads to paint its own chrome *before* any stylesheet exists, so
+  // `var(--md-sys-color-primary)` would resolve to nothing. They are `primary` in each
+  // scheme and must be re-copied by hand whenever `scripts/palette.mjs` moves the brand
+  // — the one place in the app where that is true.
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#E06C9F' },
-    { media: '(prefers-color-scheme: dark)', color: '#CC5A8D' },
+    { media: '(prefers-color-scheme: dark)', color: '#CB5B8D' },
   ],
   colorScheme: 'light dark',
   // Lets the shell paint under the notch/home indicator; the layout then pays
@@ -84,12 +91,26 @@ export default async function RootLayout({
       <body className="h-full flex flex-col overflow-hidden">
         <LoadingOverlay />
         <NextTopLoader
-          color="#ffffff"
+          /* `on-primary`, not a literal white. The bar sits along the bottom edge
+             of the brand-coloured app bar, so the role it wants is the ink that
+             goes on `primary` — which is white today and would follow the brand
+             through a re-seed. It was `#ffffff`.
+             Not "the one raw hex left", which is what this note used to claim:
+             `viewport.themeColor` above carries two, and they cannot be anything
+             else. This is the last raw hex in a *prop that CSS can reach*. */
+          color="var(--md-sys-color-on-primary)"
           initialPosition={0.08}
           crawlSpeed={200}
-          height={3}
+          /* 4dp, M3's linear progress indicator height. It was 3. */
+          height={4}
           crawl={true}
           showSpinner={false}
+          /* `--ease-standard` spelled out. `easing` is handed to a Web Animations
+             `easing:` string by the library, where a failed `var()` silently falls
+             back to `ease` rather than erroring — the same reason the hero flight
+             and `Popover` spell theirs out. The value IS the token's; keep them in
+             step. (`color` above can take a `var()` because it lands in a style
+             declaration, not in an animation string.) */
           easing="cubic-bezier(0.2, 0, 0, 1)"
           speed={200}
         />

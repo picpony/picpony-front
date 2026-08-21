@@ -14,7 +14,7 @@ interface SkeletonProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>
  * The single loading placeholder.
  *
  * The app shipped two loading languages side by side: a `.skeleton` shimmer
- * sweep (5 sites) and Tailwind's `animate-pulse` opacity throb (18 sites), so
+ * sweep (5 sites) and Tailwind's own pulse utility — an opacity throb — at 18 sites, so
  * two lists loading next to each other pulsed differently. Everything routes
  * through here now.
  *

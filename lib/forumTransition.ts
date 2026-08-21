@@ -16,7 +16,7 @@
  * the transform is supposed to look like.
  */
 
-import { gsap, prefersReducedMotion } from '@/lib/motion';
+import { DURATION, gsap, heroOwnsScreen, prefersReducedMotion, spring } from '@/lib/motion';
 
 /** Viewport-space box of the row that was pressed. */
 interface ForumOrigin {
@@ -68,6 +68,13 @@ export function readForumOrigin(id: number | string): ForumOrigin | null {
   if (!origin || origin.id !== String(id)) return null;
   if (performance.now() - origin.at > ORIGIN_TTL_MS) return null;
   if (origin.width === 0 || origin.height === 0) return null;
+  /* Stand down while a flight owns the screen. This transition's whole premise is
+     that the row is still painted where the row was — the cross-fade's clone shows
+     it, so the card can start at exactly that rectangle — and the cross-fade stands
+     itself down during a flight. Nothing here did, so the card grew out of a
+     rectangle with nothing under it. Gated here rather than at the call site because
+     the TTL check already lives here: no origin, no transform. */
+  if (heroOwnsScreen()) return null;
   return origin;
 }
 
@@ -106,8 +113,14 @@ export function playForumContainerTransform(
       y: 0,
       scaleX: 1,
       scaleY: 1,
-      duration: 0.4,
-      ease: 'decelerate',
+      /* `emphasized` at 500ms, which is the pairing for a large container
+         transform — and this file's own header calls this a container transform.
+         It read a literal `0.4` on `decelerate`: the wrong row of the table (that
+         pairing is for something *entering* the screen) and a hand-typed number
+         where `DURATION` was already imported. The shared axis was raised to 500
+         for the same reason. */
+      duration: DURATION.emphasized,
+      ease: 'emphasized',
       /* Nothing may keep a transform: this card is an ancestor of the post's
            images, and a residual one would make it a containing block for any
            fixed descendant. */
@@ -120,7 +133,12 @@ export function playForumContainerTransform(
     timeline.fromTo(
       content,
       { autoAlpha: 0 },
-      { autoAlpha: 1, duration: 0.25, ease: 'none', clearProps: 'opacity,visibility' },
+      /* `defaultEffects`, the critically-damped spring — a fade is an *effects*
+         change, and `ease: 'none'` was a linear fade, which this file's own rules
+         allow only for a spinner's rotation or a pre-sampled track. The 150ms offset
+         stays: the container morphs first, its contents arrive behind it, which is
+         the same split `Popover` uses. */
+      { autoAlpha: 1, ...spring('defaultEffects'), clearProps: 'opacity,visibility' },
       0.15,
     );
   }

@@ -15,6 +15,9 @@ import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import { useAuthModal } from '@/components/AuthModal';
 import PageHeader from '@/components/PageHeader';
+import { ICON } from '@/lib/icons';
+import { formatDateTime } from '@/lib/format';
+import { readUserInfo } from '@/lib/hooks';
 
 interface HistoryItem {
   id: number;
@@ -44,12 +47,11 @@ export default function HistoryPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const storedUser = localStorage.getItem('user_info');
-        if (!storedUser) {
+        const user = readUserInfo();
+        if (!user) {
           openAuth('login');
           return;
         }
-        const user = JSON.parse(storedUser);
         const data: HistoryResponse = await api.getBrowsingHistory(user.token, targetPage);
         if (data.success) {
           setHistory(data.history);
@@ -80,9 +82,8 @@ export default function HistoryPage() {
   const handleClearConfirm = async () => {
     setIsClearModalOpen(false);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) return;
       const res = await api.clearBrowsingHistory(user.token);
       const data = await res.json();
       if (data.success) {
@@ -99,12 +100,11 @@ export default function HistoryPage() {
 
   const handleDeleteItem = async (imageId: number) => {
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) {
+      const user = readUserInfo();
+      if (!user) {
         showToast('请先登录', 'error');
         return;
       }
-      const user = JSON.parse(storedUser);
       if (!user.token) {
         showToast('登录已过期，请重新登录', 'error');
         return;
@@ -113,7 +113,7 @@ export default function HistoryPage() {
       const data = await res.json();
       if (data.success) {
         setHistory((prev) => prev.filter((item) => item.id !== imageId));
-        showToast('已移除', 'success');
+        showToast('已删除', 'success');
       } else {
         showToast(data.error || '删除失败', 'error');
       }
@@ -126,21 +126,26 @@ export default function HistoryPage() {
     return (
       <div className="max-w-4xl mx-auto">
         {' '}
-        <PageHeader title="浏览历史" />{' '}
-        <div className="space-y-3">
+        <PageHeader title="浏览历史" />
+        {/* No `space-y-3`: `.m3-row` already puts 2px seams between rows
+            (`ListTokens.SegmentedGap`), so this added 12px more and the list
+            re-spaced by that much per row the moment the data landed. And
+            `items-center`, because the real row centres its text column against
+            the 64px thumbnail. */}
+        <div>
           {' '}
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="m3-row flex gap-4 p-4 bg-surface-container-low">
-              {' '}
-              <Skeleton className="w-20 h-16 rounded-md shrink-0" />{' '}
+            <div key={i} className="m3-row flex items-center gap-4 p-4 bg-surface-container-low">
+              
+              <Skeleton className="size-14 rounded-sm shrink-0" />
               <div className="flex-1 space-y-2">
-                {' '}
-                <Skeleton className="h-4 w-1/3" />{' '}
-                <Skeleton className="h-3 w-1/4" />{' '}
-              </div>{' '}
+                
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-3 w-1/4" />
+              </div>
             </div>
           ))}{' '}
-        </div>{' '}
+        </div>
       </div>
     );
   }
@@ -156,7 +161,7 @@ export default function HistoryPage() {
               <Button
                 variant="danger-text"
                 onClick={handleClear}
-                icon={<MdDeleteSweep size={18} />}
+                icon={<MdDeleteSweep size={ICON.dense} />}
                 responsiveLabel
               >
                 清空记录
@@ -168,7 +173,7 @@ export default function HistoryPage() {
           <ErrorRetry message={error} onRetry={() => fetchHistory(page)} />
         ) : history.length === 0 ? (
           <EmptyState
-            icon={<MdHistory size={48} />}
+            icon={<MdHistory size={ICON.display} />}
             title="暂无浏览记录"
             description="看过的图片会出现在这里。"
           />
@@ -182,36 +187,36 @@ export default function HistoryPage() {
                   key={item.id}
                   className="m3-row flex items-center gap-4 p-4 bg-surface-container-low transition-ui state-layer group"
                 >
-                  {' '}
+                  
                   <Link href={`/pic/${item.id}`} className="flex items-center gap-4 flex-1 min-w-0">
-                    {' '}
-                    <div className="w-20 h-16 rounded-md overflow-hidden bg-surface-container-high shrink-0">
+                    
+                    <div className="size-14 rounded-sm overflow-hidden bg-surface-container-high shrink-0">
                       {' '}
                       {item.preview_url ? (
                         <FadeInImage src={item.preview_url} alt="" fill className="object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-outline">
-                          {' '}
-                          <MdImage size={24} />{' '}
+                          
+                          <MdImage size={ICON.standard} />
                         </div>
                       )}{' '}
-                    </div>{' '}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      {' '}
+                      
                       <p className="text-body-m text-on-surface flex items-center gap-2">
-                        {' '}
-                        #{item.id}{' '}
+                        
+                        #{item.id}
                         {item.uploader && (
                           <span className="text-body-s text-on-surface-variant flex items-center gap-1">
-                            {' '}
-                            <MdPerson size={12} /> {item.uploader}{' '}
+                            
+                            <MdPerson size={ICON.dense} /> {item.uploader}
                           </span>
-                        )}{' '}
-                      </p>{' '}
+                        )}
+                      </p>
                       <p className="text-body-s text-on-surface-variant mt-1">
                         {' '}
                         {item.last_view_time
-                          ? new Date(item.last_view_time).toLocaleString('zh-CN')
+                          ? formatDateTime(item.last_view_time)
                           : '未知时间'}
                       </p>
                     </div>
@@ -227,10 +232,12 @@ export default function HistoryPage() {
                       gallery tiles and the detail zoom already follow. */}
                   <IconButton
                     onClick={() => handleDeleteItem(item.id)}
-                    icon={<MdDelete size={18} />}
+                    icon={<MdDelete size={ICON.dense} />}
                     size="sm"
-                    title="移除此记录"
-                    aria-label="删除浏览记录"
+                    /* Named per row, not once for the list. Every button here read
+                       `删除浏览记录`, so arrowing down a page of them announced the
+                       same string with nothing to tell them apart. */
+                    aria-label={`删除浏览记录 #${item.id}`}
                     className="text-on-surface-variant hover:text-error opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                   />
                 </div>

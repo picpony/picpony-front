@@ -6,11 +6,15 @@ import { showToast } from '@/components/Toast';
 import Skeleton from '@/components/Skeleton';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import Tabs from '@/components/Tabs';
+import TabPanes, { TabPane } from '@/components/TabPanes';
 import Button from '@/components/Button';
-import { useSlidingIndicator } from '@/lib/motion';
 import { MdEmojiEvents, MdCheckCircle, MdLock } from 'react-icons/md';
 import UserBadge from '@/components/UserBadge';
 import PageHeader from '@/components/PageHeader';
+import ProgressBar from '@/components/ProgressBar';
+import { ICON } from '@/lib/icons';
+import { readUserInfo } from '@/lib/hooks';
 
 interface TaskData {
   success: boolean;
@@ -60,19 +64,17 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TaskTab>('novice');
   const [claiming, setClaiming] = useState<string | null>(null);
-  const { containerRef, indicatorRef } = useSlidingIndicator(activeTab, [data]);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const stored = localStorage.getItem('user_info');
-      if (!stored) {
+      const user = readUserInfo();
+      if (!user) {
         setError('请先登录');
         setLoading(false);
         return;
       }
-      const user = JSON.parse(stored);
       const res = await api.getTasks(user.token);
       if (res.success) {
         setData(res);
@@ -80,7 +82,7 @@ export default function TasksPage() {
         setError(res.error || '加载失败');
       }
     } catch {
-      setError('网络错误');
+      setError('网络错误，请稍后再试');
     } finally {
       setLoading(false);
     }
@@ -95,27 +97,26 @@ export default function TasksPage() {
   const handleClaim = async (taskType: string) => {
     setClaiming(taskType);
     try {
-      const stored = localStorage.getItem('user_info');
-      if (!stored) return;
-      const user = JSON.parse(stored);
+      const user = readUserInfo();
+      if (!user) return;
       const res = await api.claimTask(user.token, taskType);
       const result = await res.json();
       if (result.success) {
-        showToast(`领取成功！经验 +${result.experience}，金币 +${result.coins}`, 'success');
+        showToast(`领取成功，经验 +${result.experience}，金币 +${result.coins}`, 'success');
         loadTasks();
       } else {
         showToast(result.error || '领取失败', 'error');
       }
     } catch {
-      showToast('网络错误', 'error');
+      showToast('网络错误，请稍后再试', 'error');
     } finally {
       setClaiming(null);
     }
   };
 
-  const getTaskItems = (): TaskItem[] => {
+  const getTaskItems = (forTab: TaskTab): TaskItem[] => {
     if (!data) return [];
-    if (activeTab === 'novice') {
+    if (forTab === 'novice') {
       const nt = data.novice_tasks || {};
       const bindApi = nt['bind_api'];
       const verifyApi = nt['verify_api'];
@@ -150,7 +151,7 @@ export default function TasksPage() {
         },
       ];
     }
-    if (activeTab === 'daily') {
+    if (forTab === 'daily') {
       const t = data.tasks || {
         login_progress: 0,
         login_claimed: 0,
@@ -200,7 +201,7 @@ export default function TasksPage() {
         },
       ];
     }
-    if (activeTab === 'weekly') {
+    if (forTab === 'weekly') {
       const wt = data.weekly_tasks || { upload_progress: 0, upload_claimed: 0 };
       return [
         {
@@ -217,37 +218,43 @@ export default function TasksPage() {
     return [];
   };
 
-  const renderTabContent = () => {
-    if (activeTab === 'cumulative') {
+  /* One tab's worth of rows. Takes the tab rather than reading `activeTab`, because
+     every pane is rendered now — see the `TabPanes` note at the call site. */
+  const renderTabContent = (forTab: TaskTab) => {
+    if (forTab === 'cumulative') {
       return (
         <EmptyState
-          key="cumulative"
           size="pane"
-          icon={<MdLock size={48} />}
+          icon={<MdLock size={ICON.display} />}
           title="该类任务暂未开放"
           description="敬请期待。"
         />
       );
     }
 
-    const items = getTaskItems();
+    const items = getTaskItems(forTab);
     return (
-      <div key={`items-${activeTab}`}>
-        {items.map((item, index) => {
+      <div>
+        {items.map((item) => {
           const pct =
             item.target > 0 ? (Math.min(item.progress, item.target) / item.target) * 100 : 0;
           const canClaim = item.progress >= item.target && !item.claimed;
           return (
             <div
               key={item.id}
-              className="m3-row flex items-center gap-4 p-4 bg-surface-container-low animate-fade-in"
-              style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
+              /* No per-row entrance. The rows used to fade in on a 50ms cascade of
+                 their own *inside* a 500ms pane transition — two clocks on one
+                 subtree, which is the case AGENTS.md calls out ("over content that
+                 already cascades on mount"). The pane's slide is the entrance; a
+                 second one on top is not extra polish. The 50ms step was also a
+                 third cascade rhythm, against `Reveal`'s 60 and the skeletons' 90. */
+              className="m3-row flex items-center gap-4 p-4 bg-surface-container-low"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2">
                   <span className="text-label-l text-on-surface truncate">{item.name}</span>
                   <span className="text-body-s text-warning whitespace-nowrap">
-                    <MdEmojiEvents size={12} className="inline mr-0.5" />
+                    <MdEmojiEvents size={ICON.dense} className="inline mr-0.5" />
                     经验+{item.xp}
                     <span className="ml-1 text-warning">金币+{item.coins}</span>
                   </span>
@@ -257,33 +264,30 @@ export default function TasksPage() {
                     {Math.min(item.progress, item.target)}/{item.target}
                   </span>
                 </div>
-                <div className="mt-2 h-2 rounded-full bg-surface-container-high overflow-hidden">
-                  <div
-                    className="h-full rounded-full origin-left animate-[bar-grow_0.4s_var(--ease-decelerate)] transition-[width,background-color] duration-300 ease-[var(--ease-standard)]"
-                    style={{
-                      width: `${pct}%`,
-                      animationDelay: `${100 + index * 50}ms`,
-                      animationFillMode: 'backwards',
-                      backgroundColor: item.claimed
-                        ? 'var(--md-sys-color-success-fill)'
-                        : canClaim
-                          ? 'var(--md-sys-color-warning-fill)'
-                          : 'var(--md-sys-color-primary)',
-                    }}
-                  />{' '}
-                </div>{' '}
-              </div>{' '}
-              {/* Fixed footprint: 领取 / 去完成 / 已领取 / loading all occupy the same box, so claiming never reflows the row. */}{' '}
+                {/* `ProgressBar`, the primitive. This was one of six hand-rolled
+                    tracks: an 8dp box (the token is 4), an animated `width`, and
+                    the three state colours as inline `style` so no grep for a
+                    `bg-*` utility could find them. The tone is now an axis, and
+                    the curve is the spring `ProgressIndicatorDefaults` assigns
+                    rather than the loop easing every one of the six was using. */}
+                <ProgressBar
+                  value={pct}
+                  tone={item.claimed ? 'success' : canClaim ? 'warning' : 'secondary'}
+                  label={`${item.name} 进度`}
+                  className="mt-2"
+                />
+              </div>
+              {/* Fixed footprint: 领取 / 去完成 / 已领取 / loading all occupy the same box, so claiming never reflows the row. */}
               <div className="flex w-20 shrink-0 justify-end">
-                {' '}
+                
                 {item.claimed ? (
                   <span className="flex h-8 items-center gap-1 text-label-m text-success">
-                    {' '}
-                    <MdCheckCircle size={16} /> 已领取{' '}
+                    
+                    <MdCheckCircle size={ICON.dense} /> 已领取
                   </span>
                 ) : (
                   <Button
-                    size="sm"
+                    size="xs"
                     fullWidth
                     variant={canClaim ? 'filled' : 'text'}
                     onClick={() => handleClaim(item.id)}
@@ -298,12 +302,18 @@ export default function TasksPage() {
                        for a button label. `disabled` already applies the
                        primitive's own `disabled-content`, i.e. the 38% M3
                        specifies for disabled content. */
-                    className={canClaim ? 'animate-[control-pop_0.3s_var(--ease-spring)]' : undefined}
+                    /* No `animate-control-pop`. That keyframe is the expressive
+                       ζ0.6 spring — 8.4% overshoot — and AGENTS.md reserves it for
+                       "a small mark arriving in place: an unread count, a favourite
+                       filling in". A 32dp button with a two-character label is not a
+                       mark, and anything large wearing that spring reads as a wobble.
+                       The state change here is the variant flipping from `text` to
+                       `filled`, which the button already transitions. */
                   >
                     {canClaim ? '领取' : '去完成'}
                   </Button>
-                )}{' '}
-              </div>{' '}
+                )}
+              </div>
             </div>
           );
         })}{' '}
@@ -323,10 +333,10 @@ export default function TasksPage() {
            the other. The progress track underneath was full-strength
            `warning-container` sitting on the same colour at 60%, i.e. an empty
            bar you could barely find. */
-        <div className="bg-warning-container text-on-warning-container mb-6 rounded-md p-5">
+        <div className="bg-warning-container text-on-warning-container mb-6 rounded-md p-4">
           {' '}
           <div className="flex items-center justify-between mb-3">
-            {' '}
+            
             <div className="text-headline-s-emphasized">
               {' '}
               Lv.{data.level}{' '}
@@ -338,34 +348,34 @@ export default function TasksPage() {
                   className="ml-2 align-middle"
                 />
               ))}{' '}
-            </div>{' '}
+            </div>
             <div className="text-body-m">
               {' '}
-              <MdEmojiEvents size={14} className="inline mr-1" /> 金币:{' '}
+              <MdEmojiEvents size={ICON.dense} className="inline mr-1" /> 金币：{' '}
               <span className="text-body-m-emphasized">
                 {data.coins?.toLocaleString() || 0}
-              </span>{' '}
-            </div>{' '}
-          </div>{' '}
+              </span>
+            </div>
+          </div>
           <div>
-            {' '}
             <div className="flex justify-between text-label-m mb-1">
-              {' '}
-              <span>当前经验进度</span> <span>当前经验: {data.experience % 100} / 100</span>{' '}
-            </div>{' '}
-            {/* The track is the scrim tone rather than another amber, so the
-                fill has something to read against inside its own card. */}
-            <div className="bg-surface-container-lowest h-2.5 overflow-hidden rounded-full">
-              {' '}
-              <div
-                /* `*-fill`, not the `warning`/`tertiary` text roles: this is a
-                   graphic, and those two flip between schemes, so the meter
-                   visibly swapped shade with the theme. */
-                className="from-warning-fill to-tertiary h-full rounded-full bg-gradient-to-r transition-[width] duration-300 ease-[var(--ease-standard)]"
-                style={{ width: `${data.experience % 100}%` }}
-              />{' '}
-            </div>{' '}
-          </div>{' '}
+              <span>当前经验进度</span>
+              <span>当前经验：{data.experience % 100} / 100</span>
+            </div>
+            {/* The last of the six hand-rolled meters, and the one that had drifted
+                furthest: a 10dp track (the token is 4, and 10 is not on the 4dp
+                grid) in `surface-container-lowest` rather than the track role, with
+                a gradient whose far end was `tertiary` — which inverts between
+                schemes, so the right-hand side of the bar swapped shade with the
+                theme. That is the exact defect the comment above it claimed to have
+                fixed by moving the near end to `warning-fill`. Flat, on the token,
+                and through the primitive. */}
+            <ProgressBar
+              value={data.experience % 100}
+              tone="warning"
+              label="当前等级经验进度"
+            />
+          </div>
         </div>
       )}{' '}
       {/* The destination's own shape, not a spinner in the middle of nothing.
@@ -391,45 +401,41 @@ export default function TasksPage() {
       {!loading && !error && data && (
         <>
           {' '}
-          {/* Tabs */}{' '}
-          <div
-            ref={containerRef}
-            className="relative flex gap-1 mb-6 border-b border-outline-variant"
-          >
-            {' '}
-            <span
-              ref={indicatorRef}
-              aria-hidden="true"
-              className="absolute bottom-0 left-0 h-0.5 rounded-full bg-warning-fill"
-            />{' '}
+          {/* `Tabs`, not a fourth copy of a tab row. This one had `useSlidingIndicator`
+              wired by hand, no ARIA roles, and — the tell that it was a copy made
+              before the primitive existed — an active tab distinguished by colour
+              alone, with no weight contrast, which is the exact defect the shared
+              component's own comment records having fixed. `tone="warning"` keeps
+              this screen's amber indicator. */}
+          <Tabs
+            className="mb-6"
+            label="任务分类"
+            tone="warning"
+            value={activeTab}
+            onChange={setActiveTab}
+            deps={[data]}
+            tabs={tabs.map((tab) => ({ value: tab.id, label: tab.label }))}
+          />
+          {/* `TabPanes`, and the subtitle lives inside each pane.
+              This was `Tabs` plus two `key`-ed wrappers, and the `key` is the exact
+              thing AGENTS.md forbids: it destroys the outgoing subtree in the commit
+              that starts the switch, so the transition had no exit to play and the
+              app's fourth tab surface was the one with no animation at all. Moving
+              the subtitle inside the pane also means it travels with its own content
+              rather than being swapped underneath it. */}
+          <TabPanes value={activeTab}>
             {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                data-tab={tab.id}
-                data-ripple
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 text-label-l transition-ui rounded-t-lg outline-none focus-visible:ring-2 focus-ring ${
-                  activeTab === tab.id
-                    ? 'text-warning'
-                    : 'text-on-surface-variant hover:text-on-surface '
-                }`}
-              >
-                {tab.label}
-              </button>
+              <TabPane key={tab.id} value={tab.id}>
+                <div className="mb-4">
+                  <span className="text-label-l-emphasized text-on-surface">{tab.label}</span>
+                  {tab.subtitle && (
+                    <span className="ml-2 text-body-s text-on-surface-variant">{tab.subtitle}</span>
+                  )}
+                </div>
+                {renderTabContent(tab.id)}
+              </TabPane>
             ))}
-          </div>
-          {/* Tab subtitle */}
-          <div key={`subtitle-${activeTab}`} className="mb-4 animate-fade-in">
-            <span className="text-label-l-emphasized text-on-surface">
-              {tabs.find((t) => t.id === activeTab)?.label}
-            </span>
-            {tabs.find((t) => t.id === activeTab)?.subtitle && (
-              <span className="ml-2 text-body-s text-on-surface-variant">
-                {tabs.find((t) => t.id === activeTab)?.subtitle}
-              </span>
-            )}
-          </div>
-          {renderTabContent()}
+          </TabPanes>
         </>
       )}
     </div>

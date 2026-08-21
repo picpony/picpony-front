@@ -73,7 +73,6 @@ export default function TagList({
             {visibleArtists.map((artist) => (
               <Chip
                 key={artist}
-                size="md"
                 colors={tagCategoryChip('artist')}
                 onClick={() =>
                   router.push(`/search?q=${encodeURIComponent(`artist:${artist}`)}`, {
@@ -83,12 +82,12 @@ export default function TagList({
               >
                 {display(artist)}
               </Chip>
-            ))}{' '}
+            ))}
           </div>{' '}
           {visibleArtists.length < artists.length && (
             <Button
               variant="text"
-              size="sm"
+              size="xs"
               className="mt-3"
               onClick={() =>
                 onShowMore({
@@ -108,13 +107,12 @@ export default function TagList({
           {' '}
           <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
             图中包含的 OC
-          </h3>{' '}
+          </h3>
           <div className="flex flex-wrap gap-2">
-            {' '}
+            
             {visibleOcs.map((oc) => (
               <Chip
                 key={oc}
-                size="md"
                 colors={tagCategoryChip('oc')}
                 onClick={() =>
                   router.push(`/search?q=${encodeURIComponent(`oc:${oc}`)}`, { scroll: false })
@@ -122,12 +120,12 @@ export default function TagList({
               >
                 {display(oc)}
               </Chip>
-            ))}{' '}
+            ))}
           </div>{' '}
           {visibleOcs.length < ocs.length && (
             <Button
               variant="text"
-              size="sm"
+              size="xs"
               className="mt-3"
               onClick={() =>
                 onShowMore({
@@ -147,10 +145,10 @@ export default function TagList({
           {' '}
           <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
             标签 (Tag)
-          </h3>{' '}
+          </h3>
           <div className="flex flex-wrap gap-2">
             {visibleRegularTags.map((tag) => (
-              <Chip key={tag} size="md" onClick={() => onTagClick(tag)} title="点击查看词库信息">
+              <Chip key={tag} onClick={() => onTagClick(tag)}>
                 {display(tag)}
                 {/* `on-surface-variant`, not `outline`: a count is supporting
                     *text*, and `outline` is the boundary role — 4.3:1 on the
@@ -172,7 +170,7 @@ export default function TagList({
           {visibleRegularTags.length < regularTags.length && (
             <Button
               variant="text"
-              size="sm"
+              size="xs"
               className="mt-3"
               onClick={() =>
                 onShowMore({

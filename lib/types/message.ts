@@ -48,3 +48,19 @@ export interface UnreadCountsResponse {
   unread_interactions: number;
   total_unread: number;
 }
+
+/**
+ * A site announcement.
+ *
+ * One declaration, because there were two and they differed: `app/messages` had
+ * `id: number` and `components/AnnouncementModal` did not — and the one *without* it
+ * was the component that renders them. A payload shape declared twice is a payload
+ * shape that will disagree.
+ */
+export interface Announcement {
+  id: number;
+  version: string;
+  title: string;
+  content: string;
+  date: string;
+}

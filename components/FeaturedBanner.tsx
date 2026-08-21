@@ -9,6 +9,8 @@ import Badge from '@/components/Badge';
 import Skeleton from '@/components/Skeleton';
 import { useHeroLink } from '@/lib/useHero';
 import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
+import { ICON } from '@/lib/icons';
+import { readUserInfo } from '@/lib/hooks';
 
 /* The banner's scrims are drawn over photography, so they must be black in both
    schemes — but "black" should still come from the token, not from a literal,
@@ -29,9 +31,9 @@ const FEATURED_KEY = 'home:featured';
  */
 export function FeaturedBannerSkeleton() {
   return (
-    <div data-tab-row className="mb-6 sm:mb-8 overflow-hidden rounded-md" aria-hidden="true">
+    <div data-tab-row className="mb-6 sm:mb-8 overflow-hidden rounded-lg" aria-hidden="true">
       <div className="relative w-full" style={{ paddingBottom: 'min(40vh, 400px)' }}>
-        <Skeleton className="absolute inset-0 rounded-md" />
+        <Skeleton className="absolute inset-0 rounded-lg" />
       </div>
     </div>
   );
@@ -71,16 +73,8 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
       setError(false);
     }
     // Flagged on delivery, not on dispatch — see `app/page.tsx` for why.
-    const getApiKey = (): string | undefined => {
-      try {
-        const userInfoStr = localStorage.getItem('user_info');
-        if (userInfoStr) {
-          const userInfo = JSON.parse(userInfoStr);
-          return userInfo.api_key || undefined;
-        }
-      } catch {}
-      return undefined;
-    };
+    const getApiKey = (): string | undefined =>
+      (readUserInfo()?.api_key as string) || undefined;
 
     api
       .getFeatured(getApiKey())
@@ -160,10 +154,21 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
   const isWideAspect = aspectRatio > 1.5;
   const paddingBottom = isWideAspect ? 'min(45vh, 420px)' : 'min(55vh, 500px)';
   return (
+    /* 16dp, the gallery tile's step, on all six of this component's layers.
+       They were 12dp — the *card* step — so the largest picture on the home page
+       took a corner one step smaller than the smaller tiles directly under it. It
+       is a grid entry rather than a dialog, which is why 16 and not the shape
+       table's 28dp "large media" row (that row means the detail surface).
+       It also matters to the flight: this is an `image-hero-card-link`, the flyer
+       reads the source's computed radius and morphs it to `HERO_TARGET_RADIUS_PX`
+       (16), so at 16 the corner morph is a no-op and the handoff is continuous.
+       All six layers are coincident (`inset-0` / `w-full`), so `inner = outer − 0`
+       requires them to move together — including the skeleton's two, or the
+       placeholder stops matching what it replaces. */
     <Link
       {...heroLinkProps}
       data-tab-row
-      className="image-hero-card-link mb-6 sm:mb-8 rounded-md relative group block"
+      className="image-hero-card-link mb-6 sm:mb-8 rounded-lg relative group block"
     >
       {/* Media only — hero hides this while the flyer flies. */}
       <div
@@ -171,7 +176,7 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
         data-image-hero-role="thumbnail"
         data-image-hero-id={featured.id}
         data-image-hero-source-key={heroSourceKey}
-        className="relative w-full overflow-hidden rounded-md"
+        className="relative w-full overflow-hidden rounded-lg"
         style={{ paddingBottom }}
       >
         <div className="absolute inset-0">
@@ -188,7 +193,7 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
           ) : (
             <FadeInImage
               src={displayImageUrl}
-              alt={featured.name || `Featured Image ${featured.id}`}
+              alt={featured.name || `近日推荐 #${featured.id}`}
               eager
               width={featured.width || 0}
               height={featured.height || 0}
@@ -203,18 +208,18 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
       {/* Labels stay in the original card slot and simply fade via CSS. */}
       <div
         data-image-hero-chrome
-        className="pointer-events-none absolute inset-0 z-20 rounded-md"
+        className="pointer-events-none absolute inset-0 z-20 rounded-lg"
         aria-hidden="true"
       >
         <div
-          className="absolute inset-0 rounded-md"
+          className="absolute inset-0 rounded-lg"
           style={{
             backgroundImage: [
               `linear-gradient(to right, ${scrim(0.3)}, transparent)`,
               `linear-gradient(to top, ${scrim(0.6)}, ${scrim(0.2)}, transparent)`,
             ].join(', '),
           }}
-        />{' '}
+        />
         <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8">
           {/* `Badge`, not a hand-rolled pill. It was `rounded-full px-3 py-1.5`
               with its own container/ink pair written out — the exact silhouette
@@ -230,7 +235,7 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
             colors="bg-primary text-on-primary"
             className="mb-2 sm:mb-3"
             icon={
-              <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <svg fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
             }
@@ -269,16 +274,16 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
           )}
           <div className="text-body-s text-on-media-variant sm:text-body-m flex items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-1">
-              <MdThumbUp size={14} />
+              <MdThumbUp size={ICON.dense} />
               <span>{featured.score?.toLocaleString() || 0}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MdComment size={14} />
+              <MdComment size={ICON.dense} />
               <span>{featured.comment_count?.toLocaleString() || 0}</span>
             </div>
             {featured.uploader && (
               <div className="flex items-center gap-1">
-                <MdPerson size={14} />
+                <MdPerson size={ICON.dense} />
                 <span>{featured.uploader}</span>
               </div>
             )}

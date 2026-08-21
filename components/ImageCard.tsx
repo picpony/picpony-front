@@ -7,6 +7,8 @@ import ImageCardVideo from './ImageCardVideo';
 import { MdThumbUp, MdComment, MdVisibility } from 'react-icons/md';
 import { PonyImage } from '@/lib/api';
 import { useHeroLink } from '@/lib/useHero';
+import { ICON } from '@/lib/icons';
+import Badge from './Badge';
 
 interface ImageCardProps {
   image: PonyImage;
@@ -114,7 +116,7 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           ) : (
             <FadeInImage
               src={thumbUrl}
-              alt={image.name || `Image ${image.id}`}
+              alt={image.name || `图片 #${image.id}`}
               /* Fall back to the card's own aspect box rather than 0 — `0` is
                  not a valid next/image dimension, and the API omits width and
                  height on some records. */
@@ -133,29 +135,42 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
         {/* Stay at the card slot; CSS fades when the sibling thumb is hero-locked. */}
         <div
           data-image-hero-chrome
-          className="pointer-events-none absolute inset-0 z-[2] rounded-lg"
+          className="pointer-events-none absolute inset-0 z-2 rounded-lg"
           aria-hidden="true"
         >
           <div className="media-hover-scrim absolute inset-0 rounded-lg" />
-          {/* 贴角圆角 = 图片大圆角(--radius-lg) - 角标间距(top-2/left-2/right-2)，
-              与图片外角同心弧，间距均匀、视觉平衡 */}
-          <div className="absolute top-2 right-2 rounded-xs rounded-tr-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media">
+          {/* `Badge tone="media"`, which owns the plate, the `on-media` ink, the blur,
+              the 4dp corner and — since this pass — the glyph size. These three marks
+              wrote all of that out by hand and dropped the blur, so a score over a pale
+              photograph lost its plate; `Badge`'s own docstring names "a score pill over
+              a gallery thumbnail" as the thing it replaced.
+
+              The one corner that cannot come from the primitive is the one hugging the
+              card's, because concentric means `outer - gap`: the card is 16dp and the
+              inset is 8px, so that corner is **8dp** — which is `rounded-*-sm`, a step
+              on the scale. It was written as `calc(--radius-lg - --spacing*2)`, which is
+              the same arithmetic spelled as an arbitrary value; naming the step it
+              resolves to is both shorter and checkable against the shape table. */}
+          <Badge tone="media" className="absolute top-2 right-2 rounded-tr-sm">
             {format}
-          </div>
-          <div
-            title="点赞数"
-            className="absolute bottom-2 left-2 flex items-center gap-1 rounded-xs rounded-bl-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media"
+          </Badge>
+          {/* No `title` on either count. This whole chrome layer is
+              `pointer-events-none aria-hidden`, so a native tooltip could never be
+              hovered and the name could never be read — two dead attributes. */}
+          <Badge
+            tone="media"
+            icon={<MdThumbUp />}
+            className="absolute bottom-2 left-2 rounded-bl-sm"
           >
-            <MdThumbUp size={12} />
-            <span>{image.score}</span>
-          </div>
-          <div
-            title="评论数"
-            className="absolute bottom-2 right-2 flex items-center gap-1 rounded-xs rounded-br-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media"
+            {image.score}
+          </Badge>
+          <Badge
+            tone="media"
+            icon={<MdComment />}
+            className="absolute bottom-2 right-2 rounded-br-sm"
           >
-            <MdComment size={12} />
-            <span>{image.comment_count}</span>
-          </div>
+            {image.comment_count}
+          </Badge>
         </div>
       </Link>
 
@@ -173,18 +188,27 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           frame — the one moment on this card where a transition carries
           information. `inert` (React 19) takes the faded remains out of the tab
           order and the accessibility tree together, which `aria-hidden` alone
-          would not: that leaves a focusable element inside a hidden subtree. */}
+          would not: that leaves a focusable element inside a hidden subtree.
+
+          No `motion-reduce:` guard, and it is not an omission — one was here and
+          it did nothing. The reduced-motion block re-declares `transition-property`
+          with `!important`, which outranks `.motion-reduce\:transition-none`
+          (Tailwind emits that without one), so the guard lost every time. It was
+          also arguing against the paragraph above it: the dissolve is the one
+          transition on this card that carries information, and the global rule
+          already does the right thing here — it keeps `opacity` and drops
+          `backdrop-filter`, so the cover fades without the blur animating. */}
       {isSpoilered && (
         <button
           type="button"
           onClick={handleReveal}
           inert={isRevealed}
           aria-label="显示被剧透标签遮住的图片"
-          className={`absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-lg bg-media-plate backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-300 ease-[var(--ease-standard)] outline-none select-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset motion-reduce:transition-none ${
+          className={`absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-lg bg-media-plate backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-300 ease-[var(--ease-standard)] outline-none select-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
             isRevealed ? 'pointer-events-none opacity-0 backdrop-blur-0' : 'opacity-100'
           }`}
         >
-          <MdVisibility size={36} className="text-on-media mb-2" />
+          <MdVisibility size={ICON.large} className="text-on-media mb-2" />
           <span className="text-on-media-variant text-label-l">点击查看</span>
         </button>
       )}

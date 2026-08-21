@@ -8,6 +8,8 @@ import IconButton from '@/components/IconButton';
 import { useAuthModal } from '@/components/AuthModal';
 import { showToast } from '@/components/Toast';
 import { api, type Comment } from '@/lib/api';
+import { ICON } from '@/lib/icons';
+import { readToken } from '@/lib/hooks';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 
@@ -51,14 +53,7 @@ export default function CommentComposer({
   const handleSubmit = async () => {
     if (!trimmedComment || isSubmitting) return;
 
-    let token: string | null = null;
-    try {
-      const userInfo = localStorage.getItem('user_info');
-      if (userInfo) token = JSON.parse(userInfo).token || null;
-    } catch (error) {
-      console.error('Failed to parse user info', error);
-    }
-
+    const token = readToken();
     if (!token) {
       showToast('请先登录', 'error');
       openAuth('login');
@@ -95,7 +90,7 @@ export default function CommentComposer({
     <>
       {replyTo && (
         <div className="mb-2 flex items-center gap-2 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-m text-on-surface-variant">
-          <MdReply size={14} />
+          <MdReply size={ICON.dense} />
           <span>
             回复 <strong className="text-primary">{replyTo.username}</strong>：
           </span>
@@ -106,7 +101,7 @@ export default function CommentComposer({
               `body-m` says "supporting" through the type scale instead. */}
           <span className="flex-1 truncate text-body-s">
             {replyTo.body.slice(0, 80)}
-            {replyTo.body.length > 80 ? '...' : ''}
+            {replyTo.body.length > 80 ? '…' : ''}
           </span>
           {/* `IconButton`, not a bare glyph with a hover opacity: this is the
               same 取消回复 control the forum thread renders, and that one is
@@ -115,10 +110,9 @@ export default function CommentComposer({
           <IconButton
             size="sm"
             onClick={onCancelReply}
-            title="取消回复"
             aria-label="取消回复"
             className="-me-1.5 ml-auto shrink-0 text-error"
-            icon={<MdClose size={16} />}
+            icon={<MdClose size={ICON.dense} />}
           />
         </div>
       )}
@@ -127,7 +121,7 @@ export default function CommentComposer({
           key={editorRevision}
           value={comment}
           onChange={setComment}
-          placeholder={replyTo ? `回复 @${replyTo.username}...` : '写下你的评论...'}
+          placeholder={replyTo ? `回复 @${replyTo.username}…` : '写下你的评论…'}
           disabled={isSubmitting}
         />
       ) : (
@@ -145,9 +139,9 @@ export default function CommentComposer({
           variant="filled"
           loading={isSubmitting}
           disabled={!trimmedComment}
-          icon={<MdSend size={18} />}
+          icon={<MdSend size={ICON.dense} />}
         >
-          {isSubmitting ? '发送中...' : replyTo ? '发送回复' : '发送评论'}
+          {isSubmitting ? '发送中…' : replyTo ? '发送回复' : '发送评论'}
         </Button>
       </div>
     </>

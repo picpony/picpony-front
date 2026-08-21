@@ -11,29 +11,67 @@ import {
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { cn } from '@/lib/utils';
+import { cn, clamp } from '@/lib/utils';
+import { MEDIA } from '@/lib/constants';
 import { prefersReducedMotion } from '@/lib/motion';
+import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
 import { useEscapeToClose, useExitAnimation, useMounted } from '@/lib/overlay';
 
-const MENU_MARGIN = 6;
+const MENU_MARGIN = 8;
 const VIEWPORT_PADDING = 12;
 /** 18rem — past this the panel scrolls no matter how much room it has. */
 export const POPOVER_MAX_HEIGHT = 288;
 
-/* Container-transform timings, from Vuetify 3.7's MD3 menu: 225ms in, 125ms
-   out, with the rows running at twice the container's duration so their fade
-   trails the morph. Vuetify's own curves are Material *2* leftovers
-   (0.4, 0, 0.2, 1); these are this project's M3 equivalents.
+/**
+ * The height a list of `rows` menu rows will come out at, for `estimatedHeight`.
+ *
+ * A menu row is M3's 40dp item under a pointer and grows to the 48dp touch floor
+ * under a finger — `touch-size` on the row itself — so the estimate has to read the
+ * same axis or `Popover` picks its side against the wrong number and flips the panel
+ * on the way in. `Menu` and `Select` render byte-identical rows and each carried its
+ * own pair of constants; this is the one place that arithmetic lives now.
+ *
+ * The 8px is the container's own `py-2`, on both.
+ */
+export function estimateMenuHeight(rows: number): number {
+  const coarse =
+    typeof window !== 'undefined' && window.matchMedia(MEDIA.pointerCoarse).matches;
+  return rows * (coarse ? 48 : 40) + 8 * 2;
+}
 
-   Spelled out rather than read from the CSS tokens because they are handed to
-   Web Animations as `easing:` strings, where a failed `var()` falls back to
-   `ease` silently — the same documented exception the hero's REVEAL_EASING and
-   the top loader make. The values ARE the token values; keep them in sync. */
-const ENTER_MS = 225;
-const EXIT_MS = 125;
-const EASE_DECELERATE = 'cubic-bezier(0.05, 0.7, 0.1, 1)';
-const EASE_STANDARD = 'cubic-bezier(0.2, 0, 0, 1)';
-const EASE_ACCELERATE = 'cubic-bezier(0.3, 0, 0.8, 0.15)';
+/* Container-transform timings.
+ *
+ * These were 225ms in and 125ms out, taken from Vuetify 3.7's MD3 menu — and
+ * neither number is a step on the M3 duration scale, which the app's own motion
+ * rules say is the whole scale. Borrowing an approximation from another library's
+ * approximation is how a system ends up with timings that agree with nothing.
+ *
+ * The **fast** tier, both halves, which is what `Menu.kt` reaches for:
+ * `MotionSchemeKeyTokens.FastSpatial` for the container and
+ * `MotionSchemeKeyTokens.FastEffects` for what is inside it. This ran on the
+ * *default* tier — 194ms and 166ms against the spec's 137ms and 108ms — so every
+ * menu in the app opened one step slower than a menu is supposed to. A menu is not
+ * a sheet; it is the fastest floating surface in the system precisely because it
+ * appears under the pointer that asked for it.
+ *
+ * The exit is the same `FastEffects` spring, not a curve. It was 150ms on
+ * standard-accelerate, described here as "the spec's pairing" — it is not:
+ * standard-accelerate pairs with 200ms, and a menu closing is component motion
+ * rather than a screen transition. One spring both ways also means the panel cannot
+ * arrive and leave on two unrelated clocks, and ζ=1 guarantees it does not bounce
+ * back into view on the way out.
+ *
+ * Spelled out as literals rather than read from the CSS tokens because they are
+ * handed to Web Animations as `easing:` strings, where a failed `var()` falls
+ * back to `ease` silently — the same documented exception the hero's
+ * REVEAL_EASING and the top loader make. `lib/spring.ts` generates them from the
+ * same closed form the CSS tables come from, so the two cannot drift. */
+const ENTER_MS = SPRING_MS.fastSpatial;
+const ENTER_EASING = springToLinear(SPRINGS.fastSpatial);
+const ROW_MS = SPRING_MS.fastEffects;
+const ROW_EASING = springToLinear(SPRINGS.fastEffects);
+const EXIT_MS = SPRING_MS.fastEffects;
+const EXIT_EASING = springToLinear(SPRINGS.fastEffects);
 
 export interface PopoverHandle {
   /** The panel element, for callers that need to measure or scroll it. */
@@ -67,7 +105,6 @@ interface PopoverProps {
   id?: string;
   role?: string;
   'aria-label'?: string;
-  'aria-activedescendant'?: string;
 }
 
 /**
@@ -111,7 +148,6 @@ export default function Popover({
   id,
   role,
   'aria-label': ariaLabel,
-  'aria-activedescendant': ariaActiveDescendant,
 }: PopoverProps) {
   const mounted = useMounted();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -158,7 +194,7 @@ export default function Popover({
       left: rect.left,
       width: rect.width,
       up,
-      available: Math.max(0, Math.min(maxHeight, up ? spaceAbove : spaceBelow)),
+      available: clamp(up ? spaceAbove : spaceBelow, 0, maxHeight),
     });
   }, [anchorRef, estimatedHeight, maxHeight]);
 
@@ -187,7 +223,7 @@ export default function Popover({
     if (!panel) return;
     const width = panel.offsetWidth;
     const rightLimit = window.innerWidth - VIEWPORT_PADDING - width;
-    const clamped = Math.max(VIEWPORT_PADDING, Math.min(placement.left, rightLimit));
+    const clamped = clamp(placement.left, VIEWPORT_PADDING, rightLimit);
     if (Math.abs(clamped - placement.left) > 0.5) {
       setPlacement((prev) => ({ ...prev, left: clamped }));
     }
@@ -208,11 +244,17 @@ export default function Popover({
     if (panelRect.width === 0 || panelRect.height === 0) return;
 
     closingRef.current = true;
-    panel.style.pointerEvents = 'none';
     /* `useExitAnimation` already holds the panel for `EXIT_MS` and then drops
        it, so this only has to draw those milliseconds — it does not have to
-       report when it is done. */
-    panel.animate(
+       report when it is done.
+
+       It does have to be cancellable, though, and that is what the cleanup is for.
+       `fill: 'forwards'` keeps the last keyframe applied after the animation ends,
+       and `useExitAnimation` reuses the same node when the panel is reopened inside
+       `EXIT_MS`: without this, that still-live forwards fill would reassert
+       `opacity: 0` and the shrunken transform on a panel that is now open, so a
+       fast close-then-open left an invisible menu holding the focus trap. */
+    const exit = panel.animate(
       [
         {},
         {
@@ -223,8 +265,9 @@ export default function Popover({
           opacity: 0,
         },
       ],
-      { duration: EXIT_MS, easing: EASE_ACCELERATE, fill: 'forwards' },
+      { duration: EXIT_MS, easing: EXIT_EASING, fill: 'forwards' },
     );
+    return () => exit.cancel();
   }, [open, rendering, anchorRef]);
 
   /* Enter: an M3 container transform. The panel starts at the anchor's own box
@@ -257,14 +300,23 @@ export default function Popover({
 
     const container = panel.animate(
       [{ transform: `scale(${sx}, ${sy})`, opacity: 0 }, { transform: 'none', opacity: 1 }],
-      { duration: ENTER_MS, easing: EASE_DECELERATE, fill: 'backwards' },
+      { duration: ENTER_MS, easing: ENTER_EASING, fill: 'backwards' },
     );
 
+    /* The rows wait out the container's morph and then fade on their **own**
+       clock — `ROW_MS`, the effects spring's settle time — rather than being
+       stretched over `ENTER_MS * 2`. A spring's shape and its duration are one
+       object: replayed over a longer span the same ζ=1 curve is not a slower fade,
+       it is a different one, and this file's own header says the two must never be
+       split at a call site. The wait is a `delay` because that is what a delay is
+       for; it used to be an `offset: 0.33` keyframe inside a doubled duration,
+       which is the same idea expressed as a number nobody could check. */
     const rows = animateChildren
       ? [...panel.children].map((row) =>
-          row.animate([{ opacity: 0 }, { opacity: 0, offset: 0.33 }, { opacity: 1 }], {
-            duration: ENTER_MS * 2,
-            easing: EASE_STANDARD,
+          row.animate([{ opacity: 0 }, { opacity: 1 }], {
+            duration: ROW_MS,
+            delay: ENTER_MS * 0.5,
+            easing: ROW_EASING,
             fill: 'backwards',
           }),
         )
@@ -313,7 +365,19 @@ export default function Popover({
       id={id}
       role={role}
       aria-label={ariaLabel}
-      aria-activedescendant={ariaActiveDescendant}
+      /* `inert` while leaving, not `pointer-events: none`.
+       *
+       * The panel is held in the tree for `EXIT_MS` so its exit has something to
+       * play on, and for those milliseconds it was still a focusable subtree in
+       * the accessibility tree — so a Tab right after a commit could land inside
+       * a menu that was visibly going away, and a screen reader could still be
+       * walked through its items. `pointer-events` only stops the pointer.
+       * `inert` (React 19) is the one attribute that takes a subtree out of the
+       * tab order and the accessibility tree together, which is the rule
+       * AGENTS.md states for exactly this case. Declarative rather than set in
+       * the exit effect, so re-opening inside the exit window cannot leave a live
+       * panel inert. */
+      inert={!open}
       style={{
         position: 'fixed',
         top: placement.up ? undefined : placement.top,
@@ -333,9 +397,18 @@ export default function Popover({
          condition it replaced used an *estimated* content height, so a panel
          whose real content ran a few pixels past the estimate was judged to fit,
          got `hidden`, and clipped its last row with no way to reach it. `auto`
-         already means "a scrollbar only when one is needed". */
+         already means "a scrollbar only when one is needed".
+
+         **4dp**, from `MenuTokens.ContainerShape = CornerExtraSmall`. This has
+         been wrong in both directions: `Select` originally drew 4dp with a comment
+         arguing for it while the emoji picker drew 8dp arguing the opposite, and
+         the previous pass "settled" it at 8dp by reading a summary table that says
+         `small` (8dp) covers "text fields, menus". The token file disagrees with
+         the summary, and it is the token file that generates the components — menus
+         are 4dp and so are text fields. `surface-container` and `shadow-e2` are
+         `MenuTokens.ContainerColor` / `ContainerElevation` and were already right. */
       className={cn(
-        'popover-scrollbar bg-surface-container text-on-surface z-popover overflow-y-auto rounded-sm shadow-e2',
+        'popover-scrollbar bg-surface-container text-on-surface z-popover overflow-y-auto rounded-xs shadow-e2',
         className,
       )}
     >

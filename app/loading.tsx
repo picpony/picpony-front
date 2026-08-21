@@ -11,13 +11,19 @@ import Skeleton, { SkeletonText } from '@/components/Skeleton';
  *
  * Deliberately generic: most pages render their own, better-fitting skeleton
  * once mounted, and this only covers the gap before that component exists.
+ *
+ * `max-w-7xl`, the widest of the five page columns. It read `max-w-4xl`, which is
+ * right for the ten list routes and 384px too narrow for the three grids — so on the
+ * gallery this was the "the column is just narrower" failure the layout section warns
+ * about, in the one file whose docstring claims genericness. A placeholder that is too
+ * wide only leaves air; one that is too narrow moves the content sideways on arrival.
  */
 export default function Loading() {
   return (
     <div
       role="status"
       aria-live="polite"
-      className="mx-auto max-w-4xl"
+      className="mx-auto max-w-7xl"
     >
       <span className="sr-only">加载中…</span>
       {/* Page title */}

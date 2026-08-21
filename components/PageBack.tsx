@@ -65,7 +65,6 @@ export default function PageBack({
   const button = (
     <DetailBack
       onClick={onClick}
-      title={title}
       aria-label={label ?? title}
       className="image-detail-back"
     />

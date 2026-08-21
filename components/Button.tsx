@@ -43,6 +43,18 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
 ) {
   const isDisabled = disabled || loading;
 
+  /* Below `sm`, `responsiveLabel` puts the label behind `display: none`, which
+     removes it from the accessibility tree as well as from the layout — so the
+     button's only remaining name is whatever `aria-label` it was given, and two
+     of the five call sites had none. Derive one from the label when it is a
+     plain string; `IconButton` reaches the same guarantee by typing `aria-label`
+     as required, which is not available here because the label is usually the
+     accessible name. An explicit `aria-label` still wins. */
+  const derivedLabel =
+    responsiveLabel && typeof children === 'string' && !rest['aria-label']
+      ? children
+      : rest['aria-label'];
+
   return (
     <button
       ref={ref}
@@ -68,9 +80,10 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
         className,
       })}
       {...rest}
+      aria-label={derivedLabel}
     >
       {loading ? (
-        <Spinner size="sm" white={variant === 'filled' || variant === 'danger'} />
+        <Spinner size="sm" tone={variant === 'filled' || variant === 'danger' ? 'on-primary' : 'primary'} />
       ) : (
         icon && (
           <span aria-hidden="true" className="shrink-0 [&>svg]:block">

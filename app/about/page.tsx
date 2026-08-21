@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { MdGroup } from 'react-icons/md';
 import Card from '@/components/Card';
+import AsciiDecodeField from '@/components/AsciiDecodeField';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import DeveloperGuideModal from '@/components/DeveloperGuideModal';
 import { useReducedMotion } from '@/lib/motion';
@@ -13,37 +13,19 @@ import Logo from '@/components/Logo';
 import { api } from '@/lib/api';
 import PageHeader from '@/components/PageHeader';
 import PageBack from '@/components/PageBack';
-import { useEscapeBack } from '@/lib/hooks';
+import { readToken, useEscapeBack } from '@/lib/hooks';
 import SectionHeading from '@/components/SectionHeading';
-
-/** 成员头像：原生 img 避开 next/image 域名白名单与 QQ 防盗链（Referer），失败降级为图标 */
-function MemberAvatar({ src, alt }: { src: string; alt: string }) {
-  const [broken, setBroken] = useState(false);
-  if (!src || broken) {
-    return (
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant">
-        <MdGroup size={24} />
-      </div>
-    );
-  }
-  return (
-    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-surface-container-high">
-      {/* eslint-disable-next-line @next/next/no-img-element -- 头像含 QQ 等白名单外域名，且需 no-referrer 防防盗链 */}
-      <img
-        src={src}
-        alt={alt}
-        referrerPolicy="no-referrer"
-        loading="lazy"
-        decoding="async"
-        onError={() => setBroken(true)}
-        className="h-full w-full object-cover"
-      />
-    </div>
-  );
-}
+import { getAssetUrl } from '@/lib/utils';
+import Avatar from '@/components/Avatar';
 
 /** The Lottie composition's own frame, so the reserved box matches what lands. */
 const TRACE_ASPECT = '3000 / 1053';
+/**
+ * One width for the mark, because there are two branches below that both draw it
+ * and they were carrying separate copies of the pair — which is how the static
+ * fallback and the animated mark come to be different sizes.
+ */
+const MARK_WIDTH = 'w-48 sm:w-64';
 
 function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -55,12 +37,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
 
   // 已登录状态下快速连点 10 次（点击间隔超 1.5s 重置）触发开发者向导
   const handleClick = () => {
-    let token = '';
-    try {
-      token = JSON.parse(localStorage.getItem('user_info') || 'null')?.token || '';
-    } catch {
-      token = '';
-    }
+    const token = readToken();
     if (!token) return;
     const now = Date.now();
     const ref = clicksRef.current;
@@ -108,7 +85,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
        wrapper rather than through it. */
     return (
       <span
-        className="mx-auto block w-44 select-none sm:w-56"
+        className={`block select-none ${MARK_WIDTH}`}
         onMouseDown={(e) => e.preventDefault()}
         onClick={handleClick}
       >
@@ -120,13 +97,14 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   /* `aspect-ratio` reserves the box before the player injects its SVG. Without
      it the host is 0px tall until the chunk resolves and then pushes the whole
      page down — a layout shift on every visit, on the one element above the
-     fold. */
+     fold. That reserved box is also what the decode field behind it measures its
+     clearing from, so it has to be right before the chunk lands as well as after. */
   return (
     <div
       ref={hostRef}
       role="img"
       aria-label="PicPony"
-      className="mx-auto w-44 select-none sm:w-56"
+      className={`select-none ${MARK_WIDTH}`}
       style={{ aspectRatio: TRACE_ASPECT }}
       onMouseDown={(e) => e.preventDefault()}
       onClick={handleClick}
@@ -158,7 +136,7 @@ function resolveMemberAvatar(
 ): string | null {
   const url = m.account_avatar || m.avatar_url;
   if (!url) return null;
-  return /^https?:\/\//.test(url) ? url : `https://picpony.top/${url}`;
+  return getAssetUrl(url);
 }
 
 // user:N → /user/N；无链接返回 null
@@ -228,7 +206,7 @@ function TeamSection() {
               <div className="flex flex-wrap gap-x-4 gap-y-5">
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="flex w-full items-center gap-3 p-2 sm:w-44">
-                    <SkeletonCircle size={64} delay={g * 120 + i * 80} />
+                    <SkeletonCircle size={56} delay={g * 120 + i * 80} />
                     <div className="min-w-0 flex-1 space-y-2">
                       <Skeleton className="h-4 w-16" delay={g * 120 + i * 80 + 40} />
                       <Skeleton className="h-3 w-20" delay={g * 120 + i * 80 + 80} />
@@ -263,7 +241,7 @@ function TeamSection() {
                   const avatar = resolveMemberAvatar(m);
                   const inner = (
                     <>
-                      <MemberAvatar src={avatar ?? ''} alt={m.name} />
+                      <Avatar src={avatar} name={m.name} size={56} unoptimized />
                       <div className="min-w-0">
                         <p className="truncate text-label-l text-on-surface">{m.name}</p>
                         <p className="mt-0.5 text-body-s text-on-surface-variant">{m.role}</p>
@@ -311,7 +289,28 @@ export default function AboutPage() {
       <div className="mx-auto max-w-4xl pt-14">
       <PageHeader title="关于本站" />
 
-      <TraceHeader onActivate={() => setGuideOpen(true)} />
+      {/* The mark has a surface of its own rather than floating on the page
+          background. A filled `Card` — `surface-container-highest` at elevation 0, per
+          the container table — with `padding="none"`, because the character texture
+          behind the mark has to reach the corners and the corners are what clip it.
+
+          The height is fixed rather than derived from the mark: the texture is the
+          point of the box, and a box sized to the wordmark alone would have room for
+          the mark and nothing else. 256/320px is sixteen and twenty rows of grid. */}
+      <Card
+        variant="filled"
+        padding="none"
+        className="relative mt-2 flex h-64 items-center justify-center overflow-hidden sm:h-80"
+      >
+        <AsciiDecodeField />
+        {/* `relative` is what keeps the mark above the texture: the two are siblings at
+            the same z-index, so paint order is DOM order and only a *positioned*
+            element takes part in it. Without it the field's `absolute inset-0` would
+            cover the mark and swallow its clicks. */}
+        <div className="relative">
+          <TraceHeader onActivate={() => setGuideOpen(true)} />
+        </div>
+      </Card>
 
       <div className="mt-8">
         <Card variant="filled" padding="lg">

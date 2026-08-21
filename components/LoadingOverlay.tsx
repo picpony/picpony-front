@@ -4,8 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import Logo, { INTRO_DURATION_MS, INTRO_CHUNK_BUDGET_MS } from './Logo';
 
 /** How long the finished mark holds before the overlay leaves. */
-const HOLD_MS = 220;
-const FADE_MS = 400;
+const HOLD_MS = 200;
+/**
+ * The fade out. `short4` on the M3 scale, paired with `accelerate` — which is the
+ * leaves-the-screen pairing. It was 400ms on the same curve, i.e. the *entering*
+ * duration on the *leaving* curve: `accelerate` ends at its maximum velocity by
+ * construction, so stretching it to 400 does not make the exit gentler, it makes
+ * the first 300ms almost imperceptible and then rips the screen away.
+ */
+const FADE_MS = 200;
 /** Reduced motion loads nothing, so there is no animation to wait for. */
 const REDUCED_HOLD_MS = 300;
 
@@ -65,7 +72,7 @@ export default function LoadingOverlay() {
 
   return (
     <div
-      className={`bg-surface fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-400 ease-[var(--ease-accelerate)] ${
+      className={`bg-surface fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-200 ease-[var(--ease-accelerate)] ${
         isVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
       }`}
     >

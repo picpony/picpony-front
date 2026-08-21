@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { api, Notification } from '@/lib/api';
+import { api, Announcement, Notification } from '@/lib/api';
 import {
   MdOutlineChatBubbleOutline,
   MdOutlineEmojiEmotions,
@@ -18,24 +18,16 @@ import {
   MdChevronRight,
 } from 'react-icons/md';
 import { getEmojis } from '@/app/actions/getEmojis';
-import TabBar from '@/components/TabBar';
+import Tabs from '@/components/Tabs';
 import PageHeader from '@/components/PageHeader';
 import { showToast } from '@/components/Toast';
-
-interface Announcement {
-  id: number;
-  version: string;
-  title: string;
-  content: string;
-  date: string;
-}
+import { ICON } from '@/lib/icons';
 
 import { Contact, Message } from '@/lib/api';
 import Image from 'next/image';
 import RichTextRenderer from '@/components/RichTextRenderer';
 import Pagination from '@/components/Pagination';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
-import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import { Input, Textarea } from '@/components/Input';
 import Avatar from '@/components/Avatar';
@@ -46,7 +38,7 @@ import ErrorRetry from '@/components/ErrorRetry';
 import Sheet from '@/components/Sheet';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
-import { useEscapeBack, useMediaQuery } from '@/lib/hooks';
+import { readUserInfo, useEscapeBack, useMediaQuery } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import Popover from '@/components/Popover';
@@ -115,7 +107,7 @@ function NotificationPane({
     return <ErrorRetry size="pane" title="消息加载失败" message={error} onRetry={onRetry} />;
   }
   if (items.length === 0) {
-    return <EmptyState size="pane" icon={<MdNotificationsNone size={48} />} title={emptyTitle} />;
+    return <EmptyState size="pane" icon={<MdNotificationsNone size={ICON.display} />} title={emptyTitle} />;
   }
   return (
     <div>
@@ -140,7 +132,13 @@ function NotificationPane({
              is the muted rose two steps off the brand hue, so twenty unread rows
              in a row still read as a list rather than as a pink screen. */
           className={cn(
-            'm3-row p-5 transition-ui',
+            /* `p-4`, the row padding every other list in the app uses. It read 20px
+               — on the 4dp grid and on no rhythm, which made these the tallest list
+               rows in the app at ~95px against /history's 66. Three of the four sites
+               with that value were in this file. (Spelled as a figure rather than as
+               the class it was, because the extractor lifts a class name out of a
+               comment and would keep the dead rule in the bundle.) */
+            'm3-row p-4 transition-ui',
             item.is_read === 0
               ? 'bg-secondary-container text-on-secondary-container'
               : 'bg-surface-container-low text-on-surface-variant',
@@ -171,7 +169,7 @@ function MessageRowsSkeleton() {
   return (
     <div>
       {[1, 2, 3].map((i) => (
-        <div key={i} className="m3-row flex flex-col gap-2 bg-surface-container-low p-5">
+        <div key={i} className="m3-row flex flex-col gap-2 bg-surface-container-low p-4">
           <Skeleton className="h-4 w-1/3" delay={i * 80} />
           <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
           <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
@@ -214,7 +212,7 @@ function ThreadSkeleton() {
             {run.widths.map((width, j) => (
               <Skeleton
                 key={width}
-                className={cn('h-9 rounded-2xl', width)}
+                className={cn('h-10 rounded-lg', width)}
                 delay={i * 80 + 40 + j * 40}
               />
             ))}
@@ -401,9 +399,8 @@ export default function MessagesPage() {
 
   const fetchUnreadCounts = useCallback(async () => {
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) return;
       const data = await api.getUnreadCounts(user.token);
       if (data.success) {
         setUnreadCounts({
@@ -449,8 +446,7 @@ export default function MessagesPage() {
       }
 
       try {
-        const storedUser = localStorage.getItem('user_info');
-        if (!storedUser) return;
+        if (!readUserInfo()) return;
 
         const res = await api.getUserProfile(String(targetId));
         if (res.success && res.user) {
@@ -535,12 +531,11 @@ export default function MessagesPage() {
     async (silent = false) => {
       if (!silent) setPane('notification', { loading: true, error: null });
       try {
-        const storedUser = localStorage.getItem('user_info');
-        if (!storedUser) {
+        const user = readUserInfo();
+        if (!user) {
           if (!silent) setPane('notification', { error: '请先登录' });
           return;
         }
-        const user = JSON.parse(storedUser);
         const data = await api.getNotifications(user.token);
         if (data.success) {
           shown.current.add('notification');
@@ -563,12 +558,11 @@ export default function MessagesPage() {
     async (page: number = 1, silent = false) => {
       if (!silent) setPane('interaction', { loading: true, error: null });
       try {
-        const storedUser = localStorage.getItem('user_info');
-        if (!storedUser) {
+        const user = readUserInfo();
+        if (!user) {
           if (!silent) setPane('interaction', { error: '请先登录' });
           return;
         }
-        const user = JSON.parse(storedUser);
         const data = await api.getInteractionNotifications(user.token, page);
         if (data.success) {
           shown.current.add('interaction');
@@ -593,12 +587,11 @@ export default function MessagesPage() {
     async (silent = false) => {
       if (!silent) setPane('chat', { loading: true, error: null });
       try {
-        const storedUser = localStorage.getItem('user_info');
-        if (!storedUser) {
+        const user = readUserInfo();
+        if (!user) {
           if (!silent) setPane('chat', { error: '请先登录' });
           return;
         }
-        const user = JSON.parse(storedUser);
         const data = await api.getRecentContacts(user.token);
         if (data.success) {
           shown.current.add('chat');
@@ -620,9 +613,8 @@ export default function MessagesPage() {
     async (contactId: number, silent = false) => {
       if (!silent) setLoadingMessages(true);
       try {
-        const storedUser = localStorage.getItem('user_info');
-        if (!storedUser) return;
-        const user = JSON.parse(storedUser);
+        const user = readUserInfo();
+        if (!user) return;
         const data = await api.getMessages(user.token, contactId);
         if (data.success) {
           setMessages(data.messages);
@@ -639,7 +631,7 @@ export default function MessagesPage() {
       } catch (err) {
         console.error('获取聊天记录失败', err);
         setMessages([]);
-        showToast('网络错误，无法加载聊天记录', 'error');
+        showToast('网络错误，请稍后再试', 'error');
       } finally {
         setLoadingMessages(false);
       }
@@ -718,12 +710,11 @@ export default function MessagesPage() {
 
     setSending(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) {
+      const user = readUserInfo();
+      if (!user) {
         showToast('请先登录', 'error');
         return;
       }
-      const user = JSON.parse(storedUser);
 
       const res = await api.sendMessage(user.token, selectedContact.id, newMessage.trim());
       const data = await res.json();
@@ -741,7 +732,7 @@ export default function MessagesPage() {
       }
     } catch (err) {
       console.error('发送消息出错:', err);
-      showToast('网络错误，消息未发送', 'error');
+      showToast('网络错误，请稍后再试', 'error');
     } finally {
       setSending(false);
     }
@@ -835,7 +826,6 @@ export default function MessagesPage() {
           key={emoji}
           type="button"
           onClick={() => handleEmojiClick(emoji)}
-          title={emoji}
           className="state-layer text-on-surface-variant flex aspect-square cursor-pointer items-center justify-center rounded-sm p-1 outline-none focus-visible:ring-2 focus-ring"
         >
           <Image
@@ -881,10 +871,18 @@ export default function MessagesPage() {
      nesting. That a run always ends at a day boundary is what lets the date
      separator sit *between* two groups instead of having to be threaded through
      the middle of one. */
-  const threadRuns: { lead: Message; items: { msg: Message; endOfRun: boolean }[] }[] = [];
+  const threadRuns: {
+    lead: Message;
+    items: { msg: Message; startOfRun: boolean; endOfRun: boolean }[];
+  }[] = [];
   for (const { item, startOfRun, endOfRun } of runs) {
     if (startOfRun || threadRuns.length === 0) threadRuns.push({ lead: item, items: [] });
-    threadRuns[threadRuns.length - 1].items.push({ msg: item, endOfRun });
+    /* Both flags reach the bubble, and both are load-bearing: together they cut a
+       run into one block. `startOfRun` opens it, `endOfRun` closes it, and dropping
+       either one leaves a turn that either reads as a stack of separate lozenges or
+       ends on a clipped corner. `endOfRun` also decides the timestamp — the clock
+       belongs to the turn, not to each message in it. */
+    threadRuns[threadRuns.length - 1].items.push({ msg: item, startOfRun, endOfRun });
   }
 
   /* The delivery mark goes on the newest outgoing message only. Under every own
@@ -902,7 +900,7 @@ export default function MessagesPage() {
       <div className="mx-auto max-w-4xl">
         <PageHeader title="消息" />
 
-        <TabBar
+        <Tabs
           className="mb-3"
           value={activeTab}
           onChange={(v) => setActiveTab(v)}
@@ -933,11 +931,11 @@ export default function MessagesPage() {
                 onRetry={() => fetchAnnouncements()}
               />
             ) : announcements.length === 0 ? (
-              <EmptyState size="pane" icon={<MdCampaign size={48} />} title="暂无公告" />
+              <EmptyState size="pane" icon={<MdCampaign size={ICON.display} />} title="暂无公告" />
             ) : (
               <div>
                 {announcements.map((item) => (
-                  <div key={item.id} className="m3-row bg-surface-container-low p-5">
+                  <div key={item.id} className="m3-row bg-surface-container-low p-4">
                     <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                       <div className="flex min-w-0 items-center gap-3">
                         {/* Was a hand-rolled `bg-primary` at 10% with `text-primary`
@@ -1014,36 +1012,63 @@ export default function MessagesPage() {
                 than the visual viewport and its bottom-docked composer sat behind
                 the keyboard. Below `md` the `dvh` unit should track the keyboard,
                 which is the whole reason to use it. */}
-            <div className="bg-surface-container flex h-[calc(100dvh-13rem)] overflow-hidden rounded-md md:h-[38rem] md:min-h-[26rem]">
+            {/* `surface-container-low`, the same step the contact column inside it
+                takes. It was `surface-container-highest` — which is the *filled text
+                field's* own tone, so the contact search box sitting in this strip was
+                painted exactly the colour behind it and disappeared into it. The
+                container table gives `highest` to a filled field and an unselected
+                chip; a two-pane frame holding a list and a thread is not either, and
+                the things inside it need somewhere to stand out *from*. */}
+            <div className="bg-surface-container-low flex h-[calc(100dvh-13rem)] overflow-hidden rounded-md md:h-[38rem] md:min-h-[26rem]">
               {/* — Contact list — */}
               <div
                 className={cn(
-                  'w-full flex-col transition-[width] duration-300 ease-[var(--ease-standard)]',
+                  'w-full flex-col transition-[width]',
+                  /* The drawer's springs, per direction, for the drawer's reasons —
+                     see the long note on the `<aside>` in `AppLayout`.
+                     `NavigationDrawer.kt` opens on `DefaultSpatial` and closes on
+                     `FastEffects`, and this rail is the same object: a docked panel
+                     a press collapses. Every clock in the gesture is this one — the
+                     rail, the row's gap, the search box's width and grow, and the
+                     labels' fade — because they are one movement. It has been
+                     `slow-spatial` (296ms, measurably laggy off the mark) and then a
+                     symmetric bezier invented for it; the springs are the spec's answer. */
+                  contactsCollapsed ? 'spring-fast-effects' : 'spring-default-spatial',
                   /* One branch or the other, never both: `cn` is a plain join,
                      so emitting `md:w-72` and `md:w-20` together left Tailwind's
                      output order to pick — and it picks the larger, so the rail
                      collapsed its contents and kept its width.
-                     18rem expanded, down from 20: the row holds a 48px portrait,
+                     18rem expanded, down from 20: the row holds a 40px portrait,
                      a name and a time, and 320px left the name ending a third of
-                     the way across. 5rem collapsed is the same rows in the same
-                     order, without the words. */
-                  contactsCollapsed ? 'md:w-20' : 'md:w-72',
+                     the way across.
+                     Collapsed is **derived from the row, not chosen**: the list's
+                     inset takes 8px a side, so the rail is the row's height plus 16 —
+                     72 + 16 = 88 — which is what makes the row come out square and the
+                     portrait centre itself with no centring rule. The three numbers
+                     that have to agree are the row's height, the row's horizontal
+                     padding and this width: a 48dp portrait in a 72px square wants 12px
+                     of padding, so the row is `px-3` and the four gaps are equal.
+                     Taking the row to 64 under a pointer broke exactly that — the height
+                     moved and the padding did not, so the portrait sat 4px high — which
+                     is why the row is one height again. */
+                  contactsCollapsed ? 'md:w-22' : 'md:w-72',
                   selectedContact ? 'hidden md:flex' : 'flex',
                 )}
               >
                 <div
                   className={cn(
                     'flex items-center gap-2 p-3',
-                    /* The gap is on the same 300ms clock as the rail's width.
+                    /* The gap is on the same clock as the rail's width.
                        Collapsed it has to reach 0, or the toggle does not end up
                        centred in the 80px rail: 12px of padding either side
                        leaves 56px, and a 40px button with an 8px gap still in
                        front of it can only sit 4px right of centre however the
                        free space is shared out. Animated rather than switched,
-                       because an instant 8px hop at the start of a 300ms slide
-                       is exactly the kind of two-clock movement that made this
+                       because an instant 8px hop at the start of the slide is
+                       exactly the kind of two-clock movement that made this
                        control look like it jumped before it moved. */
-                    'transition-[gap] duration-300 ease-[var(--ease-standard)]',
+                    'transition-[gap]',
+                    contactsCollapsed ? 'spring-fast-effects' : 'spring-default-spatial',
                     contactsCollapsed && 'md:gap-0',
                   )}
                 >
@@ -1061,13 +1086,26 @@ export default function MessagesPage() {
                       invisible search box must not still take clicks. */}
                   <div
                     className={cn(
-                      'min-w-0 transition-[width,opacity] duration-300 ease-[var(--ease-standard)]',
+                      /* `flex-grow` is in the transition list, and that is the
+                         whole fix for the toggle jumping.
+
+                         `md:grow-0` matters as much as `md:w-0`: `flex-1` is grow
+                         *and* basis, so a zero-width box still claimed every spare
+                         pixel in the rail and pushed the toggle off centre. But
+                         `grow` was being *switched* while `width` was *animated* —
+                         so on the click the search box gave up its claim on the
+                         free space in a single frame, the row re-laid out
+                         instantly, and the toggle snapped to the centre of the
+                         still-288px rail before the rail had moved at all. That is
+                         the "button suddenly centres first" — one property on a
+                         clock and its partner on none.
+                         `flex-grow` is an animatable number, so putting it on the
+                         same clock hands the space over gradually and the toggle
+                         glides to its final position with the rail around it. */
+                      'min-w-0 transition-[width,opacity,flex-grow]',
+                      contactsCollapsed ? 'spring-fast-effects' : 'spring-default-spatial',
                       contactsCollapsed
-                        ? /* `md:grow-0` matters as much as `md:w-0`: `flex-1` is
-                             grow *and* basis, so a zero-width box still claimed
-                             every spare pixel in the rail and pushed the toggle
-                             off centre. */
-                          'md:w-0 md:grow-0 md:opacity-0 md:pointer-events-none flex-1'
+                        ? 'md:w-0 md:grow-0 md:opacity-0 md:pointer-events-none flex-1'
                         : 'flex-1 opacity-100',
                     )}
                     aria-hidden={contactsCollapsed ? 'true' : undefined}
@@ -1075,8 +1113,12 @@ export default function MessagesPage() {
                   >
                     <Input
                       type="search"
-                      icon={<MdSearch size={18} />}
-                      placeholder="搜索昵称发起私信..."
+                      /* `sm` — 40dp. This is a filter above a list, which is the
+                         enclosure the dense step exists for, and at the form-slot 56
+                         it made an 80px band above the contacts for one search box. */
+                      size="sm"
+                      icon={<MdSearch size={ICON.control} />}
+                      placeholder="搜索昵称发起私信…"
                       value={contactQuery}
                       onChange={(e) => setContactQuery(e.target.value)}
                       aria-label="搜索联系人"
@@ -1094,9 +1136,9 @@ export default function MessagesPage() {
                     className="max-md:hidden mx-auto"
                     icon={
                       contactsCollapsed ? (
-                        <MdChevronRight size={22} />
+                        <MdChevronRight size={ICON.standard} />
                       ) : (
-                        <MdChevronLeft size={22} />
+                        <MdChevronLeft size={ICON.standard} />
                       )
                     }
                   />
@@ -1105,10 +1147,9 @@ export default function MessagesPage() {
                   {paneState.chat.loading && contacts.length === 0 ? (
                     <div className="flex flex-col gap-1">
                       {[1, 2, 3, 4].map((i) => (
-                        /* `h-16 px-2`, the contact row's own box — the skeleton
-                           stood at a different height, so the list re-spaced as
-                           the contacts landed. */
-                        <div key={i} className="flex h-16 items-center gap-3 px-2">
+                        /* The contact row's own box — the skeleton stood at a different
+                           height once, so the list re-spaced as the contacts landed. */
+                        <div key={i} className="flex h-18 items-center gap-3 px-3">
                           <SkeletonCircle size={48} delay={i * 80} />
                           <div
                             className={cn(
@@ -1137,7 +1178,7 @@ export default function MessagesPage() {
                           aria-label={`联系人加载失败：${paneState.chat.error}，点击重试`}
                           title={`联系人加载失败：${paneState.chat.error}`}
                           className="text-error"
-                          icon={<MdErrorOutline size={22} />}
+                          icon={<MdErrorOutline size={ICON.standard} />}
                         />
                       </div>
                     ) : (
@@ -1155,7 +1196,7 @@ export default function MessagesPage() {
                     !contactsCollapsed && (
                       <EmptyState
                         size="inline"
-                        icon={<MdOutlineChatBubbleOutline size={32} />}
+                        icon={<MdOutlineChatBubbleOutline size={ICON.large} />}
                         title="还没有任何私信"
                       />
                     )
@@ -1168,7 +1209,7 @@ export default function MessagesPage() {
                     !contactsCollapsed && (
                       <EmptyState
                         size="inline"
-                        icon={<MdSearchOff size={32} />}
+                        icon={<MdSearchOff size={ICON.large} />}
                         title="没有匹配的联系人"
                       />
                     )
@@ -1181,7 +1222,7 @@ export default function MessagesPage() {
                           type="button"
                           onClick={() => setSelectedContact(contact)}
                           aria-current={active ? 'true' : undefined}
-                          title={contactsCollapsed ? contact.username : undefined}
+                          aria-label={contactsCollapsed ? contact.username : undefined}
                           data-ripple
                           /* A list row in the shape the rest of the app uses:
                              `rounded-full` like the sidebar's nav rows, the M3
@@ -1204,18 +1245,38 @@ export default function MessagesPage() {
                              the width took 300ms to catch up. One gesture, three
                              clocks. Now the row keeps its geometry and the rail
                              simply narrows over it: the text is *clipped* by the
-                             shrinking box rather than removed from it, and `h-16`
-                             means the row's height never depended on the text in
-                             the first place.
+                             shrinking box rather than removed from it, and a fixed
+                             height means the row's height never depended on the text
+                             in the first place.
 
                              The portrait needs no centring rule either, which is
-                             what makes this work. The collapsed rail is 80px and
-                             the list's own inset takes 8px a side, so the row is
-                             64px — a 48px portrait at `px-2` sits 8px from both
-                             edges of it. It arrives in the centre by staying
-                             exactly where it was. */
+                             what makes this work. The collapsed rail is the row's
+                             height plus the list's own 8px inset either side, so the
+                             row comes out square (88 − 16 = 72) and the portrait sits
+                             the same distance from all four edges — provided the
+                             horizontal padding *is* that distance. Three numbers move
+                             together: the rail's collapsed width, this height, and this
+                             padding. At a 48dp portrait in a 72px square that distance
+                             is 12, so the row is `px-3`.
+
+                             **48dp, not `ListTokens.ItemLeadingAvatarSize`'s 40.** A
+                             40px portrait in a 72px square leaves 16px of air on every
+                             side, and collapsed — where the portrait is the only thing
+                             left in the rail — that reads as a small picture floating in
+                             a big button. The 4px the padding gives up to pay for it is
+                             the same trade: the row's leading inset is 12 rather than
+                             the spec's 16, which shifts the expanded row's text 4px
+                             left and is the cheaper of the two divergences.
+
+                             **72dp at every density**, `ItemTwoLineContainerHeight`. It
+                             took 64 under a pointer for one pass, and that is what put
+                             the collapsed portrait 4px above centre: the height moved
+                             and the padding did not. Before either, this was `h-16` with
+                             a 48dp portrait, where the 64 was the top app bar's height
+                             borrowed via the rail's width rather than anything about a
+                             row. */
                           className={cn(
-                            'flex h-16 w-full cursor-pointer items-center gap-3 overflow-hidden rounded-full px-2 text-left outline-none',
+                            'flex h-18 w-full cursor-pointer items-center gap-3 overflow-hidden rounded-full px-3 text-left outline-none',
                             'transition-ui focus-visible:ring-2 focus-ring',
                             active
                               ? 'bg-secondary-container text-on-secondary-container'
@@ -1237,7 +1298,8 @@ export default function MessagesPage() {
                               toggle was pressed. */}
                           <div
                             className={cn(
-                              'min-w-0 flex-1 transition-opacity duration-300 ease-[var(--ease-standard)]',
+                              'min-w-0 flex-1 transition-opacity',
+                              contactsCollapsed ? 'spring-fast-effects' : 'spring-default-spatial',
                               contactsCollapsed && 'md:opacity-0',
                             )}
                           >
@@ -1266,13 +1328,13 @@ export default function MessagesPage() {
                       <IconButton
                         onClick={() => setSelectedContact(null)}
                         aria-label="返回联系人列表"
-                        icon={<MdArrowBack size={20} />}
+                        icon={<MdArrowBack size={ICON.control} />}
                         className="md:hidden"
                       />
                       <Avatar
                         src={selectedContact.avatar}
                         name={selectedContact.username}
-                        size={36}
+                        size={40}
                         className="max-md:hidden"
                       />
                       <span className="text-title-m text-on-surface min-w-0 truncate">
@@ -1280,12 +1342,17 @@ export default function MessagesPage() {
                       </span>
                       <IconButton
                         onClick={() => fetchMessages(selectedContact.id)}
-                        disabled={loadingMessages}
+                        /* `loading`, not a hand-spun glyph. The primitive swaps
+                           the icon for a real `Spinner` and blocks interaction,
+                           which is what every other busy control in the app does
+                           — a hand-spun refresh arrow made this the one
+                           place a rotating icon meant "working" instead of the
+                           M3 circular indicator. `RefreshButton` in the admin
+                           console records the same fix. */
+                        loading={loadingMessages}
                         aria-label="刷新消息"
                         className="ms-auto"
-                        icon={
-                          <MdRefresh size={22} className={loadingMessages ? 'animate-spin' : ''} />
-                        }
+                        icon={<MdRefresh size={ICON.standard} />}
                       />
                     </div>
 
@@ -1298,7 +1365,7 @@ export default function MessagesPage() {
                       ) : messages.length === 0 ? (
                         <EmptyState
                           size="inline"
-                          icon={<MdOutlineChatBubbleOutline size={32} />}
+                          icon={<MdOutlineChatBubbleOutline size={ICON.large} />}
                           title="还没有消息，说点什么吧"
                           className="flex-1"
                         />
@@ -1339,10 +1406,11 @@ export default function MessagesPage() {
                                   />
                                 }
                               >
-                                {items.map(({ msg, endOfRun }) => (
+                                {items.map(({ msg, startOfRun, endOfRun }) => (
                                   <ChatBubble
                                     key={msg.id}
                                     own={isMe}
+                                    startOfRun={startOfRun}
                                     endOfRun={endOfRun}
                                     /* The clock belongs to the turn, not to each
                                        message in it: four messages in a row used
@@ -1369,15 +1437,17 @@ export default function MessagesPage() {
                       )}
                     </div>
 
-                    {/* `sm:p-4`, not `sm:px-4 sm:pb-4`: the top edge was left at
-                        `pt-3` while the other three went to 16px, so the composer's
-                        top padding was 4px short of its own sides.
+                    {/* `p-2` at every width, i.e. 8px around a 56dp field for a 72px
+                        band. It was `p-3 sm:p-4` around three 56dp boxes, which came
+                        out at 80 and 88 — an 88px strip for one line of text. The
+                        padding is the only term left to spend once the field's own
+                        height is fixed, and the field is the part you type into.
 
                         The safe-area inset is what every other bottom-docked
                         surface in this app already does (`Sheet`, the drawer, the
                         tab bar): on a phone this row sits at the bottom of the
                         viewport, over the home indicator. */}
-                    <div className="bg-surface-container relative p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <div className="bg-surface-container relative p-2 [--touch-floor:48px] pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                       {/* The two controls stay *outside* the field. They were
                           briefly moved into its trailing slot, which is right
                           for a search box — one field, one action, pressed once
@@ -1386,6 +1456,35 @@ export default function MessagesPage() {
                           row's three plain targets into one crowded box. They
                           are bottom-aligned so they stay put as the field grows.
                           `items-end`, not `items-center`. */}
+                      {/* **A 40dp field between two 40dp accessories**, 48 each under a
+                          finger, and the row is `p-2`. The height went 56 → 40 → 56 →
+                          56/40 → 40/40, and every step fixed the previous one's
+                          side-effect, which is worth keeping as a record of how easy
+                          this particular row is to get wrong.
+
+                          The buttons were once taller than the field; that got "fixed"
+                          by dropping them to 40 while the one-row `Textarea` was still
+                          48 — 48 was then retired from the scale, the field became 56,
+                          and the accessories went to 56 to match it. Three equal boxes
+                          did put the glyphs on one axis, and made the composer an 88px
+                          band for one line of text. Taking only the buttons to 40 then
+                          left a 16px gap between them and the field, which reads as the
+                          buttons being undersized rather than the field oversized.
+
+                          So all three take 40 — the step a control beside a field takes,
+                          from the field's own trailing-slot arithmetic, `(56 − 40) / 2`.
+                          `touch-size` on the buttons and `pointer-coarse` padding on the
+                          field carry all three to 48 together where a finger is the
+                          pointer. With `p-2` the row is **56px**, from 88.
+                          `shape="square"` is the other half. A circular icon button
+                          *changes shape when it is selected* — M3's
+                          `SelectedContainerShapeRound` makes a selected icon button a
+                          rounded square — so toggling the picker morphed a circle into a
+                          squarish blob, which reads as the control deforming under the
+                          press. A control that is already a 12dp rectangle has the same
+                          silhouette in both states, so there is nothing to morph. It
+                          also pairs better with the field between them: three rectangles
+                          in a row, not two circles with a box wedged in. */}
                       <div className="flex items-end gap-2">
                         <div className="relative shrink-0">
                           <IconButton
@@ -1394,8 +1493,21 @@ export default function MessagesPage() {
                             aria-label="表情"
                             aria-expanded={showEmojiPicker}
                             aria-haspopup="dialog"
-                            icon={<MdOutlineEmojiEmotions size={24} />}
-                            className={showEmojiPicker ? 'text-primary' : undefined}
+                            size="md"
+                            className="touch-size rounded-l-lg rounded-r-xs"
+                            shape="square"
+                            variant="tonal"
+                            /* No `size` on the glyph: `IconButton` sizes its own slot
+                               (24dp at this step, `MediumIconButtonTokens.IconSize`). */
+                            icon={<MdOutlineEmojiEmotions />}
+                            /* `selected`, not a text-colour override: an open picker is
+                               a toggle that is on, and `IconButton` answers that with
+                               the container pair. It no longer answers it with a *shape*
+                               change, because `shape="square"` fixes the silhouette in
+                               both states — see the note above the row. `text-primary`
+                               on a tonal container emitted a second ink over the
+                               variant's own. */
+                            selected={showEmojiPicker}
                           />
                           {/* Desktop: the app's one floating surface, anchored to
                               its own button.
@@ -1432,10 +1544,17 @@ export default function MessagesPage() {
                         <Textarea
                           ref={inputRef}
                           rows={1}
+                          /* `sm` — 40dp under a pointer, 48 under a finger, which is
+                             exactly what the two `IconButton`s beside it measure. At the
+                             form-slot 56 the field stood 16px taller than them, and the
+                             two accessories read as undersized rather than the field as
+                             oversized. Both are true: the trio has to agree, and 40 is
+                             the step a control beside a field takes. */
+                          size="sm"
                           value={newMessage}
                           onChange={(e) => setNewMessage(e.target.value)}
                           onKeyDown={handleKeyPress}
-                          placeholder="输入消息..."
+                          placeholder="输入消息…"
                           aria-label="输入消息"
                           /* `enterKeyHint` so the phone keyboard offers 发送 on a
                              field whose Enter sends, rather than a newline key. */
@@ -1464,23 +1583,32 @@ export default function MessagesPage() {
                              already blocked by `loading` on the button below and
                              by the `sending` re-check inside `handleSendMessage`. */
                         />
-                        <Button
+                        {/* An `IconButton`, not a `Button`. A labelled 送出 button would
+                            have to hold a word at 56dp beside a field that is already
+                            56dp of text, and a filled icon button is the conventional
+                            send affordance anyway. The
+                            label it loses is not lost: `aria-label` names it and
+                            `IconButton` shows it as an M3 tooltip on hover. That also
+                            retires the `responsiveLabel` collapse, which existed only
+                            because the word did not fit on a phone. */}
+                        <IconButton
                           onClick={handleSendMessage}
                           variant="filled"
+                          size="md"
+                          shape="square"
+                          className="touch-size rounded-r-lg rounded-l-xs"
                           loading={sending}
                           disabled={!newMessage.trim()}
-                          responsiveLabel
-                          icon={<MdSend size={18} />}
-                        >
-                          发送
-                        </Button>
+                          aria-label="发送"
+                          icon={<MdSend />}
+                        />
                       </div>
                     </div>
                   </>
                 ) : (
                   <EmptyState
                     size="pane"
-                    icon={<MdOutlineChatBubbleOutline size={48} />}
+                    icon={<MdOutlineChatBubbleOutline size={ICON.display} />}
                     title="选择一个联系人开始聊天"
                     className="flex-1"
                   />

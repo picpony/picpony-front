@@ -25,10 +25,12 @@ import {
 } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Card from '@/components/Card';
+import ProgressBar from '@/components/ProgressBar';
 import Skeleton from '@/components/Skeleton';
 import DataTable, { type Column } from '@/components/DataTable';
 import Pagination from '@/components/Pagination';
 import Button from '@/components/Button';
+import IconButton from '@/components/IconButton';
 import { tagCategoryChip, tagCategoryDot } from '@/lib/tagCategories';
 import Chip from '@/components/Chip';
 import EmptyState from '@/components/EmptyState';
@@ -38,6 +40,15 @@ import { useConfirm, usePrompt } from '@/components/ConfirmDialog';
 import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
 import SectionHeading from '@/components/SectionHeading';
 import Popover from '@/components/Popover';
+import { ICON } from '@/lib/icons';
+import { clamp } from '@/lib/utils';
+import { readUserInfo } from '@/lib/hooks';
+import { LS_KEYS } from '@/lib/constants';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface Tag {
   id: number;
@@ -121,30 +132,19 @@ export default function GlossaryTab() {
   const [isLoading, setIsLoading] = useState(true);
 
   const initFromStorage = () => {
-    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
-    let token = '';
-    let role = 'user';
-    let admin = false;
-    if (storedUser) {
-      try {
-        const user = JSON.parse(storedUser);
-        token = user.token || '';
-        role = user.role || 'user';
-        const allowedRoles = ['super_admin', 'admin', 'editor'];
-        admin = allowedRoles.includes(user.role);
-      } catch {
-        // ignore
-      }
-    }
+    const user = readUserInfo();
+    const token = user?.token || '';
+    const role = (user?.role as string) || 'user';
+    const admin = ['super_admin', 'admin', 'editor'].includes(role);
     const savedItemsPerPage =
-      typeof window !== 'undefined' ? localStorage.getItem('picpony_items_per_page') : null;
+      typeof window !== 'undefined' ? localStorage.getItem(LS_KEYS.itemsPerPage) : null;
     const itemsPerPage = savedItemsPerPage ? parseInt(savedItemsPerPage, 10) : 100;
     return {
       token,
       userRole: role,
       isAdmin: admin,
       itemsPerPage,
-      initError: storedUser ? null : '请先登录',
+      initError: user ? null : '请先登录',
     };
   };
 
@@ -222,18 +222,8 @@ export default function GlossaryTab() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
-     ref per tab. The signature is kept so the call sites read unchanged; what
-     went away is the second copy of the Modal, its footer and its title/message
-     state — five admin tabs had built the identical thing. */
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirmThen, confirmDialog } = useConfirm();
   const { prompt, promptDialog } = usePrompt();
-
-  const showGlossaryConfirm = (title: string, message: string, action: () => void) => {
-    void confirm({ title, message }).then((confirmed) => {
-      if (confirmed) action();
-    });
-  };
 
   // 后端时间按 UTC 存储，转为 Asia/Shanghai 展示（精确到秒）
   const formatHistoryTime = (value?: string) => {
@@ -285,7 +275,7 @@ export default function GlossaryTab() {
         setHistoryError(data.error || '加载失败');
       }
     } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : '网络错误');
+      setHistoryError(err instanceof Error ? err.message : '网络错误，请稍后再试');
     } finally {
       setIsHistoryLoading(false);
     }
@@ -325,7 +315,7 @@ export default function GlossaryTab() {
           setError(data.error || '加载失败');
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : '网络错误');
+        setError(err instanceof Error ? err.message : '网络错误，请稍后再试');
       } finally {
         setIsLoading(false);
       }
@@ -358,7 +348,7 @@ export default function GlossaryTab() {
         }
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : '网络错误');
+        setError(err instanceof Error ? err.message : '网络错误，请稍后再试');
       })
       .finally(() => setIsLoading(false));
   }, [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly]);
@@ -398,7 +388,7 @@ export default function GlossaryTab() {
         setTotalMatches(0);
       }
     } catch (err) {
-      showToast('查重失败: ' + (err instanceof Error ? err.message : '未知错误'), 'error');
+      showToast('查重失败：' + (err instanceof Error ? err.message : '未知错误'), 'error');
     } finally {
       setIsLoading(false);
     }
@@ -536,7 +526,7 @@ export default function GlossaryTab() {
 
     try {
       if (!id) {
-        const exists = await api.checkTagExists(token, en);
+        const exists = await adminApi.checkTagExists(token, en);
         if (exists) {
           showToast('词库中已存在此标签', 'error');
           setIsSaving(false);
@@ -572,12 +562,12 @@ export default function GlossaryTab() {
       const data = await res.json();
 
       if (data.success) {
-        showToast(id ? '更新成功' : '添加成功', 'success');
+        showToast(id ? '已更新' : '已添加', 'success');
         // 若有挂起的用户工单，保存成功后自动标记为已处理（与 ciku.html 行为一致）
         if (activeFeedbackWorkOrder) {
           const workOrder = activeFeedbackWorkOrder;
           try {
-            await api.handleTagFeedback(
+            await adminApi.handleTagFeedback(
               token,
               workOrder.id,
               'processed',
@@ -604,7 +594,7 @@ export default function GlossaryTab() {
         showToast(data.error || '保存失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -613,13 +603,13 @@ export default function GlossaryTab() {
   const deleteTag = async (id: number) => {
     if (!isAdmin || !token) return;
 
-    showGlossaryConfirm('确认删除', '确定要永久删除这个词条吗？', async () => {
+    confirmThen('确认删除', '确定要永久删除此词条吗？', async () => {
       try {
         const res = await api.deleteDictionaryTag(token, id);
         const data = await res.json();
 
         if (data.success) {
-          showToast('删除成功', 'success');
+          showToast('已删除', 'success');
           setSelectedIds((prev) => {
             const next = new Set(prev);
             next.delete(id);
@@ -634,7 +624,7 @@ export default function GlossaryTab() {
           showToast(data.error || '删除失败', 'error');
         }
       } catch (err) {
-        showToast(err instanceof Error ? err.message : '网络错误', 'error');
+        showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
       }
     });
   };
@@ -642,7 +632,7 @@ export default function GlossaryTab() {
   const batchDelete = async () => {
     if (!isAdmin || !token || selectedIds.size === 0) return;
 
-    showGlossaryConfirm(
+    confirmThen(
       '确认批量删除',
       `确定要永久删除选中的 ${selectedIds.size} 个标签吗？`,
       async () => {
@@ -662,7 +652,7 @@ export default function GlossaryTab() {
           await new Promise((r) => setTimeout(r, 60));
         }
 
-        showToast(`批量删除完成: ${success}成功, ${fail}失败`, 'success');
+        showToast(`批量删除完成：${success}成功, ${fail}失败`, 'success');
 
         setSelectedIds(new Set());
         if (isDuplicateMode) {
@@ -747,7 +737,7 @@ export default function GlossaryTab() {
       return;
     }
 
-    showGlossaryConfirm(
+    confirmThen(
       '确认批量导入',
       `成功解析到 ${tasks.length} 个新标签，开始导入？`,
       async () => {
@@ -759,7 +749,7 @@ export default function GlossaryTab() {
         for (let i = 0; i < tasks.length; i++) {
           const task = tasks[i];
           try {
-            const exists = await api.checkTagExists(token, task.en);
+            const exists = await adminApi.checkTagExists(token, task.en);
             if (exists) {
               skipped++;
               continue;
@@ -775,7 +765,7 @@ export default function GlossaryTab() {
           await new Promise((r) => setTimeout(r, 60));
         }
 
-        showToast(`批量导入完成: ${success}成功, ${skipped}跳过, ${fail}失败`, 'success');
+        showToast(`批量导入完成：${success}成功, ${skipped}跳过, ${fail}失败`, 'success');
 
         setIsBatchImporting(false);
         setIsBatchModalOpen(false);
@@ -795,7 +785,7 @@ export default function GlossaryTab() {
     }
 
     setIsSyncing(true);
-    setSyncProgress({ current: 0, total: totalPagesToFetch, message: '开始同步...' });
+    setSyncProgress({ current: 0, total: totalPagesToFetch, message: '开始同步…' });
 
     let newTagsCount = 0;
     let skippedCount = 0;
@@ -804,7 +794,7 @@ export default function GlossaryTab() {
       setSyncProgress({
         current: p - syncStartPage + 1,
         total: totalPagesToFetch,
-        message: `正在拉取第 ${p} 页...`,
+        message: `正在拉取第 ${p} 页…`,
       });
 
       try {
@@ -812,7 +802,7 @@ export default function GlossaryTab() {
         if (!data.tags || data.tags.length === 0) break;
 
         for (const tag of data.tags) {
-          const exists = await api.checkTagExists(token, tag.name);
+          const exists = await adminApi.checkTagExists(token, tag.name);
           if (exists) {
             skippedCount++;
             continue;
@@ -838,7 +828,7 @@ export default function GlossaryTab() {
     }
 
     setIsSyncing(false);
-    showToast(`同步完成: ${newTagsCount}新增, ${skippedCount}跳过`, 'success');
+    showToast(`同步完成：${newTagsCount}新增, ${skippedCount}跳过`, 'success');
     setIsSyncModalOpen(false);
     loadTags(1);
   };
@@ -871,7 +861,7 @@ export default function GlossaryTab() {
 
     setIsLoadingFeedback(true);
     try {
-      const data = await api.getTagFeedback(token, {
+      const data = await adminApi.getTagFeedback(token, {
         status: status === 'all' ? undefined : status,
         keyword: keyword || undefined,
         page,
@@ -887,7 +877,7 @@ export default function GlossaryTab() {
         }
       }
     } catch {
-      showToast('加载反馈失败', 'error');
+      showToast('反馈加载失败', 'error');
     } finally {
       setIsLoadingFeedback(false);
     }
@@ -908,7 +898,7 @@ export default function GlossaryTab() {
     if (!token) return;
 
     try {
-      await api.handleTagFeedback(token, id, status, note || undefined, 'pending');
+      await adminApi.handleTagFeedback(token, id, status, note || undefined, 'pending');
       void loadFeedbacks();
     } catch {
       showToast('操作失败', 'error');
@@ -1023,8 +1013,8 @@ export default function GlossaryTab() {
         </div>
         <Button
           variant="tonal"
-          size="sm"
-          icon={<MdArrowDownward size={16} />}
+          size="xs"
+          icon={<MdArrowDownward size={ICON.dense} />}
           onClick={useFeedbackAsTranslation}
         >
           填入中文翻译框
@@ -1058,8 +1048,8 @@ export default function GlossaryTab() {
             {tag.id > 0 && (
               <Button
                 variant="text"
-                size="sm"
-                icon={<MdHistory size={16} />}
+                size="xs"
+                icon={<MdHistory size={ICON.dense} />}
                 onClick={() => openTagHistory(tag)}
                 title="查看该标签的历史编辑记录"
                 className="text-primary"
@@ -1067,7 +1057,7 @@ export default function GlossaryTab() {
                 查看编辑历史
               </Button>
             )}
-            <Button variant="text" size="sm" onClick={closeInlineEditor} disabled={isSaving}>
+            <Button variant="text" size="xs" onClick={closeInlineEditor} disabled={isSaving}>
               取消
             </Button>
           </div>
@@ -1146,7 +1136,7 @@ export default function GlossaryTab() {
                       onChange={(event) =>
                         setEditForm({ ...editForm, description: event.target.value })
                       }
-                      placeholder="例如：该角色首次登场于第X季..."
+                      placeholder="例如：该角色首次登场于第X季…"
                       rows={3}
                       className="resize-none"
                     />
@@ -1199,7 +1189,7 @@ export default function GlossaryTab() {
           /* `Badge`, not an inline span with a container pair. Seven of these
              lived in this one file, in one shape but three type roles, and each
              one had to name both halves of its colour pair by hand. */
-          <Badge tone="error" icon={<MdOutlineWarning size={14} />} className="whitespace-nowrap">
+          <Badge tone="error" icon={<MdOutlineWarning />} className="whitespace-nowrap">
             未翻译
           </Badge>
         ) : (
@@ -1223,7 +1213,7 @@ export default function GlossaryTab() {
             rel="noopener noreferrer"
             className="text-link flex items-center gap-1 font-mono text-body-m hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
-            {tag.en} <MdSearch size={14} />
+            {tag.en} <MdSearch size={ICON.dense} />
           </a>
           {tag.count > 0 ? (
             <Badge colors="bg-accent-blue text-on-accent-blue">原站 ({tag.count}图)</Badge>
@@ -1252,11 +1242,13 @@ export default function GlossaryTab() {
       render: (tag) =>
         isAdmin ? (
           <>
-            <Button
+            {/* `IconButton`, not an icon-only `<Button>` with `w-9 px-0` forcing a
+                36px box — a retired figure — around a 32dp `xs` button. See
+                `UsersTab`, which had the same three. */}
+            <IconButton
               type="button"
-              variant="text"
               size="sm"
-              icon={<MdEdit size={18} />}
+              icon={<MdEdit />}
               onClick={(event) => {
                 if (editingTag?.id === tag.id && !isInlineEditorClosing) {
                   closeInlineEditor();
@@ -1265,21 +1257,18 @@ export default function GlossaryTab() {
                 captureInlineEditorLayout(event.currentTarget);
                 openInlineEditor(tag);
               }}
-              className="w-9 px-0 text-warning"
-              title="编辑"
-              aria-label={`编辑 ${tag.en}`}
+              className="text-warning"
+              aria-label={`编辑标签 ${tag.en}`}
               aria-expanded={editingTag?.id === tag.id && !isInlineEditorClosing}
               aria-controls={`glossary-inline-editor-${tag.id}`}
             />
-            <Button
+            <IconButton
               type="button"
-              variant="text"
               size="sm"
-              icon={<MdDelete size={18} />}
+              icon={<MdDelete />}
               onClick={() => deleteTag(tag.id)}
-              className="w-9 px-0 text-error"
-              title="删除"
-              aria-label={`删除 ${tag.en}`}
+              className="text-error"
+              aria-label={`删除标签 ${tag.en}`}
             />
           </>
         ) : (
@@ -1293,36 +1282,33 @@ export default function GlossaryTab() {
   if (error && !tags.length) {
     return (
       <div className="text-center py-12">
-        {' '}
-        <p className="text-body-m text-on-surface-variant mb-4">{error}</p>{' '}
+        <p className="text-body-m text-on-surface-variant mb-4">{error}</p>
         <Button variant="filled" onClick={() => loadTags(1)}>
-          {' '}
-          重试{' '}
-        </Button>{' '}
+          重试
+        </Button>
       </div>
     );
   }
   return (
     <div className="space-y-6">
-      {' '}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {' '}
+        
         <h2 className="text-title-l text-on-surface flex items-center gap-2">
-          {' '}
-          <MdLibraryBooks className="text-primary" size={24} /> 中英标签词库管理 ({totalMatches}{' '}
-          条){' '}
-        </h2>{' '}
+          
+          <MdLibraryBooks size={ICON.standard} /> 中英标签词库管理 ({totalMatches}
+          条)
+        </h2>
         {isAdmin && (
-          <Button variant="filled" icon={<MdAdd size={18} />} onClick={() => openCreateModal()}>
+          <Button variant="filled" icon={<MdAdd size={ICON.dense} />} onClick={() => openCreateModal()}>
             添加新标签
           </Button>
-        )}{' '}
-      </div>{' '}
+        )}
+      </div>
       <div className="flex flex-col sm:flex-row gap-3">
-        {' '}
+        
         <Input
           type="text"
-          icon={<MdSearch size={20} />}
+          icon={<MdSearch size={ICON.control} />}
           value={searchDraft}
           onChange={(e) => setSearchDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -1337,7 +1323,10 @@ export default function GlossaryTab() {
           placeholder="搜索标签"
           fieldClassName="flex-1 min-w-[200px]"
         />
+        {/* Both of these are `size="sm"`, matching the `SearchInput` they sit beside:
+            this is a filter bar, so 40dp is the step and the field's 56 is not. */}
         <Select
+          size="sm"
           value={sortMode}
           onChange={(v) => setSortMode(v)}
           className="shrink-0"
@@ -1350,6 +1339,7 @@ export default function GlossaryTab() {
           ]}
         />
         <Select
+          size="sm"
           value={categoryFilter}
           onChange={(v) => setCategoryFilter(v)}
           className="shrink-0"
@@ -1365,72 +1355,70 @@ export default function GlossaryTab() {
             { value: 'content-fanmade', label: '同人内容' },
             { value: 'error', label: '错误' },
           ]}
-        />{' '}
+        />
       </div>{' '}
       {isAdmin && (
         <div className="flex flex-wrap gap-2">
-          {' '}
+          
           <Chip
             variant="filter"
             tone="primary"
-            size="md"
             selected={showUntranslatedOnly}
             onClick={() => setShowUntranslatedOnly(!showUntranslatedOnly)}
-            icon={<MdTranslate size={16} />}
+            icon={<MdTranslate size={ICON.dense} />}
           >
             {showUntranslatedOnly ? '取消未翻译过滤' : '只看未翻译'}
-          </Chip>{' '}
+          </Chip>
           {selectedIds.size > 0 && (
-            <Button icon={<MdDelete size={16} />} variant="danger" size="sm" onClick={batchDelete}>
+            <Button icon={<MdDelete size={ICON.dense} />} variant="danger" size="xs" onClick={batchDelete}>
               批量删除 ({selectedIds.size})
             </Button>
-          )}{' '}
+          )}
           <Chip
             variant="filter"
             tone="primary"
-            size="md"
             selected={isDuplicateMode}
             onClick={toggleDuplicateMode}
-            icon={<MdContentCopy size={16} />}
+            icon={<MdContentCopy size={ICON.dense} />}
           >
             {isDuplicateMode ? '退出查重' : '查重模式'}
-          </Chip>{' '}
+          </Chip>
           <Button
-            icon={<MdFeedback size={16} />}
+            icon={<MdFeedback size={ICON.dense} />}
             variant="accent"
-            size="sm"
+            size="xs"
             onClick={() => setIsFeedbackModalOpen(true)}
           >
             用户反馈
           </Button>
           <Button
-            icon={<MdFileDownload size={16} />}
+            icon={<MdFileDownload size={ICON.dense} />}
             variant="accent"
-            size="sm"
+            size="xs"
             onClick={exportCurrentPage}
           >
             导出当前页
           </Button>
           <Button
-            icon={<MdFileUpload size={16} />}
+            icon={<MdFileUpload size={ICON.dense} />}
             variant="accent"
-            size="sm"
+            size="xs"
             onClick={() => setIsBatchModalOpen(true)}
           >
             批量导入
           </Button>
           <Button
-            icon={<MdCloudDownload size={16} />}
+            icon={<MdCloudDownload size={ICON.dense} />}
             variant="accent"
-            size="sm"
+            size="xs"
             onClick={() => setIsSyncModalOpen(true)}
           >
             同步热门
           </Button>
           <Button
-            icon={<MdSearch size={16} />}
+            icon={<MdSearch size={ICON.dense} />}
             variant="accent"
-            size="sm"
+            size="xs"
             onClick={() => setIsDerpiModalOpen(true)}
           >
             搜原站标签
@@ -1443,6 +1431,11 @@ export default function GlossaryTab() {
         rowKey={(tag) => tag.id}
         expandedRow={renderInlineEditor}
         loading={isLoading}
+        /* The resolved page size, so the placeholder is the right *length*. A
+           watcher that has to correct by whole rows is a visible correction, and
+           this list's page size is user-settable — the default six placeholders
+           against a hundred rows was the worst case of it. */
+        skeletonRows={Math.min(itemsPerPage, 20)}
         empty={
           isDuplicateMode ? (
             /* `EmptyState`, not a bespoke centred stack — same silhouette as
@@ -1450,7 +1443,7 @@ export default function GlossaryTab() {
                differs is the glyph, which is the point of the `icon` slot. */
             <EmptyState
               size="inline"
-              icon={<MdCheckCircle size={32} className="text-success" />}
+              icon={<MdCheckCircle size={ICON.large} className="text-success" />}
               title="太棒了，当前词库没有发现重复英文标签！"
             />
           ) : (
@@ -1461,7 +1454,7 @@ export default function GlossaryTab() {
       {!isDuplicateMode && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-body-m text-on-surface-variant">每页:</span>
+            <span className="text-body-m text-on-surface-variant">每页：</span>
             <Input
               type="number"
               min={1}
@@ -1469,7 +1462,7 @@ export default function GlossaryTab() {
               value={itemsPerPage}
               onChange={(e) => {
                 const val = parseInt(e.target.value) || 100;
-                const clamped = Math.max(1, Math.min(150, val));
+                const clamped = clamp(val, 1, 150);
                 setItemsPerPage(clamped);
                 localStorage.setItem('picpony_items_per_page', clamped.toString());
               }}
@@ -1499,19 +1492,18 @@ export default function GlossaryTab() {
             <strong className="text-success">{translationPercentage}%</strong> )
           </span>
         </div>
-        <div className="w-full h-3 bg-surface-container-highest rounded-full overflow-hidden">
-          <div
-            className="h-full bg-success-fill rounded-full transition-[width] duration-300 ease-[var(--ease-standard)]"
-            style={{ width: `${translationPercentage}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={Number(translationPercentage)}
+          tone="success"
+          label="词库翻译进度"
+        />
       </div>
       {/* Modals */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={closeCreateModal}
         title="添加新标签"
-        maxWidth="max-w-lg"
+        maxWidth="lg"
         footer={
           <>
             <Button variant="text" onClick={closeCreateModal}>
@@ -1523,16 +1515,12 @@ export default function GlossaryTab() {
           </>
         }
       >
-        {' '}
         <div className="space-y-4">
-          {' '}
           {renderFeedbackReference()}
           <div className="relative" ref={enFieldRef}>
-            {' '}
             <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="glossarytab-f1">
-              {' '}
               英文原标签{' '}
-            </label>{' '}
+            </label>
             <Input
               id="glossarytab-f1"
               type="text"
@@ -1543,7 +1531,7 @@ export default function GlossaryTab() {
               }}
               placeholder="例如：twilight sparkle"
               className="font-mono"
-            />{' '}
+            />
             <Popover
               open={showSuggestions && derpiSuggestions.length > 0}
               onClose={() => setShowSuggestions(false)}
@@ -1557,149 +1545,137 @@ export default function GlossaryTab() {
                     onClick={() => selectSuggestion(tag)}
                     className="w-full px-3 py-2 text-left state-layer flex items-center justify-between outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
                   >
-                    {' '}
+                    
                     <div className="flex items-center gap-2">
-                      {' '}
+                      
                       <span
                         className={`w-2 h-2 rounded-full ${tagCategoryDot(tag.category)}`}
-                      />{' '}
-                      <span className="text-body-m text-on-surface font-mono">{tag.name}</span>{' '}
-                    </div>{' '}
-                    <span className="text-body-s text-on-surface-variant">{tag.images} 图</span>{' '}
+                      />
+                      <span className="text-body-m text-on-surface font-mono">{tag.name}</span>
+                    </div>
+                    <span className="text-body-s text-on-surface-variant">{tag.images} 图</span>
                   </button>
                 ))}{' '}
-            </Popover>{' '}
-          </div>{' '}
+            </Popover>
+          </div>
           <div>
-            {' '}
             <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="glossarytab-f2">
-              {' '}
-              中文翻译 <span className="text-on-surface-variant">(多重翻译请用英文逗号 , 隔开)</span>{' '}
-            </label>{' '}
+              中文翻译 <span className="text-on-surface-variant">(多重翻译请用英文逗号 , 隔开)</span>
+            </label>
             <Input
               id="glossarytab-f2"
               type="text"
               value={editForm.cn}
               onChange={(e) => setEditForm({ ...editForm, cn: e.target.value })}
               placeholder="例如：紫悦,暮光闪闪,ts"
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
-            {' '}
-            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="glossarytab-f3">
-              分类
-            </label>{' '}
+            {/* `aria-label` on the `Select`, not a `<label htmlFor>`. A `Select`
+                renders a `<button role="combobox">`, which `htmlFor` cannot label —
+                and the id this pointed at (`glossarytab-f3`) is the description
+                textarea below, so the label named *that* field, the combobox had no
+                accessible name, and the textarea ended up with two. */}
+            <p className="block text-label-l text-on-surface-variant mb-1">分类</p>
             <Select
               value={editForm.cat}
               onChange={(v) => setEditForm({ ...editForm, cat: v })}
               className="w-full"
               options={TAG_CATEGORY_OPTIONS}
-            />{' '}
-          </div>{' '}
+              aria-label="分类"
+            />
+          </div>
           <div>
-            {' '}
             <Textarea
               id="glossarytab-f3"
               label="标签简介"
               value={editForm.description}
               onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-              placeholder="例如：该角色首次登场于第X季..."
+              placeholder="例如：该角色首次登场于第X季…"
               rows={3}
               className="resize-none"
-            />{' '}
-          </div>{' '}
-        </div>{' '}
-      </Modal>{' '}
+            />
+          </div>
+        </div>
+      </Modal>
       <Modal
         isOpen={isBatchModalOpen}
         onClose={() => !isBatchImporting && setIsBatchModalOpen(false)}
         title="批量导入标签"
-        maxWidth="max-w-xl"
+        maxWidth="xl"
         footer={
           <>
-            {' '}
             <Button variant="text" onClick={() => setIsBatchModalOpen(false)}>
-              {' '}
-              取消{' '}
-            </Button>{' '}
+              取消
+            </Button>
             <Button variant="tonal" onClick={executeBatchImport} loading={isBatchImporting}>
               开始导入
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <p className="text-body-m text-on-surface-variant mb-3">
-          {' '}
           格式要求：
           <code className="bg-surface-container-high px-1 rounded-xs">
             英文标签 = 主中文名, 别名1, 别名2
-          </code>{' '}
-        </p>{' '}
+          </code>
+        </p>
         <Textarea
           value={batchInput}
           onChange={(e) => setBatchInput(e.target.value)}
           placeholder="例如：&#10;twilight sparkle = 紫悦, 暮光闪闪, ts"
           rows={12}
           className="font-mono resize-none"
-        />{' '}
-      </Modal>{' '}
+        />
+      </Modal>
       <Modal
         isOpen={isSyncModalOpen}
         onClose={() => !isSyncing && setIsSyncModalOpen(false)}
         title="拉取原站热门标签"
-        maxWidth="max-w-md"
+        maxWidth="md"
         hideCloseButton={isSyncing}
         footer={
           <>
-            {' '}
             {!isSyncing && (
               <Button variant="text" onClick={() => setIsSyncModalOpen(false)}>
-                {' '}
-                取消{' '}
+                取消
               </Button>
-            )}{' '}
+            )}
             <Button
               variant={isSyncing ? 'danger' : 'success'}
               onClick={isSyncing ? () => setIsSyncing(false) : executeSync}
             >
               {isSyncing ? '停止同步' : '开始同步'}
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <div className="space-y-4">
-          {' '}
           <p className="text-body-m text-on-surface-variant">
-            {' '}
-            系统将按原站<strong>图片总数</strong>从高到低自动拉取标签。 <br />{' '}
-            <span className="text-error">新拉取的标签会被标记为【未翻译】</span>{' '}
+            系统将按原站<strong>图片总数</strong>从高到低自动拉取标签。 <br />
+            <span className="text-error">新拉取的标签会被标记为【未翻译】</span>
           </p>{' '}
           {isSyncing ? (
             <div className="space-y-3">
-              {' '}
               <div className="flex items-center justify-between text-body-m">
-                {' '}
-                <span className="text-on-surface-variant">{syncProgress.message}</span>{' '}
-                <span className="text-primary ">
-                  {' '}
-                  {syncProgress.current} / {syncProgress.total}{' '}
-                </span>{' '}
-              </div>{' '}
-              <div className="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
-                {' '}
-                <div
-                  className="h-full bg-success-fill rounded-full transition-[width] duration-300 ease-[var(--ease-standard)]"
-                  style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
-                />{' '}
-              </div>{' '}
+                <span className="text-on-surface-variant">{syncProgress.message}</span>
+                <span className="text-primary">
+                  {syncProgress.current} / {syncProgress.total}
+                </span>
+              </div>
+              <ProgressBar
+                value={
+                  syncProgress.total > 0 ? (syncProgress.current / syncProgress.total) * 100 : 0
+                }
+                tone="success"
+                label="词库同步进度"
+              />
             </div>
           ) : (
             <div className="flex items-center gap-4">
-              {' '}
+              
               <div className="flex-1">
-                {' '}
+                
                 <Input
                   label="起始页"
                   id="glossarytab-f4"
@@ -1707,10 +1683,10 @@ export default function GlossaryTab() {
                   min={1}
                   value={syncStartPage}
                   onChange={(e) => setSyncStartPage(parseInt(e.target.value) || 1)}
-                />{' '}
-              </div>{' '}
+                />
+              </div>
               <div className="flex-1">
-                {' '}
+                
                 <Input
                   label="结束页"
                   id="glossarytab-f5"
@@ -1718,29 +1694,27 @@ export default function GlossaryTab() {
                   min={1}
                   value={syncEndPage}
                   onChange={(e) => setSyncEndPage(parseInt(e.target.value) || 1)}
-                />{' '}
-              </div>{' '}
+                />
+              </div>
             </div>
           )}{' '}
-        </div>{' '}
-      </Modal>{' '}
+        </div>
+      </Modal>
       <Modal
         isOpen={isDerpiModalOpen}
         onClose={() => setIsDerpiModalOpen(false)}
         title="搜索 Trixiebooru 原站标签"
-        maxWidth="max-w-lg"
+        maxWidth="lg"
       >
-        {' '}
         <div className="space-y-4">
-          {' '}
           <div className="flex gap-2">
-            {' '}
+            
             <Input
               type="text"
               value={derpiSearchQuery}
               onChange={(e) => setDerpiSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && executeDerpiSearch()}
-              placeholder="输入英文标签名..."
+              placeholder="输入英文标签名…"
               fieldClassName="flex-1"
             />
             <Button variant="filled" onClick={executeDerpiSearch} loading={isDerpiSearching}>
@@ -1750,7 +1724,7 @@ export default function GlossaryTab() {
           <div className="popover-scrollbar max-h-72 overflow-y-auto border border-outline-variant rounded-md">
             {derpiResults.length === 0 ? (
               <div className="p-8 text-center text-on-surface-variant">
-                {isDerpiSearching ? '搜索中...' : '搜索结果将显示在这里'}
+                {isDerpiSearching ? '搜索中…' : '搜索结果将显示在这里'}
               </div>
             ) : (
               derpiResults.map((tag) => (
@@ -1762,24 +1736,23 @@ export default function GlossaryTab() {
                     <Badge colors={tagCategoryChip(tag.category)}>
                       {tag.category || 'general'}
                     </Badge>
-                    <span className="font-mono text-body-m text-on-surface">{tag.name}</span>{' '}
-                    <span className="text-body-s text-on-surface-variant">({tag.images} 图)</span>{' '}
-                  </div>{' '}
+                    <span className="font-mono text-body-m text-on-surface">{tag.name}</span>
+                    <span className="text-body-s text-on-surface-variant">({tag.images} 图)</span>
+                  </div>
                   <Button variant="success" size="xs" onClick={() => importFromDerpi(tag)}>
-                    {' '}
-                    + 导入{' '}
-                  </Button>{' '}
+                    + 导入
+                  </Button>
                 </div>
               ))
             )}{' '}
-          </div>{' '}
-        </div>{' '}
-      </Modal>{' '}
+          </div>
+        </div>
+      </Modal>
       <Modal
         isOpen={isFeedbackModalOpen}
         onClose={() => setIsFeedbackModalOpen(false)}
         title="用户反馈与翻译申请"
-        maxWidth="max-w-xl"
+        maxWidth="xl"
       >
         {/* 关键词搜索 */}
         <div className="mb-4">
@@ -1793,7 +1766,7 @@ export default function GlossaryTab() {
                 void loadFeedbacks(feedbackStatus, 1, feedbackKeyword.trim());
               }
             }}
-            icon={<MdSearch size={18} />}
+            icon={<MdSearch size={ICON.dense} />}
             placeholder="搜索标签名或用户名，回车搜索"
           />
         </div>
@@ -1850,7 +1823,7 @@ export default function GlossaryTab() {
                   <div key={feedback.id} className="p-4 rounded-md">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-body-m text-on-surface-variant">
-                        来自: {feedback.username} | {feedback.created_at}
+                        来自：{feedback.username} | {feedback.created_at}
                       </span>
                       <Badge
                         tone={
@@ -1883,7 +1856,7 @@ export default function GlossaryTab() {
                       <div className="text-body-s text-on-surface-variant mb-3">
                         已由 {feedback.handled_by_name || '管理员'} 处理
                         {feedback.handled_at ? ` · ${feedback.handled_at}` : ''}
-                        {feedback.handling_note ? ` · 备注: ${feedback.handling_note}` : ''}
+                        {feedback.handling_note ? ` · 备注：${feedback.handling_note}` : ''}
                       </div>
                     )}
                     <div className="flex justify-end gap-2">
@@ -1944,7 +1917,7 @@ export default function GlossaryTab() {
         isOpen={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
         title={historyTag ? `编辑历史 · ${historyTag.en}` : '编辑历史'}
-        maxWidth="max-w-2xl"
+        maxWidth="2xl"
       >
         <div className="space-y-4">
           {/* 历史记录列表（行样式与设置页面 m3-row 一致） */}
@@ -1973,7 +1946,7 @@ export default function GlossaryTab() {
                   onClick={() => setSelectedHistoryIndex(i)}
                   className={`m3-row flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 text-left transition-ui sm:flex-nowrap sm:gap-x-4 outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
                     i === selectedHistoryIndex
-                      ? 'bg-primary-container'
+                      ? 'bg-secondary-container'
                       : 'bg-surface-container-low state-layer'
                   }`}
                 >
@@ -1981,7 +1954,7 @@ export default function GlossaryTab() {
                     <p
                       className={`mb-1 text-body-m ${
                         i === selectedHistoryIndex
-                          ? 'text-on-primary-container'
+                          ? 'text-on-secondary-container'
                           : 'text-on-surface-variant'
                       }`}
                     >
@@ -1990,7 +1963,7 @@ export default function GlossaryTab() {
                     <p
                       className={`text-body-m-emphasized ${
                         i === selectedHistoryIndex
-                          ? 'text-on-primary-container'
+                          ? 'text-on-secondary-container'
                           : 'text-on-surface'
                       }`}
                     >

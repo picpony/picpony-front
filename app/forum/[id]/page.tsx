@@ -17,6 +17,7 @@ import {
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { ICON } from '@/lib/icons';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
 import FadeInImage from '@/components/FadeInImage';
@@ -26,15 +27,18 @@ import Skeleton, { SkeletonCircle, SkeletonText } from '@/components/Skeleton';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import PageBack from '@/components/PageBack';
+import Card from '@/components/Card';
 import RoleBadge from '@/components/RoleBadge';
 import Avatar from '@/components/Avatar';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import { useEscapeBack } from '@/lib/hooks';
+import { readUserInfo, useEscapeBack } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 import { readForumOrigin, playForumContainerTransform } from '@/lib/forumTransition';
 import { scrollAppToElement } from '@/lib/motion';
+import { copyText, getAssetUrl } from '@/lib/utils';
 import SectionHeading from '@/components/SectionHeading';
+import { formatDateTime, formatShortDateTime } from '@/lib/format';
 
 export default function ForumPostPage() {
   const params = useParams();
@@ -69,10 +73,7 @@ export default function ForumPostPage() {
   } | null>(null);
 
   useEffect(() => {
-    const checkLoginStatus = () => {
-      const userInfo = localStorage.getItem('user_info');
-      setIsLoggedIn(!!userInfo);
-    };
+    const checkLoginStatus = () => setIsLoggedIn(Boolean(readUserInfo()));
 
     checkLoginStatus();
     window.addEventListener('user_info_updated', checkLoginStatus);
@@ -112,14 +113,13 @@ export default function ForumPostPage() {
   }, [id, page, retryCount]);
 
   const handleToggleLike = useCallback(async () => {
-    const userInfoStr = localStorage.getItem('user_info');
-    if (!userInfoStr) {
+    const userInfo = readUserInfo();
+    if (!userInfo) {
       setSubmitError('请先登录');
       return;
     }
     setIsLikeLoading(true);
     try {
-      const userInfo = JSON.parse(userInfoStr);
       const res = await api.toggleForumPostLike(userInfo.token, parseInt(id));
       const data = await res.json();
       if (data.success) {
@@ -135,21 +135,9 @@ export default function ForumPostPage() {
 
   const handleCopyLink = useCallback(() => {
     const shareUrl = `${window.location.origin}/forum/${id}`;
-    navigator.clipboard
-      .writeText(shareUrl)
-      .then(() => {
-        showToast('分享链接已复制到剪贴板！', 'success');
-      })
-      .catch(() => {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = shareUrl;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        showToast('分享链接已复制到剪贴板！', 'success');
-      });
+    void copyText(shareUrl).then((ok) =>
+      showToast(ok ? '链接已复制' : '复制失败，请手动复制地址栏链接', ok ? 'success' : 'error'),
+    );
   }, [id]);
 
   /* Back goes back, not to `/forum`.
@@ -187,8 +175,10 @@ export default function ForumPostPage() {
    * remount React simulates in development kills the first flight and plays
    * the second, rather than losing both. */
   const cardBodyRef = useRef<HTMLDivElement>(null);
+  /* `HTMLElement`, matching `Card`'s own ref type — it renders a `<div>` or a
+     `<button>`, so it cannot promise the narrower one. */
   const cardRef = useCallback(
-    (card: HTMLDivElement | null) => {
+    (card: HTMLElement | null) => {
       if (!card) return;
       const origin = readForumOrigin(id);
       if (!origin) return;
@@ -205,7 +195,7 @@ export default function ForumPostPage() {
       }
       setReplyTo({ userId, username, commentId, text });
       /* One easing for every scroll in the app. `scrollIntoView({ behavior:
-         'smooth' })` used the browser's own curve, which is not `--ease-scroll`
+         'smooth' })` used the browser's own curve, not the app's `eases.scroll`
          and is not the curve pagination or "back to top" use — so the same page
          glided three different ways depending on which control you pressed.
          The timeout stays: the editor is only mounted once `replyTo` commits, so
@@ -234,8 +224,8 @@ export default function ForumPostPage() {
   const handleSubmitComment = useCallback(async () => {
     if (!newComment.trim() || isSubmitting) return;
 
-    const userInfoStr = localStorage.getItem('user_info');
-    if (!userInfoStr) {
+    const userInfo = readUserInfo();
+    if (!userInfo) {
       setSubmitError('请先登录');
       return;
     }
@@ -243,7 +233,6 @@ export default function ForumPostPage() {
     try {
       setIsSubmitting(true);
       setSubmitError(null);
-      const userInfo = JSON.parse(userInfoStr);
 
       // Build final content with reply quote prefix
       let finalContent = newComment;
@@ -291,7 +280,7 @@ export default function ForumPostPage() {
       <>
         <PageBack onClick={handleBack} title="返回论坛 (Esc)" label="返回论坛" />
         <div className="max-w-4xl mx-auto pt-14">
-          <div ref={cardRef} className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8">
+          <Card ref={cardRef} variant="filled" padding="lg" className="mb-8">
             <div ref={cardBodyRef}>
               <Skeleton className="h-8 w-3/4 mb-4" />
               <div className="mb-6 flex items-center gap-3 border-b border-outline-variant pb-4">
@@ -300,7 +289,7 @@ export default function ForumPostPage() {
               </div>
               <SkeletonText lines={3} delay={120} />
             </div>
-          </div>
+          </Card>
         </div>
       </>
     );
@@ -335,7 +324,7 @@ export default function ForumPostPage() {
           sits outside the centred wrapper. */}
       <PageBack onClick={handleBack} title="返回论坛 (Esc)" label="返回论坛" />
       <div className="max-w-4xl mx-auto pt-14">
-        <div ref={cardRef} className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8">
+        <Card ref={cardRef} variant="filled" padding="lg" className="mb-8">
           <div ref={cardBodyRef}>
             <h1 className="text-title-l sm:text-headline-s text-on-surface mb-4">{post.title}</h1>
             {/* `flex-wrap` plus `min-w-0` on the author block: with neither, the
@@ -376,26 +365,22 @@ export default function ForumPostPage() {
                   </div>
                   <time
                     dateTime={post.created_at}
-                    title={new Date(post.created_at).toLocaleString('zh-CN')}
+                    title={formatDateTime(post.created_at)}
                     className="text-body-s text-on-surface-variant mt-0.5 block truncate tabular-nums"
                   >
                     发布于{' '}
-                    {new Date(post.created_at).toLocaleString('zh-CN', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatDateTime(post.created_at)}
                   </time>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-3 text-label-l text-on-surface-variant sm:gap-4">
-                <span className="flex items-center gap-1 tabular-nums" title="浏览量">
-                  <MdVisibility size={16} /> {post.views}
+                <span className="flex items-center gap-1 tabular-nums">
+                  <span className="sr-only">浏览量</span>
+                  <MdVisibility size={ICON.dense} /> {post.views}
                 </span>
-                <span className="flex items-center gap-1 tabular-nums" title="回复数">
-                  <MdComment size={16} /> {post.reply_count}
+                <span className="flex items-center gap-1 tabular-nums">
+                  <span className="sr-only">回复数</span>
+                  <MdComment size={ICON.dense} /> {post.reply_count}
                 </span>
               </div>
             </div>
@@ -403,7 +388,7 @@ export default function ForumPostPage() {
               <div className="mb-8 rounded-md overflow-hidden bg-surface-container-high">
                 <div className="relative w-full aspect-video sm:aspect-[2/1]">
                   <FadeInImage
-                    src={`https://picpony.top${post.cover_image}`}
+                    src={getAssetUrl(post.cover_image)}
                     alt={post.title}
                     fill
                     className="object-cover"
@@ -434,9 +419,8 @@ export default function ForumPostPage() {
                 onClick={handleToggleLike}
                 loading={isLikeLoading}
                 selected={isLiked}
-                title={isLiked ? '取消点赞' : '点赞'}
                 aria-label={isLiked ? '取消点赞' : '点赞'}
-                icon={isLiked ? <MdThumbUp size={20} /> : <MdOutlineThumbUp size={20} />}
+                icon={isLiked ? <MdThumbUp size={ICON.control} /> : <MdOutlineThumbUp size={ICON.control} />}
               />
               <span className="min-w-6 text-label-l text-on-surface-variant tabular-nums">
                 {likeCount}
@@ -444,20 +428,19 @@ export default function ForumPostPage() {
               <div className="mx-1 h-6 w-px bg-outline-variant" />
               <IconButton
                 onClick={handleCopyLink}
-                title="复制分享链接"
                 aria-label="分享"
-                icon={<MdContentCopy size={20} />}
+                icon={<MdContentCopy size={ICON.control} />}
               />
             </div>
           </div>
-        </div>
+        </Card>
         <div className="mb-8">
           <SectionHeading>全部回复 ({post.reply_count})</SectionHeading>
           <div>
             {comments.length === 0 ? (
               <EmptyState
                 size="pane"
-                icon={<MdComment size={48} />}
+                icon={<MdComment size={ICON.display} />}
                 title="暂无回复"
                 description="来抢下沙发吧"
               />
@@ -478,7 +461,7 @@ export default function ForumPostPage() {
                   <Link
                     href={`/user/${comment.user_id}`}
                     className="block shrink-0 self-start rounded-full ring-2 ring-transparent transition-ui hover:ring-primary focus-visible:focus-ring"
-                    title={`查看 ${comment.username} 的个人资料`}
+                    aria-label={`查看 ${comment.username} 的个人资料`}
                   >
                     <Avatar src={comment.avatar} name={comment.username} size={40} />
                   </Link>
@@ -508,7 +491,7 @@ export default function ForumPostPage() {
                         <div className="-ms-2">
                           <Button
                             variant="text"
-                            icon={<MdReply size={18} />}
+                            icon={<MdReply size={ICON.dense} />}
                             onClick={() =>
                               handleReplyTo(
                                 comment.user_id,
@@ -524,15 +507,10 @@ export default function ForumPostPage() {
                       )}
                       <time
                         dateTime={comment.created_at}
-                        title={new Date(comment.created_at).toLocaleString('zh-CN')}
+                        title={formatDateTime(comment.created_at)}
                         className="text-body-s text-on-surface-variant ms-auto"
                       >
-                        {new Date(comment.created_at).toLocaleString('zh-CN', {
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {formatShortDateTime(comment.created_at)}
                       </time>
                     </div>
                   </div>
@@ -554,10 +532,7 @@ export default function ForumPostPage() {
           )}
         </div>
         {/* Comment Input */}
-        <div
-          id="comment-input-area"
-          className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8"
-        >
+        <Card id="comment-input-area" variant="filled" padding="lg" className="mb-8">
           <SectionHeading as="h3">发表回复</SectionHeading>
           {!isLoggedIn ? (
             /* `EmptyState`, which takes an action for exactly this. The
@@ -566,7 +541,7 @@ export default function ForumPostPage() {
                type scale none of the other fifteen used. */
             <EmptyState
               size="pane"
-              icon={<MdLogin size={48} />}
+              icon={<MdLogin size={ICON.display} />}
               title="登录后才能发表回复"
               action={
                 <Button variant="filled" onClick={() => openAuth('login')}>
@@ -580,7 +555,7 @@ export default function ForumPostPage() {
               {replyTo && (
                 <div className="bg-primary-container text-on-primary-container flex items-center justify-between gap-2 rounded-md px-4 py-2.5 text-body-m">
                   <div className="flex items-center gap-2 min-w-0">
-                    <MdReply size={16} className="shrink-0" />
+                    <MdReply size={ICON.dense} className="shrink-0" />
                     <span className="truncate">
                       回复 <strong>{replyTo.username}</strong>：
                       {/* Quieter by size, not by opacity — the same treatment
@@ -597,21 +572,20 @@ export default function ForumPostPage() {
                   <IconButton
                     size="sm"
                     onClick={handleCancelReply}
-                    title="取消回复"
                     aria-label="取消回复"
                     className="-me-1.5 shrink-0"
-                    icon={<MdClose size={16} />}
+                    icon={<MdClose size={ICON.dense} />}
                   />
                 </div>
               )}
               <RichTextEditor
                 value={newComment}
                 onChange={setNewComment}
-                placeholder={replyTo ? `回复 ${replyTo.username}...` : '写下你的回复...'}
+                placeholder={replyTo ? `回复 ${replyTo.username}…` : '写下你的回复…'}
               />
               {submitError && (
                 <div className="text-error text-body-m flex items-center gap-1">
-                  <MdErrorOutline size={16} />
+                  <MdErrorOutline size={ICON.dense} />
                   {submitError}
                 </div>
               )}
@@ -621,14 +595,14 @@ export default function ForumPostPage() {
                   variant="filled"
                   loading={isSubmitting}
                   disabled={!newComment.trim()}
-                  icon={<MdSend size={18} />}
+                  icon={<MdSend size={ICON.dense} />}
                 >
                   发送回复
                 </Button>
               </div>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </>
   );

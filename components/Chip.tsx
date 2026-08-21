@@ -3,15 +3,14 @@
 import { forwardRef, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import { MdClose, MdCheck } from 'react-icons/md';
 import { cn } from '@/lib/utils';
+import { ICON } from '@/lib/icons';
 
 export type ChipVariant = 'assist' | 'filter' | 'input';
 export type ChipTone = 'neutral' | 'primary' | 'success' | 'warning' | 'error';
-export type ChipSize = 'sm' | 'md';
 
 interface ChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   variant?: ChipVariant;
   tone?: ChipTone;
-  size?: ChipSize;
   /** `filter` chips show a leading check when selected and fill with the tone. */
   selected?: boolean;
   icon?: ReactNode;
@@ -73,21 +72,38 @@ const TONE_TEXT: Record<ChipTone, string> = {
  * box, which is what a filter chip has to be to read as pressable at all.
  *
  * Every horizontal step is spelled out per branch rather than composed from a
- * base plus an override, because `cn` is a plain join: `px-3` next to `pr-1.5`
+ * base plus an override, because `cn` is a plain join: `px-3` next to `pr-2`
  * emits both and lets Tailwind's output order decide the trailing edge.
  *
- * 32px tall at `sm`. M3 puts small chips at 32dp; below that they stop being
- * comfortable touch targets in a wrapped tag cloud. */
-const SIZES: Record<ChipSize, { box: string; lead: string; solo: string; toCross: string; trail: string }> = {
-  sm: { box: 'h-8 text-label-m', lead: 'gap-1 pl-2.5', solo: 'pr-2.5', toCross: 'pr-1', trail: 'pr-1.5' },
-  md: { box: 'h-9 text-label-l', lead: 'gap-1.5 pl-3', solo: 'pr-3', toCross: 'pr-1.5', trail: 'pr-2' },
-};
+ * **The padding depends on whether there is a glyph beside the label, not on the
+ * size.** M3 gives a chip 16dp of leading space with nothing in front of the
+ * label and 8dp when an icon or a check is there, because the glyph's own visual
+ * mass replaces the air. Both sizes therefore share one set of horizontal steps
+ * and differ only in height. They used to be 10dp and 12dp regardless, which is
+ * neither of the spec's values and made a chip with a check read as more tightly
+ * packed than the same chip without one.
+ *
+ * **One height: 32dp.** `AssistChipTokens.ContainerHeight` and
+ * `FilterChipTokens.ContainerHeight` are both 32, and the token set gives a chip no
+ * other height — so there is nothing for a `size` prop to choose between. It had
+ * two (36 then 40 for `md`), and the 40 came from this file: it moved there to land on
+ * the 32/40/48/56 control scale, which was the right instinct applied to the wrong
+ * kind of object. A chip is not a control step, it is a chip.
+ *
+ * 32dp is under the 48dp touch minimum, and that is what `touch-target` on the
+ * inner button is for — M3 states it directly: "the touch target may extend beyond
+ * the component bounds". */
+const CHIP_HEIGHT = 'h-8';
+
+/** 16dp with nothing before the label, 8dp with a glyph there. M3's own pair. */
+const LEAD = { bare: 'pl-4', withGlyph: 'gap-2 pl-2' } as const;
+/** Trailing edge: 16dp to the label, 8dp to a dismiss cross. */
+const TRAIL = { bare: 'pr-4', toCross: 'pr-2' } as const;
 
 const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   {
     variant = 'assist',
     tone = 'neutral',
-    size = 'sm',
     selected = false,
     icon,
     onRemove,
@@ -105,16 +121,21 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   // A chip with no click handler and no remove action is a label, not a
   // control — render it inert so it does not land in the tab order.
   const isInteractive = Boolean(onClick) || variant === 'filter';
-  const s = SIZES[size];
+  const showsCheck = variant === 'filter' && selected;
+  const hasGlyph = showsCheck || Boolean(icon);
 
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center rounded-sm transition-ui ease-[var(--ease-standard)]',
-        s.box,
+        'inline-flex max-w-full items-center rounded-sm transition-ui',
+        CHIP_HEIGHT,
+        /* `label-l` at both sizes. M3's chip label is Label Large regardless of
+           the chip's height; `sm` was `label-m`, one step down, so a tag row and
+           a filter row set the same words at 12px and 14px. */
+        'text-label-l',
         // The only padding the span keeps: the gap between the dismiss cross and
         // the trailing edge, which the button below cannot supply.
-        onRemove && s.trail,
+        onRemove && 'pr-2',
         /* Unselected is a *tone step*, not an outline.
          *
          * M3 draws an unselected filter chip with a 1dp outline, and that is
@@ -147,9 +168,17 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
           // together they make the press target, the state layer and the ripple
           // cover the chip instead of hugging its text.
           'inline-flex min-w-0 items-center self-stretch outline-none',
-          s.lead,
-          onRemove ? s.toCross : s.solo,
+          hasGlyph ? LEAD.withGlyph : LEAD.bare,
+          onRemove ? TRAIL.toCross : TRAIL.bare,
           isInteractive ? 'cursor-pointer' : 'cursor-default',
+          /* The state layer, which this did not have. A filter chip is a control
+             and it was the only one in the app with no hover feedback at all —
+             the ripple answered a press and nothing answered a pointer arriving,
+             so a row of filters read as labels until you clicked one. Only when
+             it is genuinely interactive: a chip used as a tag is a mark, and
+             lighting up under the pointer would promise a press that does
+             nothing. */
+          isInteractive && 'state-layer',
           // Its own radius, matching the box: the ripple is clipped by this
           // element, so a square one would paint into the chip's rounded corner.
           'rounded-sm focus-visible:ring-2 focus-ring',
@@ -157,8 +186,10 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
         {...(isInteractive ? { 'data-ripple': '' } : {})}
         {...rest}
       >
-        {variant === 'filter' && selected ? (
-          <MdCheck size={size === 'sm' ? 14 : 16} className="shrink-0" aria-hidden="true" />
+        {showsCheck ? (
+          /* 18dp, M3's chip icon size. It was 14 at `sm` and 16 at `md` — two
+             values, neither on the icon scale, for one glyph. */
+          <MdCheck size={ICON.dense} className="shrink-0" aria-hidden="true" />
         ) : (
           icon && (
             <span className="shrink-0 [&>svg]:block" aria-hidden="true">
@@ -175,9 +206,14 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
           onClick={onRemove}
           aria-label={removeLabel}
           disabled={disabled}
-          className="touch-target inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5 text-on-surface-variant outline-none transition-[color] duration-300 ease-[var(--ease-standard)] state-layer focus-visible:ring-2 focus-ring"
+          /* `transition-ui`, which is the app's 200ms. This was the one control
+             carrying a hand-written 300ms, so a chip's cross settled a third
+             slower than the chip it sits in. */
+          className="touch-target state-layer focus-ring text-on-surface-variant transition-ui inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5 outline-none focus-visible:ring-2"
         >
-          <MdClose size={size === 'sm' ? 13 : 15} />
+          {/* 18dp, matching the leading check. It was 13 and 15 — sizes that
+              exist nowhere else in the app. */}
+          <MdClose size={ICON.dense} />
         </button>
       )}
     </span>

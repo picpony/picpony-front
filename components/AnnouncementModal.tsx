@@ -1,16 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, type Announcement } from '@/lib/api';
 import Modal from './Modal';
 import Button from './Button';
-
-interface Announcement {
-  version: string;
-  title: string;
-  content: string;
-  date: string;
-}
+import SectionHeading from '@/components/SectionHeading';
 
 export default function AnnouncementModal() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
@@ -48,7 +42,7 @@ export default function AnnouncementModal() {
       isOpen={isVisible}
       onClose={handleClose}
       title="系统公告"
-      maxWidth="max-w-lg"
+      maxWidth="lg"
       footer={
         <Button variant="text" className="text-primary" onClick={handleClose}>
           我已知悉
@@ -57,7 +51,12 @@ export default function AnnouncementModal() {
     >
       {announcement && (
         <>
-          <h3 className="text-title-m-emphasized text-on-surface mb-2">{announcement.title}</h3>
+          {/* `SectionHeading`, not an `<h3 class="text-title-m-emphasized">` written
+              out — that role, that ink and that object are exactly what the primitive
+              is. */}
+          <SectionHeading as="h3" className="mb-2">
+            {announcement.title}
+          </SectionHeading>
           <p className="text-label-m text-on-surface-variant mb-4 pb-3">发布日期：{announcement.date}</p>
           <div
             className="text-on-surface-variant text-body-m space-y-2"

@@ -20,7 +20,7 @@ export default function CaptchaModal({ isOpen, onClose, onVerify }: CaptchaModal
   if (!mounted) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-fit" hideCloseButton>
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="fit" hideCloseButton>
       <SliderCaptcha onVerify={onVerify} onClose={onClose} />
     </Modal>
   );

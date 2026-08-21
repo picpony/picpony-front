@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
-import Modal from '@/components/Modal';
 import Select from '@/components/Select';
 import { MdPeople, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -12,6 +11,13 @@ import { SectionHeader } from './';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { Input } from '@/components/Input';
+import { ICON } from '@/lib/icons';
+import { useConfirm } from '@/components/ConfirmDialog';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface TeamMember {
   id: number;
@@ -91,19 +97,11 @@ export default function TeamTab({ token }: { token: string }) {
     setEditingMember(null);
   };
 
-  // Confirm dialog
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const confirmActionRef = useRef<(() => void) | null>(null);
-
-  const showConfirm = (action: () => void) => {
-    confirmActionRef.current = action;
-    setConfirmOpen(true);
-  };
-
-  const handleConfirm = () => {
-    confirmActionRef.current?.();
-    setConfirmOpen(false);
-  };
+  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
+     converted to the shared dialog and five — this among them — kept their own,
+     which is also why their copy drifted: every hand-rolled body dropped the
+     sentence-final 吗 that every converted one kept. */
+  const { confirmThen, confirmDialog } = useConfirm();
 
   const handleEdit = (member: TeamMember) => {
     setEditingMember(member);
@@ -135,9 +133,9 @@ export default function TeamTab({ token }: { token: string }) {
 
       let res: Response;
       if (editingMember) {
-        res = await api.updateTeamMember(token, { ...payload, id: editingMember.id });
+        res = await adminApi.updateTeamMember(token, { ...payload, id: editingMember.id });
       } else {
-        res = await api.addTeamMember(token, payload);
+        res = await adminApi.addTeamMember(token, payload);
       }
       const data = await res.json();
       if (data.success) {
@@ -155,9 +153,9 @@ export default function TeamTab({ token }: { token: string }) {
   };
 
   const handleDelete = (id: number) => {
-    showConfirm(async () => {
+    confirmThen('确认删除', '确定要删除此成员吗？', async () => {
       try {
-        const res = await api.deleteTeamMember(token, id);
+        const res = await adminApi.deleteTeamMember(token, id);
         const data = await res.json();
         if (data.success) {
           showToast('已删除', 'success');
@@ -178,7 +176,7 @@ export default function TeamTab({ token }: { token: string }) {
       return;
     }
     try {
-      const data = await api.adminGetUsers(token);
+      const data = await adminApi.adminGetUsers(token);
       if (data.success) {
         const user = (data.users || []).find((u: { id: number }) => u.id === uid);
         if (user) {
@@ -230,15 +228,13 @@ export default function TeamTab({ token }: { token: string }) {
           <IconButton
             size="sm"
             onClick={() => handleEdit(m)}
-            icon={<MdEdit size={16} />}
-            title="编辑"
+            icon={<MdEdit size={ICON.dense} />}
             aria-label={`编辑 ${m.name}`} className="text-primary"
           />
           <IconButton
             size="sm"
             onClick={() => handleDelete(m.id)}
-            icon={<MdDelete size={16} />}
-            title="删除"
+            icon={<MdDelete size={ICON.dense} />}
             aria-label={`删除 ${m.name}`} className="text-error"
           />
         </>
@@ -249,7 +245,7 @@ export default function TeamTab({ token }: { token: string }) {
   return (
     <div className="space-y-6">
       <SectionHeader
-        icon={<MdPeople className="text-primary" size={24} />}
+        icon={<MdPeople size={ICON.standard} />}
         title="运营团队管理"
         onRefresh={loadMembers}
       />
@@ -257,64 +253,68 @@ export default function TeamTab({ token }: { token: string }) {
       <Card variant="transparent" className="space-y-4">
         <h3 className="text-label-l text-on-surface">
           {editingMember ? '编辑团队成员' : '添加团队成员'}{' '}
-        </h3>{' '}
+        </h3>
         <div className="flex items-end gap-3 rounded-md border border-dashed border-outline p-3">
-          {' '}
+          
           <div className="flex-1">
-            {' '}
+            
             <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f1">
               快捷导入：调用站内用户
-            </label>{' '}
+            </label>
             <Input
               id="teamtab-f1"
               type="number"
               value={importUserId}
               onChange={(e) => setImportUserId(e.target.value)}
               placeholder="输入用户 ID"
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <Button onClick={handleImportUser} variant="filled">
             导入信息
           </Button>
-        </div>{' '}
+        </div>
         <div>
           {' '}
           <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f2">
             成员姓名（必填）
-          </label>{' '}
+          </label>
           <Input
             id="teamtab-f2"
             type="text"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             placeholder="如：小明"
-          />{' '}
-        </div>{' '}
+          />
+        </div>
         <div>
           {' '}
           <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f3">
             角色/头衔
-          </label>{' '}
+          </label>
           <Input
             id="teamtab-f3"
             type="text"
             value={form.role}
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
             placeholder="如：全栈开发"
-          />{' '}
-        </div>{' '}
+          />
+        </div>
         <div>
-          {' '}
-          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f4">
-            栏目分类
-          </label>{' '}
+          {/* `aria-label` on the `Select` rather than a `<label htmlFor>`: a `Select`
+              renders a `<button role="combobox">`, not a labellable form control, so
+              `htmlFor` had nowhere to land — and the id it pointed at
+              (`teamtab-f4`) belonged to the *avatar* field below, so this label named
+              that input while the combobox had no accessible name and the avatar field
+              had two. Two controls mislabelled by one stray id. */}
+          <p className="block text-label-l text-on-surface-variant mb-1">栏目分类</p>
           <Select
             value={form.category}
             onChange={(v) => setForm((f) => ({ ...f, category: v }))}
             className="w-full"
             options={categoryOptions}
-          />{' '}
-        </div>{' '}
+            aria-label="栏目分类"
+          />
+        </div>
         <div>
           {' '}
           <Input
@@ -324,44 +324,44 @@ export default function TeamTab({ token }: { token: string }) {
             value={form.avatar_url}
             onChange={(e) => setForm((f) => ({ ...f, avatar_url: e.target.value }))}
             placeholder="头像图片直链"
-          />{' '}
-        </div>{' '}
+          />
+        </div>
         <div>
           {' '}
           <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f5">
             个人主页链接（选填）
-          </label>{' '}
+          </label>
           <Input
             id="teamtab-f5"
             type="text"
             value={form.link_url}
             onChange={(e) => setForm((f) => ({ ...f, link_url: e.target.value }))}
             placeholder="如：https://github.com/xxx"
-          />{' '}
-        </div>{' '}
+          />
+        </div>
         <div>
           {' '}
           <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="teamtab-f6">
             排序号（值越小越靠前）
-          </label>{' '}
+          </label>
           <Input
             id="teamtab-f6"
             type="number"
             value={form.order_num}
             onChange={(e) => setForm((f) => ({ ...f, order_num: parseInt(e.target.value) || 0 }))}
             fieldClassName="w-32"
-          />{' '}
-        </div>{' '}
+          />
+        </div>
         <div className="flex gap-3">
-          {' '}
+          
           {editingMember && (
             <Button variant="tonal" onClick={resetForm}>
               {' '}
-              取消编辑{' '}
+              取消编辑
             </Button>
-          )}{' '}
-          <Button onClick={handleSave} variant="filled" loading={saving} icon={<MdAdd size={16} />}>
-            {saving ? '保存中...' : editingMember ? '更新成员' : '添加成员'}
+          )}
+          <Button onClick={handleSave} variant="filled" loading={saving} icon={<MdAdd size={ICON.dense} />}>
+            {saving ? '保存中…' : editingMember ? '更新成员' : '添加成员'}
           </Button>
         </div>
       </Card>
@@ -377,24 +377,7 @@ export default function TeamTab({ token }: { token: string }) {
         />
       </Card>
 
-      <Modal
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        title="确认删除"
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setConfirmOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleConfirm}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">确定要删除此成员？</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

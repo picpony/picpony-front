@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
@@ -10,6 +9,12 @@ import DataTable, { type Column } from '@/components/DataTable';
 import { SectionHeader, SearchInput } from './';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
+import { ICON } from '@/lib/icons';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface User {
   id: number;
@@ -34,12 +39,12 @@ export default function WealthTab({ token }: { token: string }) {
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await api.adminGetWealth(token);
+      const data = await adminApi.adminGetWealth(token);
       if (data.success) {
         setUsers(data.users || []);
       }
     } catch {
-      showToast('加载用户失败', 'error');
+      showToast('用户加载失败', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -47,14 +52,14 @@ export default function WealthTab({ token }: { token: string }) {
 
   useEffect(() => {
     if (!token) return;
-    api
+    adminApi
       .adminGetWealth(token)
       .then((data) => {
         if (data.success) {
           setUsers(data.users || []);
         }
       })
-      .catch(() => showToast('加载用户失败', 'error'))
+      .catch(() => showToast('用户加载失败', 'error'))
       .finally(() => setIsLoading(false));
   }, [token]);
 
@@ -87,7 +92,7 @@ export default function WealthTab({ token }: { token: string }) {
       return;
     }
     try {
-      const res = await api.adminUpdateWealth(token, {
+      const res = await adminApi.adminUpdateWealth(token, {
         target_id: editingUser.id,
         experience: form.experience,
         coins_op: form.coinsOp,
@@ -96,7 +101,7 @@ export default function WealthTab({ token }: { token: string }) {
       });
       const data = await res.json();
       if (data.success) {
-        showToast('修改成功', 'success');
+        showToast('已更新', 'success');
         closeModal();
         loadUsers();
       } else {
@@ -126,7 +131,7 @@ export default function WealthTab({ token }: { token: string }) {
       header: '操作',
       actions: true,
       render: (u) => (
-        <Button onClick={() => openModal(u)} variant="filled" size="sm">
+        <Button onClick={() => openModal(u)} variant="filled" size="xs">
           修改资产
         </Button>
       ),
@@ -134,57 +139,49 @@ export default function WealthTab({ token }: { token: string }) {
   ];
   return (
     <div className="space-y-6">
-      {' '}
       <SectionHeader
-        icon={<MdAttachMoney className="text-primary" size={24} />}
+        icon={<MdAttachMoney size={ICON.standard} />}
         title="经验与金币管理"
         onRefresh={loadUsers}
-      />{' '}
-      <SearchInput value={searchKw} onChange={setSearchKw} placeholder="搜索用户ID或用户名..." />{' '}
+      />
+      <SearchInput value={searchKw} onChange={setSearchKw} placeholder="搜索用户 ID或用户名…" />
       <DataTable<User>
         columns={wealthColumns}
         rows={filteredUsers}
         rowKey={(u) => u.id}
         loading={isLoading}
         empty="没有找到匹配的用户"
-      />{' '}
+      />
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
         title={`修改资产 - ${editingUser?.username || ''}`}
-        maxWidth="max-w-md"
+        maxWidth="md"
         footer={
           <>
-            {' '}
             <Button variant="text" onClick={closeModal}>
-              {' '}
-              取消{' '}
-            </Button>{' '}
+              取消
+            </Button>
             <Button variant="filled" onClick={submit}>
-              {' '}
-              确认修改{' '}
-            </Button>{' '}
+              确认修改
+            </Button>
           </>
         }
       >
-        {' '}
         <div className="space-y-4">
-          {' '}
           <div>
-            {' '}
             <Input
               label="经验值"
               id="wealthtab-f1"
               type="number"
               value={form.experience}
               onChange={(e) => setForm({ ...form, experience: parseInt(e.target.value) || 0 })}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
-            {' '}
-            <p className="block text-label-l text-on-surface-variant mb-1">金币操作</p>{' '}
+            <p className="block text-label-l text-on-surface-variant mb-1">金币操作</p>
             <div className="flex gap-2">
-              {' '}
+              
               <Select
                 value={form.coinsOp}
                 onChange={(v) => setForm({ ...form, coinsOp: v })}
@@ -210,7 +207,7 @@ export default function WealthTab({ token }: { token: string }) {
               type="text"
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
-              placeholder="例如: 违规惩罚、特殊活动奖励..."
+              placeholder="例如：违规惩罚、特殊活动奖励…"
             />
           </div>
         </div>

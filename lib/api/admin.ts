@@ -402,11 +402,6 @@ export async function adminEnableDeveloper(token: string, targetId: number) {
 // 团队管理
 // ---------------------------------------------------------------------------
 
-export async function getTeamMembers() {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_team_members&_t=${Date.now()}`);
-  return readJson(res);
-}
-
 export async function addTeamMember(token: string, data: Record<string, unknown>) {
   return fetch(`${PICPONY_API_BASE}?action=add_team_member`, {
     method: 'POST',

@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
  * the filled treatment instead: a tone step, no border, no shadow. Dressed as an
  * outlined field it read as a form control whose label had failed to load, and
  * it put the heaviest boundary on the page around the least ceremonial thing on
- * it. Same 12dp corner, same 44dp box — one family, two boundary treatments.
+ * it. Same 4dp corner, same 56dp box — one family, two boundary treatments.
  *
  * The geometry, the notch, the float and both treatments live in `.m3-field`
  * (globals.css), because the whole thing turns on `:focus-within` and
@@ -50,34 +50,70 @@ import { cn } from '@/lib/utils';
  * an overlay so that one button, two buttons, or a button with a word in it all
  * fit without a hand-typed reserve at the call site.
  *
- * Two heights, and the difference is content rather than density: a field with a
- * floating label needs a label row and a text row, so it takes M3's 56dp; a
- * field with no label is one row and stays at 44dp. A `Textarea` follows the
- * same rule through its block padding rather than through a fixed height, since
- * it grows: labelled, its first line clears the floated label; unlabelled, the
- * padding is symmetric and a one-row field lands at the same 44dp as its
- * single-line counterpart.
+ * **One height for a form slot, 56dp**, and that is a change. There used to be two
+ * — 56dp labelled, 48dp unlabelled — on the argument that a floating label needs two
+ * rows where a placeholder needs one. The argument is fine and the number was not:
+ * `OutlinedTextFieldTokens.ContainerHeight` is 56dp and M3 gives a text field no
+ * other height, while 48dp is the *touch-target minimum*, which is a floor on the
+ * hit area rather than a step on the size scale. So the labelled field, the
+ * unlabelled one, `Select`'s trigger, `CodeInput`'s boxes and the colour swatch all
+ * stand at 56dp, and the two variants differ in exactly one thing — the boundary —
+ * which is what the paragraphs above always claimed. `Textarea` follows through its
+ * block padding rather than a fixed height, since it grows.
+ *
+ * **And one height for a field that is chrome, 40dp** — `size="sm"`, unlabelled
+ * only. This is the app's own step rather than the spec's, and it is worth saying
+ * why rather than leaving it to be discovered. A field in an admin filter bar or a
+ * settings row is not a slot you fill in: its neighbours are a 40dp `Select`, a 32dp
+ * chip and a 32dp switch, and a 56dp box among those is the tallest thing in the row
+ * by half again. Every field in the app was 56 — including nine admin filters — so
+ * a filter bar was a 56dp field beside a 56dp dropdown beside a 32dp chip. Matching
+ * the neighbours is what "coordinated" means here, and matching a token specified
+ * for a phone form is not.
+ *
+ * Two fences keep that from spreading. It is **unlabelled only**: the labelled
+ * field's notch is a real `<legend>` whose width, float distance and negative
+ * fieldset inset are all derived from 56dp, and a labelled field lives in a form
+ * column anyway. And it takes **no `trailing` slot**: that inset is `(56 - 40) / 2`,
+ * the only value that centres a 40dp control in the box, and a 40dp box has no room
+ * for one at all — see the field block in globals.css.
  */
 
-/** M3's outlined text field height, once there is a label to float. */
+/** `OutlinedTextFieldTokens.ContainerHeight`. The only height M3 gives a field. */
 const LABELLED_HEIGHT = 'h-14';
-/** One row. 44px is the comfortable touch minimum, and most of this site's
- *  traffic is a phone. */
-const BARE_HEIGHT = 'h-11';
 /**
- * `size="lg"` — M3's *search bar*, which is its own component in the spec: 56dp
- * and fully rounded rather than 44dp and 12dp-cornered.
+ * The same 56dp, because there is no second figure to reach for *for a form slot*.
+ * This was 44 (a value from Apple's guidelines, off Material's scale entirely) and
+ * then 48, which looks like a scale step and is not one — 48dp is M3's *touch-target*
+ * minimum, a floor on the hit area. No field, button or icon-button token in the spec
+ * is 48. Kept as its own constant rather than folded into `LABELLED_HEIGHT` so the
+ * two roles stay legible at the call sites that read them.
+ */
+const BARE_HEIGHT = 'h-14';
+/**
+ * `size="sm"` — the dense step, and the one height in this file M3 does not name.
+ * 40dp is `Select size="sm"`'s box and the small control step, and the ink drops to
+ * `body-m` to match it exactly, so a field and a dropdown in one filter bar are the
+ * same height *and* the same size of type. See the docblock above for the two
+ * fences: unlabelled only, and no `trailing`.
+ */
+const DENSE_HEIGHT = 'h-10';
+/**
+ * `size="lg"` — M3's *search bar*, which is its own component in the spec
+ * (`SearchBarTokens`): the same 56dp, but `CornerFull` rather than the field's 4dp.
+ * Now that every field is 56dp the shape is the whole difference, which is exactly
+ * what the spec says it is.
  *
  * It exists for one field, the one on /search, and the reason is that that field
- * is the page. At the filter size it read as a filter — a 44dp box adrift in a
- * 1280px column with the site's primary verb inside it — which is the wrong
- * size for the only thing on the screen you are meant to touch first. The 44dp
- * box stays the default precisely so this cannot spread: an admin filter and a
- * hero search are not the same object.
+ * is the page. Cornered like a filter it read as a filter — a rectangle adrift in a
+ * 1280px column with the site's primary verb inside it — which is the wrong shape
+ * for the only thing on the screen you are meant to touch first. The 4dp corner
+ * stays the default precisely so this cannot spread: an admin filter and a hero
+ * search are not the same object.
  *
  * The pill is also what makes the buttons inside it work. Concentric corners
- * want `inner = outer - gap`, and at 12dp with a 4px gap that is an 8dp corner
- * on a 36dp control — a value someone has to remember. A centred pill inside a
+ * want `inner = outer - gap`, and at the field's own 4dp corner an inner control
+ * would need a value someone has to remember. A centred pill inside a
  * pill needs no arithmetic at all: 40dp button, 56dp box, 8px gap, and
  * `28 - 8 = 20`, which *is* half the button's height. It is concentric for free,
  * at any size, forever.
@@ -86,6 +122,8 @@ const HERO_HEIGHT = 'h-14';
 
 /** The control's own ink and placeholder, shared by both primitives. */
 const CONTROL = 'text-body-l placeholder:text-on-surface-variant';
+/** The dense field's ink — `body-m`, matching `Select size="sm"`'s trigger exactly. */
+const DENSE_CONTROL = 'text-body-m placeholder:text-on-surface-variant';
 
 /* Same guard, and for the same reason, as `Skeleton`'s conditional radius: `cn`
  * is a plain join, so a textarea asking for `resize-none` used to emit that
@@ -228,6 +266,7 @@ function shellProps(opts: {
   trailing?: boolean;
   multiline?: boolean;
   hero?: boolean;
+  dense?: boolean;
 }) {
   return {
     className: 'm3-field',
@@ -239,7 +278,7 @@ function shellProps(opts: {
     'data-lead': opts.icon ? '' : undefined,
     'data-trail': opts.trailing ? '' : undefined,
     'data-multiline': opts.multiline ? '' : undefined,
-    'data-size': opts.hero ? 'lg' : undefined,
+    'data-size': opts.hero ? 'lg' : opts.dense ? 'sm' : undefined,
   };
 }
 
@@ -249,8 +288,12 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> &
     icon?: ReactNode;
     /** Trailing adornment; may be interactive (clear button, visibility toggle). */
     trailing?: ReactNode;
-    /** `lg` is M3's search bar — 56dp and fully rounded. Unlabelled only. */
-    size?: 'md' | 'lg';
+    /**
+     * `lg` is M3's search bar — 56dp and fully rounded. `sm` is the dense step,
+     * 40dp with `body-m`, for a filter bar or a row. Both are **unlabelled only**,
+     * and `sm` additionally takes no `trailing`. See the docblock above.
+     */
+    size?: 'sm' | 'md' | 'lg';
     fieldClassName?: string;
   };
 
@@ -276,6 +319,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const inputId = id ?? autoId;
   const labelled = hasLabel(label);
   const hero = !labelled && size === 'lg';
+  /* Both size branches are gated on `!labelled` rather than trusting the call site,
+     because a labelled field's whole notch geometry is derived from 56dp. A `sm` on
+     a labelled field is a no-op rather than an error, the same way `lg` already is. */
+  const dense = !labelled && size === 'sm';
 
   return (
     <Field helper={helper} error={error} count={count} className={fieldClassName}>
@@ -284,8 +331,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           labelled,
           invalid: Boolean(error),
           icon: Boolean(icon),
-          trailing: Boolean(trailing),
+          /* The dense field has no room for a control: the 8dp inset either side is
+             `(56 - 40) / 2`, so at 40dp there is nothing left to centre. Dropped
+             here rather than left to the call site, so the inset stays one value. */
+          trailing: Boolean(trailing) && !dense,
           hero,
+          dense,
         })}
       >
         {icon && (
@@ -304,15 +355,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
              the CSS keeps invisible until the label has floated clear. */
           placeholder={placeholder ?? (labelled ? ' ' : undefined)}
           className={cn(
-            CONTROL,
-            labelled ? LABELLED_HEIGHT : hero ? HERO_HEIGHT : BARE_HEIGHT,
+            dense ? DENSE_CONTROL : CONTROL,
+            labelled ? LABELLED_HEIGHT : hero ? HERO_HEIGHT : dense ? DENSE_HEIGHT : BARE_HEIGHT,
             className,
           )}
           {...rest}
         />
         {labelled && <FieldLabel label={label} required={required} htmlFor={inputId} />}
         {!labelled && <fieldset aria-hidden="true" />}
-        {trailing && <span className="m3-field-trail">{trailing}</span>}
+        {trailing && !dense && <span className="m3-field-trail">{trailing}</span>}
       </div>
     </Field>
   );
@@ -322,6 +373,12 @@ type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> &
   FieldProps & {
     /** Trailing controls, inside the box. See `Input`'s note. */
     trailing?: ReactNode;
+    /**
+     * `sm` is the dense step, unlabelled only — a one-row field at **48dp**, matching
+     * the 48dp `IconButton`s the chat composer puts either side of it. See the
+     * block-padding note below.
+     */
+    size?: 'sm' | 'md';
     fieldClassName?: string;
   };
 
@@ -338,6 +395,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     id,
     placeholder,
     rows = 4,
+    size = 'md',
     ...rest
   },
   ref,
@@ -345,6 +403,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const autoId = useId();
   const areaId = id ?? autoId;
   const labelled = hasLabel(label);
+  const dense = !labelled && size === 'sm';
 
   return (
     <Field helper={helper} error={error} count={count} className={fieldClassName}>
@@ -352,8 +411,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         {...shellProps({
           labelled,
           invalid: Boolean(error),
-          trailing: Boolean(trailing),
+          trailing: Boolean(trailing) && !dense,
           multiline: true,
+          dense,
         })}
       >
         <textarea
@@ -367,26 +427,45 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
              label lands on the top border and the first line of text has to
              clear it. Without one there is nothing to clear, and the 16px was
              pure height — the direct-message composer is a single-row unlabelled
-             textarea, so it stood at 52px beside a 40px send button and read as
-             a box that had been stretched.
+             textarea, so it stood taller than the send button beside it and read
+             as a box that had been stretched.
 
-             Symmetric 8px, measured rather than assumed: `body-l`'s line box is
+             Symmetric 14px, measured rather than assumed: `body-l`'s line box is
              28px here, not the 24px the type scale implies, because this app's
-             body line-heights run looser for Han glyphs. 10px each side landed a
-             one-row field at 48px — closer, but still not the 44px an unlabelled
-             single-line field stands at, which is the number this padding exists
-             to match. */
+             body line-heights run looser for Han glyphs. 28 + 28 lands a one-row
+             field at 56dp — `BARE_HEIGHT`, i.e. exactly what an unlabelled
+             single-line `Input` stands at.
+             It was 10px, which landed 48. That was correct when an unlabelled field
+             was 48dp and it was quietly left behind when 48 was retired from the
+             control-height scale, so a textarea and an input of the same kind sat a
+             step apart — and in the one place they sit *side by side*, the /messages
+             composer, the field ended up shorter than the buttons flanking it.
+
+             **The dense step keeps `body-l` and spends the padding instead**, which is
+             the one place it parts company with `Input size="sm"`'s `body-m`. A filter
+             field holds a token you type and read back; a composer holds prose you are
+             writing, and 16px is the size to write at. With a 28px line box the
+             arithmetic is exact: 10 + 28 + 10 = **48**, which is what the 48dp
+             `IconButton`s beside it measure, so the trio lines up without anything being
+             rounded to fit.
+
+             48 rather than 40, and that is the second correction to this row: at 40 the
+             field read *thin* on a desktop — a one-line box in a 56px band with a 16px
+             glyph either side of it. 48 is the touch floor taken as a real box, which is
+             what the accessories take too (the row sets `--touch-floor` locally, the way
+             the app bar does), so all three agree at every density instead of stepping
+             together between two. */
           className={cn(
             CONTROL,
             !HAS_RESIZE.test(className) && 'resize-y',
-            labelled ? 'pt-4 pb-3' : 'py-2',
+            labelled ? 'pt-4 pb-3' : dense ? 'py-2.5' : 'py-3.5',
             className,
           )}
           {...rest}
         />
         {labelled && <FieldLabel label={label} required={required} htmlFor={areaId} />}
         {!labelled && <fieldset aria-hidden="true" />}
-        {trailing && <span className="m3-field-trail">{trailing}</span>}
+        {trailing && !dense && <span className="m3-field-trail">{trailing}</span>}
       </div>
     </Field>
   );
@@ -415,9 +494,11 @@ export function ColorSwatch({
       type="color"
       aria-label={ariaLabel}
       className={cn(
-        // 12dp and 44px, matching the unlabelled text field it stands beside in
-        // the admin console — same kind of object, same box.
-        'h-11 w-11 shrink-0 cursor-pointer rounded-md border border-outline p-0.5',
+        /* 4dp and 56dp, matching the unlabelled text field it stands beside in the
+           admin console — same kind of object, same box. Both numbers moved with
+           the field: 4dp is `OutlinedTextFieldTokens.ContainerShape` and 56dp is
+           its `ContainerHeight`, which is also the only height M3 gives a field. */
+        'h-14 w-14 shrink-0 cursor-pointer rounded-xs border border-outline p-0.5',
         'outline-none transition-ui focus-visible:ring-2 focus-ring',
         'disabled:cursor-not-allowed disabled:disabled-content',
         className,

@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { api } from '@/lib/api';
+import { useState, useEffect } from 'react';
 import { showToast } from '@/components/Toast';
-import Modal from '@/components/Modal';
 import { MdShield, MdAdd } from 'react-icons/md';
 import { SectionHeader } from './';
 import Button from '@/components/Button';
@@ -12,6 +10,13 @@ import Chip from '@/components/Chip';
 import Skeleton from '@/components/Skeleton';
 import EmptyState from '@/components/EmptyState';
 import { Input } from '@/components/Input';
+import { ICON } from '@/lib/icons';
+import { useConfirm } from '@/components/ConfirmDialog';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface BlockTag {
   id: number;
@@ -38,24 +43,16 @@ export default function BlockTagsTab({ token }: { token: string }) {
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState('');
 
-  // Confirm dialog
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const confirmActionRef = useRef<(() => void) | null>(null);
-
-  const showConfirm = (action: () => void) => {
-    confirmActionRef.current = action;
-    setConfirmOpen(true);
-  };
-
-  const handleConfirm = () => {
-    confirmActionRef.current?.();
-    setConfirmOpen(false);
-  };
+  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
+     converted to the shared dialog and five — this among them — kept their own,
+     which is also why their copy drifted: every hand-rolled body dropped the
+     sentence-final 吗 that every converted one kept. */
+  const { confirmThen, confirmDialog } = useConfirm();
 
   const loadBlockTags = async () => {
     setLoading(true);
     try {
-      const data = await api.getBlockTags(token);
+      const data = await adminApi.getBlockTags(token);
       if (data.success) {
         setBlockTags(data.tags || {});
       }
@@ -72,7 +69,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
     (async () => {
       setLoading(true);
       try {
-        const data = await api.getBlockTags(token);
+        const data = await adminApi.getBlockTags(token);
         if (!cancelled && data.success) {
           setBlockTags(data.tags || {});
         }
@@ -90,7 +87,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
   const handleAddTag = async (key: string) => {
     if (!newTagName.trim()) return;
     try {
-      const res = await api.adminAddBlockTag(token, {
+      const res = await adminApi.adminAddBlockTag(token, {
         filter_key: key,
         tag_name: newTagName.trim(),
       });
@@ -109,12 +106,12 @@ export default function BlockTagsTab({ token }: { token: string }) {
   };
 
   const handleRemoveTag = (_key: string, tagId: number) => {
-    showConfirm(async () => {
+    confirmThen('确认删除', '确定要删除此标签吗？', async () => {
       try {
-        const res = await api.adminRemoveBlockTag(token, tagId);
+        const res = await adminApi.adminRemoveBlockTag(token, tagId);
         const data = await res.json();
         if (data.success) {
-          showToast('已移除', 'success');
+          showToast('已删除', 'success');
           loadBlockTags();
         } else {
           showToast(data.error || '移除失败', 'error');
@@ -128,10 +125,10 @@ export default function BlockTagsTab({ token }: { token: string }) {
     <div className="space-y-6">
       {' '}
       <SectionHeader
-        icon={<MdShield className="text-primary" size={24} />}
+        icon={<MdShield size={ICON.standard} />}
         title="底层屏蔽标签管理"
         onRefresh={loadBlockTags}
-      />{' '}
+      />
       <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
         此处管理网站全局底层屏蔽规则，影响所有用户的搜索过滤结果。 <b>safe</b> 与 <b>spoilers</b>{' '}
         中的标签会作为排除项（-标签）加入搜索。 <b>onlyPony</b> 中的标签会作为可选物种范围（OR
@@ -171,9 +168,9 @@ export default function BlockTagsTab({ token }: { token: string }) {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-label-l text-on-surface">{filterLabels[key]}</h3>
                   <Button
-                    icon={<MdAdd size={14} />}
+                    icon={<MdAdd size={ICON.dense} />}
                     variant="accent"
-                    size="sm"
+                    size="xs"
                     onClick={() => setAddingKey(addingKey === key ? null : key)}
                   >
                     添加
@@ -181,16 +178,16 @@ export default function BlockTagsTab({ token }: { token: string }) {
                 </div>
                 {addingKey === key && (
                   <div className="flex items-center gap-2 mb-3">
-                    {' '}
+                    
                     <Input
                       type="text"
                       value={newTagName}
                       onChange={(e) => setNewTagName(e.target.value)}
-                      placeholder="输入标签名..."
+                      placeholder="输入标签名…"
                       fieldClassName="flex-1"
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTag(key)}
                     />
-                    <Button onClick={() => handleAddTag(key)} variant="filled" size="sm">
+                    <Button onClick={() => handleAddTag(key)} variant="filled" size="xs">
                       确认
                     </Button>
                   </div>
@@ -221,24 +218,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
           })}
         </div>
       )}
-      <Modal
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        title="确认移除"
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setConfirmOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleConfirm}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">确定要移除此标签？</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

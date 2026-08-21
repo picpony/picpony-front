@@ -51,7 +51,8 @@ interface FadeInImageProps extends ImageProps {
  *    already had. `useLayoutEffect` runs before paint, so a warm image is
  *    simply there.
  *
- * 3. The fade used Tailwind's `ease-out` at 150ms, matching nothing else. It is
+ * 3. The fade used Tailwind's default outward easing at 150ms, matching nothing
+ *    It is
  *    a utility fade now: `standard`, 200ms.
  *
  * The card-level entrance cascade (`useStaggerGrid`) animates the tile, not the
@@ -156,7 +157,7 @@ function FadeInImageInner({
         src={displaySrc}
         alt={props.alt || ''}
         ref={imgRef}
-        className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} relative transition-opacity duration-200 ease-[var(--ease-standard)] motion-reduce:transition-none`}
+        className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} relative transition-opacity duration-200 ease-[var(--ease-standard)]`}
         onLoad={handleLoad}
         onError={handleError}
         loading={props.loading ?? (eager ? 'eager' : 'lazy')}

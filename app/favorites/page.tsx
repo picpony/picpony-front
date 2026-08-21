@@ -11,11 +11,12 @@ import ErrorRetry from '@/components/ErrorRetry';
 import EmptyState from '@/components/EmptyState';
 import Button from '@/components/Button';
 import { LoadMoreButton } from '@/components/Pagination';
-import TabBar from '@/components/TabBar';
+import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { useRouter } from 'next/navigation';
 import { readJson } from '@/lib/api/client';
 import PageHeader from '@/components/PageHeader';
+import { ICON } from '@/lib/icons';
 
 const PAGE_SIZE = 50;
 const DERPI_SEARCH = 'https://trixiebooru.org/api/v1/json/search/images';
@@ -90,7 +91,7 @@ function FavoritesPane({ source }: { source: FaveSource }) {
       const res = await fetch(`${DERPI_SEARCH}?${params}`, { cache: 'no-store', signal });
       if (!res.ok) {
         const err = new Error(
-          res.status === 429 ? '你的请求次数过快，超出原站限制' : `HTTP Error ${res.status}`,
+          res.status === 429 ? '您的请求次数过快，超出原站限制' : `HTTP Error ${res.status}`,
         );
         throw err;
       }
@@ -283,7 +284,7 @@ function FavoritesPane({ source }: { source: FaveSource }) {
     return (
       <EmptyState
         size="pane"
-        icon={<MdKey size={48} />}
+        icon={<MdKey size={ICON.display} />}
         title="未绑定 API Key"
         description="您需要绑定 Derpibooru API Key 才能查看 Derpibooru 的收藏数据"
         action={
@@ -299,7 +300,7 @@ function FavoritesPane({ source }: { source: FaveSource }) {
     return (
       <EmptyState
         size="pane"
-        icon={<MdCollectionsBookmark size={48} />}
+        icon={<MdCollectionsBookmark size={ICON.display} />}
         title="还没有收藏任何图片"
         description="在图片详情页点一下收藏，就会出现在这里"
       />
@@ -330,7 +331,7 @@ function FavoritesTabs() {
 
   return (
     <PageShell>
-      <TabBar
+      <Tabs
         className="mb-4"
         value={activeTab}
         onChange={(next) => {

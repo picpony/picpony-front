@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import FadeInImage from '@/components/FadeInImage';
 import Checkbox from '@/components/Checkbox';
@@ -14,6 +13,12 @@ import Button from '@/components/Button';
 import { useConfirm } from '@/components/ConfirmDialog';
 import Card from '@/components/Card';
 import { Input, Textarea } from '@/components/Input';
+import { ICON } from '@/lib/icons';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface ShopItem {
   id: number;
@@ -40,27 +45,17 @@ export default function ShopTab({ token }: { token: string }) {
     active: true,
   });
 
-  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
-     ref per tab. The signature is kept so the call sites read unchanged; what
-     went away is the second copy of the Modal, its footer and its title/message
-     state — five admin tabs had built the identical thing. */
-  const { confirm, confirmDialog } = useConfirm();
-
-  const showShopConfirm = (title: string, message: string, action: () => void) => {
-    void confirm({ title, message }).then((confirmed) => {
-      if (confirmed) action();
-    });
-  };
+  const { confirmThen, confirmDialog } = useConfirm();
 
   const loadItems = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await api.adminGetShopItems(token);
+      const data = await adminApi.adminGetShopItems(token);
       if (data.success) {
         setItems(data.items || []);
       }
     } catch {
-      showToast('加载商品失败', 'error');
+      showToast('商品加载失败', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -68,14 +63,14 @@ export default function ShopTab({ token }: { token: string }) {
 
   useEffect(() => {
     if (!token) return;
-    api
+    adminApi
       .adminGetShopItems(token)
       .then((data) => {
         if (data.success) {
           setItems(data.items || []);
         }
       })
-      .catch(() => showToast('加载商品失败', 'error'))
+      .catch(() => showToast('商品加载失败', 'error'))
       .finally(() => setIsLoading(false));
   }, [token]);
 
@@ -113,13 +108,13 @@ export default function ShopTab({ token }: { token: string }) {
       return;
     }
     try {
-      const res = await api.adminSaveShopItem(token, {
+      const res = await adminApi.adminSaveShopItem(token, {
         ...form,
         active: form.active ? 1 : 0,
       });
       const data = await res.json();
       if (data.success) {
-        showToast(editingItem ? '更新成功' : '添加成功', 'success');
+        showToast(editingItem ? '已更新' : '已添加', 'success');
         resetForm();
         loadItems();
       } else {
@@ -131,12 +126,12 @@ export default function ShopTab({ token }: { token: string }) {
   };
 
   const deleteItem = async (id: number) => {
-    showShopConfirm('确认删除', '确定要删除这个商品吗？', async () => {
+    confirmThen('确认删除', '确定要删除此商品吗？', async () => {
       try {
-        const res = await api.adminDeleteShopItem(token, id);
+        const res = await adminApi.adminDeleteShopItem(token, id);
         const data = await res.json();
         if (data.success) {
-          showToast('删除成功', 'success');
+          showToast('已删除', 'success');
           loadItems();
         } else {
           showToast(data.error || '删除失败', 'error');
@@ -161,7 +156,7 @@ export default function ShopTab({ token }: { token: string }) {
               alt=""
               width={40}
               height={40}
-              className="h-10 w-10 shrink-0 rounded-sm object-cover"
+              className="size-14 shrink-0 rounded-sm object-cover"
             />
           )}
           <div className="min-w-0">
@@ -196,15 +191,13 @@ export default function ShopTab({ token }: { token: string }) {
           <IconButton
             size="sm"
             onClick={() => startEdit(item)}
-            icon={<MdEdit size={18} />}
-            title="编辑"
+            icon={<MdEdit size={ICON.dense} />}
             aria-label={`编辑 ${item.name}`} className="text-primary"
           />
           <IconButton
             size="sm"
             onClick={() => deleteItem(item.id)}
-            icon={<MdDelete size={18} />}
-            title="删除"
+            icon={<MdDelete size={ICON.dense} />}
             aria-label={`删除 ${item.name}`} className="text-error"
           />
         </>
@@ -215,18 +208,18 @@ export default function ShopTab({ token }: { token: string }) {
   return (
     <div className="space-y-6">
       <SectionHeader
-        icon={<MdStore className="text-primary" size={24} />}
+        icon={<MdStore size={ICON.standard} />}
         title="小商店管理"
         onRefresh={loadItems}
       />
 
       <Card variant="transparent">
         <h3 className="text-label-l text-on-surface mb-4 flex items-center gap-2">
-          {isEditing ? <MdEdit size={20} /> : <MdAdd size={20} />}
-          {isEditing ? '编辑商品' : '添加新商品'}{' '}
-        </h3>{' '}
+          {isEditing ? <MdEdit size={ICON.control} /> : <MdAdd size={ICON.control} />}
+          {isEditing ? '编辑商品' : '添加新商品'}
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          {' '}
+          
           <div>
             {' '}
             <Input
@@ -235,18 +228,18 @@ export default function ShopTab({ token }: { token: string }) {
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
             {' '}
             <Input
-              label="图片URL"
+              label="图片 URL"
               id="shoptab-f2"
               type="text"
               value={form.image_url}
               onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
             {' '}
             <Input
@@ -255,8 +248,8 @@ export default function ShopTab({ token }: { token: string }) {
               type="number"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: parseInt(e.target.value) || 0 })}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
             {' '}
             <Input
@@ -265,42 +258,44 @@ export default function ShopTab({ token }: { token: string }) {
               type="number"
               value={form.stock}
               onChange={(e) => setForm({ ...form, stock: parseInt(e.target.value) || 0 })}
-            />{' '}
-          </div>{' '}
-        </div>{' '}
+            />
+          </div>
+        </div>
         <div className="mb-4">
           {' '}
           <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="shoptab-f5">
             商品简介
-          </label>{' '}
+          </label>
           <Textarea
             id="shoptab-f5"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={3}
             className="resize-none"
-          />{' '}
-        </div>{' '}
+          />
+        </div>
         <div className="flex items-center gap-4 mb-4">
-          {' '}
-          <div className="flex items-center gap-2 cursor-pointer">
-            {' '}
-            <Checkbox
-              checked={form.active}
-              onChange={(checked) => setForm({ ...form, active: checked })}
-              aria-label="上架该商品"
-            />{' '}
-            <span className="text-body-m text-on-surface">上架展示</span>{' '}
-          </div>{' '}
-        </div>{' '}
+          
+          {/* The visible words *are* the accessible name — `Checkbox`'s `label`
+              renders them inside its own `<label>`. This was a `<span>` beside the
+              box with a differently-worded `aria-label` on the box, so a screen
+              reader heard "上架该商品" while the eye read "上架展示", and the
+              `cursor-pointer` on the wrapper promised a click target the text did
+              not have. */}
+          <Checkbox
+            checked={form.active}
+            onChange={(checked) => setForm({ ...form, active: checked })}
+            label="上架展示"
+          />
+        </div>
         <div className="flex gap-3">
-          {' '}
+          
           {isEditing && (
             <Button variant="text" onClick={resetForm}>
               {' '}
-              取消{' '}
+              取消
             </Button>
-          )}{' '}
+          )}
           <Button variant="filled" onClick={saveItem}>
             {' '}
             {isEditing ? '保存修改' : '添加商品'}

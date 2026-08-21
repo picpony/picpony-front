@@ -132,7 +132,7 @@ export default function DropZone({
         SIZES[size],
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
         state === 'idle' && !disabled && 'state-layer border-outline',
-        state === 'dragging' && 'border-primary bg-primary-container shadow-e3',
+        state === 'dragging' && 'border-primary bg-primary-container',
         state === 'filled' && 'border-primary bg-primary-container',
         className,
       )}

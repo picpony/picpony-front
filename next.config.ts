@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     '171.100.154.38',
     'dev.muyni.dpdns.org',
     '192.168.31.153',
-    '192.168.31.12',
+    '100.104.103.23',
     '192.168.31.36'
   ],
   // /api.php is proxied by app/api.php/[[...path]]/route.ts rather than a

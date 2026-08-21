@@ -10,6 +10,8 @@ import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
 import type { Comment } from '@/lib/api';
 import SectionHeading from '@/components/SectionHeading';
+import { ICON } from '@/lib/icons';
+import { formatDateTime, formatShortDateTime } from '@/lib/format';
 
 interface ReplyTo {
   id: number;
@@ -34,17 +36,6 @@ interface CommentSectionProps {
 /** Comment timestamps are secondary information sitting next to a username in
  *  a narrow column, so they lose the year (almost always the current one) and
  *  keep the clock. The full value stays on the element's `title`. */
-function formatCommentTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 /** 40dp leading avatar for a comment row.
  *
  * The same markup existed three times inside the list — linked-with-image,
@@ -70,7 +61,7 @@ function CommentAvatar({ comment }: { comment: Comment }) {
           ? `/derpi/user/${comment.user_id}`
           : `/user/${comment.user_id}`
       }
-      title={`查看 ${comment.username} 的个人资料`}
+      aria-label={`查看 ${comment.username} 的个人资料`}
       scroll={false}
       className="block shrink-0 rounded-full ring-2 ring-transparent transition-ui hover:ring-primary focus-visible:focus-ring"
     >
@@ -94,7 +85,7 @@ export default function CommentSection({
 }: CommentSectionProps) {
   return (
     <div ref={commentsSectionRef} className="mt-8 border-t border-outline-variant pt-8">
-      <SectionHeading as="h3" icon={<MdChatBubbleOutline size={24} />} className="mb-6">
+      <SectionHeading as="h3" icon={<MdChatBubbleOutline size={ICON.standard} />} className="mb-6">
         评论 ({comments.length})
       </SectionHeading>
 
@@ -170,10 +161,10 @@ export default function CommentSection({
                   )}
                   <time
                     dateTime={comment.created_at}
-                    title={new Date(comment.created_at).toLocaleString('zh-CN')}
+                    title={formatDateTime(comment.created_at)}
                     className="text-body-s text-on-surface-variant ms-auto shrink-0"
                   >
-                    {formatCommentTime(comment.created_at)}
+                    {formatShortDateTime(comment.created_at)}
                   </time>
                 </div>
 
@@ -185,7 +176,7 @@ export default function CommentSection({
                   <Button
                     variant="text"
                     onClick={() => handleReply(comment)}
-                    icon={<MdReply size={18} />}
+                    icon={<MdReply size={ICON.dense} />}
                   >
                     回复
                   </Button>
@@ -197,7 +188,7 @@ export default function CommentSection({
       ) : (
         <EmptyState
           size="inline"
-          icon={<MdChatBubbleOutline size={32} />}
+          icon={<MdChatBubbleOutline size={ICON.large} />}
           title="还没有评论，来说第一句"
         />
       )}

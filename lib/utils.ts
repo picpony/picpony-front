@@ -26,15 +26,43 @@ export function cn(...parts: unknown[]): string {
   return parts.filter((p): p is string => typeof p === 'string' && p !== '').join(' ');
 }
 
-export function getAvatarUrl(avatar: string | undefined | null): string {
-  if (!avatar) return '';
-  if (avatar.startsWith('http')) return avatar;
-  return `${API_BASE}/${avatar}`;
+/**
+ * Bound a number to a range.
+ *
+ * Written out seven times in four shapes before this — a local arrow in
+ * `AsciiDecodeField`, a `useCallback` in `ImageCropper`, and five inline
+ * `Math.max(a, Math.min(b, v))` in `GlossaryTab`, `Popover` and twice inside
+ * `lib/hero/`. All correct, all different, and none of them findable from the
+ * others.
+ */
+export function clamp(value: number, min: number, max: number): number {
+  return value < min ? min : value > max ? max : value;
 }
 
+/** The [0, 1] case, which is the one `lib/hero/` needed twice. */
+export function clamp01(value: number): number {
+  return clamp(value, 0, 1);
+}
+
+/**
+ * A PicPony-hosted path, made absolute.
+ *
+ * **The leading slash is normalised**, and that is the whole reason this exists as
+ * one function. Eleven call sites hand-joined the same host with three different
+ * semantics — `${host}/${path}`, `${host}${path}`, and a conditional — and the *same
+ * field* (`post.cover_image`) was joined with a slash in one file and without one in
+ * another. At most one of those was right, and a shared helper is what makes the
+ * question have a single answer.
+ */
 export function getAssetUrl(path: string): string {
-  if (path.startsWith('http')) return path;
-  return `${API_BASE}/${path}`;
+  if (!path) return '';
+  if (/^https?:\/\//.test(path)) return path;
+  return `${API_BASE}/${path.replace(/^\/+/, '')}`;
+}
+
+/** The avatar case, which tolerates a missing value. */
+export function getAvatarUrl(avatar: string | undefined | null): string {
+  return avatar ? getAssetUrl(avatar) : '';
 }
 
 /**
@@ -81,16 +109,6 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function formatDate(date: string | Date, locale: string = 'zh-CN'): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleString(locale, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export function processImageFile(file: File, maxSizeMB: number = 5): Promise<string> {
   return new Promise((resolve, reject) => {

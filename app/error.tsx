@@ -18,6 +18,11 @@ import ErrorRetry from '@/components/ErrorRetry';
  * reached the boundary got a 64px glyph over `headline-s` at 60vh with none.
  * The user cannot tell those two events apart and should not be shown two
  * designs for them.
+ *
+ * `fill`, which the 404 also sets and nothing else does: those two are the only
+ * screens whose entire content is the status block, so they are the only ones that
+ * should take the whole scroller and centre in it. A list's empty state must not —
+ * it sits under a page header, and filling would push the page past the viewport.
  */
 export default function Error({
   error,
@@ -33,6 +38,7 @@ export default function Error({
 
   return (
     <ErrorRetry
+      fill
       title="出了点问题"
       message={
         <>

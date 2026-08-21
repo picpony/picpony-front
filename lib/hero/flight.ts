@@ -1,21 +1,18 @@
 'use client';
 
 import {
-  HERO_ARC_DISTANCE_MAX_PX,
-  HERO_ARC_DISTANCE_RATIO,
-  HERO_ARC_GRAVITY_PX_PER_S2,
-  HERO_ARC_MAX_PX,
-  HERO_ARC_MIN_PX,
-  HERO_ARC_SCALE,
   HERO_FLIGHT_SAMPLES,
   HERO_RADIUS_LEAD,
   HERO_TARGET_RADIUS_PX,
 } from './constants';
 import {
+  createHeroRectArc,
   formatHeroClipRadius,
   formatHeroTransform,
   getHeroBoxTransform,
   getHeroCoverTransform,
+  lerpHeroRect,
+  lerpHeroRectArc,
   type HeroHost,
   type HeroRect,
 } from './geometry';
@@ -55,8 +52,6 @@ export type HeroLeg = {
   direction: HeroDirection;
   response: SpringResponse;
   duration: number;
-  /** Ballistic lift height in px; the apex sits mid-timeline. */
-  arc: number;
   startedAt: number;
 };
 
@@ -70,6 +65,12 @@ export type HeroFlight = {
   plane: HeroScrollPlane;
   /** The box the flyer element is sized to; all transforms are relative to it. */
   base: HeroRect;
+  /**
+   * Object-oriented, not leg-oriented: `source` is always the gallery card and
+   * `target` always the detail, matching `session.sourceRect` / `stage.target`
+   * everywhere else. `getFlightRadii` is the one place that maps them onto a
+   * leg's `from`/`to`, so the direction swap lives in exactly one function.
+   */
   sourceRadius: number;
   targetRadius: number;
   sessionId: number;
@@ -89,35 +90,34 @@ function planeHost(flight: HeroFlight): HeroHost {
 }
 
 /**
- * Screen-space ballistic lift. Under constant downward acceleration, a launch
- * that starts and lands on the chord peaks at g·t²/8 above it halfway through.
- * Clamped only at the visual extremes — never by device class.
+ * The flight path is **Flutter's Hero path** — `MaterialRectArcTween`, two opposite corners
+ * on two circular arcs — and it took three attempts to get there.
+ *
+ * A *ballistic lift* came first: a parabola `4·arc·offset·(1−offset)` subtracted from the top
+ * edge, keyed on **linear** time while the position ran on the spring. A ζ0.9 spring has
+ * covered most of its travel by the time that parabola is still near its peak, so the last
+ * 40% of every flight was an arrived picture sinking the remaining ~38px. Measured, the
+ * rendered top ran 390 → 197 → 196 → 202 → 208 → 221: past its landing edge by 26px and back.
+ * Then `MaterialArcMotion` — Material Android's opt-in corner Bézier — which is a per-axis
+ * reparameterisation, and which either drove an edge 38px past its destination (arcing the
+ * centre) or put the aspect ratio on the leading axis (pairing each axis): measured 830 × 281
+ * mid-flight against endpoints of 2.0 and 1.78.
+ *
+ * `MaterialRectArcTween` is a different construction from both, and the difference is that it
+ * interpolates **corners rather than a box**: pick the diagonal aligned with the travel, send
+ * those two corners along circular arcs, rebuild the rect from them. Each edge is then one
+ * coordinate of one arc whose sweep is provably under 90°, so all four are monotone for any
+ * pair of boxes, and the aspect is whatever the two corners jointly describe. The derivation
+ * and the sweep bound are on `createHeroRectArc` in `geometry.ts`.
+ *
+ * **Two standing checks, because the first two attempts each passed one and failed the
+ * other:** per-decile monotonicity of all four rendered edges, *and* an aspect ratio that
+ * stays between the two endpoints' aspects.
  */
-export function getFlightArc(
-  from: HeroRect,
-  to: HeroRect,
-  duration: number,
-  direction: HeroDirection,
-) {
-  const distance = Math.hypot(
-    to.left + to.width / 2 - (from.left + from.width / 2),
-    to.top + to.height / 2 - (from.top + from.height / 2),
-  );
-  const seconds = Math.max(0.001, duration / 1000);
-  const gravityLift = (HERO_ARC_GRAVITY_PX_PER_S2 * seconds * seconds) / 8;
-  const distanceLift = Math.min(HERO_ARC_DISTANCE_MAX_PX, distance * HERO_ARC_DISTANCE_RATIO);
-  const lift = Math.min(HERO_ARC_MAX_PX, Math.max(HERO_ARC_MIN_PX, gravityLift + distanceLift));
-  return lift * HERO_ARC_SCALE[direction];
-}
 
 /** Corner radius resolves ahead of position, so the shape settles first. */
 function radiusProgress(progress: number) {
   return Math.min(1, progress * HERO_RADIUS_LEAD);
-}
-
-function arcOffset(arc: number, offset: number) {
-  // Parabola through (0,0) and (1,0), peaking at offset 0.5.
-  return arc * 4 * offset * (1 - offset);
 }
 
 export function getFlightRadii(flight: HeroFlight, direction: HeroDirection) {
@@ -137,17 +137,11 @@ export function evaluateLeg(leg: HeroLeg, time: number): HeroPose {
   const elapsed = Math.min(leg.duration, Math.max(0, time - leg.startedAt));
   const offset = leg.duration > 0 ? elapsed / leg.duration : 1;
   const progress = springProgress(offset, leg.response);
-  const bow = arcOffset(leg.arc, offset);
+  const rect = lerpHeroRect(leg.from, leg.to, progress);
 
-  const rect: HeroRect = {
-    top: interpolate(leg.from.top, leg.to.top, progress) - bow,
-    left: interpolate(leg.from.left, leg.to.left, progress),
-    width: interpolate(leg.from.width, leg.to.width, progress),
-    height: interpolate(leg.from.height, leg.to.height, progress),
-  };
-
-  // Chord speed: |Δcenter| · dp/dt. The arc term is deliberately excluded so an
-  // interruption inherits travel along the path, not the vertical bow.
+  // Chord speed: |Δcenter| · dp/dt. A magnitude only — it exists to seed
+  // `springVelocityFromSpeed` when a leg is interrupted, and the replacement leg
+  // re-derives its own travel from the pose it is caught at.
   const chord = Math.hypot(
     leg.to.left + leg.to.width / 2 - (leg.from.left + leg.from.width / 2),
     leg.to.top + leg.to.height / 2 - (leg.from.top + leg.from.height / 2),
@@ -180,18 +174,14 @@ export type FlightKeyframes = {
 export function buildFlightKeyframes(flight: HeroFlight, leg: HeroLeg): FlightKeyframes {
   const host = planeHost(flight);
   const frames = sampleSpring(leg.response, HERO_FLIGHT_SAMPLES[leg.direction]);
+  const arc = createHeroRectArc(leg.from, leg.to);
   const flyer: Keyframe[] = new Array(frames.length);
   const clip: Keyframe[] = new Array(frames.length);
   const image: Keyframe[] = new Array(frames.length);
 
   for (let index = 0; index < frames.length; index += 1) {
     const { offset, progress } = frames[index];
-    const display: HeroRect = {
-      top: interpolate(leg.from.top, leg.to.top, progress) - arcOffset(leg.arc, offset),
-      left: interpolate(leg.from.left, leg.to.left, progress),
-      width: interpolate(leg.from.width, leg.to.width, progress),
-      height: interpolate(leg.from.height, leg.to.height, progress),
-    };
+    const display = lerpHeroRectArc(arc, progress);
     const radius = interpolate(leg.fromRadius, leg.toRadius, radiusProgress(progress));
 
     flyer[index] = {
@@ -293,8 +283,6 @@ export function createHeroFlight({
     sizePlaneLayer(layer, plane);
 
     const cardRadius = Number.parseFloat(getComputedStyle(treatment).borderRadius) || 0;
-    const sourceRadius = direction === 'forward' ? cardRadius : HERO_TARGET_RADIUS_PX;
-    const targetRadius = direction === 'forward' ? HERO_TARGET_RADIUS_PX : cardRadius;
 
     // Size the flyer to its destination box once; everything after is transform
     // only, so the flight never triggers layout.
@@ -318,8 +306,8 @@ export function createHeroFlight({
       frameLease,
       plane,
       base,
-      sourceRadius,
-      targetRadius,
+      sourceRadius: cardRadius,
+      targetRadius: HERO_TARGET_RADIUS_PX,
       sessionId,
       imageId,
       role: 'foreground',
@@ -332,11 +320,7 @@ export function createHeroFlight({
     // Establish the exact source pose synchronously. Relying on the WAAPI
     // backwards fill for the first paint can expose the untransformed base box
     // while a slower compositor promotes and rasterizes the new canvas layer.
-    applyFlightPose(
-      flight,
-      screenRectToPlane(from, plane),
-      direction === 'forward' ? sourceRadius : targetRadius,
-    );
+    applyFlightPose(flight, screenRectToPlane(from, plane), getFlightRadii(flight, direction).from);
 
     let released = false;
     flight.release = () => {

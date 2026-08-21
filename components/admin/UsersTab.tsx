@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import { default as StatusBadge } from '@/components/Badge';
 import Checkbox from '@/components/Checkbox';
@@ -11,10 +10,17 @@ import { MdPeople, MdEdit, MdDelete, MdCheckCircle, MdBlock } from 'react-icons/
 import DataTable, { type Column } from '@/components/DataTable';
 import { SectionHeader, SearchInput } from './';
 import Button from '@/components/Button';
+import IconButton from '@/components/IconButton';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { Input, Textarea } from '@/components/Input';
 import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
 import SectionHeading from '@/components/SectionHeading';
+import { ICON } from '@/lib/icons';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface Badge {
   id: number;
@@ -109,44 +115,34 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       payload.gender = editForm.gender || '';
       payload.birthday = editForm.birthday || '';
 
-      const res = await api.adminUpdateUser(token, payload);
+      const res = await adminApi.adminUpdateUser(token, payload);
       const data = await res.json();
 
       if (data.success) {
-        showToast('用户信息更新成功', 'success');
+        showToast('用户信息已更新', 'success');
         refreshAfterInlineCloseRef.current = true;
         closeInlineEditor();
       } else {
         showToast(data.error || '保存失败', 'error');
       }
     } catch {
-      showToast('保存失败，请检查网络连接', 'error');
+      showToast('网络错误，请稍后再试', 'error');
     } finally {
       setIsSavingUser(false);
     }
   };
 
-  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
-     ref per tab. The signature is kept so the call sites read unchanged; what
-     went away is the second copy of the Modal, its footer and its title/message
-     state — five admin tabs had built the identical thing. */
-  const { confirm, confirmDialog } = useConfirm();
-
-  const showUsersConfirm = (title: string, message: string, action: () => void) => {
-    void confirm({ title, message }).then((confirmed) => {
-      if (confirmed) action();
-    });
-  };
+  const { confirmThen, confirmDialog } = useConfirm();
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await api.adminGetUsers(token);
+      const data = await adminApi.adminGetUsers(token);
       if (data.success) {
         setUsers(data.users || []);
       }
     } catch {
-      showToast('加载用户失败', 'error');
+      showToast('用户加载失败', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -154,14 +150,14 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
 
   useEffect(() => {
     if (!token) return;
-    api
+    adminApi
       .adminGetUsers(token)
       .then((data) => {
         if (data.success) {
           setUsers(data.users || []);
         }
       })
-      .catch(() => showToast('加载用户失败', 'error'))
+      .catch(() => showToast('用户加载失败', 'error'))
       .finally(() => setIsLoading(false));
   }, [token]);
 
@@ -206,12 +202,12 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
   };
 
   const handleBan = async (userId: number, isBanned: number) => {
-    showUsersConfirm(
+    confirmThen(
       isBanned ? '确认封禁' : '确认解封',
-      isBanned ? '确认封禁该用户？' : '确认解封该用户？',
+      isBanned ? '确定要封禁该用户吗？' : '确定要解封该用户吗？',
       async () => {
         try {
-          const res = await api.adminUpdateUser(token, { target_id: userId, is_banned: isBanned });
+          const res = await adminApi.adminUpdateUser(token, { target_id: userId, is_banned: isBanned });
           const data = await res.json();
           if (data.success) {
             showToast(isBanned ? '已封禁' : '已解封', 'success');
@@ -227,12 +223,12 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
   };
 
   const handleDelete = async (userId: number) => {
-    showUsersConfirm(
-      '【极度危险】删除确认',
-      '确定要彻底抹除此账号及所有相关数据吗？此操作无法恢复！',
+    confirmThen(
+      '确认彻底删除账号',
+      '确定要彻底抹除此账号及所有相关数据吗？此操作无法恢复。',
       async () => {
         try {
-          const res = await api.adminDeleteUser(token, userId);
+          const res = await adminApi.adminDeleteUser(token, userId);
           const data = await res.json();
           if (data.success) {
             showToast('已删除', 'success');
@@ -265,7 +261,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
               编辑用户
             </SectionHeading>
           </div>
-          <Button variant="text" size="sm" onClick={closeInlineEditor} disabled={isSavingUser}>
+          <Button variant="text" size="xs" onClick={closeInlineEditor} disabled={isSavingUser}>
             取消
           </Button>
         </div>
@@ -412,16 +408,16 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                 </th>
                 <td className="min-w-48 px-3 py-3">
                   <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={editForm.is_banned === 1}
-                        onChange={(checked) =>
-                          setEditForm((form) => ({ ...form, is_banned: checked ? 1 : 0 }))
-                        }
-                        aria-label="封禁该用户"
-                      />
-                      <span className="text-body-m text-on-surface">封禁此用户</span>
-                    </div>
+                    {/* `label`, so the visible words are the accessible name and
+                        clicking them toggles the box. It was a sibling `<span>` plus a
+                        differently-worded `aria-label`. */}
+                    <Checkbox
+                      checked={editForm.is_banned === 1}
+                      onChange={(checked) =>
+                        setEditForm((form) => ({ ...form, is_banned: checked ? 1 : 0 }))
+                      }
+                      label="封禁此用户"
+                    />
                     {editForm.is_banned === 1 && (
                       <span className="text-body-s text-warning">封禁后将退出该用户的所有设备</span>
                     )}
@@ -465,7 +461,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       header: '角色',
       render: (u) => (
         /* `showUser`: a table column has to say something in every row, which
-           is the one place the neutral "普通用户" pill belongs. `rounded` (4dp)
+           is the one place the neutral "普通用户" pill belongs. A 4dp corner
            here against `rounded-sm` on the profile was the third shape for the
            same mark. */
         <RoleBadge role={u.role} showUser size="md" />
@@ -489,11 +485,17 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       actions: true,
       render: (u) => (
         <>
-          <Button
+          {/* `IconButton`, not an icon-only `<Button>` forcing a square box.
+              All three carried `className="w-9 px-0"` — **36px**, a figure the
+              control-height scale explicitly retired — on a 32dp `xs` button, so the
+              box was 36×32. `size="sm"` is the 32dp step, square by the token set,
+              and it supplies the state layer, the ripple and the glyph size that
+              `w-9 px-0` was reconstructing. It also renders its own tooltip from
+              `aria-label`, so the native `title` each of these carried is gone. */}
+          <IconButton
             type="button"
-            variant="text"
             size="sm"
-            icon={<MdEdit size={18} />}
+            icon={<MdEdit />}
             onClick={(event) => {
               if (editingUser?.id === u.id && !isInlineEditorClosing) {
                 closeInlineEditor();
@@ -502,31 +504,26 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
               captureInlineEditorLayout(event.currentTarget);
               openInlineEditor(u);
             }}
-            className="w-9 px-0 text-warning"
-            title="编辑"
-            aria-label={`编辑 ${u.username}`}
+            className="text-warning"
+            aria-label={`编辑用户 ${u.username}`}
             aria-expanded={editingUser?.id === u.id && !isInlineEditorClosing}
             aria-controls={`users-inline-${u.id}-editor`}
           />
-          <Button
+          <IconButton
             type="button"
-            variant="text"
             size="sm"
-            icon={u.is_banned ? <MdCheckCircle size={18} /> : <MdBlock size={18} />}
+            icon={u.is_banned ? <MdCheckCircle /> : <MdBlock />}
             onClick={() => handleBan(u.id, u.is_banned ? 0 : 1)}
-            className={`w-9 px-0 ${u.is_banned ? 'text-success' : 'text-error'}`}
-            title={u.is_banned ? '解封' : '封禁'}
-            aria-label={`${u.is_banned ? '解封' : '封禁'} ${u.username}`}
+            className={u.is_banned ? 'text-success' : 'text-error'}
+            aria-label={`${u.is_banned ? '解封' : '封禁'}用户 ${u.username}`}
           />
-          <Button
+          <IconButton
             type="button"
-            variant="text"
             size="sm"
-            icon={<MdDelete size={18} />}
+            icon={<MdDelete />}
             onClick={() => handleDelete(u.id)}
-            className="w-9 px-0 text-error"
-            title="删除"
-            aria-label={`删除 ${u.username}`}
+            className="text-error"
+            aria-label={`删除用户 ${u.username}`}
           />
         </>
       ),
@@ -536,7 +533,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
   return (
     <div className="space-y-6">
       <SectionHeader
-        icon={<MdPeople className="text-primary" size={24} />}
+        icon={<MdPeople size={ICON.standard} />}
         title="用户与权限管理"
         onRefresh={loadUsers}
       />
@@ -544,7 +541,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       <SearchInput
         value={searchKw}
         onChange={setSearchKw}
-        placeholder="搜索用户ID、用户名或邮箱..."
+        placeholder="搜索用户 ID、用户名或邮箱…"
       />
 
       <DataTable<User>

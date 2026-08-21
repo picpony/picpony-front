@@ -68,6 +68,15 @@ export function getHeroRect(element: HTMLElement): HeroRect {
 }
 
 /**
+ * The corner a flyer or a container mask starts from. Read rather than assumed: the
+ * gallery tile and the detail media happen to share 16dp today, and pinning either one
+ * would silently break the morph the day the shape scale moves.
+ */
+export function getHeroCornerRadius(element: HTMLElement) {
+  return Number.parseFloat(getComputedStyle(element).borderRadius) || 0;
+}
+
+/**
  * Measure an element as if a transformed ancestor were at rest.
  *
  * The gallery sinks under an open detail view, so a thumbnail measured during
@@ -378,12 +387,29 @@ export function leaseHeroCardChrome(element: HTMLElement | null): DomLease {
   );
 }
 
-/** Make a detail route invisible and non-interactive without unmounting it. */
+/**
+ * Make a detail route invisible and non-interactive without unmounting it.
+ *
+ * **`visibility`, not `opacity`, and that is the fix for the back button's blink.**
+ * The seal used to set both. Lifting it therefore *cleared an inline `opacity: 0`* — and
+ * `IconButton` carries `opacity` in its own 200ms transition list (for
+ * `disabled:disabled-content`), so the routed back affordance ramped 0 → 1 over 200ms
+ * while the Stage's copy of it was hidden in the same frame by `visibility`, which does
+ * not transition. One instant hide against one 200ms fade-in of the same glyph at the
+ * same coordinate: a blink, once per open.
+ *
+ * `visibility: hidden` alone is enough — it hides the subtree, takes the node out of the
+ * tab order, and is not a transitionable property, so the reveal is a single frame. It is
+ * also strictly better than `opacity: 0` for the sealed copy, which was focusable while
+ * invisible. `PageBack` has the same rule stated the other way round in its own comment:
+ * between two screens that both have an entrance, a node remounted at the same coordinate
+ * looking identical must not fade.
+ */
 export function leaseHeroRouteSealed(nodes: {
   overlay: HTMLElement;
   floatingBack: HTMLElement | null;
 }): DomLease {
-  const sealed = { opacity: '0', visibility: 'hidden', pointerEvents: 'none' } as const;
+  const sealed = { visibility: 'hidden', pointerEvents: 'none' } as const;
   return combineHeroLeases(
     leaseInlineStyles(nodes.overlay, sealed),
     leaseAttribute(nodes.overlay, 'inert', ''),

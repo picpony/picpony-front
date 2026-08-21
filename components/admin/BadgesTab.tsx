@@ -1,21 +1,28 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { api } from '@/lib/api';
+import { useState, useEffect } from 'react';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdEmojiEvents, MdAdd, MdEdit, MdDelete, MdContentCopy, MdLink } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
 import IconButton from '@/components/IconButton';
 import { SectionHeader } from './';
+import SectionHeading from '@/components/SectionHeading';
 import UserBadge from '@/components/UserBadge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import TabBar from '@/components/TabBar';
+import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { Input, ColorSwatch } from '@/components/Input';
 import Radio from '@/components/Radio';
 import { copyText } from '@/lib/utils';
+import { ICON } from '@/lib/icons';
+import { useConfirm } from '@/components/ConfirmDialog';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface Badge {
   id: number;
@@ -66,10 +73,10 @@ export default function BadgesTab({ token }: { token: string }) {
     setLoading(true);
     try {
       // Load badge links
-      const linksRes = await api.adminGetBadgeLinks(token);
+      const linksRes = await adminApi.adminGetBadgeLinks(token);
       setBadgeLinks(linksRes.data?.links || linksRes.links || []);
     } catch {
-      showToast('加载数据失败', 'error');
+      showToast('数据加载失败', 'error');
     } finally {
       setLoading(false);
     }
@@ -81,12 +88,12 @@ export default function BadgesTab({ token }: { token: string }) {
     (async () => {
       setLoading(true);
       try {
-        const linksRes = await api.adminGetBadgeLinks(token);
+        const linksRes = await adminApi.adminGetBadgeLinks(token);
         if (!cancelled) {
           setBadgeLinks(linksRes.data?.links || linksRes.links || []);
         }
       } catch {
-        if (!cancelled) showToast('加载数据失败', 'error');
+        if (!cancelled) showToast('数据加载失败', 'error');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -96,19 +103,11 @@ export default function BadgesTab({ token }: { token: string }) {
     };
   }, [token]);
 
-  // Confirm dialog
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const confirmActionRef = useRef<(() => void) | null>(null);
-
-  const showConfirm = (action: () => void) => {
-    confirmActionRef.current = action;
-    setConfirmOpen(true);
-  };
-
-  const handleConfirm = () => {
-    confirmActionRef.current?.();
-    setConfirmOpen(false);
-  };
+  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
+     converted to the shared dialog and five — this among them — kept their own,
+     which is also why their copy drifted: every hand-rolled body dropped the
+     sentence-final 吗 that every converted one kept. */
+  const { confirmThen, confirmDialog } = useConfirm();
 
   const handleGrantBadge = async () => {
     if (!badgeName.trim()) {
@@ -131,7 +130,7 @@ export default function BadgesTab({ token }: { token: string }) {
       if (endDate) payload.end_date = endDate;
       if (!isPermanent && expiresAt) payload.expires_at = expiresAt;
 
-      const res = await api.adminGrantBadge(token, payload);
+      const res = await adminApi.adminGrantBadge(token, payload);
       const data = await res.json();
       if (data.success) {
         showToast('徽章授予成功', 'success');
@@ -161,7 +160,7 @@ export default function BadgesTab({ token }: { token: string }) {
   const handleSaveEdit = async () => {
     if (!editingBadge) return;
     try {
-      const res = await api.adminEditBadge(token, {
+      const res = await adminApi.adminEditBadge(token, {
         badge_id: editingBadge.id,
         badge_name: editName.trim(),
         badge_color: editColor,
@@ -180,9 +179,9 @@ export default function BadgesTab({ token }: { token: string }) {
   };
 
   const handleDeleteBadge = (badgeId: number) => {
-    showConfirm(async () => {
+    confirmThen('确认删除', '确定要删除此徽章吗？', async () => {
       try {
-        const res = await api.adminDeleteBadge(token, badgeId);
+        const res = await adminApi.adminDeleteBadge(token, badgeId);
         const data = await res.json();
         if (data.success) {
           showToast('已删除', 'success');
@@ -210,7 +209,7 @@ export default function BadgesTab({ token }: { token: string }) {
       if (linkBadgeExpiresAt) payload.badge_expires_at = linkBadgeExpiresAt;
       if (linkExpiresAt) payload.link_expires_at = linkExpiresAt;
 
-      const res = await api.adminCreateBadgeLink(token, payload);
+      const res = await adminApi.adminCreateBadgeLink(token, payload);
       const data = await res.json();
       if (data.success) {
         showToast('领取链接已生成', 'success');
@@ -231,7 +230,7 @@ export default function BadgesTab({ token }: { token: string }) {
 
   const handleToggleBadgeLink = async (id: number, isActive: number) => {
     try {
-      const res = await api.adminToggleBadgeLink(token, id, isActive ? 0 : 1);
+      const res = await adminApi.adminToggleBadgeLink(token, id, isActive ? 0 : 1);
       const data = await res.json();
       if (data.success) {
         showToast(isActive ? '已停用' : '已启用', 'success');
@@ -275,16 +274,14 @@ export default function BadgesTab({ token }: { token: string }) {
           <IconButton
             size="sm"
             onClick={() => handleEditBadge(b)}
-            icon={<MdEdit size={16} />}
-            title="编辑"
+            icon={<MdEdit size={ICON.dense} />}
             aria-label={`编辑徽章 ${b.badge_name}`}
             className="text-primary"
           />
           <IconButton
             size="sm"
             onClick={() => handleDeleteBadge(b.id)}
-            icon={<MdDelete size={16} />}
-            title="删除"
+            icon={<MdDelete size={ICON.dense} />}
             aria-label={`删除徽章 ${b.badge_name}`}
             className="text-error"
           />
@@ -321,8 +318,8 @@ export default function BadgesTab({ token }: { token: string }) {
       header: '有效期',
       render: (l) => (
         <span className="text-on-surface-variant text-body-s">
-          {l.link_expires_at ? `链接: ${l.link_expires_at}` : '永久'}
-          {l.badge_expires_at && ` / 徽章: ${l.badge_expires_at}`}
+          {l.link_expires_at ? `链接：${l.link_expires_at}` : '永久'}
+          {l.badge_expires_at && ` / 徽章：${l.badge_expires_at}`}
         </span>
       ),
     },
@@ -334,8 +331,7 @@ export default function BadgesTab({ token }: { token: string }) {
         <IconButton
           size="sm"
           onClick={() => copyBadgeLink(l)}
-          icon={<MdContentCopy size={16} />}
-          title="复制链接"
+          icon={<MdContentCopy size={ICON.dense} />}
           aria-label={`复制 ${l.badge_name} 的领取链接`}
           className="text-primary"
         />
@@ -346,17 +342,18 @@ export default function BadgesTab({ token }: { token: string }) {
     <div className="space-y-6">
       {' '}
       <SectionHeader
-        icon={<MdEmojiEvents className="text-primary" size={24} />}
+        icon={<MdEmojiEvents size={ICON.standard} />}
         title="徽章管理"
         onRefresh={loadData}
-      />{' '}
-      {/* The app's fifth tab row, and the last one that was not `TabBar`. It
+      />
+      {/* The app's fifth tab row, and the last one that was not the shared
+          primitive. It
           was a pair of `rounded-full` pills with a `secondary-container`
           selected fill — close enough to the real thing to look deliberate, but
           with no sliding indicator, and its panes were gated on
           `{activeSubTab === 'x' && …}`, which unmounts the outgoing pane so
           there is nothing left for the transition to animate out. */}
-      <TabBar
+      <Tabs
         className="mb-4"
         value={activeSubTab}
         onChange={setActiveSubTab}
@@ -372,7 +369,7 @@ export default function BadgesTab({ token }: { token: string }) {
               {' '}
               您可以向特定用户
               ID，或在某日期区间注册的用户批量授予专属徽章。徽章将在用户的发言、个人主页等多处显示。{' '}
-            </Card>{' '}
+            </Card>
             <div>
               {' '}
               <Input
@@ -382,13 +379,13 @@ export default function BadgesTab({ token }: { token: string }) {
                 value={badgeName}
                 onChange={(e) => setBadgeName(e.target.value)}
                 placeholder="例如：元老、贡献者"
-              />{' '}
-            </div>{' '}
+              />
+            </div>
             <div>
               {' '}
               <p className="block text-label-l text-on-surface-variant mb-1">
                 徽章颜色
-              </p>{' '}
+              </p>
               <div className="flex items-center gap-3">
                 <ColorSwatch
                   aria-label="选择徽章颜色"
@@ -400,42 +397,42 @@ export default function BadgesTab({ token }: { token: string }) {
                   value={badgeColor}
                   onChange={(e) => setBadgeColor(e.target.value)}
                   fieldClassName="flex-1"
-                />{' '}
-              </div>{' '}
-            </div>{' '}
+                />
+              </div>
+            </div>
             <div>
               {' '}
               <Input
-                label="授予指定用户（输入用户ID，多个用逗号隔开，留空则使用下方日期区间）"
+                label="授予指定用户（输入用户 ID，多个用逗号隔开，留空则使用下方日期区间）"
                 type="text"
                 value={targetUserIds}
                 onChange={(e) => setTargetUserIds(e.target.value)}
                 placeholder="例如：1, 2, 5"
-              />{' '}
-            </div>{' '}
+              />
+            </div>
             <div className="flex gap-4">
-              {' '}
+              
               <div className="flex-1">
-                {' '}
+                
                 <Input
                   label="注册起始日期"
                   id="badgestab-f2"
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                />{' '}
-              </div>{' '}
+                />
+              </div>
               <div className="flex-1">
-                {' '}
+                
                 <Input
                   label="注册截止日期"
                   id="badgestab-f3"
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                />{' '}
-              </div>{' '}
-            </div>{' '}
+                />
+              </div>
+            </div>
             <div>
               {/* `fieldset`/`legend`, because this caption names a *group* of
                   radios rather than one control. A bare `<label>` with no
@@ -476,20 +473,32 @@ export default function BadgesTab({ token }: { token: string }) {
               onClick={handleGrantBadge}
               variant="filled"
               loading={granting}
-              icon={<MdAdd size={16} />}
+              icon={<MdAdd size={ICON.dense} />}
             >
-              {granting ? '授予中...' : '立即授予徽章'}
+              {granting ? '授予中…' : '立即授予徽章'}
             </Button>
           </Card>
           {/* Badges list */}
           <Card variant="transparent">
-            <h3 className="text-label-l text-on-surface mb-4">已有徽章列表</h3>
+            {/* `SectionHeading`, not a hand-written `<h3 class="text-label-l">`:
+                a heading above a block is the one thing that primitive is for, and
+                `label-l` is a control's role rather than a heading's. */}
+            <SectionHeading as="h3" className="mb-4">
+              已有徽章列表
+            </SectionHeading>
+            {/* `badges` has no setter and there is no endpoint to fill it —
+                `lib/api/admin.ts` has `adminGrantBadge`, `adminEditBadge` and
+                `adminDeleteBadge` but no `admin_list_badges`, so the rows below
+                cannot arrive until the backend grows one. The edit and delete paths
+                are complete and become reachable the moment it does, which is why
+                they stay. The empty copy says that rather than claiming there are
+                no badges, which is what it used to say. */}
             <DataTable<Badge>
               columns={badgeColumns}
               rows={badges}
               rowKey={(b) => b.id}
               loading={loading}
-              empty="暂无徽章"
+              empty="徽章列表接口尚未开放"
             />
           </Card>
         </TabPane>
@@ -500,24 +509,24 @@ export default function BadgesTab({ token }: { token: string }) {
             <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
               {' '}
               生成一个包含徽章信息的专属链接，用户点击链接即可自动领取指定的徽章。{' '}
-            </Card>{' '}
+            </Card>
             <div className="flex gap-4">
-              {' '}
+              
               <div className="flex-1">
-                {' '}
+                
                 <Input
                   label="徽章名称"
                   type="text"
                   value={linkBadgeName}
                   onChange={(e) => setLinkBadgeName(e.target.value)}
                   placeholder="输入徽章名称"
-                />{' '}
-              </div>{' '}
+                />
+              </div>
               <div className="flex-1">
-                {' '}
+                
                 <p className="block text-label-l text-on-surface-variant mb-1">
                   徽章颜色
-                </p>{' '}
+                </p>
                 <div className="flex items-center gap-2">
                   <ColorSwatch
                     aria-label="选择领取链接徽章颜色"
@@ -529,34 +538,34 @@ export default function BadgesTab({ token }: { token: string }) {
                     value={linkBadgeColor}
                     onChange={(e) => setLinkBadgeColor(e.target.value)}
                     fieldClassName="flex-1"
-                  />{' '}
-                </div>{' '}
-              </div>{' '}
-            </div>{' '}
+                  />
+                </div>
+              </div>
+            </div>
             <div className="flex gap-4">
-              {' '}
+              
               <div className="flex-1">
-                {' '}
+                
                 <Input
                   label="徽章有效期至（留空为永久）"
                   type="date"
                   value={linkBadgeExpiresAt}
                   onChange={(e) => setLinkBadgeExpiresAt(e.target.value)}
-                />{' '}
-              </div>{' '}
+                />
+              </div>
               <div className="flex-1">
-                {' '}
+                
                 <Input
                   label="链接有效期至（留空为永久）"
                   id="badgestab-f4"
                   type="date"
                   value={linkExpiresAt}
                   onChange={(e) => setLinkExpiresAt(e.target.value)}
-                />{' '}
-              </div>{' '}
-            </div>{' '}
+                />
+              </div>
+            </div>
             <Button
-              icon={<MdLink size={16} />}
+              icon={<MdLink size={ICON.dense} />}
               variant="warning"
               onClick={handleCreateBadgeLink}
               loading={creatingLink}
@@ -581,7 +590,7 @@ export default function BadgesTab({ token }: { token: string }) {
         isOpen={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         title="编辑徽章"
-        maxWidth="max-w-md"
+        maxWidth="md"
         footer={
           <>
             <Button variant="text" onClick={() => setEditModalOpen(false)}>
@@ -632,24 +641,7 @@ export default function BadgesTab({ token }: { token: string }) {
           </div>
         </div>
       </Modal>
-      <Modal
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        title="确认删除"
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setConfirmOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleConfirm}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">确定要删除此徽章？</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

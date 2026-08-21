@@ -24,7 +24,7 @@ export interface ConfirmOptions {
 /**
  * One "are you sure?" for the whole app.
  *
- * Five admin tabs had hand-rolled this — `Modal` at `max-w-sm`, a `<p>` body, a
+ * Ten admin tabs had hand-rolled this — `Modal` at `max-w-sm`, a `<p>` body, a
  * text 取消 next to a danger 确认 — and each carried four pieces of state to do
  * it: an open flag, a title, a message, and the pending action stashed in a ref.
  * Two more places skipped the dialog entirely and called the browser's own
@@ -33,11 +33,22 @@ export interface ConfirmOptions {
  * carries the origin string. The upload guidelines — the one place in the app a
  * user is asked to affirm a legal condition — were shown that way.
  *
- * The hook returns a promise so the caller reads as a straight line:
+ * Five of the ten converted and five did not, and the copy split followed the
+ * code split exactly: every hand-rolled body dropped the sentence-final 吗
+ * (`确定要删除此徽章？`) while every converted one kept it
+ * (`确定要永久删除这个词条吗？`). Fixing one was fixing the other.
+ *
+ * Two shapes, because the wrappers proved which one call sites want. The promise
+ * form reads as a straight line where the caller already has one:
  *
  *   if (!(await confirm({ title: '…', message: '…' }))) return;
  *
- * and renders `confirmDialog` once, anywhere in its tree.
+ * and `confirmThen` is the fire-and-forget form five tabs each rebuilt by hand,
+ * with the same three-line justifying comment pasted five times:
+ *
+ *   confirmThen('确认删除', '确定要删除此徽章吗？', async () => { … });
+ *
+ * Render `confirmDialog` once, anywhere in the tree.
  *
  * The options are held through the close animation rather than cleared with the
  * open flag. Clearing both at once emptied the title and body for the 200ms the
@@ -58,6 +69,15 @@ export function useConfirm() {
     });
   }, []);
 
+  const confirmThen = useCallback(
+    (title: string, message: ReactNode, action: () => void | Promise<void>) => {
+      void confirm({ title, message }).then((confirmed) => {
+        if (confirmed) void action();
+      });
+    },
+    [confirm],
+  );
+
   const settle = useCallback((confirmed: boolean) => {
     const resolve = resolveRef.current;
     resolveRef.current = null;
@@ -70,7 +90,7 @@ export function useConfirm() {
       isOpen={isOpen}
       onClose={() => settle(false)}
       title={options?.title ?? ''}
-      maxWidth="max-w-sm"
+      maxWidth="sm"
       footer={
         <>
           <Button variant="text" onClick={() => settle(false)}>
@@ -88,7 +108,7 @@ export function useConfirm() {
     </Modal>
   );
 
-  return { confirm, confirmDialog };
+  return { confirm, confirmThen, confirmDialog };
 }
 
 export interface PromptOptions {
@@ -110,6 +130,10 @@ export interface PromptOptions {
  * `prompt()` had, so a call site converts by adding `await` and losing nothing.
  * The value is trimmed here rather than at each call site, because both existing
  * callers trimmed it and one of them forgot.
+ *
+ * Its confirm button says 确认, like `useConfirm`'s. It said 确定 — two sibling
+ * hooks in one file disagreeing on the app's most-pressed word, against a docblock
+ * that named 确认.
  */
 export function usePrompt() {
   const [options, setOptions] = useState<PromptOptions | null>(null);
@@ -139,14 +163,14 @@ export function usePrompt() {
       isOpen={isOpen}
       onClose={() => settle(null)}
       title={options?.title ?? ''}
-      maxWidth="max-w-sm"
+      maxWidth="sm"
       footer={
         <>
           <Button variant="text" onClick={() => settle(null)}>
             {options?.cancelLabel ?? '取消'}
           </Button>
           <Button variant="filled" onClick={() => settle(value.trim())}>
-            {options?.confirmLabel ?? '确定'}
+            {options?.confirmLabel ?? '确认'}
           </Button>
         </>
       }

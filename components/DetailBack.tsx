@@ -3,6 +3,7 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { MdArrowBack } from 'react-icons/md';
 import IconButton from './IconButton';
+import { ICON } from '@/lib/icons';
 
 type DetailBackProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   passive?: boolean;
@@ -44,9 +45,12 @@ type DetailBackProps = ButtonHTMLAttributes<HTMLButtonElement> & {
  *
  * Motion is the state layer plus the shared ripple; no bespoke transform.
  *
- * `passive` is the copy that rides along on a hero flight: visible, but not in
- * the tab order and not in the accessibility tree, because the real one is
- * still mounted somewhere else.
+ * `passive` is the copy that rides along on a hero flight: still clickable, so a tap
+ * during the flight still turns it around, but out of the tab order, out of the
+ * accessibility tree and without a ripple of its own, because the real one is mounted at
+ * the same time. It went unused for several passes — `HeroStage` rendered its copy
+ * plainly — which put two focusable 返回图片列表 buttons in the tab order for the length
+ * of every flight.
  */
 const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function DetailBack(
   {
@@ -67,7 +71,7 @@ const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function Detai
       variant="tonal"
       size="md"
       shape="square"
-      icon={<MdArrowBack size={24} aria-hidden="true" />}
+      icon={<MdArrowBack size={ICON.standard} aria-hidden="true" />}
       title={title}
       tabIndex={passive ? -1 : tabIndex}
       aria-label={ariaLabel}

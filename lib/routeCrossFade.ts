@@ -204,6 +204,17 @@ export function playRouteCrossFade(
       lean: false,
       onSettle: cancelRouteCrossFade,
     });
+    /* `[data-page-content]` is an ancestor of every gallery card, `ROUTE_CELL`
+       includes `/`, and `lean: false` starts this node a full viewport off — so
+       for the whole 500ms the cards are on screen, pressable, and offset. The
+       hero reads a plain `getBoundingClientRect` on press, and `arm()` below
+       only fires once the phase changes, which is after `useHeroLink` has
+       already measured. `runTabTransition` and the masonry cascade guard the
+       same rows the same way.
+       No removal: `handle.finish` is idempotent, and this node is keyed on the
+       pathname and discarded at the next navigation, so the listener goes with
+       it. */
+    page.addEventListener('pointerdown', () => handle.finish(), { capture: true });
     arm(layer, () => {
       handle.finish();
       endTransit();
@@ -215,9 +226,12 @@ export function playRouteCrossFade(
   timeline
     .set(snapshot.node, { willChange: 'transform, opacity' })
     /* The outgoing leg is the mirror of `pageIn`: it leaves upward over the
-       full duration while its opacity is spent in the first 120ms, so the
-       incoming page takes over inside the overlap rather than after it. */
-    .to(snapshot.node, { opacity: 0, duration: 0.12, ease: 'accelerate' }, 0)
+       full duration while its opacity is spent in the first 100ms, so the
+       incoming page takes over inside the overlap rather than after it.
+       `DURATION.press`, i.e. `short2` — the shortest step M3 defines above a
+       micro-interaction, and the same value the press feedback uses. It was a
+       bare 0.12, which is not on the scale. */
+    .to(snapshot.node, { opacity: 0, duration: DURATION.press, ease: 'accelerate' }, 0)
     .to(snapshot.node, { y: -12, duration: DURATION.long, ease: 'standard' }, 0);
 
   /* The incoming page's entrance is driven here, on opacity alone, instead of

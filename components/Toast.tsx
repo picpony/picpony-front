@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from '
 import { createPortal } from 'react-dom';
 import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
 import { gsap, useGSAP, prefersReducedMotion, DURATION } from '@/lib/motion';
+import { ICON } from '@/lib/icons';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -39,19 +40,19 @@ export const showToast = (
 const severityStyles: Record<ToastType, { bg: string; icon: React.ReactNode }> = {
   success: {
     bg: 'bg-success-fill',
-    icon: <MdCheckCircle size={20} />,
+    icon: <MdCheckCircle size={ICON.control} />,
   },
   error: {
     bg: 'bg-error-fill',
-    icon: <MdError size={20} />,
+    icon: <MdError size={ICON.control} />,
   },
   info: {
     bg: 'bg-info-fill',
-    icon: <MdInfo size={20} />,
+    icon: <MdInfo size={ICON.control} />,
   },
   warning: {
     bg: 'bg-warning-fill',
-    icon: <MdWarning size={20} />,
+    icon: <MdWarning size={ICON.control} />,
   },
 };
 
@@ -80,13 +81,22 @@ export function ToastContainer() {
 
   if (!mounted) return null;
 
+  /* An error interrupts; everything else waits its turn.
+   *
+   * The region was unconditionally `polite`, which is right for "已保存" and
+   * wrong for "上传失败" — a failure the user needs to know about before they
+   * carry on was queued behind whatever the screen reader was already saying.
+   * The politeness follows the most severe message currently on screen rather
+   * than being split into two regions, because the region has to be in the DOM
+   * before its contents change for the announcement to be reliable, and two
+   * stacked regions would have to share one column of pixels. */
+  const urgent = toasts.some((toast) => toast.type === 'error');
+
   return createPortal(
     <div
       className="pointer-events-none fixed top-6 left-1/2 z-toast flex -translate-x-1/2 flex-col items-center"
-      // Announced politely so a screen reader hears the result of an action
-      // without interrupting whatever it is currently reading.
       role="status"
-      aria-live="polite"
+      aria-live={urgent ? 'assertive' : 'polite'}
       aria-atomic="false"
     >
       {toasts.map((toast) => (
@@ -117,12 +127,14 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
          saved form bounce, and the bounce is the loudest thing in the frame for
          something the user did not ask to see.
 
-         The three legs run on the three tokens: in on `decelerate` because it
-         is arriving, out on `accelerate` because it is leaving, and the height
-         collapse on `standard` because it begins and ends on screen. The
-         collapse starts slightly before the fade finishes so the stack below
-         is already closing as the card goes — sequential reads as a queue
-         emptying one at a time. */
+         In on `decelerate` because it is arriving, out on `accelerate` because it
+         is leaving. The height collapse is the *same* leg as the fade — the card
+         going and the gap closing are one dismissal — so it shares the exit's clock
+         and curve. It used to be 300ms on `standard` against the fade's 200ms
+         `accelerate`, which left the stack below still settling 100ms after the
+         message had vanished. The small negative offset stays: the gap starts
+         closing just before the card is fully gone, so the queue reads as emptying
+         rather than as jumping. */
       const tl = gsap
         .timeline({ onComplete: () => onClose(toast.id) })
         .fromTo(
@@ -135,7 +147,7 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
           { y: -8, autoAlpha: 0, duration: DURATION.short, ease: 'accelerate' },
           toast.duration / 1000,
         )
-        .to(wrap, { height: 0, duration: DURATION.medium, ease: 'standard' }, '<0.08');
+        .to(wrap, { height: 0, duration: DURATION.short, ease: 'accelerate' }, '<0.08');
 
       return () => {
         tl.kill();
@@ -149,12 +161,20 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
   return (
     <div ref={wrapRef} className="pointer-events-auto overflow-hidden">
       <div
-        className={`${style.bg} text-on-fill mb-3 flex min-h-12 items-center gap-3 rounded-sm px-4 py-2`}
+        /* M3's snackbar, by its own tokens: `corner-extra-small` (4dp) — not the
+           8dp this had, which is the menu/text-field step — `body-medium` for the
+           message rather than `label-large`, elevation level 3, and a 560dp cap
+           so a long sentence wraps instead of running the width of a desktop
+           window. The container stays a `*-fill` tone rather than the spec's
+           `inverse-surface`, which is the documented divergence at the top of
+           this file: that role flips between schemes, so the same message would
+           arrive as a dark chip or a light one depending on the theme. */
+        className={`${style.bg} text-on-fill mb-3 flex max-w-140 min-h-12 items-center gap-3 rounded-xs px-4 py-2 shadow-e3`}
       >
         <span className="shrink-0 [&>svg]:block" aria-hidden="true">
           {style.icon}
         </span>
-        <span className="text-label-l">{toast.message}</span>
+        <span className="text-body-m">{toast.message}</span>
       </div>
     </div>
   );

@@ -39,7 +39,11 @@ export default function Reveal({
       gsap.from(ref.current.children, {
         autoAlpha: 0,
         y: distance,
-        duration: DURATION.emphasized,
+        /* `long`, the enters-the-screen duration. It was `emphasized` (500),
+           which the spec reserves for a large container transform — and the two
+           scroll-driven helpers in `lib/motion.ts` use `long`, so the same
+           entrance ran at two speeds depending on which helper produced it. */
+        duration: DURATION.long,
         ease: 'decelerate',
         stagger,
         delay,

@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useRef } from 'react';
+import { ReactNode, useRef, useState } from 'react';
 import { spawnRipple } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
@@ -10,7 +10,6 @@ interface ToggleSwitchProps {
   disabled?: boolean;
   label?: string | ReactNode;
   description?: string;
-  colorClass?: string;
   /**
    * `inline` — switch first, then its label, sized to its content. Right inside
    * a form, where the control is read left to right like a checkbox.
@@ -29,22 +28,39 @@ interface ToggleSwitchProps {
   'aria-label'?: string;
 }
 
-/* Transitions copied verbatim from material-web's `md-switch`, where each
-   property runs on its own clock — hence the arbitrary `transition` shorthand
-   rather than a `transition-[…] duration-…` pair, which can only carry one. */
+/* Two motion systems, split the way M3 splits them, and the shorthand form is
+   what makes that expressible on one element: the handle's *geometry* is component
+   motion and takes a spring, while its *colour* is a recolour and takes a short
+   curve. A `transition-[…] duration-…` pair can only carry one clock.
 
-/** Handle: the spec's two clocks. A state change resizes it 16 → 24dp and runs
- *  on `standard`; a press swells it to 28dp and runs at 100ms linear, because
- *  contact feedback has to feel immediate. Colour keeps its own 67ms. */
+   The numbers used to come from material-web's `md-switch` verbatim — 250ms
+   `standard` for the resize, 100ms linear on press, 67ms and 33ms for the fades.
+   Those are frame counts from a Lit implementation, not `md.sys.motion` steps: 67
+   and 33 are 4 and 2 frames at 60Hz, and neither is on M3's duration scale at all.
+   `Switch.kt` says `MotionSchemeKeyTokens.FastSpatial`, so the geometry is ζ0.9
+   k1400 (137ms) and the recolours move to the scale's own `short2` (100ms).
+
+   Written as arbitrary properties, these are also the one form the reduced-motion
+   enumeration missed for months — see the note at the bottom of globals.css. Both
+   bracket shapes are matched now, so the handle stops resizing under the
+   preference while its colours keep changing. */
+
+/** Handle geometry: `FastSpatial`, per `Switch.kt`. Colour is not geometry, so it
+ *  keeps its own short clock. */
 const HANDLE_TRANSITION =
-  '[transition:width_250ms_var(--ease-standard),height_250ms_var(--ease-standard),background-color_67ms_linear]';
+  '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),background-color_100ms_var(--ease-standard)]';
+/** Press is contact, so it is the scale's shortest step and linear — a curve on a
+ *  100ms squash is a shape nobody can see. Applied only while the press is held; the
+ *  release falls back to the base spring above, which is the same `FastSpatial` the
+ *  travel runs on, so the two land together. */
 const PRESSED_HANDLE_TRANSITION =
-  'group-active/switch:[transition:width_100ms_linear,height_100ms_linear,background-color_67ms_linear]';
-/** The check fades on the spec's 33ms — fast enough not to smear while the
- *  handle is still travelling. */
-const ICON_TRANSITION = '[transition:opacity_33ms_linear]';
-/** Track and its outline recolour together with the handle. */
-const TRACK_TRANSITION = '[transition:background-color_67ms_linear,border-color_67ms_linear]';
+  '[transition:width_100ms_linear,height_100ms_linear,background-color_100ms_var(--ease-standard)]';
+/** The check crosses while the handle is still travelling, so it takes the fastest
+ *  *effects* spring (ζ1.0 k3800, 108ms) rather than a hand-counted 33ms. */
+const ICON_TRANSITION = '[transition:opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
+/** Track and outline recolour together with the handle, on the same short step. */
+const TRACK_TRANSITION =
+  '[transition:background-color_100ms_var(--ease-standard),border-color_100ms_var(--ease-standard)]';
 
 /**
  * Material 3 switch, at the spec's own numbers (material-web `md-switch`,
@@ -103,12 +119,29 @@ export default function ToggleSwitch({
   disabled,
   label,
   description,
-  colorClass,
   layout = 'inline',
   'aria-label': ariaLabel,
 }: ToggleSwitchProps) {
   const stateLayerRef = useRef<HTMLSpanElement>(null);
   const isRow = layout === 'row';
+  /**
+   * The press state, driven by pointer events rather than by CSS `:active`.
+   *
+   * AOSP reads it from the `interactionSource` — an event stream — and that is the
+   * difference that matters here rather than a token. `:active` is the browser's, and
+   * on a touch screen the browser holds it past the release: Chrome delays applying it
+   * so a scroll does not flash every control it passes, then keeps it for a minimum
+   * visible period. The result on a tap was the handle still at its 28dp pressed width
+   * *after* it had finished travelling to the other end — the grip cue outliving the
+   * grip, which is the one thing it must not do. Off a real `pointerup` the shrink and
+   * the travel start in the same frame and, both being `FastSpatial`, land together.
+   *
+   * `pointercancel` and `pointerleave` are not optional: a press that turns into a
+   * scroll never sends `pointerup`, and without them the handle stays swollen until the
+   * next interaction.
+   */
+  const [pressed, setPressed] = useState(false);
+  const release = () => setPressed(false);
 
   return (
     <label
@@ -134,12 +167,31 @@ export default function ToggleSwitch({
             owns the wave. */}
         <input
           type="checkbox"
+          /* `role="switch"`, which this did not have. A checkbox and a switch are
+             different controls to a screen reader — the first is announced as
+             "checked / not checked" and the second as "on / off" — and the
+             difference is not cosmetic: a checkbox stages a change that a form
+             submit will apply, while a switch takes effect the moment it moves,
+             which is exactly what every one of these does. `switch` is a valid
+             role on a checkbox input, so the platform keeps the space-bar
+             behaviour and the `checked` state for free. */
+          role="switch"
           className="peer absolute top-1/2 left-1/2 z-10 h-12 w-13 -translate-x-1/2 -translate-y-1/2 cursor-[inherit] appearance-none rounded-full outline-none"
           checked={checked}
           disabled={disabled}
-          aria-label={ariaLabel ?? (typeof label === 'string' ? undefined : '开关')}
+          /* Only when the caller gives one. The fallback used to be the literal
+             '开关' for any non-string `label`, which is worse than nothing: a
+             `ReactNode` label is still inside the wrapping `<label>`, so the input
+             already had an accessible name from it — and `aria-label` *overrides*
+             that name rather than supplementing it. A switch whose label was
+             `<>清理 <code>cache</code></>` announced itself as "开关". */
+          aria-label={ariaLabel}
           onChange={(e) => onChange(e.target.checked)}
+          onPointerUp={release}
+          onPointerCancel={release}
+          onPointerLeave={release}
           onPointerDown={(e) => {
+            if (!disabled && e.button === 0) setPressed(true);
             const host = stateLayerRef.current;
             if (!host || e.button !== 0) return;
             // Always from the middle of the circle: the switch's wave reads as
@@ -157,9 +209,12 @@ export default function ToggleSwitch({
               : 'border-outline bg-surface-container-highest'
           }`}
         >
-          {/* Shell — carries the travel, nothing else. */}
+          {/* Shell — carries the travel, nothing else. `FastSpatial`, the same
+              spring as the handle's resize: the two are one movement, and running
+              the travel on a 200ms curve while the resize ran on a 250ms one was
+              the switch arriving in two instalments. */}
           <span
-            className={`flex items-center justify-center transition-[translate] duration-200 ease-[var(--ease-standard)] ${
+            className={`spring-fast-spatial flex items-center justify-center transition-[translate] ${
               checked ? 'translate-x-2.5' : '-translate-x-2.5'
             }`}
           >
@@ -176,16 +231,37 @@ export default function ToggleSwitch({
                   utility: that utility keys on the element's own `:hover`, but
                   a switch lights up from a hover anywhere on the control while
                   the layer itself only covers the part around the handle. */}
-              <span className="absolute inset-0 rounded-full bg-current opacity-0 transition-opacity duration-150 ease-[var(--ease-standard)] group-hover/switch:opacity-[var(--md-sys-state-hover-opacity)] group-has-[:focus-visible]/switch:opacity-[var(--md-sys-state-focus-opacity)] group-active/switch:opacity-[var(--md-sys-state-pressed-opacity)]" />
+              {/* `group-*` rather than plain states, and gated on `disabled`: a
+                  disabled switch used to keep lighting its hover layer, because the
+                  only thing removed was `data-ripple`. The `state-layer` utility
+                  gates itself on `:disabled`; this hand-rolled twin has to do the
+                  same by hand. */}
+              <span
+                className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity duration-150 ease-[var(--ease-standard)] ${
+                  disabled
+                    ? ''
+                    : 'group-hover/switch:opacity-[var(--md-sys-state-hover-opacity)] group-has-[:focus-visible]/switch:opacity-[var(--md-sys-state-focus-opacity)] group-active/switch:opacity-[var(--md-sys-state-pressed-opacity)]'
+                }`}
+              />
 
               {/* Handle. `z-10` keeps it above the ripple, which the global
-                  RippleLayer appends after it. */}
+                  RippleLayer appends after it.
+                  The pressed width comes from `pressed` rather than from
+                  `group-active/switch:size-7` — see the note on that state. The size
+                  classes are spelled per branch so only one `size-*` is ever emitted:
+                  `cn` is a plain join and would otherwise leave Tailwind's output order
+                  to pick between 28 and 24. */}
               <span
-                className={`relative z-10 grid place-items-center rounded-full ${HANDLE_TRANSITION} ${PRESSED_HANDLE_TRANSITION} group-active/switch:size-7 ${
-                  checked
-                    ? 'size-6 bg-on-primary'
-                    : 'size-4 bg-outline group-hover/switch:bg-on-surface-variant'
-                }`}
+                className={cn(
+                  'relative z-10 grid place-items-center rounded-full',
+                  HANDLE_TRANSITION,
+                  pressed && !disabled
+                    ? cn(PRESSED_HANDLE_TRANSITION, 'size-7')
+                    : checked
+                      ? 'size-6'
+                      : 'size-4',
+                  checked ? 'bg-on-primary' : 'bg-outline group-hover/switch:bg-on-surface-variant',
+                )}
               >
                 {/* Only the selected state carries a mark. */}
                 <svg
@@ -211,7 +287,11 @@ export default function ToggleSwitch({
       </span>
       {label && (
         <div className={isRow ? 'min-w-0 flex-1' : undefined}>
-          <span className={cn('text-label-l', colorClass || 'text-on-surface')}>{label}</span>
+          {/* No ink prop. `colorClass` was a free-form `className` with zero call
+              sites — a switch's label is a switch's label, and if one ever needs a
+              semantic it takes a `tone` union like `Radio` does rather than an
+              arbitrary string. */}
+          <span className="text-label-l text-on-surface">{label}</span>
           {/* `on-surface-variant`, the supporting-text ink role — not `outline`,
               which is a *boundary* role for rules and field borders. */}
           {description && <p className="text-body-s text-on-surface-variant mt-0.5">{description}</p>}

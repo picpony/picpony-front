@@ -899,3 +899,15 @@ export async function deleteTagGroup(token: string, id: number) {
     body: JSON.stringify({ id }),
   });
 }
+
+/**
+ * The运营团队 list, which `/about` renders — a public, tokenless read.
+ *
+ * It lived in `lib/api/admin.ts` next to the team CRUD, so `/about` had to reach the
+ * admin surface for it, which is the one thing that kept `getTeamMembers` inside the
+ * un-tree-shakeable half of the barrel.
+ */
+export async function getTeamMembers() {
+  const res = await fetch(`${PICPONY_API_BASE}?action=get_team_members&_t=${Date.now()}`);
+  return readJson(res);
+}

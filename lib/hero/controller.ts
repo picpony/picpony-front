@@ -11,6 +11,7 @@ import {
   combineHeroLeases,
   findImageHeroThumbnail,
   getHeroBackgroundVisual,
+  getHeroCornerRadius,
   getHeroRect,
   getHeroRectWithoutAncestorTransform,
   getVisualMedia,
@@ -349,6 +350,13 @@ export class HeroController {
     const route = this.routes.get(surfaceId);
     if (!route) return;
     this.routes.setTarget(route, target);
+    this.events.notify();
+  }
+
+  markRouteResolvedWithoutMedia(surfaceId: string) {
+    const route = this.routes.get(surfaceId);
+    if (!route || route.resolvedWithoutMedia) return;
+    route.resolvedWithoutMedia = true;
     this.events.notify();
   }
 
@@ -849,7 +857,15 @@ export class HeroController {
       overlay: stage.overlay,
       floatingBack: stage.floatingBack,
       continueBackground: Boolean(session.collapseRecord),
+      // The container grows from the card itself, not from the picture's landing box:
+      // `_rectTween.end = Offset.zero & navSize` — the whole surface, not the media slot.
+      container: {
+        card: session.sourceRect,
+        cardRadius: getHeroCornerRadius(intent.source),
+      },
+      choreography: 'container',
     });
+
     session.viewportBaseline = {
       destination: targetRect,
       planeWidth: plane.viewportWidth,
@@ -1398,7 +1414,12 @@ export class HeroController {
         overlay: route.overlay,
         floatingBack: route.floatingBack,
         continueBackground: session.intent.backgroundMode === 'continue',
+        container: { card: to, cardRadius: getHeroCornerRadius(thumbnail) },
+        // A swipe-down is already a motion the hand started, so it keeps the gesture's pose
+        // instead of the container return.
+        choreography: session.intent.cause === 'dismiss' ? 'dismiss' : 'container',
       });
+
       session.viewportBaseline = {
         destination: to,
         planeWidth: plane.viewportWidth,
@@ -2079,7 +2100,9 @@ export class HeroController {
           const stage = this.stage?.sessionId === session.id ? this.stage.nodes : null;
           if (!stage?.target.isConnected) return null;
           return {
-            destination: getHeroRect(stage.target),
+            // The Stage's landing target sits inside the container transform's fit, so a
+            // mid-flight read is the scaled box; undo the fit before re-aiming.
+            destination: motion.unprojectRect(getHeroRect(stage.target)),
             plane: getElementScrollPlane(stage.anchor, stage.scroller),
             pose: motion.measurePose(),
           };

@@ -30,6 +30,9 @@ import { useAuthModal } from '@/components/AuthModal';
 import { Input, Textarea } from '@/components/Input';
 import PageHeader from '@/components/PageHeader';
 import SectionHeading from '@/components/SectionHeading';
+import { ICON } from '@/lib/icons';
+import { readUserInfo } from '@/lib/hooks';
+import { getAssetUrl, processImageFile } from '@/lib/utils';
 
 /* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run
    of rows as one cut block rather than as separate floating cards. */
@@ -38,7 +41,12 @@ const rowClass =
 /* The label column of a row. `min-w-0` is what lets a long value truncate
    instead of pushing the action out of the card. */
 const rowLabelClass = 'min-w-0 flex-1';
-const labelClass = 'text-body-m text-on-surface-variant mb-1';
+/* A row's primary label, matching `ToggleSwitch layout="row"`'s own — `label-l` on
+   `on-surface`, with 2px to the supporting line under it, which is `body-s` on
+   `on-surface-variant`. It read `body-m`/`on-surface-variant` at 4px, i.e. the
+   supporting role in the primary slot, so a row holding a `Select` and a row holding
+   a switch announced two different hierarchies inside one card. */
+const labelClass = 'text-label-l text-on-surface mb-0.5';
 const valueClass = 'text-body-m-emphasized text-on-surface';
 
 /** 计算年龄 */
@@ -303,18 +311,17 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user_info');
-    if (!storedUser) {
+    const user = readUserInfo();
+    if (!user) {
       openAuth('login');
       // 无云端配置可等，直接恢复交互
       queueMicrotask(() => setSettingsReady(true));
       return;
     }
     try {
-      const user = JSON.parse(storedUser);
       queueMicrotask(() => {
-        setCurrentUsername(user.username);
-        setCurrentAvatar(user.avatar || '');
+        setCurrentUsername(String(user.username ?? ''));
+        setCurrentAvatar(String(user.avatar ?? ''));
         setUserToken(user.token || '');
 
         const dev = localStorage.getItem('picpony_developer') === 'true';
@@ -338,7 +345,7 @@ export default function SettingsPage() {
             if (u.avatar) {
               const fullUrl = u.avatar.startsWith('http')
                 ? u.avatar
-                : `https://picpony.top/${u.avatar}`;
+                : getAssetUrl(u.avatar);
               setCurrentAvatar(fullUrl);
               const updatedUser = { ...user, avatar: fullUrl };
               localStorage.setItem('user_info', JSON.stringify(updatedUser));
@@ -422,15 +429,17 @@ export default function SettingsPage() {
     queueMicrotask(() => setContentFilter(validFilter));
   }, [userToken, profileBirthday, isDeveloper]);
 
-  const handleAvatarPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      showToast('请选择图片文件', 'error');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('图片大小不能超过 5MB', 'error');
+    /* `processImageFile`, not the type-and-size check written out. It was inline
+       here, again 48 lines below with one number changed, and twice more elsewhere —
+       four copies of the byte arithmetic the helper's `maxSizeMB` parameter exists
+       for, all emitting `请选择图片文件` where the helper says 请选择有效的图片文件. */
+    try {
+      await processImageFile(file, 5);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
       return;
     }
     setAvatarPick(file);
@@ -442,9 +451,8 @@ export default function SettingsPage() {
   const handleAvatarCropped = async (blob: Blob) => {
     setIsAvatarUploading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const file = new File([blob], `avatar.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, {
         type: blob.type,
       });
@@ -455,7 +463,7 @@ export default function SettingsPage() {
         setAvatarPick(null);
         const fullUrl = data.avatar_url.startsWith('http')
           ? data.avatar_url
-          : `https://picpony.top/${data.avatar_url}`;
+          : getAssetUrl(data.avatar_url);
         setCurrentAvatar(fullUrl);
         const updatedUser = { ...user, avatar: fullUrl };
         localStorage.setItem('user_info', JSON.stringify(updatedUser));
@@ -464,21 +472,19 @@ export default function SettingsPage() {
         showToast(data.message || '上传失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setIsAvatarUploading(false);
     }
   };
 
-  const handleBannerPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      showToast('请选择图片文件', 'error');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('图片大小不能超过 10MB', 'error');
+    try {
+      await processImageFile(file, 10);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
       return;
     }
     setBannerPick(file);
@@ -488,9 +494,8 @@ export default function SettingsPage() {
   const handleBannerCropped = async (blob: Blob) => {
     setIsBannerUploading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const file = new File([blob], `banner.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, {
         type: blob.type,
       });
@@ -501,7 +506,7 @@ export default function SettingsPage() {
         setBannerPick(null);
         const fullUrl = data.banner_url.startsWith('http')
           ? data.banner_url
-          : `https://picpony.top/${data.banner_url}`;
+          : getAssetUrl(data.banner_url);
         setCurrentBanner(fullUrl);
         const updatedUser = { ...user, banner: fullUrl };
         localStorage.setItem('user_info', JSON.stringify(updatedUser));
@@ -510,7 +515,7 @@ export default function SettingsPage() {
         showToast(data.message || '上传失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setIsBannerUploading(false);
     }
@@ -531,9 +536,8 @@ export default function SettingsPage() {
     }
     setApiKeyLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.saveApikey(user.token, {
         api_key: key,
         derpi_user_id: derpiUserId,
@@ -550,7 +554,7 @@ export default function SettingsPage() {
         showToast(data.message || '配置失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setApiKeyLoading(false);
     }
@@ -608,9 +612,8 @@ export default function SettingsPage() {
       }
       setDerpiUserId(identity.id);
       setDerpiUsername(identity.name);
-      const storedUser = localStorage.getItem('user_info');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (user) {
         await api.saveApikey(user.token, {
           api_key: currentApiKey,
           derpi_user_id: identity.id,
@@ -619,7 +622,7 @@ export default function SettingsPage() {
         localStorage.setItem('derpi_api_key', currentApiKey);
         window.dispatchEvent(new Event('user_info_updated'));
       }
-      showToast(`核验成功！已确认您的身份：${identity.name}`, 'success');
+      showToast(`核验成功，已确认您的身份：${identity.name}`, 'success');
       window.dispatchEvent(new Event('user_info_updated'));
     } catch {
       showToast('核验请求失败（API 限流/网络问题），请稍后再试', 'error');
@@ -636,9 +639,8 @@ export default function SettingsPage() {
   const handleClearApiKeyConfirm = async () => {
     setIsClearApiKeyModalOpen(false);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) return;
       await api.saveApikey(user.token, {
         api_key: '',
         derpi_user_id: '',
@@ -663,9 +665,8 @@ export default function SettingsPage() {
     }
     setPasswordLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.changePassword(user.token, {
         old_password: oldPassword,
         new_password: newPassword,
@@ -683,7 +684,7 @@ export default function SettingsPage() {
         showToast(data.message || '修改失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setPasswordLoading(false);
     }
@@ -697,13 +698,12 @@ export default function SettingsPage() {
     }
     setIsLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.changeUsername(user.token, newUsername.trim());
       const data = await res.json();
       if (data.success) {
-        showToast('用户名修改成功！', 'success');
+        showToast('用户名已更新', 'success');
         setCurrentUsername(newUsername.trim());
         const updatedUser = { ...user, username: newUsername.trim() };
         localStorage.setItem('user_info', JSON.stringify(updatedUser));
@@ -713,7 +713,7 @@ export default function SettingsPage() {
         showToast(data.message || '修改失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -733,9 +733,8 @@ export default function SettingsPage() {
 
     setEmailLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.updateEmail(user.token, newEmail.trim());
       const data = await res.json();
       if (data.success) {
@@ -747,7 +746,7 @@ export default function SettingsPage() {
         showToast(data.message || '更新失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setEmailLoading(false);
     }
@@ -760,9 +759,8 @@ export default function SettingsPage() {
     }
     setEmailLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) return;
       const res = await api.verifyEmail(user.token, verifyCode.trim());
       const data = await res.json();
       if (data.success) {
@@ -783,9 +781,8 @@ export default function SettingsPage() {
   const handleResendCode = async () => {
     setIsResending(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) return;
       const res = await api.resendVerifyCode(user.token);
       const data = await res.json();
       if (data.success) {
@@ -803,9 +800,8 @@ export default function SettingsPage() {
   const handleProfileSubmit = async () => {
     setProfileLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.saveProfile(user.token, {
         bio: profileBio,
         gender: profileGender,
@@ -821,7 +817,7 @@ export default function SettingsPage() {
         showToast(data.message || '保存失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setProfileLoading(false);
     }
@@ -847,7 +843,7 @@ export default function SettingsPage() {
     lsSet('trixie_content_filter', val);
     syncSettingsToCloud({ contentFilter: val });
     showToast(
-      `内容过滤器已切换至: ${val === 'safe' ? '安全模式' : val === 'spoilers' ? '中等限制' : '开发者模式'}`,
+      `内容过滤器已切换至：${val === 'safe' ? '安全模式' : val === 'spoilers' ? '中等限制' : '开发者模式'}`,
       'info',
     );
   };
@@ -884,13 +880,19 @@ export default function SettingsPage() {
   return (
     <div className="max-w-4xl mx-auto" aria-busy={!settingsReady}>
       <PageHeader title="设置" />
-      {/* The cloud config gate, from master: until the fetch resolves the page
-          is dimmed and inert, so a default value cannot be written back over a
-          setting the server has not returned yet. Same 50% the gallery uses for
-          a list being replaced — one weight for "this content is in flight". */}
+      {/* The cloud config gate: until the fetch resolves the page is dimmed and
+          inert, so a default value cannot be written back over a setting the server
+          has not returned yet.
+          `disabled-content` (38%), not a third `opacity-50`. The gallery's paging dim
+          is a documented pair — one value, two matched call sites on / and /favorites
+          — and this was quietly a third, for a different purpose: the gallery is
+          *replacing* content the user can still read, while this is a form that
+          cannot be used yet. That is what "disabled" means, and M3 gives it 38%.
+          200ms `standard`, which is what the two gallery sites use and what the
+          comment here already claimed. */}
       <div
-        className={`transition-[opacity] duration-300 ease-[var(--ease-standard)] ${
-          settingsReady ? '' : 'opacity-50 pointer-events-none'
+        className={`transition-[opacity] duration-200 ease-[var(--ease-standard)] ${
+          settingsReady ? '' : 'disabled-content pointer-events-none'
         }`}
       >
       {/* No entrance animation. This is a settings form — rows of switches and
@@ -901,7 +903,7 @@ export default function SettingsPage() {
       <div>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdPerson size={20} />}>账户设置</SectionHeading>
+            <SectionHeading icon={<MdPerson size={ICON.control} />}>账户设置</SectionHeading>
 
             <div className={rowClass}>
               <div className="flex items-center gap-4">
@@ -910,13 +912,13 @@ export default function SettingsPage() {
                     <>
                       {!avatarLoaded && (
                         <div className="absolute inset-0 flex items-center justify-center text-outline z-10">
-                          <MdPerson size={24} />
+                          <MdPerson size={ICON.standard} />
                         </div>
                       )}
                       <FadeInImage
                         key={currentAvatar}
                         src={currentAvatar}
-                        alt="Avatar"
+                        alt="头像预览"
                         fill
                         className="object-cover"
                         onLoad={() => setAvatarLoaded(true)}
@@ -929,7 +931,7 @@ export default function SettingsPage() {
                   )}
                   {isAvatarUploading && (
                     <div className="bg-media-plate absolute inset-0 flex items-center justify-center">
-                      <Spinner white />
+                      <Spinner tone="on-primary" />
                     </div>
                   )}
                 </div>
@@ -949,7 +951,7 @@ export default function SettingsPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!currentUsername}
                 loading={isAvatarUploading}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title="修改头像"
               >
                 修改头像
@@ -963,7 +965,7 @@ export default function SettingsPage() {
                     <>
                       {!bannerLoaded && (
                         <div className="absolute inset-0 flex items-center justify-center text-outline z-10">
-                          <MdImage size={20} />
+                          <MdImage size={ICON.control} />
                         </div>
                       )}
                       <FadeInImage
@@ -971,9 +973,9 @@ export default function SettingsPage() {
                         src={
                           currentBanner.startsWith('http')
                             ? currentBanner
-                            : `https://picpony.top/${currentBanner}`
+                            : getAssetUrl(currentBanner)
                         }
-                        alt="Banner"
+                        alt="横幅预览"
                         fill
                         className="object-cover"
                         onLoad={() => setBannerLoaded(true)}
@@ -981,12 +983,12 @@ export default function SettingsPage() {
                     </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-outline">
-                      <MdImage size={20} />
+                      <MdImage size={ICON.control} />
                     </div>
                   )}
                   {isBannerUploading && (
                     <div className="bg-media-plate absolute inset-0 flex items-center justify-center">
-                      <Spinner white />
+                      <Spinner tone="on-primary" />
                     </div>
                   )}
                 </div>
@@ -1006,7 +1008,7 @@ export default function SettingsPage() {
                 onClick={() => bannerInputRef.current?.click()}
                 disabled={!currentUsername}
                 loading={isBannerUploading}
-                icon={<MdImage size={16} />}
+                icon={<MdImage size={ICON.dense} />}
                 title="上传 Banner"
               >
                 上传 Banner
@@ -1021,7 +1023,7 @@ export default function SettingsPage() {
               <Button
                 onClick={() => setIsModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title="修改用户名"
               >
                 修改用户名
@@ -1036,7 +1038,7 @@ export default function SettingsPage() {
               <Button
                 onClick={() => setIsPasswordModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title="修改密码"
               >
                 修改密码
@@ -1065,7 +1067,7 @@ export default function SettingsPage() {
                   setIsEmailModalOpen(true);
                 }}
                 disabled={!currentUsername}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title={currentEmail ? '修改邮箱' : '绑定邮箱'}
               >
                 {currentEmail ? '修改' : '绑定'}
@@ -1077,14 +1079,14 @@ export default function SettingsPage() {
                 <p className={labelClass}>个人资料</p>
                 <p className="text-body-s text-on-surface-variant">
                   {profileBio
-                    ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '...' : '')
+                    ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '…' : '')
                     : '点击编辑个人简介、性别、生日'}
                 </p>
               </div>
               <Button
                 onClick={() => setIsProfileModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title="编辑个人资料"
               >
                 编辑
@@ -1111,7 +1113,7 @@ export default function SettingsPage() {
                       disabled={!currentUsername}
                       loading={isVerifyLoading}
                       variant="tonal"
-                      icon={<MdVerifiedUser size={16} />}
+                      icon={<MdVerifiedUser size={ICON.dense} />}
                       title="核验身份"
                       responsiveLabel
                     >
@@ -1121,7 +1123,7 @@ export default function SettingsPage() {
                       onClick={handleClearApiKey}
                       disabled={!currentUsername}
                       variant="text"
-                      icon={<MdLinkOff size={16} />}
+                      icon={<MdLinkOff size={ICON.dense} />}
                       title="解除绑定"
                       responsiveLabel
                       className="text-error hover:bg-error-container hover:text-on-error-container"
@@ -1136,7 +1138,7 @@ export default function SettingsPage() {
                     setIsApiKeyModalOpen(true);
                   }}
                   disabled={!currentUsername}
-                  icon={<MdEdit size={16} />}
+                  icon={<MdEdit size={ICON.dense} />}
                   title={currentApiKey ? '修改配置' : '去配置'}
                   responsiveLabel
                 >
@@ -1148,22 +1150,29 @@ export default function SettingsPage() {
         </section>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdFilterList size={20} />}>内容筛选</SectionHeading>
+            <SectionHeading icon={<MdFilterList size={ICON.control} />}>内容筛选</SectionHeading>
 
             <div className={rowClass}>
               <div className={rowLabelClass}>
                 <p className={labelClass}>内容分级过滤器</p>
-                <p className="text-body-s text-on-surface-variant mt-1">
+                <p className="text-body-s text-on-surface-variant">
                   {contentFilter === 'safe' && '仅显示安全内容'}
                   {contentFilter === 'spoilers' && '拦截限制级内容（需 16 岁以上）'}
                   {contentFilter === 'developer' && '开发者模式，显示所有内容'}
                 </p>
               </div>
+              {/* `size="sm"` — 40dp, not the field's 56. This control sits in an
+                  `.m3-row` whose next three siblings hold a 32dp `ToggleSwitch`, so
+                  at 56 it made this row 88px against their 78 and read as 1.75x the
+                  control below it. A control's step comes from its enclosure: in a
+                  row it matches the row's other controls, which also puts the row's
+                  height back under the control of its *text*. */}
               <Select
+                size="sm"
                 value={contentFilter}
                 onChange={handleContentFilterChange}
                 aria-label="内容分级过滤器"
-                className="w-full sm:w-auto sm:min-w-[11rem]"
+                className="w-full sm:w-auto"
                 options={[
                   { value: 'safe', label: '完全安全 (Safe)' },
                   { value: 'spoilers', label: '中等限制 (Spoilers)' },
@@ -1207,7 +1216,7 @@ export default function SettingsPage() {
         </section>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdVisibility size={20} />}>显示偏好</SectionHeading>
+            <SectionHeading icon={<MdVisibility size={ICON.control} />}>显示偏好</SectionHeading>
 
             <div className={rowClass}>
               <ToggleSwitch
@@ -1240,12 +1249,13 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <div className="flex items-center gap-2">
-                <MdHome size={20} className="text-outline" />
+                <MdHome size={ICON.control} className="text-outline" />
                 <div className={rowLabelClass}>
                   <p className={labelClass}>首页瀑布流默认排序</p>
                 </div>
               </div>
               <Select
+                size="sm"
                 value={defaultHomeSort}
                 onChange={(v) => {
                   setDefaultHomeSort(v);
@@ -1253,19 +1263,20 @@ export default function SettingsPage() {
                   syncSettingsToCloud({ defaultHomeSort: v });
                 }}
                 aria-label="首页瀑布流默认排序"
-                className="w-full sm:w-auto sm:min-w-[9rem]"
+                className="w-full sm:w-auto"
                 options={sortOptions}
               />
             </div>
 
             <div className={rowClass}>
               <div className="flex items-center gap-2">
-                <MdSearch size={20} className="text-outline" />
+                <MdSearch size={ICON.control} className="text-outline" />
                 <div className={rowLabelClass}>
                   <p className={labelClass}>搜索默认排序</p>
                 </div>
               </div>
               <Select
+                size="sm"
                 value={defaultSearchSort}
                 onChange={(v) => {
                   setDefaultSearchSort(v);
@@ -1273,7 +1284,7 @@ export default function SettingsPage() {
                   syncSettingsToCloud({ defaultSearchSort: v });
                 }}
                 aria-label="搜索默认排序"
-                className="w-full sm:w-auto sm:min-w-[9rem]"
+                className="w-full sm:w-auto"
                 options={sortOptions}
               />
             </div>
@@ -1281,7 +1292,7 @@ export default function SettingsPage() {
         </section>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdSpeed size={20} />}>性能与加速</SectionHeading>
+            <SectionHeading icon={<MdSpeed size={ICON.control} />}>性能与加速</SectionHeading>
 
             <div className={rowClass}>
               <ToggleSwitch
@@ -1325,7 +1336,7 @@ export default function SettingsPage() {
         <section className="mb-8">
           <div>
             <SectionHeading
-              icon={<MdSecurity size={20} />}
+              icon={<MdSecurity size={ICON.control} />}
               subtitle="控制您的个人主页上对外显示的内容"
             >
               隐私设置
@@ -1377,7 +1388,7 @@ export default function SettingsPage() {
         <section className="mb-8">
           <div>
             <SectionHeading
-              icon={<MdNotifications size={20} />}
+              icon={<MdNotifications size={ICON.control} />}
               subtitle="选择接收哪些邮件通知（需要先绑定邮箱）"
             >
               通知偏好
@@ -1428,7 +1439,7 @@ export default function SettingsPage() {
         outputWidth={512}
         title="调整头像"
         busy={isAvatarUploading}
-      />{' '}
+      />
       <ImageCropper
         file={bannerPick}
         onClose={() => setBannerPick(null)}
@@ -1438,17 +1449,16 @@ export default function SettingsPage() {
         outputHeight={400}
         title="调整个人横幅"
         busy={isBannerUploading}
-      />{' '}
+      />
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
         title="修改用户名"
         footer={
           <>
-            {' '}
             <Button variant="text" type="button" onClick={closeModal} disabled={isLoading}>
               取消
-            </Button>{' '}
+            </Button>
             <Button
               variant="filled"
               type="submit"
@@ -1457,16 +1467,14 @@ export default function SettingsPage() {
               disabled={!newUsername.trim()}
             >
               确认修改
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <form id="username-form" onSubmit={handleUsernameSubmit}>
-          {' '}
           <label htmlFor="new-username" className="block text-label-l text-on-surface mb-2">
             新用户名
-          </label>{' '}
+          </label>
           <Input
             id="new-username"
             data-autofocus
@@ -1475,16 +1483,15 @@ export default function SettingsPage() {
             onChange={(e) => setNewUsername(e.target.value)}
             placeholder="请输入新用户名"
             disabled={isLoading}
-          />{' '}
-        </form>{' '}
-      </Modal>{' '}
+          />
+        </form>
+      </Modal>
       <Modal
         isOpen={isPasswordModalOpen}
         onClose={closePasswordModal}
         title="修改密码"
         footer={
           <>
-            {' '}
             <Button
               variant="text"
               type="button"
@@ -1492,7 +1499,7 @@ export default function SettingsPage() {
               disabled={passwordLoading}
             >
               取消
-            </Button>{' '}
+            </Button>
             <Button
               variant="filled"
               type="submit"
@@ -1501,18 +1508,15 @@ export default function SettingsPage() {
               disabled={!oldPassword.trim() || !newPassword.trim()}
             >
               确认修改
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <form id="password-form" onSubmit={handlePasswordSubmit} className="space-y-4">
-          {' '}
           <div>
-            {' '}
             <label htmlFor="old-password" className="block text-label-l text-on-surface mb-2">
               原密码
-            </label>{' '}
+            </label>
             <Input
               id="old-password"
               data-autofocus
@@ -1521,13 +1525,12 @@ export default function SettingsPage() {
               onChange={(e) => setOldPassword(e.target.value)}
               placeholder="请输入原密码"
               disabled={passwordLoading}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
-            {' '}
             <label htmlFor="new-password" className="block text-label-l text-on-surface mb-2">
               新密码
-            </label>{' '}
+            </label>
             <Input
               id="new-password"
               type="password"
@@ -1535,17 +1538,16 @@ export default function SettingsPage() {
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="请输入新密码"
               disabled={passwordLoading}
-            />{' '}
-          </div>{' '}
-        </form>{' '}
-      </Modal>{' '}
+            />
+          </div>
+        </form>
+      </Modal>
       <Modal
         isOpen={isApiKeyModalOpen}
         onClose={closeApiKeyModal}
         title="配置 API Key"
         footer={
           <>
-            {' '}
             <Button
               variant="text"
               type="button"
@@ -1553,19 +1555,17 @@ export default function SettingsPage() {
               disabled={apiKeyLoading}
             >
               取消
-            </Button>{' '}
+            </Button>
             <Button variant="filled" type="submit" form="apikey-form" loading={apiKeyLoading}>
               确认保存
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <form id="apikey-form" onSubmit={handleApiKeySubmit}>
-          {' '}
           <label htmlFor="derpi-api-key" className="block text-label-l text-on-surface mb-2">
             Derpibooru API Key
-          </label>{' '}
+          </label>
           <Input
             id="derpi-api-key"
             data-autofocus
@@ -1574,51 +1574,44 @@ export default function SettingsPage() {
             onChange={(e) => setNewApiKey(e.target.value)}
             placeholder="请输入你的 API Key"
             disabled={apiKeyLoading}
-          />{' '}
+          />
           <p className="text-body-s text-on-surface-variant mt-2">
-            {' '}
             通过绑定 Derpibooru API Key 可同步黑名单过滤等设置。
             <br /> 获取方法：登录 Derpibooru → Account Settings → API Key 区域。{' '}
-          </p>{' '}
-        </form>{' '}
-      </Modal>{' '}
+          </p>
+        </form>
+      </Modal>
       <Modal
         isOpen={isClearApiKeyModalOpen}
         onClose={() => setIsClearApiKeyModalOpen(false)}
         title="解除绑定 API Key"
         footer={
           <>
-            {' '}
             <Button
               variant="text"
               onClick={() => setIsClearApiKeyModalOpen(false)}
               data-ripple
             >
               取消
-            </Button>{' '}
+            </Button>
             <Button variant="danger" onClick={handleClearApiKeyConfirm} data-ripple>
               确认解除
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <p className="text-body-m text-on-surface-variant">
-          {' '}
           确定要解除 Derpibooru API Key
           的绑定吗？解除后部分功能（如黑名单过滤同步）将无法使用。{' '}
-        </p>{' '}
-      </Modal>{' '}
+        </p>
+      </Modal>
       <Modal isOpen={isEmailModalOpen} onClose={closeEmailModal} title="邮箱设置">
-        {' '}
         {!showVerifyInput ? (
           <div className="space-y-4">
-            {' '}
             <div>
-              {' '}
               <label htmlFor="new-email" className="block text-label-l text-on-surface mb-2">
                 新邮箱地址
-              </label>{' '}
+              </label>
               <Input
                 id="new-email"
                 data-autofocus
@@ -1627,10 +1620,10 @@ export default function SettingsPage() {
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="example@email.com"
                 disabled={emailLoading}
-              />{' '}
-            </div>{' '}
+              />
+            </div>
             <div className="flex justify-end gap-3">
-              {' '}
+              
               <Button
                 variant="text"
                 type="button"
@@ -1638,29 +1631,25 @@ export default function SettingsPage() {
                 disabled={emailLoading}
               >
                 取消
-              </Button>{' '}
+              </Button>
               <Button
                 variant="filled"
                 onClick={handleEmailSubmit}
                 disabled={emailLoading || !newEmail.trim()}
               >
-                {' '}
-                {emailLoading ? '提交中...' : '更新邮箱'}{' '}
-              </Button>{' '}
-            </div>{' '}
+                {emailLoading ? '提交中…' : '更新邮箱'}
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
-            {' '}
-            <div className="bg-accent-blue text-on-accent-blue text-body-m rounded-sm p-3">
-              {' '}
+            <div className="bg-primary-container text-on-primary-container text-body-m rounded-md p-3">
               验证码已发送至 {newEmail}，请查收{' '}
-            </div>{' '}
+            </div>
             <div>
-              {' '}
               <label htmlFor="email-code" className="block text-label-l text-on-surface mb-2">
                 验证码
-              </label>{' '}
+              </label>
               <Input
                 id="email-code"
                 data-autofocus
@@ -1669,17 +1658,16 @@ export default function SettingsPage() {
                 onChange={(e) => setVerifyCode(e.target.value)}
                 placeholder="请输入验证码"
                 disabled={emailLoading}
-              />{' '}
-            </div>{' '}
+              />
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              {' '}
+              
               <button
                 onClick={handleResendCode}
                 disabled={isResending}
                 className="text-body-m text-link hover:underline disabled:disabled-content"
               >
-                {' '}
-                {isResending ? '发送中...' : '重新发送'}
+                {isResending ? '发送中…' : '重新发送'}
               </button>
               <div className="flex gap-3">
                 <Button
@@ -1695,7 +1683,7 @@ export default function SettingsPage() {
                   onClick={handleVerifyEmail}
                   disabled={emailLoading || !verifyCode.trim()}
                 >
-                  {emailLoading ? '验证中...' : '验证邮箱'}
+                  {emailLoading ? '验证中…' : '验证邮箱'}
                 </Button>
               </div>
             </div>
@@ -1706,7 +1694,7 @@ export default function SettingsPage() {
         isOpen={isProfileModalOpen}
         onClose={closeProfileModal}
         title="编辑个人资料"
-        maxWidth="max-w-lg"
+        maxWidth="lg"
         footer={
           <>
             <Button
@@ -1718,19 +1706,16 @@ export default function SettingsPage() {
               取消
             </Button>
             <Button variant="filled" onClick={handleProfileSubmit} disabled={profileLoading}>
-              {profileLoading ? '保存中...' : '保存资料'}{' '}
-            </Button>{' '}
+              {profileLoading ? '保存中…' : '保存资料'}
+            </Button>
           </>
         }
       >
-        {' '}
         <div className="space-y-4">
-          {' '}
           <div>
-            {' '}
             <label htmlFor="profile-bio" className="block text-label-l text-on-surface mb-2">
               个人简介 (Bio)
-            </label>{' '}
+            </label>
             <Textarea
               id="profile-bio"
               data-autofocus
@@ -1739,13 +1724,12 @@ export default function SettingsPage() {
               rows={3}
               maxLength={500}
               className="resize-none"
-              placeholder="介绍一下你自己..."
-            />{' '}
-            <p className="text-body-s text-on-surface-variant mt-1">{profileBio.length}/500</p>{' '}
-          </div>{' '}
+              placeholder="介绍一下你自己…"
+            />
+            <p className="text-body-s text-on-surface-variant mt-1">{profileBio.length}/500</p>
+          </div>
           <div>
-            {' '}
-            <p className="block text-label-l text-on-surface mb-2">性别</p>{' '}
+            <p className="block text-label-l text-on-surface mb-2">性别</p>
             <Select
               value={profileGender}
               onChange={setProfileGender}
@@ -1757,23 +1741,21 @@ export default function SettingsPage() {
                 { value: '女', label: '女' },
                 { value: '武装直升机', label: '其他' },
               ]}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
-            {' '}
             <label htmlFor="profile-birthday" className="block text-label-l text-on-surface mb-2">
               生日
-            </label>{' '}
+            </label>
             <Input
               id="profile-birthday"
               type="date"
               value={profileBirthday}
               onChange={(e) => setProfileBirthday(e.target.value)}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
-            {' '}
-            <p className="block text-label-l text-on-surface mb-2">种族</p>{' '}
+            <p className="block text-label-l text-on-surface mb-2">种族</p>
             <Select
               value={profileRace}
               onChange={setProfileRace}

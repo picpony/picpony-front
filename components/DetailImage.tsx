@@ -13,6 +13,7 @@ import { MdFullscreen } from 'react-icons/md';
 import IconButton from './IconButton';
 import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
 import { warmImageHeroFrame } from '@/lib/hero';
+import { ICON } from '@/lib/icons';
 
 type DetailMediaTargetCallback = (surfaceId: string, target: HTMLDivElement | null) => void;
 
@@ -379,7 +380,7 @@ export default function DetailImage({
           a pointer convenience; this button is what makes it reachable. */}
       <IconButton
         variant="media"
-        icon={<MdFullscreen size={22} />}
+        icon={<MdFullscreen size={ICON.standard} />}
         aria-label="放大查看原图"
         /* Stops the press reaching the media box's own handler underneath, which
            would open the lightbox a second time in the same tick. */
@@ -387,6 +388,11 @@ export default function DetailImage({
           e.stopPropagation();
           onOpen();
         }}
+        /* Hidden for the length of a hero flight — see the rule in globals.css. Below `sm`
+           this control is `opacity-100` rather than hover-revealed, and `HeroStage`'s
+           landing target renders no children at all, so on a phone the handoff frame was
+           conjuring a 40dp button into the picture's corner out of nothing. */
+        data-image-detail-zoom
         className="absolute right-3 bottom-3 z-30 cursor-zoom-in opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
       />
     </div>

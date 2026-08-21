@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
-import Popover from './Popover';
+import Popover, { estimateMenuHeight } from './Popover';
 
-/** M3 menu item height and the container's block padding. Keep in step with the
- *  `min-h-12` / `py-2` below — `Popover` uses them to pick a side before paint. */
-const ITEM_HEIGHT = 48;
-const BLOCK_PADDING = 8;
+/* The row's height estimate comes from `estimateMenuHeight` in `Popover`, which owns
+   the placement decision. This file and `Select.tsx` each carried their own copy of
+   it — `ITEM_HEIGHT`/`BLOCK_PADDING` here, `MENU_ITEM_HEIGHT`/`MENU_PADDING` there —
+   for rows whose class strings are byte-identical. */
 
 export interface MenuAction {
   /** Stable key, and what `onSelect` receives. */
@@ -151,7 +151,7 @@ export default function Menu({
       role="menu"
       id={menuId}
       aria-label={ariaLabel}
-      estimatedHeight={items.length * ITEM_HEIGHT + BLOCK_PADDING * 2}
+      estimatedHeight={estimateMenuHeight(items.length)}
       /* A menu is as wide as its longest label, not as wide as the icon button
          that opened it — unlike `Select`, whose trigger states the value. */
       matchAnchorWidth={false}
@@ -179,12 +179,16 @@ export default function Menu({
           onKeyDown={onKeyDown}
           onPointerEnter={() => !item.disabled && setChosenIndex(index)}
           data-ripple={item.disabled ? undefined : ''}
-          /* M3 menu item: 48dp minimum, 16dp inline / 4dp block padding,
-             label-large, and NO corner radius — rows are full-bleed, which is
-             the single biggest thing that makes a menu read as a menu rather
-             than as a stack of chips. */
+          /* M3 menu item: 16dp inline / 4dp block padding, label-large, and NO corner
+             radius — rows are full-bleed, which is the single biggest thing that makes
+             a menu read as a menu rather than as a stack of chips.
+             40dp under a pointer, growing to the 48dp touch floor via `touch-size`,
+             which has to be a real box here because `data-ripple` clips
+             `touch-target`'s pseudo-element. It read a flat `min-h-12`: 48 is M3's
+             minimum *target*, the item's own height is 40, so the touch figure was
+             sitting in the desktop layout. */
           className={cn(
-            'flex min-h-12 w-full cursor-pointer items-center gap-3 px-4 py-1 text-left text-label-l outline-none',
+            'flex min-h-10 touch-size w-full cursor-pointer items-center gap-3 px-4 py-1 text-left text-label-l outline-none',
             /* The *inset* ring. The panel scrolls, and `overflow-y-auto` clips a
                box-shadow — a full-bleed row's outset ring would be cut off on
                both sides and at the ends of the scroll area. Same form as the

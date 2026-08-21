@@ -23,7 +23,7 @@ interface RichTextEditorProps {
 export default function RichTextEditor({
   value,
   onChange,
-  placeholder = '请输入内容...',
+  placeholder = '请输入内容…',
   disabled = false,
   enableImageUpload = true,
   imageUploadUrl,
@@ -111,7 +111,7 @@ export default function RichTextEditor({
             }
           } catch (err) {
             console.error('上传图片异常:', err);
-            showToast('上传图片发生异常', 'error');
+            showToast('上传图片失败', 'error');
           }
         },
         maxFileSize: 5 * 1024 * 1024,
@@ -238,7 +238,23 @@ export default function RichTextEditor({
   }, [disabled]);
 
   return (
-    <div className="w-full overflow-hidden rounded-sm border border-outline-variant transition-ui focus-within:border-primary focus-within:ring-2 focus-within:focus-ring">
+    /* `outline`, not `outline-variant`. This is the boundary of a control you type
+       into — the same object as a text field's border, and the app's own rule is
+       that a text-field border takes `outline` while `outline-variant` is for
+       dividers and decorative rules. The shell wore the divider role, so the
+       largest typed-into container on the site had the lightest possible edge.
+       (The `--w-e-*` variables below keep `outline-variant` where they genuinely
+       are dividers: the seam between toolbar and body, and the table gridlines.)
+
+       **One focus indicator, and 4dp not 8.** It thickened its boundary to
+       `primary` *and* drew a ring 2px outside that boundary — two nested boxes,
+       the one defect `CodeInput` records removing, on the largest control in the
+       app. A control whose identity is a 1px outline cannot wear a ring around
+       that outline; the thickened border *is* the indicator, which is what
+       `.m3-field[data-labelled]:focus-within > fieldset` does. And a text field is
+       `CornerExtraSmall`, so `rounded-sm` (the chip's 8dp step) was one step too
+       round. */
+    <div className="w-full overflow-hidden rounded-xs border border-outline transition-ui focus-within:border-2 focus-within:border-primary">
       <style>{`
         /* wangEditor is themed entirely through its own \`--w-e-*\` variables.
            These used to be set only under \`.dark\`, and to a cold slate palette:
@@ -352,26 +368,43 @@ export default function RichTextEditor({
             color 200ms var(--ease-standard);
         }
 
+        /* The three state weights read the tokens rather than repeating numbers.
+           They were hand-typed 8 and 12 with no focus weight at all: 12 is the
+           stale Material Web figure the rest of the app corrected to .10, and a
+           toolbar button that tints on hover and press but not on focus is the one
+           state a keyboard user actually needs to see. */
         .w-e-bar-item button:hover {
           background-color: color-mix(
             in oklab,
-            var(--md-sys-color-on-surface) 8%,
+            var(--md-sys-color-on-surface) calc(var(--md-sys-state-hover-opacity) * 100%),
             transparent
           );
           color: var(--md-sys-color-on-surface);
         }
 
+        /* Focus gets the state layer *and* the app's own ring. It used to draw
+           outline: 2px solid primary with outline-offset: -2px — the only control
+           in the app drawing its own indicator, in the wrong role (the focus token
+           is secondary now, per MenuTokens.FocusIndicatorColor) and inset, which
+           ate 2px of a target that is already small. A ring sits outside.
+           No backticks anywhere in this block: it lives inside a template literal,
+           and one would end the string. */
+        .w-e-bar-item button:focus-visible {
+          background-color: color-mix(
+            in oklab,
+            var(--md-sys-color-on-surface) calc(var(--md-sys-state-focus-opacity) * 100%),
+            transparent
+          );
+          outline: none;
+          box-shadow: 0 0 0 2px var(--md-sys-color-focus);
+        }
+
         .w-e-bar-item button:active {
           background-color: color-mix(
             in oklab,
-            var(--md-sys-color-on-surface) 12%,
+            var(--md-sys-color-on-surface) calc(var(--md-sys-state-pressed-opacity) * 100%),
             transparent
           );
-        }
-
-        .w-e-bar-item button:focus-visible {
-          outline: 2px solid var(--md-sys-color-primary);
-          outline-offset: -2px;
         }
 
         /* Selected state — the M3 pairing, not a grey wash. */
@@ -412,11 +445,3 @@ export default function RichTextEditor({
   );
 }
 
-export function getEditorBBCode(editor: IDomEditor | null): string {
-  if (!editor) return '';
-  try {
-    return htmlToBBCode(editor.getHtml());
-  } catch {
-    return '';
-  }
-}

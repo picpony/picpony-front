@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { api } from '@/lib/api';
+import { useState, useEffect } from 'react';
 import { showToast } from '@/components/Toast';
-import Modal from '@/components/Modal';
 import { MdBuild, MdRefresh, MdPersonAdd, MdRemoveCircle } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
 import IconButton from '@/components/IconButton';
@@ -11,6 +9,13 @@ import { SectionHeader } from './';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { Input } from '@/components/Input';
+import { ICON } from '@/lib/icons';
+import { useConfirm } from '@/components/ConfirmDialog';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface DeveloperUser {
   id: number;
@@ -28,34 +33,26 @@ export default function DeveloperTab({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
   const [addDevUserId, setAddDevUserId] = useState('');
 
-  // Confirm dialog
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const confirmActionRef = useRef<(() => void) | null>(null);
-
-  const showConfirm = (action: () => void) => {
-    confirmActionRef.current = action;
-    setConfirmOpen(true);
-  };
-
-  const handleConfirm = () => {
-    confirmActionRef.current?.();
-    setConfirmOpen(false);
-  };
+  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
+     converted to the shared dialog and five — this among them — kept their own,
+     which is also why their copy drifted: every hand-rolled body dropped the
+     sentence-final 吗 that every converted one kept. */
+  const { confirmThen, confirmDialog } = useConfirm();
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const passRes = await api.adminGetDeveloperPassword(token);
+      const passRes = await adminApi.adminGetDeveloperPassword(token);
       if (passRes.success) {
         setDevPassword(passRes.password || '');
         setPasswordUpdatedAt(passRes.updated_at || '');
       }
-      const usersRes = await api.adminGetDeveloperUsers(token);
+      const usersRes = await adminApi.adminGetDeveloperUsers(token);
       if (usersRes.success) {
         setDevUsers(usersRes.users || []);
       }
     } catch {
-      showToast('加载数据失败', 'error');
+      showToast('数据加载失败', 'error');
     } finally {
       setLoading(false);
     }
@@ -67,17 +64,17 @@ export default function DeveloperTab({ token }: { token: string }) {
     (async () => {
       setLoading(true);
       try {
-        const passRes = await api.adminGetDeveloperPassword(token);
+        const passRes = await adminApi.adminGetDeveloperPassword(token);
         if (!cancelled && passRes.success) {
           setDevPassword(passRes.password || '');
           setPasswordUpdatedAt(passRes.updated_at || '');
         }
-        const usersRes = await api.adminGetDeveloperUsers(token);
+        const usersRes = await adminApi.adminGetDeveloperUsers(token);
         if (!cancelled && usersRes.success) {
           setDevUsers(usersRes.users || []);
         }
       } catch {
-        if (!cancelled) showToast('加载数据失败', 'error');
+        if (!cancelled) showToast('数据加载失败', 'error');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -89,7 +86,7 @@ export default function DeveloperTab({ token }: { token: string }) {
 
   const handleRefreshPassword = async () => {
     try {
-      const res = await api.adminRefreshDeveloperPassword(token);
+      const res = await adminApi.adminRefreshDeveloperPassword(token);
       const data = await res.json();
       if (data.success) {
         showToast('密码已更新', 'success');
@@ -109,7 +106,7 @@ export default function DeveloperTab({ token }: { token: string }) {
       return;
     }
     try {
-      const res = await api.adminEnableDeveloper(token, id);
+      const res = await adminApi.adminEnableDeveloper(token, id);
       const data = await res.json();
       if (data.success) {
         showToast('已开启开发者模式', 'success');
@@ -124,9 +121,9 @@ export default function DeveloperTab({ token }: { token: string }) {
   };
 
   const handleRevokeDeveloper = (targetId: number) => {
-    showConfirm(async () => {
+    confirmThen('确认关闭', '确定要关闭该用户的开发者模式吗？', async () => {
       try {
-        const res = await api.adminRevokeDeveloper(token, targetId);
+        const res = await adminApi.adminRevokeDeveloper(token, targetId);
         const data = await res.json();
         if (data.success) {
           showToast('已关闭开发者模式', 'success');
@@ -171,8 +168,7 @@ export default function DeveloperTab({ token }: { token: string }) {
         <IconButton
             size="sm"
             onClick={() => handleRevokeDeveloper(u.id)}
-            icon={<MdRemoveCircle size={16} />}
-            title="关闭开发者模式"
+            icon={<MdRemoveCircle size={ICON.dense} />}
             aria-label={`关闭 ${u.username} 的开发者模式`} className="text-error"
           />
       ),
@@ -182,7 +178,7 @@ export default function DeveloperTab({ token }: { token: string }) {
   return (
     <div className="space-y-6">
       <SectionHeader
-        icon={<MdBuild className="text-primary" size={24} />}
+        icon={<MdBuild size={ICON.standard} />}
         title="开发者模式管理"
         onRefresh={loadData}
       />
@@ -190,7 +186,7 @@ export default function DeveloperTab({ token }: { token: string }) {
       {/* Developer Password */}
       <Card variant="transparent" className="space-y-4">
         <h3 className="text-label-l text-on-surface">维护密码</h3>
-        <div className="text-body-s text-primary rounded-sm p-3">
+        <div className="text-body-s text-primary p-3">
           此密码为系统随机生成的8位纯数字，每3天自动更新一次。用户开启开发者模式需输入此密码。
         </div>
 
@@ -209,7 +205,7 @@ export default function DeveloperTab({ token }: { token: string }) {
           onClick={handleRefreshPassword}
           variant="filled"
           className="self-start"
-          icon={<MdRefresh size={16} />}
+          icon={<MdRefresh size={ICON.dense} />}
         >
           手动更新密码
         </Button>
@@ -230,7 +226,7 @@ export default function DeveloperTab({ token }: { token: string }) {
             placeholder="输入用户 ID"
             fieldClassName="w-32"
           />
-          <Button onClick={handleEnableDeveloper} variant="filled" icon={<MdPersonAdd size={16} />}>
+          <Button onClick={handleEnableDeveloper} variant="filled" icon={<MdPersonAdd size={ICON.dense} />}>
             强制开启
           </Button>
         </div>
@@ -244,24 +240,7 @@ export default function DeveloperTab({ token }: { token: string }) {
         />
       </Card>
 
-      <Modal
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        title="确认关闭"
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setConfirmOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleConfirm}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">确定要关闭该用户的开发者模式？</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

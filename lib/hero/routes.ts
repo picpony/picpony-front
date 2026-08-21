@@ -134,7 +134,12 @@ export class HeroRouteRegistry {
       ) {
         continue;
       }
-      if (requirePreview && (!route.previewPaintable || !route.target)) continue;
+      /* A route that has resolved without media has nothing to preview and nothing to hand
+         off to, and that is a final answer rather than a not-yet — so it satisfies the wait.
+         `handoffOpening` never reads `route.target`; the closing path does, and already
+         falls back to a plain history collapse when it is null. */
+      if (requirePreview && !route.resolvedWithoutMedia && (!route.previewPaintable || !route.target))
+        continue;
       if (!candidate || route.epoch > candidate.epoch) candidate = route;
     }
     return candidate;
@@ -180,11 +185,14 @@ export class HeroRouteRegistry {
     route.interaction = null;
     route.interactionOwner = null;
     route.overlay.dataset.imageHeroRouteState = 'active';
-    route.overlay.style.opacity = '';
+    // `visibility` only, matching `leaseHeroRouteSealed`. Clearing an inline
+    // `opacity` here is what used to make the back affordance blink: that property
+    // is transitioned by `IconButton`, so the reveal was a 200ms fade rather than a
+    // frame. Nothing sets it now, and clearing a property the seal no longer writes
+    // would be the kind of stale defence that hides the next such bug.
     route.overlay.style.visibility = '';
     route.overlay.style.pointerEvents = '';
     if (route.floatingBack) {
-      route.floatingBack.style.opacity = '';
       route.floatingBack.style.visibility = '';
       route.floatingBack.style.pointerEvents = '';
     }

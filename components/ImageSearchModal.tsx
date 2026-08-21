@@ -9,8 +9,10 @@ import { processImageFile } from '../lib/utils';
 import { PonyImage } from '../lib/api';
 import FadeInImage from './FadeInImage';
 import Modal from './Modal';
+import Slider from './Slider';
 import Button from '@/components/Button';
 import DropZone from '@/components/DropZone';
+import { ICON } from '@/lib/icons';
 
 interface ImageSearchModalProps {
   isOpen: boolean;
@@ -77,7 +79,7 @@ export default function ImageSearchModal({
         onClose();
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '错误', 'error');
+      showToast(err instanceof Error ? err.message : '以图搜图失败', 'error');
     } finally {
       setIsUploading(false);
     }
@@ -89,11 +91,9 @@ export default function ImageSearchModal({
       title="以图搜图"
       footer={
         <>
-          {' '}
           <Button variant="text" type="button" onClick={onClose} disabled={isUploading}>
-            {' '}
-            取消{' '}
-          </Button>{' '}
+            取消
+          </Button>
           <Button
             variant="filled"
             onClick={handleSubmit}
@@ -121,9 +121,9 @@ export default function ImageSearchModal({
           <div className="relative w-full h-48 flex items-center justify-center">
             <FadeInImage
               src={selectedImage}
-              alt="Selected"
+              alt="已选择的图片"
               fill
-              className="object-contain rounded-md shadow-e1"
+              className="object-contain rounded-md"
             />
             <div className="bg-media-plate absolute inset-0 flex items-center justify-center rounded-md opacity-0 transition-opacity duration-300 ease-[var(--ease-standard)] hover:opacity-100">
               <span className="text-on-media text-label-l">更换图片</span>
@@ -131,7 +131,7 @@ export default function ImageSearchModal({
           </div>
         ) : (
           <>
-            <MdCloudUpload size={48} className="text-outline mb-3" />
+            <MdCloudUpload size={ICON.display} className="text-outline mb-3" />
             <p className="text-body-m-emphasized text-on-surface mb-1">点击或拖拽图片到此处</p>
           </>
         )}
@@ -142,14 +142,14 @@ export default function ImageSearchModal({
           <p className="text-label-l text-on-surface">容差</p>
           <span className="text-label-l-emphasized text-primary">{distance.toFixed(2)}</span>
         </div>
-        <input
-          type="range"
+        <Slider
           min={0.01}
           max={1.0}
           step={0.01}
           value={distance}
-          onChange={(e) => setDistance(parseFloat(e.target.value))}
-          className="range-slider w-full"
+          onValueChange={setDistance}
+          aria-label="搜索容差"
+          valueText={(v) => `容差 ${v.toFixed(2)}`}
         />
         <div className="flex justify-between text-body-s text-on-surface-variant mt-1">
           <span>精确匹配</span>

@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { MdInbox } from 'react-icons/md';
 import StatusView, { type StatusViewSize } from './StatusView';
+import { ICON } from '@/lib/icons';
 
 interface EmptyStateProps {
   title: string;
@@ -12,6 +13,8 @@ interface EmptyStateProps {
   /** Override the default tray glyph with something the screen is about. */
   icon?: ReactNode;
   size?: StatusViewSize;
+  /** The whole route is this block — fill the scroller and centre. See `StatusView`. */
+  fill?: boolean;
   className?: string;
 }
 
@@ -41,11 +44,13 @@ export default function EmptyState({
   action,
   icon,
   size = 'page',
+  fill = false,
   className = '',
 }: EmptyStateProps) {
   return (
     <StatusView
       size={size}
+      fill={fill}
       className={className}
       title={title}
       description={description}
@@ -53,7 +58,7 @@ export default function EmptyState({
       icon={
         /* `inline` is a hint inside a small well; a 48px tray there is larger
            than the box it is apologising for. */
-        icon ?? (size === 'inline' ? <MdInbox size={32} /> : <MdInbox size={48} />)
+        icon ?? (size === 'inline' ? <MdInbox size={ICON.large} /> : <MdInbox size={ICON.display} />)
       }
     />
   );

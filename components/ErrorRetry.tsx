@@ -3,6 +3,7 @@
 import { MdErrorOutline, MdRefresh } from 'react-icons/md';
 import Button from '@/components/Button';
 import StatusView, { type StatusViewSize } from './StatusView';
+import { ICON } from '@/lib/icons';
 
 interface ErrorRetryProps {
   title?: string;
@@ -10,9 +11,19 @@ interface ErrorRetryProps {
   message?: React.ReactNode;
   onRetry?: () => void;
   retryLabel?: string;
+  /**
+   * Replaces the retry button, for a failure whose one useful exit is not "try
+   * again" — the image detail offers 上一张, a missing Derpibooru profile offers
+   * the original site. Both used to render `StatusView` directly and re-type this
+   * component's glyph and default title by hand, so the two drifted apart the
+   * moment either changed.
+   */
+  action?: React.ReactNode;
   icon?: React.ReactNode;
   /** Match the enclosure — see `StatusView`. Defaults to a whole-route block. */
   size?: StatusViewSize;
+  /** The whole route is this block — fill the scroller and centre. See `StatusView`. */
+  fill?: boolean;
 }
 
 /**
@@ -33,31 +44,35 @@ export default function ErrorRetry({
   message,
   onRetry,
   retryLabel = '重试',
+  action,
   icon,
   size = 'page',
+  fill = false,
 }: ErrorRetryProps) {
   return (
     <StatusView
       size={size}
+      fill={fill}
       title={title}
       description={message}
-      icon={icon ?? <MdErrorOutline size={size === 'inline' ? 32 : 48} />}
+      icon={icon ?? <MdErrorOutline size={size === 'inline' ? ICON.large : ICON.display} />}
       action={
-        onRetry && (
+        action ??
+        (onRetry && (
           <Button
             onClick={onRetry}
             variant="filled"
             className="group"
             icon={
               <MdRefresh
-                size={20}
-                className="transition-transform duration-300 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
+                size={ICON.control}
+                className="transition-transform duration-200 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
               />
             }
           >
             {retryLabel}
           </Button>
-        )
+        ))
       }
     />
   );

@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 
 import { safeColor, safeUrl } from '@/lib/bbcode';
+import { getAssetUrl } from '@/lib/utils';
 
 interface BBCodeRendererProps {
   content: string;
@@ -31,7 +32,7 @@ function bbcodeToSafeHtml(bbcode: string): string {
     const src = url.trim();
     if (!src) return '';
     // Resolve relative paths
-    const resolved = src.startsWith('/') ? `https://picpony.top${src}` : src;
+    const resolved = getAssetUrl(src);
     const safe = safeUrl(resolved);
     if (!safe) return '';
     /* `alt=""` marks it decorative — a BBCode `[img]` carries no description and

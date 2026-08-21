@@ -6,7 +6,9 @@
     "dev": "next dev -p 3100",
     "build": "next build",
     "start": "next start -p 3100",
-    "lint": "eslint"
+    "lint": "eslint",
+    "colors": "node scripts/palette.mjs",
+    "colors:write": "node scripts/palette.mjs --write"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -25,6 +27,7 @@
     "yet-another-react-lightbox": "^3.32.0"
   },
   "devDependencies": {
+    "@material/material-color-utilities": "0.3.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

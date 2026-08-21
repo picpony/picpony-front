@@ -13,7 +13,6 @@ import {
 } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  MdErrorOutline,
   MdDownload,
   MdOpenInNew,
   MdStar,
@@ -26,7 +25,7 @@ import {
   MdThumbDown,
 } from 'react-icons/md';
 import Modal from '@/components/Modal';
-import { copyText } from '@/lib/utils';
+import { cn, copyText } from '@/lib/utils';
 import { useAuthModal } from '@/components/AuthModal';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
@@ -35,16 +34,18 @@ import Download from 'yet-another-react-lightbox/plugins/download';
 import Video from 'yet-another-react-lightbox/plugins/video';
 import { api, Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
+import { ICON } from '@/lib/icons';
 const Lightbox = dynamic(() => import('yet-another-react-lightbox'), { ssr: false });
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
 import IconButton from '@/components/IconButton';
+import Card from '@/components/Card';
 import Menu, { type MenuAction } from '@/components/Menu';
 import Skeleton from '@/components/Skeleton';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import PageBack from '@/components/PageBack';
-import { useEscapeBack } from '@/lib/hooks';
+import { readToken, useEscapeBack } from '@/lib/hooks';
 import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
 import TagList, { groupTags } from '@/components/TagList';
@@ -52,7 +53,7 @@ import { loadTagCounts } from '@/lib/tagCounts';
 import { loadTagTranslations } from '@/lib/tagTranslations';
 import CommentSection from '@/components/CommentSection';
 import Button, { buttonClasses } from '@/components/Button';
-import StatusView from '@/components/StatusView';
+import ErrorRetry from '@/components/ErrorRetry';
 import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/Input';
 import { getHeroMediaStyle } from '@/lib/hero/geometry';
@@ -66,6 +67,7 @@ import {
   isImageHeroDetailDataPublishable,
   isImageHeroPublicationQuiet,
   markImageHeroRoutePreviewPaintable,
+  markImageHeroRouteResolvedWithoutMedia,
   publishWhenHeroSettled,
   registerImageHeroRoute,
   requestImageHeroClose,
@@ -90,6 +92,27 @@ type PicDetailProps = {
 
 function getServerDetail() {
   return null;
+}
+
+/**
+ * The gallery's press order, as this screen's prev/next stack.
+ *
+ * A module-level read so the first render can use it: the failure state's only action is
+ * gated on it, and learning it from an effect meant the block re-laid-out one paint later.
+ * Returns an empty list on the server and on anything unparseable, so every caller can
+ * treat it as a plain array.
+ */
+const NAV_HISTORY_KEY = 'picpony_nav_history';
+
+function readNavHistory(): number[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = sessionStorage.getItem(NAV_HISTORY_KEY);
+    const parsed = stored ? JSON.parse(stored) : null;
+    return Array.isArray(parsed) ? parsed.filter((value) => typeof value === 'number') : [];
+  } catch {
+    return [];
+  }
 }
 
 const INITIAL_TAG_LIMIT = 80;
@@ -151,6 +174,31 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const readDetail = useCallback(() => peekImageDetail(imageId), [imageId]);
   const prefetchedDetail = useSyncExternalStore(subscribeDetail, readDetail, getServerDetail);
   const image = prefetchedDetail?.image ?? heroSeed?.image ?? null;
+  /**
+   * The media box is latched per route id.
+   *
+   * It was `heroSeed?.image.width || image.width` — the listing record while a seed
+   * existed, the detail record otherwise. `heroSeed` is memoised on
+   * `heroRuntime.sessionId`, which changes when a flight ends, so the released snapshot
+   * came back null and the width source switched from one record to the other at exactly
+   * that moment. Where the two records disagree, the box resized a beat after landing.
+   *
+   * Set during render rather than in an effect, so a new route id never paints a frame at
+   * the previous image's aspect ratio.
+   */
+  const [latchedMedia, setLatchedMedia] = useState<{
+    id: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const seedWidth = heroSeed?.image.width || image?.width || 0;
+  const seedHeight = heroSeed?.image.height || image?.height || 0;
+  if (seedWidth > 0 && seedHeight > 0 && latchedMedia?.id !== imageId) {
+    setLatchedMedia({ id: imageId, width: seedWidth, height: seedHeight });
+  }
+  const latchedMediaBox = latchedMedia?.id === imageId ? latchedMedia : null;
+
+
   const [revealedHeroSeedAt, setRevealedHeroSeedAt] = useState<number | null>(null);
   const [finalReadyId, setFinalReadyId] = useState<number | null>(null);
   const [deferredBodyId, setDeferredBodyId] = useState<number | null>(() =>
@@ -199,8 +247,39 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   // --- Image navigation state ---
-  const [navHistory, setNavHistory] = useState<number[]>([]);
-  const [currentNavIndex, setCurrentNavIndex] = useState(-1);
+  /**
+   * Read during the first render, not from an effect, because the failure state's one
+   * action is gated on it.
+   *
+   * It used to be a `useEffect` gated on `deferredBodyReady` that then deferred its own
+   * `setState` through a `queueMicrotask`, so `上一张` mounted at least one paint after the
+   * block did — and adding a 24px margin plus a 40dp button to a `justify-center` column
+   * lifts the whole block **32px**. That is the "it appears lower, then jumps up" report,
+   * and after a hero open it could arrive much later still, because `deferredBodyReady`
+   * waits for `publishWhenHeroSettled`.
+   *
+   * `sessionStorage` is not available while this renders on the server, hence the guard
+   * rather than a bare read; the lazy initialiser then runs exactly once per mount on the
+   * client, before the first paint.
+   */
+  const [navHistory, setNavHistory] = useState<number[]>(() => readNavHistory());
+  const currentNavIndex = useMemo(() => navHistory.indexOf(Number(id)), [navHistory, id]);
+  /**
+   * Whether this screen can offer 上一张, decided **once, at mount**.
+   *
+   * Deliberately not derived from `currentNavIndex`, which moves: the effect below appends
+   * the current id to the press order as soon as the image record lands, so an image reached
+   * directly goes from "not in history" to "last in history" a paint or two after the first
+   * one. In the failure state that is the only action on screen, and adding a 24px margin
+   * plus a 40dp button to a `justify-center` column lifts the whole block **32px** — the
+   * "it appears lower, then jumps up" report. What the button needs to know is whether there
+   * *is* a previous picture, and that is already true at mount either way.
+   */
+  const [hasNavPrevious] = useState(() => {
+    const ids = readNavHistory();
+    const index = ids.indexOf(Number(id));
+    return index > 0 || (index === -1 && ids.length > 0);
+  });
 
   // --- Tag info modal state ---
   const [tagInfoModal, setTagInfoModal] = useState<{
@@ -276,20 +355,33 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       target: detailTargetRef.current,
       floatingBack: overlayBackRef.current,
       previewPaintable: previewSurfaceRef.current === surfaceId,
+      resolvedWithoutMedia: false,
     });
   }, [imageId, presentation, surfaceId]);
+
+  /**
+   * Tell the controller when there will never be anything to hand off to.
+   *
+   * The handoff waits for a route with a paintable preview *and* a target, and only
+   * `DetailImage`/`DetailVideo` provide either — so a failed load left the flight waiting
+   * out `HERO_DETAIL_ROUTE_TIMEOUT_MS` with this page sealed behind it, i.e. 30 seconds of
+   * blank. Saying so explicitly lets the container transform finish and the error surface in
+   * its place, which is what every other resolution does.
+   */
+  /* The same condition the failure branch renders on: after the loading check, `error ||
+     !image` can only be true when `error` is set. Written as the one term so the flag and
+     the branch cannot drift apart. */
+  const resolvedWithoutMedia = presentation === 'overlay' && Boolean(error);
+  useEffect(() => {
+    if (!resolvedWithoutMedia) return;
+    markImageHeroRouteResolvedWithoutMedia(surfaceId);
+  }, [resolvedWithoutMedia, surfaceId]);
 
   const tokenRef = useRef<string | null>(null);
 
   // Load token once
   useEffect(() => {
-    try {
-      const userInfoStr = localStorage.getItem('user_info');
-      if (userInfoStr) {
-        const userInfo = JSON.parse(userInfoStr);
-        tokenRef.current = userInfo.token || null;
-      }
-    } catch {}
+    tokenRef.current = readToken();
   }, []);
 
   // 记录浏览历史：登录用户打开图片详情时同步到云端（与完整版前端
@@ -403,30 +495,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     };
   }, [deferredBodyReady]);
 
-  // Track navigation context from sessionStorage
-  useEffect(() => {
-    if (!deferredBodyReady) return;
-    let cancelled = false;
-    try {
-      const stored = sessionStorage.getItem('picpony_nav_history');
-      if (stored) {
-        const ids: number[] = JSON.parse(stored);
-        const currentIdNum = Number(id);
-        const idx = ids.indexOf(currentIdNum);
-        if (idx !== -1) {
-          queueMicrotask(() => {
-            if (cancelled) return;
-            setNavHistory(ids);
-            setCurrentNavIndex(idx);
-          });
-        }
-      }
-    } catch {}
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredBodyReady, id]);
-
   useEffect(() => {
     if (!deferredBodyReady || !shouldLoadComments) return;
     const element = commentEditorMountRef.current;
@@ -468,18 +536,19 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     let cancelled = false;
     if (image) {
       try {
-        const stored = sessionStorage.getItem('picpony_nav_history');
-        let ids: number[] = stored ? JSON.parse(stored) : [];
+        let ids = readNavHistory();
         const currentIdNum = image.id;
         if (!ids.includes(currentIdNum)) {
           ids.push(currentIdNum);
           if (ids.length > 200) ids = ids.slice(-200);
-          sessionStorage.setItem('picpony_nav_history', JSON.stringify(ids));
+          sessionStorage.setItem(NAV_HISTORY_KEY, JSON.stringify(ids));
         }
-        const idx = ids.indexOf(currentIdNum);
+        /* Still deferred, and now that is only about the lint rule against a synchronous
+           `setState` in an effect: nothing on screen waits for this any more, because the
+           press order was read during the first render and the failure state's action is
+           decided from that read. */
         queueMicrotask(() => {
           if (cancelled) return;
-          setCurrentNavIndex(idx);
           setNavHistory(ids);
         });
       } catch {}
@@ -515,14 +584,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     let cancelled = false;
     const checkFaveStatus = async () => {
       try {
-        const userInfoStr = localStorage.getItem('user_info');
-        if (userInfoStr) {
-          const userInfo = JSON.parse(userInfoStr);
-          if (userInfo.token) {
-            const res = await api.getFaves(userInfo.token);
-            if (res.success && res.faves) {
-              if (!cancelled) setIsFaved(res.faves.includes(Number(id)));
-            }
+        const token = readToken();
+        if (token) {
+          const res = await api.getFaves(token);
+          if (res.success && res.faves) {
+            if (!cancelled) setIsFaved(res.faves.includes(Number(id)));
           }
         }
       } catch (err) {
@@ -643,7 +709,13 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Navigation handlers ---
   const handleNavigate = useCallback(
     (direction: number) => {
-      const newIndex = currentNavIndex + direction;
+      /* An id that is not in the press order sits *after* its end, not before its start.
+         That is the failure state's case: the effect that appends the current id needs the
+         image record, which a failed load never produces, so `currentNavIndex` stays −1 for
+         as long as the error is on screen — and `-1 + -1` used to fall through to
+         「已是第一张」, i.e. the one button that state offers did nothing. */
+      const from = currentNavIndex === -1 ? navHistory.length : currentNavIndex;
+      const newIndex = from + direction;
       if (newIndex >= 0 && newIndex < navHistory.length) {
         const targetId = navHistory[newIndex];
         if (targetId !== Number(id)) {
@@ -763,16 +835,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   }, []);
 
   const handleToggleFave = async () => {
-    let token = null;
-    try {
-      const userInfoStr = localStorage.getItem('user_info');
-      if (userInfoStr) {
-        token = JSON.parse(userInfoStr).token;
-      }
-    } catch (e) {
-      console.error('Failed to parse user info', e);
-    }
-
+    const token = readToken();
     if (!token) {
       showToast('请先登录', 'error');
       openAuth('login');
@@ -832,11 +895,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       showToast('请填写举报原因', 'error');
       return;
     }
-    let token = null;
-    try {
-      const userInfoStr = localStorage.getItem('user_info');
-      if (userInfoStr) token = JSON.parse(userInfoStr).token;
-    } catch {}
+    const token = readToken();
     if (!token) {
       showToast('请先登录', 'error');
       openAuth('login');
@@ -893,7 +952,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         : [
             {
               src: imageSrc,
-              alt: image.name || `Image ${image.id}`,
+              alt: image.name || `图片 #${image.id}`,
               width: image.width ?? undefined,
               height: image.height ?? undefined,
               download: {
@@ -910,7 +969,31 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const downloadPlugin = Download;
   const videoPlugin = Video;
 
-  const renderDetailShell = (content: React.ReactNode) => {
+  /* The shell's own inset, and only where there is not one already: in the `page`
+     presentation `[data-page-content]` is already `p-4 sm:p-6`, so carrying a second
+     one here stacked them to 24/40px and made this screen's column narrower than
+     every other route's for no stated reason. The overlay is portalled outside that
+     wrapper and does need its own.
+     **Horizontal only, and that is a geometry contract rather than a preference.**
+     `HeroStage` renders the landing target inside `image-detail-page mx-auto
+     max-w-5xl px-2 sm:px-4` — no vertical padding — and `geometry.ts` states that the
+     stage and this must produce pixel-identical boxes or the handoff visibly shifts.
+     A `py-*` here moves the media well down by 16/24px relative to the box the flyer
+     was aimed at, so the picture lands and then hops. If this gains vertical padding,
+     the stage gains the same padding in the same commit. */
+  const overlayGutter = presentation === 'overlay' ? 'px-2 sm:px-4' : '';
+
+  /**
+   * `centred` is the `StatusView fill` chain, and it has to be threaded through here
+   * because `fill` is `flex-1` rather than a percentage height — every box between the
+   * block and the scroller has to be a flex column or the `1` has nothing to divide.
+   * The scroller is `absolute inset-0`, so its height is definite; `min-h-full` on the
+   * content wrapper resolves against it; and from there down it is flex distribution.
+   * `min-height: 100%` on the block itself was tried and computes to `auto`, because a
+   * height that comes from flex distribution is indefinite in Chrome — that is the
+   * failure this replaces, and it centred nothing.
+   */
+  const renderDetailShell = (content: React.ReactNode, centred = false) => {
     if (presentation === 'page') {
       /* Opening a link to /pic/123 directly used to drop you on bare content
          with no way back except the browser button, while arriving from the
@@ -921,7 +1004,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
          sticky strip. `data-image-detail-back-button` is not carried across:
          nothing reads it, here or anywhere. */
       return (
-        <div className="relative">
+        <div className={cn('relative', centred && 'flex flex-1 flex-col')}>
           <PageBack onClick={handleBackToGallery} title="返回图库 (Esc)" label="返回图片列表" />
           {content}
         </div>
@@ -950,17 +1033,30 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           >
             <div
               ref={overlayContentRef}
-              className="image-detail-overlay-content relative min-h-full w-full"
+              className={cn(
+                'image-detail-overlay-content relative min-h-full w-full',
+                centred && 'flex flex-col',
+              )}
             >
-              {content}
+              {/* The container transform's fit target — see HERO_CONTENT_SELECTOR. */}
+              <div
+                data-image-detail-scale
+                className={cn('w-full origin-top-left', centred && 'flex flex-1 flex-col')}
+              >
+                {content}
+              </div>
             </div>
           </div>
         </section>
+        {/* No `data-image-detail-reveal`: this renders as a *sibling* of the overlay, and
+            the reveal cascade is `overlay.querySelectorAll(HERO_REVEAL_SELECTOR)`, so the
+            `chrome` role it used to carry never matched anything. Its entrance is the
+            `floatingBack` branch of `buildOverlayAnimations`, and the pull gesture reaches
+            it through a compound selector rather than a descendant one. */}
         <DetailBack
           ref={overlayBackRef}
           data-image-detail-back-button
           data-image-detail-floating-back="route"
-          data-image-detail-reveal="chrome"
           data-image-hero-route-id={String(imageId)}
           onClick={handleBackToGallery}
           className="image-detail-back"
@@ -972,18 +1068,29 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Loading skeleton ---
   if (isLoading) {
     return renderDetailShell(
-      <div className="image-detail-page max-w-5xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
+      /* The skeleton is never a landing target — the flight is over before this can
+         mount — so it is free to carry the vertical padding the real render must not. */
+      <div className={cn('image-detail-page max-w-5xl mx-auto py-4 sm:py-6', overlayGutter)}>
         <div className="flex flex-col rounded-md bg-transparent">
+          {/* The header's own shape, which is three centred metadata cells and no
+              visible title — `DetailHeader` renders its `<h1>` `sr-only`. This drew a
+              half-width title bar above a left-aligned row, so the placeholder stood
+              in for something the header deliberately does not paint and the row
+              jumped from left to centre when the data landed. A skeleton that does
+              not match is the one thing a skeleton exists to prevent. */}
           <div className="image-detail-header-route p-4 sm:p-6">
-            <Skeleton className="h-8 w-1/2 mb-4" />
-            <div className="flex gap-4">
-              <Skeleton className="h-5 w-20" delay={60} />
-              <Skeleton className="h-5 w-20" delay={120} />
-              <Skeleton className="h-5 w-20" delay={180} />
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              <Skeleton className="h-5 w-28" delay={60} />
+              <Skeleton className="h-5 w-16" delay={120} />
+              <Skeleton className="h-5 w-12" delay={180} />
             </div>
           </div>
           <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
-            <Skeleton className="w-full h-full rounded-md absolute inset-4" delay={90} />
+            {/* `inset-4` alone. With `w-full h-full` beside it the width and height
+                won — they are not shorthands for the insets, they *replace* what the
+                right and bottom insets computed — so the placeholder was 32px wider
+                than its own box and overflowed the media well on both axes. */}
+            <Skeleton className="absolute inset-4 rounded-md" delay={90} />
           </div>
           <div
             data-image-detail-reveal="body"
@@ -1006,24 +1113,32 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   // --- Error state ---
   if (error || !image) {
-    /* The shared failure block. The 返回上一页 button is gone because this
-       overlay already draws `DetailBack` in its top-left corner, so the screen
-       was offering the same exit twice in two different places; what is left is
-       the one action that is specific to being mid-gallery. */
+    /* `ErrorRetry`, not `StatusView` directly. AGENTS.md names the image detail's
+       failure among the screens that must go through the presets, and this had
+       re-typed the preset's glyph and its default title by hand because
+       `ErrorRetry` took only `onRetry` — it has an `action` slot now.
+       The 返回上一页 button is gone because this overlay already draws
+       `DetailBack` in its top-left corner, so the screen was offering the same
+       exit twice in two places; what is left is the one action specific to being
+       mid-gallery.
+       `fill`, because this block *is* the whole screen in both presentations —
+       the fourth such case after the 404, the route boundary and the Derpibooru
+       profile. Without it the block took `page`'s half-viewport floor and centred
+       itself in the top half of a full-height scroller, i.e. sat in the upper
+       third with nothing under it. */
     return renderDetailShell(
-      <StatusView
-        icon={<MdErrorOutline size={48} />}
-        title="加载失败"
-        description="图片可能不存在或已被删除"
+      <ErrorRetry
+        fill
+        message="图片可能不存在或已被删除"
         action={
-          navHistory.length > 0 &&
-          currentNavIndex > 0 && (
+          hasNavPrevious && (
             <Button variant="tonal" onClick={() => handleNavigate(-1)}>
               上一张
             </Button>
           )
         }
       />,
+      true,
     );
   }
 
@@ -1048,15 +1163,12 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     image.representations?.full ||
     image.view_url ||
     '';
-  const detailHeroStyle = getHeroMediaStyle({
-    width: heroSeed?.image.width || image.width,
-    height: heroSeed?.image.height || image.height,
-  });
+  const detailHeroStyle = getHeroMediaStyle(
+    latchedMediaBox ?? { width: image.width, height: image.height },
+  );
 
   return renderDetailShell(
-    <div
-      className="image-detail-page max-w-5xl mx-auto px-2 sm:px-4"
-    >
+    <div className={cn('image-detail-page max-w-5xl mx-auto', overlayGutter)}>
       <div className="bg-transparent flex flex-col rounded-md">
         {/* === Title & Meta ===
             No back button here: `renderDetailShell` pins one for both
@@ -1077,7 +1189,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               previewSrc={heroSeed?.previewSrc}
               previewKind={heroSeed?.mediaType}
               finalSrc={detailVideoSrc}
-              alt={image.name || `Video ${image.id}`}
+              alt={image.name || `视频 #${image.id}`}
               style={detailHeroStyle}
               heroActive={isHeroPreview}
               preloadFinal={preloadFinal}
@@ -1092,7 +1204,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               imageId={image.id}
               previewSrc={heroSeed?.previewSrc}
               finalSrc={detailImageSrc}
-              alt={image.name || `Image ${image.id}`}
+              alt={image.name || `图片 #${image.id}`}
               width={image.width}
               height={image.height}
               style={detailHeroStyle}
@@ -1115,7 +1227,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           // compositor layer under the overlay (mid-scroll "background vanished").
           style={{ contentVisibility: 'visible', contain: 'none' }}
         >
-          {' '}
+          
           <div className="max-w-5xl mx-auto w-full space-y-6">
             {/* Votes.
                 `mb-6` removed from both branches: the column is already
@@ -1127,7 +1239,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   <Skeleton className="h-4 w-14" />
                   <Skeleton className="h-4 w-14" delay={60} />
                 </div>
-                <Skeleton className="h-2.5 w-full rounded-full" delay={120} />
+                {/* `h-1`, matching the real track below. It was `h-2.5`, standing
+                    in for a 4dp bar, so the row shifted 6px the moment the votes
+                    landed — which is the one thing a placeholder exists to
+                    prevent. */}
+                <Skeleton className="h-1 w-full rounded-full" delay={120} />
               </div>
             ) : (
               image.upvotes !== undefined &&
@@ -1135,42 +1251,57 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                 <div>
                   <div className="flex justify-between text-label-l mb-1.5">
                     <span className="text-on-surface flex items-center gap-1">
-                      <MdThumbUp size={16} className="text-success-fill" aria-label="赞" />
+                      <MdThumbUp size={ICON.dense} className="text-success" aria-label="赞" />
                       {image.upvotes}
                     </span>
                     <span className="text-on-surface flex items-center gap-1">
                       {image.downvotes}
-                      <MdThumbDown size={16} className="text-error-fill" aria-label="踩" />
+                      <MdThumbDown size={ICON.dense} className="text-error" aria-label="踩" />
                     </span>
                   </div>
-                  <div className="relative w-full h-2.5 bg-surface-container-high rounded-full overflow-hidden">
-                    {image.upvotes === 0 && image.downvotes === 0 ? (
-                      <div className="bg-surface-container-highest h-full w-full" />
-                    ) : (
+                  <div className="relative w-full h-1 bg-secondary-container rounded-full overflow-hidden">
+                    {/* With no votes the track shows through on its own — that branch
+                        used to paint `-highest` over a `-high` track, i.e. two surface
+                        steps for one object, neither of them the progress-track token
+                        (`ProgressIndicatorTokens.TrackColor` = `secondary-container`,
+                        4dp; this was 2.5dp). */}
+                    {image.upvotes === 0 && image.downvotes === 0 ? null : (
                       <>
-                        {/* `scaleX` on two full-width absolute bars, not animated
-                            `width` on two flex items.
-                            Animating `width` reflows the row every frame, and this
-                            runs live while paging between images inside the
-                            overlay — exactly when the hero flight is finishing and
-                            least able to afford layout work. A meter settling in
-                            place is also the 300ms `standard` row; 500ms belongs to
-                            a large container transform and pairs with `emphasized`.
+                        {/* Not a `ProgressBar`, and that is deliberate: this is a
+                            100%-stacked two-segment *ratio* with a both-zero state,
+                            which `value`/`max` cannot express.
+                            `scaleX` on two full-width absolute bars, not animated
+                            `width` on two flex items. Animating `width` reflows the
+                            row every frame, and this runs live while paging between
+                            images inside the overlay — exactly when the hero flight
+                            is finishing and least able to afford layout work.
 
                             Absolute rather than flex because a scaled flex item
                             still occupies its unscaled basis: two items at
                             `width: 100%` would shrink to 50/50 and the scale would
                             be applied to the wrong box. Anchored at opposite edges
                             they tile exactly — the up bar covers [0, r] and the
-                            down bar, scaled from its right edge, covers [r, 1]. */}
+                            down bar, scaled from its right edge, covers [r, 1].
+
+                            `spring-slow-effects`, the same spring `ProgressBar`
+                            takes: `ProgressIndicatorDefaults.ProgressAnimationSpec`
+                            is critically damped, and an overshoot here would push one
+                            segment over the other. It ran `duration-200` with
+                            `--ease-symmetric`, which is the *loop* curve, under a
+                            comment claiming the 300ms `standard` row — neither of
+                            which was what the code did.
+                            The `motion-reduce:` guard is gone with them: the global
+                            reduced-motion rule re-declares `transition-property` with
+                            `!important`, so Tailwind's un-important
+                            `motion-reduce:transition-none` never won anyway. */}
                         <div
-                          className="bg-success-fill absolute inset-y-0 left-0 w-full origin-left transition-transform duration-300 ease-[var(--ease-standard)] motion-reduce:transition-none"
+                          className="bg-success-fill spring-slow-effects absolute inset-y-0 left-0 w-full origin-left transition-transform"
                           style={{
                             transform: `scaleX(${image.upvotes / (image.upvotes + image.downvotes)})`,
                           }}
                         />
                         <div
-                          className="bg-error-fill absolute inset-y-0 left-0 w-full origin-right transition-transform duration-300 ease-[var(--ease-standard)] motion-reduce:transition-none"
+                          className="bg-error-fill spring-slow-effects absolute inset-y-0 left-0 w-full origin-right transition-transform"
                           style={{
                             transform: `scaleX(${image.downvotes / (image.upvotes + image.downvotes)})`,
                           }}
@@ -1202,16 +1333,14 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                       <IconButton
                         onClick={() => handleNavigate(-1)}
                         disabled={currentNavIndex <= 0}
-                        title="上一张 (←)"
                         aria-label="上一张"
-                        icon={<MdChevronLeft size={20} />}
+                        icon={<MdChevronLeft size={ICON.control} />}
                       />
                       <IconButton
                         onClick={() => handleNavigate(1)}
                         disabled={currentNavIndex >= navHistory.length - 1}
-                        title="下一张 (→)"
                         aria-label="下一张"
-                        icon={<MdChevronRight size={20} />}
+                        icon={<MdChevronRight size={ICON.control} />}
                       />
                     </>
                   )}
@@ -1223,16 +1352,15 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                     onClick={handleToggleFave}
                     loading={isFaveLoading}
                     selected={isFaved}
-                    title={isFaved ? '取消收藏' : '收藏'}
                     aria-label={isFaved ? '取消收藏' : '收藏'}
                     icon={
                       isFaved ? (
                         <MdStar
-                          size={20}
-                          className="animate-[star-burst_0.4s_var(--ease-decelerate)]"
+                          size={ICON.control}
+                          className="animate-star-burst"
                         />
                       ) : (
-                        <MdStarBorder size={20} />
+                        <MdStarBorder size={ICON.control} />
                       )
                     }
                   />
@@ -1240,11 +1368,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                     <IconButton
                       ref={shareButtonRef}
                       onClick={() => setIsShareOpen(!isShareOpen)}
-                      title="分享"
                       aria-label="分享"
                       aria-expanded={isShareOpen}
                       aria-haspopup="menu"
-                      icon={<MdShare size={20} />}
+                      icon={<MdShare size={ICON.control} />}
                     />
                     {/* `Menu`, not a hand-rolled panel. This one announced
                         itself as `role="menu"` and then implemented none of the
@@ -1263,10 +1390,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   </div>
                   <IconButton
                     onClick={() => setIsReportModalOpen(true)}
-                    title="举报"
                     aria-label="举报"
                     className="hover:text-error"
-                    icon={<MdFlag size={20} />}
+                    icon={<MdFlag size={ICON.control} />}
                   />
                 </div>
                 {/* Description */}
@@ -1279,37 +1405,48 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   {image.description ? (
                     image.description.length > 100 ||
                     (image.description.match(/\n/g) || []).length >= 3 ? (
-                      /* A `<button>`, not a `<div onClick>`. The only way to read
-                         a long description was to click it, so on a keyboard the
-                         text below the third line was unreachable. `aria-expanded`
-                         is what makes the collapsed state readable rather than
-                         merely visible. Left-aligned explicitly — a button
-                         centres its text by default, which would have re-set the
-                         paragraph. */
-                      <button
-                        type="button"
+                      /* `Card interactive`, which renders a real `<button>` — the
+                         whole surface is one control. It was a hand-written
+                         `rounded-md border border-outline-variant
+                         bg-surface-container-low p-4` plus a state layer and a
+                         focus ring, i.e. the outlined card's recipe on a tone step
+                         that is neither of the card variants, spelled out here and
+                         again on both non-interactive branches below.
+                         `aria-expanded` is what makes the collapsed state readable
+                         rather than merely visible. */
+                      <Card
+                        variant="outlined"
+                        interactive
                         aria-expanded={isDescriptionExpanded}
                         onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                        className="state-layer block w-full cursor-pointer rounded-md border border-outline-variant bg-surface-container-low p-4 text-left outline-none focus-visible:ring-2 focus-ring"
                       >
                         <p
-                          className={`text-on-surface whitespace-pre-wrap break-words ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}
+                          className={`text-body-m text-on-surface whitespace-pre-wrap break-words ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}
                         >
                           {image.description}
                         </p>
                         <span className="text-label-l text-primary mt-2 block text-center">
                           {isDescriptionExpanded ? '折叠简介' : '展开简介'}
                         </span>
-                      </button>
+                      </Card>
                     ) : (
-                      <p className="text-body-m text-on-surface whitespace-pre-wrap break-words bg-surface-container-low p-4 rounded-md border border-outline-variant">
-                        {image.description}
-                      </p>
+                      <Card variant="outlined">
+                        <p className="text-body-m text-on-surface whitespace-pre-wrap break-words">
+                          {image.description}
+                        </p>
+                      </Card>
                     )
                   ) : (
-                    <p className="text-body-m text-on-surface-variant italic bg-surface-container-low p-4 rounded-md border border-outline-variant">
-                      滚木
-                    </p>
+                    <Card variant="outlined">
+                      {/* No `italic`. The rich-text layer states the app's one
+                          typographic prohibition and states why — Han has no true
+                          italic, so the browser synthesises a slant that is not a
+                          typeface. A placeholder sentence is exactly where it is
+                          tempting and exactly where it looks wrong. */}
+                      <p className="text-body-m text-on-surface-variant">
+                        滚木
+                      </p>
+                    </Card>
                   )}
                 </div>
                 {/* Source URL */}
@@ -1351,7 +1488,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                     variant="filled"
                     size="lg"
                     className="max-sm:w-full"
-                    icon={<MdDownload size={20} />}
+                    icon={<MdDownload size={ICON.control} />}
                   >
                     下载原图
                   </Button>
@@ -1366,7 +1503,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                       className: 'max-sm:w-full',
                     })}
                   >
-                    <MdOpenInNew size={20} aria-hidden="true" />在 Derpibooru 查看
+                    <MdOpenInNew size={ICON.control} aria-hidden="true" />在 Derpibooru 查看
                   </a>
                 </div>
                 <CommentSection
@@ -1413,13 +1550,13 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           /* The lightbox ships its own loading ring — a plain CSS spin at a
              constant rate — which is the one place in the app that was not the
              M3 indicator. `render.iconLoading` is the sanctioned override, so
-             it becomes `Spinner` like everything else. `inheritColor` because
+             it becomes `Spinner` like everything else. `tone="inherit"` because
              this sits on `media-stage`, whose ink is `on-media`, not either of
              the two roles the `white` flag can pick between. */
           render={{
             iconLoading: () => (
               <span className="text-on-media">
-                <Spinner size="lg" inheritColor track />
+                <Spinner size="lg" tone="inherit" track />
               </span>
             ),
           }}
@@ -1444,11 +1581,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         isOpen={tagInfoModal.open}
         onClose={() => setTagInfoModal({ open: false, tag: '', data: null, loading: false })}
         title={tagInfoModal.tag}
-        maxWidth="max-w-md"
+        maxWidth="md"
       >
         {' '}
         {tagInfoModal.loading ? (
-          <Spinner label="查询词库中..." className="py-8" />
+          <Spinner label="查询词库中…" className="py-8" />
         ) : tagInfoModal.data ? (
           <div className="space-y-3">
             {' '}
@@ -1457,8 +1594,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                 {' '}
                 <span className="text-label-m-emphasized text-on-surface-variant">
                   中文翻译
-                </span>{' '}
-                <p className="text-body-m text-on-surface mt-1">{tagInfoModal.data.cn}</p>{' '}
+                </span>
+                <p className="text-body-m text-on-surface mt-1">{tagInfoModal.data.cn}</p>
               </div>
             )}{' '}
             {tagInfoModal.data.description && (
@@ -1466,36 +1603,36 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                 {' '}
                 <span className="text-label-m-emphasized text-on-surface-variant">
                   标签简介
-                </span>{' '}
+                </span>
                 <p className="text-on-surface-variant mt-1 text-body-m">
                   {tagInfoModal.data.description}
-                </p>{' '}
+                </p>
               </div>
             )}{' '}
             {tagInfoModal.data.cat && (
               <div>
                 {' '}
-                <span className="text-label-m-emphasized text-on-surface-variant">分类</span>{' '}
+                <span className="text-label-m-emphasized text-on-surface-variant">分类</span>
                 <p className="text-on-surface-variant mt-1 text-body-m">
                   {tagInfoModal.data.cat}
-                </p>{' '}
+                </p>
               </div>
             )}{' '}
             {tagInfoModal.data.aliases && tagInfoModal.data.aliases.length > 0 && (
               <div>
                 {' '}
-                <span className="text-label-m-emphasized text-on-surface-variant">别名</span>{' '}
+                <span className="text-label-m-emphasized text-on-surface-variant">别名</span>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  {' '}
+                  
                   {tagInfoModal.data.aliases.map((alias, i) => (
                     <span
                       key={i}
-                      className="px-2 py-0.5 bg-surface-container-high text-on-surface-variant text-label-m rounded-sm"
+                      className="px-2 py-0.5 bg-surface-container-high text-on-surface-variant text-label-m rounded-xs"
                     >
                       {alias}
                     </span>
-                  ))}{' '}
-                </div>{' '}
+                  ))}
+                </div>
               </div>
             )}{' '}
           </div>
@@ -1507,7 +1644,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           />
         )}{' '}
         <div className="flex gap-3 mt-4">
-          {' '}
+          
           <Button
             variant="accent"
             fullWidth
@@ -1517,9 +1654,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             }}
           >
             搜索此标签
-          </Button>{' '}
-        </div>{' '}
-      </Modal>{' '}
+          </Button>
+        </div>
+      </Modal>
       {/* ========== Report Modal ========== */}{' '}
       <Modal
         isOpen={isReportModalOpen}
@@ -1549,7 +1686,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               loading={isReporting}
               disabled={!reportReason.trim()}
             >
-              {isReporting ? '提交中...' : '提交举报'}
+              {isReporting ? '提交中…' : '提交举报'}
             </Button>
           </>
         }
@@ -1560,7 +1697,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         <Textarea
           value={reportReason}
           onChange={(e) => setReportReason(e.target.value)}
-          placeholder="请详细描述违规原因..."
+          placeholder="请详细描述违规原因…"
           rows={4}
           disabled={isReporting}
           className="resize-none"

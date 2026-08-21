@@ -89,7 +89,27 @@ const TONES: Record<Exclude<BadgeTone, 'custom'>, string> = {
 
 const SIZES: Record<BadgeSize, string> = {
   sm: 'text-label-s-emphasized gap-1 px-2 py-0.5',
-  md: 'text-label-m gap-1 px-2.5 py-1',
+  md: 'text-label-m-emphasized gap-1 px-2.5 py-1',
+};
+
+/* **The glyph size belongs to the badge**, the way it already does to `Button` and
+ * `IconButton`, and here it is load-bearing rather than tidy: a badge is 20 or 24px
+ * tall and its own line box is 16px, so an 18dp glyph — `ICON.dense`, the smallest
+ * step the icon scale offers — makes the box 2px taller than the same badge without
+ * one. That is measurable and it was visible: a profile's role badge stood at 24px
+ * beside a 已核验 badge at 26, and the gallery thumbnail's three count pills each
+ * carried an 18px glyph against 11px digits, which is what reads as "the icons are
+ * too big".
+ *
+ * 14 at `sm` and 16 at `md`, both inside the 16px line box, so a badge with an icon is
+ * exactly as tall as one without. These are **below the 18dp floor** the icon scale
+ * sets, and the reason that floor does not apply is what the floor is for: 18 is where
+ * a Material Symbol stops resolving *as a control's only content*. A badge's glyph is
+ * paired with a digit or a word at 11–12px and is read as part of that phrase, not
+ * aimed at. Call sites pass no size — one is ignored, as on the other two primitives. */
+const ICON_SIZES: Record<BadgeSize, string> = {
+  sm: '[&>svg]:size-3.5',
+  md: '[&>svg]:size-4',
 };
 
 /* Same guard, and for the same reason, as `Skeleton`'s conditional radius: `cn`
@@ -124,7 +144,7 @@ export default function Badge({
       )}
     >
       {icon && (
-        <span className="shrink-0 [&>svg]:block" aria-hidden="true">
+        <span className={cn('shrink-0 [&>svg]:block', ICON_SIZES[size])} aria-hidden="true">
           {icon}
         </span>
       )}
@@ -136,15 +156,18 @@ export default function Badge({
 /**
  * The unread count pill.
  *
- * `TabBar` and the header's notification link each had their own copy of this,
+ * `Tabs` and the header's notification link each had their own copy of this,
  * identical down to the `99+` clamp and the spring pop, which is exactly the
  * kind of duplication that survives until one of them is changed. The pop is
- * `control-pop` on `--ease-spring`, i.e. the same overshoot every other control
- * that appears in place uses.
+ * the shared `animate-control-pop` token, which carries M3's expressive fast
+ * spatial spring — the one curve in the system with a visible overshoot, and
+ * the right one for a mark landing in place.
  *
- * Fixed 18px box with `min-w`, not padding-driven: a run of counts down a tab
+ * Fixed 16dp box with `min-w`, not padding-driven: a run of counts down a tab
  * row has to line up, and `1` next to `12` next to `99+` cannot if each is
- * sized by its own content. `tabular-nums` for the same reason.
+ * sized by its own content. `tabular-nums` for the same reason. 16dp is M3's
+ * large-badge size; it was an arbitrary 18px, which is both off the spacing
+ * grid and off the spec.
  *
  * Renders nothing at zero, so callers do not each need their own `!!count &&`.
  */
@@ -164,9 +187,9 @@ export function CountBadge({
       aria-label={label}
       className={cn(
         'bg-error-fill text-on-fill text-label-s-emphasized',
-        'flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1',
+        'flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1',
         'leading-none tabular-nums',
-        'animate-[control-pop_0.3s_var(--ease-spring)]',
+        'animate-control-pop',
         className,
       )}
     >

@@ -21,6 +21,7 @@ import { useBackgroundSearchParams } from './BackgroundLocation';
 import { CountBadge } from './Badge';
 import { cn } from '@/lib/utils';
 import { isStaff } from '@/lib/roles';
+import { ICON } from '@/lib/icons';
 
 export interface SidebarUser {
   id?: number;
@@ -37,10 +38,35 @@ interface SidebarNavProps {
   onLogout: () => void;
 }
 
-/* 48px rows. The previous `py-2` gave ~36px, under the comfortable touch
-   target, and this drawer is the only navigation on a phone. */
+/* **48dp rows under a pointer, 56 under a finger.** 56 is M3's navigation-drawer
+   item height and it is a touch figure: this drawer is the only navigation on a
+   phone, and a phone is where 56 earns its keep. On a desktop it is a repeated
+   element — thirteen of them signed in, which measured 930px of column against a
+   736px viewport — so it takes the density step down.
+
+   `pointer-coarse:h-14` rather than `touch-size`, and the difference matters: that
+   utility raises a box to `--touch-floor`, which is 48, so it can only help a control
+   that is *smaller* than the floor. This row is already at the floor and needs to go
+   past it, which is a size decision rather than a hit-area one. `touch-size` is for
+   the 40dp cases — a menu row, a pagination number, an app-bar action — where the
+   floor is the thing being reached.
+
+   A 24dp glyph in a 48dp box still leaves 12dp above and below, which is the
+   drawer item's own leading space, so nothing is crowded by the change.
+   `py-2` gave ~36px once, and a first pass corrected that to 48 by reaching for
+   the touch minimum — the number was right and the reason was wrong, which is
+   why it then moved to 56 and is now back. The pill shape is the spec's
+   (`ActiveIndicatorShape = CornerFull`) and does not move.
+
+   The padding is **asymmetric, and that is the spec's**: `NavigationDrawer.kt`'s
+   item row is `padding(start = 16.dp, end = 24.dp)`. It read 16/16 here, which
+   crowded the trailing unread badge against the drawer's edge — the extra 8dp
+   exists because a trailing element needs more air than a leading one. It stays
+   asymmetric at both densities, because it is about the badge rather than the
+   height. The 12dp between the icon and the label is the spacer in the same row,
+   and `gap-3` covers the label-to-badge spacer at 12dp as well (also the spec's). */
 const ROW = cn(
-  'flex h-12 w-full items-center gap-3 rounded-full px-4',
+  'flex h-12 pointer-coarse:h-14 w-full items-center gap-3 rounded-full pl-4 pr-6',
   'text-label-l outline-none transition-ui',
   'focus-visible:ring-2 focus-ring',
 );
@@ -74,7 +100,7 @@ function NavItem({
       </span>
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {/* `CountBadge`, not a second copy of it. This span was byte-identical to
-          the primitive's class string — same 18px box, same `min-w`, same `99+`
+          the primitive's class string — same box, same `min-w`, same `99+`
           clamp — minus the two things the primitive adds: the spring pop when
           the count arrives, and an accessible name, so a screen reader read the
           drawer as "消息 3" with no unit. */}
@@ -135,7 +161,12 @@ function NavItem({
 function Section({ label, children }: { label?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      {label && <h2 className="text-label-m text-on-surface-variant px-4 pt-3 pb-1">{label}</h2>}
+      {/* `pt-2 pb-1`, i.e. 8 above and 4 below a 20px `title-s` line box, for 32px
+          total. It read `pt-3` (36px), which is on the 4dp grid and on no rhythm:
+          a heading binds to what it introduces, so the space above it has to be
+          the larger one. That is the same 2:1 asymmetry `.bbcode-content`'s own
+          heading rule uses (`1.25em 0.5em`). */}
+      {label && <h2 className="text-title-s text-on-surface-variant px-4 pt-2 pb-1">{label}</h2>}
       {children}
     </div>
   );
@@ -174,7 +205,7 @@ export default function SidebarNav({
             route it is a genuine navigation and the default (top) is right. */}
         <NavItem
           href="/"
-          icon={<MdHome size={22} />}
+          icon={<MdHome size={ICON.standard} />}
           label="主页"
           active={onHome && !forumTab}
           scroll={onHome ? false : undefined}
@@ -182,7 +213,7 @@ export default function SidebarNav({
         />
         <NavItem
           href="/?tab=forum"
-          icon={<MdForum size={22} />}
+          icon={<MdForum size={ICON.standard} />}
           label="论坛"
           active={onHome && forumTab}
           scroll={onHome ? false : undefined}
@@ -190,7 +221,7 @@ export default function SidebarNav({
         />
         <NavItem
           href="/search"
-          icon={<MdSearch size={22} />}
+          icon={<MdSearch size={ICON.standard} />}
           label="搜索"
           active={backgroundPathname === '/search'}
           onClick={onNavigate}
@@ -201,14 +232,14 @@ export default function SidebarNav({
         <Section label="创作">
           <NavItem
             href="/upload"
-            icon={<MdCloudUpload size={22} />}
+            icon={<MdCloudUpload size={ICON.standard} />}
             label="发布图片"
             active={backgroundPathname === '/upload'}
             onClick={onNavigate}
           />
           <NavItem
             href="/forum/create"
-            icon={<MdEditNote size={22} />}
+            icon={<MdEditNote size={ICON.standard} />}
             label="发布帖子"
             active={backgroundPathname === '/forum/create'}
             onClick={onNavigate}
@@ -220,14 +251,14 @@ export default function SidebarNav({
         <Section label="我的">
           <NavItem
             href="/favorites"
-            icon={<MdCollectionsBookmark size={22} />}
+            icon={<MdCollectionsBookmark size={ICON.standard} />}
             label="我的收藏"
             active={backgroundPathname === '/favorites'}
             onClick={onNavigate}
           />
           <NavItem
             href="/messages"
-            icon={<MdNotifications size={22} />}
+            icon={<MdNotifications size={ICON.standard} />}
             label="消息"
             active={backgroundPathname === '/messages'}
             badge={unread}
@@ -235,21 +266,21 @@ export default function SidebarNav({
           />
           <NavItem
             href="/history"
-            icon={<MdHistory size={22} />}
+            icon={<MdHistory size={ICON.standard} />}
             label="浏览历史"
             active={backgroundPathname === '/history'}
             onClick={onNavigate}
           />
           <NavItem
             href="/tasks"
-            icon={<MdEmojiEvents size={22} />}
+            icon={<MdEmojiEvents size={ICON.standard} />}
             label="任务"
             active={backgroundPathname === '/tasks'}
             onClick={onNavigate}
           />
           <NavItem
             href="/block-groups"
-            icon={<MdShield size={22} />}
+            icon={<MdShield size={ICON.standard} />}
             label="屏蔽组"
             active={backgroundPathname === '/block-groups'}
             onClick={onNavigate}
@@ -257,13 +288,15 @@ export default function SidebarNav({
         </Section>
       )}
 
-      {user && <div className="bg-outline-variant mx-4 my-2 h-px" />}
+      {/* `shrink-0` for the same reason as the structural rule in `AppLayout`: a
+          1px flex item in a column absorbs overflow and collapses to nothing. */}
+      {user && <div className="bg-outline-variant mx-4 my-2 h-px shrink-0" />}
 
       <Section>
         {user && (
           <NavItem
             href="/settings"
-            icon={<MdSettings size={22} />}
+            icon={<MdSettings size={ICON.standard} />}
             label="设置"
             active={backgroundPathname === '/settings'}
             onClick={onNavigate}
@@ -272,13 +305,13 @@ export default function SidebarNav({
         {staff && (
           <NavItem
             href="/admin"
-            icon={<MdDashboard size={22} />}
+            icon={<MdDashboard size={ICON.standard} />}
             label="管理面板"
             active={backgroundPathname.startsWith('/admin')}
             onClick={onNavigate}
           />
         )}
-        {user && <NavItem icon={<MdLogout size={22} />} label="登出" onClick={onLogout} />}
+        {user && <NavItem icon={<MdLogout size={ICON.standard} />} label="登出" onClick={onLogout} />}
       </Section>
     </nav>
   );

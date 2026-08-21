@@ -68,6 +68,16 @@ export type HeroRouteRegistration = HeroSurfaceNodes & {
   target: HTMLElement | null;
   /** The route can paint the same pixels the flyer is showing. */
   previewPaintable: boolean;
+  /**
+   * The route has finished resolving and has **no** hero media — the failure state.
+   *
+   * Without it the handoff can never be satisfied: it requires a paintable preview and a
+   * target, and both are set only by `DetailImage`/`DetailVideo`, which the failure branch
+   * does not render. The wait then ran to `HERO_DETAIL_ROUTE_TIMEOUT_MS`, so an image that
+   * turned out not to exist left the error page sealed and the screen blank for **30
+   * seconds** before `reconcileIdleLocation` surfaced it.
+   */
+  resolvedWithoutMedia: boolean;
 };
 
 export type HeroStageNodes = HeroSurfaceNodes & {
@@ -90,6 +100,17 @@ export type HeroOpenIntent = {
   /** Replaying a history entry rather than starting a fresh navigation. */
   historyRestore?: boolean;
 };
+
+/**
+ * Which of the two exit choreographies a close runs.
+ *
+ * `container` shrinks the whole detail surface back into the thumbnail — Material's container
+ * transform read backwards, with the return thresholds. `dismiss` does not: a swipe-down is a
+ * gesture the hand is already driving, so the surface keeps the translate and veil the finger
+ * left it at and only continues them. M3 draws the same line for a drawer, settling a drag
+ * release on a different spring from a close.
+ */
+export type HeroChoreography = 'container' | 'dismiss';
 
 export type HeroCloseIntent = {
   imageId: number;

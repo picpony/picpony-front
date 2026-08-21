@@ -21,10 +21,13 @@ export default function RefreshButton({
        spinner was a rotating `MdRefresh` in one place and a `Spinner` everywhere
        else, for the same state.
 
-       `motion-reduce:` on the hover rotate, which the identical idiom in
-       `Modal` and `AuthModal` already carries — the reduced-motion enumeration
-       covers `animate-*` keyframes and (now) `transition-ui`, but a named
-       `transition-transform` still needs its own opt-out. */
+       `motion-reduce:` on the hover *end state* only. The named
+       `transition-transform` is in the reduced-motion enumeration in globals.css,
+       which re-declares `transition-property` with `!important` — so a
+       `motion-reduce:transition-none` beside it never won and was dropped. What the
+       global rule cannot reach is the rotation the hover leaves behind, which is
+       what `motion-reduce:group-hover:rotate-0` is for. `IconButton dismiss` and
+       `Pagination` carry the same one-attribute form. */
     <Button
       variant="accent"
       className="group"
@@ -32,8 +35,10 @@ export default function RefreshButton({
       loading={loading}
       icon={
         <MdRefresh
-          size={18}
-          className="transition-transform duration-300 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:transition-none motion-reduce:group-hover:rotate-0"
+          /* No `size`: `Button` sizes its own icon slot now (20dp at this step,
+             `ButtonSmallTokens.IconSize`). It passed `ICON.dense` (18), which is the
+             chip/metadata size — one glyph, two opinions. */
+          className="transition-transform duration-200 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
         />
       }
       data-ripple

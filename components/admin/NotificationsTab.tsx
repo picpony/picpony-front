@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { api } from '@/lib/api';
+import { useState, useEffect } from 'react';
 import { showToast } from '@/components/Toast';
-import Modal from '@/components/Modal';
 import Select from '@/components/Select';
 import { MdNotifications, MdSend, MdDelete } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -12,6 +10,13 @@ import { SectionHeader } from './';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { Input, Textarea } from '@/components/Input';
+import { ICON } from '@/lib/icons';
+import { useConfirm } from '@/components/ConfirmDialog';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface NotificationItem {
   id: number;
@@ -28,19 +33,11 @@ export default function NotificationsTab({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
 
-  // Confirm dialog
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const confirmActionRef = useRef<(() => void) | null>(null);
-
-  const showConfirm = (action: () => void) => {
-    confirmActionRef.current = action;
-    setConfirmOpen(true);
-  };
-
-  const handleConfirm = () => {
-    confirmActionRef.current?.();
-    setConfirmOpen(false);
-  };
+  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
+     converted to the shared dialog and five — this among them — kept their own,
+     which is also why their copy drifted: every hand-rolled body dropped the
+     sentence-final 吗 that every converted one kept. */
+  const { confirmThen, confirmDialog } = useConfirm();
 
   // Form fields
   const [targetUserId, setTargetUserId] = useState(0);
@@ -50,12 +47,12 @@ export default function NotificationsTab({ token }: { token: string }) {
   const loadNotifications = async () => {
     setLoading(true);
     try {
-      const data = await api.adminGetNotifications(token, filter);
+      const data = await adminApi.adminGetNotifications(token, filter);
       if (data.success) {
         setNotifications(data.notifications || []);
       }
     } catch {
-      showToast('加载通知列表失败', 'error');
+      showToast('通知加载失败', 'error');
     } finally {
       setLoading(false);
     }
@@ -67,12 +64,12 @@ export default function NotificationsTab({ token }: { token: string }) {
     (async () => {
       setLoading(true);
       try {
-        const data = await api.adminGetNotifications(token, filter);
+        const data = await adminApi.adminGetNotifications(token, filter);
         if (!cancelled && data.success) {
           setNotifications(data.notifications || []);
         }
       } catch {
-        if (!cancelled) showToast('加载通知列表失败', 'error');
+        if (!cancelled) showToast('通知加载失败', 'error');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -89,7 +86,7 @@ export default function NotificationsTab({ token }: { token: string }) {
     }
     setSending(true);
     try {
-      const res = await api.adminSendNotification(token, {
+      const res = await adminApi.adminSendNotification(token, {
         user_id: targetUserId,
         title: title.trim(),
         content: content.trim(),
@@ -112,9 +109,9 @@ export default function NotificationsTab({ token }: { token: string }) {
   };
 
   const handleDelete = (id: number) => {
-    showConfirm(async () => {
+    confirmThen('确认删除', '确定要删除此通知吗？', async () => {
       try {
-        const res = await api.adminDeleteNotification(token, id);
+        const res = await adminApi.adminDeleteNotification(token, id);
         const data = await res.json();
         if (data.success) {
           showToast('已删除', 'success');
@@ -151,8 +148,7 @@ export default function NotificationsTab({ token }: { token: string }) {
         <IconButton
           size="sm"
           onClick={() => handleDelete(n.id)}
-          icon={<MdDelete size={16} />}
-          title="删除"
+          icon={<MdDelete size={ICON.dense} />}
           aria-label={`删除通知「${n.title}」`}
           className="text-error"
         />
@@ -163,17 +159,17 @@ export default function NotificationsTab({ token }: { token: string }) {
     <div className="space-y-6">
       {' '}
       <SectionHeader
-        icon={<MdNotifications className="text-primary" size={24} />}
+        icon={<MdNotifications size={ICON.standard} />}
         title="系统通知发送"
         onRefresh={loadNotifications}
-      />{' '}
+      />
       <Card variant="transparent" className="space-y-4">
         {' '}
         <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
           {' '}
-          使用系统通知可以向特定用户或全站用户发送消息（信箱红点提醒）。用户ID填 0
+          使用系统通知可以向特定用户或全站用户发送消息（信箱红点提醒）。用户 ID填 0
           代表全站广播。{' '}
-        </Card>{' '}
+        </Card>
         <div>
           {' '}
           <Input
@@ -183,8 +179,8 @@ export default function NotificationsTab({ token }: { token: string }) {
             min={0}
             value={targetUserId}
             onChange={(e) => setTargetUserId(parseInt(e.target.value) || 0)}
-          />{' '}
-        </div>{' '}
+          />
+        </div>
         <div>
           {' '}
           <Input
@@ -194,27 +190,27 @@ export default function NotificationsTab({ token }: { token: string }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例如：您的稿件已被审核通过"
-          />{' '}
-        </div>{' '}
+          />
+        </div>
         <div>
           {' '}
           <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="notificationstab-f3">
             通知正文
-          </label>{' '}
+          </label>
           <Textarea
             id="notificationstab-f3"
             rows={4}
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="通知的详细内容..."
-          />{' '}
-        </div>{' '}
+            placeholder="通知的详细内容…"
+          />
+        </div>
         <Button
           onClick={handleSend}
           variant="filled"
           loading={sending}
           className="self-start"
-          icon={<MdSend size={16} />}
+          icon={<MdSend size={ICON.dense} />}
         >
           发送通知
         </Button>
@@ -222,7 +218,10 @@ export default function NotificationsTab({ token }: { token: string }) {
       <Card variant="transparent">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-label-l text-on-surface">历史通知记录</h3>
+          {/* A card header, not a form column — so the small step, beside the
+              heading rather than towering over it. */}
           <Select
+            size="sm"
             value={filter}
             onChange={(v) => setFilter(v)}
             aria-label="通知筛选"
@@ -242,24 +241,7 @@ export default function NotificationsTab({ token }: { token: string }) {
           empty="暂无通知记录"
         />
       </Card>
-      <Modal
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        title="确认删除"
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setConfirmOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleConfirm}>
-              确认
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">确定要删除此通知？</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

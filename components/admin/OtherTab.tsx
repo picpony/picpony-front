@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { MdBuild, MdWarning, MdTranslate, MdBarChart, MdSync } from 'react-icons/md';
@@ -9,6 +8,12 @@ import Button from '@/components/Button';
 import { useConfirm } from '@/components/ConfirmDialog';
 import Card from '@/components/Card';
 import { Textarea } from '@/components/Input';
+import { ICON } from '@/lib/icons';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 export default function OtherTab({ token }: { token: string }) {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -17,24 +22,14 @@ export default function OtherTab({ token }: { token: string }) {
   const [stats, setStats] = useState({ images: 0, tags: 0, comments: 0, updated_at: '-' });
   const [isLoading, setIsLoading] = useState(false);
 
-  /* One dialog for the whole app (`useConfirm`), not four pieces of state and a
-     ref per tab. The signature is kept so the call sites read unchanged; what
-     went away is the second copy of the Modal, its footer and its title/message
-     state — five admin tabs had built the identical thing. */
-  const { confirm, confirmDialog } = useConfirm();
-
-  const showOtherConfirm = (title: string, message: string, action: () => void) => {
-    void confirm({ title, message }).then((confirmed) => {
-      if (confirmed) action();
-    });
-  };
+  const { confirmThen, confirmDialog } = useConfirm();
 
   useEffect(() => {
     const doLoad = async () => {
       try {
         const [dataResult, statsResult] = await Promise.all([
-          api.getMaintenanceStatus().catch(() => null),
-          api.getSiteStats().catch(() => null),
+          adminApi.getMaintenanceStatus().catch(() => null),
+          adminApi.getSiteStats().catch(() => null),
         ]);
 
         if (dataResult?.success) {
@@ -42,14 +37,14 @@ export default function OtherTab({ token }: { token: string }) {
           setMaintenanceMessage(dataResult.maintenance_message || '');
           setTranslateEnabled(dataResult.translate_enabled !== false);
         } else {
-          showToast('加载设置失败', 'error');
+          showToast('设置加载失败', 'error');
         }
 
         if (statsResult?.success && statsResult.stats) {
           setStats(statsResult.stats);
         }
       } catch {
-        showToast('加载设置失败', 'error');
+        showToast('设置加载失败', 'error');
       }
     };
     doLoad();
@@ -58,12 +53,12 @@ export default function OtherTab({ token }: { token: string }) {
   const toggleMaintenance = async () => {
     const newValue = !maintenanceMode;
     if (newValue) {
-      showOtherConfirm(
+      confirmThen(
         '确认开启维护模式',
         '开启维护模式后，所有非管理员用户将无法访问网站，确定要开启吗？',
         async () => {
           try {
-            const res = await api.adminToggleMaintenance(token, {
+            const res = await adminApi.adminToggleMaintenance(token, {
               maintenance_mode: newValue,
               maintenance_message: maintenanceMessage,
             });
@@ -81,7 +76,7 @@ export default function OtherTab({ token }: { token: string }) {
       );
     } else {
       try {
-        const res = await api.adminToggleMaintenance(token, {
+        const res = await adminApi.adminToggleMaintenance(token, {
           maintenance_mode: newValue,
           maintenance_message: maintenanceMessage,
         });
@@ -101,7 +96,7 @@ export default function OtherTab({ token }: { token: string }) {
   const toggleTranslate = async () => {
     const newValue = !translateEnabled;
     try {
-      const res = await api.adminToggleTranslate(token, { translate_enabled: newValue });
+      const res = await adminApi.adminToggleTranslate(token, { translate_enabled: newValue });
       const data = await res.json();
       if (data.success) {
         setTranslateEnabled(newValue);
@@ -115,7 +110,7 @@ export default function OtherTab({ token }: { token: string }) {
   };
 
   const syncStats = async () => {
-    showOtherConfirm('确认同步', '确定要从原站同步最新的数据统计吗？', async () => {
+    confirmThen('确认同步', '确定要从原站同步最新的数据统计吗？', async () => {
       setIsLoading(true);
       try {
         showToast('同步功能需要后端支持', 'warning');
@@ -128,9 +123,9 @@ export default function OtherTab({ token }: { token: string }) {
     <div className="space-y-6">
       {' '}
       <h2 className="text-title-l text-on-surface flex items-center gap-2">
-        {' '}
-        <MdBuild className="text-primary" size={24} /> 其他功能{' '}
-      </h2>{' '}
+        
+        <MdBuild size={ICON.standard} /> 其他功能
+      </h2>
       <Card variant="filled">
         {/* `layout="row"` rather than a hand-built `justify-between` pair. Same
             reading order, one description ink, and the whole row is now the
@@ -142,7 +137,7 @@ export default function OtherTab({ token }: { token: string }) {
           onChange={toggleMaintenance}
           label={
             <span className="flex items-center gap-2">
-              <MdWarning size={20} /> 维护模式
+              <MdWarning size={ICON.control} /> 维护模式
             </span>
           }
           description="开启后，所有非管理员用户访问前台将看到全屏维护提示"
@@ -156,7 +151,7 @@ export default function OtherTab({ token }: { token: string }) {
               id="othertab-f1"
               value={maintenanceMessage}
               onChange={(e) => setMaintenanceMessage(e.target.value)}
-              placeholder="例如：服务器正在升级维护..."
+              placeholder="例如：服务器正在升级维护…"
               rows={2}
               className="resize-none"
             />
@@ -170,7 +165,7 @@ export default function OtherTab({ token }: { token: string }) {
           onChange={toggleTranslate}
           label={
             <span className="flex items-center gap-2">
-              <MdTranslate size={20} /> 图片翻译功能
+              <MdTranslate size={ICON.control} /> 图片翻译功能
             </span>
           }
           description="控制前台大图模态框中是否展示“一键图片翻译”按钮"
@@ -179,44 +174,44 @@ export default function OtherTab({ token }: { token: string }) {
       <Card variant="transparent">
         {' '}
         <h3 className="text-label-l text-on-surface mb-4 flex items-center gap-2">
-          {' '}
-          <MdBarChart size={20} /> 全站数据统计{' '}
-        </h3>{' '}
+          
+          <MdBarChart size={ICON.control} /> 全站数据统计
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
-          {' '}
+          
           <div className="text-center p-3 rounded-md">
             {' '}
-            <div className="text-body-s text-on-surface-variant mb-1">图片总数</div>{' '}
+            <div className="text-body-s text-on-surface-variant mb-1">图片总数</div>
             <div className="text-title-l-emphasized text-primary">
               {stats.images?.toLocaleString() || 0}
-            </div>{' '}
-          </div>{' '}
+            </div>
+          </div>
           <div className="text-center p-3 rounded-md">
             {' '}
-            <div className="text-body-s text-on-surface-variant mb-1">标签总数</div>{' '}
+            <div className="text-body-s text-on-surface-variant mb-1">标签总数</div>
             <div className="text-title-l-emphasized text-primary">
               {stats.tags?.toLocaleString() || 0}
-            </div>{' '}
-          </div>{' '}
+            </div>
+          </div>
           <div className="text-center p-3 rounded-md">
             {' '}
-            <div className="text-body-s text-on-surface-variant mb-1">评论总数</div>{' '}
+            <div className="text-body-s text-on-surface-variant mb-1">评论总数</div>
             <div className="text-title-l-emphasized text-primary">
               {stats.comments?.toLocaleString() || 0}
-            </div>{' '}
-          </div>{' '}
-        </div>{' '}
+            </div>
+          </div>
+        </div>
         <div className="flex items-center justify-between">
-          {' '}
+          
           <span className="text-body-m text-on-surface-variant">
             {' '}
-            上次同步: <span className="">{stats.updated_at || '未同步'}</span>{' '}
-          </span>{' '}
+            上次同步：<span className="">{stats.updated_at || '未同步'}</span>
+          </span>
           <Button
             variant="accent"
             onClick={syncStats}
             loading={isLoading}
-            icon={<MdSync size={18} />}
+            icon={<MdSync size={ICON.dense} />}
           >
             立即同步
           </Button>

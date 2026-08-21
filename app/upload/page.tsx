@@ -14,6 +14,7 @@ import IconButton from '@/components/IconButton';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { ICON } from '@/lib/icons';
 
 export default function UploadPage() {
   const { getUserInfo } = useAuth();
@@ -131,7 +132,7 @@ export default function UploadPage() {
         const imageId = data?.image?.id;
         if (imageId) {
           setUploadResult({ id: imageId });
-          showToast(`发布成功！图片 ID: ${imageId}`, 'success');
+          showToast(`发布成功，图片 ID：${imageId}`, 'success');
         } else {
           showToast('上传成功，但未能获取图片 ID', 'success');
         }
@@ -164,7 +165,7 @@ export default function UploadPage() {
         recordWeekly();
         resetForm();
       } else {
-        showToast('网络错误，请检查网络连接后重试', 'error');
+        showToast('网络错误，请稍后再试', 'error');
       }
     } finally {
       setIsUploading(false);
@@ -175,7 +176,7 @@ export default function UploadPage() {
   if (!user || !user.token) {
     return (
       <EmptyState
-        icon={<MdCloudUpload size={48} />}
+        icon={<MdCloudUpload size={ICON.display} />}
         title="需要登录"
         description="请先登录后再发布图片"
         action={
@@ -190,14 +191,14 @@ export default function UploadPage() {
   if (!userApiKey) {
     return (
       <EmptyState
-        icon={<MdInfoOutline size={48} className="text-warning" />}
+        icon={<MdInfoOutline size={ICON.display} className="text-warning" />}
         title="未配置 API Key"
         description="发布图片需要绑定 Derpibooru API Key，请先在设置中配置"
         action={
           <Button
             onClick={() => router.push('/settings')}
             variant="filled"
-            icon={<MdOpenInNew size={18} />}
+            icon={<MdOpenInNew size={ICON.dense} />}
           >
             前往设置
           </Button>
@@ -224,7 +225,7 @@ export default function UploadPage() {
         <div className="bg-success-container text-on-success-container rounded-md p-8 text-center">
           <div className="bg-success-fill text-on-fill mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
             <svg
-              className="w-8 h-8"
+              className="size-9"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -245,7 +246,7 @@ export default function UploadPage() {
             <Button
               onClick={() => router.push(`/pic/${uploadResult.id}`)}
               variant="filled"
-              icon={<MdOpenInNew size={18} />}
+              icon={<MdOpenInNew size={ICON.dense} />}
             >
               查看图片
             </Button>
@@ -271,11 +272,17 @@ export default function UploadPage() {
           >
 
             {preview ? (
-              <div className="relative inline-block max-w-full animate-pop-in">
+              /* `animate-fade-in` (400ms `decelerate`, the enters-the-screen pairing),
+                 not `animate-pop-in`. `popIn` is the floating-surface growth — a 4px
+                 rise plus a 0.95 scale — which is right for a popover appearing out of
+                 its anchor and wrong for a half-viewport image appearing in a drop
+                 zone: the scale made the preview visibly settle into its own box, as
+                 if it had been dropped slightly off-target. */
+              <div className="relative inline-block max-w-full animate-fade-in">
                 {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
                 <img
                   src={preview}
-                  alt="Preview"
+                  alt="预览"
                   className="max-h-[50vh] max-w-full rounded-md object-contain mx-auto"
                 />
                 {/* `IconButton` gives the box, the state layer, the ripple and the
@@ -283,9 +290,9 @@ export default function UploadPage() {
                     hand-sized `w-8 h-8` box — and `touch-target` cannot be
                     combined with a ripple anyway, since `data-ripple`'s
                     `overflow: hidden` clips the hit-area pseudo-element out of
-                    hit-testing. It also stacked `hover:rotate-90` *and*
-                    `hover:scale-110`, where the app's one precedent for a
-                    rotating dismiss (`Modal`'s close) uses the rotation alone. */}
+                    hit-testing. It also stacked the dismiss rotation *and* a
+                    10% hover scale, where the app's one precedent for a rotating
+                    dismiss (`Modal`'s close) uses the rotation alone. */}
                 <IconButton
                   size="sm"
                   onClick={(e) => {
@@ -293,10 +300,11 @@ export default function UploadPage() {
                     removeFile();
                   }}
                   aria-label="移除文件"
-                  title="移除文件"
+
                   dismiss
-                  className="bg-error-fill text-on-fill absolute -top-3 -right-3 shadow-e3"
-                  icon={<MdClose size={16} />}
+                  variant="danger"
+                  className="absolute -top-3 -right-3"
+                  icon={<MdClose size={ICON.dense} />}
                 />
                 <p className="mt-2 text-body-s text-on-surface-variant">
                   {(file!.size / 1024 / 1024).toFixed(2)} MB — 点击更换
@@ -310,9 +318,9 @@ export default function UploadPage() {
                   controls
                 />
                 <Button
-                  icon={<MdClose size={14} />}
+                  icon={<MdClose size={ICON.dense} />}
                   variant="danger-text"
-                  size="sm"
+                  size="xs"
                   className="mt-3"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -327,7 +335,7 @@ export default function UploadPage() {
               </div>
             ) : (
               <>
-                <MdCloudUpload size={56} className="mx-auto mb-4 text-outline" />
+                <MdCloudUpload size={ICON.display} className="mx-auto mb-4 text-outline" />
                 <p className="text-body-l-emphasized text-on-surface-variant mb-1">
                   点击选择或拖拽文件到此处
                 </p>
@@ -357,7 +365,7 @@ export default function UploadPage() {
               label="来源链接"
               value={source}
               onChange={(e) => setSource(e.target.value)}
-              placeholder="Source URL (选填)"
+              placeholder="例如 https://derpibooru.org/…（选填）"
             />
 
             <Textarea
@@ -367,7 +375,7 @@ export default function UploadPage() {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               className="resize-none"
-              placeholder="Description (选填)"
+              placeholder="简单描述这张作品（选填）"
             />
 
             {/* 上传按钮 */}
@@ -378,9 +386,9 @@ export default function UploadPage() {
               fullWidth
               loading={isUploading}
               disabled={!file}
-              icon={<MdCloudUpload size={22} />}
+              icon={<MdCloudUpload size={ICON.standard} />}
             >
-              {isUploading ? '上传中...' : '确认发布'}
+              {isUploading ? '上传中…' : '确认发布'}
             </Button>
           </div>
         </>

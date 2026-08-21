@@ -54,6 +54,7 @@ export type {
   Notification,
   InteractionNotificationsResponse,
   UnreadCountsResponse,
+  Announcement,
 } from '@/lib/types/message';
 
 export type { CaptchaGetResponse, CaptchaVerifyResponse } from '@/lib/types/captcha';
@@ -64,153 +65,11 @@ export type { CaptchaGetResponse, CaptchaVerifyResponse } from '@/lib/types/capt
 
 export { getBrowsingSettings, applyCdn, buildSearchQuery, proxyFetch } from '@/lib/api/client';
 
-export {
-  getImage,
-  getImages,
-  getFeatured,
-  searchDerpiImages,
-  searchImagesByIds,
-  searchDerpiTags,
-  getDerpiPopularTags,
-  getDerpiProfile,
-  uploadImageToDerpi,
-} from '@/lib/api/derpi';
-
-export {
-  login,
-  register,
-  getUser,
-  getUserProfile,
-  changeUsername,
-  changePassword,
-  saveProfile,
-  uploadAvatar,
-  uploadBanner,
-  getFaves,
-  toggleFave,
-  getSharedFaves,
-  getSharedFavesByUsername,
-  postComment,
-  getComments,
-  getUserComments,
-  getUserPosts,
-  getForumPosts,
-  getForumPostDetail,
-  createForumPost,
-  createForumComment,
-  toggleForumPostLike,
-  uploadForumImage,
-  getNotifications,
-  getInteractionNotifications,
-  getRecentContacts,
-  getMessages,
-  getUnreadCounts,
-  sendMessage,
-  captchaGet,
-  captchaVerify,
-  getAnnouncement,
-  getAnnouncementHistory,
-  saveApikey,
-  updateSettings,
-  updateEmail,
-  verifyEmail,
-  resendVerifyCode,
-  verifyEmailById,
-  resendVerifyCodeById,
-  reportImage,
-  resetPasswordRequest,
-  resetPassword,
-  searchImage,
-  getBrowsingHistory,
-  clearBrowsingHistory,
-  deleteBrowsingHistoryItem,
-  recordWeeklyUpload,
-  addBrowsingHistory,
-  checkHasPrivacyPassword,
-  setPrivacyPassword,
-  verifyPrivacyPassword,
-  getPrivacyFaves,
-  addPrivacyFave,
-  removePrivacyFave,
-  getMyBadges,
-  equipBadge,
-  getTasks,
-  claimTask,
-  getCoinTransactions,
-  getBlockGroups,
-  saveBlockGroup,
-  deleteBlockGroup,
-  toggleBlockGroup,
-  getGlossaryEntries,
-  createGlossaryEntry,
-  updateGlossaryEntry,
-  deleteGlossaryEntry,
-  getDictionary,
-  getTagTranslations,
-  getDeveloperStatus,
-  enableDeveloperMode,
-  disableDeveloperMode,
-  getDictionaryDuplicates,
-  saveDictionaryTag,
-  deleteDictionaryTag,
-  getDictionaryLeaderboard,
-  getDictionaryTagHistory,
-  getTagGroups,
-  saveTagGroup,
-  deleteTagGroup,
-} from '@/lib/api/picpony';
-
-export {
-  adminGetUsers,
-  adminUpdateUser,
-  adminDeleteUser,
-  adminGetWealth,
-  adminUpdateWealth,
-  adminGetShopItems,
-  adminSaveShopItem,
-  adminDeleteShopItem,
-  adminGetReports,
-  adminHandleReport,
-  adminGetBlacklist,
-  adminAddBlacklist,
-  adminRemoveBlacklist,
-  saveAnnouncement,
-  adminDeleteAnnouncement,
-  adminGetAllMessages,
-  adminSendNotification,
-  adminGetNotifications,
-  adminDeleteNotification,
-  adminGrantBadge,
-  adminGetBadgeLinks,
-  adminCreateBadgeLink,
-  adminToggleBadgeLink,
-  adminDeleteBadge,
-  adminEditBadge,
-  getMaintenanceStatus,
-  adminToggleMaintenance,
-  adminToggleTranslate,
-  getSiteStats,
-  adminSyncSiteStats,
-  adminGetMascotConfig,
-  adminSaveMascotConfig,
-  adminUploadMascotImage,
-  adminDeleteMascotImage,
-  getBlockTags,
-  adminAddBlockTag,
-  adminRemoveBlockTag,
-  adminGetDeveloperPassword,
-  adminRefreshDeveloperPassword,
-  adminGetDeveloperUsers,
-  adminRevokeDeveloper,
-  adminEnableDeveloper,
-  getTeamMembers,
-  addTeamMember,
-  updateTeamMember,
-  deleteTeamMember,
-  getTagFeedback,
-  handleTagFeedback,
-  checkTagExists,
-} from '@/lib/api/admin';
+/* The admin surface is deliberately **not** re-exported here.
+   `lib/api.ts` is imported by every gallery route, and a re-export keeps the
+   admin module in their graph even when nothing calls it. The eleven admin tabs
+   do `import * as adminApi from '@/lib/api/admin'` instead — each of them is
+   already a `dynamic(…, { ssr: false })` chunk. */
 
 // ---------------------------------------------------------------------------
 // 兼容性 api 命名空间对象
@@ -219,16 +78,28 @@ export {
 
 import * as derpi from '@/lib/api/derpi';
 import * as picpony from '@/lib/api/picpony';
-import * as admin from '@/lib/api/admin';
 import { applyCdn, proxyFetch, buildSearchQuery } from '@/lib/api/client';
 
+/**
+ * The admin surface is **not** in here, and that is the one thing about this
+ * object worth knowing.
+ *
+ * It is built by spreading modules, so it is a runtime value rather than a set of
+ * re-exports and no bundler can tree-shake it: every importer of `api` pulls every
+ * member. Thirty-nine files import it, including `app/page.tsx`, `ImageCard`,
+ * `MasonryGrid` and `FeaturedBanner` — so while `lib/api/admin.ts`'s 43 functions
+ * were spread in here, the home page shipped the entire admin console's API layer.
+ *
+ * They live on `adminApi` (`@/lib/api/admin`) now, whose only importers are the
+ * eleven admin tabs — each of which is already `dynamic(…, { ssr: false })` and so
+ * in its own chunk. Splitting the whole object into named re-exports is still the
+ * end state; this is the half of it that pays for itself immediately.
+ */
 export const api = {
   // Derpibooru
   ...derpi,
   // PicPony
   ...picpony,
-  // Admin
-  ...admin,
   // 工具
   applyCdn,
   proxyFetch,

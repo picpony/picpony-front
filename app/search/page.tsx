@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback, useId } from 'react';
 import { MdSearch, MdImageSearch, MdSearchOff, MdArrowBack, MdExpandMore } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
@@ -22,9 +22,10 @@ import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import IconButton from '@/components/IconButton';
 import Chip from '@/components/Chip';
-import { useEscapeBack } from '@/lib/hooks';
+import { readToken, useEscapeBack } from '@/lib/hooks';
 import SectionHeading from '@/components/SectionHeading';
 import Popover from '@/components/Popover';
+import { ICON } from '@/lib/icons';
 
 interface DictionaryEntry {
   id: number;
@@ -40,11 +41,11 @@ function CustomImageList({ images, onBack }: { images: PonyImage[]; onBack: () =
   if (images.length === 0) {
     return (
       <EmptyState
-        icon={<MdImageSearch size={48} />}
+        icon={<MdImageSearch size={ICON.display} />}
         title="没有找到匹配的图片"
         description="换一张图，或者放宽一点相似度再试。"
         action={
-          <Button variant="tonal" onClick={onBack} icon={<MdArrowBack size={20} />}>
+          <Button variant="tonal" onClick={onBack} icon={<MdArrowBack size={ICON.control} />}>
             返回
           </Button>
         }
@@ -54,13 +55,12 @@ function CustomImageList({ images, onBack }: { images: PonyImage[]; onBack: () =
 
   return (
     <>
-      <div className="mb-6 flex items-center justify-between rounded-md p-4">
+      <div className="mb-6 flex items-center">
         <div className="flex items-center gap-3">
           <IconButton
             onClick={onBack}
-            title="返回"
             aria-label="返回"
-            icon={<MdArrowBack size={20} />}
+            icon={<MdArrowBack size={ICON.control} />}
           />
           <div>
             <SectionHeading className="mb-0" subtitle={`找到 ${images.length} 张相似图片`}>
@@ -158,6 +158,15 @@ function SearchPageContent() {
   const [suggestions, setSuggestions] = useState<DictionaryEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [acCursor, setAcCursor] = useState(0);
+  /* The combobox contract needs stable ids: one for the listbox so the field can
+     point `aria-controls` at it, and one per row so `aria-activedescendant` can
+     name the cursor. Without them the field declared no relationship to the list
+     at all — the rows carried `role="option"` and `aria-selected`, which describes
+     a *selection* inside a listbox nobody had been told about, and the keyboard
+     cursor was announced to nothing. */
+  const acId = useId();
+  const acListboxId = `${acId}-listbox`;
+  const acOptionId = (i: number) => `${acId}-option-${i}`;
   const acChunkRef = useRef<{ start: number; end: number; prefix: string }>({
     start: 0,
     end: 0,
@@ -275,6 +284,12 @@ function SearchPageContent() {
      handles its own, so both stand this down while they are open. */
   useEscapeBack(handleBack, !showSuggestions && !isImageSearchOpen);
 
+  /* One expression for "the popup is showing", because three things have to agree
+     about it: the `Popover`'s own `open`, `aria-expanded`, and whether
+     `aria-controls`/`aria-activedescendant` should be present at all. Spelling the
+     condition out at each of them is how they drift. */
+  const acOpen = showSuggestions && suggestions.length > 0;
+
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (!showSuggestions || suggestions.length === 0) return;
@@ -307,13 +322,7 @@ function SearchPageContent() {
   }, [q]);
 
   useEffect(() => {
-    try {
-      const userInfoStr = localStorage.getItem('user_info');
-      if (userInfoStr) {
-        const userInfo = JSON.parse(userInfoStr);
-        tokenRef.current = userInfo.token || null;
-      }
-    } catch {}
+    tokenRef.current = readToken();
   }, []);
 
   useEffect(() => {
@@ -453,18 +462,41 @@ function SearchPageContent() {
   return (
     <>
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6 max-w-3xl mx-auto">
+        {/* `2xl`, the form column, not a sixth page width. The page itself is `7xl`
+            because what fills it is a grid of pictures; the field and the advanced
+            panel below are a *form* inside that column, and a form column is `2xl`
+            here (see /upload). Both blocks carry the same value so the panel lines up
+            with the field that opens it — they were 3xl and 2xl once, which put the
+            panel 48px narrower per side than its own trigger. */}
+        <div className="mb-6 max-w-2xl mx-auto">
           <form onSubmit={handleSearch} className="flex items-center gap-2">
             <div className="flex-1 relative" ref={inputWrapRef}>
               <Input
                 type="text"
                 size="lg"
-                icon={<MdSearch size={24} />}
+                icon={<MdSearch size={ICON.standard} />}
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}
-                placeholder="搜索图片..."
+                placeholder="搜索图片…"
                 aria-label="搜索图片"
+                /* The field is the combobox, so the whole contract sits on it:
+                   `aria-controls` names the popup, `aria-expanded` says whether it
+                   is showing, and `aria-activedescendant` names the row the arrow
+                   keys are on. It had none of these — only the rows were marked —
+                   so a screen reader was told there were options but never that
+                   this field owned them, nor which one the cursor was on.
+                   `aria-autocomplete="list"` because typing filters a list rather
+                   than completing the text inline. */
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls={acOpen ? acListboxId : undefined}
+                aria-expanded={acOpen}
+                aria-activedescendant={
+                  acOpen && acCursor >= 0 && acCursor < suggestions.length
+                    ? acOptionId(acCursor)
+                    : undefined
+                }
                 /* The two actions live *inside* the box. Outside, a search box,
                    a submit button and an image-search button were three objects
                    in a row that the eye had to associate before it could tell
@@ -474,13 +506,39 @@ function SearchPageContent() {
                    button with a word in it need no width reserved for them.
                    Both stay pills: the field is a pill too, and a centred pill
                    inside a pill is concentric without anyone doing arithmetic. */
+                /* Two controls that read as a pair. Both are 40dp pills in a 56dp
+                   pill field, which is concentric for free (`28 - 8` is half of 40) —
+                   that part was already right. What was wrong is that only one of them
+                   had a container: a bare glyph beside a solid brand pill, so the
+                   image-search action was easy to miss entirely and the right end of
+                   the field read as two unrelated objects.
+                   `tonal` gives it the secondary container — visible, clearly a
+                   sibling of the submit, and quieter than it, which is the ranking
+                   these two actions actually have. The glyph drops to `control` (20dp)
+                   to match what a 40dp button's own icon slot uses; at 24 it crowded a
+                   container that the bare version had not had to fit inside. */
                 trailing={
                   <>
+                    {/* `tonal` — a *visible* container, and that is what makes the
+                        spacing round the submit read as equal.
+
+                        Measured, every gap around 搜索 was already exactly 8px: 40dp
+                        control in a 56dp field, so 8 above and below, and 8 to the
+                        field's edge from the slot's `padding-inline-end`. Two
+                        concentric pills (28 and 20 radius, centres coincident) hold
+                        that 8 all the way round the cap too. But the control on its
+                        left was `standard` — no container — so its 40dp box was
+                        invisible and the *perceived* gap on that side was 8 plus the
+                        empty box's own 10px of padding: 18 against 8 on the other
+                        three. The boxes were even and the picture was not.
+                        So the pairing goes the other way instead: both controls carry
+                        a container, and the hierarchy is `tonal` against `filled`
+                        rather than nothing against something. */}
                     <IconButton
+                      variant="tonal"
                       onClick={() => setIsImageSearchOpen(true)}
-                      title="以图搜图"
                       aria-label="以图搜图"
-                      icon={<MdImageSearch size={22} />}
+                      icon={<MdImageSearch size={ICON.control} />}
                     />
                     <Button type="submit" variant="filled">
                       搜索
@@ -493,9 +551,10 @@ function SearchPageContent() {
                   hand-rolled recipe, and escapes any clipping ancestor by
                   portalling rather than relying on this wrapper. */}
               <Popover
-                open={showSuggestions && suggestions.length > 0}
+                open={acOpen}
                 onClose={() => setShowSuggestions(false)}
                 anchorRef={inputWrapRef}
+                id={acListboxId}
                 role="listbox"
                 aria-label="搜索建议"
                 estimatedHeight={suggestions.length * 40}
@@ -504,6 +563,7 @@ function SearchPageContent() {
                       <button
                         key={tag.id}
                         type="button"
+                        id={acOptionId(i)}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           selectSuggestion(tag);
@@ -513,86 +573,93 @@ function SearchPageContent() {
                         aria-selected={i === acCursor}
                         className={`flex items-center justify-between w-full px-3 py-2 text-left transition-ui outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
                           i === acCursor
-                            ? 'bg-primary-container text-on-primary-container'
+                            /* The keyboard cursor is the state layer at the focus
+                               weight, not a `primary-container` fill: a container
+                               pair means *selected* everywhere else in this app
+                               (the sidebar's route, a chosen `Select` option, a
+                               selected chip), and nothing here is selected until
+                               it is committed. Same treatment as `Select`'s
+                               listbox, which is the same object. */
+                            ? 'state-layer-active'
                             : 'state-layer'
                         }`}
                       >
-                        {' '}
+                        
                         <div className="flex items-center gap-2 min-w-0">
-                          {' '}
+                          
                           <span
                             className={`w-2.5 h-2.5 rounded-full shrink-0 ${tagCategoryDot(tag.cat)}`}
-                          />{' '}
+                          />
                           <div className="min-w-0">
                             {' '}
                             {tag.cn ? (
                               <span className="text-body-m text-on-surface">
                                 {' '}
-                                <span className="text-primary ">{tag.cn}</span>{' '}
-                                <span className="ml-1.5 text-on-surface-variant">{tag.en}</span>{' '}
+                                <span className="text-primary ">{tag.cn}</span>
+                                <span className="ml-1.5 text-on-surface-variant">{tag.en}</span>
                               </span>
                             ) : (
                               <span className="text-body-m text-on-surface">{tag.en}</span>
                             )}{' '}
-                          </div>{' '}
-                        </div>{' '}
+                          </div>
+                        </div>
                         <span className="text-body-s text-on-surface-variant shrink-0 ml-2">
                           {' '}
-                          {tag.count?.toLocaleString()}{' '}
-                        </span>{' '}
+                          {tag.count?.toLocaleString()}
+                        </span>
                       </button>
                     ))}{' '}
-              </Popover>{' '}
-            </div>{' '}
-          </form>{' '}
+              </Popover>
+            </div>
+          </form>
         </div>{' '}
         {tagInfo.loading ? (
           <div className="mb-6 flex items-center gap-2 text-body-m text-on-surface-variant">
-            {' '}
-            <Spinner size="sm" /> <span>查询中...</span>{' '}
+            
+            <Spinner size="sm" /> <span>查询中…</span>
           </div>
         ) : tagInfo.data ? (
           <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-body-m text-on-surface-variant">
-            {' '}
+            
             {tagInfo.data.cn && (
               <div>
                 {' '}
-                <span className="text-body-s text-on-surface-variant">中文翻译</span>{' '}
-                <p className="text-body-m text-on-surface">{tagInfo.data.cn}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">中文翻译</span>
+                <p className="text-body-m text-on-surface">{tagInfo.data.cn}</p>
               </div>
-            )}{' '}
+            )}
             {tagInfo.data.count > 0 && (
               <div>
                 {' '}
-                <span className="text-body-s text-on-surface-variant">使用量</span>{' '}
-                <p className="text-body-m text-on-surface">{tagInfo.data.count.toLocaleString()}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">使用量</span>
+                <p className="text-body-m text-on-surface">{tagInfo.data.count.toLocaleString()}</p>
               </div>
-            )}{' '}
+            )}
             {tagInfo.data.cat && (
               <div>
                 {' '}
-                <span className="text-body-s text-on-surface-variant">分类</span>{' '}
-                <p className="text-body-m text-on-surface">{tagInfo.data.cat}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">分类</span>
+                <p className="text-body-m text-on-surface">{tagInfo.data.cat}</p>
               </div>
-            )}{' '}
+            )}
             {tagInfo.data.aliases && tagInfo.data.aliases.length > 0 && (
               <div>
                 {' '}
-                <span className="text-body-s text-on-surface-variant">别名</span>{' '}
+                <span className="text-body-s text-on-surface-variant">别名</span>
                 <div className="flex flex-wrap gap-1 mt-0.5">
                   {tagInfo.data.aliases.map((alias) => (
                     <Badge key={alias}>{alias}</Badge>
                   ))}
-                </div>{' '}
+                </div>
               </div>
-            )}{' '}
+            )}
             {tagInfo.data.description && (
               <div className="sm:col-span-2">
                 {' '}
-                <span className="text-body-s text-on-surface-variant">标签简介</span>{' '}
-                <MarkdownRenderer content={tagInfo.data.description} />{' '}
+                <span className="text-body-s text-on-surface-variant">标签简介</span>
+                <MarkdownRenderer content={tagInfo.data.description} />
               </div>
-            )}{' '}
+            )}
           </div>
         ) : null}{' '}
         {customResults ? (
@@ -601,7 +668,7 @@ function SearchPageContent() {
           /* The Lottie rides in `StatusView`'s glyph slot rather than being its
              own centred column, so the resting search screen has the same
              geometry and the same staggered entrance as every empty list in the
-             app. Its own class string carried `mb-4` *and* `mb-12`, i.e. two
+             app. Its own class string carried a 16px *and* a 48px bottom margin, i.e. two
              values for one property with Tailwind's output order deciding. */
           <EmptyState
             icon={
@@ -614,7 +681,16 @@ function SearchPageContent() {
                    definition. */
                 className="w-[min(39rem,88vw)]"
                 load={() => import('@/lib/lottie/search.json').then((m) => m.default)}
-                fallback={null}
+                /* 3000×1553, the composition's own box. */
+                aspect={3000 / 1553}
+                /* `fallback` used to be `null`, which meant this screen had no
+                   illustration at all under `prefers-reduced-motion` — the state
+                   the component's own reduced-motion branch exists to serve. The
+                   glyph is `display` (48dp), the app's size for an illustration
+                   over an empty state, centred in the box the ratio reserves, and
+                   it inherits `StatusView`'s own icon colour like every other
+                   empty state's glyph. */
+                fallback={<MdImageSearch size={ICON.display} />}
               />
             }
             title="输入关键词搜索图片"
@@ -629,14 +705,14 @@ function SearchPageContent() {
               (error as { status?: number }).status == 429 ||
               error.message === 'Failed to fetch' ||
               error.message === 'Too Many Requests'
-                ? '请求次数过快，超出原站限制'
+                ? '您的请求次数过快，超出原站限制'
                 : `${(error as { status?: number }).status ? `HTTP Error ${(error as { status?: number }).status}: ` : ''}${error.message}`
             }
             onRetry={handleRetry}
           />
         ) : images.length === 0 ? (
           <EmptyState
-            icon={<MdSearchOff size={48} />}
+            icon={<MdSearchOff size={ICON.display} />}
             title="没有找到匹配的图片"
             description={<>没有与「{q}」相关的结果，换个关键词或检查一下拼写。</>}
           />
@@ -673,17 +749,26 @@ function SearchPageContent() {
                   ]}
                 />
                 {sortBy !== 'random' && (
-                  <Button variant="tonal" size="sm" onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))} data-ripple>
-                    <span
-                      key={sortDir}
-                      className="inline-block animate-[icon-swap_0.3s_var(--ease-spring)]"
-                    >
+                  <Button variant="tonal" size="xs" onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))} data-ripple>
+                    {/* A fade, not `animate-icon-swap`. That keyframe is a
+                        quarter-turn spin-in built for a *glyph* — 90° of rotation and a
+                        0.6 scale on the expressive ζ0.6 spring — and this is a two-word
+                        label. Anything larger than a mark wearing that spring reads as
+                        a wobble, and text tumbling into place reads as a rendering
+                        fault. The arrow already carries the meaning, so the swap only
+                        has to be noticed: `fade-in` is 400ms `decelerate` on opacity
+                        alone, restarted by the `key`. */}
+                    <span key={sortDir} className="animate-fade-in inline-block">
                       {sortDir === 'desc' ? '↓ 降序' : '↑ 升序'}
                     </span>
                   </Button>
                 )}
+                {/* No `animate-pop-in` on the button below: that token is the
+                    floating-surface growth (a 4px rise plus a 0.95 scale), and this is a
+                    button appearing in a toolbar row. Its two neighbours enter without
+                    one, so a third entrance here had the row arriving in instalments. */}
                 {(sortParam || sortBy !== defaultSort || sortDir !== 'desc') && (
-                  <Button variant="tonal" size="sm" className="animate-pop-in" onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }} data-ripple>
+                  <Button variant="tonal" size="xs" onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }} data-ripple>
                     重置排序
                   </Button>
                 )}
@@ -697,7 +782,7 @@ function SearchPageContent() {
                   selected={showAdvanced}
                   onClick={() => setShowAdvanced((prev) => !prev)}
                   aria-expanded={showAdvanced}
-                  icon={<MdExpandMore size={14} />}
+                  icon={<MdExpandMore size={ICON.dense} />}
                 >
                   高级排序
                 </Chip>
@@ -707,12 +792,25 @@ function SearchPageContent() {
             {/* Advanced search panel */}
             {q && (
               <div
-                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-standard)] ${
-                  showAdvanced ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                /* The drawer's springs, per direction — `DefaultSpatial` opening and
+                   `FastEffects` closing, per `NavigationDrawer.kt`. This is the app's
+                   third collapsible panel and the last one still on a one-sided
+                   200/300ms curve: it ran 300ms `standard`, whose fastest tenth carries
+                   97x its last, so the panel dropped and then crept.
+                   `grid-template-rows` stays as the mechanism. It is a layout property,
+                   which the guillotine note in AGENTS.md warns about — but the failure
+                   there is a box resizing *past* fixed-width contents, and here the
+                   inner `min-h-0 overflow-hidden` track carries the whole subtree, so
+                   the contents are clipped rather than left behind. A translate would
+                   need a measured height; `0fr → 1fr` does not. */
+                className={`grid transition-[grid-template-rows,opacity] ${
+                  showAdvanced
+                    ? 'spring-default-spatial grid-rows-[1fr] opacity-100'
+                    : 'spring-fast-effects grid-rows-[0fr] opacity-0'
                 }`}
               >
                 <div className="min-h-0 overflow-hidden">
-                  <div className="mt-4 p-4 border border-outline-variant rounded-md bg-surface-container max-w-2xl mx-auto">
+                  <div className="mt-4 p-4 border border-outline-variant rounded-md bg-surface max-w-2xl mx-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {/* Upvotes */}
                       <div>
@@ -832,10 +930,10 @@ function SearchPageContent() {
                         点击&quot;应用&quot;后，筛选条件会拼接到搜索框并执行搜索。
                       </span>
                       <div className="flex gap-2">
-                        <Button variant="tonal" size="sm" onClick={clearAdvancedFilters} data-ripple>
+                        <Button variant="tonal" size="xs" onClick={clearAdvancedFilters} data-ripple>
                           重置
                         </Button>
-                        <Button onClick={applyAdvancedFilters} variant="filled" size="sm">
+                        <Button onClick={applyAdvancedFilters} variant="filled" size="xs">
                           应用并搜索
                         </Button>
                       </div>

@@ -3,7 +3,7 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
-import TabBar, { type TabItem } from '@/components/TabBar';
+import Tabs, { type TabItem } from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import PageHeader from '@/components/PageHeader';
 import PageBack from '@/components/PageBack';
@@ -40,7 +40,7 @@ function UL({ children }: { children: ReactNode }) {
 
 function Code({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded-sm bg-surface-container-high px-1.5 py-0.5 font-mono text-body-s text-on-surface">
+    <code className="rounded-xs bg-surface-container-high px-1.5 py-0.5 font-mono text-body-s text-on-surface">
       {children}
     </code>
   );
@@ -363,7 +363,7 @@ export default function PolicyPage() {
       <PageHeader title="声明与政策" />
 
       {/* 板块切换，样式与消息/通知页一致 */}
-      <TabBar
+      <Tabs
         tabs={TABS}
         value={active}
         onChange={setActive}

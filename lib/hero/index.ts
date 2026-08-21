@@ -82,6 +82,11 @@ export function markImageHeroRoutePreviewPaintable(surfaceId: string, target?: H
   imageHeroController.markRoutePreviewPaintable(surfaceId, target);
 }
 
+/** The detail resolved with nothing to fly to — see `HeroRouteRegistration`. */
+export function markImageHeroRouteResolvedWithoutMedia(surfaceId: string) {
+  imageHeroController.markRouteResolvedWithoutMedia(surfaceId);
+}
+
 export function bindImageHeroDismissGesture(
   surfaceId: string,
   canStart: () => boolean,

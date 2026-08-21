@@ -1,13 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import { MdReport, MdOpenInNew } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
 import Badge from '@/components/Badge';
 import { SectionHeader, SearchInput } from './';
 import Button from '@/components/Button';
+import { ICON } from '@/lib/icons';
+/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
+   spread and therefore un-tree-shakeable, so while the admin surface was in it
+   every gallery route shipped all 48 of these. Only the eleven admin tabs
+   import it now, and each is already its own `dynamic` chunk. */
+import * as adminApi from '@/lib/api/admin';
 
 interface Report {
   id: number;
@@ -34,12 +39,12 @@ export default function ReportsTab({ token }: { token: string }) {
   const loadReports = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await api.adminGetReports(token);
+      const data = await adminApi.adminGetReports(token);
       if (data.success) {
         setReports(data.reports || []);
       }
     } catch {
-      showToast('加载举报失败', 'error');
+      showToast('举报加载失败', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -47,14 +52,14 @@ export default function ReportsTab({ token }: { token: string }) {
 
   useEffect(() => {
     if (!token) return;
-    api
+    adminApi
       .adminGetReports(token)
       .then((data) => {
         if (data.success) {
           setReports(data.reports || []);
         }
       })
-      .catch(() => showToast('加载举报失败', 'error'))
+      .catch(() => showToast('举报加载失败', 'error'))
       .finally(() => setIsLoading(false));
   }, [token]);
 
@@ -69,7 +74,7 @@ export default function ReportsTab({ token }: { token: string }) {
 
   const handleReport = async (id: number, status: string) => {
     try {
-      const res = await api.adminHandleReport(token, id, status);
+      const res = await adminApi.adminHandleReport(token, id, status);
       const data = await res.json();
       if (data.success) {
         showToast('处理成功', 'success');
@@ -94,7 +99,7 @@ export default function ReportsTab({ token }: { token: string }) {
           rel="noopener noreferrer"
           className="text-link inline-flex items-center gap-1 hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
         >
-          #{r.image_id} <MdOpenInNew size={14} />
+          #{r.image_id} <MdOpenInNew size={ICON.dense} />
         </a>
       ),
     },
@@ -125,9 +130,8 @@ export default function ReportsTab({ token }: { token: string }) {
         r.status === 'pending' ? (
           <>
             <Button variant="success" size="xs" onClick={() => handleReport(r.id, 'processed')} data-ripple>
-              {' '}
-              完结{' '}
-            </Button>{' '}
+              完结
+            </Button>
             <Button variant="tonal" size="xs" onClick={() => handleReport(r.id, 'rejected')} data-ripple>
               驳回
             </Button>
@@ -141,7 +145,7 @@ export default function ReportsTab({ token }: { token: string }) {
   return (
     <div className="space-y-6">
       <SectionHeader
-        icon={<MdReport className="text-primary" size={24} />}
+        icon={<MdReport size={ICON.standard} />}
         title="违规举报处理"
         onRefresh={loadReports}
       />
@@ -149,7 +153,7 @@ export default function ReportsTab({ token }: { token: string }) {
       <SearchInput
         value={searchKw}
         onChange={setSearchKw}
-        placeholder="搜索举报ID、图片ID或举报人..."
+        placeholder="搜索举报 ID、图片 ID或举报人…"
       />
 
       <DataTable<Report>

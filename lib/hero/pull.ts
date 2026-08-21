@@ -13,6 +13,10 @@ import { getHeroBackgroundVisual, type DomLease } from './dom';
 import { getHeroBackgroundSinkTransform } from './geometry';
 import { heroFrameScheduler } from './scheduler';
 import { springProgress, springVelocityFromSpeed } from './spring';
+/* One `prefersReducedMotion` for the app, and it is the reactive form —
+   `lib/motion`'s reads a live `matchMedia` listener, where the private copies
+   these two files carried could not pick up a mid-session change. */
+import { prefersReducedMotion } from '@/lib/motion';
 
 const PULL_ATTRIBUTE = 'imageHeroPulling';
 const VAR_OFFSET = '--hero-pull-y';
@@ -62,9 +66,6 @@ export function createPullSample(rawDistance: number): HeroPullSample {
 
 export const PULL_REST = createPullSample(0);
 
-function prefersReducedMotion() {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 /**
  * The dismiss-drag presentation for one detail surface.
@@ -151,13 +152,16 @@ export class HeroPullSurface {
     );
     // Travel runs start → 0, so a finger still moving away is negative progress
     // speed: the surface overshoots slightly before returning, as it should.
+    /* Spread, so the release keeps the *whole* response — damping included. Rebuilt
+       field by field it silently dropped ζ back to the default and the dismiss ran a
+       critically damped curve while claiming the spatial one. */
     const response = {
-      rate: PULL_RELEASE_RESPONSE.rate,
+      ...PULL_RELEASE_RESPONSE,
       velocity: springVelocityFromSpeed(
         -releaseVelocity,
         start,
         duration,
-        PULL_RELEASE_RESPONSE.rate,
+        PULL_RELEASE_RESPONSE,
       ),
     };
 

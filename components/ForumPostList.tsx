@@ -12,6 +12,9 @@ import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import { rememberForumOrigin } from '@/lib/forumTransition';
 import Link from 'next/link';
 import Badge from '@/components/Badge';
+import { ICON } from '@/lib/icons';
+import { formatDate } from '@/lib/format';
+import { getAssetUrl } from '@/lib/utils';
 
 interface ForumPostListProps {
   posts: ForumPost[];
@@ -38,22 +41,34 @@ export default memo(function ForumPostList({
 }: ForumPostListProps) {
   if (isLoading) {
     return (
+      /* Three bars and the `mb-8`, matching the row below. It stood at two bars
+         inside no wrapper margin, so the placeholder row was measurably shorter than
+         the row it replaced *and* `Pagination` jumped up when the posts landed. The
+         real row is a title, an author line and a baseline. */
       <div className={className}>
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="m3-row bg-surface-container-low p-4 flex gap-4">
-            <SkeletonCircle size={48} delay={i * 80} />
-            <div className="flex flex-1 flex-col gap-3">
-              <Skeleton className="h-5 w-3/4" delay={i * 80 + 40} />
-              <Skeleton className="h-4 w-1/4" delay={i * 80 + 80} />
+        <div className="mb-8">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="m3-row bg-surface-container-low p-4 flex gap-4">
+              <SkeletonCircle size={48} delay={i * 80} />
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <Skeleton className="h-5 w-3/4" delay={i * 80 + 40} />
+                <Skeleton className="h-4 w-1/3" delay={i * 80 + 80} />
+                <Skeleton className="h-4 w-1/4" delay={i * 80 + 120} />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error) {
-    return <ErrorRetry title="帖子加载失败" message={error.message} onRetry={onRetry} />;
+    return (
+      /* `pane`, matching the empty branch below. It defaulted to `page`, so one
+         list had two silhouettes — a half-viewport block when it failed and a
+         32dvh one when it was merely empty. */
+      <ErrorRetry size="pane" title="帖子加载失败" message={error.message} onRetry={onRetry} />
+    );
   }
 
   return (
@@ -62,31 +77,29 @@ export default memo(function ForumPostList({
         {posts.length === 0 ? (
           <EmptyState
             size="pane"
-            icon={<MdForum size={48} />}
+            icon={<MdForum size={ICON.display} />}
             title="暂无帖子"
             description="还没有人开过话题，来发第一个吧。"
           />
         ) : (
           posts.map((post) => {
+            /* No `sm:size-4` on these glyphs. It overrode the `size` prop, so the
+               icon got *smaller* on the wider viewport — 18dp down to 16 — and 16 is
+               off the icon scale entirely (below 18 a Material Symbol's strokes stop
+               resolving and it reads as a smudge). `dense` at both sizes. */
             const stats = (
               <>
-                <span
-                  className="flex items-center gap-1 whitespace-nowrap tabular-nums"
-                  title="浏览量"
-                >
-                  <MdVisibility size={14} className="sm:size-4" /> {post.views}
+                <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
+                  <MdVisibility size={ICON.dense} aria-hidden="true" />
+                  <span className="sr-only">浏览量</span> {post.views}
                 </span>
-                <span
-                  className="flex items-center gap-1 whitespace-nowrap tabular-nums"
-                  title="回复数"
-                >
-                  <MdComment size={14} className="sm:size-4" /> {post.reply_count}
+                <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
+                  <MdComment size={ICON.dense} aria-hidden="true" />
+                  <span className="sr-only">回复数</span> {post.reply_count}
                 </span>
-                <span
-                  className="flex items-center gap-1 whitespace-nowrap tabular-nums"
-                  title="点赞数"
-                >
-                  <MdThumbUp size={14} className="sm:size-4" /> {post.like_count}
+                <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
+                  <MdThumbUp size={ICON.dense} aria-hidden="true" />
+                  <span className="sr-only">点赞数</span> {post.like_count}
                 </span>
               </>
             );
@@ -154,7 +167,12 @@ export default memo(function ForumPostList({
                         {post.title}
                       </h2>
                     </div>
-                    <span className="block truncate text-body-s text-on-surface sm:text-body-m">
+                    {/* `on-surface-variant`, which is
+                        `ListTokens.ItemSupportingTextColor`. It shared `on-surface` with
+                        the headline above it, so the row's two lines carried the same ink
+                        and stated no hierarchy — the title and the author read as equally
+                        important. */}
+                    <span className="block truncate text-body-s text-on-surface-variant sm:text-body-m">
                       {post.username}
                     </span>
                     {/* `flex-wrap` and a shrinkable stats group: with a cover
@@ -166,7 +184,7 @@ export default memo(function ForumPostList({
                         outer page numbers for the same reason. */}
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1.5 text-body-s text-on-surface-variant sm:text-body-m">
                       <span className="truncate">
-                        {new Date(post.created_at).toLocaleDateString()}
+                        {formatDate(post.created_at)}
                       </span>
                       <div className="flex items-center gap-3 sm:gap-4">{stats}</div>
                     </div>
@@ -174,11 +192,16 @@ export default memo(function ForumPostList({
                   {post.cover_image && (
                     <div className="shrink-0">
                       <FadeInImage
-                        src={`https://picpony.top${post.cover_image}`}
-                        alt="Cover"
+                        src={getAssetUrl(post.cover_image)}
+                        alt="帖子封面"
                         width={80}
                         height={80}
-                        className="object-cover rounded-md w-12 h-12 sm:w-20 sm:h-20"
+                        /* 56dp and an 8dp corner:
+                           `ListTokens.ItemLeadingImageWidth` / `-Height` are 56 and
+                           `ItemLeadingImageExpressiveShape` is `CornerSmall`. It was
+                           48dp growing to 80 with a 12dp card corner — a leading image
+                           is not a card, and neither figure was on the token. */
+                        className="object-cover rounded-sm size-14"
                       />
                     </div>
                   )}

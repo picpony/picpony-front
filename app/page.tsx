@@ -12,10 +12,11 @@ import ErrorRetry from '@/components/ErrorRetry';
 import ForumPostList from '@/components/ForumPostList';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 import { useDeferredLoading } from '@/lib/hooks';
-import { useTabPanes } from '@/lib/motion';
+import TabPanes, { TabPane } from '@/components/TabPanes';
 import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
 import Button from '@/components/Button';
 import SectionHeading from '@/components/SectionHeading';
+import { ICON } from '@/lib/icons';
 
 type HomeTab = 'gallery' | 'forum';
 
@@ -154,12 +155,17 @@ function ImageList({ onRetry }: { onRetry?: () => void }) {
     const status = (error as { status?: number }).status;
     return (
       <ErrorRetry
+        /* `pane`, not the default `page`. This renders inside a `TabPane` under the
+           home route's floating tab pill, so a half-viewport block pushes the pill
+           off a phone screen — the same reason /favorites' two status blocks are
+           `pane`. `StatusView` reserves `page` for a bare route. */
+        size="pane"
         title="图片加载失败"
         message={
           status == 429 ||
           error.message === 'Failed to fetch' ||
           error.message === 'Too Many Requests'
-            ? '你的请求次数过快，超出原站限制'
+            ? '您的请求次数过快，超出原站限制'
             : `${status ? `HTTP Error ${status}: ` : ''}${error.message}`
         }
         onRetry={handleRetry}
@@ -272,15 +278,15 @@ function ForumTab() {
           <Button
             onClick={() => router.push('/forum/create')}
             variant="filled"
-            size="sm"
-            icon={<MdAdd size={16} />}
+            size="xs"
+            icon={<MdAdd size={ICON.dense} />}
           >
             发帖
           </Button>
         }
       >
         论坛
-      </SectionHeading>{' '}
+      </SectionHeading>
       <ForumPostList
         posts={posts}
         page={page}
@@ -290,7 +296,7 @@ function ForumTab() {
         onRetry={handleRetry}
         onPageChange={handlePageChange}
         onPostClick={handlePostClick}
-      />{' '}
+      />
     </div>
   );
 }
@@ -302,12 +308,6 @@ function HomeContent() {
   useEffect(() => {
     document.title = '主页 - PicPony';
   }, []);
-
-  /* Owns the pane flags and plays the shared-axis cross-fade. The tab bar
-     starts the same transition optimistically on the tap; this adopts that one
-     when it exists, and covers every other route into a tab (back/forward, a
-     sidebar link, the /forum redirect, a deep link). */
-  const panelRef = useTabPanes<HTMLDivElement>(tab);
 
   /* The forum is mounted once and then kept mounted, hidden, alongside the
      gallery — the panel used to carry `key={tab}`, which tore the whole subtree
@@ -340,25 +340,33 @@ function HomeContent() {
   return (
     <>
       <div className="max-w-7xl mx-auto">
-        {/* No `key` here: re-keying is what used to remount both tabs. */}
-        <div ref={panelRef} data-tab-panel>
-          {/* Marked, not unmounted, so state, scroll and fetched data all
-              survive a switch. `data-tab-pane-active` is the resting state;
-              CSS in globals.css also keeps a pane boxed while it carries the
-              motion layer's `-leaving` / `-entering` flag, which is what lets
-              both panes be on screen at once during the cross-fade. */}
-          <div data-tab-pane="gallery" data-tab-pane-active={tab === 'gallery' ? '' : undefined}>
+        {/* `TabPanes`, not the wiring by hand. This screen used to spell out
+            `useTabPanes` plus two `data-tab-pane` divs, which AGENTS.md names as the
+            thing not to do.
+            `lean` is **on here and nowhere else**, and it has to be stated at both call
+            sites — this one for the reactive path (a sidebar link, back/forward, the
+            `/forum` redirect) and `startTabTransition`'s argument in `AppLayout` for the
+            tap path. It used to arrive by accident, through a parameter default that
+            disagreed with this component's; unifying the defaults to `false` took the
+            horizontal stagger off the home switch, which is the visible thing the lean
+            exists for. Safe here because the forum pane is mounted ahead of the tap. */}
+        <TabPanes value={tab} lean>
+          {/* Marked, not unmounted, so state, scroll and fetched data all survive a
+              switch — `TabPane` handles the flags. */}
+          <TabPane value="gallery">
             <FeaturedBanner reloadKey={bannerReloadKey} />
             <ImageList onRetry={handleBannerReload} />
-          </div>
+          </TabPane>
           {/* `|| tab === 'forum'` so a deep link to /?tab=forum, or a tap that
-              beats the idle callback, still produces the pane to fade into. */}
+              beats the idle callback, still produces the pane to fade into. Gating
+              the *first* mount of an expensive pane is allowed; gating it on
+              `active` is not. */}
           {(forumMounted || tab === 'forum') && (
-            <div data-tab-pane="forum" data-tab-pane-active={tab === 'forum' ? '' : undefined}>
+            <TabPane value="forum">
               <ForumTab />
-            </div>
+            </TabPane>
           )}
-        </div>
+        </TabPanes>
       </div>
     </>
   );

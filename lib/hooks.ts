@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { MEDIA } from './constants';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { LS_KEYS, MEDIA } from './constants';
 
 /**
  * Subscribes to a media query.
@@ -54,6 +54,35 @@ export function useMasonryColumns() {
 }
 
 /**
+ * The stored session, as a plain function.
+ *
+ * Forty-five call sites read `localStorage.getItem('user_info')` by hand — in
+ * seventeen files, under four different variable names, with **five** different
+ * behaviours for the same missing key (throw `未登录`; bare `return`; toast
+ * `请先登录`; `?.token || ''`; a silent `catch {}`) and **none** of them guarding
+ * `typeof window`. One reader, one shape.
+ *
+ * A function rather than only a hook, because a third of those sites are not in a
+ * hook position: a `useState` initialiser, an event handler, a module-scope helper.
+ * `useAuth` wraps it for the effect-dependency case.
+ */
+export function readUserInfo(): { token: string; [key: string]: unknown } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(LS_KEYS.userInfo);
+    if (!stored) return null;
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
+}
+
+/** The token alone, which is what most call sites actually wanted. */
+export function readToken(): string | null {
+  return readUserInfo()?.token || null;
+}
+
+/**
  * Reads the stored session.
  *
  * Every member is memoised and so is the returned object. This is not a
@@ -64,37 +93,10 @@ export function useMasonryColumns() {
  * until the upstream API rate-limited it.
  */
 export function useAuth() {
-  const getUserInfo = useCallback((): { token: string; [key: string]: unknown } | null => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const stored = localStorage.getItem('user_info');
-      if (!stored) return null;
-      return JSON.parse(stored);
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const getToken = useCallback((): string | null => {
-    const user = getUserInfo();
-    return user?.token || null;
-  }, [getUserInfo]);
-
-  return useMemo(() => ({ getUserInfo, getToken }), [getUserInfo, getToken]);
-}
-
-export function useModalAnimation(onClose: () => void) {
-  const [isClosing, setIsClosing] = useState(false);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-      setIsClosing(false);
-    }, 200);
-  };
-
-  return { isClosing, handleClose };
+  /* One stable object, not two `useCallback`s wrapping module-scope functions —
+     `readUserInfo` and `readToken` already have a stable identity, so the only
+     thing a hook has to add is that the returned object does too. */
+  return useMemo(() => ({ getUserInfo: readUserInfo, getToken: readToken }), []);
 }
 
 /**

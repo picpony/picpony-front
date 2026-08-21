@@ -120,7 +120,7 @@ export default function DataTable<T>({
            <div> would break the `.m3-row` sibling chain and give the header
            row the "last row" bottom corner radius while the list was loading. */}
       {loading &&
-        Array.from({ length: Math.min(skeletonRows, 6) }, (_, i) => (
+        Array.from({ length: skeletonRows }, (_, i) => (
           <div
             key={i}
             className="m3-row flex flex-col gap-2 bg-surface-container-low p-4"

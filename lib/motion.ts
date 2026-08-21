@@ -9,6 +9,7 @@ import { Observer } from 'gsap/Observer';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { BREAKPOINTS } from '@/lib/constants';
+import { SPRINGS, SPRING_DURATION, springEase, type SpringName } from '@/lib/spring';
 
 gsap.registerPlugin(useGSAP, CustomEase, Flip, Observer, ScrollToPlugin, ScrollTrigger);
 
@@ -17,9 +18,22 @@ gsap.registerPlugin(useGSAP, CustomEase, Flip, Observer, ScrollToPlugin, ScrollT
  * globals.css (`--ease-*` in @theme) for CSS transitions/keyframes — keep the
  * two in sync so scripted and declarative motion feel identical.
  * CustomEase registers by name, so `ease: 'decelerate'` works in any tween.
+ *
+ * These are M3's **transition** curves: for something entering, leaving or
+ * crossing the screen. Component motion — a handle travelling, a menu growing,
+ * a mark landing — is spring physics in M3 Expressive and lives below, in
+ * `springs`. Reaching for `decelerate` on a switch handle is the mistake this
+ * split exists to prevent.
+ *
+ * `standard` and `emphasized` are two different sets and not interchangeable;
+ * the short `decelerate` / `accelerate` names are the *emphasized* pair, which
+ * is what every existing call site means by them. The standard pair is spelled
+ * out in full for the same reason globals.css does it.
  */
 export const eases = {
   standard: CustomEase.create('standard', '0.2, 0, 0, 1'),
+  standardDecelerate: CustomEase.create('standard-decelerate', '0, 0, 0, 1'),
+  standardAccelerate: CustomEase.create('standard-accelerate', '0.3, 0, 1, 1'),
   decelerate: CustomEase.create('decelerate', '0.05, 0.7, 0.1, 1'),
   accelerate: CustomEase.create('accelerate', '0.3, 0, 0.8, 0.15'),
   /**
@@ -35,7 +49,17 @@ export const eases = {
     'emphasized',
     'M0,0 C0.05,0 0.133333,0.06 0.166666,0.4 C0.208333,0.82 0.25,1 1,1',
   ),
-  spring: 'back.out(1.55)',
+  /**
+   * Symmetric — eases in as well as out. Every curve above is one-sided by
+   * construction, which leaves two motions with no token: a repeating one, whose
+   * velocity would be discontinuous once per cycle, and a panel travelling in
+   * place with both ends of its journey on screen, which starts and stops at rest
+   * and reads as a jump-then-stall on a one-sided curve. The CSS twin is
+   * `--ease-symmetric`.
+   */
+  symmetric: CustomEase.create('symmetric', '0.4, 0, 0.6, 1'),
+  /** Alias of `symmetric`, kept because "loop" is the role at its call sites. */
+  loop: CustomEase.create('loop', '0.4, 0, 0.6, 1'),
   /**
    * Long-distance scrolling. Starts and ends at rest, so it needs to ease at
    * both ends — the M3 curves above are one-sided (`accelerate` is for content
@@ -45,7 +69,40 @@ export const eases = {
   scroll: CustomEase.create('scroll', '0.33, 0, 0, 1'),
 } as const;
 
-gsap.defaults({ ease: eases.standard, duration: 0.4, overwrite: 'auto' });
+/**
+ * The nine M3 Expressive component springs, registered as GSAP eases under the
+ * names `spring-fastSpatial`, `spring-defaultSpatial`, … See `lib/spring.ts` for
+ * the physics and for why spatial may overshoot while effects never can.
+ *
+ * Registered as **closed-form functions** rather than sampled tables, which is
+ * the one advantage the scripted side has over CSS here: no interpolation error
+ * at all. Pair each with `SPRING.<name>` for its settle time — the two together
+ * are the spring, and using one without the other gives a curve on the wrong
+ * clock.
+ *
+ *     gsap.to(el, { x: 0, ...spring('fastSpatial') })
+ */
+for (const [name, spec] of Object.entries(SPRINGS)) {
+  gsap.registerEase(`spring-${name}`, springEase(spec));
+}
+
+/** Settle times in seconds, keyed the same way. */
+export const SPRING = SPRING_DURATION;
+
+/**
+ * A spring as a ready-made `{ duration, ease }` pair, so the two cannot drift
+ * apart at a call site.
+ */
+export function spring(name: SpringName): { duration: number; ease: string } {
+  return { duration: SPRING_DURATION[name], ease: `spring-${name}` };
+}
+
+/* Matches the CSS safety net (`--default-transition-duration: 200ms` +
+   `--ease-standard`). It read 0.4s, which pairs `standard` with a duration from
+   another row of the table, so the two renderers' fallbacks disagreed. Spelled as a
+   literal rather than `DURATION.short` because this call runs at module load, above
+   that declaration. */
+gsap.defaults({ ease: eases.standard, duration: 0.2, overwrite: 'auto' });
 
 /* Never let a stalled frame be charged to an animation.
  *
@@ -75,9 +132,17 @@ gsap.ticker.lagSmoothing(100, 33);
  *   begins and ends on screen → `medium` + `standard`
  *   large container transform → `emphasized` + `standard`
  *
+ * This is the **transition** scale. A component's own motion — a handle
+ * travelling, a mark landing, a container growing — takes a spring instead; see
+ * `spring()` above. Duration is then a *result* of the physics rather than a
+ * value picked from a list, which is why those numbers are not in this table.
+ *
  * `press` is below the scale on purpose: a press-down must feel like contact,
- * not like an animation. CSS twins are the `duration-*` utilities — 200/300/400
- * exist in Tailwind by default, so no theme entry is needed.
+ * not like an animation. It is `short2` (100ms), the smallest step M3 defines
+ * above the 50ms micro-interaction — it read 120ms until this pass, which is
+ * not a step on the scale at all and was the value three call sites had copied.
+ * CSS twins are the `duration-*` utilities — 100/200/300/400 all exist in
+ * Tailwind by default, so no theme entry is needed.
  *
  * `state` is below it again, and is the one value here that this file does not
  * own: it is the `state-layer` utility's own `transition: opacity 150ms` in
@@ -89,7 +154,7 @@ gsap.ticker.lagSmoothing(100, 33);
  */
 export const DURATION = {
   state: 0.15,
-  press: 0.12,
+  press: 0.1,
   short: 0.2,
   medium: 0.3,
   long: 0.4,
@@ -124,6 +189,20 @@ export function useReducedMotion(): boolean {
 }
 
 /**
+ * How long the wave takes to cross the control. `long1` on the M3 duration
+ * scale, and the figure Material Web's own ripple uses — a press wave is
+ * deliberately slower than any other feedback in the app, because it is
+ * describing the *shape* of the control rather than reporting a state change.
+ */
+const RIPPLE_GROW = 0.45;
+/**
+ * Scale the wave starts at, as a fraction of its final radius. Material Web's
+ * value. Starting nearer zero reads as a dot appearing and then expanding;
+ * starting here reads as contact already having been made.
+ */
+const RIPPLE_START_SCALE = 0.2;
+
+/**
  * Paints one Material press wave inside `host`, centred on (`x`, `y`) given in
  * the host's own coordinates. The span cleans itself up.
  *
@@ -132,6 +211,13 @@ export function useReducedMotion(): boolean {
  * reach: a control whose ripple target is not an ancestor of what the pointer
  * actually hits, such as the switch, where the press lands on a full-size
  * input overlay but the wave belongs to the 40dp circle around the handle.
+ *
+ * The wave holds **one** opacity for its whole life and then fades, which is how
+ * M3 draws it: the ripple *is* the pressed state layer, spreading. It used to
+ * open at 0.18 and settle to 0.12 — two values, neither of them a token, the
+ * first of them half again the spec's — so the press read as a flash followed by
+ * a wash rather than as one gesture. `standard`, not `decelerate`, for the same
+ * reason: this begins and ends on screen.
  */
 export function spawnRipple(host: HTMLElement, x: number, y: number) {
   if (prefersReducedMotion()) return;
@@ -150,12 +236,14 @@ export function spawnRipple(host: HTMLElement, x: number, y: number) {
 
   gsap
     .timeline({ onComplete: () => ripple.remove() })
-    .fromTo(
-      ripple,
-      { scale: 0.25, opacity: 0.18 },
-      { scale: 1, opacity: 0.12, duration: 0.45, ease: 'decelerate' },
-    )
-    .to(ripple, { opacity: 0, duration: 0.3, ease: 'none' }, '-=0.12');
+    /* Only the scale is tweened. The wave's opacity is the pressed state-layer
+       token, set on `.ripple` in globals.css, so the value has one owner rather
+       than being restated as a number here. */
+    .fromTo(ripple, { scale: RIPPLE_START_SCALE }, { scale: 1, duration: RIPPLE_GROW, ease: 'standard' })
+    /* Ends with the grow rather than after it, so the wave is still spreading as
+       it goes. A fade that waits for the spread to finish leaves a static disc
+       sitting on the control for its whole duration. */
+    .to(ripple, { opacity: 0, duration: DURATION.state, ease: 'none' }, `-=${DURATION.state}`);
 }
 
 /**
@@ -315,7 +403,13 @@ export function useSlidingIndicator<
   useGSAP(
     () => {
       const indicator = indicatorRef.current;
-      const target = containerRef.current?.querySelector<HTMLElement>(`[data-tab="${active}"]`);
+      /* `CSS.escape`, because `active` is a caller's value: a tab key containing a
+         quote or a bracket would otherwise throw inside the `useGSAP` callback and
+         take the indicator down with it. `paneOf` already escapes for the same
+         reason. */
+      const target = containerRef.current?.querySelector<HTMLElement>(
+        `[data-tab="${CSS.escape(active)}"]`,
+      );
       if (!indicator || !target) return;
       const place = { x: target.offsetLeft, width: target.offsetWidth };
       if (!placed.current || prefersReducedMotion()) {
@@ -323,7 +417,19 @@ export function useSlidingIndicator<
         gsap.set(indicator, place);
         return;
       }
-      gsap.to(indicator, { ...place, duration: DURATION.long, ease: 'spring' });
+      /* `DefaultSpatial`, which is what `TabRow.kt` assigns
+         (`MotionSchemeKeyTokens.DefaultSpatial`). It ran on the *expressive* scheme's
+         default spatial spring — ζ0.8 k380, settling in 326ms against the standard
+         scheme's 194 — which is the more general problem this pass is fixing: the
+         nine `spring-*` utilities expose ζ and k directly, so call sites were each
+         picking a tier out of a different scheme. The app's scheme is `standard`
+         (which is `MaterialTheme`'s own default); the expressive trio is reserved
+         for a small mark landing in place, and a pill sliding between two labels is
+         travel rather than arrival.
+         Before either, this was `back.out(1.55)` on a 400ms clock — a guess at a
+         spring, on a duration taken from the transition scale rather than from the
+         physics. */
+      gsap.to(indicator, { ...place, ...spring('defaultSpatial') });
     },
     // No `revertOnUpdate` here, deliberately — unlike every other hook in this
     // file. The callback's lasting effect is the `gsap.set` above, and
@@ -540,7 +646,15 @@ let isHeroBusy: (() => boolean) | null = null;
 export function setHeroBusyCheck(fn: (() => boolean) | null) {
   isHeroBusy = fn;
 }
-function heroOwnsScreen(): boolean {
+/**
+ * Whether a shared-element flight owns the screen.
+ *
+ * Exported because it is the app's fourth page-level transition that needed it:
+ * the theme wipe and the tab shared axis consulted it, the route cross-fade gates
+ * equivalently by reading the runtime it already imports, and `lib/forumTransition`
+ * consulted nothing at all.
+ */
+export function heroOwnsScreen(): boolean {
   return isHeroBusy?.() ?? false;
 }
 
@@ -575,7 +689,8 @@ const DRAWER_FLICK_VELOCITY = 450;
  * a fast flick at any distance.
  *
  * During a drag the panel and scrim are driven inline with their CSS
- * transitions suppressed — the shell styles them with `transition-all` and a
+ * transitions suppressed — the shell styles them with an all-properties transition
+ * and a
  * `-translate-x-full` class, and leaving that in place would put 300ms of lag
  * between the finger and the panel. Both are handed back to CSS once the settle
  * tween lands, at which point the inline and class positions agree, so the
@@ -598,7 +713,7 @@ export function useDrawerSwipe({
      `document.body` while the first stayed alive — holding a captured
      `open === true` forever. Those survivors then read `pending = open && startX
      <= drawer().offsetWidth` as true for any horizontal drag beginning within
-     288px of the left edge — three quarters of a phone screen — computed
+     a drawer's width of the left edge — most of a phone screen — computed
      `startOffset = 0`, and dragged the *closed* drawer into view. That is the
      "sidebar randomly flies out" report; the gesture itself can only close.
 
@@ -615,7 +730,7 @@ export function useDrawerSwipe({
     (_context, contextSafe) => {
       if (!enabled) return;
 
-      // `width` is read per gesture: the panel is `w-72` open and auto-width
+      // `width` is read per gesture: the panel is 360dp open and auto-width
       // closed, and either can change with the viewport.
       let width = 0;
       let startOffset = 0;
@@ -685,15 +800,29 @@ export function useDrawerSwipe({
         }
 
         const target = toOpen ? 0 : -width;
-        const remaining = Math.abs(target - (gsap.getProperty(d, 'x') as number));
-        const duration = gsap.utils.clamp(0.16, 0.34, remaining / 1200);
+        /* The panel's own springs, the same ones the tap-driven transition uses:
+           `DefaultSpatial` on the way open and `FastEffects` on the way shut, which
+           is what `NavigationDrawer.kt` assigns to `openMotion` / `closeMotion` —
+           and it assigns `DefaultSpatial` to `anchoredDraggableMotion`, the release,
+           as well. A gesture and a tap on the same object must not land differently.
+
+           No velocity scaling any more, and dropping it is the fix rather than a
+           simplification. It read `clamp(0.16, DURATION.short, remaining / 1200)`,
+           which is a *duration* scaled by distance — 160ms is off M3's scale, and
+           scaling a duration is what you do when you have no physics: a spring
+           already covers a shorter remaining distance in less time, because that is
+           what a mass on a spring does. Scaling its clock as well double-counts. */
+        const spec = toOpen ? spring('defaultSpatial') : spring('fastEffects');
 
         if (s)
-          gsap.to(s, { opacity: toOpen ? 1 : 0, duration, ease: 'decelerate', overwrite: true });
+          gsap.to(s, {
+            opacity: toOpen ? 1 : 0,
+            ...spec,
+            overwrite: true,
+          });
         gsap.to(d, {
           x: target,
-          duration,
-          ease: 'decelerate',
+          ...spec,
           overwrite: true,
           onComplete: release,
         });
@@ -738,7 +867,24 @@ export function useDrawerSwipe({
         },
       });
 
-      return () => observer.kill();
+      /* Kill the Observer **and** undo the two raw style writes `begin()` makes.
+         `context.revert()` cannot: `transition: none` and `pointer-events: none` are
+         set through `element.style` rather than through GSAP, so GSAP does not know
+         they exist. The leak was reachable — `enabled` flips at the `md` breakpoint,
+         so rotating a tablet mid-drag tore the Observer down and left the drawer
+         with `transition: none` and the scrim with `pointer-events: none` for the
+         rest of the session: a drawer that snaps instead of sliding, and a scrim
+         that has stopped catching the tap that closes it. */
+      return () => {
+        observer.kill();
+        const d = drawer();
+        const s = scrim();
+        if (d) d.style.transition = '';
+        if (s) {
+          s.style.transition = '';
+          s.style.pointerEvents = '';
+        }
+      };
     },
     { dependencies: [enabled], revertOnUpdate: true },
   );
@@ -754,8 +900,11 @@ export function useDrawerSwipe({
  * ------------------------------------------------------------------------ */
 
 /** Distance an entering element travels, px. Small on purpose: a long throw
- *  reads as decoration, a short one reads as the content settling. */
-const REVEAL_SHIFT = 18;
+ *  reads as decoration, a short one reads as the content settling. On the 4dp
+ *  grid, like every other distance in the app — it was 18, which is not a step
+ *  and did not match `useStaggerGrid`'s 14 either, so the app's two entrance
+ *  helpers rose by different amounts. */
+const REVEAL_SHIFT = 16;
 
 interface ScrollRevealOptions {
   /** Children matching this selector animate individually; omit to reveal the container. */
@@ -853,7 +1002,11 @@ export function useScrollReveal<T extends HTMLElement = HTMLElement>({
           gsap.to(batch, {
             autoAlpha: 1,
             y: 0,
-            duration: DURATION.emphasized,
+            /* `long`, the enters-the-screen duration. It was `emphasized` (500),
+               which is the large-container-transform value — and `useStaggerGrid`
+               below already used `long`, so the app's two entrance helpers
+               disagreed by 100ms about what an entrance is. */
+            duration: DURATION.long,
             ease: 'decelerate',
             stagger,
             overwrite: true,
@@ -945,7 +1098,7 @@ export function useStaggerGrid<T extends HTMLElement = HTMLElement>(
 
       const tween = gsap.fromTo(
         ordered,
-        { autoAlpha: 0, y: 14, scale: 0.985 },
+        { autoAlpha: 0, y: REVEAL_SHIFT, scale: 0.985 },
         {
           autoAlpha: 1,
           y: 0,
@@ -1224,6 +1377,14 @@ export function playSharedAxis(opts: {
    * survive the run — true of the tab panes, which are mounted once and only
    * marked, and false of a route change, where React is replacing the whole
    * subtree behind us.
+   *
+   * **Off by default, and this is the third default the option has had.** It was
+   * `true` here and in `runTabTransition` while `TabPanes` and `useTabPanes` said
+   * `false`, so the tab bar's *tap* path — `startTabTransition`, which passes four
+   * arguments and therefore takes the parameter default — ran the lean on the home
+   * page while the reactive path did not, and while `app/page.tsx` and AGENTS.md
+   * both stated it was off. One option, one default: `false`, and `/policy` is the
+   * only screen that opts in.
    */
   lean?: boolean;
   onSettle?: () => void;
@@ -1237,7 +1398,7 @@ export function playSharedAxis(opts: {
      clone slid the whole way while the incoming page simply appeared. Without a
      lean there is nothing to sample, so the whole side moves as one element,
      which is also the only node a re-render is guaranteed not to replace. */
-  const lean = (opts.lean ?? true) && axis === 'x';
+  const lean = (opts.lean ?? false) && axis === 'x';
   const outAll = lean ? paneBlocks(leaving) : [leaving];
   const inAll = lean ? paneBlocks(entering) : [entering];
   /** The travel, as a vars object on whichever axis this run is using. */
@@ -1522,6 +1683,13 @@ function watchPaneGrowth(panel: HTMLElement, pane: HTMLElement): () => void {
   };
 
   const observer = new ResizeObserver(() => {
+    /* Stand down while a flight owns the screen. This holds an inline `height` on
+       `[data-tab-panel]` — an ancestor of every gallery card — and re-tweens it for
+       up to `PANE_GROWTH_WATCH_MS` after a switch settles, so a flight launched
+       inside that window would have its landing target moved under it. Not a
+       transform, so the press-time rect is honest; the risk is the card moving
+       *during* the flight. */
+    if (heroOwnsScreen()) return;
     const next = pane.offsetHeight;
     if (Math.abs(next - last) <= 1) return;
     /* Mid-morph the inline height is the animated value, not `last` — starting
@@ -1555,7 +1723,8 @@ function runTabTransition(
   from: string,
   to: string,
   direction: 1 | -1,
-  lean = true,
+  // `false`, so the tap path and the reactive path agree — see `playSharedAxis`.
+  lean = false,
 ) {
   const leaving = paneOf(panel, from);
   const entering = paneOf(panel, to);
@@ -1759,17 +1928,34 @@ function runTabTransition(
 /**
  * Starts the switch on the tap, before the route.
  *
- * Call `router.push` on the very next line — there is nothing to wait for. Both
- * panes are mounted, so this hands the incoming one a box directly and the
+ * Both panes are mounted, so this hands the incoming one a box directly and the
  * commit that follows only has to agree with what is already on screen.
+ *
+ * **Hold the `router.push` back past the end of the slide** —
+ * `TAB_PUSH_COALESCE_MS`. An RSC navigation lands as a commit, and in the middle of
+ * the swap that is a dropped frame; nothing is waiting for the URL, because the
+ * optimistic tab state owns what is on screen. It also swallows a run down the
+ * sidebar into one push rather than one history entry per tab passed through.
+ * This used to say "call it on the very next line — there is nothing to wait for",
+ * which was true before the coalescing window existed and is what the note at
+ * `playSharedAxis` has said since.
  */
-export function startTabTransition(from: string, to: string, direction: 1 | -1): void {
+export function startTabTransition(
+  from: string,
+  to: string,
+  direction: 1 | -1,
+  /* Passed explicitly rather than left to the parameter default. It defaulting to `true`
+     here while `TabPanes` defaulted it to `false` is what made the tap path and the
+     reactive path disagree; the tap path now says what it wants and the panes say the
+     same thing at their own call site. */
+  lean = false,
+): void {
   if (from === to) return;
   const scroller = getAppScroller();
   if (scroller) tabScrollMemory.set(from, scroller.scrollTop);
   if (prefersReducedMotion()) return;
   const panel = document.querySelector<HTMLElement>('[data-tab-panel]');
-  if (panel) runTabTransition(panel, from, to, direction);
+  if (panel) runTabTransition(panel, from, to, direction, lean);
 }
 
 /**
@@ -1797,7 +1983,15 @@ export function startTabTransition(from: string, to: string, direction: 1 | -1):
  */
 export function useTabPanes<T extends HTMLElement = HTMLElement>(
   active: string,
-  { lean = true }: { lean?: boolean } = {},
+  /* `false`, matching `TabPanes` and matching what AGENTS.md says. It defaulted to
+     `true` here and `false` in the component, so a caller that wired this hook by
+     hand silently got the lean — and the lean holds GSAP references to the blocks
+     *inside* each pane, which a pane that fetches on selection replaces within a few
+     frames of the switch starting. Measured on the messages tabs: pane height
+     collapsing 1887px to a 288px skeleton inside 70ms, with zero transformed
+     descendants for the whole 500ms run, i.e. a switch with no animation at all. Two
+     defaults for one option is a bug regardless of which is right. */
+  { lean = false }: { lean?: boolean } = {},
 ): RefObject<T | null> {
   const ref = useRef<T>(null);
   const previous = useRef(active);

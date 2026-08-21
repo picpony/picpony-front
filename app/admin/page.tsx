@@ -18,8 +18,12 @@ import {
 } from 'react-icons/md';
 import dynamic from 'next/dynamic';
 import ErrorRetry from '@/components/ErrorRetry';
+import Tabs from '@/components/Tabs';
+import { tabId, tabPanelId } from '@/components/TabPanes';
 import Skeleton from '@/components/Skeleton';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
+import { ICON } from '@/lib/icons';
+import { readUserInfo } from '@/lib/hooks';
 
 /* One loading shape for all fourteen lazy tabs. Without it, the first switch to
    a tab rendered nothing at all until its chunk arrived — an empty well the height
@@ -135,25 +139,25 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  { id: 'welcome', label: '欢迎', icon: <MdDashboard size={20} />, editorOnly: true },
-  { id: 'glossary', label: '词库编辑', icon: <MdBook size={20} />, editorOnly: true },
-  { id: 'users', label: '用户管理', icon: <MdPeople size={20} />, adminOnly: true },
+  { id: 'welcome', label: '欢迎', icon: <MdDashboard size={ICON.control} />, editorOnly: true },
+  { id: 'glossary', label: '词库编辑', icon: <MdBook size={ICON.control} />, editorOnly: true },
+  { id: 'users', label: '用户管理', icon: <MdPeople size={ICON.control} />, adminOnly: true },
   {
     id: 'notifications',
     label: '通知管理',
-    icon: <MdNotifications size={20} />,
+    icon: <MdNotifications size={ICON.control} />,
     adminOnly: true,
   },
-  { id: 'messages', label: '私信审计', icon: <MdMessage size={20} />, adminOnly: true },
-  { id: 'badges', label: '徽章管理', icon: <MdEmojiEvents size={20} />, adminOnly: true },
-  { id: 'blocktags', label: '屏蔽标签', icon: <MdShield size={20} />, adminOnly: true },
-  { id: 'developer', label: '开发者', icon: <MdBuild size={20} />, adminOnly: true },
-  { id: 'team', label: '团队管理', icon: <MdPeople size={20} />, adminOnly: true },
-  { id: 'shop', label: '商店管理', icon: <MdStore size={20} />, adminOnly: true },
-  { id: 'reports', label: '举报处理', icon: <MdReport size={20} />, adminOnly: true },
-  { id: 'blacklist', label: '屏蔽图库', icon: <MdBlock size={20} />, adminOnly: true },
-  { id: 'wealth', label: '经验金币', icon: <MdAttachMoney size={20} />, superAdminOnly: true },
-  { id: 'other', label: '其他功能', icon: <MdBuild size={20} />, adminOnly: true },
+  { id: 'messages', label: '私信审计', icon: <MdMessage size={ICON.control} />, adminOnly: true },
+  { id: 'badges', label: '徽章管理', icon: <MdEmojiEvents size={ICON.control} />, adminOnly: true },
+  { id: 'blocktags', label: '屏蔽标签', icon: <MdShield size={ICON.control} />, adminOnly: true },
+  { id: 'developer', label: '开发者', icon: <MdBuild size={ICON.control} />, adminOnly: true },
+  { id: 'team', label: '团队管理', icon: <MdPeople size={ICON.control} />, adminOnly: true },
+  { id: 'shop', label: '商店管理', icon: <MdStore size={ICON.control} />, adminOnly: true },
+  { id: 'reports', label: '举报处理', icon: <MdReport size={ICON.control} />, adminOnly: true },
+  { id: 'blacklist', label: '屏蔽图库', icon: <MdBlock size={ICON.control} />, adminOnly: true },
+  { id: 'wealth', label: '经验金币', icon: <MdAttachMoney size={ICON.control} />, superAdminOnly: true },
+  { id: 'other', label: '其他功能', icon: <MdBuild size={ICON.control} />, adminOnly: true },
 ];
 
 /** The tab `/admin` with no `?tab=` lands on, and the one that is spelled by
@@ -161,8 +165,9 @@ const TABS: TabConfig[] = [
 const DEFAULT_TAB: TabId = 'welcome';
 
 /**
- * Long enough to sit past the pane's own fade (`--animate-page-transition`,
- * 80ms delay + 320ms), for the same reason the home tab bar defers its push:
+ * Long enough to sit past the pane's own fade — `animate-fade-in`, 400ms, which is
+ * what this panel uses (it was `animate-page-transition` when this note was written,
+ * and that is the route animation) — for the same reason the home tab bar defers:
  * an RSC navigation lands as a commit, and in the middle of the swap that is a
  * dropped frame. Nothing here is waiting for the URL — `pendingTab` owns what
  * is on screen — so the only cost of deferring is how soon the address bar
@@ -172,16 +177,8 @@ const DEFAULT_TAB: TabId = 'welcome';
 const TAB_PUSH_COALESCE_MS = 400;
 
 function readAdminIdentity(): { userRole: string; token: string } {
-  const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
-  if (storedUser) {
-    try {
-      const user = JSON.parse(storedUser);
-      return { userRole: user.role || 'user', token: user.token || '' };
-    } catch {
-      // ignore
-    }
-  }
-  return { userRole: 'user', token: '' };
+  const user = readUserInfo();
+  return { userRole: (user?.role as string) || 'user', token: user?.token || '' };
 }
 
 function AdminPanel() {
@@ -274,39 +271,31 @@ function AdminPanel() {
           is the same fault the layout note in AGENTS.md records for /settings'
           six invisible section wrappers. */}
       <div className="bg-surface-container-low rounded-md overflow-hidden flex flex-col md:flex-row">
-        {' '}
+        
         <div className="md:w-48 shrink-0 border-b md:border-b-0 border-outline-variant">
-          {' '}
-          <nav className="flex md:flex-col p-2 gap-1 overflow-x-auto scrollbar-hide">
-            {' '}
-            {visibleTabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                data-ripple
-                aria-current={activeTab === tab.id}
-                className={`group flex items-center gap-2 rounded-full px-3 py-3 text-label-l transition-ui whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-ring ${
-                  activeTab === tab.id
-                    ? 'bg-secondary-container text-on-secondary-container'
-                    : 'text-on-surface-variant state-layer'
-                }`}
-              >
-                {/* `standard`, not `spring`: the active icon *stays* scaled, and
-                    `--ease-spring` overshoots past 110% and settles back — which
-                    reads as a wobble on arrival rather than as a state change.
-                    `motion-reduce` because a named `transition-transform` is not
-                    covered by the keyframe enumeration. */}
-                <span
-                  className={`shrink-0 transition-transform duration-300 ease-[var(--ease-standard)] motion-reduce:transition-none ${
-                    activeTab === tab.id ? 'scale-110' : 'group-hover:scale-105'
-                  }`}
-                >
-                  {tab.icon}
-                </span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </nav>
+          {/* `Tabs variant="rail"`, not a hand-rolled pill list. This was one of
+              the app's four tab implementations and, like two of the others, it
+              declared no ARIA roles at all — fourteen destinations that a screen
+              reader read as a run of buttons, with no arrow-key navigation and no
+              statement of which was current beyond `aria-current` on a control
+              that is not a link.
+
+              The icon's `scale-110` when active is gone with it. It was one of
+              three different hover/active scale amounts in the app (110, 105 and
+              1.02), it is not something M3 does to a navigation item, and the row
+              already says "current" with a container pair. */}
+          <Tabs
+            variant="rail"
+            label="管理面板分区"
+            className="p-2"
+            value={activeTab}
+            onChange={handleTabChange}
+            tabs={visibleTabs.map((tab) => ({
+              value: tab.id,
+              label: tab.label,
+              icon: tab.icon,
+            }))}
+          />
         </div>
         <div className="flex-1 p-4 sm:p-6 min-h-96 md:min-h-150 relative">
           {/* A fade, and deliberately *not* the tab shared axis.
@@ -324,8 +313,20 @@ function AdminPanel() {
 
               The `key` stays: it is what restarts the animation on each switch,
               and with `{cond && ...}` mounting there is nothing for it to destroy
-              that was not being destroyed anyway. */}
-          <div key={activeTab} className="animate-fade-in">
+              that was not being destroyed anyway.
+
+              It carries the panel half of `role="tab"`'s contract itself, since
+              there is no `TabPane` here to do it: one panel, re-identified as the
+              active tab changes, so the selected tab's `aria-controls` always
+              resolves. `TabPanes` reaches the same place with one panel per pane. */}
+          <div
+            key={activeTab}
+            id={tabPanelId(activeTab)}
+            role="tabpanel"
+            aria-labelledby={tabId(activeTab)}
+            tabIndex={0}
+            className="animate-fade-in"
+          >
             {activeTab === 'welcome' && <WelcomeTab />}
             {activeTab === 'glossary' && <GlossaryTab />}
             {activeTab === 'users' && <UsersTab token={token} myRole={userRole} />}
@@ -356,8 +357,12 @@ export default function AdminPage() {
         /* `AdminTabFallback`, not a centred dot. It is the panel's own
            silhouette and it already exists two functions up — a spinner here
            reflows the whole console when the real panel lands, which is the one
-           thing a fallback is for avoiding. */
-        <div className="mx-auto max-w-6xl p-4 sm:p-6">
+           thing a fallback is for avoiding.
+           No padding of its own: `[data-page-content]` is already `p-4 sm:p-6`
+           and the real console (`max-w-6xl mx-auto`, below) takes none, so this
+           was insetting the fallback 32/48px and the console then shifted 16px
+           per side and 16px down on arrival — exactly the reflow above. */
+        <div className="mx-auto max-w-6xl">
           <AdminTabFallback />
         </div>
       }

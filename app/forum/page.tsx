@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import ForumPostList from '@/components/ForumPostList';
 import Button from '@/components/Button';
 import PageHeader from '@/components/PageHeader';
+import { ICON } from '@/lib/icons';
 
 export default function ForumPage() {
   const searchParams = useSearchParams();
@@ -72,7 +73,7 @@ export default function ForumPage() {
           <Button
             onClick={() => router.push('/forum/create')}
             variant="filled"
-            icon={<MdAdd size={18} />}
+            icon={<MdAdd size={ICON.dense} />}
             responsiveLabel
           >
             发帖
