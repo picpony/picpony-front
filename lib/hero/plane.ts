@@ -25,8 +25,29 @@ export type HeroScrollPlane = {
   maxScrollTop: number;
 };
 
-function createPlane(anchor: HTMLElement, scroller: HTMLElement): HeroScrollPlane {
-  const rect = scroller.getBoundingClientRect();
+/**
+ * @param host An element whose border box is the plane's origin, defaulting to the scroller.
+ *   It exists because the scroller may sit **inside the container transform's window**, and a
+ *   mid-flight `rebuild` re-creates the plane (`controller.handleViewportInvalidation`) — at
+ *   which point `scroller.getBoundingClientRect()` is the *scaled* box and every later
+ *   `screenRectToPlane` is wrong by the whole transform. The Stage passes its overlay, which is
+ *   the one node in that chain never carrying a transform; because the scroller is
+ *   `absolute inset-0` of a node that is `absolute inset-0` of the overlay, and none of them has
+ *   a border or padding, the overlay's box *is* the scroller's untransformed box — exact, one
+ *   rect read, no matrix. `getHeroRectWithoutAncestorTransform` was the alternative and is
+ *   worse here: it unwinds only one ancestor, costs a `getComputedStyle` plus a matrix inverse,
+ *   and returns the transformed rect silently under rotation or skew.
+ *
+ *   Only `top`/`left` are read from it. `clientWidth`/`clientHeight`/`scrollWidth`/`scrollHeight`
+ *   and the scroll offsets are layout values and unaffected by any ancestor transform, and
+ *   `plane.host.width`/`height` have no readers.
+ */
+function createPlane(
+  anchor: HTMLElement,
+  scroller: HTMLElement,
+  host: HTMLElement = scroller,
+): HeroScrollPlane {
+  const rect = host.getBoundingClientRect();
   const scrollLeft = scroller.scrollLeft;
   const scrollTop = scroller.scrollTop;
   const viewportWidth = scroller.clientWidth;
@@ -58,8 +79,12 @@ export function getGalleryScrollPlane(): HeroScrollPlane | null {
   return anchor && scroller ? createPlane(anchor, scroller) : null;
 }
 
-export function getElementScrollPlane(anchor: HTMLElement, scroller: HTMLElement) {
-  return createPlane(anchor, scroller);
+export function getElementScrollPlane(
+  anchor: HTMLElement,
+  scroller: HTMLElement,
+  host?: HTMLElement,
+) {
+  return createPlane(anchor, scroller, host);
 }
 
 /**

@@ -118,6 +118,14 @@ export default function HeroStage() {
         aria-hidden="true"
         className="pointer-events-auto absolute inset-0 z-hero-stage overflow-hidden"
       >
+        {/* The container transform's window, and the counter-scale that makes the content's
+            accumulated transform uniform. Inert until `buildContainerAnimations` drives them —
+            see the block above `getHeroContainerPose` for the algebra, and note that neither may
+            ever hold a resting transform: a transform is a containing block for fixed-position
+            descendants. Both boxes are `absolute inset-0`, so inserting them changes no
+            geometry; the route's shell must stay structurally identical to this. */}
+        <div data-image-detail-clip className="image-detail-clip absolute inset-0">
+          <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
         <div
           ref={surfaceRef}
           data-image-detail-surface
@@ -136,8 +144,8 @@ export default function HeroStage() {
             inert
             className="image-detail-overlay-content pointer-events-none relative min-h-full w-full"
           >
-            {/* The container transform's fit target — see HERO_CONTENT_SELECTOR. */}
-            <div data-image-detail-scale className="w-full origin-top-left">
+            {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR. */}
+            <div data-image-detail-crossfade className="w-full">
             <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
               <div className="flex flex-col rounded-md bg-transparent">
                 <DetailHeader key={image.id} image={image} layout="stage" metadataReady={false} />
@@ -184,6 +192,8 @@ export default function HeroStage() {
             aria-hidden="true"
             className="image-hero-stage-anchor"
           />
+        </div>
+          </div>
         </div>
       </section>
       {/* `passive`, which is what the prop was added for and what no call site had ever

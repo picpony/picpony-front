@@ -1397,7 +1397,14 @@ export function playSharedAxis(opts: {
      holding and leaves the new ones sitting at rest. Measured: the outgoing
      clone slid the whole way while the incoming page simply appeared. Without a
      lean there is nothing to sample, so the whole side moves as one element,
-     which is also the only node a re-render is guaranteed not to replace. */
+     which is also the only node a re-render is guaranteed not to replace.
+
+     **It was briefly disabled below `md` as a frame-rate measure and that is reverted.** The
+     reasoning was sound on paper — the lean gives every near-viewport block its own tween and
+     its own transformed layer, against two without it — and it bought nothing measurable on the
+     device that was dropping frames, while the shear is the visible thing the lean exists for.
+     A cost reduction that does not reduce the cost is just a loss. The blurs were the real item,
+     and they are gone from `Badge`'s `media` tone rather than suppressed per transition. */
   const lean = (opts.lean ?? false) && axis === 'x';
   const outAll = lean ? paneBlocks(leaving) : [leaving];
   const inAll = lean ? paneBlocks(entering) : [entering];

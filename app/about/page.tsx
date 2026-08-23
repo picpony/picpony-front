@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Card from '@/components/Card';
-import AsciiDecodeField from '@/components/AsciiDecodeField';
+import AsciiWordmark from '@/components/AsciiWordmark';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import DeveloperGuideModal from '@/components/DeveloperGuideModal';
 import { useReducedMotion } from '@/lib/motion';
@@ -82,14 +82,26 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
        would be unreachable for anyone with the preference on — an easter egg is
        still a feature, and reduced motion asks for less movement, not fewer
        affordances. `Logo` renders the mark, not a box, so the handlers go on a
-       wrapper rather than through it. */
+       wrapper rather than through it.
+
+       The width goes on `Logo` rather than on the wrapper, and that is a fix
+       rather than a preference: `Logo`'s own root is an `inline-block`, so a
+       `w-full` mask inside it resolves against a shrink-to-fit box that the mask
+       is itself supposed to size — circular, and it collapsed the mark to
+       nothing. Only reduced motion took this branch, which is why it went unseen.
+
+       The keyline sits on the wrapper so the two colours can differ: the halo is
+       `currentColor` of whatever carries the filter, and the mask's fill is
+       `currentColor` of whatever carries the mask. Surface outside, ink inside —
+       a halo in the ink colour would only thicken the mark instead of knocking
+       it out of the texture behind it. */
     return (
       <span
-        className={`block select-none ${MARK_WIDTH}`}
+        className="logo-keyline logo-keyline-plate block text-surface-container-highest select-none"
         onMouseDown={(e) => e.preventDefault()}
         onClick={handleClick}
       >
-        <Logo className="h-auto w-full" />
+        <Logo className={`h-auto text-on-surface ${MARK_WIDTH}`} />
       </span>
     );
   }
@@ -97,14 +109,22 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   /* `aspect-ratio` reserves the box before the player injects its SVG. Without
      it the host is 0px tall until the chunk resolves and then pushes the whole
      page down — a layout shift on every visit, on the one element above the
-     fold. That reserved box is also what the decode field behind it measures its
-     clearing from, so it has to be right before the chunk lands as well as after. */
+     fold. The plate behind it does not read this box: it has no keep-out, by
+     decision — see `AsciiWordmark`, which puts a much larger character version
+     of this same mark behind this one on purpose.
+
+     `logo-keyline` is what keeps that decision from reading as clutter, and it
+     is the same treatment the brand bar's mark gets. The filter draws a 1px
+     halo in `currentColor`, so `currentColor` has to be the *Card's* fill
+     rather than the page's ink: a halo in the surface colour knocks the mark
+     out of the texture behind it, where a halo in `on-surface` would only
+     thicken it. */
   return (
     <div
       ref={hostRef}
       role="img"
       aria-label="PicPony"
-      className={`select-none ${MARK_WIDTH}`}
+      className={`logo-keyline logo-keyline-plate text-surface-container-highest select-none ${MARK_WIDTH}`}
       style={{ aspectRatio: TRACE_ASPECT }}
       onMouseDown={(e) => e.preventDefault()}
       onClick={handleClick}
@@ -296,13 +316,19 @@ export default function AboutPage() {
 
           The height is fixed rather than derived from the mark: the texture is the
           point of the box, and a box sized to the wordmark alone would have room for
-          the mark and nothing else. 256/320px is sixteen and twenty rows of grid. */}
+          the mark and nothing else. 256/320px is sixteen and twenty rows of grid.
+
+          Those two row counts are what pick the plate's subject: at twenty rows the
+          whole wordmark clears the legibility floor and is drawn at ~13.5 rows; at
+          sixteen it would be 5.2, so the plate draws the `Pic` monogram at ~13.0
+          instead. The rule lives in `AsciiWordmark`, derived from the stroke width
+          rather than from a breakpoint. */}
       <Card
         variant="filled"
         padding="none"
         className="relative mt-2 flex h-64 items-center justify-center overflow-hidden sm:h-80"
       >
-        <AsciiDecodeField />
+        <AsciiWordmark />
         {/* `relative` is what keeps the mark above the texture: the two are siblings at
             the same z-index, so paint order is DOM order and only a *positioned*
             element takes part in it. Without it the field's `absolute inset-0` would

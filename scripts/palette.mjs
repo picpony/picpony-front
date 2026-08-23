@@ -15,8 +15,9 @@
 //     drifts the out-of-gamut ends between engines.
 //   - It does not touch anything off the tonal ramps: the four `*-fill` tones (tuned
 //     against white ink), `accent-*` (a categorical OKLCH hue sweep owned by
-//     lib/tagCategories.ts), the `media-*` roles, `scrim`, `link`, `plate-cool` and
-//     `plate-warm`. Those are all argued for where they live.
+//     lib/tagCategories.ts), the `media-*` roles, `scrim`, `link` and the six `plate-*`
+//     tones (the /about plate's ring, whose hues come from the logo artwork). Those are
+//     all argued for where they live.
 //
 // The basis is **HCT**, not the OKLCH the prose recipe used, because HCT is the space
 // M3's own numbers are quoted in: "neutral chroma 6" means 6 in HCT, and converting
@@ -296,7 +297,9 @@ for (const [token] of ROLES) {
 
 const pad = (s, n) => String(s).padEnd(n);
 console.log(`seed ${SEED}  hue ${seed.hue.toFixed(2)}  chroma ${seed.chroma.toFixed(2)}`);
-console.log(`neutral chroma ${NEUTRAL_CHROMA}, brand tone ${BRAND_TONE}\n`);
+console.log(
+  `neutral chroma ${NEUTRAL_CHROMA}, brand tone ${BRAND_TONE.light} light / ${BRAND_TONE.dark} dark\n`,
+);
 
 console.log(`CHANGED (${changed.length})`);
 for (const c of changed) {

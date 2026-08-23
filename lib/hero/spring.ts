@@ -5,9 +5,10 @@ import { clamp01 } from '@/lib/utils';
 /**
  * Analytic spring, damped or critically damped.
  *
- * Every Hero motion — flight, reverse, pull release — is a normalized response
- * `p(t)` on `t ∈ [0, 1]` with `p(0) = 0` and `p(1) = 1`, so a leg's *shape* is
- * independent of how long it lasts and the duration is a separate decision.
+ * One normalized response `p(t)` on `t ∈ [0, 1]` with `p(0) = 0` and `p(1) = 1`, so a leg's
+ * *shape* is independent of how long it lasts and the duration is a separate decision. The
+ * sampling, the table cache and the choice between this and a curve all live in
+ * `progress.ts`; this file is the closed form and nothing else.
  *
  * The model is a unit-mass spring released from 0 toward 1 with an initial speed:
  *
@@ -15,23 +16,26 @@ import { clamp01 } from '@/lib/utils';
  *     critically damped (ζ=1) raw(t) = 1 - (1 + (ω - v) t) · e^(-ω t)
  *     p(t) = raw(t) / raw(1)
  *
- * where `ω_d = ω√(1 - ζ²)`. `rate` is ω in *normalized* time — i.e. the physical
- * ω times the leg's duration — so setting it to a token spring's `√k × settle`
- * makes the leg reproduce that spring's curve over its own window. `velocity` is
- * the normalized launch speed and `damping` is ζ, defaulting to 1.
+ * where `ω_d = ω√(1 - ζ²)`. `rate` is ω in *normalized* time — i.e. the physical ω times the
+ * leg's duration — so setting it to a token spring's `√k × settle` makes the leg reproduce
+ * that spring's curve over its own window. `velocity` is the normalized launch speed and
+ * `damping` is ζ, defaulting to 1.
  *
- * ζ < 1 was the addition. The model was critically-damped-only, which meant the
- * hero could not reference the `MotionScheme` springs the rest of the app runs on:
- * every spatial token in `StandardMotionTokens` is ζ0.9, and ζ is exactly the
- * parameter that was missing. The two forms agree in the limit — the ζ=1 branch is
- * the same expression the file has always had — and both are differentiable, which
- * is what makes velocity-continuous interruption and DOM-read-free pose measurement
- * possible.
+ * **What it is for, now that a from-rest leg flies `HERO_FLIGHT_CURVE` instead.** A spring is
+ * the only one of the two models that can be *solved* for a launch slope — a cubic Bézier's
+ * is `y1/x1`, fixed by its shape — so every leg that has to leave at a speed something is
+ * already travelling at is a spring: a reversal, a mid-flight rebuild, a drag release. ζ0.9
+ * remains the right ratio for those, and the argument is in `HERO_FLIGHT_RESPONSE`.
  *
- * Note ζ0.9 overshoots by `e^(-ζπ/√(1-ζ²))` ≈ 0.15%, which on a 600px flight is
- * under a pixel: enough to be a settle rather than a stop, not enough to read as the
- * picture missing its landing box. That is the whole reason the spatial tier is ζ0.9
- * and not ζ0.8.
+ * ζ < 1 was the addition that made it possible to reference the `MotionScheme` springs the
+ * rest of the app runs on: every spatial token in `StandardMotionTokens` is ζ0.9, and ζ was
+ * exactly the parameter that was missing. The two forms agree in the limit, and both are
+ * differentiable, which is what makes velocity-continuous interruption and DOM-read-free pose
+ * measurement possible.
+ *
+ * Note ζ0.9 overshoots by `e^(-ζπ/√(1-ζ²))` ≈ 0.15%, which on a 600px flight is under a
+ * pixel: enough to be a settle rather than a stop, not enough to read as the picture missing
+ * its landing box. That is the whole reason the spatial tier is ζ0.9 and not ζ0.8.
  */
 
 export type SpringResponse = {
@@ -43,17 +47,9 @@ export type SpringResponse = {
   damping?: number;
 };
 
-export type SpringFrame = {
-  offset: number;
-  progress: number;
-};
-
 /** Launch speeds outside this band either stall or visibly overshoot. */
 const MIN_VELOCITY = -0.5;
 const MAX_VELOCITY = 2.5;
-
-/** Velocity is quantized before caching so live gestures reuse sample tables. */
-const VELOCITY_QUANTUM = 100;
 
 export function clampSpringVelocity(velocity: number) {
   if (!Number.isFinite(velocity)) return 0;
@@ -171,50 +167,6 @@ export function springVelocityFromSpeed(
   if (!Number.isFinite(speed) || distance <= 0.5 || duration <= 0) return 0;
   // px/ms → progress per normalized time unit.
   return solveSpringVelocity((speed * duration) / distance, response);
-}
-
-const frameCache = new Map<string, readonly SpringFrame[]>();
-const MAX_CACHED_TABLES = 64;
-
-/**
- * Sampled progress table for WAAPI. The compositor interpolates between these
- * fixed offsets at whatever refresh rate the display runs, so the sample count
- * is a fidelity constant — never scaled by device class.
- */
-export function sampleSpring(response: SpringResponse, count: number): readonly SpringFrame[] {
-  const samples = Math.max(2, Math.round(count));
-  const velocity = Math.round(response.velocity * VELOCITY_QUANTUM) / VELOCITY_QUANTUM;
-  const quantized: SpringResponse = {
-    rate: response.rate,
-    velocity,
-    damping: response.damping,
-  };
-  /* `damping` is part of the key. Without it a ζ0.9 leg and a ζ1.0 leg of the same
-     rate would share one table and the second one drawn would get the first one's
-     curve — a cache collision that shows up as the close animation wearing the open
-     animation's shape. */
-  const key = `${quantized.rate}:${velocity}:${quantized.damping ?? 1}:${samples}`;
-  const cached = frameCache.get(key);
-  if (cached) {
-    // LRU touch so live gesture tables outlive one-off flights.
-    frameCache.delete(key);
-    frameCache.set(key, cached);
-    return cached;
-  }
-
-  const frames: SpringFrame[] = new Array(samples);
-  for (let index = 0; index < samples; index += 1) {
-    const offset = index / (samples - 1);
-    frames[index] = { offset, progress: springProgress(offset, quantized) };
-  }
-  const table = frames as readonly SpringFrame[];
-  frameCache.set(key, table);
-  while (frameCache.size > MAX_CACHED_TABLES) {
-    const oldest = frameCache.keys().next().value;
-    if (oldest === undefined) break;
-    frameCache.delete(oldest);
-  }
-  return table;
 }
 
 export function interpolate(start: number, end: number, progress: number) {

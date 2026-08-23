@@ -82,9 +82,17 @@ const TONES: Record<Exclude<BadgeTone, 'custom'>, string> = {
   /* A mark on a picture. None of the surface roles apply over a photograph, so
      this is the plate/ink pair the media roles exist for — the same reasoning
      as `IconButton`'s `media` variant, and the pair a score pill over a gallery
-     thumbnail was writing out by hand. `backdrop-blur-sm` because the plate is
-     translucent and a busy photograph reads through it otherwise. */
-  media: 'bg-media-plate text-on-media backdrop-blur-sm',
+     thumbnail was writing out by hand.
+     **No backdrop blur.** It carried a small backdrop blur on the argument that the plate is
+     translucent and a busy photograph reads through it otherwise — but the legibility figure
+     that justifies the plate (4.8:1 for a pure-white subject under black at 55%) was measured
+     without it, and a blur does not change average luminance, only high-frequency detail. What
+     it cost is not subtle: three of these ride every gallery thumbnail, so a 50-card grid held
+     on the order of 150 backdrop-filter regions, each of which re-samples what is behind it
+     whenever that moves — and the grid moves in the hero flight, the tab shared axis and every
+     route cross-fade. It had to be stood down per transition in CSS to make the hero
+     presentable, and that stand-down is gone with it. */
+  media: 'bg-media-plate text-on-media',
 };
 
 const SIZES: Record<BadgeSize, string> = {

@@ -27,15 +27,14 @@ import {
 import Modal from '@/components/Modal';
 import { cn, copyText } from '@/lib/utils';
 import { useAuthModal } from '@/components/AuthModal';
-import Zoom from 'yet-another-react-lightbox/plugins/zoom';
-import Counter from 'yet-another-react-lightbox/plugins/counter';
-import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen';
-import Download from 'yet-another-react-lightbox/plugins/download';
-import Video from 'yet-another-react-lightbox/plugins/video';
 import { api, Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import { ICON } from '@/lib/icons';
-const Lightbox = dynamic(() => import('yet-another-react-lightbox'), { ssr: false });
+import type { PicLightboxSlide } from '@/components/PicLightbox';
+/* The whole lightbox — core *and* its five plugins — behind one boundary. It used to be the
+   core alone, with the plugins as static imports, so the module the split was meant to defer
+   arrived anyway. See `PicLightbox`. */
+const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false });
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
 import IconButton from '@/components/IconButton';
@@ -625,7 +624,13 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           {
             canPublish: () => {
               if (!isImageHeroDetailDataPublishable(imageId)) return false;
-              return getImageHeroRuntime().phase !== 'opening.flight';
+              /* The whole `opening.` family, not just `opening.flight`.
+                 `isImageHeroDetailDataPublishable` stays true across `landed` and `handoff`, so
+                 the body's mount could land in the handoff frame — the one frame that has to be
+                 pixel-identical on both sides and that writes `scroller.scrollTop` inside a
+                 batched read/write pass. A React commit of this size arriving there is the
+                 worst possible moment for it. */
+              return !getImageHeroRuntime().phase.startsWith('opening.');
             },
           },
         );
@@ -937,7 +942,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const lightboxFormat = getImageFormat(imageSrc);
   const lightboxVideoType =
     lightboxFormat === 'WEBM' ? 'video/webm' : lightboxFormat === 'MP4' ? 'video/mp4' : null;
-  const yarlSlides =
+  const yarlSlides: PicLightboxSlide[] =
     image && imageSrc
       ? lightboxVideoType
         ? [
@@ -962,12 +967,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             },
           ]
       : [];
-
-  const zoomPlugin = Zoom;
-  const counterPlugin = Counter;
-  const fullscreenPlugin = Fullscreen;
-  const downloadPlugin = Download;
-  const videoPlugin = Video;
 
   /* The shell's own inset, and only where there is not one already: in the `page`
      presentation `[data-page-content]` is already `p-4 sm:p-6`, so carrying a second
@@ -1022,6 +1021,14 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           aria-label="图片详情"
           className="image-detail-route absolute inset-0 z-detail-overlay overflow-hidden"
         >
+          {/* The container transform's window and counter-scale. Structurally identical to
+              `HeroStage`'s pair — the handoff depends on that — and inert until
+              `buildContainerAnimations` drives them. Both are `absolute inset-0`, so the
+              `StatusView fill` chain below is unaffected: `flex-1` starts at
+              `.image-detail-overlay-content`, whose parent is the absolutely positioned
+              scroller, so it never took part in an ancestor's flex layout. */}
+          <div data-image-detail-clip className="image-detail-clip absolute inset-0">
+            <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
           <div
             ref={overlaySurfaceRef}
             data-image-detail-surface
@@ -1038,13 +1045,15 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                 centred && 'flex flex-col',
               )}
             >
-              {/* The container transform's fit target — see HERO_CONTENT_SELECTOR. */}
+              {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR. */}
               <div
-                data-image-detail-scale
-                className={cn('w-full origin-top-left', centred && 'flex flex-1 flex-col')}
+                data-image-detail-crossfade
+                className={cn('w-full', centred && 'flex flex-1 flex-col')}
               >
                 {content}
               </div>
+            </div>
+          </div>
             </div>
           </div>
         </section>
@@ -1526,55 +1535,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       </div>
       {/* ========== YARL Fullscreen Lightbox (replaces custom lightbox) ========== */}
       {isLightboxOpen && (
-        <Lightbox
-          open={isLightboxOpen}
-          close={handleCloseLightbox}
-          slides={yarlSlides}
-          plugins={[zoomPlugin, counterPlugin, fullscreenPlugin, downloadPlugin, videoPlugin]}
-          zoom={{
-            maxZoomPixelRatio: 3,
-            scrollToZoom: true,
-          }}
-          counter={{ separator: ' / ' }}
-          labels={{
-            Close: '关闭 (Esc)',
-            Download: '下载',
-            'Zoom in': '放大',
-            'Zoom out': '缩小',
-            'Enter Fullscreen': '全屏',
-            'Exit Fullscreen': '退出全屏',
-          }}
-          carousel={{
-            finite: true,
-          }}
-          /* The lightbox ships its own loading ring — a plain CSS spin at a
-             constant rate — which is the one place in the app that was not the
-             M3 indicator. `render.iconLoading` is the sanctioned override, so
-             it becomes `Spinner` like everything else. `tone="inherit"` because
-             this sits on `media-stage`, whose ink is `on-media`, not either of
-             the two roles the `white` flag can pick between. */
-          render={{
-            iconLoading: () => (
-              <span className="text-on-media">
-                <Spinner size="lg" tone="inherit" track />
-              </span>
-            ),
-          }}
-          download={{
-            download: ({ slide, saveAs }) => {
-              const s = slide as unknown as Record<string, unknown>;
-              const dl = s.download;
-              if (dl && typeof dl === 'object' && 'url' in dl) {
-                saveAs(
-                  (dl as { url: string; filename?: string }).url,
-                  (dl as { url: string; filename?: string }).filename,
-                );
-              } else if (typeof s.src === 'string') {
-                saveAs(s.src);
-              }
-            },
-          }}
-        />
+        <PicLightbox open={isLightboxOpen} close={handleCloseLightbox} slides={yarlSlides} />
       )}
       {/* ========== Tag Info Modal ========== */}
       <Modal

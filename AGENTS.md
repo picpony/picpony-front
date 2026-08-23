@@ -161,10 +161,12 @@ the only occurrence of the string. Press lives in `spawnRipple` (`lib/motion.ts`
 and the `state-layer` utility in `globals.css`, and `Button`/`IconButton` already
 carry both.
 
-`useScrollReveal` (`lib/motion.ts`) is wired into the long-content screens —
-/about's team groups, /settings' six sections, a forum thread's reply list. Pick
-by *position*, not preference: on screen at commit uses `<Reveal>`, further down
-uses this. /settings is the worked example of getting that wrong — it wrapped all
+`useScrollReveal` (`lib/motion.ts`) is the hook for a long-content screen — /settings' six
+sections, a forum thread's reply list. Pick by *position*, not preference: on screen at commit
+uses `<Reveal>`, further down uses this. **It currently has no call sites at all**, by decision,
+and its own docstring says so; /about in particular does not use it, despite this paragraph
+having claimed otherwise — an entrance cascade on a text roster is explicitly rejected there.
+Read `lib/motion.ts` before assuming a screen has one. /settings is the worked example of getting that wrong — it wrapped all
 six sections in one mount-time `<Reveal>`, so the three below the fold had
 finished revealing before you ever scrolled to them.
 
@@ -1079,8 +1081,8 @@ The assignments, each taken from the component's own source rather than guessed:
 | Bottom sheet | `default-effects` | `ModalBottomSheet.kt` |
 | Slider | none *on position* — a slider reports where the input is, and a transition would put the mark behind the finger. Its handle's *width* is a state and does spring (`fast-spatial`) | `Slider.kt` |
 | Button pressed corner | none — see the control-height section for why the morph came out | — |
-| Shared-element flight, opening | ζ0.9 spatial at `slowSpatial` (296ms) | the app's own family rule — it moves *and* resizes; `MaterialContainerTransform` runs `emphasized`, whose shape this is the nearest of the four to |
-| Shared-element flight, closing | same shape at `defaultSpatial` (194ms) | `MaterialContainerTransform` returns faster than it enters (500:400); one tier down is that ratio on this ladder |
+| Shared-element flight, opening | `fastOutSlowIn` over **250ms** (M3 `medium1`) — *not* a ladder tier | a from-rest leg flies a curve, so its length is a step on M3's duration scale rather than a spring settle time; the ζ0.9 spatial spring is the *interruption* model and its `rate` is normalised, so it fits any clock |
+| Shared-element flight, closing | same curve, same 250ms | Flutter's Hero rides one route animation, so a push and a pop are one duration read both ways; the direction difference lives in the thresholds |
 | Shared-element flight, swipe-release | `slow-spatial`, sliding to `fast-spatial` | `NavigationDrawer.kt`'s drag release — a gesture, so it keeps the spatial ζ0.9 |
 
 A collapsible panel a press opens or closes is the drawer's case: the two drawer
@@ -1298,37 +1300,197 @@ scaled to that box's current width.** `MaterialContainerTransform` computes
 `open_container.dart` writes the same thing as
 `FittedBox(fit: BoxFit.fitWidth, alignment: topLeft)` inside a `SizedBox` of the
 animated rect. Both grow the box to the **whole surface**
-(`_rectTween.end = Offset.zero & navSize`), not to the picture's slot. In DOM terms the
-mask is a `clip-path: inset(… round R)` on the overlay and the fit is a `translate` +
-uniform `scale` on `[data-image-detail-scale]`, which is why that node exists: the
-pull gesture already owns `.image-detail-overlay-content`, and a CSS-variable translate
-and a WAAPI scale cannot compose on one element.
+(`_rectTween.end = Offset.zero & navSize`), not to the picture's slot. **In DOM terms that is one composited `transform` on a clipping wrapper, and there is no
+separate fit track at all.** `[data-image-detail-clip]` is a host-sized box carrying
+`overflow: clip`, a circular `border-radius` and `translate3d(dx, dy, 0) scale(sx, sy)`;
+`[data-image-detail-unclip]` inside it carries `scale(f/sx, f/sy)`, where `f = max(sx, sy)`. The
+accumulated content transform is then a uniform `scale(f)` with a top-left translate — a `FittedBox`
+— so the pair *is* the fit. Both need `transform-origin: 0 0`, and neither may hold a resting
+transform, because a transform is a containing block for fixed-position descendants; they get
+one from the leg's first frame until `settle()` cancels it, and nothing fixed renders inside
+that subtree anyway (YARL portals to `document.body`).
+
+**`f` is `max(sx, sy)` — cover — and fitting always to width was a measured artefact, not a
+simplification.** The window's aspect mid-leg runs between the card's and the host's while the
+content inside it always has the host's, so whenever `sx < sy` a band of the window had nothing
+painted in it: measured in a browser at 1920×1080 on an 800×2000 picture at p 0.4, window
+1234×866, content 1234×**728**, so **138px** of the window's bottom was transparent and the gallery
+showed through it — and because the flyer is contained by the *window* rather than by the paint, it
+hung **111px** past the bottom of the white surface, over the grid. That is the "part of the bottom
+is cut off, only on a wide desktop" report: nothing was cropping the picture, the surface behind it
+was ending early. It is wide-desktop-only because the band is `host.height · (sy − sx)`, and a
+portrait card against a landscape host is the only place the two scales separate — a phone's overlay
+is nearly the picture's own shape, and a landscape card on a wide desktop matches the host's aspect
+to within a few percent. `MaterialContainerTransform` has exactly this as `FIT_MODE_AUTO`: the axis
+is chosen per transition rather than fixed. Fitting to the larger scale clips the content on the
+other axis instead, which is what `overflow: clip` is for and what "masked to the container" means;
+what gets clipped is the centred `max-w-5xl` column's empty outer margin.
+
+The compensator is emitted as a two-component `scale()` with one component exactly 1, rather than
+as `scaleY(...)` or `scaleX(...)`. That is load-bearing: the window's aspect *does* excurse past the
+host's mid-leg, so the fit axis can change hands inside one leg, and a `scaleY` keyframe beside a
+`scaleX` one is a transform-list mismatch that drops WAAPI onto matrix interpolation for that
+segment. Written as a pair the interpolation stays componentwise and continuous through the
+crossing, where both components are 1 — measured, between-sample anisotropy stays at 0.441%, where
+the single-axis form reached 4.5%.
+
+The mask used to be an animated `clip-path: inset(… round R)` on the overlay, and swapping it
+is not a tuning change — it is the difference between compositing and not:
+`core/animation/compositor_animations.cc:79-84` lists the compositable properties, and
+`clip-path` appears only as a *native paint worklet* property whose branch (`:354-368`) needs
+`RuntimeEnabledFeatures::CompositeClipPathAnimationEnabled()` or falls to
+`DefaultToUnsupportedProperty` — a Finch-gated feature, which is why two recent Chromiums on
+one device disagreed, one dropping most of the transition and the other running it on the main
+thread and freezing while React rendered the route. Worse,
+`platform/graphics/compositing/property_tree_manager.cc:984-1035` makes `ShaderBasedRRect`
+return `nullopt` for **any** clip node carrying a `clip-path`, animated or not, which
+`:1183-1187` turns into `RenderSurfaceReason::kClipPath`. A circular `border-radius` instead
+gives `mask_filter_info` with `is_fast_rounded_corner` and no render surface. Two corollaries
+worth keeping: the clip must be `overflow: clip` on **both** axes, since
+`NeedsInnerBorderRadiusClip` requires `ShouldClipOverflowAlongBothAxis()` and a single-axis
+clip silently squares the corner; and the corner must be **one circular value**, since
+`RoundedCornersF` is four scalars and an elliptical radius costs a mask layer. That last one is
+the construction's only visual compromise — the corner is elliptical on screen wherever the box
+is not host-shaped, up to 4.44:1 at take-off on the shipped matrix, which is where the opaque
+flyer covers it.
+
+The corner is divided by `min(sx, sy)` and rounded **up**. Both screen radii are then at least
+`R`, so the window's cut provably contains the flyer's circular-`R` cut; dividing by `sx` or
+rounding to nearest under-cuts and leaves slivers of `bg-surface` outside the picture's corner
+at take-off, which is where the eye is.
+
+`[data-image-detail-scale]` is `[data-image-detail-crossfade]` now, and carries one property:
+the content's opacity. It could not become the window itself, because the pull gesture already
+owns `.image-detail-overlay-content` and a CSS-variable translate and a WAAPI transform cannot
+compose on one element; and the fade could not move onto the compensator, because that node is
+an ancestor of `[data-image-detail-surface]`, which has its own fade on the back leg, and two
+nested opacities multiply into two entrances.
+
+**The flight layer gets the exact inverse of the window, on an opening leg only.** The plane's
+anchor cannot leave the scroller — `sizePlaneLayer` puts the layer at the scroll offset captured
+at take-off, inside a node that scrolls with the content, and that is the whole of why the flyer
+follows ordinary and inertial scrolling at zero per-frame cost — so instead of moving it out of
+the window, it carries `scale(1/sx) translate(-dx, -dy)`, which accumulates to the identity.
+`transform-origin: 0 0` on that layer is load-bearing: the default `50% 50%` would displace the
+flyer by hundreds of pixels. The track is built iff the window `contains()` the layer, not by
+testing the direction — containment is self-correcting for both legs, for every
+`moveFlightToPlane`, and for the reduced and dismiss paths. Dropping the scroll term is
+deliberate and is an improvement: the landing target is inside the scaled subtree, so both move
+by `sx · Δ` and the flyer tracks it for the whole leg, where today they separate mid-flight and
+only reconverge on arrival.
+
+**`npm run hero:path` covers all of it now**, over 36 legs at 97 samples each: that the
+accumulated content transform is isotropic (1e-16) **and equal to `max(sx, sy)`**, so a fit that
+leaves part of the window unpainted is a failing check rather than a report; that clip ∘ compensator
+∘ counter parses
+back to the identity from the *emitted strings* (1e-13, and it is the string level that catches
+writing the counter's two functions in the wrong order — an error that compiles and only shows
+on a device you are not holding), that the visible box reconstructed from the pose is the arc's
+own rect, that landing is exact to the character, that corner containment holds and the
+browser's radius clamp never binds, that `unprojectHeroContainerRect` round-trips, and that the
+between-sample anisotropy WAAPI introduces by lerping the two scales independently stays under
+0.6% (measured 0.441%).
+
+**And every box in that matrix is measured now, which is why it started catching things.** It used to
+place its media wells at hard-coded origins that were not inside the hosts it compared them against —
+the destination at 1440 sat at x 104 while the overlay starts at 300 — so the containment check was
+solving a problem the app does not have, and passed while the shipped app was flattening the picture
+on real geometry. Card rects and host boxes come out of a browser on the fixture gallery at 1440, 1920
+and 390 now; the well is derived from the host the way the layout derives it. The wide desktop is in
+there for a specific reason: four 308px columns against a well capped at 944 and centred means a
+flight from an *outer* column is a long, mostly horizontal move into a box that straddles the card
+vertically, and that is the geometry where the two corner arcs bow in opposite screen directions and
+the box's centre travels almost straight. Nothing at 1440 or 390 has that shape, which is why "on a
+wide screen the two columns near the edges have too weak a parabola" was invisible to the harness.
+
+**Containment is judged on what is visible, not on the raw rects.** The visible loss is
+`(picture ∩ host) \ window`: the overlay and `[data-image-detail-host]` are both `overflow: hidden`
+on one box, so a picture edge outside *that* is clipped whether the window holds it or not. Solving
+and auditing on the clipped rect is worth real bow — a card whose box extends 488px below the fold
+spends most of its early flight outside the overlay, and refusing to notice cost it its whole arc
+(bow 0.13 against 1.00). The raw escape reaches 67px on the shipped matrix and every pixel of it is
+outside the overlay; the visible escape stays under 1px.
+
+**The gallery's depth cue is a scale, and it is a window on the leg's travel rather than the leg.**
+Both halves were wrong for a while. It was a *translate* — 8px down, then 24 — and a translate is the
+wrong verb: a sink is a recede, not a displacement, and sliding the grid down the screen pushed the
+top row out of the fold. It is `scale(0.95)` now, which is `AuthModal`'s own gesture when the captcha
+dialog opens over it — cited rather than picked. Its `transform-origin` is the **viewport's** centre
+inside the scroller, written from the live scroll offset once per leg, because
+`[data-image-detail-background-visual]`'s box is the whole scrollable content and an element-centred
+origin on something several viewports tall flings the visible rows.
+
+And it ramped 1:1 with the flight, so it reached full depth exactly when the window had grown over the
+whole host and there was nothing left to see it against: measured, the grid was 5.3px down at 155ms of
+a 194ms leg and 8px down at 310ms, behind an opaque surface. A cue whose peak is occluded is a cue
+that does not exist. `HERO_BACKGROUND_SINK_WINDOW` spends it over the first 60% of the travel and mirrors on
+the way home (0.4 → 1) because the grid is *revealed* rather than covered on a return. 0.45 was the
+first answer and ended too early — the recede was over while the box was still visibly growing, so the
+two halves of one gesture stopped at different times. Later than 0.6 is not free: the window has
+covered most of the host by 0.75, and a cue that finishes behind it is the defect this window exists
+to fix.
+
+The old note claimed a scale on this layer "makes Chromium re-raster it". That is true of scaling
+*up*: `cc` takes the raster scale from the maximum the animation reaches, and this animation's maximum
+is 1 — the identity it starts from — so the existing raster stands and the shrink is a GPU downscale.
+What is left is a slight softening while the grid recedes, which is what receding looks like. It still
+wants a check on a phone before it is treated as free.
 
 Before this, the detail side of a flight was `opacity` on the surface plane and nothing
 else, with the routed page appearing when its seal lifted. A full-screen page arrived by
 fading a rectangle in and un-hiding a page behind it while the picture flew past on a
 separate path — two objects for one gesture, which no timing function can fix.
 
-**296ms out, 194ms back — the spatial ladder's slow and default tiers**, and the two wrong
-answers before it were wrong in opposite directions for the same reason: nobody had decided
-which *kind* of clock a container transform runs on. It read `slowSpatial` both ways on the
-claim that `MaterialContainerTransform` is "`motionDurationLong2` (300ms) either way"; that
-citation was doubly false (300 is `DurationMedium2`, and the transform is not symmetric — it
-reads `entering ? motionDurationLong2 : motionDurationMedium4`, which are **500** and
-**400**). It then read 500/400, which are those real numbers, and 500ms was too slow to
-live with. Both citations describe Android's *activity-level* transform, a gesture that
-happens once per app launch; this one happens every time you look at a picture and go back.
-So it belongs on the spring ladder the rest of the app's component motion uses, and the
-asymmetry is Material's 500:400 taken to the nearest tiers — which is also what every row of
-the duration table above already does. The 166ms `FastEffects` close remains wrong for its
-own reason: it came from `NavigationDrawer.kt`, and a drawer *leaves* where a container
-transform *returns*.
+**296ms, mirrored — `slowSpatial` both ways, which is Flutter's arrangement.** Flutter's Hero
+has no duration of its own: `_HeroFlight` rides the route's animation, so a push and a pop are
+the same animation played forwards and backwards, one duration and one curve. Three wrong
+answers came before it. 296/166, from `NavigationDrawer.kt` — but a drawer *leaves* where this
+*returns*. 500/400, which are `MaterialContainerTransform`'s real durations
+(`entering ? motionDurationLong2 : motionDurationMedium4`, and not the "300ms either way" this
+file claimed before that): correct citation, wrong subject, since that is Android's
+*activity-level* transform, and 500ms measured as too slow to live with here. Then 296/194,
+taking that asymmetry to the nearest tiers, where the open was right and the return read as
+snatched — 194 is the tier for a switch handle and this is a full-screen box collapsing to a
+thumbnail. The direction difference lives entirely in the thresholds now, which is where
+Material keeps it too.
 
-Three things the length has to fit, all checked: 24 samples per leg is 12.3ms per segment at
-296 (under one frame — at 500 it was 21ms, so the curve's fastest region was being flattened
-across 1.3 frames); the gallery card's chrome fades on a 200ms CSS transition that must
-finish inside the flight; and `HERO_REVERSE_MIN_DURATION_MS` becomes reachable for the first
-time, which is what it is for.
+The *duration and the shape* mirror; **the path does not.** `createHeroPointArc` puts the
+circle's centre on an axis through whichever endpoint owns the larger delta, so swapping the
+pair mirrors the arc rather than retracing it: measured on a masonry-tile pair, the forward pose
+at `p` and the back pose at `1 − p` sit up to **170px** apart mid-flight. Flutter has the
+identical property, since `MaterialApp` builds a fresh `MaterialRectArcTween(begin, end)` per
+flight. Going out and coming back are the same gesture, not the same picture reversed.
+
+**250ms is off the spring ladder on purpose, and the two tiers either side are why.** `defaultSpatial`
+(194ms) reads snatched and `slowSpatial` (296ms) reads slack; there is nothing between them on the
+ladder, and that is the tell — the ladder's entries are *spring settle times*, and a from-rest leg flies
+a Bézier. The only spring here is the interruption model, whose `rate` is normalised so its shape is
+independent of the clock. So the flight is a transition, its shape is a curve, and its length is a step
+on M3's own duration scale, of which 250 is `medium1`. One consequence worth knowing: an interrupted leg
+is now a ζ0.9 spatial spring settling in 250ms — a real member of that family, not one of its three
+named tiers.
+
+**It went down to `defaultSpatial` (194ms) once and came back, and the round trip is the lesson.**
+The argument for cutting it was that the flight read slower than the rest of the app. What that missed
+is that its *length* was never what made it read slow — it was flat: the path was flying 2-5% of its
+chord because the crop budget and a shared containment bow had eaten the arc, the content arrived with
+the box instead of following it, and the depth cue peaked behind an opaque surface. Cutting 34% off
+the clock made a flat motion brief rather than a curved motion quick, and once the arc, the
+choreography and the sink were fixed the same 194ms read as snatched. **When a transition reads wrong,
+check what it is doing before changing how long it takes** — a duration is the cheapest knob and the
+least likely to be the fault.
+
+Three things the length has to fit, all checked: `HERO_PROGRESS_SAMPLES` is 48 per leg, so 250ms
+is 5.21ms per segment (under one frame at 120Hz — at 500 with 24 it was 21ms, so
+the curve's fastest region was flattened across 1.3 frames); the gallery card's chrome fades on
+a 200ms CSS transition that must finish inside the flight; and the reveal staircase is expressed
+as fractions of the leg rather than milliseconds, so it cannot outlive it. 48 rather than 32
+because the *spring* is the harder curve to table and the reverse leg is its worst case: the
+largest linear-interpolation error between samples is 0.332% for the flight curve but 0.609% for
+the ζ0.9 spring at the −0.5 launch velocity a reversal saturates to, which 32 brings to 0.189%
+and 0.353%. `HERO_REVERSE_MIN_DURATION_MS`'s 90ms floor is **inert** at these durations — the
+ratio bottoms out at 0.35, so the shortest reverse is 104ms and it would take a leg under 257ms
+to reach it.
 
 **The rest of the direction asymmetry lives in the thresholds**, which is where Material
 keeps it — `DEFAULT_ENTER_THRESHOLDS` / `DEFAULT_RETURN_THRESHOLDS`:
@@ -1337,6 +1499,19 @@ keeps it — `DEFAULT_ENTER_THRESHOLDS` / `DEFAULT_RETURN_THRESHOLDS`:
 | --- | --- | --- |
 | surface cross-fade | 0 → 0.25 | **0.60 → 0.90** |
 | corner (shape) mask | 0 → 0.75 | 0.30 → 0.90 |
+
+**Every one of those windows is evaluated on the leg's `progress`, not on its wall clock**, which
+is what `MaterialContainerTransform` does (it applies `ProgressThresholds` to the animator's
+*interpolated* fraction). The fades used to be four keyframes at raw time offsets while the mask's
+corner already used the eased progress — one gesture measured two ways, and the literal answer to
+"the curve and the rate are not coordinated". The forward leg barely moves: `0 → 0.25` ended at
+74ms on the clock and ends at 75.6ms on travel. The back leg is where it shows — the surface's
+`0.60 → 0.90` was 178 → 266ms and is 116 → 187ms, so the plane hands over to the thumbnail when
+the box has actually got most of the way home. The flyer's own corner reads the same row of the
+shape table as the container's in *both* directions; it used to hold the enter row's reciprocal
+and apply it either way, so a closing flight ran the two on different windows. (That last one is
+invisible today: both `ImageCard` and `FeaturedBanner` treat their thumbnail with the same corner
+as `HERO_TARGET_RADIUS_PX`, so the flyer's radius track interpolates 16 to 16.)
 
 The return row is the one that changes how the exit reads: the plane stays fully there
 while the container shrinks and hands over to the thumbnail late, instead of blinking out
@@ -1352,80 +1527,167 @@ same trip. On the way back the content takes the *enter* window mirrored (0 → 
 is gone in the first quarter; the surface plane keeps 0.60 → 0.90 so there is still
 something to shrink, and the picture keeps its own morph.
 
-**The path is the chord, on the spring's own progress, and it must stay monotone per axis.**
-There used to be a *ballistic lift* — a parabola subtracted from the top edge, peaking
-mid-flight, sized from a gravity term and the chord length. Two things were wrong and the
-second is the visible one: the lift was keyed on **linear** time while the position ran on
-the spring curve, so at the point where the spring has covered 97% of its travel the
-parabola is still at 96% of its peak. The last 40% of every flight was therefore an
-already-arrived picture sinking the remaining ~38px straight down. Measured on a 296ms
-open, the rendered top ran 390 → 197 → 196 → 202 → 208 → 221 — past its landing edge by
-26px and back — while width, height and left were monotone, which is what localised it.
+**The path is Flutter's Hero path — `MaterialRectArcTween`, two opposite corners on two
+circular arcs** — and it took three attempts to get there. A *ballistic lift* came first: a
+parabola subtracted from the top edge, keyed on **linear** time while the position ran on the
+spring, so at the point where the spring has covered 97% of its travel the parabola was still at
+96% of its peak. The last 40% of every flight was an already-arrived picture sinking the
+remaining ~38px. Measured, the rendered top ran 390 → 197 → 196 → 202 → 208 → 221: past its
+landing edge by 26px and back, while width, height and left were monotone, which is what
+localised it.
 
-It is also not a Material path. `MaterialContainerTransform` leaves `pathMotion` linear
-unless a caller opts into `MaterialArcMotion`, and Compose's `SharedTransitionScope` lerps
-the bounds outright. **`MaterialArcMotion` has since been implemented here and taken back
-out, so do not reach for it a third time.** The arc is one quadratic Bézier through a
-corner of the endpoints' bounding box, which collapses to two closed forms of one
-parameter — one axis on `1 − (1−t)²`, the other on `t²` — i.e. a reparameterisation per
-axis rather than a second clock. Keeping every edge monotone then forces the axis progress
-to drive the box's *whole extent* on its axis (`left` and `width` together, `top` and
-`height` together), because arcing the centre while the size ran on the plain progress sent
-the left edge 38px past its landing column and back. That version measured clean — zero
-edge reversals across four cards, one of them travelling leftward — and still had to go,
-because pairing the axes puts the aspect ratio on the leading one: 169ms into a 500ms open
-the box was **830 × 281**, an aspect of 2.95 where the thumbnail was 2.0 and the picture is
-1.78, and the canvas is `object-cover` inside it. The middle of every flight was a hard
-crop through a shape more extreme than either end. Material's own arc thresholds
-(`DEFAULT_ENTER_THRESHOLDS_ARC`) are the tell: the arc is tuned for a full-width row or
-card growing into a page, where the horizontal travel is near zero and the size delta is
-small. A masonry thumbnail becoming a near-full-width photo is the opposite geometry.
+Then Material Android's opt-in `MaterialArcMotion`, twice. **Do not reach for that one a third
+time.** It is one quadratic Bézier through a corner of the endpoints' bounding box, i.e. a
+per-axis reparameterisation, and it fails in whichever of two ways you build it: arcing the
+centre while the size runs on the plain progress sends an edge 38px past its landing column and
+back, and pairing each axis's whole extent onto its own quadratic fixes the edges and puts the
+aspect ratio on the leading axis — measured at **830 × 281** mid-flight, an aspect of 2.95 where
+the thumbnail was 2.0 and the picture 1.78, with an `object-cover` canvas inside it.
 
-**The standing check is per-decile monotonicity of all four rendered edges**; a flight that
-passes an edge and returns is a bug however good the curve is. Both terms this file has
-recorded removing failed it — one at the end of the leg, one in the middle — and both read
-as a timing problem from the outside. **The second check is the aspect ratio**, which the
-monotonicity check does not cover: it must stay between the two endpoints' aspects.
+`MaterialRectArcTween` is a different construction from both, and it *is* the Material default:
+`MaterialApp` installs `createRectTween: (a, b) => MaterialRectArcTween(a, b)`, so every Material
+Flutter app's shared element flies this way. It interpolates **corners rather than a box** — pick
+the diagonal whose direction best matches the travel, send those two opposite corners along
+circular arcs, rebuild the rect from them. The radius comes out of the chord and the shorter
+delta, `r = |AB|² / (2·Δshort)`, which bounds every sweep under 90°, so each edge is one
+coordinate of one monotone arc for any pair of boxes.
 
-**The shape is one of the app's four, not a curve of its own.** `HERO_FLIGHT_RESPONSE`
-takes ω in *normalised* time — the physical frequency times the leg's duration — and
-within a family that product is a constant: 5.13 for every ζ0.9 spatial tier, 6.65 for
-every ζ1.0 effects tier. So the family fixes the shape, `HERO_DURATIONS` fixes the tier,
-and the flight reproduces `StandardMotionTokens` decile for decile to within 0.2 of a
-point. Before this the hero's spring model was critically-damped-only, which is why it
-*could* not reference the scheme: ζ was the missing parameter. A response must therefore
-always be **spread** when it is rebuilt — reconstructing it field by field drops ζ back to
-1 silently.
+**Two standing checks, and they are in tension — which is why there is a `bow`.** The first is
+per-decile monotonicity of all four rendered edges: a flight that passes an edge and returns is a
+bug however good the curve is. The second is the crop. The flyer's canvas is `object-cover`, so
+the visible fraction of the picture is `min(a / aBase, aBase / a)` — a function of the box's
+instantaneous aspect and nothing else — and it has to approach the destination's aspect
+*monotonically*. Corner arcs pass the first and fail the second, because the lead and trail arcs
+have different radii and the difference between their bows is a size change; the centre-arc form
+(Flutter's own `MaterialRectCenterArcTween`) passes the second and fails the first. No
+construction has neither.
 
-**And ζ is 0.9 — spatial — after a round trip through 1.0 that is the argument for it.**
-The app's own rule for picking a family is the one that decides it: *spatial* is "it moves or
-resizes", *effects* is "it fades or recolours, and must not overshoot". A container transform
-moves **and** resizes, and this is the largest such motion in the app. It was moved to ζ1.0
-on the strength of Compose's `BoundsTransform` being `DampingRatioNoBouncy` — a real citation,
-but not an aesthetic one: Compose picks a *spring* for a shared element because a shared
-element must be interruptible, and the no-bouncy ratio is a safe default for arbitrary user
-content. `MaterialContainerTransform`, the same object with a fixed choreography, uses no
-spring at all — it uses `motionEasingEmphasizedInterpolator`, and `emphasized` hangs back
-before it runs. Of this app's four shapes, the one that hangs back is ζ0.9. Per tenth of the
-leg: ζ1.0 is 14.5 24.2 21.1 15.3 10.1 6.4 3.9 2.3 1.3 0.8, peak in the second tenth,
-fastest:last 31:1; ζ0.9 is 9.8 19.2 19.7 16.6 12.6 8.9 5.9 3.7 2.2 1.3, peak in the third,
-15:1. The first starts abruptly and then crawls; the second reads as having mass.
+So the arc is blended toward its own chord by `bow ∈ [0, 1]`, solved per box-pair as the largest
+value whose crop retracement stays inside `HERO_ARC_CROP_BUDGET` (24%). A convex combination of two
+same-direction monotone functions is monotone, so the edge check holds by construction at any
+bow, and the full Flutter arc survives untouched wherever it is already safe. **Measured before
+the fix, at bow 1**, the visible fraction on a masonry mid-column flight ran
+`81 → 98 → 79 → 76 → 81 → 86 → 91 → 95 → 98 → 99 → 100` per decile — it un-cropped to nearly
+full, handed back 22 points, and un-cropped again inside 300ms. Half the geometry matrix
+retraced 12–32%. That was the "the flight is not coherent" complaint, and no timing function
+touches it.
 
-The objection this replaces was that ζ0.9's monotonicity is "a property of where the window
-stops rather than of the motion". Both halves are now checked rather than argued: the raw
-spring's first peak is at `π/ω_d` = 1.40 in normalised time, past the end of any leg, and
-`springProgress` normalises by `raw(1)`, so swept at 200 points the response is monotone with
-`max = 1.00000` and `p(1) = 1.00000`. An *interrupted* leg re-solves from a measured velocity
-and can then overshoot — true, deliberate, and exactly what the drag release has always done:
-a reversal launched with a negative velocity dips before it recovers, and that dip is the
-catch. One consequence worth having: the flight and the drag release are now the same shape
-and differ only in duration, so the two ways of leaving a picture stop disagreeing about what
-kind of object it is.
+**There are two bows, not one, and conflating them cost the picture its arc.** The window has to
+hold the picture — `[data-image-detail-clip]` is `overflow: clip`, so anything the flyer does
+outside it is a visible crop — and the window's rect pair is not the flyer's, so the two arcs pick
+their tangent axis from different endpoints and can leave along different axes. That was one shared
+scalar for a while, reduced until the pair fit, and it turned the reported crop into a reported
+*flatness*: on the three destination shapes where containment binds it solved to **0.020 / 0.079 /
+0.233**, i.e. the picture flew a straight line — 0.3% / 1.6% / 2.9% peak deviation from its own
+chord where full bow gives 12–21%. It is now `bow(picture)` for the crop budget and `bow(window)`
+for containment (`solveHeroArcContainBows`), and the *window* is the one that gives way, because the
+window is the arc at fault: from a 240×240 card to a 1312×780 host its aspect excursion at full bow
+is 24–59% past its own endpoints, so mid-flight it is a far flatter box than either end and too
+short to hold the picture. The same three pairs now measure 16.2% / 12.2% / 7.7%. Where nothing
+clips the picture — a dismiss, and the closing leg, whose flyer is planted in the gallery plane —
+the two share, because both are then fully on screen and neither constrains the other.
 
-**It leaves from rest.** It was launched with `velocity ≈ 1` — already travelling at
-the whole flight's average speed in its first frame — so its fastest tenth carried 46x
-(out) and 64x (back) what its last one did. That is the one-sided profile the drawer
-took three passes to remove, still living in the hero.
+That solve **scans and then refines; a bisection is wrong rather than coarse.** Escape is not
+monotone in the window's bow: on some pairs the feasible band is an interior interval (one reads
+13.0 3.3 0.0 0.0 0.0 4.3 12.5 … px per tenth), because a flat window is a plain corner-chord
+interpolation whose own aspect stops tracking the picture's. And when *no* window holds the picture,
+the picture is reduced against the **friendliest** window rather than against a flat one — measured on
+a 1920x1080 grid with a tall picture opened from the bottom row, the escape runs 74.6px at window bow 0
+down to 63.1px at bow 1, so reducing against the flat window (the only one where feasibility is
+provable) throws away most of the arc for nothing. Bow 0 stays as the backstop.
+
+**The crop budget is what limits the outer columns on a wide screen, and the trade there is 1:1.** In a
+masonry grid the card's aspect *is* the picture's, so the cover fraction is 1 at both ends and any
+mid-flight aspect excursion is a pure there-and-back; and with two corner arcs the excursion *is* the
+bow, since the lead and trail arcs have different radii and the difference between their bows is
+precisely a size change. So for the commonest geometry in the app you cannot buy arc without buying
+pump — they are one quantity measured two ways. Swept on the real 1920 and 2560 grids, the outer
+columns are budget-bound on every case and their deviation tracks the budget almost linearly: 2.5-4.6%
+at 12%, 3.8-7.0% at 18%, 5.1-9.4% at 24%. 24% is what ships; browser-measured after the change, the
+left column reads 8.3% where it read 4.5%, and the right column 6.6% where it read 0.3%.
+
+The construction that separates arc from pump is a **centre arc with the size on the lerp**, where a
+constant aspect makes the retrace identically zero — measured, it is, on all nineteen wide-screen
+pairs. It is not shipped because its own limiter, edge monotonicity, is harsher and less predictable:
+on the same nineteen it lands between 0.3% and 16.7% and is *flatter* than the corner form on nine of
+them. Selecting between the two per pair would beat both and is the open option.
+
+Two other constructions were measured against this one and both lost, so do not reach for either.
+**A centre arc with the size on the lerp** (`MaterialRectCenterArcTween` plus a bow solving edge
+monotonicity) makes the crop retrace exactly zero — the aspect is then a Möbius function of
+progress — but monotonicity is the expensive criterion there, since the centre's deviation moves
+both edges of an axis together: the solved bows come out at 0.05–0.66 and the picture's arc is
+*flatter* than the corner form on seven of thirteen pairs. **Per-corner bows matched so the two
+corners deviate equally** removes the size term almost entirely (crop retrace ≈ 0) and destroys the
+arc, because the centre's deviation is the *average* of the two corners' and they measure 2 vs 96,
+5 vs 46, 12 vs 103 — matching means keeping the smaller.
+
+**Both checks are a command now, not prose: `npm run hero:path`.** It imports the app's own
+`geometry.ts`, `progress.ts` and `constants.ts` through a `module.registerHooks` resolve hook —
+no build step, no new dependency, Node 22.18+ — sweeps a matrix of thirteen realistic box pairs
+in both directions, and exits non-zero. Prose is why the crop check was failing in shipped code
+for as long as it was: nobody had run it. It asserts containment too — that the picture never leaves
+the window, and that the *picture* never has to give up bow to achieve it — and prints both bows
+beside the shipped and the previous deviation, so a change to either lever is a diff in a table. If
+you touch the path, the arc, either bow or the sample count, that command is the thing that says
+whether you were right.
+
+**And `emphasized` does not fit this clock, which is the answer to "unify the curve with the rest of
+the app".** It is the token the motion table names for a large container transform and what
+`MaterialContainerTransform` runs, and at this clock it is unusable: one decile carries **54.2%** of
+the travel, the fastest tenth of the journey takes **2.7ms at 250ms** — well under a
+frame either way — and a 60Hz frame straddles a ~30-point jump, hundreds of pixels on a full-screen
+travel. Its 32-sample table error is 2.159%
+against `fastOutSlowIn`'s 0.189%, so it would need roughly 110 keyframes as well. It works at the
+500ms the shared axis pairs it with (biggest single-frame jump 22 points) and needs ≥450ms to
+present at all, which is the duration this file already records as too slow to live with here.
+`standard` is the other candidate and gives up the hang-back — 15.6% of the travel in its first
+tenth against 2.6% — which is the recognisable thing about a Flutter hero. So the flight keeps
+`fastOutSlowIn`, and what unifies it with the rest of the app is the *arc* and the choreography
+rather than the easing.
+
+**The shape is `Curves.fastOutSlowIn`, which is what Flutter's Hero actually flies.**
+`_HeroFlightManifest.animation` wraps the route's animation in
+`CurvedAnimation(curve: Curves.fastOutSlowIn, reverseCurve: Curves.fastOutSlowIn.flipped)`, and
+`FlippedCurve` is `1 − curve(1 − t)`, so a pop presents the same profile as a push. Per tenth of
+the leg it travels 2.6 10.8 23.3 24.6 16.2 10.0 6.2 3.7 1.9 0.6 — peak at 30%, half travel at
+35%, fastest:last 41:1.
+
+**A spring cannot be given that shape, and that is why this is a curve rather than a tier.** The
+whole difference is the first fifth: the curve hangs back, 2.6% of the travel in its first tenth
+against the ζ0.9 spring's 9.8%, and then goes. A spring released from rest has its peak velocity
+at `arccos(ζ)/ω_d`; normalised by settle time that lands at 15–20% for every tier this app ships
+(ζ1.0 at 15%, ζ0.9 at 20%), and *lowering* ζ moves it earlier rather than later, because a longer
+settle window stretches the tail more than the head. "Almost still, then away" is not reachable by
+retuning ζ, and it is the recognisable thing about a Flutter hero.
+
+**The ζ0.9 spring is still here, and it is the interruption model.** Every leg that has to leave
+at a speed something is *already* travelling at is a spring — a reversal, a mid-flight rebuild, a
+drag release — because a cubic Bézier's launch slope is `y1/x1`, fixed by its own shape, while
+`solveSpringVelocity` is exact in both damping regimes. A mid-flight resize therefore converts an
+uninterrupted leg from the curve to a spring, which is forced rather than chosen. `rate` is ω in
+*normalised* time, so within a family that product is a constant — 5.13 for every ζ0.9 spatial
+tier, 6.65 for every ζ1.0 effects tier — which is what lets a reverse pick its own duration
+without picking a different curve, and it reproduces `StandardMotionTokens` `DefaultSpatial`
+decile for decile to within 0.2 of a point. ζ0.9 rather than ζ1.0 by the app's own family rule: a
+container transform moves **and** resizes, so it is spatial. Per tenth, ζ1.0 is
+14.5 24.2 21.1 15.3 10.1 6.4 3.9 2.3 1.3 0.8 (peak second tenth, 31:1) against ζ0.9's
+9.8 19.2 19.7 16.6 12.6 8.9 5.9 3.7 2.2 1.3 (peak third, 15:1) — the first starts abruptly and
+then crawls.
+
+There is no longer a spread to remember. `relaunch()` in `lib/hero/progress.ts` is the only place
+a launch velocity is solved, so the hazard this file used to document — that rebuilding a response
+field by field drops ζ back to 1 silently, which had shipped — is structurally gone rather than
+commented. An interrupted leg *can* overshoot: a reversal launched with a negative velocity dips
+before it recovers, and that dip is the catch. `npm run hero:path` asserts monotonicity of the
+from-rest models and deliberately exempts the negative-velocity one.
+
+**Both ends leave from rest.** `y'(0) = 3·y1 = 0` and `y'(1) = 3·(1 − y2) = 0` exactly, and the
+check asserts it rather than trusting the constant, because the constants read
+`{ rate: 7.0, velocity: 0.9 }` for a long time while claiming otherwise — the flyer already
+travelling at the whole flight's average speed in its first frame, fastest tenth carrying 46x
+(out) and 64x (back) what its last one did. That is the one-sided profile the drawer took three
+passes to remove, and the hero was the last place still doing it.
 
 **Three exits, and `cause` is what picks between them.** A tap-back and a browser-back
 run the container return above. A **swipe-down does not**: the finger has already put the
@@ -1450,19 +1712,32 @@ the two elements' *containing blocks*, not their style objects.
 `emphasized-decelerate` starting with the flyer, against a 340ms flight — so the plane
 finished arriving 70ms before the picture landed on it, and the two read as separate
 events that merely began together. Its opacity is on the container's cross-fade interval
-now. The content cascade above it keeps its own staircase but *only its position*: chrome,
-header and body still arrive in reading order, while the block's opacity belongs to the
-container once, because two nested opacities multiply and read as two entrances.
+now. The content cascade above it keeps its own staircase but *only its position*: header and
+body still arrive in reading order, while the block's opacity belongs to the container once,
+because two nested opacities multiply and read as two entrances. Two steps, not three — the
+cascade is a descendant query on the overlay and both back buttons render as its *siblings*, so
+nothing in the app carries `data-image-detail-reveal="chrome"`. Their entrance is the
+`floatingBack` branch, which legitimately keeps its own clock: it renders outside the overlay,
+the mask never reaches it, and it is a control appearing beside the surface rather than a block
+inside the box.
 
-**And the staircase had the same defect from the other end.** It ran 400ms on
-`emphasized-decelerate` with delays of 50/100/150, so the body finished at 550ms — the text
-kept sliding for a quarter of a second after the picture had landed, which is its own kind
-of "too slow". 400 + `emphasized-decelerate` is a correct pairing (that curve covers 62% of
-its travel in the first tenth and only 400 gives it room) but it is the **page entering**
-row, and these steps move 8, 16 and 24px. A 16px rise is a small thing entering: 200ms on
-`standard-decelerate`. With delays of 0/50/100 the last step ends at 300 against a 296ms
-flight, and measured on the built app the body's rise and the flyer's landing now finish in
-the same frame (both t≈305).
+**And the staircase had the same defect from the other end, twice.** It ran 400ms on
+`emphasized-decelerate` with delays of 50/100/150, so the body finished at 550ms — the text kept
+sliding for a quarter of a second after the picture landed. Moving it to 200ms on
+`standard-decelerate` with delays of 0/50/100 fixed the length and left two smaller things wrong.
+`0 + 100 + 200 = 300` against a 296ms flight is not "they stop together": the body's window ended
+at 1.0135 of the leg, and the targets during an open are the *Stage's* nodes, which the handoff
+replaces with the route's untransformed ones — so a window ending past `p = 1` leaves a residual
+transform on the node in the frame that swaps them. And a positional rise is spatial by this
+file's own family rule, so a transition-table bezier was a second shape inside a gesture the box
+was already giving a shape to.
+
+So the steps are **windows on the leg's own progress** now — `HERO_REVEAL_WINDOW`, sampled from
+the same table the mask, the fit, both fades and the depth sink read. The values are today's
+timing translated into travel rather than new timing (`p(50/296) = 0.088`, `p(250/296) = 0.986`,
+`p(100/296) = 0.469`), so each step starts and stops within a millisecond of where it did, the
+body now ends exactly with the flyer, and none of it can drift when `HERO_DURATIONS` moves. The
+arithmetic that used to live in a comment is gone with it.
 
 **A box outside the host must not be clamped.** `formatHeroContainerClip` read
 `Math.max(0, …)` on all four insets, and because `right`/`bottom` derive from the
@@ -1728,14 +2003,16 @@ from any route outside `ROUTE_CELL` left a ~400ms window in which a tap launched
 the flyer from a box up to 12px above the thumbnail. The plain branch now drives
 the entrance itself, on opacity alone.
 
-**The gallery's blurs stand down too, and that one came out of measuring rather than
-reasoning.** Every thumbnail carries three `Badge tone="media"` marks and that tone
-includes a backdrop blur, so a 50-card grid holds on the order of 150 backdrop-filter
-regions — and for the whole flight the grid is moving, because
-`[data-image-detail-background-visual]` carries the depth sink. A backdrop filter re-samples
-whatever is behind it whenever that moves. `html[data-image-hero-transition]` drops
-`backdrop-filter` inside that subtree for the length of the flight; the plate under each
-mark is an opaque 55% black, so there is nothing to see while it lasts.
+**The gallery has no blurs to stand down any more, and that is the fix rather than the
+workaround.** `Badge tone="media"` carried a small backdrop blur and three of those ride every
+gallery thumbnail, so a 50-card grid held on the order of 150 backdrop-filter regions — each
+re-sampling what is behind it on every frame the grid moved, and the grid moves in the hero
+flight, the tab shared axis and every route cross-fade. Measured on presented compositor frames:
+28fps with them live, 31fps without. Three CSS rules used to suppress `backdrop-filter` inside
+the moving subtree per transition; the blur is gone from the tone instead, so the cost is gone
+everywhere rather than suppressed in three places, and the legibility figure that justifies the
+plate (4.8:1 for a pure-white subject under black at 55%) never included the blur anyway. The
+tombstone is in globals.css where the rules were.
 
 **Chrome that appears only on one side of the handoff is chrome that jumps.** The detail's
 zoom control is `opacity-100` below `sm` and hover-revealed above it, while `HeroStage`'s
@@ -1746,14 +2023,16 @@ flight. Anything else added inside the media box needs the same treatment or a t
 Stage.
 
 **A viewport change mid-flight has to re-aim the container, not just the flyer.** `rebuild()`
-did only the flyer for a long time, and the mask is a `clip-path: inset()` expressed against
-the *host's* border box — so when the host resized, the same four numbers landed somewhere
-else and the keyframes were still aimed at the old box. On a phone the trigger is the address
+did only the flyer for a long time, and the window is a pose expressed against the *host's*
+box — so when the host resized, the same numbers landed somewhere else and the keyframes were
+still aimed at the old box. On a phone the trigger is the address
 bar collapsing. Measured at 400px wide with the flight 90ms in and the height changed by 60px:
 the flyer moved 19px in that frame while the mask jumped **682 → 784**, then converged on the
 pre-resize host and finished 8px short of the new one. `rebuildContainer` rebases it from
-wherever it is toward freshly measured boxes; after the fix the same test converges on 791
-against a host of 792. A one-frame jump of a full-screen mask is the artefact that reads worse
+wherever it is toward a freshly measured host; after the fix the same test converges on 791
+against a host of 792. Re-reading the host is safe because the overlay is the one node in that
+chain that never carries a transform — which is also why `createPlane` takes it as the plane's
+origin rather than the scroller, whose rect *is* the scaled box once a leg is running. A one-frame jump of a full-screen mask is the artefact that reads worse
 the lower the refresh rate, because it *is* the difference between two adjacent frames — do not
 reach for the frame rate when that is the complaint.
 
@@ -1765,7 +2044,9 @@ not to exist left the error page sealed and the screen blank for **30 seconds**.
 transform finish and the error surface in its place; the closing path already fell back to a
 plain history collapse when `route.target` is null.
 
-**Measure presented frames, not `requestAnimationFrame` gaps.** A composited animation
+**Measure presented frames, not `requestAnimationFrame` gaps.** *The figures in this paragraph
+predate the curve, bow and single-clock pass and have not been reproduced since; re-measure
+before quoting them.* A composited animation
 keeps running while the main thread is busy, so rAF intervals report main-thread cadence
 and say nothing about what the display got — the two disagreed by a factor of two here. A
 CDP screencast (`Page.startScreencast`, `everyNthFrame: 1`) yields one event per presented

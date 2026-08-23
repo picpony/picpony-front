@@ -12,7 +12,7 @@ import {
 import { getHeroBackgroundVisual, type DomLease } from './dom';
 import { getHeroBackgroundSinkTransform } from './geometry';
 import { heroFrameScheduler } from './scheduler';
-import { springProgress, springVelocityFromSpeed } from './spring';
+import { progressAt, relaunch } from './progress';
 /* One `prefersReducedMotion` for the app, and it is the reactive form —
    `lib/motion`'s reads a live `matchMedia` listener, where the private copies
    these two files carried could not pick up a mid-session change. */
@@ -152,18 +152,12 @@ export class HeroPullSurface {
     );
     // Travel runs start → 0, so a finger still moving away is negative progress
     // speed: the surface overshoots slightly before returning, as it should.
-    /* Spread, so the release keeps the *whole* response — damping included. Rebuilt
+    /* `relaunch` owns the spread that keeps the *whole* response, damping included. Rebuilt
        field by field it silently dropped ζ back to the default and the dismiss ran a
-       critically damped curve while claiming the spatial one. */
-    const response = {
-      ...PULL_RELEASE_RESPONSE,
-      velocity: springVelocityFromSpeed(
-        -releaseVelocity,
-        start,
-        duration,
-        PULL_RELEASE_RESPONSE,
-      ),
-    };
+       critically damped curve while claiming the spatial one; there is now one function that
+       can make that mistake instead of three call sites. The release is always a spring — it
+       continues a speed the hand supplied. */
+    const model = relaunch(PULL_RELEASE_RESPONSE, -releaseVelocity, start, duration);
 
     this.endSettle();
     this.settling = true;
@@ -182,7 +176,7 @@ export class HeroPullSurface {
           this.reset();
           return;
         }
-        const progress = springProgress(elapsed / duration, response);
+        const progress = progressAt(model, elapsed / duration);
         this.write(createPullSample(start * (1 - progress)));
         heroFrameScheduler.request(this.settleOwner, { read: () => undefined, write: step });
       };

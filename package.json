@@ -8,7 +8,8 @@
     "start": "next start -p 3100",
     "lint": "eslint",
     "colors": "node scripts/palette.mjs",
-    "colors:write": "node scripts/palette.mjs --write"
+    "colors:write": "node scripts/palette.mjs --write",
+    "hero:path": "node scripts/heroPath.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

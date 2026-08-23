@@ -2,30 +2,38 @@
 
 import {
   HERO_CONTAINER_FADE,
-  HERO_CONTAINER_SAMPLES,
   HERO_CONTAINER_SHAPE,
+  HERO_CONTENT_FADE,
+  HERO_CLIP_SELECTOR,
   HERO_CONTENT_SELECTOR,
   HERO_DURATIONS,
-  HERO_FLIGHT_RESPONSE,
+  HERO_PROGRESS_SAMPLES,
   HERO_REVERSE_BASE_RATIO,
   HERO_REVERSE_MIN_DURATION_MS,
   HERO_REVERSE_TRAVEL_RATIO,
   HERO_REVEAL_SELECTOR,
+  HERO_REVEAL_WINDOW,
   HERO_SURFACE_SELECTOR,
+  HERO_UNCLIP_SELECTOR,
   HIDE_DISTANCE_PX,
   HIDE_EASING,
   REVEAL_CONTENT_DURATION_MS,
-  REVEAL_DELAY_MS,
   REVEAL_DISTANCE_PX,
   REVEAL_EASING,
-  HERO_BACKGROUND_SINK_Y_PX,
+  HERO_BACKGROUND_SINK_SCALE,
+  HERO_BACKGROUND_SINK_WINDOW,
 } from './constants';
 import {
   createHeroRectArc,
-  formatHeroContainerClip,
-  formatHeroContentTransform,
+  formatHeroContainerCompensator,
+  formatHeroContainerCounter,
+  formatHeroContainerRadius,
+  formatHeroTransform,
+  getHeroContainerPose,
+  unprojectHeroContainerRect,
   getHeroBackgroundSinkTransform,
   heroRectCenterDistance,
+  solveHeroArcContainBows,
   lerpHeroRectArc,
   lerpHeroRect as lerpRect,
   type HeroRect,
@@ -34,6 +42,7 @@ import {
 import {
   applyFlightPose,
   buildFlightKeyframes,
+  createHeroLeg,
   evaluateLeg,
   getFlightRadii,
   moveFlightToPlane,
@@ -44,7 +53,8 @@ import {
   type HeroPose,
 } from './flight';
 import { planeRectToScreen, screenRectToPlane, type HeroScrollPlane } from './plane';
-import { sampleSpring, springProgress, springVelocityFromSpeed, interpolate } from './spring';
+import { intervalProgress, progressAt, sampleProgress, type ProgressFrame } from './progress';
+import { interpolate } from './spring';
 import type { HeroChoreography, HeroDirection } from './types';
 /* One `prefersReducedMotion` for the app, and it is the reactive form —
    `lib/motion`'s reads a live `matchMedia` listener, where the private copies
@@ -61,10 +71,8 @@ type AnimationOwner = {
 export type HeroContainer = {
   /** The gallery card / thumbnail, in screen space. */
   card: HeroRect;
-  /** The overlay's own box — what the mask grows to or shrinks from. */
+  /** The overlay's own box — what the window grows to or shrinks from. */
   host: HeroRect;
-  /** The content wrapper's natural, untransformed box. */
-  natural: HeroRect;
   /** The card's corner radius; a full-bleed overlay's is 0. */
   cardRadius: number;
 };
@@ -76,53 +84,44 @@ export type HeroContainer = {
 type HeroContainerLeg = {
   clipFrom: HeroRect;
   clipTo: HeroRect;
-  contentFrom: HeroRect;
-  contentTo: HeroRect;
   radiusFrom: number;
   radiusTo: number;
   host: HeroRect;
-  natural: HeroRect;
+  /**
+   * The window's own bow, which is **not** the flyer's.
+   *
+   * It answers containment — the window has to hold the picture — while `HeroLeg.bow` answers the
+   * crop budget. They were one scalar, and sharing it meant the picture paid for the window's
+   * aspect excursion by flying a straight line. `solveHeroArcContainBows` has the measurement;
+   * `settleBows` is the only place either is set once a leg exists.
+   */
+  bow: number;
 };
 
 /* `lerpRect` is `geometry.ts`'s `lerpHeroRect` — Flutter's `MaterialRectArcTween` — shared
    with the flyer rather than re-typed here, and used at the sites that need a single sample
    rather than a whole track. A loop builds its arc once with `createHeroRectArc` instead. */
 
-/** Material's `ProgressThresholds`: a sub-timeline inside the leg's own progress. */
-function intervalProgress(progress: number, start: number, end: number) {
-  if (end <= start) return progress >= end ? 1 : 0;
-  return clamp01((progress - start) / (end - start));
-}
-
 function createContainerLeg(
   container: HeroContainer,
   direction: HeroDirection,
 ): HeroContainerLeg {
-  const { card, host, natural, cardRadius } = container;
+  const { card, host, cardRadius } = container;
+  /* `bow: 1` is a starting point rather than an answer — `settleBows` overwrites it as soon as the
+     flight leg exists, because the containment solve needs the picture's bow as its input. */
   return direction === 'forward'
-    ? {
-        clipFrom: card,
-        clipTo: host,
-        contentFrom: card,
-        contentTo: natural,
-        radiusFrom: cardRadius,
-        radiusTo: 0,
-        host,
-        natural,
-      }
-    : {
-        clipFrom: host,
-        clipTo: card,
-        contentFrom: natural,
-        contentTo: card,
-        radiusFrom: 0,
-        radiusTo: cardRadius,
-        host,
-        natural,
-      };
+    ? { clipFrom: card, clipTo: host, radiusFrom: cardRadius, radiusTo: 0, host, bow: 1 }
+    : { clipFrom: host, clipTo: card, radiusFrom: 0, radiusTo: cardRadius, host, bow: 1 };
 }
 
-/** Turn around from wherever the box currently is, so a reversal never snaps. */
+/**
+ * Turn around from wherever the box currently is, so a reversal never snaps.
+ *
+ * The bow it re-reads the box at is the *container's* own (`previous.bow`), not the flyer's. It
+ * used to be a parameter and every caller passed `leg.bow`, which was the same number only because
+ * the two arcs shared one scalar; reading it off the leg being rebased is what makes that
+ * unrepresentable rather than merely fixed.
+ */
 function reverseContainerLeg(
   previous: HeroContainerLeg,
   direction: HeroDirection,
@@ -131,10 +130,8 @@ function reverseContainerLeg(
   const shape = HERO_CONTAINER_SHAPE[direction];
   return {
     ...previous,
-    clipFrom: lerpRect(previous.clipFrom, previous.clipTo, progress),
+    clipFrom: lerpRect(previous.clipFrom, previous.clipTo, progress, previous.bow),
     clipTo: previous.clipFrom,
-    contentFrom: lerpRect(previous.contentFrom, previous.contentTo, progress),
-    contentTo: previous.contentFrom,
     radiusFrom: interpolate(
       previous.radiusFrom,
       previous.radiusTo,
@@ -213,23 +210,57 @@ function createCompletion(): Completion {
   return completion;
 }
 
+/**
+ * The clock every leg is timed against — and it is **`performance.now()`, not
+ * `document.timeline.currentTime`**, which is the bug this used to be.
+ *
+ * A `DocumentTimeline`'s current time is the time of the last *rendering update*, not the time
+ * now. Both are the same clock — `now − timeOrigin` — but one is sampled per frame and the other
+ * is live, so however long the main thread has been busy since the last frame is exactly how far
+ * behind the timeline is. Opening a picture does a lot of synchronous work in the press handler
+ * (capture the thumbnail's pixels into a canvas, measure, build the flight layer, push the
+ * route), so on a phone that gap is routinely 100ms and can be much more.
+ *
+ * Every leg then set `animation.startTime` to that stale value, i.e. **declared that it had
+ * started in the past**, and a leg is only 296ms long. The reported symptom was precisely what
+ * that predicts: on a slower browser the opening transition was simply missing and only its last
+ * short segment played, because by the first frame the compositor produced the animation was
+ * already two thirds through its own timeline. It is invisible on a desktop, where the gap is at
+ * most one frame.
+ *
+ * `+ 1` at the call sites is unchanged and still means "start on the next frame, not this one".
+ */
 function timelineNow() {
-  return Number(document.timeline.currentTime ?? performance.now());
+  return performance.now();
 }
 
+/**
+ * Start an animation **now**, meaning at the next frame the compositor produces — and
+ * deliberately *not* at a wall-clock instant this code picks.
+ *
+ * It used to set `animation.startTime` explicitly, so that every track in a leg shared one
+ * origin. They do share one anyway: animations created in the same task are given the same
+ * start time when that task's animation frame runs, which is what the WebKit note this replaces
+ * was describing. What the explicit assignment added was a *hazard*, and it is the one behind
+ * the reported symptom — a leg anchored to an instant that has already passed plays from
+ * wherever its clock has got to, so if the first frame after the press lands 200ms later, 200
+ * of a leg's 296ms are already spent and only the last fifth is ever seen. Opening a picture
+ * does a lot of synchronous work in the press handler (capture the thumbnail into a canvas,
+ * measure, build the flight layer, push the route), and how long that takes is a property of
+ * the device and the browser rather than of anything here, which is why it showed up on a phone
+ * and on one browser more than another.
+ *
+ * Letting the browser assign the start time makes a leg always play its whole length from the
+ * first frame anybody sees. `startedAt` survives as the analytic reference for interruption, and
+ * `HeroMotion.startVisual` rebases it from the real animation once it is running so the two
+ * cannot drift.
+ */
 function animateAt(
   element: HTMLElement,
   keyframes: Keyframe[],
   timing: KeyframeAnimationOptions,
-  startTime: number,
 ): AnimationOwner {
   const animation = element.animate(keyframes, { ...timing, fill: 'both' });
-  try {
-    animation.startTime = startTime;
-  } catch {
-    // Older WebKit shares document.timeline when animations are created in the
-    // same task; an explicit startTime is an optimization, not correctness.
-  }
   return { animation, element };
 }
 
@@ -254,7 +285,10 @@ function readBackgroundAmount(element: HTMLElement) {
   if (!transform || transform === 'none') return 0;
   try {
     const matrix = new DOMMatrixReadOnly(transform);
-    return clamp01(matrix.m42 / HERO_BACKGROUND_SINK_Y_PX);
+    /* The cue is a scale now, so the amount comes off `a` rather than off the translation. A
+       gesture that hands the sink over mid-flight reads it back through here, so this has to
+       invert `getHeroBackgroundSinkTransform` exactly. */
+    return clamp01((1 - matrix.a) / (1 - HERO_BACKGROUND_SINK_SCALE));
   } catch {
     return 0;
   }
@@ -287,45 +321,61 @@ function revealRole(element: HTMLElement) {
  */
 type OverlayContext = {
   overlay: HTMLElement;
-  /** `[data-image-detail-scale]` — the full-width block the fit scales. */
+  /** `[data-image-detail-crossfade]` — the full-width block the fit scales. */
   content: HTMLElement | null;
   floatingBack: HTMLElement | null;
   choreography: HeroChoreography;
 };
 
 /**
- * The mask and the fit, as their own pair of tracks.
+ * The window, its corner, the counter-scale and the flight layer's inverse — one group.
  *
- * Separate from the rest of the overlay's animations because they are the only ones that a
- * mid-flight viewport change invalidates: the mask is expressed as insets *relative to the
- * host's border box*, so when the host resizes the same numbers land somewhere else. See
+ * Held apart from the rest of the overlay's animations because they are the only tracks a
+ * mid-flight viewport change invalidates: every one of them is expressed against the *host's*
+ * box, so when the host resizes the same numbers land somewhere else. See
  * `HeroMotion.rebuildContainer`.
+ *
+ * **The corner is its own `animate()` call and that is load-bearing.**
+ * `compositor_animations.cc:79-84` checks the property set for the animation as a whole, so a
+ * keyframe list mixing `transform` with `borderRadius` falls to `DefaultToUnsupportedProperty`
+ * and the *transform* loses the compositor with it — which would forfeit the entire point of
+ * this construction. Two animations on one element, one composited and one not, is the intended
+ * arrangement: position rides the compositor and the corner is a paint-property update on a
+ * single node.
  */
 function buildContainerAnimations(
-  overlay: HTMLElement,
-  content: HTMLElement | null,
+  nodes: {
+    clip: HTMLElement;
+    unclip: HTMLElement;
+    /** The opening leg's flyer, iff it is inside the window. */
+    flightLayer: HTMLElement | null;
+  },
   container: HeroContainerLeg,
   leg: HeroLeg,
 ): AnimationOwner[] {
-  const { direction, response, duration, startedAt } = leg;
+  const { direction, duration } = leg;
   const shape = HERO_CONTAINER_SHAPE[direction];
-  const frames = sampleSpring(response, HERO_CONTAINER_SAMPLES);
-  /* The mask and the fit get their own arcs, from their own endpoint pairs — the mask
-     grows to the whole overlay, the fit to the content's natural box — rather than
-     borrowing the flyer's. Both pairs share the card as their origin and both travel
-     the same way, so `createHeroRectArc` picks the same diagonal for them and the three
-     bow together; giving them the flyer's arc outright would aim them at the flyer's
-     destination, which is not where either of them is going. */
-  const clipArc = createHeroRectArc(container.clipFrom, container.clipTo);
-  const fitArc = createHeroRectArc(container.contentFrom, container.contentTo);
+  const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES);
+  /* One arc, from the container's own endpoint pair — the window grows to the whole overlay, not
+     to the flyer's destination — and at the container's **own** bow. It used to take `leg.bow`, on
+     the argument that one scalar is the only reading under which the two still bow together. That
+     argument cost the picture its arc: the window's aspect excursion is what breaks containment,
+     so a shared scalar flattened the *picture* to fit a frame that was the one misbehaving, down to
+     0.02 of its bow on a portrait destination. `solveHeroArcContainBows` has the numbers. */
+  const clipArc = createHeroRectArc(container.clipFrom, container.clipTo, container.bow);
   const clip: Keyframe[] = new Array(frames.length);
-  const fit: Keyframe[] = new Array(frames.length);
+  const corner: Keyframe[] = new Array(frames.length);
+  const counter: Keyframe[] = new Array(frames.length);
+  const flight: Keyframe[] = new Array(frames.length);
+
   for (let index = 0; index < frames.length; index += 1) {
     const { offset, progress } = frames[index];
-    clip[index] = {
+    const pose = getHeroContainerPose(lerpHeroRectArc(clipArc, progress), container.host);
+    clip[index] = { offset, transform: formatHeroTransform(pose) };
+    corner[index] = {
       offset,
-      clipPath: formatHeroContainerClip(
-        lerpHeroRectArc(clipArc, progress),
+      borderRadius: formatHeroContainerRadius(
+        pose,
         container.host,
         interpolate(
           container.radiusFrom,
@@ -334,20 +384,72 @@ function buildContainerAnimations(
         ),
       ),
     };
-    fit[index] = {
-      offset,
-      transform: formatHeroContentTransform(lerpHeroRectArc(fitArc, progress), container.natural),
-    };
+    counter[index] = { offset, transform: formatHeroContainerCompensator(pose) };
+    flight[index] = { offset, transform: formatHeroContainerCounter(pose) };
   }
-  const owners = [animateAt(overlay, clip, { duration, easing: 'linear' }, startedAt)];
-  if (content) owners.push(animateAt(content, fit, { duration, easing: 'linear' }, startedAt));
+
+  const timing = { duration, easing: 'linear' } satisfies KeyframeAnimationOptions;
+  const owners = [
+    animateAt(nodes.clip, clip, timing),
+    animateAt(nodes.clip, corner, timing),
+    animateAt(nodes.unclip, counter, timing),
+  ];
+  if (nodes.flightLayer) owners.push(animateAt(nodes.flightLayer, flight, timing));
   return owners;
+}
+
+/**
+ * An opacity threshold on the leg's **travel**, not on its wall clock.
+ *
+ * `MaterialContainerTransform` applies `ProgressThresholds` to the animator's interpolated
+ * fraction, so "0.60" there means "when the box is 60% home". This file used to build the
+ * fades from four keyframes at raw time offsets while the mask's corner already used the eased
+ * progress — one gesture measured two ways, which is the whole of what needed fixing.
+ *
+ * The forward leg barely moves: 0 → 0.25 ended at 74ms on the clock and ends at 75.6ms on
+ * travel, because `HERO_FLIGHT_CURVE` happens to be near its own diagonal there. The back leg
+ * is where it shows — the surface's 0.60 → 0.90 was 178 → 266ms and is now 116 → 187ms, so the
+ * plane hands over to the thumbnail when the box has actually got most of the way home rather
+ * than when a stopwatch says so.
+ */
+function fadeTrack(
+  frames: readonly ProgressFrame[],
+  interval: { start: number; end: number },
+  from: number,
+  to: number,
+): Keyframe[] {
+  return frames.map(({ offset, progress }) => ({
+    offset,
+    opacity: from + (to - from) * intervalProgress(progress, interval.start, interval.end),
+  }));
+}
+
+/**
+ * The staircase, position only, on the same table as everything else.
+ *
+ * Opacity belongs to the container's block fade above — two nested opacities multiply and read
+ * as two entrances — so this is a rise and nothing else. See `HERO_REVEAL_WINDOW` for why the
+ * steps are fractions of the leg rather than milliseconds behind a decelerate curve.
+ */
+function revealTrack(
+  frames: readonly ProgressFrame[],
+  role: keyof typeof HERO_REVEAL_WINDOW,
+): Keyframe[] {
+  const distance = REVEAL_DISTANCE_PX[role];
+  const { start, end } = HERO_REVEAL_WINDOW[role];
+  return frames.map(({ offset, progress }) => {
+    const settled = intervalProgress(progress, start, end);
+    return {
+      offset,
+      transform:
+        settled >= 1 ? 'none' : `translate3d(0, ${(distance * (1 - settled)).toFixed(3)}px, 0)`,
+    };
+  });
 }
 
 function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   const { overlay, content, floatingBack, choreography } = ctx;
-  const { direction, duration, startedAt } = leg;
-  const startTime = startedAt;
+  const { direction, duration } = leg;
   const owners: AnimationOwner[] = [];
   const surface = overlay.querySelector<HTMLElement>(HERO_SURFACE_SELECTOR);
   if (choreography === 'dismiss') {
@@ -355,79 +457,55 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   }
   const reduced = prefersReducedMotion();
   const fade = HERO_CONTAINER_FADE[direction];
+  /* One table for the whole leg. The LRU in `progress.ts` keys on the model, so the mask, the
+     fit, both fades, the staircase and the sink all get the same array for free. */
+  const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES);
+  const timing = { duration, easing: 'linear' } satisfies KeyframeAnimationOptions;
 
-  // --- the cross-fade, on LINEAR time ----------------------------------------
-  // Both references evaluate the opacity tweens on the raw animation while the geometry
-  // runs on the curve (`open_container.dart`: `_rectTween.evaluate(curvedAnimation)` but
-  // `closedOpacityTween.animate(animation)`), so the thresholds are fractions of the leg's
-  // wall clock, not of its travel.
-  //
-  // **The plane and the content no longer share a window on the way back.** Material's
-  // return threshold (0.60 → 0.90) is tuned for a card-to-card transform, where the thing
-  // shrinking is about the size of the thing it shrinks into. Here it is a full-screen page
-  // going home to a thumbnail, and holding the page at full opacity for the first 60% of
-  // that meant watching the whole article — heading, tags, description, comment list —
-  // scale down and fly into the card behind the picture. The picture flying is the gesture;
-  // the page following it in is a second object doing the same trip.
-  //
-  // So on the back leg the content takes the *enter* window (0 → 0.25) mirrored: it is gone
-  // in the first quarter, the surface plane holds the 0.60 → 0.90 fade so there is still
-  // something to shrink, and the picture keeps its own morph. Forward is unchanged — content
-  // arriving late is the whole point of the enter threshold.
-  const contentFade = direction === 'forward' ? fade : HERO_CONTAINER_FADE.forward;
-  const fadeKeysFor = (interval: { start: number; end: number }) => {
-    const keys: Keyframe[] = [];
-    const [fadeFrom, fadeTo] = direction === 'forward' ? [0, 1] : [1, 0];
-    (
-      [
-        [0, fadeFrom],
-        [interval.start, fadeFrom],
-        [interval.end, fadeTo],
-        [1, fadeTo],
-      ] as [number, number][]
-    ).forEach(([offset, opacity]) => {
-      const last = keys[keys.length - 1];
-      if (last && last.offset === offset) last.opacity = opacity;
-      else keys.push({ offset, opacity });
-    });
-    return keys;
-  };
-  if (surface) {
-    owners.push(animateAt(surface, fadeKeysFor(fade), { duration, easing: 'linear' }, startTime));
+  /* The plane and the content do not share a window: see `HERO_CONTENT_FADE` for why the
+     content leaves from the first frame on the way back, and why its window now ends exactly
+     where the plane's begins. */
+  const contentFade = HERO_CONTENT_FADE[direction];
+  const [fadeFrom, fadeTo] = direction === 'forward' ? [0, 1] : [1, 0];
+  /* **The plane does not fade in, and that was a real defect on a phone.** A cross-fade exists
+     to keep the destination's *layout* from popping into a container too small to hold it, which
+     is a statement about content; a flat `surface` rectangle has nothing to hide. And fading it
+     hid the first quarter of the mask's growth, which is breakpoint-dependent in the worst way:
+     the enter threshold is a fraction of *travel*, but how much of the screen the card already
+     covers is not. Measured, card width over overlay width — 264/1152 = 0.23 on a 1440 desktop
+     against 175/390 = 0.45 on a 390 phone — so at the instant the plane reached full opacity it
+     was 42% of the way across the screen on the desktop and 59% on the phone. The reported
+     symptom was exactly that: on mobile the blank page appeared already most of the way open
+     instead of growing out of the thumbnail.
+
+     `open_container.dart` is unambiguous here and we had it wrong: the container's own
+     `Material(color: openColor)` carries **no opacity at all**, and only the closed and open
+     *children* cross-fade (`_fadeOutTween`, `_fadeInTween`). The mask is the reveal.
+
+     The back leg keeps `HERO_CONTAINER_FADE.back`'s 0.60 → 0.90, which is doing real work: it is
+     what hands the plane over to the thumbnail late instead of blinking it out and letting the
+     picture travel alone. */
+  if (surface && direction === 'back') {
+    owners.push(animateAt(surface, fadeTrack(frames, fade, fadeFrom, fadeTo), timing));
   }
   if (content) {
     owners.push(
-      animateAt(content, fadeKeysFor(contentFade), { duration, easing: 'linear' }, startTime),
+      animateAt(content, fadeTrack(frames, contentFade, fadeFrom, fadeTo), timing),
     );
   }
 
-  // --- the staircase: position only, because opacity is the container's now ----
-  // Chrome, header and body still arrive in reading order — Flutter stages incoming content
-  // the same way, from about a quarter of the way through the morph — but a second opacity
-  // on nested nodes would multiply against the block fade above and read as two entrances.
+  // Chrome, header and body still arrive in reading order — Flutter stages incoming content the
+  // same way, from about a quarter of the way through the morph.
   if (direction === 'forward' && !reduced) {
     overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
-      const role = revealRole(element);
-      owners.push(
-        animateAt(
-          element,
-          [
-            { transform: `translate3d(0, ${REVEAL_DISTANCE_PX[role]}px, 0)` },
-            { transform: 'none' },
-          ],
-          {
-            duration: REVEAL_CONTENT_DURATION_MS,
-            delay: REVEAL_DELAY_MS[role],
-            easing: REVEAL_EASING,
-          },
-          startTime,
-        ),
-      );
+      owners.push(animateAt(element, revealTrack(frames, revealRole(element)), timing));
     });
   }
 
-  // The floating back button renders *outside* the overlay, so the mask never reaches
-  // it and it carries its own entrance.
+  /* The floating back button renders *outside* the overlay, so the mask never reaches it and
+     the container's parameter has no claim on it: it is a control appearing beside the surface
+     rather than a block inside the box, and it keeps the motion table's "small thing entering"
+     row. Do not "finish the job" by moving it onto the leg's progress. */
   if (floatingBack) {
     const distance = reduced ? 0 : REVEAL_DISTANCE_PX.chrome;
     const pose = `translate3d(0, ${distance}px, 0)`;
@@ -444,13 +522,8 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
               { opacity: 0, transform: pose },
             ],
         direction === 'forward'
-          ? {
-              duration: REVEAL_CONTENT_DURATION_MS,
-              delay: REVEAL_DELAY_MS.chrome,
-              easing: REVEAL_EASING,
-            }
+          ? { duration: REVEAL_CONTENT_DURATION_MS, easing: REVEAL_EASING }
           : { duration: Math.min(duration, REVEAL_CONTENT_DURATION_MS), easing: HIDE_EASING },
-        startTime,
       ),
     );
   }
@@ -490,7 +563,6 @@ function buildDismissAnimations(
         // as short as `HERO_REVERSE_MIN_DURATION_MS`, and a fade outliving its own flight
         // is what left the surface visibly settling after the flyer had landed.
         { duration: leg.duration, easing: HIDE_EASING },
-        leg.startedAt,
       ),
     );
   });
@@ -516,10 +588,12 @@ export class HeroMotion {
   private leg: HeroLeg;
   private visual: AnimationOwner[] = [];
   private shared: AnimationOwner[] = [];
+  private readonly clip: HTMLElement | null;
+  private readonly unclip: HTMLElement | null;
   /**
-   * The mask and the fit, held apart from `shared` because they are the two tracks a
-   * mid-flight viewport change invalidates and therefore the two that have to be
-   * replaceable on their own. See `rebuildContainer`.
+   * The window, its corner, the counter-scale and the flight layer's inverse, held apart from
+   * `shared` because they are the tracks a mid-flight viewport change invalidates and therefore
+   * the ones that have to be replaceable on their own. See `rebuildContainer`.
    */
   private containerTracks: AnimationOwner[] = [];
   private visualRevision = 0;
@@ -538,17 +612,21 @@ export class HeroMotion {
     this.choreography = options.choreography ?? 'container';
     this.content =
       this.overlay?.querySelector<HTMLElement>(HERO_CONTENT_SELECTOR) ?? null;
+    this.clip = this.overlay?.querySelector<HTMLElement>(HERO_CLIP_SELECTOR) ?? null;
+    this.unclip = this.overlay?.querySelector<HTMLElement>(HERO_UNCLIP_SELECTOR) ?? null;
 
     const { direction } = options;
-    // Measured before any track starts, so `natural` is the untransformed pose the fit has
-    // to resolve to at progress 1.
-    if (this.overlay && this.content && options.container) {
+    /* Gated on the two window nodes rather than on the content node, which is the correction to
+       what this used to require: the leg no longer measures the content, so a tree without the
+       cross-fade block would have lost the whole container transform for nothing. The host is
+       read before any track starts, and it is the one box in the chain that is never
+       transformed — which is also why `rebuildContainer` can re-read it safely. */
+    if (this.overlay && this.clip && this.unclip && options.container) {
       this.containerLeg = createContainerLeg(
         {
           card: options.container.card,
           cardRadius: options.container.cardRadius,
           host: readRect(this.overlay),
-          natural: readRect(this.content),
         },
         direction,
       );
@@ -558,16 +636,17 @@ export class HeroMotion {
     const to = screenRectToPlane(options.to, this.flight.plane);
     const radii = getFlightRadii(this.flight, direction);
     const duration = HERO_DURATIONS[direction];
-    this.leg = {
+    this.leg = createHeroLeg({
       from,
       to,
       fromRadius: radii.from,
       toRadius: radii.to,
       direction,
-      response: HERO_FLIGHT_RESPONSE[direction],
       duration,
       startedAt: timelineNow() + 1,
-    };
+      baseAspect: this.baseAspect,
+    });
+    this.settleBows();
 
     this.startVisual();
     this.startShared(options.continueBackground ?? false);
@@ -586,6 +665,55 @@ export class HeroMotion {
   /** Current visual state — analytic, so no forced layout and no DOM reads. */
   measurePose(): HeroPose {
     return { ...evaluateLeg(this.leg, timelineNow()), pullOffset: this.pullOffset };
+  }
+
+  /**
+   * The flyer canvas's own aspect, which is what the crop budget is measured against.
+   * Constant for the flight's whole life: `base` is sized once in `createHeroFlight` and
+   * `moveFlightToPlane` does not touch it.
+   */
+  /**
+   * Settle the two bows against each other: the picture keeps its arc, the window gives way.
+   *
+   * The flight leg arrives from `createHeroLeg` holding only the crop criterion's answer, and the
+   * container leg holds a placeholder — so this is the one place either is decided once both exist,
+   * and it runs before `startVisual` at every call site because the flyer's keyframes read
+   * `leg.bow`.
+   *
+   * The two arcs live in different spaces — the flyer's in the plane, the window's in the viewport
+   * — so the window's pair goes through the same `screenRectToPlane` the flyer's endpoints did. At
+   * capture time the scroll terms cancel, so this is the plain host offset and the comparison is
+   * exact.
+   *
+   * **Where the window does not clip the picture there is nothing to solve, and then the two
+   * share.** A dismiss builds no window, and a closing leg's flyer is planted in the gallery plane,
+   * outside both overlays — so on the way home neither arc constrains the other and both are fully
+   * on screen, which is the one case where a shared scalar is the right answer: the shrinking
+   * surface and the picture have to read as one object. The gate is `containedFlightLayer`, the same
+   * DOM question the counter track asks, for the same reason a direction test goes stale.
+   */
+  private settleBows() {
+    const container = this.containerLeg;
+    if (!container) return;
+    if (this.choreography === 'dismiss' || !this.containedFlightLayer()) {
+      this.containerLeg = { ...container, bow: this.leg.bow };
+      return;
+    }
+    const bows = solveHeroArcContainBows(
+      { from: this.leg.from, to: this.leg.to, bow: this.leg.bow },
+      {
+        from: screenRectToPlane(container.clipFrom, this.flight.plane),
+        to: screenRectToPlane(container.clipTo, this.flight.plane),
+      },
+      screenRectToPlane(container.host, this.flight.plane),
+    );
+    if (bows.inner !== this.leg.bow) this.leg = { ...this.leg, bow: bows.inner };
+    this.containerLeg = { ...container, bow: bows.outer };
+  }
+
+  private get baseAspect() {
+    const { width, height } = this.flight.base;
+    return height > 0 ? width / height : 1;
   }
 
   setRole(role: HeroFlightRole) {
@@ -652,16 +780,6 @@ export class HeroMotion {
       ),
     );
 
-    // Reversing flips the travel direction, so inherited speed is negative:
-    // the spring dips slightly before recovering, which is the "catch".
-    const base = HERO_FLIGHT_RESPONSE[direction];
-    const velocity = springVelocityFromSpeed(
-      -pose.speed,
-      heroRectCenterDistance(from, to),
-      duration,
-      base,
-    );
-
     // The container turns around from wherever it currently is, on the previous leg's own
     // progress — the same instant the flyer is being caught at.
     if (this.containerLeg) {
@@ -669,24 +787,26 @@ export class HeroMotion {
       this.containerLeg = reverseContainerLeg(
         this.containerLeg,
         previous.direction,
-        springProgress(offset, previous.response),
+        progressAt(previous.progress, offset),
       );
     }
 
-    this.leg = {
+    /* Reversing flips the travel direction, so the inherited speed goes in negative and the
+       replacement leg is a spring rather than the curve — a Bézier's launch slope is fixed by
+       its own shape, so it cannot be told to leave at a given speed. The spring dips slightly
+       before recovering, and that dip is what reads as the flyer being caught. */
+    this.leg = createHeroLeg({
       from,
       to,
       fromRadius: pose.radius,
       toRadius: getFlightRadii(this.flight, direction).to,
       direction,
-      /* Spread, so the reversal keeps the whole response — damping included. Rebuilt field
-         by field it dropped ζ back to 1, so every interrupted flight ran a critically damped
-         curve while the constants claimed the ζ0.9 spatial one. */
-      response: { ...base, velocity },
-
       duration,
       startedAt: timelineNow() + 1,
-    };
+      baseAspect: this.baseAspect,
+      speed: -pose.speed,
+    });
+    this.settleBows();
 
     this.startVisual();
     this.startShared(true);
@@ -718,50 +838,49 @@ export class HeroMotion {
     }
 
     // The progress the container is at, read off the leg that is being replaced.
-    const containerProgress = springProgress(
+    const containerProgress = progressAt(
+      previous.progress,
       previous.duration > 0 ? pose.elapsed / previous.duration : 1,
-      previous.response,
     );
 
-    // Preserve the current speed so a resize mid-flight is not a visible restart.
+    /* Preserve the current speed so a resize mid-flight is not a visible restart — which also
+       means an uninterrupted leg converts from the curve to a spring here. That is forced
+       rather than chosen: only a spring can be solved for a launch slope. */
     const duration = Math.max(80, previous.duration - pose.elapsed);
-    const velocity = springVelocityFromSpeed(
-      pose.speed,
-      heroRectCenterDistance(from, to),
-      duration,
-      previous.response,
-    );
-    this.leg = {
-      ...previous,
+    this.leg = createHeroLeg({
       from,
       to,
       fromRadius: pose.radius,
-      // Spread for the same reason as in `reverse`: a rebuilt response must keep its ζ.
-      response: { ...previous.response, velocity },
+      toRadius: previous.toRadius,
+      direction: previous.direction,
       duration,
       startedAt: timelineNow() + 1,
-    };
-    this.startVisual();
+      baseAspect: this.baseAspect,
+      speed: pose.speed,
+    });
+    /* Before `startVisual`, because the window is rebased and both bows are settled in there and
+       the flyer's keyframes read `leg.bow`. It costs one forced layout ahead of the first frame
+       rather than after it, in the same task, so nothing is painted in between. */
     this.rebuildContainer(destination, containerProgress);
+    this.startVisual();
   }
 
   /**
-   * Re-aim the mask and the fit at freshly measured boxes, from wherever they are now.
+   * Re-aim the window at a freshly measured host, from wherever it is now.
    *
-   * **This is what `rebuild` used to skip, and skipping it was visible.** The mask is a
-   * `clip-path: inset()` expressed against the *host's* border box, so when the host
-   * resizes the same four numbers land somewhere else — and the keyframes were built
-   * against the old box and aimed at the old box. Measured on a 400px-wide viewport with
-   * the flight 90ms in and the height changed by 60px (which is a phone's address bar
-   * collapsing, the one thing that fires this path on mobile): the flyer moved 19px in that
-   * frame and **the mask jumped 682 → 784**, then converged on the pre-resize host and
-   * finished 8px short of the new one. A one-frame jump of a full-screen mask is exactly
-   * the artefact that reads worse the lower the refresh rate, because it *is* the
-   * difference between two adjacent frames.
+   * **This is what `rebuild` used to skip, and skipping it was visible.** The window is
+   * expressed as a pose *relative to the host's box*, so when the host resizes the same numbers
+   * land somewhere else — and the keyframes were built against the old box and aimed at the old
+   * box. Measured on a 400px-wide viewport with the flight 90ms in and the height changed by
+   * 60px (which is a phone's address bar collapsing, the one thing that fires this path on
+   * mobile): the flyer moved 19px in that frame and **the mask jumped 682 → 784**, then
+   * converged on the pre-resize host and finished 8px short of the new one. A one-frame jump of
+   * a full-screen window is exactly the artefact that reads worse the lower the refresh rate,
+   * because it *is* the difference between two adjacent frames.
    *
-   * The destinations: a forward leg grows to the overlay and to the content's natural box,
-   * both re-measurable from the DOM; a back leg collapses to the card, which is the same
-   * rect the flyer was just re-aimed at, so `destination` serves for both of its ends.
+   * Re-reading the host is safe for the same reason the constructor's read was: the overlay is
+   * the one node in this chain that never carries a transform. It also costs one forced layout
+   * now rather than two — the content's natural box is not part of the leg any more.
    */
   private rebuildContainer(destination: HeroRect, progress: number) {
     const previous = this.containerLeg;
@@ -770,27 +889,28 @@ export class HeroMotion {
     this.containerTracks = [];
     if (prefersReducedMotion()) return;
 
+    if (!this.clip || !this.unclip) return;
     const host = readRect(this.overlay);
-    const natural = this.content ? readRect(this.content) : previous.natural;
     const forward = this.leg.direction === 'forward';
+    const shape = HERO_CONTAINER_SHAPE[this.leg.direction];
     this.containerLeg = {
       ...previous,
-      clipFrom: lerpRect(previous.clipFrom, previous.clipTo, progress),
+      clipFrom: lerpRect(previous.clipFrom, previous.clipTo, progress, previous.bow),
       clipTo: forward ? host : destination,
-      contentFrom: lerpRect(previous.contentFrom, previous.contentTo, progress),
-      contentTo: forward ? natural : destination,
       radiusFrom: interpolate(
         previous.radiusFrom,
         previous.radiusTo,
-        intervalProgress(progress, HERO_CONTAINER_SHAPE[this.leg.direction].start, HERO_CONTAINER_SHAPE[this.leg.direction].end),
+        intervalProgress(progress, shape.start, shape.end),
       ),
       host,
-      natural,
     };
+    /* The window's endpoints just moved, so its bow is a stale answer to a question about a box
+       that no longer exists — and so is the picture's, since the two are solved against each
+       other. */
+    this.settleBows();
     try {
       this.containerTracks = buildContainerAnimations(
-        this.overlay,
-        this.content,
+        { clip: this.clip, unclip: this.unclip, flightLayer: this.containedFlightLayer() },
         this.containerLeg,
         this.leg,
       );
@@ -800,36 +920,51 @@ export class HeroMotion {
   }
 
   /**
-   * Undo the container fit for a caller measuring a node inside the scaled block.
+   * The flight layer, iff the window is one of its ancestors.
    *
-   * The viewport-invalidation path re-reads the Stage's landing target to re-aim the flyer,
-   * and that target now lives under the fit, so a mid-flight read is the scaled box. The fit
-   * is our own animation, so its origin and scale are known exactly.
+   * **Containment, not direction, and that is deliberate.** An opening leg builds its plane from
+   * the Stage's scroller (`getElementScrollPlane`), whose anchor is inside the window; a closing
+   * leg builds it from the gallery (`getGalleryScrollPlane`), which is outside both overlays. A
+   * direction test would encode that indirectly and go stale the moment a plane moves. Asking
+   * the DOM is self-correcting for both legs, for every `moveFlightToPlane`, and for the reduced
+   * and dismiss paths — where no container track exists at all, so the layer correctly gets no
+   * transform. Both `reverse` and `rebuild` re-plant the layer *before* rebuilding these tracks,
+   * so this always sees the final parent.
+   */
+  private containedFlightLayer(): HTMLElement | null {
+    const layer = this.flight.layer;
+    return this.clip && layer && this.clip.contains(layer) ? layer : null;
+  }
+
+  /**
+   * Undo the accumulated window transform for a caller measuring a node inside it.
+   *
+   * The viewport-invalidation path re-reads the Stage's landing target to re-aim the flyer, and
+   * that target lives under the window, so a mid-flight read is the scaled box. The transform is
+   * our own animation, so its origin and scale are known exactly — see
+   * `unprojectHeroContainerRect`.
+   *
+   * The `containerTracks` guard fixes a **pre-existing** defect rather than guarding a new one:
+   * reduced motion does not skip the flight (`skipFlight` is only `!source`), but it does skip
+   * these tracks, so this used to divide by a transform that was not on screen.
    */
   unprojectRect(rect: HeroRect): HeroRect {
     const container = this.containerLeg;
-    if (!container || this.choreography === 'dismiss') return rect;
-    const { natural } = container;
-    if (natural.width <= 0) return rect;
+    if (!container || this.choreography === 'dismiss' || this.containerTracks.length === 0) {
+      return rect;
+    }
     const elapsed = Math.min(
       this.leg.duration,
       Math.max(0, timelineNow() - this.leg.startedAt),
     );
     const offset = this.leg.duration > 0 ? elapsed / this.leg.duration : 1;
     const box = lerpRect(
-      container.contentFrom,
-      container.contentTo,
-      springProgress(offset, this.leg.response),
+      container.clipFrom,
+      container.clipTo,
+      progressAt(this.leg.progress, offset),
+      container.bow,
     );
-    const scale = box.width / natural.width;
-    if (!(scale > 0.001)) return rect;
-    // screen = box.topLeft + (local − natural.topLeft) · scale
-    return {
-      left: natural.left + (rect.left - box.left) / scale,
-      top: natural.top + (rect.top - box.top) / scale,
-      width: rect.width / scale,
-      height: rect.height / scale,
-    };
+    return unprojectHeroContainerRect(rect, box, container.host);
   }
 
   /** Demote to a background layer that will fade out under a newer flight. */
@@ -895,9 +1030,9 @@ export class HeroMotion {
       } satisfies KeyframeAnimationOptions;
       // Pushed one at a time and settled in the catch: built as one array literal, a throw
       // on the second or third call orphaned the animations the first had created.
-      owners.push(animateAt(this.flight.flyer, keyframes.flyer, timing, this.leg.startedAt));
-      owners.push(animateAt(this.flight.clip, keyframes.clip, timing, this.leg.startedAt));
-      owners.push(animateAt(this.flight.image, keyframes.image, timing, this.leg.startedAt));
+      owners.push(animateAt(this.flight.flyer, keyframes.flyer, timing));
+      owners.push(animateAt(this.flight.clip, keyframes.clip, timing));
+      owners.push(animateAt(this.flight.image, keyframes.image, timing));
     } catch {
       settle(owners, false);
       this.visual = [];
@@ -906,6 +1041,21 @@ export class HeroMotion {
     }
     this.visual = owners;
     const revision = ++this.visualRevision;
+    /* Rebase the analytic clock onto the real one.
+     *
+     * `startedAt` is what `evaluateLeg` measures elapsed time against, and nothing sets an
+     * animation's start time by hand any more — the browser assigns it when the leg's first
+     * frame runs, which may be well after this task on a device that was busy. Reading it back
+     * is what keeps a pose measured for an interruption agreeing with what is on screen; before
+     * this the two could disagree by however long that gap was, and a reversal would then be
+     * launched from a box the flyer had not reached. `ready` is the only point at which
+     * `startTime` is guaranteed non-null. */
+    const flyer = owners[0]?.animation;
+    void flyer?.ready.then(() => {
+      if (revision !== this.visualRevision) return;
+      const started = Number(flyer.startTime);
+      if (Number.isFinite(started)) this.leg = { ...this.leg, startedAt: started };
+    }, () => {});
     void Promise.allSettled(owners.map(({ animation }) => animation.finished)).then(() => {
       if (revision !== this.visualRevision) return;
       this.landedCompletion.resolve();
@@ -937,10 +1087,15 @@ export class HeroMotion {
             this.leg,
           ),
         );
-        if (this.containerLeg && this.choreography !== 'dismiss' && !prefersReducedMotion()) {
+        if (
+          this.containerLeg &&
+          this.clip &&
+          this.unclip &&
+          this.choreography !== 'dismiss' &&
+          !prefersReducedMotion()
+        ) {
           this.containerTracks = buildContainerAnimations(
-            this.overlay,
-            this.content,
+            { clip: this.clip, unclip: this.unclip, flightLayer: this.containedFlightLayer() },
             this.containerLeg,
             this.leg,
           );
@@ -969,21 +1124,38 @@ export class HeroMotion {
 
   private buildBackgroundAnimation(continueFromCurrent: boolean) {
     const element = this.background!;
-    const { direction, response, duration, startedAt } = this.leg;
+    const { direction, duration } = this.leg;
     const from = continueFromCurrent
       ? readBackgroundAmount(element)
       : direction === 'forward'
         ? 0
         : 1;
     const to = direction === 'forward' ? 1 : 0;
-    element.style.transformOrigin = 'center top';
+    /* The origin is the *viewport's* centre inside the scroller, not the element's: this node's box
+       is the whole scrollable content and can be several viewports tall, so `center center` would
+       fling the visible rows. Read once — the gallery scroller carries `data-scroll-hidden` while
+       the detail is open, so the offset cannot move under the leg. */
+    const scroller = element.parentElement;
+    const centre = scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0;
+    element.style.transformOrigin = `center ${centre}px`;
     element.style.willChange = 'transform';
-    // The sink shares the flight's response so depth and travel stay locked.
-    const keyframes = sampleSpring(response, 24).map(({ offset, progress }) => ({
-      offset,
-      transform: getHeroBackgroundSinkTransform(from + (to - from) * progress),
-    }));
-    return animateAt(element, keyframes, { duration, easing: 'linear' }, startedAt);
+    /* The sink shares the leg's own table, so depth and travel stay locked. It used to build
+       its own with a literal sample count, which would have forked off the mask's the moment
+       either number moved.
+
+       It no longer shares the leg's whole *interval*, though: the window grows over the gallery as
+       the leg runs, so a cue that peaked at p=1 peaked behind an opaque surface. See
+       `HERO_BACKGROUND_SINK_WINDOW`. */
+    const window = HERO_BACKGROUND_SINK_WINDOW[direction];
+    const keyframes = sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES).map(
+      ({ offset, progress }) => ({
+        offset,
+        transform: getHeroBackgroundSinkTransform(
+          from + (to - from) * intervalProgress(progress, window.start, window.end),
+        ),
+      }),
+    );
+    return animateAt(element, keyframes, { duration, easing: 'linear' });
   }
 
   private cancelVisual(finish: boolean) {

@@ -30,7 +30,7 @@ export function cn(...parts: unknown[]): string {
  * Bound a number to a range.
  *
  * Written out seven times in four shapes before this — a local arrow in
- * `AsciiDecodeField`, a `useCallback` in `ImageCropper`, and five inline
+ * a `useCallback` in `ImageCropper`, and five inline
  * `Math.max(a, Math.min(b, v))` in `GlossaryTab`, `Popover` and twice inside
  * `lib/hero/`. All correct, all different, and none of them findable from the
  * others.

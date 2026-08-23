@@ -91,8 +91,11 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      `secondary`, which has no guaranteed contrast over a photograph — the same
      argument that gave the app bar its own ring — and an outset white one would
      put its outer edge on the picture. Inward, it sits on this variant's own
-     plate. `iconButtonClasses` switches the ring *width* to match. */
-  media: 'bg-media-plate text-on-media backdrop-blur-sm focus-ring-on-media',
+     plate. `iconButtonClasses` switches the ring *width* to match.
+     No backdrop blur, for the reason spelled out on `Badge`'s `media` tone: the plate is what
+     carries legibility, the blur was never in the measurement, and one treatment per plate
+     beats two. */
+  media: 'bg-media-plate text-on-media focus-ring-on-media',
   'on-primary': 'bg-transparent text-on-primary focus-ring-on-primary',
 };
 

@@ -194,19 +194,39 @@
   --md-sys-color-outline: #807479;
   --md-sys-color-outline-variant: #d1c3c8;
 
-  /* Two low-chroma tones that exist only for the /about plate's character texture,
-     which needs more than one colour region or it reads as a wash rather than as a
-     composition. A *documented divergence*: `lib/tagCategories.ts` is otherwise the
-     only thing allowed to pick a hue, and the rule holds because these are not
-     categories — nothing means "sage" — they are two halves of one decoration, and
-     naming them is what keeps a hex out of the component. Both are picked to sit
-     beside `outline` in value — L* 53.0 and 52.4 against its 49.7 — so the texture
-     reads as a rule rather than as prose and never out-contrasts the text beside it.
-     This note claimed they sat "a step or two off `on-surface-variant`", which is
-     29.6: they are more than twenty points off it, and `outline` is the neighbour
-     they were actually tuned against. */
-  --md-sys-color-plate-cool: #6f8285;
-  --md-sys-color-plate-warm: #8d7a63;
+  /* The /about plate's six-hue ring.
+
+     **The hues are the logo's own.** `lib/lottie/logoTrace.json` draws the `o` of "Pony" as a ring
+     of thirteen filled segments, and these are six of them, in the ring's own hue order: HCT hues
+     3.4, 27.9, 94.7, 166.0, 238.9 and 322.2, taken from `#dc849b`, `#ef5c47`, `#f0cc49`,
+     `#42a97f`, `#98beda` and `#8f5f9d`. So the one place in the app that gets to be colourful
+     takes its colours from the one piece of artwork that already is, and the answer to "which
+     hue" stops being anybody's taste.
+
+     A *documented divergence*: `lib/tagCategories.ts` is otherwise the only thing allowed to pick a
+     hue, and the rule holds because this is not a taxonomy — nothing here means "sage". They are
+     positions on a ring, which is why they are numbered rather than named, and the plate reads the
+     ring by angle about its own centre so the numbering is load-bearing.
+
+     **Only the hue is the artwork's; the value and the chroma are the ladder's.** As drawn, the six
+     span tone 47.6 to 83.0, which as a texture would read as noise rather than as one step of the
+     tone scale. Held at tone 53 / 70 and chroma 38 they all land within 3.11–3.14:1 of the plate's
+     own `surface-container-highest` ground (5.36–5.39:1 dark), i.e. beside `outline` in value, so
+     the texture reads as a rule rather than as prose and no band reads as heavier than its
+     neighbours. The price is that a yellow at this value is necessarily an olive-brass — that is
+     what any constant-value colour wheel does to yellow, and it is one band of six rather than the
+     khaki half-plate this replaces, whose warm was a chroma-13 mud at a hue the app does not own.
+
+     Only the mark's strokes take them. The ground steps stay neutral in every band, because a
+     lattice that changes colour with the region reads as a stain rather than as the material
+     underneath. */
+  --md-sys-color-plate-1: #b5677c;
+  --md-sys-color-plate-2: #b9685b;
+  --md-sys-color-plate-3: #947d27;
+  --md-sys-color-plate-4: #3f8d6b;
+  --md-sys-color-plate-5: #4385ad;
+  --md-sys-color-plate-6: #9c6ea8;
+
   --md-sys-color-inverse-surface: #372e31;
   --md-sys-color-inverse-on-surface: #fdedf0;
   --md-sys-color-inverse-primary: #ffb0ce;
@@ -446,10 +466,16 @@
   --md-sys-color-on-surface-variant: #d1c3c8;
   --md-sys-color-outline: #9a8d92;
   --md-sys-color-outline-variant: #4e4449;
-  /* See the light scheme for why these two exist. They lighten rather than invert,
-     the way every ink role here does. */
-  --md-sys-color-plate-cool: #9db0b3;
-  --md-sys-color-plate-warm: #bda88e;
+
+  /* See the light scheme for where these hues come from. They lighten rather than invert, the way
+     every ink role here does: same six hues, same chroma, tone 70. */
+  --md-sys-color-plate-1: #e893a8;
+  --md-sys-color-plate-2: #ed9385;
+  --md-sys-color-plate-3: #c3a950;
+  --md-sys-color-plate-4: #6dba96;
+  --md-sys-color-plate-5: #72b2dc;
+  --md-sys-color-plate-6: #cb9ad7;
+
   --md-sys-color-inverse-surface: #eedfe2;
   --md-sys-color-inverse-on-surface: #372e31;
   --md-sys-color-inverse-primary: #9f3869;
@@ -838,8 +864,12 @@
   --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
   --color-outline: var(--md-sys-color-outline);
   --color-outline-variant: var(--md-sys-color-outline-variant);
-  --color-plate-cool: var(--md-sys-color-plate-cool);
-  --color-plate-warm: var(--md-sys-color-plate-warm);
+  --color-plate-1: var(--md-sys-color-plate-1);
+  --color-plate-2: var(--md-sys-color-plate-2);
+  --color-plate-3: var(--md-sys-color-plate-3);
+  --color-plate-4: var(--md-sys-color-plate-4);
+  --color-plate-5: var(--md-sys-color-plate-5);
+  --color-plate-6: var(--md-sys-color-plate-6);
   --color-inverse-surface: var(--md-sys-color-inverse-surface);
   --color-inverse-on-surface: var(--md-sys-color-inverse-on-surface);
   --color-inverse-primary: var(--md-sys-color-inverse-primary);
@@ -1759,6 +1789,17 @@
   }
 }
 
+/* The plate's copy of the keyline, thicker on purpose.
+ *
+ * A one-device-pixel halo is the right weight against the flat brand bar, where the mark is ~100px
+ * wide and the only job is to keep white ink off a similar tone. On /about the same mark is 256px
+ * over a whole card of character texture, and a hairline vanishes into it — the halo has to be
+ * wide enough to clear a glyph's stroke. 2px is about one character cell's stroke weight at
+ * `text-label-s`, which is the thing it has to separate from. */
+.logo-keyline-plate {
+  --logo-keyline: 2px;
+}
+
 /* Once the splash's trace has finished drawing it is opaque and permanent, so
  * the base under it has no job left — and leaving it there is not free. Two
  * independently antialiased renderings of the same path do not cancel at the
@@ -2623,6 +2664,11 @@ html[data-theme-vt]::view-transition-new(root) {
 [data-image-detail-background-visual] {
   contain: layout paint style;
   backface-visibility: hidden;
+  /* The hero's sink writes its own `transform-origin` — the viewport's centre inside the scroller,
+     which only JS knows — so this is the resting value and not the one the animation uses. `center
+     top` rather than the initial `50% 50%` because this box is the whole scrollable content: an
+     element-centred origin on something several viewports tall throws the visible rows across the
+     screen if anything ever scales it without setting an origin first. */
   transform-origin: center top;
 }
 
@@ -2810,36 +2856,81 @@ html[data-image-hero-transition] [data-image-detail-zoom] {
   transition: none !important;
 }
 
-/* The gallery's own blurs stand down for the length of a flight.
+/* There is no blur to stand down any more, and that is the fix rather than the workaround.
  *
- * Every thumbnail carries three `Badge tone="media"` marks and that tone includes a
- * backdrop blur, so a 50-card grid holds on the order of 150 backdrop-filter regions.
- * A backdrop filter has to re-sample what is behind it whenever that moves, and for
- * the whole flight the grid *is* moving — `[data-image-detail-background-visual]`
- * carries the depth sink's translate and scale. Measured on presented compositor
- * frames (a CDP screencast, so this is what the display got rather than what the main
- * thread attempted): 28fps with the blurs live, 31fps without, reproducible across
- * three runs each. Nothing else in the flight moved the number — cancelling the
- * flyer's corner track, the container mask, the content fit and every skeleton
- * shimmer, together, was worth one frame per second.
+ * Three rules used to live here, killing `backdrop-filter` inside the moving subtree for the
+ * length of a hero flight, a tab shared axis and a route cross-fade. They existed because
+ * `Badge tone="media"` carried a small backdrop blur and three of those ride every gallery
+ * thumbnail — a 50-card grid held on the order of 150 backdrop-filter regions, each re-sampling
+ * what is behind it on every frame the grid moved. Measured on presented compositor frames (a
+ * CDP screencast, so this is what the display got rather than what the main thread attempted):
+ * 28fps with them live, 31fps without, across three runs each. Nothing else in the flight moved
+ * the number — cancelling the flyer's corner track, the container mask, the content fit and
+ * every skeleton shimmer, together, was worth one frame per second.
  *
- * Invisible while it lasts: the plate under each mark is `media-plate`, an opaque 55%
- * black, so what the blur contributes is the softness of a thumbnail's own pixels
- * behind a 20px pill — on a grid that is sinking away under a growing mask. */
-html[data-image-hero-transition] [data-image-detail-background-visual] * {
-  backdrop-filter: none !important;
+ * The blur is gone from the tone instead, so the cost is gone everywhere rather than suppressed
+ * in three places. And the suppression was a latent content leak: the one backdrop filter left
+ * in a gallery card is the **spoiler cover's** own 2px backdrop blur, which is what makes a
+ * hidden picture unreadable under a 55%-black plate — stripping it for the length of a
+ * transition would have shown, briefly, exactly the thing the cover exists to hide. A rule that
+ * has to enumerate which blurs are decorative is the wrong shape; not having decorative ones is
+ * the right one. */
+
+/*
+ * The container transform's window, and the counter-scale under it.
+ *
+ * `.image-detail-clip` is the window: a host-sized box carrying the leg's `transform` and its own
+ * circular `border-radius`. `overflow: clip` rather than a `clip-path` is the whole mechanism —
+ * Blink's `ShaderBasedRRect` returns `nullopt` for any clip node carrying a `clip-path`, which
+ * forces `RenderSurfaceReason::kClipPath`, whereas a circular `border-radius` becomes a
+ * `MaskFilterInfo` with `is_fast_rounded_corner` and no render surface at all. And it is `clip`
+ * rather than `hidden` because `clip` is not a scroll container: the counter-scale below exceeds 1
+ * on one axis, so under `hidden` this would be a programmatically scrollable window that any
+ * `scrollIntoView` inside could push off-centre. Both axes, not one: Blink's
+ * `NeedsInnerBorderRadiusClip` requires `ShouldClipOverflowAlongBothAxis()`, quoting the spec's
+ * "when one of overflow-x or overflow-y computes to clip and the other computes to visible, the
+ * clipping region is not rounded" — a single-axis clip silently squares the corner. Never
+ * `corner-shape` here either: a non-round curvature makes Blink attach a `clip_path` to the node,
+ * which is the one thing that cannot take the fast path.
+ *
+ * `.image-detail-unclip` carries `scaleY(sx / sy)`, which is what makes the *accumulated* content
+ * transform a uniform `scale(sx)` — Material's `BoxFit.fitWidth`, top-left aligned. Both need
+ * `transform-origin: 0 0`.
+ *
+ * Neither carries `will-change`, `backface-visibility` or a resting transform. Two overlays are
+ * mounted at once, so any standing compositing hint would keep two full-screen layers alive for
+ * nothing; and `transform: none` is not interchangeable with an identity matrix, which would make
+ * both nodes a containing block for fixed-position descendants and a stacking context for as long
+ * as the overlay exists. The transform arrives with a leg and leaves with `settle()`, which
+ * cancels rather than commits, so `fill: 'both'` drops back to this rule.
+ */
+.image-detail-clip {
+  overflow: clip;
+  transform-origin: 0 0;
+}
+
+.image-detail-unclip {
+  transform-origin: 0 0;
 }
 
 .image-detail-route {
   animation: none;
 }
 
-/* The foreground flyer sits above Stage and route surfaces without a fixed layer. */
+/* The foreground flyer sits above Stage and route surfaces without a fixed layer.
+ *
+ * `transform-origin: 0 0` is load-bearing rather than tidy. On an opening leg this layer is a
+ * descendant of the container transform's window — the plane's anchor has to stay inside the
+ * scroller, because that is what carries the flyer along with ordinary and inertial scrolling for
+ * free — so `buildContainerAnimations` gives it the exact inverse of the accumulated ancestor
+ * transform. That inverse is derived about the layer's top-left; with the default `50% 50%` the
+ * flyer would be displaced by `(1 − 1/sx)` of half the viewport, which is hundreds of pixels. */
 .image-hero-flight-layer {
   position: absolute;
   z-index: var(--z-hero-flight);
   overflow: visible;
   pointer-events: none;
+  transform-origin: 0 0;
   contain: layout style;
 }
 

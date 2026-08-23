@@ -1,8 +1,10 @@
 'use client';
 
 import {
-  HERO_FLIGHT_SAMPLES,
-  HERO_RADIUS_LEAD,
+  HERO_CONTAINER_SHAPE,
+  HERO_FLIGHT_PROGRESS,
+  HERO_FLIGHT_RESPONSE,
+  HERO_PROGRESS_SAMPLES,
   HERO_TARGET_RADIUS_PX,
 } from './constants';
 import {
@@ -11,16 +13,25 @@ import {
   formatHeroTransform,
   getHeroBoxTransform,
   getHeroCoverTransform,
+  heroRectCenterDistance,
   lerpHeroRect,
   lerpHeroRectArc,
+  solveHeroArcBow,
   type HeroHost,
   type HeroRect,
 } from './geometry';
-import { interpolate, sampleSpring, springProgress, springVelocity } from './spring';
+import {
+  intervalProgress,
+  progressAt,
+  relaunch,
+  sampleProgress,
+  velocityAt,
+  type HeroProgressModel,
+} from './progress';
+import { interpolate } from './spring';
 import { screenRectToPlane, sizePlaneLayer, type HeroScrollPlane } from './plane';
 import type { FrameAsset, FrameLease } from './frameCache';
 import type { HeroDirection } from './types';
-import type { SpringResponse } from './spring';
 
 export type HeroFlightRole = 'foreground' | 'retiring';
 
@@ -43,14 +54,26 @@ export type HeroPose = {
   pullOffset: number;
 };
 
-/** One continuous spring leg: everything needed to evaluate it at any time. */
+/**
+ * One continuous leg: everything needed to evaluate it at any time.
+ *
+ * `progress` is the leg's shape, and which of the two kinds it holds says how the leg began —
+ * a curve for a leg that leaves from rest, a spring for one caught mid-air. `createHeroLeg` is
+ * the only place that decides.
+ */
 export type HeroLeg = {
   from: HeroRect;
   to: HeroRect;
   fromRadius: number;
   toRadius: number;
   direction: HeroDirection;
-  response: SpringResponse;
+  progress: HeroProgressModel;
+  /**
+   * How much of the corner arcs' bow the *picture* can afford; see `solveHeroArcBow`. Purely the
+   * crop criterion — the window's own bow lives on the container leg and answers containment, so
+   * the two are no longer one scalar. `solveHeroArcContainBows` has why.
+   */
+  bow: number;
   duration: number;
   startedAt: number;
 };
@@ -115,15 +138,79 @@ function planeHost(flight: HeroFlight): HeroHost {
  * stays between the two endpoints' aspects.
  */
 
-/** Corner radius resolves ahead of position, so the shape settles first. */
-function radiusProgress(progress: number) {
-  return Math.min(1, progress * HERO_RADIUS_LEAD);
+/**
+ * Corner radius resolves ahead of position, so the shape settles first — on the same window
+ * the container's mask uses, which is `MaterialContainerTransform`'s `shapeMask` threshold for
+ * this direction. It used to be `min(1, p · 4/3)` regardless of direction, i.e. always the
+ * *enter* row, so a closing flight squared the picture off over 0 → 0.75 while the mask around
+ * it ran 0.3 → 0.9.
+ */
+function radiusProgress(progress: number, direction: HeroDirection) {
+  const shape = HERO_CONTAINER_SHAPE[direction];
+  return intervalProgress(progress, shape.start, shape.end);
 }
 
 export function getFlightRadii(flight: HeroFlight, direction: HeroDirection) {
   return direction === 'forward'
     ? { from: flight.sourceRadius, to: flight.targetRadius }
     : { from: flight.targetRadius, to: flight.sourceRadius };
+}
+
+/**
+ * The one place that decides which progress model a leg gets.
+ *
+ * Passing a `speed` is the whole of the decision: a leg that has to leave at a speed the
+ * flyer is already travelling at gets a spring solved for that launch slope, and a leg that
+ * starts from a press gets `HERO_FLIGHT_CURVE`. Centralised because the three call sites had
+ * each written `{ ...base, velocity: springVelocityFromSpeed(...) }` by hand, and two of them
+ * carried a comment about the spread that must not be forgotten.
+ *
+ * The duration stays the caller's: an opening leg takes `HERO_DURATIONS`, a reverse scales it
+ * by remaining travel, a rebuild takes whatever is left of the leg it replaces. Only the shape
+ * is decided here.
+ */
+export function createHeroLeg({
+  from,
+  to,
+  fromRadius,
+  toRadius,
+  direction,
+  duration,
+  startedAt,
+  baseAspect,
+  speed,
+}: {
+  from: HeroRect;
+  to: HeroRect;
+  fromRadius: number;
+  toRadius: number;
+  direction: HeroDirection;
+  duration: number;
+  startedAt: number;
+  /** Aspect of the flyer canvas's own box, i.e. `flight.base`. Decides the bow. */
+  baseAspect: number;
+  /** Signed px/ms along the new leg's travel. Omit for a from-rest launch. */
+  speed?: number;
+}): HeroLeg {
+  return {
+    from,
+    to,
+    fromRadius,
+    toRadius,
+    direction,
+    progress:
+      speed === undefined
+        ? HERO_FLIGHT_PROGRESS[direction]
+        : relaunch(
+            HERO_FLIGHT_RESPONSE[direction],
+            speed,
+            heroRectCenterDistance(from, to),
+            duration,
+          ),
+    bow: solveHeroArcBow(from, to, baseAspect),
+    duration,
+    startedAt,
+  };
 }
 
 /**
@@ -136,8 +223,8 @@ export function getFlightRadii(flight: HeroFlight, direction: HeroDirection) {
 export function evaluateLeg(leg: HeroLeg, time: number): HeroPose {
   const elapsed = Math.min(leg.duration, Math.max(0, time - leg.startedAt));
   const offset = leg.duration > 0 ? elapsed / leg.duration : 1;
-  const progress = springProgress(offset, leg.response);
-  const rect = lerpHeroRect(leg.from, leg.to, progress);
+  const progress = progressAt(leg.progress, offset);
+  const rect = lerpHeroRect(leg.from, leg.to, progress, leg.bow);
 
   // Chord speed: |Δcenter| · dp/dt. A magnitude only — it exists to seed
   // `springVelocityFromSpeed` when a leg is interrupted, and the replacement leg
@@ -147,11 +234,11 @@ export function evaluateLeg(leg: HeroLeg, time: number): HeroPose {
     leg.to.top + leg.to.height / 2 - (leg.from.top + leg.from.height / 2),
   );
   const speed =
-    leg.duration > 0 ? (chord * springVelocity(offset, leg.response)) / leg.duration : 0;
+    leg.duration > 0 ? (chord * velocityAt(leg.progress, offset)) / leg.duration : 0;
 
   return {
     rect,
-    radius: interpolate(leg.fromRadius, leg.toRadius, radiusProgress(progress)),
+    radius: interpolate(leg.fromRadius, leg.toRadius, radiusProgress(progress, leg.direction)),
     speed,
     elapsed,
     pullOffset: 0,
@@ -173,8 +260,8 @@ export type FlightKeyframes = {
  */
 export function buildFlightKeyframes(flight: HeroFlight, leg: HeroLeg): FlightKeyframes {
   const host = planeHost(flight);
-  const frames = sampleSpring(leg.response, HERO_FLIGHT_SAMPLES[leg.direction]);
-  const arc = createHeroRectArc(leg.from, leg.to);
+  const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES);
+  const arc = createHeroRectArc(leg.from, leg.to, leg.bow);
   const flyer: Keyframe[] = new Array(frames.length);
   const clip: Keyframe[] = new Array(frames.length);
   const image: Keyframe[] = new Array(frames.length);
@@ -182,7 +269,11 @@ export function buildFlightKeyframes(flight: HeroFlight, leg: HeroLeg): FlightKe
   for (let index = 0; index < frames.length; index += 1) {
     const { offset, progress } = frames[index];
     const display = lerpHeroRectArc(arc, progress);
-    const radius = interpolate(leg.fromRadius, leg.toRadius, radiusProgress(progress));
+    const radius = interpolate(
+      leg.fromRadius,
+      leg.toRadius,
+      radiusProgress(progress, leg.direction),
+    );
 
     flyer[index] = {
       offset,

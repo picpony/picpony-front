@@ -79,12 +79,19 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* `type` is spelled out on both of these, and it is the fix for a hydration warning
+            rather than decoration. Something in the document — Next's own SSR stream or, more
+            likely, a script-management extension — hands the server HTML a
+            `type="text/javascript"` that the client render does not produce, and React reports the
+            attribute mismatch on every load. Declaring the spec default makes both sides agree and
+            changes nothing about how either script executes. */}
         <script
+          type="text/javascript"
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var d=localStorage.getItem('followSystemPrefersColorScheme'),t;t=d===null||d==='true'?window.matchMedia('(prefers-color-scheme:dark)').matches:localStorage.getItem('darkMode')==='true';t?document.documentElement.classList.add('dark'):document.documentElement.classList.remove('dark')}catch(e){}})();`,
           }}
         />
-        <Script id="recaptcha-options" strategy="beforeInteractive">
+        <Script id="recaptcha-options" strategy="beforeInteractive" type="text/javascript">
           {`window.recaptchaOptions = { useRecaptchaNet: true };`}
         </Script>
       </head>

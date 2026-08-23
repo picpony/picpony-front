@@ -832,7 +832,7 @@ export class HeroController {
 
   private launchFlight(session: OpeningSession, stage: HeroStageNodes) {
     const { intent } = session;
-    const plane = getElementScrollPlane(stage.anchor, stage.scroller);
+    const plane = getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
     const targetRect = getHeroRect(stage.target);
     const flight = createHeroFlight({
       asset: session.snapshot.previewFrame,
@@ -2103,7 +2103,7 @@ export class HeroController {
             // The Stage's landing target sits inside the container transform's fit, so a
             // mid-flight read is the scaled box; undo the fit before re-aiming.
             destination: motion.unprojectRect(getHeroRect(stage.target)),
-            plane: getElementScrollPlane(stage.anchor, stage.scroller),
+            plane: getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay),
             pose: motion.measurePose(),
           };
         }
