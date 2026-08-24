@@ -33,11 +33,21 @@ interface PaginationProps {
  * scroll container is not the window (see `scrollAppToTop`). Putting it here
  * means a new call site cannot forget it or get it wrong.
  *
- * The target is the nearest `[data-pagination-anchor]` ancestor — i.e. the top
- * of the list this pager belongs to — rather than the top of the document, so
- * turning a page lands on the first new row instead of replaying the featured
- * banner. Pages with several independent pagers (the profile tabs) each get
- * their own anchor. With no anchor it falls back to the top.
+ * The target is the nearest `[data-pagination-anchor]` **ancestor** — i.e. the top of the
+ * list this pager belongs to — rather than the top of the document, so turning a page lands
+ * on the first new row instead of replaying the featured banner.
+ *
+ * **Ancestor is the whole contract, and it is the thing that gets got wrong.** `closest()`
+ * walks up; a marker on the list with the pager as its *sibling* is a marker this cannot see,
+ * and the failure is silent — the page turn just falls back as if there were no anchor at all.
+ * Seven of the app's thirteen pagers shipped that way for one commit. A screen with several
+ * pagers can share one enclosing anchor (a profile's four tabs do, on the box that holds the
+ * tab row and the panes), and a pager passed into a list component as `children` is inside it
+ * by construction (`/messages`).
+ *
+ * With no anchor it falls back to the top of the scroll container — unless the container is a
+ * dialog's, where it does nothing at all rather than scrolling a surface the user is not
+ * looking at.
  */
 /** Matches a caller-supplied top margin (`mt-*`, `my-*`, or a breakpoint form). */
 const HAS_TOP_MARGIN = /(?:^|\s|:)(?:mt|my)-/;
@@ -63,9 +73,18 @@ export default function Pagination({
     if (page === currentPage) return;
     onPageChange(page);
     if (!scrollToTop) return;
+    /* Which *container* to scroll, before deciding where in it. A pager inside a `<Modal>`
+       was scrolling the page behind the dialog to the top and leaving the list it belongs to
+       exactly where it was — the app scroller is not the only thing that scrolls, which is
+       the reason `scrollAppToElement` takes an override at all. With a nearer scroll
+       container, the fallback also changes: `scrollAppToTop()` would be the wrong element
+       entirely, so an anchorless pager in a modal simply does nothing rather than moving a
+       surface the user is not looking at. */
+    const scroller =
+      rootRef.current?.closest<HTMLElement>('[data-app-scroll-container]') ?? undefined;
     const anchor = rootRef.current?.closest('[data-pagination-anchor]');
-    if (anchor) scrollAppToElement(anchor);
-    else scrollAppToTop();
+    if (anchor) scrollAppToElement(anchor, { scroller });
+    else if (!scroller) scrollAppToTop();
   };
 
   // Centre the window on the current page and clamp it to the known range.

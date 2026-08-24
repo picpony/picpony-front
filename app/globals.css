@@ -208,24 +208,62 @@
      positions on a ring, which is why they are numbered rather than named, and the plate reads the
      ring by angle about its own centre so the numbering is load-bearing.
 
-     **Only the hue is the artwork's; the value and the chroma are the ladder's.** As drawn, the six
-     span tone 47.6 to 83.0, which as a texture would read as noise rather than as one step of the
-     tone scale. Held at tone 53 / 70 and chroma 38 they all land within 3.11–3.14:1 of the plate's
-     own `surface-container-highest` ground (5.36–5.39:1 dark), i.e. beside `outline` in value, so
-     the texture reads as a rule rather than as prose and no band reads as heavier than its
-     neighbours. The price is that a yellow at this value is necessarily an olive-brass — that is
-     what any constant-value colour wheel does to yellow, and it is one band of six rather than the
-     khaki half-plate this replaces, whose warm was a chroma-13 mud at a hue the app does not own.
+     **Hue and chroma are the artwork's, and so is the tone.** This started as hue-only, held at a
+     flat tone 53 and a flat chroma 38 so that all six landed within 3.11–3.14:1 of the plate's
+     ground — even in value, so no band read heavier than its neighbours. It was too even to be the
+     logo's colours: at chroma 38 the ring's coral-red (as drawn a chroma **70**) came out the same
+     weight as its powder blue (as drawn a chroma **27**), and at tone 53 a hue-95 yellow is
+     necessarily an olive-brass, because that is what any constant-value wheel does to yellow.
+     Neither is a hue error; both are the wheel. Giving each its own chroma and compressing the
+     tones toward their mean instead was the same mistake one step smaller.
+
+     **Light: the artwork's own tone, floored at 58 and capped at 78. Nothing else.** Four of the
+     six are therefore the logo's exact hexes. The two rounds of arithmetic before this both went
+     wrong in the same place, and the reason is worth keeping because it is not obvious: against a
+     near-white ground the contrast ratio is a pure function of *tone* — measured, all six hues at
+     tone 66 land within 2.01–2.03:1, and at 72 within 1.67–1.68 — so "even contrast" and "each
+     colour's own tone" are the same knob pulling in opposite directions, and holding the tone even
+     is exactly what destroys the colours.
+
+     Two ways it showed, and both were in the shipped values. A **yellow** is only yellow when it is
+     light: at hue 95 the largest in-gamut chroma is 50 at tone 60 against 60 at tone 78, so a tone
+     in the 60s cannot be bright whatever chroma is asked for — the token read `#d0ae2c` (the
+     artwork's chroma at tone 72), a mustard, and that is what "the yellow looks too dark" was. And
+     an **orange** at hue 28 cannot hold the artwork's chroma 71 much above tone 60: the request
+     clips against the red channel and comes back as `#ff6b55`, a neon, which is what "the orange
+     looks too bright" was. The artwork's own `#ef5c47` is in gamut by construction and reads as
+     coral.
+
+     The floor and the cap are the only two adjustments, and each answers one measurement. The
+     **cap** (78) is for the yellow, and it is the last step that has any margin at all: the tone
+     alone decides the ratio here, so hue 95 measures 1.40:1 at tone 78, **1.32:1 at tone 80 — the
+     ground lattice's own figure** (`outline-variant`), and 1.21:1 at the artwork's tone 83, i.e. a
+     mark stroke fainter than the paper it is drawn on. 78 keeps it a bright gold with 6% of margin
+     over the weave. The **floor** (58) is for the purple: at the artwork's tone 47.6 it measures
+     3.80:1, half again the next darkest, and read as one heavy band among five light ones.
+
+     Result: 1.40–2.63:1, a factor of 1.88. There is no legibility bar to clear beyond the lattice —
+     the plate is `aria-hidden` decorative texture whose own neutral steps sit at 1.32:1 and 3.47:1.
+     `on-surface-variant` used to be a third neutral in it and was removed for the opposite reason:
+     at 7.23:1 it was five times the ring's weight and read as black ink among pastels.
+
+     **The dark scheme is not derived that way and is deliberately left alone.** Its ground is
+     near-black, so tone is not the constraint it is on paper: the six sit at 6.06–8.65:1 (a factor
+     of 1.43) and the yellow is the *brightest* of them rather than the faintest. These are the
+     earlier even-tone construction — each hue's own chroma, tones compressed toward a base of 80 —
+     and they read correctly, so only one scheme needed fixing. The tones land at 80/78/86/79/84/74,
+     i.e. above the light scheme's cap throughout, which is the same lightening every other ink role
+     here does rather than an inversion.
 
      Only the mark's strokes take them. The ground steps stay neutral in every band, because a
      lattice that changes colour with the region reads as a stain rather than as the material
      underneath. */
-  --md-sys-color-plate-1: #b5677c;
-  --md-sys-color-plate-2: #b9685b;
-  --md-sys-color-plate-3: #947d27;
-  --md-sys-color-plate-4: #3f8d6b;
-  --md-sys-color-plate-5: #4385ad;
-  --md-sys-color-plate-6: #9c6ea8;
+  --md-sys-color-plate-1: #dc849b;
+  --md-sys-color-plate-2: #ef5c47;
+  --md-sys-color-plate-3: #e1be3c;
+  --md-sys-color-plate-4: #42a97f;
+  --md-sys-color-plate-5: #98beda;
+  --md-sys-color-plate-6: #ac79b9;
 
   --md-sys-color-inverse-surface: #372e31;
   --md-sys-color-inverse-on-surface: #fdedf0;
@@ -467,14 +505,16 @@
   --md-sys-color-outline: #9a8d92;
   --md-sys-color-outline-variant: #4e4449;
 
-  /* See the light scheme for where these hues come from. They lighten rather than invert, the way
-     every ink role here does: same six hues, same chroma, tone 70. */
-  --md-sys-color-plate-1: #e893a8;
-  --md-sys-color-plate-2: #ed9385;
-  --md-sys-color-plate-3: #c3a950;
-  --md-sys-color-plate-4: #6dba96;
-  --md-sys-color-plate-5: #72b2dc;
-  --md-sys-color-plate-6: #cb9ad7;
+  /* See the light scheme for where these hues come from, and for why only that one is floored and
+     capped. They lighten rather than invert, the way every ink role here does: same six hues, same
+     per-hue chroma, tones compressed toward a base of 80, landing at 6.06–8.65:1 against this
+     scheme's plate ground. */
+  --md-sys-color-plate-1: #ffb1c3;
+  --md-sys-color-plate-2: #ffaa9c;
+  --md-sys-color-plate-3: #fad551;
+  --md-sys-color-plate-4: #72d7aa;
+  --md-sys-color-plate-5: #afd5f2;
+  --md-sys-color-plate-6: #d8a3e6;
 
   --md-sys-color-inverse-surface: #eedfe2;
   --md-sys-color-inverse-on-surface: #372e31;
@@ -1798,6 +1838,48 @@
  * `text-label-s`, which is the thing it has to separate from. */
 .logo-keyline-plate {
   --logo-keyline: 2px;
+}
+
+/* The /about character plate's type, and the one place in the app where ink weight is a
+ * function of the display rather than of the role.
+ *
+ * The plate is 11px monospace held at a very low contrast on purpose, and how heavy 11px text
+ * paints is decided by the rasteriser, not by the token: at 1x the glyph is hinted and
+ * stem-darkened and a stem snaps to a whole device pixel, so the field reads thick; at 2-3x the
+ * coverage is closer to the truth and the thin strokes stop being filled in, so the same field
+ * reads faint. Nothing else in the app cares — a 16px label is far enough above the hinting
+ * threshold — but a whole card of 11px texture does, and the two reports were exactly
+ * "too heavy on a laptop, washed out on a Retina".
+ *
+ * So the weight moves against the DPR: one step down under 1.5x, one step up over 2.5x, 500 in
+ * between. The buckets are `.logo-keyline`'s own, which is the other DPR-aware thing on this
+ * page, and Geist Mono arrives as a variable font (no `weight` is requested in `app/layout.tsx`)
+ * so these are real axis positions rather than synthesised.
+ *
+ * The other three declarations are about the *grid* rather than the weight. `geometricPrecision`
+ * turns off hinting-driven advance rounding, so the per-character advance is linear and equals
+ * the average the probe in `AsciiWordmark` measures — without it a hinted advance drifts along a
+ * 130-column row and the mark stops sitting on the grid it was rastered against. Kerning and
+ * ligatures are off for the same reason: a monospace grid has no business adjusting pairs, and
+ * `--font-mono`'s CJK fallback does have ligatures. */
+.ascii-plate {
+  --ascii-weight: 500;
+  font-weight: var(--ascii-weight);
+  text-rendering: geometricPrecision;
+  font-kerning: none;
+  font-variant-ligatures: none;
+}
+
+@media (max-resolution: 1.5dppx) {
+  .ascii-plate {
+    --ascii-weight: 400;
+  }
+}
+
+@media (min-resolution: 2.5dppx) {
+  .ascii-plate {
+    --ascii-weight: 560;
+  }
 }
 
 /* Once the splash's trace has finished drawing it is opaque and permanent, so

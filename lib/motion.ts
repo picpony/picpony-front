@@ -1382,9 +1382,22 @@ export function playSharedAxis(opts: {
    * `true` here and in `runTabTransition` while `TabPanes` and `useTabPanes` said
    * `false`, so the tab bar's *tap* path — `startTabTransition`, which passes four
    * arguments and therefore takes the parameter default — ran the lean on the home
-   * page while the reactive path did not, and while `app/page.tsx` and AGENTS.md
-   * both stated it was off. One option, one default: `false`, and `/policy` is the
-   * only screen that opts in.
+   * page while the reactive path did not. One option, one default: `false`, and a
+   * screen that wants it says so at *both* of its call sites.
+   *
+   * Two screens opt in: `/policy`, whose four prose panes are static once mounted,
+   * and the home page's gallery↔forum switch (`app/page.tsx` for the reactive path,
+   * `AppLayout`'s `startTabTransition` argument for the tap path). The home one is safe
+   * because the forum pane is mounted ahead of the tap on an idle callback, so by the
+   * time you press it holds its rows rather than a skeleton it is about to replace.
+   * `/messages` is the counter-example and must stay without it.
+   *
+   * The frame-rate cost of the lean is real and is paid where it belongs: sixteen to
+   * forty inline transforms and promoted layers per frame on a 50-card gallery, against
+   * two. What made that unaffordable was not the count but the `height` tween that used
+   * to run on `[data-tab-panel]` at the same time — a layout pass per frame on the
+   * ancestor of every one of those promoted cards. That is gone (see step 4 of
+   * `runTabTransition`), and the lean stays.
    */
   lean?: boolean;
   onSettle?: () => void;
@@ -1595,8 +1608,183 @@ export function playSharedAxis(opts: {
 type TabRun = { panel: HTMLElement; to: string; finish(): void };
 let activeTabRun: TabRun | null = null;
 
-/** Per-tab scroll offset, so switching back lands where you left that tab. */
-const tabScrollMemory = new Map<string, number>();
+/**
+ * Per-tab scroll offset, so switching back lands where you left that tab.
+ *
+ * Keyed by the **panel element**, then by tab name. It was one flat
+ * `Map<tabName, offset>` at module scope, and the collision that produced is between
+ * *instances of one screen* rather than between screens: `posts`/`uploads`/`faves`/
+ * `comments` carried an offset from one profile to the next, and `picpony`/`derpibooru`
+ * across two visits to `/favorites`. Tab values happen to be unique app-wide, which is
+ * what `TabPanes` relies on for its own reasons, and that is exactly why the flat map
+ * looked safe.
+ *
+ * The panel element *is* the tab group's identity, so this also handles a nested group
+ * (`BadgesTab` inside `/admin`) and answers "when is it cleared" for free: the page
+ * content is keyed on the pathname, so `/user/1` → `/user/2` unmounts the panel and the
+ * entry goes with it. Leaving home and coming back drops the per-tab offsets, and
+ * `lib/scrollMemory.ts` restores the scroller itself.
+ */
+const tabScrollMemory = new WeakMap<HTMLElement, Map<string, number>>();
+
+function rememberTabScroll(panel: HTMLElement, tab: string, offset: number) {
+  let group = tabScrollMemory.get(panel);
+  if (!group) {
+    group = new Map();
+    tabScrollMemory.set(panel, group);
+  }
+  group.set(tab, offset);
+}
+
+function recallTabScroll(panel: HTMLElement, tab: string) {
+  return tabScrollMemory.get(panel)?.get(tab);
+}
+
+/**
+ * Shared chrome above the panel, past which a tab switch stops *restoring* an offset.
+ *
+ * The app bar's own 64dp — the smallest thing this design system calls a region. Below it the
+ * panel is effectively the page (the home route's gutter is 24, /policy is 209, a profile is
+ * 697); above it there is a header the two tabs share, and moving it is what reads as a jump.
+ * "Stops restoring" rather than "never moves": `finalMax`'s clamp still applies on every screen,
+ * because a destination pane shorter than the current offset leaves the browser no choice.
+ */
+const TAB_SHARED_CHROME_PX = 64;
+
+/**
+ * Records the tab being left and lands on the one being entered, and it is the whole of
+ * the scroll behaviour of a tab switch.
+ *
+ * Extracted so the reduced-motion path can reach it. Under that preference
+ * `startTabTransition` returned before any of this and `useTabPanes` bailed too, so the
+ * panes swapped via `display: none` and the browser clamped `scrollTop` to whatever the
+ * arriving pane's height allowed — a nondeterministic jump on every switch, for the users
+ * least able to absorb one. A scroll position is state, not decoration; the preference asks
+ * for less movement, not for less positioning. So the animated path and the reduced path
+ * share this, and the reduced one simply applies it and stops.
+ *
+ * Returns the scroller and how far it moved, which is what the animated path needs to hold
+ * the outgoing pane over the pixels the user was looking at.
+ */
+/**
+ * How much shared chrome sits above the panel: the distance from the top of the scroller's
+ * *content* to the panel's own top edge, so it is invariant to where the user has scrolled.
+ *
+ * Both writers consult it, which is the point — it is the one rule that decides whether a tab
+ * switch may move the scroller at all, and having the animated path apply it while the
+ * reduced-motion path did not is how a profile could still jump under the preference.
+ */
+function tabPanelTop(panel: HTMLElement, scroller: HTMLElement) {
+  return (
+    scroller.scrollTop + panel.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+  );
+}
+
+function applyTabScroll(
+  panel: HTMLElement,
+  from: string,
+  to: string,
+  leaving: HTMLElement,
+  entering: HTMLElement,
+): { scroller: HTMLElement | null; offsetY: number } {
+  const scroller = getAppScroller();
+  if (!scroller) return { scroller: null, offsetY: 0 };
+  const before = scroller.scrollTop;
+  /* Saved here rather than only in `startTabTransition`, so that the memory is
+     kept by *every* way of changing tab. The tab bar saved it; a sidebar
+     `<Link href="/?tab=forum">`, the back button and the `/forum` redirect all
+     arrive through `useTabPanes` instead and used to restore the destination's
+     offset without ever recording the one they were leaving. Switching with
+     the tab bar therefore came back to where you were and switching with the
+     sidebar came back to the top — the same control, two behaviours. */
+  rememberTabScroll(panel, from, before);
+  // Reading scrollHeight here forces the reflow the pane flags need.
+  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  /* …but `max` is the height with BOTH panes mounted, and the row is a grid
+     cell as tall as the taller of the two. At settle the leaving pane is
+     taken out of layout, the page shrinks to the entering pane's height, and
+     the browser clamps `scrollTop` to whatever is left — with no animation,
+     in one frame, right at the end of the switch. Leave a tall gallery for a
+     forum that is still loading and it clamped 44 to 0: the page visibly
+     snapped backwards just as the slide finished. That is the "switching
+     between gallery and forum still jumps back".
+     So the target is clamped against the height the page *ends* at. `max` was
+     read with both panes boxed, i.e. at `max(H_out, H_in)`, and that minus
+     `H_in` is `max(0, H_out − H_in)` — so this is exact rather than a bound,
+     and it only clamps when the destination pane is the shorter one. It used
+     to subtract `|H_out − H_in|`, which also clamped when the destination was
+     *taller*: the page ends up taller there, so there was nothing to clamp
+     against and a remembered offset was being thrown away for nothing. */
+  const finalMax = Math.max(0, max - Math.max(0, leaving.offsetHeight - entering.offsetHeight));
+  /* Whether this screen may restore at all, and it is a property of the *screen* rather than
+     of the scroll position — which is what makes it predictable.
+     `panelTop` is how much shared chrome sits above the panel: the distance from the top of
+     the scroller's content to the panel's own top edge. On the home route that is the page
+     gutter and nothing else, because the tab pill is fixed chrome outside the scroller, so the
+     panel effectively *is* the page and moving the scroller moves only the thing being
+     switched. On a profile it is the banner, the name, the level bar and the tab row — some
+     660px of content that both tabs share, and restoring the destination's remembered offset
+     drags all of it: scroll down through 历史评论, switch back to 上传记录, and the page snapped
+     to wherever 上传记录 had been left. That is the reported jump.
+     So a screen whose panel carries real shared chrome above it is left where it is — only
+     `finalMax`'s clamp can still move it — and a screen whose panel is the page keeps the memory
+     that makes leaving the gallery for the forum and coming back land on the same row. The
+     threshold is the app bar's own 64dp, which is the smallest piece of chrome this design
+     system treats as a region. */
+  const mayRestore = tabPanelTop(panel, scroller) <= TAB_SHARED_CHROME_PX;
+  /* No memory for the destination means stay exactly where you are. This used
+     to scroll to put the tab bar at the top of the scrollport, which is fine
+     on the home page — the bar is near the top of the document — and wrong on
+     a profile, where it sits below a tall header card, so a first visit to a
+     tab jumped *down* to find it. Worse, a short destination pane makes
+     `finalMax` small, so that downward target clamped straight to the
+     bottom of the page: switching to 上传记录 or 收藏夹 landed at the end of
+     the list. */
+  const remembered = mayRestore ? recallTabScroll(panel, to) : undefined;
+  const next = Math.min(remembered ?? before, finalMax);
+  // Scroll anchoring would "correct" a deliberate jump; same guard as runScroll.
+  scroller.style.overflowAnchor = 'none';
+  scroller.scrollTop = next;
+  return { scroller, offsetY: next - before };
+}
+
+/**
+ * The reduced-motion half of the same behaviour, applied *after* the commit.
+ *
+ * Under the preference the panes swap through `display: none` rather than sliding, so there is
+ * no run to hold an offset across and `applyTabScroll`'s prediction of the settled height is
+ * unnecessary: at the moment this runs the arriving pane is the only one with a box, so
+ * `scrollHeight` is already final and the clamp is the browser's real maximum. What it does
+ * keep is the *screen* test, and that is not arithmetic — a profile has 697px of shared chrome
+ * above its panel, so restoring there drags the banner, which is the jump this whole rule
+ * exists to stop. Leaving it out would have made that jump reachable by turning the preference
+ * on, which is the population least able to absorb one.
+ *
+ * **What it can restore is bounded by who records.** The origin's offset is written by
+ * `applyTabScroll` (every animated run, tap or reactive) and by `startTabTransition` (the tap
+ * path, before its reduced-motion bail). So under the preference a screen whose tabs are
+ * reached through the tab bar remembers both directions — the home route, which is the one
+ * screen the test above lets restore anyway — while a tab reached only by a sidebar link or the
+ * back button has nothing recorded and this returns at the `undefined` guard, leaving the
+ * position exactly where the browser's clamp put it. The two limits coincide today; a future
+ * screen with a low `panelTop` and no tap path would need a pre-commit hook the reactive path
+ * does not have.
+ */
+function applyReducedTabScroll(panel: HTMLElement, to: string) {
+  const scroller = getAppScroller();
+  if (!scroller) return;
+  if (tabPanelTop(panel, scroller) > TAB_SHARED_CHROME_PX) return;
+  const remembered = recallTabScroll(panel, to);
+  if (remembered === undefined) return;
+  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  /* No `overflowAnchor` guard, deliberately, and it is not an omission of `applyTabScroll`'s:
+     that one suspends anchoring because it writes and then animates for 500ms, with the panes
+     re-laying-out underneath. This write is synchronous and nothing lays out after it in the
+     same task, so there is nothing for anchoring to "correct" — and leaving it on is what
+     absorbs a late shrink above the viewport, which is the job `restoreAnchor` hands back to it
+     on the animated path. */
+  scroller.scrollTop = Math.min(remembered, max);
+}
 
 /* The tab a panel has already been animated to.
  *
@@ -1650,81 +1838,6 @@ function clearPaneFlags(panel: HTMLElement) {
   });
 }
 
-/* How long after a switch a height change still counts as part of it.
- *
- * Long enough to cover the fetch the switch itself started; short enough that a
- * change the *user* causes — turning a page, expanding a row — is not swept up
- * and animated at them for no reason. */
-const PANE_GROWTH_WATCH_MS = 2500;
-
-/** Torn down by the next switch, so two watchers can never drive one box. */
-let stopPaneGrowthWatch: (() => void) | null = null;
-
-/**
- * Keeps animating the panel's height for a moment after the slide has settled.
- *
- * The switch is not the last time the page's height changes, and on a profile it
- * is not even the interesting one. Every pane there fetches when its tab is
- * selected, so at the instant the box is measured the incoming pane is still a
- * skeleton: the morph lands on the skeleton's height, the data arrives a few
- * hundred milliseconds later, and the page jumps by however much the two differ
- * — after the motion has visibly finished, which is exactly the shape of the
- * jolt the morph was added to remove. Matching each skeleton to its page size
- * shrinks that gap but cannot close it, because the real page can be short.
- *
- * So the arriving pane is watched for a moment and any further change is run
- * through the same curve. The clip is applied per morph rather than held for the
- * whole window: it is a clip context for absolutely positioned descendants, and
- * a menu opened inside the pane a second after a switch must not be cropped by
- * it.
- */
-function watchPaneGrowth(panel: HTMLElement, pane: HTMLElement): () => void {
-  if (typeof ResizeObserver === 'undefined' || prefersReducedMotion()) return () => {};
-
-  let last = pane.offsetHeight;
-  let tween: gsap.core.Tween | null = null;
-
-  const release = () => {
-    panel.style.height = '';
-    panel.style.overflowY = '';
-  };
-
-  const observer = new ResizeObserver(() => {
-    /* Stand down while a flight owns the screen. This holds an inline `height` on
-       `[data-tab-panel]` — an ancestor of every gallery card — and re-tweens it for
-       up to `PANE_GROWTH_WATCH_MS` after a switch settles, so a flight launched
-       inside that window would have its landing target moved under it. Not a
-       transform, so the press-time rect is honest; the risk is the card moving
-       *during* the flight. */
-    if (heroOwnsScreen()) return;
-    const next = pane.offsetHeight;
-    if (Math.abs(next - last) <= 1) return;
-    /* Mid-morph the inline height is the animated value, not `last` — starting
-       the new tween from `last` would snap the box backwards first. */
-    const from = tween?.isActive() ? parseFloat(panel.style.height) || last : last;
-    last = next;
-    tween?.kill();
-    gsap.set(panel, { height: from, overflowY: 'clip' });
-    tween = gsap.to(panel, {
-      height: next,
-      duration: DURATION.emphasized,
-      ease: 'emphasized',
-      onComplete: release,
-    });
-  });
-  observer.observe(pane);
-
-  const timer = window.setTimeout(() => observer.disconnect(), PANE_GROWTH_WATCH_MS);
-
-  return () => {
-    window.clearTimeout(timer);
-    observer.disconnect();
-    tween?.kill();
-    tween = null;
-    release();
-  };
-}
-
 function runTabTransition(
   panel: HTMLElement,
   from: string,
@@ -1746,10 +1859,6 @@ function runTabTransition(
   if (heroOwnsScreen()) return false;
 
   activeTabRun?.finish();
-  /* A watcher from the previous switch is still holding the box; two of them
-     driving one `height` would fight frame by frame. */
-  stopPaneGrowthWatch?.();
-  stopPaneGrowthWatch = null;
   clearPaneFlags(panel);
 
   /* 1. Give both panes a box. They share one grid cell, so the row is now as
@@ -1765,111 +1874,57 @@ function runTabTransition(
   entering.setAttribute('data-tab-pane-entering', '');
   leaving.setAttribute('data-tab-pane-animating', '');
   entering.setAttribute('data-tab-pane-animating', '');
+  /* Written here, with the flags, rather than after the measurements below: it is a
+     style write, so putting it later would split what is otherwise one invalidation
+     into two and force a second layout inside the pointer handler. `clip` does not
+     create a scrollbox, so it changes nothing the measurements read. See step 4. */
+  panel.style.overflowY = 'clip';
 
   /* 2. Restore the destination tab's own offset while the incoming pane is
         still invisible, and 3. pin the outgoing pane to the pixels the user was
         actually looking at, so step 2 is invisible on that side. */
-  const scroller = getAppScroller();
-  let offsetY = 0;
-  if (scroller) {
-    const before = scroller.scrollTop;
-    /* Saved here rather than only in `startTabTransition`, so that the memory is
-       kept by *every* way of changing tab. The tab bar saved it; a sidebar
-       `<Link href="/?tab=forum">`, the back button and the `/forum` redirect all
-       arrive through `useTabPanes` instead and used to restore the destination's
-       offset without ever recording the one they were leaving. Switching with
-       the tab bar therefore came back to where you were and switching with the
-       sidebar came back to the top — the same control, two behaviours. */
-    tabScrollMemory.set(from, before);
-    // Reading scrollHeight here forces the reflow step 1 needs.
-    const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    /* …but `max` is the height with BOTH panes mounted, and the row is a grid
-       cell as tall as the taller of the two. At settle the leaving pane is
-       taken out of layout, the page shrinks to the entering pane's height, and
-       the browser clamps `scrollTop` to whatever is left — with no animation,
-       in one frame, right at the end of the switch. Leave a tall gallery for a
-       forum that is still loading and it clamped 44 to 0: the page visibly
-       snapped backwards just as the slide finished. That is the "switching
-       between gallery and forum still jumps back".
-       So the target is clamped against the *shortest* height the page will have
-       at any point in the run. Both panes share one cell, so that is today's
-       height less the difference between them — in either direction, because
-       the box below morphs from one height to the other and therefore passes
-       through the smaller of the two whichever way it is going. */
-    const settledMax = Math.max(0, max - Math.abs(leaving.offsetHeight - entering.offsetHeight));
-    /* No memory for the destination means stay exactly where you are. This used
-       to scroll to put the tab bar at the top of the scrollport, which is fine
-       on the home page — the bar is near the top of the document — and wrong on
-       a profile, where it sits below a tall header card, so a first visit to a
-       tab jumped *down* to find it. Worse, a short destination pane makes
-       `settledMax` small, so that downward target clamped straight to the
-       bottom of the page: switching to 上传记录 or 收藏夹 landed at the end of
-       the list. Holding the offset is also simply the least surprising rule —
-       the panes share a tab bar, so the page under them has not changed. */
-    const remembered = tabScrollMemory.get(to);
-    const next = Math.min(remembered ?? before, settledMax);
-    // Scroll anchoring would "correct" a deliberate jump; same guard as runScroll.
-    scroller.style.overflowAnchor = 'none';
-    scroller.scrollTop = next;
-    offsetY = next - before;
-  }
+  const { scroller, offsetY } = applyTabScroll(panel, from, to, leaving, entering);
 
   const settle = () => activeTabRun?.finish();
 
-  /* 4. Morph the pane box itself, so the page's height changes over the same
-        500ms as the slide instead of in one frame at the end of it.
-     Both panes share a grid cell, so the row is the taller of the two for the
-     whole run and then becomes the entering pane's height the instant the
-     leaving one drops out of layout. Every profile tab has a different amount
-     in it — eight uploaded pictures against two forum posts — so that last
-     frame moved everything below the panes, footer included, by hundreds of
-     pixels, and did it *after* the motion had visibly finished. The switch
-     read as a slide followed by an unrelated jolt.
-     Driving `height` (not `min-height`) because the row's own height is the
-     max of the two panes and a floor under that has nothing to do.
+  /* 4. Nothing animates the panel's box, and that is the point.
+     This used to pin `[data-tab-panel]`'s `height` to the leaving pane's and tween it
+     to the entering pane's over the same 500ms as the slide, so the page's height
+     changed with the motion rather than in one frame at the end of it. Two things
+     killed it. The first is that the pin was doing nothing the layout was not already
+     doing: the panel is a grid with both panes in one cell, both hold a box for the run
+     (`-leaving` / `-entering`), so its natural height *is* the taller of the two — all
+     the tween added was a forced shrink to `H_out` at the start, which is also the only
+     reason it needed `overflow-y: clip`. The second is the cost: `height` on the
+     ancestor of every gallery card is a layout pass per frame, and with `lean` on,
+     sixteen to forty of those cards are promoted compositor layers that then re-raster.
+     A layout property on this element is exactly what the motion section forbids.
+     What it bought is invisible anyway. The only in-flow element below the panel on
+     every screen that uses `TabPanes` is the shell footer, and `.page-chrome` is
+     `opacity: 0` with `transition: none` for the whole transit — `endTransit()` runs in
+     the same `onSettle` as everything else, so the footer's 400ms fade-in starts from
+     the settled layout and it is never rendered at a pre-settle position. The content
+     *above* the panel does not move, because the clamp against `finalMax` above
+     guarantees the offset survives the shrink.
+     Gone with it: `watchPaneGrowth`, a `ResizeObserver` that re-tweened the same
+     `height` for 2.5s after settle to absorb late-arriving data. A late change is now an
+     ordinary reflow, like every other data arrival in the app, and `restoreAnchor` puts
+     `overflow-anchor` back at settle so a shrink above the viewport is absorbed by
+     scroll anchoring. Skeletons still have to be the right length.
 
-     The clip that comes with it is `overflow-y: clip`, and it must be *only*
-     the vertical axis and it must be `clip` rather than `hidden`. A plain
-     `overflow: hidden` was both axes, and this element is the centred content
-     column — so for the whole 500ms the shared axis was cropped to the column
-     instead of to the scroller, and the incoming pane appeared out of the
-     column's own edge rather than sliding in from the side of the content area.
-     That is the entire "it should come from the sides of the information area,
-     not from the sides of the content" report, and it was introduced by this
-     tween. `hidden` on one axis is not an option either: CSS computes a
-     `visible` on the other axis to `auto` when its partner is `hidden`, which
-     would make this a horizontal scroll container mid-slide. `clip` is the one
-     value allowed to sit beside `visible`, so the horizontal axis stays exactly
-     as it was and `[data-axis-running]` on the scroller keeps owning it.
-
-     Both are cleared by `releaseBox`, on the settle path *and* on the interrupt
-     path — a residual inline height on an ancestor of a gallery card would
-     freeze the page at whatever it happened to be mid-run. */
-  const fromHeight = leaving.offsetHeight;
-  const toHeight = entering.offsetHeight;
-  let boxTween: gsap.core.Tween | null = null;
-  let growth: ResizeObserver | null = null;
-  const releaseBox = () => {
-    boxTween?.kill();
-    boxTween = null;
-    growth?.disconnect();
-    growth = null;
-    panel.style.height = '';
-    panel.style.overflowY = '';
-  };
-  const morphTo = (height: number) => {
-    boxTween?.kill();
-    boxTween = gsap.to(panel, {
-      height,
-      duration: DURATION.emphasized,
-      ease: 'emphasized',
-    });
-  };
-  if (fromHeight > 0 && toHeight > 0 && Math.abs(fromHeight - toHeight) > 1) {
-    panel.style.height = `${fromHeight}px`;
-    panel.style.overflowY = 'clip';
-    morphTo(toHeight);
-  }
+     What does survive is the clip, as two style writes instead of a tween. It is
+     `overflow-y`, not `overflow`: this element is the centred `max-w-*` content column,
+     so clipping both axes cropped the shared axis to the column and the incoming pane
+     appeared out of the text's own edge instead of sliding in from the side of the
+     content area. And the value is `clip` rather than `hidden` because CSS computes a
+     `visible` sibling axis to `auto` beside `hidden`, which would make this a horizontal
+     scroll container mid-slide; `clip` is the one value allowed to sit beside `visible`,
+     so `[data-axis-running]` on the scroller keeps owning x. What it is *for* is
+     `leavingOffsetY`: the outgoing pane is translated by the difference between the two
+     tabs' remembered offsets, which can be most of a screen, and without the clip it
+     paints over the footer for the length of the run. It used to be applied only when
+     the two panes' heights differed by more than a pixel, since it came in with the
+     height pin — so the case it exists for was the one case it could miss. */
 
   /* The footer rides inside `[data-page-content]` and so travels with every
      route change on its own. A tab switch is the exception — the panes that
@@ -1880,9 +1935,11 @@ function runTabTransition(
   /* Belt and braces on the scroll-anchoring guard: `onSettle` restores it, but
      a run whose panes are unmounted mid-flight would never reach that, and
      leaving `overflow-anchor: none` on the app scroller silently disables
-     anchoring for the rest of the session. */
+     anchoring for the rest of the session. The clip goes with it, and for the same
+     reason: a residual `overflow-y: clip` on an ancestor of every gallery card would
+     crop anything a pane opens afterwards. */
   const restoreAnchor = () => {
-    releaseBox();
+    panel.style.overflowY = '';
     if (scroller) scroller.style.overflowAnchor = '';
     endTransit();
   };
@@ -1907,10 +1964,6 @@ function runTabTransition(
       leaving.removeAttribute('data-tab-pane-animating');
       entering.removeAttribute('data-tab-pane-animating');
       restoreAnchor();
-      /* The leaving pane only drops out of layout on the line above, so this is
-         the first moment the panel's height is the arriving pane's alone — which
-         is the height the watcher has to start from. */
-      stopPaneGrowthWatch = watchPaneGrowth(panel, entering);
       panel.removeEventListener('pointerdown', settle, { capture: true });
       if (activeTabRun?.panel === panel) activeTabRun = null;
     },
@@ -1958,11 +2011,15 @@ export function startTabTransition(
   lean = false,
 ): void {
   if (from === to) return;
-  const scroller = getAppScroller();
-  if (scroller) tabScrollMemory.set(from, scroller.scrollTop);
-  if (prefersReducedMotion()) return;
   const panel = document.querySelector<HTMLElement>('[data-tab-panel]');
-  if (panel) runTabTransition(panel, from, to, direction, lean);
+  if (!panel) return;
+  /* Recorded before the reduced-motion bail, and keyed on the panel, so the two writers
+     agree. It used to be `tabScrollMemory.set(from, …)` above the panel lookup, i.e. a
+     flat key written before the thing that scopes it was even in hand. */
+  const scroller = getAppScroller();
+  if (scroller) rememberTabScroll(panel, from, scroller.scrollTop);
+  if (prefersReducedMotion()) return;
+  runTabTransition(panel, from, to, direction, lean);
 }
 
 /**
@@ -2043,7 +2100,11 @@ export function useTabPanes<T extends HTMLElement = HTMLElement>(
     // Already animated to this tab optimistically; the commit is only catching
     // up. Flags were cleared above, so React's own `-active` now holds it.
     if (lastTabTarget.get(panel) === active) return;
-    if (prefersReducedMotion()) return;
+    if (prefersReducedMotion()) {
+      // Positioning is not motion — see `applyReducedTabScroll`.
+      applyReducedTabScroll(panel, active);
+      return;
+    }
 
     const order = [...panel.querySelectorAll<HTMLElement>('[data-tab-pane]')].map(
       (pane) => pane.dataset.tabPane,

@@ -178,8 +178,10 @@ export default function HistoryPage() {
             description="看过的图片会出现在这里。"
           />
         ) : (
-          <>
-            {' '}
+          /* The anchor wraps the list *and* its pager, because `Pagination` finds it with
+             `closest()` — on the list alone it is an anchor the pager cannot see. Its top
+             edge is still the first row rather than the page header, which is the point. */
+          <div data-pagination-anchor>
             <div>
               {' '}
               {history.map((item) => (
@@ -188,7 +190,7 @@ export default function HistoryPage() {
                   className="m3-row flex items-center gap-4 p-4 bg-surface-container-low transition-ui state-layer group"
                 >
                   
-                  <Link href={`/pic/${item.id}`} className="flex items-center gap-4 flex-1 min-w-0">
+                  <Link scroll={false} href={`/pic/${item.id}`} className="flex items-center gap-4 flex-1 min-w-0">
                     
                     <div className="size-14 rounded-sm overflow-hidden bg-surface-container-high shrink-0">
                       {' '}
@@ -251,7 +253,7 @@ export default function HistoryPage() {
                 className="mt-8"
               />
             )}
-          </>
+          </div>
         )}
       </div>
       <Modal

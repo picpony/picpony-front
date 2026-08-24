@@ -339,6 +339,12 @@ export default function Sheet({
         )}
         <div
           ref={bodyRef}
+          /* `data-app-scroll-container` for the same reason `Modal`'s body carries it: this is
+             the box that scrolls, so anything inside that wants to scroll to an element —
+             `Pagination`, `scrollAppToElement` — has to find this rather than the page behind
+             the sheet. Nothing in the app pages inside a `Sheet` today; the marker is what
+             keeps the first one that does from moving the wrong surface. */
+          data-app-scroll-container
           className={cn('popover-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'px-6')}
         >
           {children}

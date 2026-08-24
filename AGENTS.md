@@ -482,7 +482,23 @@ the last not even on the 4dp grid), three track tones, two drive mechanisms and
 including the 词库 sync, which is the one place a user has to wait. `ProgressBar`
 owns all of it. `TrackActiveSpace` (a 4dp gap between indicator and remaining track)
 is knowingly not implemented: it needs the remaining track's leading edge to follow
-the value, which is the layout work `scaleX` is there to avoid. `StopSize` is.
+the value, which is the layout work `scaleX` is there to avoid. **`StopSize` is not
+implemented either, and that is a divergence rather than an omission.** It shipped twice — a
+4dp square in the fill's own colour at `right-0`, which the track's `rounded-full` clipped
+into a nub; then a round dot concentric with the cap in the *track's* on-container
+(`on-secondary-container` measures 13.32:1 light / 7.24:1 dark against the track, against the
+fill colour's 5.00:1) hidden above 98% — and both read as a detached mark on a meter that is
+mostly not full. The profile's XP bar is the case that surfaced it, since `experience % 100`
+is 0–99 and can never cover the dot.
+
+What the removal costs is worth keeping, because M3's rule for the dot is conditional and this
+app meets the condition: it is *required* when the track's contrast against the container
+behind it falls under 3:1, and `secondary-container` measures 1.23:1 light / 1.99:1 dark
+against `surface` and **1.00:1** against `surface-container-highest` — so on that tone step the
+empty half of the track is invisible and nothing marks where it ends. If that ever needs
+fixing, give the *track* contrast rather than putting a mark at the end of an invisible one.
+`Slider` keeps its own stop indicator and should: its track is 16dp with an 8dp cap, so a 4dp
+dot inset on the inactive side reads as part of the track rather than as a fragment of a fill.
 
 The dialog is the instructive one: it was `surface-container-lowest`, the *flattest*
 step on the scale, so the one surface in the app meant to read as lifted off
@@ -1892,9 +1908,9 @@ starting, and GSAP is then animating detached nodes while the visible new ones
 sit still: measured on the messages tabs as pane height collapsing 1887px → a
 288px skeleton inside 70ms, with zero transformed descendants for the whole 500ms
 run — a switch with no animation at all. Turn `lean` on only for panes that are
-static once mounted (`/policy`).
+static once mounted, which today means `/policy` and the home page.
 
-**The home tab bar opts in, and it is the only thing that does.** `lean` has to be stated at
+**The home tab bar opts in, and it and `/policy` are the only two that do.** `lean` has to be stated at
 *both* of its call sites — `TabPanes` for the reactive path (a sidebar link, back/forward, the
 `/forum` redirect) and `startTabTransition`'s fourth argument for the tap path. It is safe
 there for a specific reason rather than by luck: the forum pane is mounted ahead of the tap on
@@ -1907,29 +1923,52 @@ than trusting it: the option had a default in four places — `playSharedAxis`,
 last two said `false`. `startTabTransition` passes four arguments and therefore took the
 parameter default, so the home page's *tab bar* ran the lean while its own comment and this
 file both said it did not, and while the reactive path (a sidebar link, back/forward, the
-`/forum` redirect) ran without it. One option, one default. Measured after the fix, with a
-50-card gallery: two inline-transformed nodes inside the panes instead of every
-near-viewport block, and the switch presenting at a 60fps median.
+`/forum` redirect) ran without it. One option, one default, and a screen that wants it says
+so at both call sites — which the home page now does.
 
-**The pane height tween must clip on one axis only, and with `clip`.** While
-`[data-tab-panel]` is being morphed from the outgoing pane's height to the
-incoming one's, it has to hide the overflow — but that panel *is* the centred
-`max-w-*` content column, and `overflow: hidden` therefore cropped the shared
-axis to the column for the whole 500ms: panes appeared and vanished at the text's
-own edge instead of sliding past the information area's. It is `overflow-y`, and
-the value is `clip` rather than `hidden` because `overflow-x: visible` beside
-`overflow-y: hidden` is *computed to `auto`* by the spec — which would quietly
-turn the panel into a horizontal scroll container — while `visible` beside `clip`
-is legal and leaves the x axis alone. The horizontal clip is then back where it
-belongs, on the scroller's `[data-axis-running='x']` rule.
+**The lean's cost is real and it is not what made the switch drop frames.** With a 50-card
+gallery it is sixteen to forty inline transforms and sixteen to forty promoted compositor
+layers per frame, against two without it; that figure is why the option existed, and a
+measurement taken with it *off* once recorded a 60fps median, which is not a measurement of
+the shipped configuration. What actually cost the frames was the `height` tween described
+below, running on the ancestor of every one of those promoted cards: a layout pass per frame
+invalidates all fifty geometries and re-rasters the promoted ones. Remove the layout work and
+the node count is affordable. Do not reach for the node count first.
 
-The other half of the same complaint is that the height was measured once, at the
-moment of the switch, when the entering pane still held its skeleton — so the
-data landing a beat later moved the height again after the tween had finished.
-`runTabTransition` now watches the entering pane with a `ResizeObserver` for a
-couple of seconds and re-tweens on the same curve if it grows. Skeletons should
-still be the right *length* (`PER_PAGE` rows, not eight), because a watcher that
-has to correct by a whole row is a visible correction.
+**Nothing animates the pane box, and the panel's clip is two style writes.**
+`[data-tab-panel]` used to have its `height` pinned to the outgoing pane's and tweened to the
+incoming one's over the same 500ms as the slide, so the page's height changed with the motion
+rather than in one frame at the end of it. Both halves of that turned out to be wrong. The pin
+was a no-op dressed as a fix: the panel is a grid with both panes in one cell and both hold a
+box for the run, so its natural height already *is* the taller of the two — all the tween added
+was a forced shrink to the outgoing height at the start, which is the only reason it needed to
+clip at all. And what it bought is invisible: the one in-flow element below the panel on every
+`TabPanes` screen is the shell footer, and `.page-chrome` is `opacity: 0` with
+`transition: none` for the whole transit, coming back on 400ms decelerate only after
+`endTransit()` runs in the same `onSettle` as the release — so the footer is never rendered at a
+pre-settle position. The content above does not move, because the pre-run clamp against the
+page's *final* scrollable height guarantees the offset survives the shrink.
+
+The clip survives, because the outgoing pane is translated by `leavingOffsetY` — the difference
+between the two tabs' remembered offsets, which can be most of a screen — and without it that
+paints over the footer for the length of the run. It is `overflow-y`, not `overflow`: the panel
+*is* the centred `max-w-*` content column, and clipping both axes cropped the shared axis to the
+column for the whole 500ms, so panes appeared and vanished at the text's own edge instead of
+sliding past the information area's. The value is `clip` rather than `hidden` because
+`overflow-x: visible` beside `overflow-y: hidden` is *computed to `auto`* by the spec — which
+would quietly turn the panel into a horizontal scroll container — while `visible` beside `clip`
+is legal and leaves the x axis alone; the horizontal clip stays where it belongs, on the
+scroller's `[data-axis-running='x']` rule. It is written with the pane flags rather than after
+the measurements, so the run costs one style invalidation in the pointer handler instead of two.
+
+`watchPaneGrowth` went with the tween. It was a `ResizeObserver` that re-tweened the same
+`height` for 2.5 seconds after settle, to absorb the case the tween could not: the height is
+measured at the moment of the switch, when a pane that fetches on selection still holds its
+skeleton, so the data landing a beat later moved the height again after the motion had visibly
+finished. A late change is now an ordinary reflow, like every other data arrival in the app, and
+`restoreAnchor` puts `overflow-anchor` back at settle so a shrink above the viewport is absorbed
+by scroll anchoring rather than by a tween on a layout property. Skeletons still have to be the
+right *length* (`PER_PAGE` rows, not eight) — that requirement got stricter, not looser.
 
 **A page gets a back affordance if, and only if, it is not in the sidebar.**
 There was no rule, and the distribution showed it: `/search` and `/messages` had
@@ -2057,6 +2096,29 @@ corner morph, the container mask, the content fit and every skeleton shimmer, to
 worth about one frame per second. The cost is the detail route's first render and first
 paint landing inside the flight window (~190ms of React work in a production build), spread
 evenly across it. The blur rule above was the only change that moved the number (27 → 36).
+
+**The ~190ms attribution has now been re-measured and it does not hold — do not act on it.**
+Measured on a production build against a 50-card gallery, four opens, `Performance.getMetrics`
+deltas between the tap and `opening.landed` (medians): `ScriptDuration` **50ms**,
+`RecalcStyleDuration` **54ms**, `LayoutDuration` **3.6ms**, `TaskDuration` **220ms**, over a
+tap-to-landed wall time of **384ms**. Between `landed` and `detail-idle` the same counters read
+3ms / 11ms / 0.4ms. So the route's commit *is* inside the window, but it is a fifth of the
+window's cost rather than three quarters of it — style recalculation is the same size, and
+`TaskDuration` exceeds script plus style plus layout by more than double, which puts the
+remainder in paint and raster.
+
+Two consequences. **Deferring the route's chrome to `opening.landed` is not worth it**: it
+would move part of 50ms out of a window that is spending 220ms, in exchange for the picture
+landing and the metadata arriving as two separate events — the failure this file names
+repeatedly — plus a real risk to the header-height contract the handoff depends on. It was
+planned and then dropped on this measurement. **And the leg is not the whole flight**: 250ms of
+`HERO_DURATIONS` against 384ms tap-to-landed means roughly 130ms is spent before the flyer
+moves, which is where `frameCache`'s press-path warming and the cache count now aim.
+
+One caveat on the harness: a headless *and* a headed Chromium on this machine both cap the
+presented-frame control at 46fps, so presented frame rate could not be measured here at all —
+only main-thread occupancy, which is machine-independent. The 36fps figure above still needs a
+device with a real compositor to re-confirm.
 
 
 ## State layers
@@ -2457,6 +2519,96 @@ the app then appears to change its scrollbar as you navigate.
 Never give a child of the scroller `min-h-dvh` — the scroller is already shorter
 than the viewport (header + margins), so it forces a permanent scrollbar. Use
 `min-h-full`.
+
+### Vertical position has one owner
+
+`lib/scrollMemory.ts`, mounted once in `AppLayout` as `<RouteScrollMemory>`, and **every
+`router.push`/`replace` and every `<Link>` in the app passes `scroll: false`**. That is not a
+per-call-site decision any more; a new one that forgets it is a bug, and the flag is only a
+suppression — the position is written explicitly.
+
+Four situations, and the last two are one rule:
+
+| a new pathname | jump to 0. A new page starts at its top |
+| back / forward | restore what that history entry had |
+| a page turn (`?page=`) | `Pagination` owns it |
+| a tab switch (`?tab=`) | `startTabTransition` / `useTabPanes` own it |
+
+The owner depends on `pathname` alone, so it does not run for a search-only change at all —
+which is stronger than testing for one. The image detail stays the hero subsystem's, guarded
+both by `heroOwnsScreen()` and by a `/pic/` test for a cold load.
+
+**Why Next's own handler is off rather than merely overridden.** It does reach the app
+scroller — `layout-router.js` falls through to `domNode.scrollIntoView()`, which walks up to
+the nearest scrollable ancestor — but it is the one writer that cannot consult
+`heroOwnsScreen()`, it tests the segment's top against `document.documentElement.clientHeight`
+rather than the scroller's box, `block: 'start'` lands on the segment's top edge rather than on
+`scrollTop === 0` (a page-gutter's difference, every navigation), it fires after the commit and
+so races `RouteCrossFade`, and the live handler ends with `domNode.focus()` — so every
+scrolling navigation moved focus to the route segment. `scroll: false` is also not a hard
+opt-out: `completeSoftNavigation` neutralises the *current* navigation's targets while leaving
+an earlier unconsumed `scrollRef` live.
+
+**Offsets are keyed per history entry, not per URL** — `window.navigation.currentEntry.key`,
+with a URL fallback whose one observable difference is documented at the call site. Do not
+merge a key into `history.state`: the App Router rebuilds that object on every commit and
+drops anything it does not own, which is what `lib/hero/history.ts` already spends three
+mechanisms working around.
+
+**Every pager needs a `[data-pagination-anchor]`, and it has to be an *ancestor* of the pager.**
+There were three anchors and thirteen pagers, so most page turns replayed the banner and the page
+header, and the home route's two tabs paged differently from each other — the gallery pane had an
+anchor and the forum pane did not.
+
+`Pagination` finds it with `closest()`, which is the part that is easy to get wrong and fails
+silently: a marker on the list with the pager as its *sibling* is one the pager cannot see, and the
+turn falls back exactly as if there were none. The first attempt at this added seven markers and
+five of them were siblings; the one that predated it was a sibling of all four of a profile's
+pagers, which is why that screen — the one with 697px of chrome to replay — never had a working one. Several pagers may share one enclosing anchor — a profile's four tabs
+use the box that holds the tab row and the panes — and a pager handed to a list component as
+`children` is inside its anchor by construction, which is how `/messages` works.
+
+And a pager inside a dialog needs a *scroller* as well: the box with `overflow-y: auto` carries
+`data-app-scroll-container`, which `Pagination` also finds with `closest()`. `Modal`'s body has it,
+`Sheet`'s body has it, and so does the one nested `max-h-[60vh]` list in the admin console — that
+last one matters because the dialog's body is an ancestor of it and would otherwise be found first,
+so the turn would scroll a box that is not the one moving.
+
+**The per-tab memory is keyed on the panel element**, not on the tab name. A flat
+`Map<tabName, offset>` looked safe because tab values are unique app-wide, but the collision is
+between *instances of one screen*: `posts`/`uploads`/`faves`/`comments` carried an offset from
+one profile to the next. A `WeakMap` on the panel also answers "when is it cleared", since
+`[data-page-content]` is keyed on the pathname.
+
+**And a tab switch only moves the scroller when the panel is the page.** The memory is what
+makes leaving the gallery at row 20 for the forum and coming back land on row 20 — but applying
+it on a screen with a header above the panel drags that header, which reads as a jump: scroll
+down through 历史评论, switch back to 上传记录, and the page snapped to wherever 上传记录 had been
+left. So the decision is a property of the *screen*, measured rather than assumed —
+`panelTop`, the shared chrome above `[data-tab-panel]`, is **24px on the home route** (the page
+gutter; the tab pill is fixed chrome outside the scroller), **209px on /policy** (page header and
+tab row) and **697px on a profile** (banner, name, level bar, tab row). Above
+`TAB_SHARED_CHROME_PX`, the app bar's own 64dp, the scroller is
+left alone and only `finalMax`'s clamp can move it. Per-screen rather than per-scroll-position on
+purpose: a rule that fires depending on how far you happen to have scrolled is not one a user can
+learn.
+
+**And it positions under `prefers-reduced-motion`.** It did not: both the tap path and the
+reactive path returned before positioning, so the panes swapped through `display: none` and the
+browser clamped and nothing else happened. A scroll position is state, not decoration; the
+preference asks for less movement, not for less positioning. `applyReducedTabScroll` runs after
+the commit, where the arriving pane is the only one with a box and the clamp is the browser's real
+maximum rather than a prediction — and it applies the same `panelTop` test, which is the half that
+must not be dropped: without it, turning the preference on is what makes a profile's 697px jump
+reachable again.
+
+What it can restore is bounded by who *records*, and the two limits happen to coincide: the origin's
+offset is written by every animated run and by the tab bar's own tap path, so under the preference a
+screen reached through the tab bar remembers both directions — which is the home route, the one
+screen the `panelTop` test lets restore anyway — while a tab reached only by a sidebar link or the
+back button has nothing recorded and the position stays where the browser's clamp put it. A future
+screen with a low `panelTop` and no tap path would need a pre-commit hook the reactive path does not
+have.
 
 ## `useGSAP`
 

@@ -270,6 +270,7 @@ function TeamSection() {
                   );
                   return href ? (
                     <Link
+                      scroll={false}
                       key={m.id}
                       href={href}
                       data-ripple

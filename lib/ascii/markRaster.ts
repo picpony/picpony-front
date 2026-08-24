@@ -18,7 +18,7 @@
  *     vector spaces are not comparable, so the nearest-glyph lookup answers a question nobody
  *     asked.
  *   - It keeps coverage **continuous**. Thresholding to ink/no-ink puts a hard edge on a
- *     6.85x16px cell, which is a staircase; antialiased coverage is what lets a stroke's edge
+ *     7x16px cell, which is a staircase; antialiased coverage is what lets a stroke's edge
  *     resolve into the character set, which is what a halftone is.
  *
  * Everything here is measured from the artwork at runtime rather than written down, because the
@@ -46,7 +46,7 @@ const MARK_SRC = '/img/picpony-g.svg';
  * The stroke width the artwork is rasterised at, replacing its own 14.
  *
  * **This is the difference between character rendering and a stencil, and it was measured.** At the
- * artwork's own width a vertical stroke lands ~3 cells wide on a desktop plate — cells are 2.34x
+ * artwork's own width a vertical stroke lands ~3 cells wide on a desktop plate — cells are 2.29x
  * taller than they are wide, so the horizontal count is the one that blows up — and a cell entirely
  * inside a stroke has six equal samples, no structure, and therefore no shape for `matchGlyph` to
  * match. Probed in a browser: 16.4% of the whole plate came out as the single glyph `a`, because
@@ -334,7 +334,7 @@ function fitCells(
 ) {
   const box = subjectMetrics(geometry, subject);
   if (!box || !(box.width > 0) || !(box.height > 0)) return null;
-  /* The ink's aspect is a *pixel* ratio; cells are ~2.34x taller than wide, so it has to be
+  /* The ink's aspect is a *pixel* ratio; cells are ~2.29x taller than wide, so it has to be
      restated in cell units before it can be compared with `cols / rows`. */
   const aspect = (box.width / box.height) * cellAspect;
   const width = Math.min(cols * MARK_FIT_X, rows * MARK_FIT_Y * aspect);

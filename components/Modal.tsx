@@ -156,8 +156,14 @@ export default function Modal({
           </div>
         )}
         {/* `bodyClassName` 完整接管 padding：cn 只拼接不解决 Tailwind
-            冲突，所以默认 p-6 不能留在 base 里，否则会盖掉传入的 p-0。 */}
-        <div className={cn('main-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'p-6')}>
+            冲突，所以默认 p-6 不能留在 base 里，否则会盖掉传入的 p-0。
+            `data-app-scroll-container` marks this as the nearest real scroller for anything
+            inside it that needs one — a `Pagination` in a dialog was turning a page and
+            scrolling the *page behind the dialog* to the top. */}
+        <div
+          data-app-scroll-container
+          className={cn('main-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'p-6')}
+        >
           {children}
         </div>
         {footer && <div className="flex shrink-0 justify-end gap-3 px-6 pb-6">{footer}</div>}

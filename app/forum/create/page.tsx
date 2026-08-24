@@ -103,7 +103,7 @@ export default function CreateForumPostPage() {
 
         if (data.success) {
           showToast('发帖成功', 'success');
-          router.push(`/forum/${data.post_id}`);
+          router.push(`/forum/${data.post_id}`, { scroll: false });
         } else {
           setError(data.error || '发帖失败');
           showToast(data.error || '发帖失败', 'error');
@@ -124,6 +124,7 @@ export default function CreateForumPostPage() {
       <div className="mb-6">
         {' '}
         <Link
+          scroll={false}
           href="/forum"
           className="flex items-center text-on-surface-variant hover:text-on-surface transition-ui"
         >
@@ -229,7 +230,7 @@ export default function CreateForumPostPage() {
               `<Button variant="filled">`, and hand-writing the padding meant the
               cancel link and the submit button were 44px and 40px tall in the
               same footer row. */}
-          <Link href="/forum" className={buttonClasses({ variant: 'text' })}>
+          <Link scroll={false} href="/forum" className={buttonClasses({ variant: 'text' })}>
             取消
           </Link>
           <Button variant="filled" type="submit" disabled={isSubmitting || !title.trim()}>

@@ -2,6 +2,7 @@
 
 import {
   HERO_DETAIL_ROUTE_TIMEOUT_MS,
+  HERO_INPUT_TRANSFER_MAX_MS,
   HERO_INPUT_TRANSFER_QUIET_MS,
   HERO_ROUTE_TIMEOUT_MS,
   HERO_VIEWPORT_REBUILD_EPSILON_PX,
@@ -152,7 +153,6 @@ const INITIAL_RUNTIME: ImageHeroRuntimeState = {
   sessionId: null,
   imageId: null,
   stage: EMPTY_STAGE,
-  interactionQuiet: true,
   background: null,
 };
 
@@ -226,8 +226,15 @@ export class HeroController {
     initializeHeroInput();
     this.observedHref = normalizeHeroHref(window.location.href);
     this.releaseHistory = imageHeroHistory.initialize(this.handleHistoryNavigation);
+    /* `this.events.notify()` and nothing else. This used to fold
+       `interactionQuiet: isHeroInteractionQuiet()` into the published runtime, and no
+       consumer anywhere in the app read it — so every quiet↔active transition of the
+       input state minted a new runtime object and re-rendered all three
+       `useSyncExternalStore` subscribers (`AppLayout`, `PicDetail`, `HeroStage`) for a
+       field nobody looked at. On touch, `touchstart` fires before `click`, so one of
+       those re-renders landed in the task immediately preceding a press.
+       The internal waiters still need the signal, which is what `events` carries. */
     this.releaseInteraction = subscribeHeroInteraction(() => {
-      this.updateRuntime({ interactionQuiet: isHeroInteractionQuiet() });
       this.events.notify();
     });
     this.releaseViewport = subscribeHeroViewportInvalidation(this.handleViewportInvalidation);
@@ -926,11 +933,20 @@ export class HeroController {
     this.setPhase('opening.handoff', session, session.intent.background!);
 
     if (session.pullSeized) {
+      /* Bounded, and on expiry the drag is reset rather than the handoff abandoned. The
+         recognizer does terminate reliably, so this is a backstop — but it was the one
+         wait in the handoff with no ceiling at all, and everything downstream of here
+         (the route reveal, the pointer shield, publication) is gated on reaching it. */
       const settled = await waitForSignal(this.events, {
         signal: session.abort.signal,
+        timeout: HERO_ROUTE_TIMEOUT_MS,
         read: () => (session.pullSeized ? null : true),
       });
-      if (!settled || !this.owns(session) || !session.motion) return;
+      if (!this.owns(session) || !session.motion) return;
+      if (!settled) {
+        session.pull?.reset();
+        session.pullSeized = false;
+      }
     }
 
     if (!(await this.establishOpeningGuard(session))) {
@@ -2190,14 +2206,31 @@ export class HeroController {
    * Wait until the browser has genuinely stopped delivering input to the old
    * scroller, then confirm across a frame. A wheel stream stays latched to its
    * original receiver, so releasing early makes the rest of that stream vanish.
+   *
+   * Bounded by `HERO_INPUT_TRANSFER_MAX_MS`, and on expiry it proceeds rather than
+   * failing. The quiet window is 320ms while a wheel event refreshes `wheelActive`
+   * every 160ms, so an inertial trackpad stream can hold this loop open indefinitely —
+   * and every caller treats `false` as "abandon the handoff", which parks the session in
+   * `opening.handoff` and withholds the detail body for as long as the stream lasts. A
+   * lost 160ms of momentum is the cheaper failure.
+   *
+   * **The budget has to go *into* the quiet wait, not around it.** Checking a deadline at
+   * the top of this loop cannot fire while the `await` below is the thing that never
+   * returns, which is precisely the case being bounded — so `waitForHeroInteractionQuiet`
+   * takes the remaining budget and resolves `false` on expiry, and the `!quiet` branch
+   * tells expiry from abort by looking at the deadline.
    */
   private async waitForInputTransfer(session: HeroSession, sync?: () => void) {
+    const deadline = performance.now() + HERO_INPUT_TRANSFER_MAX_MS;
     while (this.owns(session)) {
+      if (performance.now() >= deadline) return true;
       const quiet = await waitForHeroInteractionQuiet(
         session.abort.signal,
         HERO_INPUT_TRANSFER_QUIET_MS,
+        deadline - performance.now(),
       );
-      if (!quiet || !this.owns(session)) return false;
+      if (!this.owns(session)) return false;
+      if (!quiet) return performance.now() >= deadline;
       sync?.();
       if (
         !(await waitForFrame(
@@ -2266,7 +2299,6 @@ export class HeroController {
       next.sessionId === this.runtime.sessionId &&
       next.imageId === this.runtime.imageId &&
       next.stage === this.runtime.stage &&
-      next.interactionQuiet === this.runtime.interactionQuiet &&
       next.background === this.runtime.background
     ) {
       return;

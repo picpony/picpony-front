@@ -150,7 +150,7 @@ export default function ForumPostPage() {
    * entry — a shared link, a new tab — where there is nothing to pop. */
   const handleBack = useCallback(() => {
     if (window.history.length > 1) router.back();
-    else router.push('/?tab=forum');
+    else router.push('/?tab=forum', { scroll: false });
   }, [router]);
 
   /* Escape leaves, as on every other full-screen view. Stood down while a reply
@@ -215,7 +215,7 @@ export default function ForumPostPage() {
     (newPage: number) => {
       if (newPage >= 1 && newPage <= totalPages) {
         setPage(newPage);
-        router.push(`/forum/${id}?page=${newPage}`);
+        router.push(`/forum/${id}?page=${newPage}`, { scroll: false });
       }
     },
     [id, totalPages, router],
@@ -333,7 +333,7 @@ export default function ForumPostPage() {
             characters — wraps one character per line. */}
             <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-outline-variant pb-4">
               <div className="flex min-w-0 items-center gap-3">
-                <Link href={`/user/${post.user_id}`} className="shrink-0">
+                <Link scroll={false} href={`/user/${post.user_id}`} className="shrink-0">
                   {/* `Avatar`. Every avatar in the forum section fell back to
                       `/img/default-avatar.png`, and that file does not exist —
                       `public/img/` holds only the emoji folder and the two
@@ -348,6 +348,7 @@ export default function ForumPostPage() {
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
                     <Link
+                      scroll={false}
                       href={`/user/${post.user_id}`}
                       className="text-label-l-emphasized text-on-surface hover:text-primary truncate transition-ui"
                     >
@@ -434,7 +435,11 @@ export default function ForumPostPage() {
             </div>
           </div>
         </Card>
-        <div className="mb-8">
+        {/* The anchor is this block — heading, replies and the pager they belong to.
+            `Pagination` finds it with `closest()`, so it has to *enclose* the pager; and
+            the heading naming the list is the right landing edge for a page turn, where
+            the page header is not. */}
+        <div data-pagination-anchor className="mb-8">
           <SectionHeading>全部回复 ({post.reply_count})</SectionHeading>
           <div>
             {comments.length === 0 ? (
@@ -459,6 +464,7 @@ export default function ForumPostPage() {
                   className="m3-row bg-surface-container-low flex gap-3 p-3 sm:gap-4 sm:p-4"
                 >
                   <Link
+                    scroll={false}
                     href={`/user/${comment.user_id}`}
                     className="block shrink-0 self-start rounded-full ring-2 ring-transparent transition-ui hover:ring-primary focus-visible:focus-ring"
                     aria-label={`查看 ${comment.username} 的个人资料`}
@@ -468,6 +474,7 @@ export default function ForumPostPage() {
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <Link
+                        scroll={false}
                         href={`/user/${comment.user_id}`}
                         className="text-label-l-emphasized text-on-surface hover:text-primary truncate transition-ui"
                       >

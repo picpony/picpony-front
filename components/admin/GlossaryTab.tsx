@@ -1425,65 +1425,73 @@ export default function GlossaryTab() {
           </Button>
         </div>
       )}{' '}
-      <DataTable<Tag>
-        columns={tagColumns}
-        rows={visibleTags}
-        rowKey={(tag) => tag.id}
-        expandedRow={renderInlineEditor}
-        loading={isLoading}
-        /* The resolved page size, so the placeholder is the right *length*. A
-           watcher that has to correct by whole rows is a visible correction, and
-           this list's page size is user-settable — the default six placeholders
-           against a hundred rows was the worst case of it. */
-        skeletonRows={Math.min(itemsPerPage, 20)}
-        empty={
-          isDuplicateMode ? (
-            /* `EmptyState`, not a bespoke centred stack — same silhouette as
-               every other "nothing here" in the app, and the only thing that
-               differs is the glyph, which is the point of the `icon` slot. */
-            <EmptyState
-              size="inline"
-              icon={<MdCheckCircle size={ICON.large} className="text-success" />}
-              title="太棒了，当前词库没有发现重复英文标签！"
-            />
-          ) : (
-            '未找到匹配的标签记录'
-          )
-        }
-      />
-      {!isDuplicateMode && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-body-m text-on-surface-variant">每页：</span>
-            <Input
-              type="number"
-              min={1}
-              max={150}
-              value={itemsPerPage}
-              onChange={(e) => {
-                const val = parseInt(e.target.value) || 100;
-                const clamped = clamp(val, 1, 150);
-                setItemsPerPage(clamped);
-                localStorage.setItem('picpony_items_per_page', clamped.toString());
-              }}
-              onBlur={() => loadTags(1)}
-              fieldClassName="w-16"
-            />
-            <span className="text-body-m text-on-surface-variant">条</span>
-          </div>
+      {/* Wrapped only to carry the anchor, and it has to reach *past* the table: the pager
+          is a sibling of it and `Pagination` looks for the anchor with `closest()`, so a
+          wrapper around the table alone is one the pager cannot see — and a page turn then
+          scrolls the whole admin console to the top. */}
+      <div data-pagination-anchor>
+        <DataTable<Tag>
+          columns={tagColumns}
+          rows={visibleTags}
+          rowKey={(tag) => tag.id}
+          expandedRow={renderInlineEditor}
+          loading={isLoading}
+          /* The resolved page size, so the placeholder is the right *length*. A
+             watcher that has to correct by whole rows is a visible correction, and
+             this list's page size is user-settable — the default six placeholders
+             against a hundred rows was the worst case of it. */
+          skeletonRows={Math.min(itemsPerPage, 20)}
+          empty={
+            isDuplicateMode ? (
+              /* `EmptyState`, not a bespoke centred stack — same silhouette as
+                 every other "nothing here" in the app, and the only thing that
+                 differs is the glyph, which is the point of the `icon` slot. */
+              <EmptyState
+                size="inline"
+                icon={<MdCheckCircle size={ICON.large} className="text-success" />}
+                title="太棒了，当前词库没有发现重复英文标签！"
+              />
+            ) : (
+              '未找到匹配的标签记录'
+            )
+          }
+        />
+        {/* `mt-6` because this row used to be a direct child of the `space-y-6` above and took
+            its 24px gap from it; inside the anchor it has to carry its own. */}
+        {!isDuplicateMode && (
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-body-m text-on-surface-variant">每页：</span>
+              <Input
+                type="number"
+                min={1}
+                max={150}
+                value={itemsPerPage}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 100;
+                  const clamped = clamp(val, 1, 150);
+                  setItemsPerPage(clamped);
+                  localStorage.setItem('picpony_items_per_page', clamped.toString());
+                }}
+                onBlur={() => loadTags(1)}
+                fieldClassName="w-16"
+              />
+              <span className="text-body-m text-on-surface-variant">条</span>
+            </div>
 
-          <div className="flex flex-col items-center gap-1 sm:items-end">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={loadTags}
-              siblings={1}
-              className="mt-0"
-            />
-            <span className="text-on-surface-variant text-body-s">共 {totalMatches} 条</span>
+            <div className="flex flex-col items-center gap-1 sm:items-end">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={loadTags}
+                siblings={1}
+                className="mt-0"
+              />
+              <span className="text-on-surface-variant text-body-s">共 {totalMatches} 条</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
       <div className="p-4 rounded-md">
         <div className="text-center mb-3">
           <span className="text-body-m text-on-surface-variant">
@@ -1797,7 +1805,13 @@ export default function GlossaryTab() {
           </div>
         </div>
 
-        <div className="popover-scrollbar max-h-[60vh] overflow-y-auto">
+        {/* This is the scroller for the list below, not `Modal`'s body — so it carries the
+            marker `Pagination` looks for. Without it, `closest()` found the dialog's body
+            instead and a page turn scrolled a box that was not the one moving. */}
+        <div
+          data-app-scroll-container
+          className="popover-scrollbar max-h-[60vh] overflow-y-auto"
+        >
           {isLoadingFeedback ? (
             /* Feedback rows, in the shape they arrive in. A centred spinner
                collapsed the 60vh box to nothing and then snapped three cards
@@ -1817,7 +1831,7 @@ export default function GlossaryTab() {
           ) : feedbacks.length === 0 ? (
             <EmptyState size="inline" title="暂无任何反馈申请" />
           ) : (
-            <>
+            <div data-pagination-anchor>
               <div className="space-y-3">
                 {feedbacks.map((feedback) => (
                   <div key={feedback.id} className="p-4 rounded-md">
@@ -1907,7 +1921,7 @@ export default function GlossaryTab() {
                   className="mt-4"
                 />
               )}
-            </>
+            </div>
           )}
         </div>
       </Modal>

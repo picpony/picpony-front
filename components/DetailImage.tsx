@@ -12,6 +12,7 @@ import {
 import { MdFullscreen } from 'react-icons/md';
 import IconButton from './IconButton';
 import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
+import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
 import { warmImageHeroFrame } from '@/lib/hero';
 import { ICON } from '@/lib/icons';
 
@@ -38,6 +39,10 @@ type DetailImageProps = {
   onTargetChange?: DetailMediaTargetCallback;
   onPreviewReady?: DetailMediaReadyCallback;
   onFinalReady?: DetailMediaReadyCallback;
+  /** The preview will never paint. Lets the route drop `heroActive` and show the final. */
+  onPreviewFailed?: (surfaceId: string) => void;
+  /** Neither layer will ever paint. The terminal answer the handoff waits for. */
+  onMediaUnavailable?: (surfaceId: string) => void;
   onOpen: () => void;
 };
 
@@ -113,6 +118,8 @@ export default function DetailImage({
   onTargetChange,
   onPreviewReady,
   onFinalReady,
+  onPreviewFailed,
+  onMediaUnavailable,
   onOpen,
 }: DetailImageProps) {
   const targetRef = useRef<HTMLDivElement>(null);
@@ -121,8 +128,13 @@ export default function DetailImage({
   const surfaceIdRef = useRef(surfaceId);
   const onPreviewReadyRef = useRef(onPreviewReady);
   const onFinalReadyRef = useRef(onFinalReady);
+  const onPreviewFailedRef = useRef(onPreviewFailed);
+  const onMediaUnavailableRef = useRef(onMediaUnavailable);
   const previewReadyRef = useRef(false);
   const finalReadyRef = useRef(false);
+  const previewFailedRef = useRef(false);
+  const finalFailedRef = useRef(false);
+  const previewFallbackRef = useRef<number | null>(null);
   const publishedPreviewSurfaceRef = useRef<string | null>(null);
   const publishedFinalSurfaceRef = useRef<string | null>(null);
   const hasPreview = Boolean(previewSrc);
@@ -163,10 +175,54 @@ export default function DetailImage({
     callback(readySurfaceId, target);
   }, []);
 
+  const clearPreviewFallback = useCallback(() => {
+    if (previewFallbackRef.current === null) return;
+    window.clearTimeout(previewFallbackRef.current);
+    previewFallbackRef.current = null;
+  }, []);
+
   const markPreviewReady = useCallback(() => {
+    clearPreviewFallback();
     previewReadyRef.current = true;
     publishPreviewReady();
-  }, [publishPreviewReady]);
+  }, [clearPreviewFallback, publishPreviewReady]);
+
+  /**
+   * The preview will never paint: it errored, or it went quiet past the grace above.
+   *
+   * Two things follow. The route is told first so `heroActive` drops and the CSS swap puts the
+   * *final* layer on top — the same path `revealedHeroSeedAt` takes on a normal open — and then
+   * paintability is published. If neither layer will ever paint, that is the terminal answer the
+   * flight is waiting for and it goes out instead.
+   *
+   * **The order is the call order and nothing stronger, which is worth stating rather than
+   * implying.** `onPreviewFailed` schedules a React state update while `markPreviewReady()`
+   * publishes synchronously, so the controller can learn the preview is paintable in the same
+   * task, while `data-image-detail-hero-active` is still `'true'` and the final layer is still at
+   * `opacity: 0`. The handoff frame is an rAF later, which is usually enough and is not
+   * guaranteed to be. Making it a guarantee means waiting for the flag to land before publishing,
+   * i.e. another round trip on the failure path — against a 30-second hang, one possibly blank
+   * frame is the trade taken here.
+   */
+  const markPreviewFailed = useCallback(() => {
+    clearPreviewFallback();
+    if (previewFailedRef.current) return;
+    previewFailedRef.current = true;
+    const failedSurfaceId = surfaceIdRef.current;
+    if (failedSurfaceId) onPreviewFailedRef.current?.(failedSurfaceId);
+    if (finalReadyRef.current) markPreviewReady();
+    else if (finalFailedRef.current && failedSurfaceId) {
+      onMediaUnavailableRef.current?.(failedSurfaceId);
+    }
+  }, [clearPreviewFallback, markPreviewReady]);
+
+  /** A paintable preview is still a handoff target, so only escalate when there is none. */
+  const markFinalFailed = useCallback(() => {
+    finalFailedRef.current = true;
+    const failedSurfaceId = surfaceIdRef.current;
+    if (!failedSurfaceId || previewReadyRef.current) return;
+    onMediaUnavailableRef.current?.(failedSurfaceId);
+  }, []);
 
   const markFinalReady = useCallback(() => {
     const target = targetRef.current;
@@ -174,8 +230,20 @@ export default function DetailImage({
     finalReadyRef.current = true;
     target.setAttribute('data-image-detail-final-ready', 'true');
     publishFinalReady();
-    if (!sourceRef.current.previewSrc) markPreviewReady();
-  }, [markPreviewReady, publishFinalReady]);
+    /* A decoded final is enough on its own when there is no preview to wait for, or when
+       the one there was has already failed. Otherwise it starts the grace — this used to
+       be `if (!previewSrc)` and nothing else, which is what let a 404'd preview hold the
+       flight for the full `HERO_DETAIL_ROUTE_TIMEOUT_MS` while the picture the user asked
+       for sat decoded underneath it. */
+    if (!sourceRef.current.previewSrc || previewFailedRef.current) {
+      markPreviewReady();
+      return;
+    }
+    if (previewReadyRef.current || previewFallbackRef.current !== null) return;
+    previewFallbackRef.current = window.setTimeout(markPreviewFailed, HERO_PREVIEW_FALLBACK_MS);
+  }, [markPreviewFailed, markPreviewReady, publishFinalReady]);
+
+  useEffect(() => clearPreviewFallback, [clearPreviewFallback]);
 
   useLayoutEffect(() => {
     const target = targetRef.current;
@@ -184,10 +252,13 @@ export default function DetailImage({
 
     if (previous.previewSrc !== previewSrc) {
       previewReadyRef.current = false;
+      previewFailedRef.current = false;
+      clearPreviewFallback();
       publishedPreviewSurfaceRef.current = null;
     }
     if (previous.finalSrc !== finalSrc) {
       finalReadyRef.current = false;
+      finalFailedRef.current = false;
       publishedFinalSurfaceRef.current = null;
       target.removeAttribute('data-image-detail-final-ready');
       if (!previewSrc) {
@@ -197,7 +268,7 @@ export default function DetailImage({
     }
     sourceRef.current = { previewSrc, finalSrc };
     if (!previewSrc && finalReadyRef.current) previewReadyRef.current = true;
-  }, [finalSrc, previewSrc]);
+  }, [clearPreviewFallback, finalSrc, previewSrc]);
 
   useLayoutEffect(() => {
     if (mountFinal) return;
@@ -209,6 +280,8 @@ export default function DetailImage({
   useLayoutEffect(() => {
     onPreviewReadyRef.current = onPreviewReady;
     onFinalReadyRef.current = onFinalReady;
+    onPreviewFailedRef.current = onPreviewFailed;
+    onMediaUnavailableRef.current = onMediaUnavailable;
     surfaceIdRef.current = surfaceId;
     if (!surfaceId) {
       publishedPreviewSurfaceRef.current = null;
@@ -220,6 +293,8 @@ export default function DetailImage({
   }, [
     finalSrc,
     onFinalReady,
+    onMediaUnavailable,
+    onPreviewFailed,
     onPreviewReady,
     previewSrc,
     publishFinalReady,
@@ -344,6 +419,10 @@ export default function DetailImage({
           fetchPriority="high"
           unoptimized={shouldBypassImageOptimization(finalSrc)}
           onLoad={markFinalDecoded}
+          /* `next/image` re-assigns `src` to itself so a lost error re-fires, and there
+             was nothing here to receive it — so a final that 404s was indistinguishable
+             from one still in flight. */
+          onError={markFinalFailed}
           data-image-detail-layer="final"
           className="image-detail-final pointer-events-none absolute inset-0 z-0 block h-full w-full object-contain"
         />
@@ -359,6 +438,7 @@ export default function DetailImage({
           fetchPriority="high"
           unoptimized
           onLoad={markPreviewDecoded}
+          onError={markPreviewFailed}
           data-image-detail-layer="preview"
           // Absolute so preloading final never shifts the box.
           className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"

@@ -135,7 +135,7 @@ function SearchPageContent() {
     setInputValue(newQuery);
     setCustomResults(null);
     setPage(1);
-    router.push(`/search?q=${encodeURIComponent(newQuery)}`);
+    router.push(`/search?q=${encodeURIComponent(newQuery)}`, { scroll: false });
   }, [
     advUpvoteOp,
     advUpvoteVal,
@@ -273,10 +273,10 @@ function SearchPageContent() {
     if (q || inputValue) {
       setInputValue('');
       setPage(1);
-      router.push('/search');
+      router.push('/search', { scroll: false });
       return;
     }
-    router.push('/');
+    router.push('/', { scroll: false });
   }, [customResults, inputValue, q, router]);
 
   /* Escape leaves the page — but only once nothing nearer owns the key. The
@@ -429,9 +429,9 @@ function SearchPageContent() {
         setPage(1);
         const sortParam =
           sortBy !== 'created_at' || sortDir !== 'desc' ? `&sort=${sortBy}&dir=${sortDir}` : '';
-        router.push(`/search?q=${encodeURIComponent(formattedQuery)}${sortParam}`);
+        router.push(`/search?q=${encodeURIComponent(formattedQuery)}${sortParam}`, { scroll: false });
       } else {
-        router.push('/');
+        router.push('/', { scroll: false });
       }
     },
     [inputValue, router, sortBy, sortDir],

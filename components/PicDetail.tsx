@@ -210,8 +210,18 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     regular: INITIAL_TAG_LIMIT,
   });
   const [detailError, setDetailError] = useState<{ id: number; error: Error } | null>(null);
+  /* Both keyed by image id for the same reason `finalReadyId` is: the route is reused
+     across detail↔detail navigations, so a per-image answer must not outlive its image. */
+  const [previewFailedId, setPreviewFailedId] = useState<number | null>(null);
+  const [mediaUnavailableId, setMediaUnavailableId] = useState<number | null>(null);
+  const previewFailed = previewFailedId === imageId;
+  const mediaUnavailable = mediaUnavailableId === imageId;
+  /* `!previewFailed` is the third term, and it is what turns a dead preview into a
+     visible final rather than a stalled handoff: the preview layer is `z-10` and opaque
+     while `heroActive`, so dropping the flag is the CSS swap — the same one
+     `revealedHeroSeedAt` performs on a normal open. */
   const isHeroPreview = Boolean(
-    heroSeed?.image.id === imageId && heroSeed.createdAt !== revealedHeroSeedAt,
+    heroSeed?.image.id === imageId && heroSeed.createdAt !== revealedHeroSeedAt && !previewFailed,
   );
   // A Hero snapshot is already a confirmed navigation intent. Start the final
   // request on the first route render; input activity only controls publishing.
@@ -337,6 +347,28 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     [surfaceId],
   );
 
+  /* Both are overlay-only in practice, and that is a property of `surfaceId` rather than of
+     these guards: it is passed down only in the overlay presentation, and the media components
+     will not report a failure without one. That is the right scope — the failure they answer is a
+     flight stranded waiting for a paintable layer, and a cold `/pic/x` has no flight and no hero
+     seed, so its preview layer is never the visual authority. The id comparison is what keeps a
+     stale surface's report from landing on the live one. */
+  const handlePreviewFailed = useCallback(
+    (ownerSurfaceId: string) => {
+      if (ownerSurfaceId !== surfaceId) return;
+      setPreviewFailedId(imageId);
+    },
+    [imageId, surfaceId],
+  );
+
+  const handleMediaUnavailable = useCallback(
+    (ownerSurfaceId: string) => {
+      if (ownerSurfaceId !== surfaceId) return;
+      setMediaUnavailableId(imageId);
+    },
+    [imageId, surfaceId],
+  );
+
   useLayoutEffect(() => {
     if (presentation !== 'overlay') return;
     const overlay = overlayRef.current;
@@ -367,10 +399,17 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
    * blank. Saying so explicitly lets the container transform finish and the error surface in
    * its place, which is what every other resolution does.
    */
-  /* The same condition the failure branch renders on: after the loading check, `error ||
-     !image` can only be true when `error` is set. Written as the one term so the flag and
-     the branch cannot drift apart. */
-  const resolvedWithoutMedia = presentation === 'overlay' && Boolean(error);
+  /* Two terms, because they answer for different failures and neither implies the other.
+     `error` is the detail *record* failing, and it can only be set when there is no hero
+     seed (see the fetch below) — so during a flight, which is the one time the flag is
+     load-bearing, it is unreachable by construction and this used to be the whole
+     condition. `mediaUnavailable` is both media layers reporting that they will never
+     paint, which is the failure that actually strands a flight.
+     So the flag and the failure branch no longer share one expression: a record can
+     resolve with no paintable media, and the branch below renders the picture's box
+     rather than the error state for that case. That is deliberate — a seeded image with
+     dead media is not a page that failed to load. */
+  const resolvedWithoutMedia = presentation === 'overlay' && (Boolean(error) || mediaUnavailable);
   useEffect(() => {
     if (!resolvedWithoutMedia) return;
     markImageHeroRouteResolvedWithoutMedia(surfaceId);
@@ -1206,6 +1245,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               onTargetChange={handleDetailTargetChange}
               onPreviewReady={handlePreviewPaintable}
               onFinalReady={handleFinalReady}
+              onPreviewFailed={handlePreviewFailed}
+              onMediaUnavailable={handleMediaUnavailable}
             />
           ) : (
             <DetailImage
@@ -1223,6 +1264,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
               onTargetChange={handleDetailTargetChange}
               onPreviewReady={handlePreviewPaintable}
               onFinalReady={handleFinalReady}
+              onPreviewFailed={handlePreviewFailed}
+              onMediaUnavailable={handleMediaUnavailable}
               onOpen={handleOpenLightbox}
             />
           )}
@@ -1610,7 +1653,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             variant="accent"
             fullWidth
             onClick={() => {
-              router.push(`/search?q=${encodeURIComponent(tagInfoModal.tag)}`);
+              router.push(`/search?q=${encodeURIComponent(tagInfoModal.tag)}`, { scroll: false });
               setTagInfoModal((prev) => ({ ...prev, open: false }));
             }}
           >

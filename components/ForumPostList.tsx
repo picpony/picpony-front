@@ -72,7 +72,12 @@ export default memo(function ForumPostList({
   }
 
   return (
-    <div className={className}>
+    /* `data-pagination-anchor` on the list root, so turning a page lands on the first new
+       row. Without it `Pagination` fell back to the top of the page — which on the home
+       route's forum pane meant the two tabs of one screen paged differently, since the
+       gallery pane has an anchor and this did not. It is here rather than on the pager's own
+       wrapper because the anchor is meant to be the top of the *list*. */
+    <div data-pagination-anchor className={className}>
       <div className="mb-8">
         {posts.length === 0 ? (
           <EmptyState

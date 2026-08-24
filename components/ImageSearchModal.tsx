@@ -72,7 +72,7 @@ export default function ImageSearchModal({
         showToast(`找到 ${data.total} 张相似图片`, 'success');
         onClose();
       } else if (data && data.searchQuery) {
-        router.push(`/search?q=${encodeURIComponent(data.searchQuery)}`);
+        router.push(`/search?q=${encodeURIComponent(data.searchQuery)}`, { scroll: false });
         onClose();
       } else {
         showToast('未能找到相似图片', 'info');

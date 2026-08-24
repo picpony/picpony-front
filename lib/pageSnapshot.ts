@@ -113,7 +113,46 @@ function offscreenPaths(source: HTMLElement, viewTop: number, viewBottom: number
  * Returns `null` when the subtree is too large to be worth cloning.
  */
 export function captureVisualClone(source: HTMLElement, host: HTMLElement): RouteSnapshot | null {
-  if (source.getElementsByTagName('*').length > MAX_CLONE_NODES) return null;
+  /* Which tab panes are `display: none`, found before the budget below rather than after.
+   *
+   * `STRIP_ATTRS` removes `data-tab-panel` and every `data-tab-pane*` marker, so a query
+   * cannot resolve into the clone — and in doing so it removes the only thing that was
+   * hiding the inactive pane. The panel stops being a grid, the two panes stop sharing a
+   * cell, and the clone stacks them as ordinary blocks with nothing hidden. `clip-path`
+   * then keeps whatever band was on screen, which is now always the first pane in
+   * document order: leave the forum tab for /search and the clone that slides out is the
+   * *gallery*. So the state has to be baked in before the markers go.
+   *
+   * They are pruned to 0×0 spacers rather than carried forward as an inline
+   * `display: none`, which is what this used to do. A hidden pane contributes nothing to
+   * layout either way, but it is not *cloned* this way — and the home route mounts its
+   * forum pane ahead of the tap, so `cloneNode` was copying a whole second page and then
+   * hiding it. That subtree also counted against `MAX_CLONE_NODES`, and going over the
+   * budget is not a degradation but a cliff: the capture returns `null` and the route
+   * change has no transition at all.
+   *
+   * Computed `display` off the live source rather than re-deriving the CSS here: the rule
+   * has four conditions across two selectors and a duplicate would drift the first time
+   * either is touched.
+   */
+  const hiddenPanes: HTMLElement[] = [];
+  for (const panel of source.querySelectorAll<HTMLElement>('[data-tab-panel]')) {
+    for (const pane of panel.querySelectorAll<HTMLElement>(':scope > [data-tab-pane]')) {
+      if (getComputedStyle(pane).display !== 'none') continue;
+      /* Nested groups exist — the admin console has a `TabPanes` inside one of its own panes —
+         and a pane inside a hidden pane computes `display: none` from the same rule. Both would
+         be collected, and the discount below would then subtract the inner subtree twice, which
+         under-reports the count the cap is there to enforce. The outer one already accounts for
+         everything under it. */
+      if (hiddenPanes.some((outer) => outer.contains(pane))) continue;
+      hiddenPanes.push(pane);
+    }
+  }
+  let nodeCount = source.getElementsByTagName('*').length;
+  /* Descendants only. The pane element itself survives the prune as a 0×0 spacer, so it is still
+     a node in the clone and counting it as saved is the same under-report from the other side. */
+  for (const pane of hiddenPanes) nodeCount -= pane.getElementsByTagName('*').length;
+  if (nodeCount > MAX_CLONE_NODES) return null;
 
   const sourceRect = source.getBoundingClientRect();
   if (sourceRect.width === 0 || sourceRect.height === 0) return null;
@@ -129,38 +168,18 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
     hostRect.top - PRUNE_MARGIN_PX,
     hostRect.bottom + PRUNE_MARGIN_PX,
   );
+  /* Appended to the same list, so both kinds of removal go through one pass and a hidden
+     pane inside an already-pruned ancestor resolves to null, which is correct. */
+  for (const pane of hiddenPanes) {
+    const path = pathTo(source, pane);
+    if (path) prune.push(path);
+  }
   const pruneSizes = prune.map((path) => {
     const node = nodeAt(source, path) as HTMLElement | null;
     const rect = node?.getBoundingClientRect();
     return { width: rect?.width ?? 0, height: rect?.height ?? 0 };
   });
   const sourceOpacity = getComputedStyle(source).opacity;
-
-  /* Which tab panes are actually on screen.
-   *
-   * `STRIP_ATTRS` removes `data-tab-panel` and every `data-tab-pane*` marker, so
-   * that a query cannot resolve into the clone — and in doing so it removes the
-   * only thing that was hiding the inactive pane. The panel stops being a grid,
-   * the two panes stop sharing a cell, and the clone stacks them as ordinary
-   * blocks with nothing hidden. `clip-path` then keeps whatever band was on
-   * screen, which is now always the first pane in document order: leave the
-   * forum tab for /search and the clone that slides out is the *gallery*.
-   *
-   * So the state is baked in before the markers go. Computed `display` off the
-   * live source rather than re-deriving the CSS here: the rule has four
-   * conditions across two selectors and a duplicate would drift the first time
-   * either is touched. Read in the read phase, applied after the prune, which
-   * is one-for-one and leaves these paths valid.
-   */
-  const hiddenPanePaths: number[][] = [];
-  for (const panel of source.querySelectorAll<HTMLElement>('[data-tab-panel]')) {
-    for (const pane of panel.querySelectorAll<HTMLElement>(':scope > [data-tab-pane]')) {
-      if (getComputedStyle(pane).display === 'none') {
-        const path = pathTo(source, pane);
-        if (path) hiddenPanePaths.push(path);
-      }
-    }
-  }
 
   /* Indexed against `getElementsByTagName('*')` on the untouched source. The
      clone is an exact copy at that moment, so the same index identifies the
@@ -205,21 +224,22 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
     img.removeAttribute('srcset');
     img.removeAttribute('sizes');
     img.setAttribute('loading', 'eager');
-    img.setAttribute('decoding', 'sync');
+    /* `async`, not `sync`. This runs inside `RouteCrossFade`'s `componentDidUpdate`, i.e.
+       the same commit as the incoming page's first paint, and `sync` made every surviving
+       thumbnail decode on that frame — a 50-card gallery's worth of blocking decodes at
+       the one moment the main thread has none to spare. The bitmap is already in the
+       decode cache at the width the clone asks for, because `src` is the source's own
+       `currentSrc` with `srcset` stripped and the clone is laid out at the source's width,
+       so what `sync` was buying was a guarantee the cache already provides. The outgoing
+       leg is a 100ms opacity fade; a first frame that is one image short of complete is
+       cheaper than a long task. */
+    img.setAttribute('decoding', 'async');
   }
 
   // Paths still align: every replacement above was one-for-one.
   prune.forEach((path, i) => {
     const node = nodeAt(clone, path);
     node?.replaceWith(spacer(pruneSizes[i]));
-  });
-
-  // Carry the panel's own hiding forward as an inline style, before the markers
-  // that produced it are stripped below. A path landing inside an already-pruned
-  // subtree resolves to null, which is correct — that pane is a spacer now.
-  hiddenPanePaths.forEach((path) => {
-    const pane = nodeAt(clone, path) as HTMLElement | null;
-    if (pane) pane.style.display = 'none';
   });
 
   /* A ripple mid-press must not be carried into the clone.

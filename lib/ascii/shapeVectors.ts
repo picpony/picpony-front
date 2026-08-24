@@ -66,7 +66,15 @@ const SAMPLES: readonly (readonly [number, number])[] = [
 ];
 export const SHAPE_DIMENSIONS = SAMPLES.length;
 
-/** Raster resolution the glyphs are measured at. Higher than the cell, so coverage is smooth. */
+/**
+ * Raster resolution the glyphs are measured at. Higher than the cell, so coverage is smooth.
+ *
+ * 24x56 is 2.33:1 against the shipped cell's 2.29 (7.0 x 16 CSS px after the device-pixel snap),
+ * and the scale that matters is the vertical one — `MEASURE_H / cell.h` = 3.5 — because that is
+ * what the glyph is drawn at. The 2% of horizontal slack it leaves puts the advance box at 24.5px
+ * in a 24px raster; the sampling circles are inset by 0.27 and 0.73 of the width with a 0.3
+ * radius, so nothing reads past 24.
+ */
 const MEASURE_W = 24;
 const MEASURE_H = 56;
 
@@ -76,7 +84,8 @@ export type GlyphTable = {
   vectors: Float32Array;
 };
 
-let table: GlyphTable | null = null;
+/** One table per (weight, spec, cell) — see `getGlyphTable`'s key. */
+const tables = new Map<string, GlyphTable>();
 
 /**
  * Measure every glyph once, in the font that actually loaded.
@@ -84,14 +93,65 @@ let table: GlyphTable | null = null;
  * Done from the DOM rather than shipped as a constant on purpose: the vectors are a property of
  * the *rendered* face, and this app's mono stack can resolve to Geist Mono or to a fallback. A
  * table baked at build time would describe a font the visitor may not have.
+ *
+ * **The glyph has to be drawn at the cell's scale, and for a long time it was not.** The raster
+ * is `MEASURE_W x MEASURE_H` because the six sampling circles need pixels to average over — it
+ * is the *cell*, enlarged. So the glyph must be enlarged with it. It was drawn at the computed
+ * `font-size` (11px) into a 24x56 box, i.e. at about a third of the size the box represents,
+ * while the baseline *was* scaled — so it sat in the lower-left corner of a raster the circles
+ * covered the whole of. Measured in a browser on the real face: four of the six components came
+ * out **exactly 0 for all 69 glyphs** (the right column fell outside the circles on x, the top
+ * one on y), 136 of 414 entries non-zero — 69 and 414 rather than the set's 70 and 420 because the
+ * leading blank's six components are zero by construction and are not part of the question. The per-component normalisation below then divides
+ * those by a zero maximum and emits zero, and `matchGlyph`'s distance term for a component that
+ * is zero in every glyph is identical across glyphs and cannot affect the argmin. So the lookup
+ * was choosing on **two** left-column samples: a two-point density ramp, which is precisely the
+ * "treat the character as a pixel" pipeline the block at the top of this file says it replaced.
+ * At the correct scale all six carry signal and 387 of 414 entries are non-zero.
+ *
+ * `cell` is therefore required, and the two derived numbers matter as much as the size: x starts
+ * at 0, because a monospace advance times the scale is `MEASURE_W` to within 2% and any nudge is a
+ * percentage of the cell rather than a pixel; and the baseline comes from the face's own ascent
+ * plus the line box's half-leading, rather than the 0.78 that was hard-coded for one size.
  */
-export function getGlyphTable(fontSpec: string): GlyphTable | null {
-  if (table) return table;
+export function getGlyphTable(
+  fontSpec: string,
+  cell: { w: number; h: number },
+  weight = '',
+): GlyphTable | null {
+  /* Keyed, because none of the three inputs is a constant: the cell is snapped to whole device
+     pixels and the weight steps with the ratio, so a window moved between a Retina and a 1x
+     display asks for a different table. The single unkeyed slot this had meant the first ratio
+     seen won for the session. */
+  const key = `${weight}|${fontSpec}|${cell.w}x${cell.h}`;
+  const cached = tables.get(key);
+  if (cached) return cached;
   const canvas = document.createElement('canvas');
   canvas.width = MEASURE_W;
   canvas.height = MEASURE_H;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) return null;
+
+  const scale = MEASURE_H / cell.h;
+  const size = parseFloat(fontSpec) || 0;
+  if (!(size > 0) || !(scale > 0)) return null;
+  const family = fontSpec.slice(fontSpec.indexOf(' ') + 1);
+  /* The weight is a separate argument rather than part of `fontSpec`, and that is not fussiness:
+     `size` above is `parseFloat` of the spec, so a leading `560` would be read as the font size.
+     It has to be *in* the shorthand though — the CSS `font` shorthand resets every subproperty it
+     omits, so a spec without it measures the face at 400 while `.ascii-plate` paints 400/500/560
+     by device ratio, i.e. the vectors would describe a face up to 160 units lighter than the one
+     on screen. */
+  const scaled = `${weight} ${size * scale}px ${family}`.trim();
+
+  /* Where the baseline sits in the line box, measured rather than assumed: half the leading
+     the line box adds, plus the face's own ascent. `fontBoundingBox*` is the face's metrics,
+     not the drawn glyph's, so it is the same for every character. */
+  context.font = scaled;
+  const metrics = context.measureText('0');
+  const ascent = metrics.fontBoundingBoxAscent || size * scale * 0.98;
+  const descent = metrics.fontBoundingBoxDescent || size * scale * 0.24;
+  const baseline = Math.max(0, (MEASURE_H - (ascent + descent)) / 2) + ascent;
 
   const vectors = new Float32Array(GLYPHS.length * SHAPE_DIMENSIONS);
   const radius = SAMPLE_R * MEASURE_W;
@@ -99,11 +159,10 @@ export function getGlyphTable(fontSpec: string): GlyphTable | null {
 
   for (let g = 0; g < GLYPHS.length; g += 1) {
     context.clearRect(0, 0, MEASURE_W, MEASURE_H);
-    context.font = fontSpec;
+    context.font = scaled;
     context.fillStyle = '#fff';
     context.textBaseline = 'alphabetic';
-    // Baseline at 78% of the box, which is where a 16px line box puts an 11px face.
-    context.fillText(GLYPHS[g], 1, MEASURE_H * 0.78);
+    context.fillText(GLYPHS[g], 0, baseline);
     const pixels = context.getImageData(0, 0, MEASURE_W, MEASURE_H).data;
 
     for (let s = 0; s < SHAPE_DIMENSIONS; s += 1) {
@@ -146,8 +205,9 @@ export function getGlyphTable(fontSpec: string): GlyphTable | null {
     }
   }
 
-  table = { glyphs: GLYPHS, vectors };
-  return table;
+  const built = { glyphs: GLYPHS, vectors };
+  tables.set(key, built);
+  return built;
 }
 
 /**

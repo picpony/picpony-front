@@ -47,6 +47,7 @@ import {
 import HeroStage from '@/components/HeroStage';
 import Badge from '@/components/Badge';
 import RouteCrossFade from '@/components/RouteCrossFade';
+import RouteScrollMemory from '@/lib/scrollMemory';
 import Button from '@/components/Button';
 import Tabs from '@/components/Tabs';
 import IconButton, { iconButtonClasses } from '@/components/IconButton';
@@ -65,7 +66,7 @@ function SearchBar() {
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
-    router.push('/search');
+    router.push('/search', { scroll: false });
   };
 
   return (
@@ -592,7 +593,7 @@ export default function AppLayout({
     clearSnapshots();
     setUserInfo(null);
     setIsLogoutDialogOpen(false);
-    router.push('/');
+    router.push('/', { scroll: false });
   };
 
   const handleLogoutCancel = () => {
@@ -650,6 +651,7 @@ export default function AppLayout({
             icon={<MdMenu size={ICON.standard} />}
           />
           <Link
+            scroll={false}
             href="/"
             aria-label="PicPony 主页"
             /* Visible on a phone too, which it was not — `hidden sm:flex` cost
@@ -721,6 +723,7 @@ export default function AppLayout({
               count, so the badge is decorative and can sit outside. */}
           <span className="relative ml-1 flex shrink-0">
             <Link
+              scroll={false}
               href="/messages"
               aria-label={totalUnread > 0 ? `消息（${totalUnread} 条未读）` : '消息'}
               data-ripple
@@ -846,6 +849,7 @@ export default function AppLayout({
               <div className="p-3 pb-0">
                 {userInfo ? (
                   <Link
+                    scroll={false}
                     href={`/user/${userInfo.id}`}
                     onClick={handleMobileNavigation}
                     data-ripple
@@ -1043,11 +1047,11 @@ export default function AppLayout({
                           <Logo className="h-8 w-auto text-outline" />
                           <nav aria-label="站内导航" className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             
-                            <Link href="/about" className="transition-ui hover:text-on-surface hover:underline">
+                            <Link scroll={false} href="/about" className="transition-ui hover:text-on-surface hover:underline">
                               关于本站
                             </Link>
                             <span aria-hidden="true" className="text-outline">·</span>
-                            <Link href="/policy" className="transition-ui hover:text-on-surface hover:underline">
+                            <Link scroll={false} href="/policy" className="transition-ui hover:text-on-surface hover:underline">
                               声明与政策
                             </Link>
                           </nav>
@@ -1067,6 +1071,11 @@ export default function AppLayout({
                   className="image-hero-gallery-anchor"
                 />
               </main>
+              {/* The sibling immediately above `RouteCrossFade`, so the ordering between the two
+                  is stated rather than incidental: within one commit phase React runs siblings in
+                  render order, and the clone's own `getSnapshotBeforeUpdate` runs before either.
+                  See `lib/scrollMemory.ts`. */}
+              <RouteScrollMemory />
               <RouteCrossFade pathname={backgroundPathname} enabled={crossFadeEnabled} />
               {/* Where `PageBack` lands.
                   The back affordance is chrome, not content. Rendered inside

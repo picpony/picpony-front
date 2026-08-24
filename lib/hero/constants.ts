@@ -71,6 +71,36 @@ export const SNAPSHOT_TTL = 2 * 60 * 1000;
  */
 export const HERO_INPUT_TRANSFER_QUIET_MS = 320;
 
+/**
+ * Overall budget for the input handover, after which the handoff proceeds anyway.
+ *
+ * `HERO_INPUT_TRANSFER_QUIET_MS` is a *quiet* window, and a wheel stream refreshes
+ * `wheelActive` every 160ms — so a trackpad's inertial tail delivers events closer
+ * together than 320ms and the quiet window never opens. Without a ceiling the session
+ * parks in `opening.handoff` for as long as the finger keeps the stream alive, and that
+ * phase withholds the detail body and comments (`isPublicationQuiet`), so the page
+ * arrives visibly complete above the fold and permanently empty below it. Opening a
+ * picture right after a fling reproduces it with no error involved.
+ *
+ * Losing the tail of one stream is the smaller defect: it is 160ms of momentum against
+ * a page that never finishes. The budget is handed *to* the quiet wait rather than checked
+ * around it — a deadline outside an `await` that never resolves is not a deadline.
+ */
+export const HERO_INPUT_TRANSFER_MAX_MS = 2000;
+
+/**
+ * Grace after the final media decodes before a still-silent preview is declared failed.
+ *
+ * The handoff needs a paintable preview, and the preview is the visual authority while
+ * `heroActive` — so a decoded final image cannot simply stand in for it, or the handoff
+ * frame lands on a box whose visible layer has not painted. But a preview request that
+ * neither loads nor errors has no other terminal answer, and one that 404s only has one
+ * because `onError` was added; this covers both. One step on M3's duration scale, and
+ * longer than the 250ms leg plus a frame, so it can never fire while the flight is the
+ * thing being waited on.
+ */
+export const HERO_PREVIEW_FALLBACK_MS = 320;
+
 // ---------------------------------------------------------------------------
 // Media box geometry — the Stage landing target and the routed detail media
 // MUST render pixel-identical boxes, so both derive from these.
@@ -788,7 +818,22 @@ export const PULL_RELEASE_RESPONSE: SpringResponse = {
 // Frame capture
 // ---------------------------------------------------------------------------
 
-export const HERO_FRAME_CACHE_LIMIT = 4;
+/**
+ * How many captured frames the LRU holds.
+ *
+ * Memory is bounded separately, by `HERO_FRAME_CACHE_MAX_PIXELS` — so this is a *count* limit,
+ * and the count is what evicts for a small capture: at 4, scrolling past five warmed cards
+ * guaranteed that the one you then tapped had to be re-captured synchronously in the press
+ * handler, which is the mechanism behind the press-time spike being intermittent rather than
+ * constant.
+ *
+ * **6 is not always reachable, and the arithmetic is worth having here.** The pixel budget is
+ * 2,654,208 (`HERO_FRAME_MAX_DIMENSION²·2`), so it holds six frames only while each stays under
+ * ~442k pixels: 13 frames of a 400×500 capture, but only 5 of a 640×800 one. Raising the count
+ * therefore helps the 1x srcset picks it was measured on and is capped by memory on the 2x ones —
+ * which is the correct order of priority, since the budget is the thing protecting a phone.
+ */
+export const HERO_FRAME_CACHE_LIMIT = 6;
 export const HERO_FRAME_MAX_DIMENSION = 1152;
 export const HERO_FRAME_MAX_DPR = 1.875;
 

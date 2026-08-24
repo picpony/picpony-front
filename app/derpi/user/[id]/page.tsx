@@ -95,7 +95,7 @@ export default function DerpiUserPage() {
 
   const handleUploadClick = useCallback(
     (id: number) => {
-      router.push(`/pic/${id}`);
+      router.push(`/pic/${id}`, { scroll: false });
     },
     [router],
   );
@@ -270,7 +270,7 @@ export default function DerpiUserPage() {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <Button
-              onClick={() => router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`)}
+              onClick={() => router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`, { scroll: false })}
               variant="filled"
               size="lg"
               className="flex-1"
@@ -306,7 +306,9 @@ export default function DerpiUserPage() {
                 ))}
               </div>
             ) : uploads.length > 0 ? (
-              <>
+              /* The anchor wraps the grid *and* its pager: `Pagination` reaches it with
+                 `closest()`, so one that sits beside the pager is one it cannot see. */
+              <div data-pagination-anchor>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                   {uploads.map((img) => {
                     const thumbUrl =
@@ -362,7 +364,6 @@ export default function DerpiUserPage() {
                   })}
                 </div>
 
-                {/* Pagination */}
                 {totalPages > 1 && (
                   <Pagination
                     currentPage={uploadsPage}
@@ -373,7 +374,7 @@ export default function DerpiUserPage() {
                     }}
                   />
                 )}
-              </>
+              </div>
             ) : (
               <EmptyState
                 size="pane"

@@ -196,7 +196,7 @@ export default function UploadPage() {
         description="发布图片需要绑定 Derpibooru API Key，请先在设置中配置"
         action={
           <Button
-            onClick={() => router.push('/settings')}
+            onClick={() => router.push('/settings', { scroll: false })}
             variant="filled"
             icon={<MdOpenInNew size={ICON.dense} />}
           >
@@ -244,7 +244,7 @@ export default function UploadPage() {
           </p>
           <div className="flex items-center justify-center gap-3">
             <Button
-              onClick={() => router.push(`/pic/${uploadResult.id}`)}
+              onClick={() => router.push(`/pic/${uploadResult.id}`, { scroll: false })}
               variant="filled"
               icon={<MdOpenInNew size={ICON.dense} />}
             >

@@ -46,8 +46,9 @@ export type ImageHeroRuntimeState = {
   phase: HeroControllerPhase;
   sessionId: number | null;
   imageId: number | null;
+  /* No `interactionQuiet` here. It was published and never read — see the
+     `subscribeHeroInteraction` call in the controller for what that cost. */
   stage: ImageHeroStageState;
-  interactionQuiet: boolean;
   background: ImageHeroBackgroundLocation | null;
 };
 

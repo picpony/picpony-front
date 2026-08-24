@@ -519,6 +519,7 @@ export default function UserProfilePage() {
               
               {!isOwnProfile && currentUserId !== null && (
                 <Link
+                  scroll={false}
                   href={`/messages?to=${profile.id}`}
                   className={buttonClasses({ variant: 'filled' })}
                 >
@@ -605,9 +606,11 @@ export default function UserProfilePage() {
               </a>
             </div>
           )}
-          {/* The anchor is here rather than at the top of the page: turning a
-              page inside any tab should land on the first new row, not replay
-              the banner and the whole profile header. */}
+          {/* The anchor encloses the tab row *and* the panes, which is what makes it reach
+              the four pagers inside them: `Pagination` finds it with `closest()`, so an
+              anchor beside a pager is an anchor no pager can see. Landing on the tab row
+              rather than at the top of the page is the point — a page turn inside a tab
+              should not replay the banner, the name and the level bar. */}
           <div data-pagination-anchor>
             <Tabs<ProfileTab>
               tabs={navTabs}
@@ -616,7 +619,6 @@ export default function UserProfilePage() {
               label="用户资料标签页"
               className="mb-6"
             />
-          </div>
           {/* `TabPanes`, not the `data-tab-panel` / `data-tab-pane` trio written
               out by hand — and the difference is not only tidiness. Written out,
               this was passing `lean` by default, and `lean` requires the blocks
@@ -644,6 +646,7 @@ export default function UserProfilePage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {uploads.map((item) => (
                       <Link
+                        scroll={false}
                         key={item.id}
                         href={`/pic/${item.id}`}
                         className="block relative aspect-square rounded-lg overflow-hidden bg-surface-container-high transition-ui group"
@@ -704,6 +707,7 @@ export default function UserProfilePage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {faveImages.map((img) => (
                       <Link
+                        scroll={false}
                         key={img.id}
                         href={`/pic/${img.id}`}
                         className="block relative aspect-square rounded-lg overflow-hidden bg-surface-container-high transition-ui group"
@@ -774,6 +778,7 @@ export default function UserProfilePage() {
                     {' '}
                     {posts.map((post) => (
                       <Link
+                        scroll={false}
                         key={post.id}
                         href={`/forum/${post.id}`}
                         /* `Card as="a" interactive`, not the recipe written out.
@@ -875,6 +880,7 @@ export default function UserProfilePage() {
                       const typeInfo = getCommentTypeLabel(comment.type);
                       return (
                         <Link
+                          scroll={false}
                           key={`${comment.type}-${comment.id}-${index}`}
                           href={getCommentTargetLink(comment)}
                           className="state-layer block rounded-md bg-surface-container-low p-4 transition-ui"
@@ -937,6 +943,7 @@ export default function UserProfilePage() {
               )}
             </TabPane>
           </TabPanes>
+          </div>
         </div>
       </div>
     </div>

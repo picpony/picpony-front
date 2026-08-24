@@ -75,7 +75,12 @@ export function useHeroLink<T extends HTMLElement>({
       router.prefetch(href);
       void warmImageHero(image.id, priority);
       cancelFrameWarmRef.current?.();
-      cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current);
+      /* `immediate` on the press path. Hover warming cannot reach a touch screen, so
+         without it the tapped card's capture always lands synchronously in the click
+         handler — see `warmImageHeroFrame`. */
+      cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current, {
+        immediate: priority === 'immediate',
+      });
     },
     [href, image, router, sourceRef],
   );

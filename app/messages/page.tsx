@@ -110,7 +110,7 @@ function NotificationPane({
     return <EmptyState size="pane" icon={<MdNotificationsNone size={ICON.display} />} title={emptyTitle} />;
   }
   return (
-    <div>
+    <div data-pagination-anchor>
       {items.map((item) => (
         <div
           key={item.id}
@@ -491,7 +491,7 @@ export default function MessagesPage() {
       setSelectedContact(null);
       return;
     }
-    router.push('/');
+    router.push('/', { scroll: false });
   }, [router, selectedContact]);
 
   /* Escape leaves the page. Stood down with the emoji picker open — that is the

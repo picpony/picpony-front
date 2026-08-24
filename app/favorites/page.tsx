@@ -288,7 +288,7 @@ function FavoritesPane({ source }: { source: FaveSource }) {
         title="未绑定 API Key"
         description="您需要绑定 Derpibooru API Key 才能查看 Derpibooru 的收藏数据"
         action={
-          <Button variant="filled" onClick={() => router.push('/settings')}>
+          <Button variant="filled" onClick={() => router.push('/settings', { scroll: false })}>
             去绑定
           </Button>
         }

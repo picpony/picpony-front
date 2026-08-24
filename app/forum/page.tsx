@@ -51,7 +51,7 @@ export default function ForumPage() {
       setIsLoading(true);
       setError(null);
       setPage(newPage);
-      router.push(`/forum?page=${newPage}`);
+      router.push(`/forum?page=${newPage}`, { scroll: false });
       // No scroll call here: `ForumPostList` renders `Pagination`, which owns
       // the reset. The `window.scrollTo` that used to sit here never fired —
       // the scroll container is <main>, not the window.
@@ -71,7 +71,7 @@ export default function ForumPage() {
         title="论坛"
         actions={
           <Button
-            onClick={() => router.push('/forum/create')}
+            onClick={() => router.push('/forum/create', { scroll: false })}
             variant="filled"
             icon={<MdAdd size={ICON.dense} />}
             responsiveLabel
@@ -93,7 +93,7 @@ export default function ForumPage() {
           setRetryCount((c) => c + 1);
         }}
         onPageChange={handlePageChange}
-        onPostClick={(postId) => router.push(`/forum/${postId}`)}
+        onPostClick={(postId) => router.push(`/forum/${postId}`, { scroll: false })}
       />
     </div>
   );

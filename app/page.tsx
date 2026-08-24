@@ -260,7 +260,7 @@ function ForumTab() {
 
   const handlePostClick = useCallback(
     (postId: number) => {
-      router.push(`/forum/${postId}`);
+      router.push(`/forum/${postId}`, { scroll: false });
     },
     [router],
   );
@@ -276,7 +276,7 @@ function ForumTab() {
         data-tab-row
         actions={
           <Button
-            onClick={() => router.push('/forum/create')}
+            onClick={() => router.push('/forum/create', { scroll: false })}
             variant="filled"
             size="xs"
             icon={<MdAdd size={ICON.dense} />}

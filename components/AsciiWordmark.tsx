@@ -18,9 +18,13 @@
  * structure, low on the tone ladder; and the pointer lens raises the *mark's own weight* as well
  * as the density, so a stroke resolves under the cursor and there is only ever one subject.
  *
- * Six `<pre>` layers, one per tone, each holding a single string. Not a `<span>` per character:
+ * Eight `<pre>` layers, one per tone, each holding a single string. Not a `<span>` per character:
  * on a 130x20 grid that is 2600 elements rebuilt every frame the pointer moves. Nothing is
  * created after mount.
+ *
+ * **The type is device-pixel-aware, and it is the one place in the app where ink weight depends
+ * on the display.** See `.ascii-plate` in globals.css for why, and the measure effect below for
+ * the cell snapping that goes with it.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -33,7 +37,6 @@ import {
   matchGlyph,
   sampleOffsets,
   SHAPE_DIMENSIONS,
-  type GlyphTable,
 } from '@/lib/ascii/shapeVectors';
 
 /* ------------------------------------------------------------------------- */
@@ -56,11 +59,18 @@ const W_D = 0.6;
  *
  * A smooth field's six sub-cell samples differ by almost nothing — measured, a mean spread of
  * 0.013 over a 130x20 grid — so shape matching degenerates to one glyph for the whole plate. The
- * triangle fold turns the field into stacked contour bands and brings the spread to 0.333 mean /
- * 0.758 max, which is what gives the paper its own grain. Fewer bands than the subject version
- * used, because the ground only has to be *not flat*.
+ * triangle fold turns the field into stacked contour bands, which is what gives the paper its own
+ * grain: at nine bands (the value this carried while the spread above was measured) the fold
+ * brought it to 0.333 mean / 0.758 max.
+ *
+ * **13 rather than 9**, because a band is what one sub-cell sample can resolve, and the sample
+ * spacing did not change when the glyph table's scale was fixed while the *shapes it can reach*
+ * did. Measured in a browser on the shipped table, ground cells and their most common glyph:
+ * 9 bands gives 27 distinct glyphs with the top one at 305 of 1585, 13 gives 31 with the top at
+ * 220 of 1694. Past about 16 the bands are finer than the cell and the paper reads as noise
+ * rather than as a weave.
  */
-const GROUND_BANDS = 9;
+const GROUND_BANDS = 13;
 
 /**
  * How the mark and the paper are mixed. Both are coverage in [0, 1], and the mix is **ink over
@@ -128,18 +138,23 @@ const PROBE = '0'.repeat(PROBE_LEN);
 /* ------------------------------------------------------------------------- */
 
 /**
- * Three neutrals for the paper and the mark's edges, then the logo's six-hue ring for its cores.
+ * A neutral for the paper, a neutral for the decode, then the logo's six-hue ring for the mark.
  *
  * `outline-variant` carries the woven ground — this is the one place it belongs on a glyph, because
- * 1.3:1 against `surface-container-highest` is exactly what a ground lattice wants. `outline` takes
- * the faint edge where a stroke is only partly in a cell, and `on-surface-variant` is the neutral
- * seam between two bands of the ring. Everything denser than that is the artwork, and the artwork
- * gets the artwork's colours — see the block that defines them in globals.css.
+ * 1.32:1 against `surface-container-highest` is exactly what a ground lattice wants. Everything
+ * denser than the paper is the artwork, and the artwork gets the artwork's colours (see
+ * globals.css). `outline` (3.47:1) is what the decode churns in, and now the only thing it draws:
+ * it used to take the mark's faint edges and a seam between bands as well, and both of those are
+ * gone — a mark cell that is neutral for reasons the eye cannot attribute just reads as a character
+ * that failed to colour.
+ *
+ * **There was a third neutral and it read as black.** `on-surface-variant` sat above `outline` at
+ * 7.23:1 against this ground — five times the ring's own weight, so wherever the density crossed
+ * into it the plate grew hard black marks among pastels. A texture cannot carry a step that heavy.
  */
 const TONES = [
   'text-outline-variant',
   'text-outline',
-  'text-on-surface-variant',
   'text-plate-1',
   'text-plate-2',
   'text-plate-3',
@@ -148,7 +163,7 @@ const TONES = [
   'text-plate-6',
 ];
 /** Index of the first ring tone in `TONES`, and how many there are. */
-const RING_FIRST = 3;
+const RING_FIRST = 2;
 const RING_COUNT = 6;
 
 /**
@@ -156,10 +171,12 @@ const RING_COUNT = 6;
  *
  * That last part is the whole reason this is a table rather than a scale: a lattice that changes
  * colour with the band reads as a stain rather than as the material underneath. Steps 0-2 are the
- * paper, 3 is the faint edge where a stroke only partly fills a cell, and 4 up is the artwork —
- * which is where the ring takes over.
+ * paper and 3 up is the mark, where `RING_STEP` hands over to the ring — unconditionally, so the
+ * tail of this table is a fallback nothing reaches while a ring exists. The settled mark therefore
+ * carries no neutral at all; `TONES[1]` is reached only by the decode's churn, which is grey on
+ * purpose.
  */
-const TONE_MAP = [0, 0, 0, 1, 1, 2, 2, 2, 2, 2];
+const TONE_MAP = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1];
 const RING_STEP = 3;
 
 /**
@@ -175,11 +192,73 @@ const RING_STEP = 3;
  * on the plate can reach the dense end of the set; weight is carried by the tone instead, which is
  * read from the density *before* this. Glyph is shape, tone is weight, and the ceiling is what
  * keeps a saturated stroke drawn as a stroke.
+ *
+ * **The window moved when the glyph table's scale was fixed, and it had to.** With four of the six
+ * components stuck at zero the table was effectively two-dimensional and 0.22–0.5 landed where
+ * the letter-shaped glyphs were; with all six live, the same window lands in the dot band and the
+ * plate came out 52% colons. Measured on the corrected table, the set sorts by normalised peak
+ * into: `. - :` under 0.2, `_ ~ , ;` to 0.35, `' ` ! = | + > <` to 0.5, then the directional and
+ * curved band `r t ( n } ) / l { z i c ^ " v x L X Y` to 0.7, and the slab end `% O w f P p & W Z
+ * q @ $` above 0.85. Line work lives in the middle two, so the window is 0.45–0.62: the low end
+ * reaches a stem or a tick for a faint edge, the high end reaches a bowl or a diagonal for a
+ * filled one, and the slab band stays out of reach — which is the same intent as before, aimed at
+ * where the glyphs actually are.
  */
-const GLYPH_PEAK_MIN = 0.22;
-const GLYPH_PEAK_MAX = 0.5;
-/** Coverage at which the ceiling is fully in force; below it the paper keeps its own level. */
+const GLYPH_PEAK_MIN = 0.45;
+const GLYPH_PEAK_MAX = 0.62;
+/** Coverage at which the ink ceiling is fully in force. Below it the paper's own applies. */
 const GLYPH_CAP_INK = 0.2;
+
+/**
+ * The paper's own target peak, and the reason the lattice is more than dots.
+ *
+ * `matchGlyph` picks by absolute distance, so a vector's *level* decides which end of the set it
+ * can reach — and the ground's level is `W_GROUND`, i.e. at most 0.22, which is the `. - :` corner
+ * of the set and nothing else. Measured, one glyph was **69%** of the whole plate. The paper was
+ * deliberately left un-rescaled ("the paper keeps its own low level"), and that was conflating two
+ * things this file otherwise keeps apart: glyph is shape, tone is weight. Tone is read from `mean`
+ * *before* the rescale, so lifting the paper's peak changes which mark is drawn and nothing about
+ * how heavy it reads — the lattice stays exactly as light as it was.
+ *
+ * **0.6, and the band it lands in is the whole point.** Sorted by peak, the set goes
+ * `. - :` → `_ ~ , ;` → `' \` ! = | + > <` → `r t ( n } ) / l { z i c ^ " v x L X Y J I [ *`. The
+ * third band is *intrinsically vertical* — five of its eight glyphs are upright ticks — so a paper
+ * aimed there came out as nothing but short vertical strokes, measured at 74% of the lattice, which
+ * is exactly how it read. The fourth band is the varied one: parens, diagonals, curves, a caret, a
+ * quote. Aiming at it takes the lattice to 40 distinct glyphs with no single glyph over 11%, and
+ * the direction mix from 74% vertical to 26%.
+ *
+ * **It must not exceed `GLYPH_PEAK_MAX`.** The two ceilings are blended by `capping`, so a paper
+ * ceiling above the ink's makes a *partly* inked cell reach further up the set than a fully inked
+ * one — which put `#` back into the mark's strokes at 0.64. 0.6 sits just under it.
+ *
+ * Raising `W_GROUND` instead was tried and is the wrong lever twice over: it makes the paper
+ * *heavier* rather than more varied, and past about 0.34 its density crosses `RING_STEP` and the
+ * ground starts taking ring hues, which is the stain the tone table exists to prevent.
+ */
+const GROUND_PEAK = 0.6;
+
+/**
+ * How far a cell's shape vector is nudged per cell before matching, peak to peak.
+ *
+ * Only to break ties: a saturated cell has no shape, so its nearest glyph is arbitrary, and
+ * picking the same arbitrary one everywhere is what made the aperture a field of one letter.
+ *
+ * **The magnitude is set by `matchGlyph`'s cache, not by the glyph separation.** That cache
+ * quantises each component to `CACHE_BITS` levels, so two vectors in the same 1/8-wide bucket get
+ * the *same* answer however far apart they are inside it — and a uniform region's cells all share
+ * one base vector, so if that vector sits mid-bucket no per-cell nudge under half a bucket can
+ * move any of them. It is not a per-cell coin flip; the whole region comes out identical. 0.14 is
+ * therefore just over one bucket peak to peak, i.e. ±just over half a bucket, which is the
+ * smallest value that can always reach a neighbour.
+ *
+ * Measured on the mark, most-common glyph out of 414 inked cells and longest same-glyph run:
+ * **103 / 9 with no dither, 59 / 5 at 0.09, 48 / 5 at 0.14, 42 / 5 at 0.20.** The ground is
+ * almost unaffected at any value (its own field already varies), so this is a mark fix. 0.20 buys
+ * six more distinct glyphs than 0.14 and costs a fifth of the component range in shape error,
+ * which is the point where the glyph stops describing the field it was measured from.
+ */
+const GLYPH_DITHER = 0.14;
 
 /**
  * The wordmark's own letters, typed along the mark under the pointer.
@@ -204,10 +283,32 @@ const WORD_INK = 0.22;
  * of the wordmark, which is a ring, so arranging them as a ring is a citation rather than a
  * decoration. `atan2` is only reached for cells that have earned a colour — roughly a tenth of the
  * plate — so it costs a few hundred calls a frame rather than a few thousand.
+ *
+ * **The period is 18s, taken from the paper rather than picked.** It was 83s, and at six bands that
+ * is one colour change per cell every 14 seconds — slower than anyone looks at a page, so the ring
+ * read as a still image that happened to be different on a second visit. The observable is not the
+ * revolution, it is `RING_TURNS_PER_SECOND * RING_COUNT` band-crossings per cell per second, which
+ * 18s puts at one every 3 seconds. 18 is the middle of the ground's own three drift periods (15s,
+ * 18s, 26s — `SPEED_X/Y/D` are radians per second), so the ring now beats with the texture
+ * underneath it instead of against it.
+ *
+ * There is no neutral seam between bands, and there was: a twelfth of each band's width kept
+ * `TONE_MAP`'s neutral, on the argument that it made the ring read as composed marks rather than as
+ * a smear. What it actually produced is a colourless glyph appearing at random inside a coloured
+ * stroke — the seam is a *band* boundary, so it cuts across letterforms rather than along them, and
+ * at 12% roughly one mark cell in eight was paper-coloured for no reason the eye could attribute.
+ * The smear it was guarding against is what `RING_SPIRAL` already prevents.
  */
-const RING_TURNS_PER_SECOND = 0.012;
-/** Fraction of each band's width given to a neutral seam, so the ring reads as composed. */
-const RING_SEAM = 0.12;
+const RING_TURNS_PER_SECOND = 1 / 18;
+/**
+ * Extra turns of hue between the plate's centre and its corner, so the bands sweep.
+ *
+ * By angle alone six hues are six 60-degree wedges, which on a 130-column plate means a third of
+ * the width in one colour. At 1.6 a radial traverse crosses about ten bands as well, so no region
+ * larger than a few cells is flat — and it echoes the aperture the hues come from, whose blades
+ * are swept rather than pie slices.
+ */
+const RING_SPIRAL = 1.6;
 
 type Grid = { cols: number; rows: number };
 const EMPTY: Grid = { cols: 0, rows: 0 };
@@ -227,7 +328,6 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
   const layerRefs = useRef<(HTMLPreElement | null)[]>([]);
   const cellRef = useRef(FALLBACK_CELL);
   const pointerRef = useRef<{ col: number; row: number } | null>(null);
-  const tableRef = useRef<GlyphTable | null>(null);
   /**
    * The decode's start, held outside the draw effect. As a local it replayed the whole
    * develop-in on any resize that crossed a cell boundary, and on toggling the motion
@@ -240,13 +340,31 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
   /* Measure the cell from a real run of glyphs rather than from the type scale, because the
      advance includes `--text-label-s--letter-spacing` and the line box is the one the browser
      actually built. The probe's `absolute` is load-bearing: it blockifies the inline span, which
-     is what makes `rect.height` the 16px line box instead of the font's inline box. */
+     is what makes `rect.height` the 16px line box instead of the font's inline box.
+
+     Then the cell is **snapped to whole device pixels**, by solving for the tracking that gets
+     it there. 6.85 CSS px is not an integer number of device pixels at any common ratio
+     (1 → 6.85, 2 → 13.7, 3 → 20.55), so every column started at a different subpixel phase and
+     the same glyph rastered differently along one row — which is half of why the plate read as
+     mush rather than as line work. The tracking is computed rather than tabulated: the three
+     common ratios happen to land on 7.0 CSS px but 1.5x lands on 6.667, and the glyph's own
+     advance is a property of whichever face resolved. */
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const measure = () => {
       const probe = probeRef.current;
       if (probe) {
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const tracking = parseFloat(getComputedStyle(host).letterSpacing) || 0;
+        const first = probe.getBoundingClientRect();
+        if (first.width > 0) {
+          const advance = first.width / PROBE_LEN;
+          const snapped = Math.round(advance * dpr) / dpr;
+          // The glyph's own advance is whatever the face gives; only tracking is ours to move.
+          host.style.letterSpacing = `${snapped - (advance - tracking)}px`;
+          host.style.lineHeight = `${Math.round(first.height * dpr) / dpr}px`;
+        }
         const rect = probe.getBoundingClientRect();
         if (rect.width > 0) cellRef.current = { w: rect.width / PROBE_LEN, h: rect.height };
       }
@@ -266,9 +384,27 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
     void document.fonts?.ready.then(() => {
       if (live) measure();
     });
+    /* A window dragged between a Retina and a 1x display changes the ratio without changing the
+       box or the font, so neither signal above fires — and both the snapped cell and the weight
+       bucket are wrong until something else happens to resize.
+       Re-armed on every change, which is the part that is easy to miss: the query is pinned to
+       the ratio it was built at, so after one transition it is simply false and a *second*
+       change fires nothing. This is MDN's own pattern for watching `resolution`. */
+    let ratio: MediaQueryList | null = null;
+    const onRatio = () => {
+      measure();
+      if (live) watchRatio();
+    };
+    const watchRatio = () => {
+      ratio?.removeEventListener('change', onRatio);
+      ratio = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      ratio.addEventListener('change', onRatio, { once: true });
+    };
+    watchRatio();
     return () => {
       live = false;
       observer.disconnect();
+      ratio?.removeEventListener('change', onRatio);
     };
   }, []);
 
@@ -278,12 +414,17 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
     if (!host || cols === 0 || rows === 0) return;
 
     /* Measured from the DOM rather than shipped as a constant: the vectors are a property of the
-       *rendered* face, and this app's mono stack can resolve to Geist Mono or to a fallback. */
-    if (!tableRef.current) {
-      const style = getComputedStyle(host);
-      tableRef.current = getGlyphTable(`${style.fontSize} ${style.fontFamily}`);
-    }
-    const table = tableRef.current;
+       *rendered* face, and this app's mono stack can resolve to Geist Mono or to a fallback.
+       Three things go together — spec, cell and weight — because all three vary: the cell is
+       snapped to whole device pixels and `--ascii-weight` steps with the ratio, so a table
+       measured at one ratio describes the wrong face at another. `getGlyphTable` keys on the
+       three, so this is a cache lookup rather than a re-measure on the way back. */
+    const style = getComputedStyle(host);
+    const table = getGlyphTable(
+      `${style.fontSize} ${style.fontFamily}`,
+      cellRef.current,
+      style.fontWeight,
+    );
     if (!table) return;
 
     let live = true;
@@ -332,6 +473,9 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
       const lens = { col: 0, row: 0, on: 0 };
       const centreCol = cols / 2;
       const centreRow = rows / 2;
+      /* Half the plate's diagonal, in the same cell-width units `dyRing` is in, so the radial
+         term of the ring's sweep is ~[0, 1] from centre to corner at any grid size. */
+      const ringRadius = Math.hypot(centreCol, centreRow * aspect) || 1;
 
       const buildColumns = (t: number) => {
         for (let k = 0; k < xs.length; k += 1) {
@@ -410,31 +554,69 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
             mean /= SHAPE_DIMENSIONS;
 
             /* Tone is the density as it stands; the glyph comes from the same vector with its peak
-               pulled toward a ceiling — but only where there is ink. The paper keeps its own low
-               level, which is what makes it read as a quiet lattice; capping it too lifted the whole
-               plate to 99% covered and the wordmark vanished into its own background. */
+               pulled toward a ceiling. **Every cell with any value is rescaled, ink or paper**, and
+               the two ceilings differ instead — `capping` blends between them. Rescaling only the
+               inked cells was the first answer and it left the paper matching from its raw level,
+               which is a two-glyph lattice; the failure that made it look like the fix was the
+               *flat* paper ceiling, not the rescale, and that is what the block below records. */
             let peak = 0;
             for (let s = 0; s < SHAPE_DIMENSIONS; s += 1) {
               if (vector[s] > peak) peak = vector[s];
             }
             const capping = Math.min(1, peakInk / GLYPH_CAP_INK);
-            if (peak > 0 && capping > 0) {
-              const ceiling = GLYPH_PEAK_MIN + (GLYPH_PEAK_MAX - GLYPH_PEAK_MIN) * mean;
-              const scale = (peak + (ceiling - peak) * capping) / peak;
+            if (peak > 0) {
+              /* Two ceilings, blended by how much ink the cell holds: the paper's flat one and
+                 the ink's, which rises with the cell's own density. `mean` is read above, before
+                 this, so neither changes the tone. */
+              const inked = GLYPH_PEAK_MIN + (GLYPH_PEAK_MAX - GLYPH_PEAK_MIN) * mean;
+              /* The paper's ceiling is proportional to its own level rather than flat, so the
+                 quiet parts of the field stay quiet. Flat, every cell with any value at all was
+                 lifted far enough to match a glyph instead of a space and the plate went from
+                 61% to 86% covered — which is the "the whole plate lifted and the wordmark
+                 vanished into its own background" failure, arriving through the glyph set
+                 instead of through the density. */
+              const grounded = GROUND_PEAK * Math.min(1, mean / W_GROUND);
+              const ceiling = grounded + (inked - grounded) * capping;
+              const scale = ceiling / peak;
               for (let s = 0; s < SHAPE_DIMENSIONS; s += 1) vector[s] *= scale;
             }
             enhance(vector, ENHANCE_EXPONENT);
+            /* A per-cell nudge, and it is what stops a filled region drawing one glyph forty times.
+               A cell inside a thick stroke is saturated in all six samples, so its vector carries no
+               shape at all — and a vector with no shape has exactly one nearest neighbour, which is
+               why the aperture's ring came out as a field of `U` and the ground as a field of `!`.
+               Any glyph is as right as any other there; drawing the *same* one is the only wrong
+               answer, because a repeat reads as a pattern the artwork does not have. So the vector
+               is jittered by a deterministic per-cell amount — sized against `matchGlyph`'s
+               quantised cache rather than against the glyph separation, which is the part that is
+               not obvious and is written out where the constant lives. Derived from one hash rather
+               than six: the same value taken at six different scales, which is decorrelated enough
+               for this and costs one `imul` chain per cell rather than six. */
+            if (peak > 0) {
+              const wobble = hash(col, row, 9187);
+              for (let s = 0; s < SHAPE_DIMENSIONS; s += 1) {
+                const spun = (wobble * (s + 1) * 7.13) % 1;
+                const next = vector[s] + (spun - 0.5) * GLYPH_DITHER;
+                vector[s] = next < 0 ? 0 : next > 1 ? 1 : next;
+              }
+            }
             let ch = table.glyphs[matchGlyph(table, vector)];
             const step = Math.min(9, Math.max(0, Math.round(mean * 9)));
             let tone = TONE_MAP[step];
             if (step >= RING_STEP) {
               const dx = col - centreCol;
-              /* [0, 1) around the plate's centre. The seam keeps the neutral in `TONE_MAP` for a
-                 sliver of each band, so the ring reads as six marks rather than as a smear. */
-              const turn = Math.atan2(dyRing, dx) / (Math.PI * 2) + 0.5 + ringPhase;
+              /* [0, 1) around the plate's centre, advanced by the radius so the bands sweep.
+                 Six hues read by angle alone are six 60-degree wedges, and on a plate this wide
+                 that is a very large area of one colour — the whole left third came out coral. The
+                 radial term turns each wedge into a swept arc, so a band is crossed every
+                 ~1/(RING_SPIRAL * RING_COUNT) of the way out as well as every 60 degrees. It is
+                 also the better citation: the `o` this takes its colours from is a camera
+                 aperture, and an aperture's blades sweep rather than sitting in wedges. */
+              const radius = Math.sqrt(dx * dx + dyRing * dyRing) / ringRadius;
+              const turn =
+                Math.atan2(dyRing, dx) / (Math.PI * 2) + 0.5 + ringPhase + radius * RING_SPIRAL;
               const scaled = (turn - Math.floor(turn)) * RING_COUNT;
-              const withinBand = scaled - Math.floor(scaled);
-              if (withinBand > RING_SEAM) tone = RING_FIRST + (Math.floor(scaled) % RING_COUNT);
+              tone = RING_FIRST + (Math.floor(scaled) % RING_COUNT);
             }
 
             /* Under the lens the mark stops describing itself and spells itself. */
@@ -560,7 +742,7 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
       ref={hostRef}
       aria-hidden="true"
       className={cn(
-        'pointer-events-none absolute inset-0 overflow-hidden font-mono text-label-s select-none',
+        'ascii-plate pointer-events-none absolute inset-0 overflow-hidden font-mono text-label-s select-none',
         className,
       )}
     >

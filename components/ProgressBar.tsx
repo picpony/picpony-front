@@ -37,6 +37,31 @@ const TRACKS: Record<ProgressSurface, string> = {
   media: 'bg-media-outline',
 };
 
+/* **There is no stop indicator, and `StopSize` is a divergence now.**
+ *
+ * It was a 4dp square at `right-0` in the fill's own colour, which the track's `rounded-full`
+ * clipped into a nub — on any bar that cannot reach 100 that reads as a stray piece of the
+ * fill floating a few pixels off the end of the real one, and the profile's XP bar is exactly
+ * that (`experience % 100`, so 0–99, never 100). Two fixes were tried before removal: a round
+ * dot concentric with the track's cap, and then that dot in the *track's* on-container
+ * (`on-secondary-container`, which measures 13.32:1 light / 7.24:1 dark against the track,
+ * against the fill colour's 5.00:1) with a hide above 98%. Both are defensible and both still
+ * read as a detached mark on a meter that is mostly not full, which is what the report was
+ * about.
+ *
+ * The M3 argument for keeping it is real and is worth writing down rather than losing: the dot
+ * is *required* when the track's contrast against the container behind it falls under 3:1, and
+ * here it does by a distance — `secondary-container` measures 1.23:1 light / 1.99:1 dark
+ * against `surface` and **1.00:1** against `surface-container-highest`, i.e. on that tone step
+ * the empty half of the track is invisible and nothing says where it ends. So this removal
+ * costs something measurable, and the thing it costs is on the table if the empty track ever
+ * needs to be locatable: the answer then is to give the *track* contrast, not to put a mark at
+ * the end of an invisible one.
+ *
+ * `Slider` keeps its own stop indicator. That is not an inconsistency — a slider's dot marks
+ * where a *draggable* value can go, and its track is 16dp with an 8dp cap, so a 4dp dot inset
+ * on the inactive side reads as part of the track rather than as a fragment of the fill. */
+
 /** Matches any width utility a call site might name, including a responsive one. */
 const HAS_WIDTH = /(?:^|\s)(?:\S+:)?w-\S+/;
 
@@ -55,8 +80,8 @@ const HAS_WIDTH = /(?:^|\s)(?:\S+:)?w-\S+/;
  * there is no size axis: 8px and 10px were 2× and 2.5× the token, and 10 is not
  * even on the 4dp grid.
  *
- * `StopSize` is 4dp — the dot at the track's far end that marks 100%. M3 draws it
- * on every determinate bar and this had none.
+ * `StopSize` is 4dp and is **not** implemented — the block above `TRACKS` records what was
+ * tried, what M3 asks for, and what removing it costs.
  *
  * `TrackActiveSpace` (a 4dp gap between the indicator and the remaining track) is
  * deliberately **not** implemented. It needs the remaining track's leading edge to
@@ -129,15 +154,6 @@ export default function ProgressBar({
         )}
         style={determinate ? { transform: `scaleX(${pct / 100})` } : undefined}
       />
-      {/* `StopSize`, 4dp. Square rather than round because the track's own
-          `rounded-full` clips it into the cap, and `aria-hidden` because the value
-          is already on the track. */}
-      {determinate && (
-        <span
-          aria-hidden="true"
-          className={cn('pointer-events-none absolute inset-y-0 right-0 w-1', fill)}
-        />
-      )}
     </div>
   );
 }

@@ -78,7 +78,6 @@ function NavItem({
   active,
   badge,
   onClick,
-  scroll,
 }: {
   href?: string;
   icon: ReactNode;
@@ -86,8 +85,6 @@ function NavItem({
   active?: boolean;
   badge?: number;
   onClick?: () => void;
-  /** `false` leaves the scroller alone on commit — see the home entries below. */
-  scroll?: boolean;
 }) {
   const inner = (
     <>
@@ -146,8 +143,8 @@ function NavItem({
 
   return (
     <Link
+      scroll={false}
       href={href}
-      scroll={scroll}
       onClick={onClick}
       data-ripple
       aria-current={active ? 'page' : undefined}
@@ -196,19 +193,21 @@ export default function SidebarNav({
   return (
     <nav aria-label="主导航" className="flex flex-1 flex-col gap-1 px-3 pb-3">
       <Section>
-        {/* `scroll={false}` only while already on the home page: from here these
-            two are the same control as the tab bar, and the tab machinery owns
+        {/* This used to read `scroll={onHome ? false : undefined}`, and the reasoning
+            behind the condition is now the site-wide rule rather than a local one:
+            these two are the same control as the tab bar, and the tab machinery owns
             the scroller — it restores each tab's own offset and holds the
             outgoing pane over the pixels you were looking at. Letting Next reset
             the scroller on top of that is what made the sidebar land at the top
-            while the tab bar came back to where you were. Arriving from another
-            route it is a genuine navigation and the default (top) is right. */}
+            while the tab bar came back to where you were. `lib/scrollMemory.ts` now
+            owns every case, and it skips a search-only change for exactly this
+            reason, so `NavItem` passes `scroll={false}` unconditionally like every
+            other link in the app. */}
         <NavItem
           href="/"
           icon={<MdHome size={ICON.standard} />}
           label="主页"
           active={onHome && !forumTab}
-          scroll={onHome ? false : undefined}
           onClick={onNavigate}
         />
         <NavItem
@@ -216,7 +215,6 @@ export default function SidebarNav({
           icon={<MdForum size={ICON.standard} />}
           label="论坛"
           active={onHome && forumTab}
-          scroll={onHome ? false : undefined}
           onClick={onNavigate}
         />
         <NavItem

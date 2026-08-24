@@ -44,7 +44,7 @@ export default function NotFound() {
       title="这里什么都没有"
       description="页面可能已被删除，或者链接本来就不对。"
       action={
-        <Link href="/" className={buttonClasses({ variant: 'filled' })}>
+        <Link scroll={false} href="/" className={buttonClasses({ variant: 'filled' })}>
           <MdHome size={ICON.dense} aria-hidden="true" />
           回到首页
         </Link>
