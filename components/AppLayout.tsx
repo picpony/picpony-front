@@ -64,6 +64,8 @@ import {
   type SchemeSetting,
 } from '@/lib/appearance';
 import { readUserInfo, useMediaQuery } from '@/lib/hooks';
+import { ensureRoutePolicy, setLineNotifier } from '@/lib/route';
+import { showToast } from '@/components/Toast';
 import { cn } from '@/lib/utils';
 import { COOKIE_KEYS, LS_KEYS, MEDIA } from '@/lib/constants';
 
@@ -435,6 +437,18 @@ export default function AppLayout({
     const mediaQuery = window.matchMedia(MEDIA.reducedMotion);
     mediaQuery.addEventListener('change', refreshSystemMotion);
     return () => mediaQuery.removeEventListener('change', refreshSystemMotion);
+  }, []);
+
+  /* The request line's two shell-level chores.
+   *
+   * `setLineNotifier` is a seam for the same reason `setMotionScaleListener` is one:
+   * `lib/route.ts` is on every request path and must not reach into `components/`, but a
+   * line that switches under you has to say so. And `ensureRoutePolicy` is kicked here
+   * only to overlap the fetch with the first render — `proxyFetch` awaits it regardless,
+   * so a route that never mounts this shell is still covered. */
+  useEffect(() => {
+    setLineNotifier((message, tone) => showToast(message, tone));
+    void ensureRoutePolicy();
   }, []);
 
   const cycleThemeMode = () => {

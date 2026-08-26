@@ -1,17 +1,31 @@
-import { PROXY_API_BASE, LS_KEYS } from '@/lib/constants';
+import { LS_KEYS } from '@/lib/constants';
+import { toCurrentImageLine } from '@/lib/imageLoader';
+import type { PonyImage } from '@/lib/types/image';
+import {
+  API_FAILOVER_STATUSES,
+  applyApiLineToWrite,
+  buildApiLineUrl,
+  ensureRoutePolicy,
+  isApiForced,
+  resolveApiLine,
+  resolveImageLine,
+  stepApiFailover,
+} from '@/lib/route';
 
 // ---------------------------------------------------------------------------
 // 浏览设置类型
 // ---------------------------------------------------------------------------
 
+/**
+ * What the user has asked to *see*. The four line preferences are not in here —
+ * `lib/route.ts` owns those, because which host answers is a different question from
+ * what the answer should contain.
+ */
 export interface BrowsingSettings {
   contentFilter: 'safe' | 'spoilers' | 'developer';
   banAnthro: boolean;
   banDiscomfort: boolean;
   onlyPony: boolean;
-  useCdn: boolean;
-  usePicponyProxy: boolean;
-  useApiAccel: boolean;
   homeSort: string;
   searchSort: string;
 }
@@ -27,28 +41,37 @@ export function getBrowsingSettings(): BrowsingSettings {
     banAnthro: ls(LS_KEYS.banAnthro, 'false') === 'true',
     banDiscomfort: ls(LS_KEYS.banDiscomfort, 'true') !== 'false',
     onlyPony: ls(LS_KEYS.onlyPony, 'false') === 'true',
-    useCdn: ls(LS_KEYS.useCdn, 'false') === 'true',
-    usePicponyProxy: ls(LS_KEYS.usePicponyProxy, 'true') !== 'false',
-    useApiAccel: ls(LS_KEYS.useApiAccel, 'true') !== 'false',
     homeSort: ls(LS_KEYS.homeSort, 'created_at'),
     searchSort: ls(LS_KEYS.searchSort, 'created_at'),
   };
 }
 
 // ---------------------------------------------------------------------------
-// CDN / 代理 URL 处理
+// 图片线路
 // ---------------------------------------------------------------------------
 
-export function applyCdn(url: string): string {
-  if (getBrowsingSettings().useCdn && url) {
-    return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
-  }
-  return url;
-}
-
-function buildProxyUrl(originalUrl: string): string {
-  const derpiUrl = originalUrl.replace('trixiebooru.org', 'derpibooru.org');
-  return PROXY_API_BASE + encodeURIComponent(derpiUrl);
+/**
+ * Put a whole search result on the current image line.
+ *
+ * Applied centrally in `lib/api/derpi.ts` so it reaches every consumer of an image, not only
+ * the three grids that used to do it themselves — the featured banner, the opened picture and
+ * both profile grids render their URLs directly and so ignored the policy entirely. It is
+ * idempotent (`toCurrentImageLine` strips before it wraps), which is what makes applying it in
+ * both places safe.
+ *
+ * Three screens had this map written out beside a hand-typed read of the CDN storage key — the
+ * key restated at three call sites, guarding a function that checked the same thing itself.
+ * Spelled in prose rather than quoted, so a grep for that literal still proves it is gone.
+ */
+export function applyImageLine<T extends PonyImage>(image: T): T {
+  if (resolveImageLine() === 'direct') return image;
+  return {
+    ...image,
+    representations: Object.fromEntries(
+      Object.entries(image.representations).map(([k, v]) => [k, toCurrentImageLine(v as string)]),
+    ) as unknown as PonyImage['representations'],
+    view_url: toCurrentImageLine(image.view_url),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -80,7 +103,7 @@ export function buildSearchQuery(search?: string): string {
 
   try {
     const activeHidden: string[] = JSON.parse(
-      localStorage.getItem('trixie_active_hidden_tags') || '[]',
+      localStorage.getItem(LS_KEYS.activeHiddenTags) || '[]',
     );
     const blockNegations = activeHidden
       .filter((t) => t && typeof t === 'string')
@@ -113,53 +136,114 @@ function getSortParams(isSearch: boolean): string {
 }
 
 // ---------------------------------------------------------------------------
-// 代理请求 (三级回退策略)
+// 按线路发请求
 // ---------------------------------------------------------------------------
 
-interface ProxyFetchOptions extends RequestInit {
-  directOnly?: boolean;
-}
+/** In-place retries on one line, and how many times the line itself may change. */
+const MAX_ATTEMPTS = 3;
+const MAX_SWITCHES = 3;
 
-export async function proxyFetch(url: string, options?: ProxyFetchOptions): Promise<Response> {
-  const s = getBrowsingSettings();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  if (options?.directOnly) {
-    return fetch(url, options);
+/**
+ * Send a Derpibooru request on whichever line is in force.
+ *
+ * The policy is awaited first, every time. That await is the whole reason a line can
+ * be trusted: resolved once it costs a microtask, and before then it is what stops the
+ * first request of a cold load from going out on the default host while an
+ * administrator has the site pinned somewhere else.
+ *
+ * Failover is asymmetric by design:
+ *
+ * - **Forced, or on the PicPony relay** — retry in place, never change line. An
+ *   administrator's choice is not ours to leave, and the relay exists precisely for
+ *   the visitor whose direct connection does not work, so dropping them back to it
+ *   would undo the only thing that line is for.
+ * - **`auto`, on direct or the accel line** — one plain retry, then hand over to
+ *   `stepApiFailover`. Since the relay is the default preference, the cascade that is
+ *   actually reachable is direct → accel → direct-with-cooldown.
+ *
+ * Not ported: the old frontend's request queue, its exponential backoff and its
+ * concurrency shrink. Those hang off a rate limiter this app has never had; the short
+ * linear delay below is the proportionate stand-in.
+ */
+export async function proxyFetch(url: string, options?: RequestInit): Promise<Response> {
+  await ensureRoutePolicy();
+
+  const method = (options?.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') {
+    /* A body cannot travel through a `?url=` worker, so a write has only two
+       possibilities and `applyApiLineToWrite` picks between them. */
+    return fetch(applyApiLineToWrite(url), options);
   }
 
-  if (s.usePicponyProxy) {
-    const proxyUrl = buildProxyUrl(url);
+  /* A 403 on a request that carried a key is about the key, not about the host: no other
+     line will answer it differently, so failing over spends six requests and two snackbars
+     on a revoked credential. */
+  const carriesKey = /[?&]key=/.test(url);
+
+  let attempts = 0;
+  let switches = 0;
+  let directRetried = false;
+  let lastError: Error = new Error('请求失败');
+
+  for (;;) {
+    const line = resolveApiLine();
+    const forced = isApiForced();
+    const target = buildApiLineUrl(url, line);
+
+    let status: number | undefined;
     try {
-      const res = await fetch(proxyUrl, options);
+      const res = await fetch(target, options);
       if (res.ok) return res;
-      console.warn('[Proxy] 加速服务器响应异常', res.status, '回退直连');
-    } catch {
-      console.warn('[Proxy] 加速服务器请求失败，回退直连');
+      status = res.status;
+      const httpError = new Error(`HTTP ${res.status}`) as Error & { status?: number };
+      httpError.status = res.status;
+      lastError = httpError;
+    } catch (err) {
+      lastError = err as Error;
     }
-  }
 
-  let directError: Error | null = null;
-  try {
-    const res = await fetch(url, options);
-    if (res.ok) return res;
-    const httpError = new Error(`HTTP ${res.status}`) as Error & { status?: number };
-    httpError.status = res.status;
-    directError = httpError;
-  } catch (err) {
-    directError = err as Error;
-  }
+    /* A cancellation is not a failure of anything. Retrying re-`fetch`es an already-aborted
+       signal, so the loop just burns its budget and then throws something that is no longer
+       an `AbortError` — and on the `auto` cascade it would announce two line switches
+       because the pointer left a gallery card. */
+    if (options?.signal?.aborted || lastError.name === 'AbortError') throw lastError;
 
-  if (s.useApiAccel && !s.usePicponyProxy) {
-    const proxyUrl = buildProxyUrl(url);
-    try {
-      const res = await fetch(proxyUrl, options);
-      if (res.ok) return res;
-    } catch {
-      // ignore
+    /* A 404 or a 400 is an answer, not a broken line. Only a network throw and the
+       statuses a proxy emits when it cannot reach its upstream are worth another go. */
+    if (status !== undefined && !API_FAILOVER_STATUSES.includes(status)) throw lastError;
+    if (status === 403 && carriesKey) throw lastError;
+
+    attempts += 1;
+
+    if (forced || line === 'picpony_api') {
+      if (attempts >= MAX_ATTEMPTS) {
+        throw new Error(
+          forced
+            ? '强制 API 线路已重试多次仍不可用'
+            : 'PicPony API 线路已重试多次仍不可用',
+        );
+      }
+      await sleep(300 * attempts);
+      continue;
     }
-  }
 
-  throw directError;
+    if (line === 'direct' && !directRetried) {
+      directRetried = true;
+      await sleep(300);
+      continue;
+    }
+
+    if (switches < MAX_SWITCHES && stepApiFailover(status)) {
+      switches += 1;
+      attempts = 0;
+      continue;
+    }
+
+    if (attempts >= MAX_ATTEMPTS) throw lastError;
+    await sleep(300 * attempts);
+  }
 }
 
 // ---------------------------------------------------------------------------

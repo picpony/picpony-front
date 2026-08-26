@@ -5,7 +5,7 @@ import { MdSearch, MdImageSearch, MdSearchOff, MdArrowBack, MdExpandMore } from 
 import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import Badge from '@/components/Badge';
-import { api, PonyImage, applyCdn } from '@/lib/api';
+import { api, PonyImage, applyImageLine } from '@/lib/api';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
@@ -350,16 +350,7 @@ function SearchPageContent() {
       .getImages(q, page, sortBy === 'random' ? undefined : sortBy, sortDir)
       .then((res) => {
         if (isMounted) {
-          let imgs = res.images;
-          if (localStorage.getItem('trixie_use_cdn') === 'true') {
-            imgs = imgs.map((img) => ({
-              ...img,
-              representations: Object.fromEntries(
-                Object.entries(img.representations).map(([k, v]) => [k, applyCdn(v)]),
-              ) as unknown as PonyImage['representations'],
-              view_url: applyCdn(img.view_url),
-            }));
-          }
+          const imgs = res.images.map(applyImageLine);
           setImages(imgs);
           setHasMore(imgs.length === 50);
           setIsLoading(false);

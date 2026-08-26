@@ -63,7 +63,7 @@ export type { CaptchaGetResponse, CaptchaVerifyResponse } from '@/lib/types/capt
 // API 方法重导出 (命名导出)
 // ---------------------------------------------------------------------------
 
-export { getBrowsingSettings, applyCdn, buildSearchQuery, proxyFetch } from '@/lib/api/client';
+export { getBrowsingSettings, applyImageLine, buildSearchQuery, proxyFetch } from '@/lib/api/client';
 
 /* The admin surface is deliberately **not** re-exported here.
    `lib/api.ts` is imported by every gallery route, and a re-export keeps the
@@ -78,7 +78,7 @@ export { getBrowsingSettings, applyCdn, buildSearchQuery, proxyFetch } from '@/l
 
 import * as derpi from '@/lib/api/derpi';
 import * as picpony from '@/lib/api/picpony';
-import { applyCdn, proxyFetch, buildSearchQuery } from '@/lib/api/client';
+import { applyImageLine, proxyFetch, buildSearchQuery } from '@/lib/api/client';
 
 /**
  * The admin surface is **not** in here, and that is the one thing about this
@@ -101,7 +101,7 @@ export const api = {
   // PicPony
   ...picpony,
   // 工具
-  applyCdn,
+  applyImageLine,
   proxyFetch,
   buildSearchQuery,
 };

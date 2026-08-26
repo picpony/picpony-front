@@ -33,7 +33,7 @@ export default function OtherTab({ token }: { token: string }) {
         ]);
 
         if (dataResult?.success) {
-          setMaintenanceMode(dataResult.maintenance_mode);
+          setMaintenanceMode(dataResult.maintenance_mode === true);
           setMaintenanceMessage(dataResult.maintenance_message || '');
           setTranslateEnabled(dataResult.translate_enabled !== false);
         } else {

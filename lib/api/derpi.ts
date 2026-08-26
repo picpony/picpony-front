@@ -1,7 +1,19 @@
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import type { PonyImage, ApiResponse, FeaturedImage } from '@/lib/types/image';
 import type { DerpiProfileResponse } from '@/lib/types/user';
-import { proxyFetch, fetchDerpiImages, handleDerpiError, getBrowsingSettings, readJson } from './client';
+import {
+  proxyFetch,
+  fetchDerpiImages,
+  handleDerpiError,
+  getBrowsingSettings,
+  readJson,
+  applyImageLine,
+} from './client';
+
+/** Map an `{ total, images }` envelope onto the current image line. */
+function withImageLine(data: ApiResponse): ApiResponse {
+  return Array.isArray(data?.images) ? { ...data, images: data.images.map(applyImageLine) } : data;
+}
 
 // ---------------------------------------------------------------------------
 // 图片详情
@@ -15,7 +27,12 @@ export async function getImage(id: string, signal?: AbortSignal): Promise<{ imag
   });
 
   if (!res.ok) await handleDerpiError(res);
-  return readJson(res);
+  /* Every image-bearing response is put on the current image line here rather than at the
+     screens: the featured banner, the opened picture and both profile grids render their URLs
+     directly, so a policy applied only in the two gallery `map`s never reached them.
+     `applyImageLine` is idempotent, so the screens that still map are no-ops. */
+  const data: { image: PonyImage } = await readJson(res);
+  return data?.image ? { ...data, image: applyImageLine(data.image) } : data;
 }
 
 export async function getImages(
@@ -34,7 +51,7 @@ export async function getImages(
   });
 
   if (!res.ok) await handleDerpiError(res);
-  return readJson(res);
+  return withImageLine(await readJson(res));
 }
 
 export async function getFeatured(key?: string): Promise<FeaturedImage | null> {
@@ -55,7 +72,8 @@ export async function getFeatured(key?: string): Promise<FeaturedImage | null> {
       console.error(`Featured API Error: ${res.status} ${res.statusText}`);
       return null;
     }
-    return readJson(res);
+    const data: FeaturedImage = await readJson(res);
+    return data?.image ? { ...data, image: applyImageLine(data.image) } : data;
   } catch (err) {
     console.error('Failed to fetch featured image', err);
     return null;
@@ -72,12 +90,12 @@ export async function searchDerpiImages(
   perPage: number = 24,
 ): Promise<ApiResponse | null> {
   try {
-    const res = await fetch(
+    const res = await proxyFetch(
       `${DERPIBOORU_API_BASE}/search/images?q=${encodeURIComponent(query)}&page=${page}&per_page=${perPage}&sf=created_at&sd=desc`,
       { headers: { 'User-Agent': 'PicPony/1.0' } },
     );
     if (!res.ok) return null;
-    return readJson(res);
+    return withImageLine(await readJson(res));
   } catch {
     return null;
   }
@@ -100,7 +118,7 @@ export async function searchImagesByIds(
     },
   );
   if (!res.ok) await handleDerpiError(res);
-  return readJson(res);
+  return withImageLine(await readJson(res));
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +204,7 @@ export async function getDerpiProfile(
   userId: string | number,
 ): Promise<DerpiProfileResponse | null> {
   try {
-    const res = await fetch(`${DERPIBOORU_API_BASE}/profiles/${userId}`, {
+    const res = await proxyFetch(`${DERPIBOORU_API_BASE}/profiles/${userId}`, {
       headers: { 'User-Agent': 'PicPony/1.0' },
     });
     if (!res.ok) return null;
@@ -212,7 +230,10 @@ export async function uploadImageToDerpi(
   formData.append('image[tag_input]', tags);
   if (source) formData.append('image[source_url]', source);
   if (description) formData.append('image[description]', description);
-  return fetch(`${DERPIBOORU_API_BASE}/images?key=${encodeURIComponent(apiKey)}`, {
+  /* Through `proxyFetch` for the policy await and the write-path line, not for the
+     retry ladder — a POST takes neither the accel worker nor the relay, so the only
+     line that can apply is a third-party origin speaking the whole Philomena API. */
+  return proxyFetch(`${DERPIBOORU_API_BASE}/images?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     body: formData,
   });

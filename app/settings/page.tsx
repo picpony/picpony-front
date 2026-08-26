@@ -17,6 +17,8 @@ import {
   MdPalette,
   MdBrightness6,
   MdAnimation,
+  MdRefresh,
+  MdRoute,
   MdSpeed as MdSpeedIcon,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
@@ -29,7 +31,7 @@ import Select from '@/components/Select';
 import Button from '@/components/Button';
 import ImageCropper from '@/components/ImageCropper';
 import { api } from '@/lib/api';
-import { readJson } from '@/lib/api/client';
+import { proxyFetch, readJson } from '@/lib/api/client';
 import { useAuthModal } from '@/components/AuthModal';
 import { Input, Textarea } from '@/components/Input';
 import PageHeader from '@/components/PageHeader';
@@ -39,7 +41,7 @@ import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { ICON } from '@/lib/icons';
 import { readUserInfo } from '@/lib/hooks';
-import { LS_KEYS } from '@/lib/constants';
+import { DERPIBOORU_API_BASE, LS_KEYS } from '@/lib/constants';
 import { changeScheme } from '@/lib/motion';
 import {
   commitEntranceMotion,
@@ -53,6 +55,17 @@ import {
   type MotionSpeed,
   type SchemeSetting,
 } from '@/lib/appearance';
+import {
+  apiPolicy,
+  currentLineLabels,
+  imagePolicy,
+  raceImageLines,
+  refreshRoutePolicy,
+  subscribeRouteState,
+  syncLinePrefs,
+  type ApiPolicy,
+  type ImagePolicy,
+} from '@/lib/route';
 import { getAssetUrl, processImageFile } from '@/lib/utils';
 
 /* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run
@@ -246,6 +259,19 @@ function AppearanceSection() {
   );
 }
 
+/* What the server renders for the 当前线路 row. `resolveApiLine` answers `direct` on the server
+   and no policy is ever loaded there, so these are the SSR truth rather than a placeholder;
+   `ready` is what keeps the row from claiming a line before the client has read one. */
+const INITIAL_LINES = {
+  ready: false,
+  apiLabel: '直连',
+  imageLabel: '直连',
+  apiForced: false,
+  imageForced: false,
+  forcedApi: 'auto' as ApiPolicy,
+  forcedImage: 'auto' as ImagePolicy,
+};
+
 type CloudSettings = {
   contentFilter?: string;
   showTagCounts?: boolean;
@@ -256,6 +282,7 @@ type CloudSettings = {
   useCdn?: boolean;
   usePicponyProxy?: boolean;
   useApiAccel?: boolean;
+  useHongKongRelay?: boolean;
   showUploads?: boolean;
   showFaves?: boolean;
   showPosts?: boolean;
@@ -326,6 +353,35 @@ export default function SettingsPage() {
   const [useCdn, setUseCdn] = useState(false);
   const [usePicponyProxy, setUsePicponyProxy] = useState(true);
   const [useApiAccel, setUseApiAccel] = useState(true);
+  const [useHongKongRelay, setUseHongKongRelay] = useState(true);
+  const [refreshingLines, setRefreshingLines] = useState(false);
+
+  /* The line in force, which is not only this user's business: an administrator can pin the
+     whole site to one, in which case the four toggles below report that value and stop being
+     editable. Subscribed rather than read once, because a failover can move it while this page
+     is open.
+     `useState` + an effect rather than `useSyncExternalStore`, and that is the same rule the
+     rest of this page follows: the server renders the defaults and localStorage is applied
+     after mount. A store's client snapshot is read during hydration, so it would report the
+     device's real line against server HTML built from the SSR fallback — and those differ on
+     the *default* configuration, since the server always resolves `direct`. */
+  const [lines, setLines] = useState(INITIAL_LINES);
+  useEffect(() => {
+    const read = () => {
+      const l = currentLineLabels();
+      setLines({
+        ready: true,
+        apiLabel: l.api,
+        imageLabel: l.raceWon ? `${l.image}（竞速优选）` : l.image,
+        apiForced: l.apiForced,
+        imageForced: l.imageForced,
+        forcedApi: apiPolicy(),
+        forcedImage: imagePolicy(),
+      });
+    };
+    read();
+    return subscribeRouteState(read);
+  }, []);
 
   const [showUploads, setShowUploads] = useState(true);
   const [showFaves, setShowFaves] = useState(true);
@@ -395,6 +451,7 @@ export default function SettingsPage() {
         useCdn,
         usePicponyProxy,
         useApiAccel,
+        useHongKongRelay,
         showUploads,
         showFaves,
         showPosts,
@@ -424,6 +481,7 @@ export default function SettingsPage() {
       useCdn,
       usePicponyProxy,
       useApiAccel,
+      useHongKongRelay,
       showUploads,
       showFaves,
       showPosts,
@@ -473,6 +531,11 @@ export default function SettingsPage() {
     apply('useCdn', LS_KEYS.useCdn, setUseCdn);
     apply('usePicponyProxy', LS_KEYS.usePicponyProxy, setUsePicponyProxy);
     apply('useApiAccel', LS_KEYS.useApiAccel, setUseApiAccel);
+    apply('useHongKongRelay', LS_KEYS.useHongKongRelay, setUseHongKongRelay);
+    /* The account's stored lines have just landed in localStorage, so the request layer
+       has to be told to re-read them — otherwise this session keeps resolving against
+       whatever the device had before signing in. */
+    syncLinePrefs();
     apply('showUploads', LS_KEYS.showUploads, setShowUploads);
     apply('showFaves', LS_KEYS.showFaves, setShowFaves);
     apply('showPosts', LS_KEYS.showPosts, setShowPosts);
@@ -561,6 +624,7 @@ export default function SettingsPage() {
       setUseCdn(lsBool(LS_KEYS.useCdn, false));
       setUsePicponyProxy(lsBool(LS_KEYS.usePicponyProxy, true));
       setUseApiAccel(lsBool(LS_KEYS.useApiAccel, true));
+      setUseHongKongRelay(lsBool(LS_KEYS.useHongKongRelay, true));
       setShowUploads(lsBool(LS_KEYS.showUploads, true));
       setShowFaves(lsBool(LS_KEYS.showFaves, true));
       setShowPosts(lsBool(LS_KEYS.showPosts, true));
@@ -735,13 +799,12 @@ export default function SettingsPage() {
 
   // Detect user identity from Derpibooru API
   const detectRealIdentity = useCallback(async (apiKey: string) => {
-    const base = 'https://trixiebooru.org/api/v1/json';
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
       try {
         // 1. Try my:uploads
-        const uploadsRes = await fetch(
-          `${base}/search/images?q=my:uploads&per_page=1&key=${encodeURIComponent(apiKey)}`,
+        const uploadsRes = await proxyFetch(
+          `${DERPIBOORU_API_BASE}/search/images?q=my:uploads&per_page=1&key=${encodeURIComponent(apiKey)}`,
         );
         if (uploadsRes.status === 401 || uploadsRes.status === 403) return null;
         if (uploadsRes.ok) {
@@ -753,8 +816,8 @@ export default function SettingsPage() {
           throw new Error(`HTTP ${uploadsRes.status}`);
         }
         // 2. Try my:comments
-        const commentsRes = await fetch(
-          `${base}/search/comments?q=my:comments&per_page=1&key=${encodeURIComponent(apiKey)}`,
+        const commentsRes = await proxyFetch(
+          `${DERPIBOORU_API_BASE}/search/comments?q=my:comments&per_page=1&key=${encodeURIComponent(apiKey)}`,
         );
         if (commentsRes.status === 401 || commentsRes.status === 403) return null;
         if (commentsRes.ok) {
@@ -1021,6 +1084,17 @@ export default function SettingsPage() {
     );
   };
 
+  /* All four line writers end with `syncLinePrefs()`. The request layer re-reads these
+     keys from localStorage on every call, but *which line it is currently sitting on* is
+     separate runtime state — and turning the relay on has to take the accel line out of
+     the running, which is the same coupling the old frontend does in `mt()`. */
+  const handleUseCdnChange = (val: boolean) => {
+    setUseCdn(val);
+    lsSet(LS_KEYS.useCdn, val);
+    syncLinePrefs();
+    syncSettingsToCloud({ useCdn: val });
+  };
+
   const handleUsePicponyProxyChange = (val: boolean) => {
     setUsePicponyProxy(val);
     lsSet(LS_KEYS.usePicponyProxy, val);
@@ -1028,17 +1102,38 @@ export default function SettingsPage() {
       setUseCdn(true);
       lsSet(LS_KEYS.useCdn, true);
     }
+    syncLinePrefs();
     syncSettingsToCloud({ usePicponyProxy: val, useCdn: val || useCdn });
   };
 
+  /* No API-key gate, and that is a deliberate divergence from the old frontend. The accel line
+     is a `?url=` worker that needs no credential — `buildApiLineUrl` just wraps whatever URL it
+     is given — so gating the switch on a key created a state nobody could leave: the row read
+     off and was permanently disabled while the stored value stayed on, and `stepApiFailover`
+     went on using the line the UI said was unavailable. */
   const handleUseApiAccelChange = (val: boolean) => {
-    if (val && !currentApiKey) {
-      showToast('您当前未绑定 API Key，该功能无法使用', 'warning');
-      return;
-    }
     setUseApiAccel(val);
     lsSet(LS_KEYS.useApiAccel, val);
+    syncLinePrefs();
     syncSettingsToCloud({ useApiAccel: val });
+  };
+
+  const handleUseHongKongRelayChange = (val: boolean) => {
+    setUseHongKongRelay(val);
+    lsSet(LS_KEYS.useHongKongRelay, val);
+    syncLinePrefs();
+    syncSettingsToCloud({ useHongKongRelay: val });
+  };
+
+  /* Re-read the site policy and re-measure the image lines. The policy is fetched once
+     per load, so without this the only way to notice an administrator switching lines is
+     to reload. The race reports through the same subscription rather than this promise —
+     it can take up to five seconds and there is no reason to hold the button that long. */
+  const handleRefreshLines = async () => {
+    setRefreshingLines(true);
+    raceImageLines();
+    await refreshRoutePolicy();
+    setRefreshingLines(false);
   };
 
   const sortOptions = [
@@ -1496,44 +1591,104 @@ export default function SettingsPage() {
         </section>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdSpeed size={ICON.control} />}>性能与加速</SectionHeading>
+            <SectionHeading
+              icon={<MdSpeed size={ICON.control} />}
+              actions={
+                <Button
+                  size="xs"
+                  variant="tonal"
+                  icon={<MdRefresh />}
+                  loading={refreshingLines}
+                  onClick={handleRefreshLines}
+                >
+                  重新检测
+                </Button>
+              }
+            >
+              性能与加速
+            </SectionHeading>
+
+            {/* Which line is actually in use, which is not always what the switches below
+                say: an administrator can pin the whole site to one, and a failover can
+                move it mid-session. Read-only — the row reports, the switches ask. */}
+            <div className={rowClass}>
+              <div className="flex items-center gap-2">
+                <MdRoute size={ICON.control} className="text-outline" />
+                <div className={rowLabelClass}>
+                  <p className={labelClass}>当前线路</p>
+                  <p className={valueClass}>
+                    {lines.ready ? `API：${lines.apiLabel} ｜ 图片：${lines.imageLabel}` : '检测中…'}
+                  </p>
+                </div>
+              </div>
+              {(lines.apiForced || lines.imageForced) && (
+                <Badge tone="warning" size="sm">
+                  全站强制
+                </Badge>
+              )}
+            </div>
 
             <div className={rowClass}>
               <ToggleSwitch
                 layout="row"
-                checked={useCdn}
-                onChange={(v) => updateSetting('useCdn', v, LS_KEYS.useCdn, setUseCdn)}
+                checked={lines.imageForced ? lines.forcedImage === 'cdn' : useCdn}
+                onChange={handleUseCdnChange}
+                disabled={lines.imageForced}
                 label="启用图片 CDN 加速"
-                description="通过 wsrv.nl 加速图片加载"
-              />
-            </div>
-
-            <div className={rowClass}>
-              <ToggleSwitch
-                layout="row"
-                checked={usePicponyProxy}
-                onChange={handleUsePicponyProxyChange}
-                label="启用 PicPony 加速服务器 (beta)"
-                description="使用 picpony 代理服务器加速请求，开启后自动启用 CDN"
-              />
-            </div>
-
-            <div className={rowClass}>
-              <ToggleSwitch
-                layout="row"
-                checked={useApiAccel}
-                onChange={handleUseApiAccelChange}
-                disabled={!currentApiKey}
-                label="启用 API 加速"
                 description={
-                  currentApiKey
-                    ? '通过备用 API 代理提升请求稳定性'
-                    : '需要先配置 Derpibooru API Key'
+                  lines.imageForced ? '图片线路已被全站强制指定' : '通过 wsrv.nl 加速图片加载'
                 }
               />
-              {!currentApiKey && (
-                <span className="text-body-s text-on-surface-variant ml-2">需先配置 API Key</span>
-              )}
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                layout="row"
+                checked={lines.imageForced ? lines.forcedImage === 'picpony' : usePicponyProxy}
+                onChange={handleUsePicponyProxyChange}
+                disabled={lines.imageForced}
+                label="启用 PicPony 加速服务器 (beta)"
+                description={
+                  lines.imageForced
+                    ? '图片线路已被全站强制指定'
+                    : '通过 PicPony 代理服务器加载图片，开启后自动启用 CDN 作为下一档'
+                }
+              />
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                layout="row"
+                checked={lines.apiForced ? lines.forcedApi === 'picpony_api' : useHongKongRelay}
+                onChange={handleUseHongKongRelayChange}
+                disabled={lines.apiForced}
+                label="启用 PicPony API"
+                description={
+                  lines.apiForced
+                    ? 'API 线路已被全站强制指定'
+                    : '通过 PicPony 中转访问 Derpibooru，直连不通时的首选线路'
+                }
+              />
+            </div>
+
+            {/* Disabled while the relay is on rather than hidden: with the relay preferred
+                this toggle has nothing left to select, and `disabled-content` says so
+                where a vanished row would just have to be rediscovered. */}
+            <div className={rowClass}>
+              <ToggleSwitch
+                layout="row"
+                checked={lines.apiForced ? lines.forcedApi === 'api_accel' : useApiAccel}
+                onChange={handleUseApiAccelChange}
+                disabled={lines.apiForced || useHongKongRelay}
+                label="启用 API 加速"
+                description={
+                  lines.apiForced
+                    ? 'API 线路已被全站强制指定'
+                    : useHongKongRelay
+                      ? '已优先使用 PicPony API，关闭后此项可选'
+                      : '通过备用 API 代理提升请求稳定性'
+                }
+              />
             </div>
           </div>
         </section>

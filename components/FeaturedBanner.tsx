@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { api, PonyImage, applyCdn } from '@/lib/api';
+import { api, PonyImage, applyImageLine } from '@/lib/api';
 import { MdThumbUp, MdComment, MdPerson } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import Badge from '@/components/Badge';
@@ -83,17 +83,7 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
           served.current = 'snap';
           if (data && data.image) {
             hasContent.current = true;
-            let img = data.image;
-            // 应用 CDN
-            if (localStorage.getItem('trixie_use_cdn') === 'true') {
-              img = {
-                ...img,
-                representations: Object.fromEntries(
-                  Object.entries(img.representations).map(([k, v]) => [k, applyCdn(v)]),
-                ) as unknown as PonyImage['representations'],
-                view_url: applyCdn(img.view_url),
-              };
-            }
+            const img = applyImageLine(data.image);
             setFeatured(img);
             writeSnapshot<PonyImage>(FEATURED_KEY, img);
           }

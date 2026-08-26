@@ -1,7 +1,19 @@
 // 图片分层加载：PicPony 加速代理(0) → CDN(1) → 直连(2)，失败自动降级重试
-// 参考官方前端 main.js 的 retryImage / getProxyUrl / 全局熔断逻辑移植
+//
+// This module owns the *ladder* — which tier one `<img>` tries next after it failed —
+// and nothing else. Which line is in force, whether a host is healthy, and the CDN /
+// direct race all belong to `lib/route.ts`, because a forced policy has to beat the
+// ladder and because the same health state decides API lines too.
 
-import { getBrowsingSettings } from '@/lib/api/client';
+import { IMAGE_CDN_BASE, IMAGE_WORKER_BASE } from '@/lib/constants';
+import {
+  isImageForced,
+  recordCdnFailure,
+  raceImageLines,
+  recordWorkerFailure,
+  resolveImageFallbackLine,
+  resolveImageLine,
+} from '@/lib/route';
 
 export type ImageTier = 0 | 1 | 2;
 
@@ -12,23 +24,8 @@ export interface LoadAttempt {
   giveUp: boolean; // 重试次数耗尽，放弃
 }
 
-const PROXY_WORKER_URL = 'https://147052.xyz/?url=';
-const CDN_URL = 'https://wsrv.nl/?url=';
-
-const WORKER_DEGRADE_WINDOW = 30_000; // 故障记录窗口（ms）
-const WORKER_DEGRADE_COUNT = 3; // 窗口内达此数触发全局降级
-const RECOVERY_MS = 60_000; // 降级后多久探测恢复（ms）
 const DIRECT_MAX_RETRIES = 5; // 直连最大重试次数
 export const LOAD_TIMEOUT_MS = 15_000; // 单次加载超时（ms），与官方一致
-
-// 全局代理健康状态，跨所有图片实例共享
-const proxyState = {
-  workerAvailable: true,
-  cdnAvailable: true,
-  workerRecovering: false,
-  cdnRecovering: false,
-  workerFailures: [] as { time: number; url: string }[],
-};
 
 // 是否值得启用分层加载（Derpibooru 系或已被代理/CDN 包装的图片）
 export function isResilientImageUrl(url: string): boolean {
@@ -51,9 +48,9 @@ export function getRawImageUrl(url: string): string {
 export function buildImageUrl(rawUrl: string, tier: ImageTier, bust = false, thumb = false): string {
   let url: string;
   if (tier === 0) {
-    url = `${PROXY_WORKER_URL}${encodeURIComponent(rawUrl)}${thumb ? '&_thumb=1' : ''}`;
+    url = `${IMAGE_WORKER_BASE}${encodeURIComponent(rawUrl)}${thumb ? '&_thumb=1' : ''}`;
   } else if (tier === 1) {
-    url = `${CDN_URL}${encodeURIComponent(rawUrl)}`;
+    url = `${IMAGE_CDN_BASE}${encodeURIComponent(rawUrl)}`;
   } else {
     url = rawUrl;
   }
@@ -61,100 +58,84 @@ export function buildImageUrl(rawUrl: string, tier: ImageTier, bust = false, thu
   return url;
 }
 
-// 首次尝试：按当前设置与健康状态决定起始层
+const TIER_OF = { picpony: 0, cdn: 1, direct: 2 } as const;
+
+/**
+ * Put one already-built URL on the current image line, idempotently.
+ *
+ * Strips whatever wrapper it is already wearing before applying the current one, so it is safe
+ * to call at the data layer *and* have the ladder re-derive a tier from the result — and so a
+ * forced `direct` policy unwraps a URL the response arrived pre-wrapped in.
+ */
+export function toCurrentImageLine(url: string, thumb = false): string {
+  if (!url) return url;
+  return buildImageUrl(getRawImageUrl(url), TIER_OF[resolveImageLine()], false, thumb);
+}
+
+function tierAttempt(
+  rawUrl: string,
+  tier: ImageTier,
+  bust: boolean,
+  thumb: boolean,
+  retries = 0,
+): LoadAttempt {
+  return { url: buildImageUrl(rawUrl, tier, bust, thumb), tier, retries, giveUp: false };
+}
+
+/** 首次尝试：线路策略优先，其次是用户开关与健康状态 */
 export function createInitialAttempt(rawUrl: string, thumb = false): LoadAttempt {
-  const s = getBrowsingSettings();
-  let tier: ImageTier;
-  if (s.usePicponyProxy && proxyState.workerAvailable) tier = 0;
-  else if (s.useCdn && proxyState.cdnAvailable) tier = 1;
-  else tier = 2;
-  return { url: buildImageUrl(rawUrl, tier, false, thumb), tier, retries: 0, giveUp: false };
+  return tierAttempt(rawUrl, TIER_OF[resolveImageLine()], false, thumb);
 }
 
-// 记录代理故障；窗口内同一 URL 只计一次
-function recordWorkerFailure(rawUrl: string) {
-  const now = Date.now();
-  const clean = rawUrl.replace(/[&?]retry=\d+/g, '');
-  proxyState.workerFailures = proxyState.workerFailures.filter(
-    (f) => now - f.time < WORKER_DEGRADE_WINDOW,
-  );
-  if (!proxyState.workerFailures.some((f) => f.url === clean)) {
-    proxyState.workerFailures.push({ time: now, url: clean });
-  }
-  if (proxyState.workerFailures.length >= WORKER_DEGRADE_COUNT) {
-    proxyState.workerAvailable = false;
-    proxyState.workerFailures = [];
-    startWorkerRecovery();
-  }
-}
-
-function startWorkerRecovery() {
-  if (proxyState.workerRecovering) return;
-  proxyState.workerRecovering = true;
-  window.setTimeout(probeWorker, RECOVERY_MS);
-}
-
-// 探测代理是否恢复，成功后重新启用
-function probeWorker() {
-  const testUrl = `${PROXY_WORKER_URL}${encodeURIComponent('https://derpicdn.net/img/2017/12/27/1617129/thumb.png')}&_t=${Date.now()}`;
-  fetch(testUrl, { method: 'HEAD', mode: 'no-cors' })
-    .then(() => {
-      proxyState.workerAvailable = true;
-      proxyState.workerRecovering = false;
-    })
-    .catch(() => {
-      window.setTimeout(probeWorker, RECOVERY_MS);
-    });
-}
-
-function startCdnRecovery() {
-  if (proxyState.cdnRecovering) return;
-  proxyState.cdnRecovering = true;
-  window.setTimeout(probeCdn, RECOVERY_MS);
-}
-
-function probeCdn() {
-  const testUrl = `${CDN_URL}${encodeURIComponent('https://derpicdn.net/img/2017/12/27/1617129/thumb.png')}&_t=${Date.now()}`;
-  fetch(testUrl, { method: 'HEAD', mode: 'no-cors' })
-    .then(() => {
-      proxyState.cdnAvailable = true;
-      proxyState.cdnRecovering = false;
-    })
-    .catch(() => {
-      window.setTimeout(probeCdn, RECOVERY_MS);
-    });
-}
-
-// 失败后决策下一次尝试：同层重试 1 次 → 降级下一层 → 直连最多 DIRECT_MAX_RETRIES 次
+/**
+ * 失败后决策下一次尝试：同层重试 1 次 → 降级下一层 → 直连最多 DIRECT_MAX_RETRIES 次
+ *
+ * A forced policy has no ladder — it converges on the line the administrator named. That
+ * includes snapping back to it: an `<img>` whose first attempt was built before the policy
+ * landed (a grid restored from `lib/pageCache` paints in the first commit) starts on the
+ * wrong tier, and retrying that tier in place would never reach the forced one. Which is
+ * the case that matters, because a policy forcing `direct` usually means the other lines
+ * are the broken ones.
+ */
 export function resolveNextAttempt(
   rawUrl: string,
   attempt: LoadAttempt,
   thumb = false,
 ): LoadAttempt {
   if (attempt.giveUp) return attempt;
+
+  if (isImageForced()) {
+    const forcedTier = TIER_OF[resolveImageLine()];
+    if (forcedTier !== attempt.tier) return tierAttempt(rawUrl, forcedTier, true, thumb);
+    if (attempt.retries >= DIRECT_MAX_RETRIES) return { ...attempt, giveUp: true };
+    return {
+      ...attempt,
+      retries: attempt.retries + 1,
+      url: buildImageUrl(rawUrl, attempt.tier, true, thumb),
+    };
+  }
+
   // 代理/CDN 层先原地重试一次（带防缓存参数）
   if (attempt.retries === 0 && attempt.tier < 2) {
     return { ...attempt, retries: 1, url: buildImageUrl(rawUrl, attempt.tier, true, thumb) };
   }
+
   if (attempt.tier === 0) {
     recordWorkerFailure(rawUrl);
-    const s = getBrowsingSettings();
-    if (s.useCdn && proxyState.cdnAvailable) {
-      return { url: buildImageUrl(rawUrl, 1, false, thumb), tier: 1, retries: 0, giveUp: false };
-    }
-    return { url: buildImageUrl(rawUrl, 2, true, thumb), tier: 2, retries: 1, giveUp: false };
+    /* Measure the two remaining lines while the worker is in doubt, so the next image
+       starts on whichever of them is actually answering. */
+    raceImageLines();
+    return resolveImageFallbackLine() === 'cdn'
+      ? tierAttempt(rawUrl, 1, false, thumb)
+      : tierAttempt(rawUrl, 2, true, thumb, 1);
   }
+
   if (attempt.tier === 1) {
-    proxyState.cdnAvailable = false;
-    startCdnRecovery();
-    return { url: buildImageUrl(rawUrl, 2, true, thumb), tier: 2, retries: 1, giveUp: false };
+    recordCdnFailure(rawUrl);
+    return tierAttempt(rawUrl, 2, true, thumb, 1);
   }
+
   // 直连：退避重试，防止无限触发 onerror 死循环
   if (attempt.retries >= DIRECT_MAX_RETRIES) return { ...attempt, giveUp: true };
-  return {
-    url: buildImageUrl(rawUrl, 2, true, thumb),
-    tier: 2,
-    retries: attempt.retries + 1,
-    giveUp: false,
-  };
+  return tierAttempt(rawUrl, 2, true, thumb, attempt.retries + 1);
 }

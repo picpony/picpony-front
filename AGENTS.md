@@ -3040,3 +3040,118 @@ table rather than a derivation.
 `(prefers-color-scheme: dark)` was hand-typed at three sites and
 `(prefers-reduced-motion: reduce)` at four — seven copies of two strings, in the two places
 where a typo fails silently by never matching.
+
+## Request lines
+
+**A line is not a user preference — it is a policy the server pushes.**
+`api.php?action=get_maintenance_status` carries four fields besides the maintenance ones,
+and an administrator uses them to pin every visitor to one Derpibooru API line and one
+image line. `lib/route.ts` owns all of it. When the policy is anything but `auto` the
+user's own toggles in /settings report the forced value and go disabled — so "the line
+switches are all greyed out" is this feature *working*, not a bug, and that is exactly how
+it read on the old frontend for as long as nobody had written it down.
+
+**Two axes, and they are independent.** The API policy rewrites Derpibooru `/api/` calls;
+the image policy rewrites derpicdn images. PicPony's own `/api.php`, its avatars and its
+banners never change host, so `PICPONY_API_BASE`, `getAssetUrl`'s host and the proxy
+route's upstream are not part of this at all.
+
+| API line | URL |
+| --- | --- |
+| `direct` | `trixiebooru.org/api/v1/json/…` unchanged |
+| `api_accel` | `PROXY_API_BASE` + the encoded `derpibooru.org` URL — a Worker, `GET`/`HEAD`/`OPTIONS` only |
+| `picpony_api` | our own `/relay?url=…&xp_user=…` |
+| `third_party` | an admin-supplied origin, with the Derpibooru path and search copied onto it |
+
+| Image line | URL |
+| --- | --- |
+| `direct` | `derpicdn.net/…` unchanged |
+| `cdn` | `IMAGE_CDN_BASE` + encoded |
+| `picpony` | `IMAGE_WORKER_BASE` + encoded, plus a thumbnail marker |
+
+**Every line is applied per request, over the canonical URL.** `DERPIBOORU_API_BASE` stays
+what it is and `buildApiLineUrl` rewrites at call time. The alternative — making the base
+constants mutable — cannot work: `export const '…'` is a string literal that a bundler is
+free to fold into all 140 call sites, so reassigning the module binding changes nothing.
+
+**`proxyFetch` awaits `ensureRoutePolicy()` on every call**, and that await is the whole
+guarantee. Resolved, it costs a microtask; unresolved, it is what stops the first request
+of a cold load from going out on the default host while the site is pinned somewhere else.
+It is the old frontend's `window._maintenanceReady` moved somewhere it cannot be got
+wrong — a React boundary would depend on mount order. It **never rejects**: any failure
+leaves the `auto` defaults in place, because a rejection there would lock every Derpibooru
+request in the app behind one dead fetch.
+
+**A forced line is not ours to leave, and neither is the relay.** Under a forced policy —
+or on `picpony_api` under `auto` — a failure is retried in place, three times, and then
+thrown. Falling quietly back to direct is what would make 全站强制 meaningless, and the
+relay in particular exists for the visitor whose direct connection does not work, so
+dropping them onto it would undo the only thing that line is for. The same rule holds for
+images: a forced image policy has no ladder, so `resolveNextAttempt` converges on the named
+line — including *snapping to* it, since an `<img>` built before the policy landed starts on
+the wrong tier and retrying that tier in place would never reach the forced one.
+
+**What that costs, stated because it is the sharp edge of the design.** `useHongKongRelay`
+defaults on, so `auto` resolves to the relay for anyone who has not touched the switch — and
+the relay does not fail over. If it is down, those visitors get an error even where direct
+works. The cascade that is actually reachable is therefore **direct → accel →
+direct-with-cooldown**, and only for users who turned the relay off; cooldown is 30s, or 10
+minutes on a 403/503, which mean an overloaded backup rather than a broken one.
+`stepApiFailover`'s relay step is unreachable for the same reason and says so where it sits.
+
+**Only a network throw and the proxy statuses retry**, and three exclusions are load-bearing.
+A **cancellation** is not a failure of anything: retrying re-`fetch`es an aborted signal, and
+on the `auto` cascade it would announce two line switches because the pointer left a gallery
+card. **429** is left out of the failover list that the old frontend includes — a rate limit
+is counted against the caller, so moving to a shared worker spreads one visitor's limit onto
+every visitor of that line, and it made `handleDerpiError`'s dedicated 429 message
+unreachable. A **403 on a request that carried a key** is about the key: no other line
+answers it differently, so failing over spends six requests and two snackbars on a revoked
+credential. Note too that `readJson` turns a dead line into `{ success: false }` rather than
+an exception, which is why the decision is made on `res.ok` and the status inside `proxyFetch`.
+
+**The image line is applied in the data layer, once.** `applyImageLine` runs inside
+`lib/api/derpi.ts` for every image-bearing response, not at the screens — the featured banner,
+the opened picture and both profile grids render their URLs directly, so a policy applied only
+in the two gallery maps never reached them. It is idempotent (strip the wrapper, then apply the
+current one), which is what makes the surviving call sites harmless and what lets a forced
+`direct` policy unwrap a URL that arrived pre-wrapped.
+
+**`/relay` exists because the relay checks `Origin`.** `cdn.picpony.top/relay` allows
+`picpony.top` and `www.picpony.top` and 403s everything else, so the browser cannot use that
+line from this app's origin at all. `app/relay/route.ts` makes the hop server-side, where
+the `Origin` is ours to set. It forwards `GET`/`HEAD` only and validates protocol, host, port,
+credentials **and path** — **that check is the security of the endpoint**, not a tidiness
+check. Without the path restriction a bare `?url=https://derpibooru.org/` serves third-party
+HTML *from this origin* on an unauthenticated GET, in the origin that holds the session token,
+because the upstream `content-type` is echoed through. A 3xx is rejected rather than passed on:
+the browser would follow it back to the host whose `Origin` check this route exists to satisfy.
+`xp_user` is bounded and charset-checked because it is unauthenticated — it is the relay's
+per-user accounting label and anyone can claim any value for it.
+
+**Three things were quietly wrong before this and are worth not reintroducing.**
+`usePicponyProxy` is the *image* worker's toggle, and it was gating the API proxy as well,
+so one switch steered both pipelines. The fourth line — `picpony_hk_relay`, the relay, and
+the old frontend's *default* — was missing entirely, so this app's out-of-the-box line was
+the accel Worker while the old one had always been the relay. And the image degrade
+constants had drifted from the live ones (a 30s window against 10s, one 60s recovery
+against 30s and 15s) with no CDN-versus-direct race at all, so the `raceWinner` rung in
+`resolveImageLine` had nothing to read.
+
+**The image probes use an `Image()`, not a `fetch`.** These hosts are image proxies, so a
+decoded bitmap is the only evidence that means "this line works". A no-cors `HEAD` — what
+this repo used — yields an opaque response that resolves on a 500 as readily as on a 200, so
+a dead line probed as healthy and undid its own degrade. The race is lazy: it runs when an
+image has actually failed and after a recovery probe comes back down, never at boot. Both
+hosts take the same three-distinct-URLs-in-10s threshold; the CDN used to be dropped on its
+first failure, so one deleted picture — which 404s on every line — took the CDN out of the
+session for every other image in the app.
+
+**Two things to know rather than fix.** When the server sets
+`global_api_third_party_pass_api_key`, the user's Derpibooru API key is forwarded in the query
+string to the third-party origin. That is the old frontend's behaviour and the flag is the
+server's to set, so this app follows it — but it is a credential leaving for a host neither end
+controls, and the `false` branch (which strips the key) has to keep working. And the key
+transits *our* server too: `getFeatured` and identity detection put `key=` in the URL, and on
+the relay line that whole URL becomes a query parameter of `/relay`, so it lands in this
+server's access log as well as the relay's.

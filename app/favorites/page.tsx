@@ -14,12 +14,13 @@ import { LoadMoreButton } from '@/components/Pagination';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { useRouter } from 'next/navigation';
-import { readJson } from '@/lib/api/client';
+import { applyImageLine, proxyFetch, readJson } from '@/lib/api/client';
+import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import PageHeader from '@/components/PageHeader';
 import { ICON } from '@/lib/icons';
 
 const PAGE_SIZE = 50;
-const DERPI_SEARCH = 'https://trixiebooru.org/api/v1/json/search/images';
+const DERPI_SEARCH = `${DERPIBOORU_API_BASE}/search/images`;
 const DERPI_FAVES_QUERY =
   '(my:faves), -explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, -anthro, -humanized, pony';
 
@@ -88,14 +89,17 @@ function FavoritesPane({ source }: { source: FaveSource }) {
         params.set('sd', 'desc');
         params.set('key', key);
       }
-      const res = await fetch(`${DERPI_SEARCH}?${params}`, { cache: 'no-store', signal });
+      /* Through `proxyFetch` so a forced API line reaches this list too — it is the one
+         Derpibooru read on a page of its own, and it was the last one still going direct. */
+      const res = await proxyFetch(`${DERPI_SEARCH}?${params}`, { cache: 'no-store', signal });
       if (!res.ok) {
         const err = new Error(
           res.status === 429 ? '您的请求次数过快，超出原站限制' : `HTTP Error ${res.status}`,
         );
         throw err;
       }
-      return (await res.json()) as { images: PonyImage[] };
+      const data = (await readJson(res)) as { images: PonyImage[] };
+      return { images: (data.images ?? []).map(applyImageLine) };
     },
     [],
   );

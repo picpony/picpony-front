@@ -17,8 +17,41 @@ export const PICPONY_API_ORIGIN = 'https://picpony.top';
 /** Derpibooru (Trixiebooru) API 基础路径 */
 export const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
-/** PicPony 图片代理加速服务器 */
+/**
+ * The `api_accel` line: a Cloudflare Worker that fetches a Derpibooru URL for you.
+ *
+ * One of the four API lines in `lib/route.ts` — not "the proxy". It answers
+ * `GET`/`HEAD`/`OPTIONS` only, so a POST to Derpibooru can never be wrapped in it.
+ * Note the host is `picponyapi.147052.xyz` while the *image* worker at
+ * `lib/imageLoader.ts` is the bare `147052.xyz`: two hostnames, two pipelines.
+ */
 export const PROXY_API_BASE = 'https://picponyapi.147052.xyz/?url=';
+
+/**
+ * The `picpony_api` line, and the path our own handler answers on.
+ *
+ * The upstream enforces an `Origin` allowlist of `picpony.top` / `www.picpony.top`
+ * and 403s everything else, so the browser cannot reach it from this app's origin
+ * at all. `app/relay/route.ts` calls it server-side with `PICPONY_API_ORIGIN` as the
+ * `Origin`, which is why the client-facing value here is a path rather than a host.
+ */
+export const PICPONY_RELAY_UPSTREAM = 'https://cdn.picpony.top/relay';
+export const PICPONY_RELAY_PATH = '/relay';
+
+/**
+ * The two non-direct image lines.
+ *
+ * They were private to `lib/imageLoader.ts`, which is where the retry ladder lives;
+ * they moved here when `lib/route.ts` became the one module that decides *which*
+ * line is in force, because both modules now need to name them. Note the worker is
+ * the bare `147052.xyz` while the API line's worker is `picponyapi.147052.xyz` —
+ * `getRawImageUrl` is the one place that has to know about both.
+ */
+export const IMAGE_WORKER_BASE = 'https://147052.xyz/?url=';
+export const IMAGE_CDN_BASE = 'https://wsrv.nl/?url=';
+
+/** The fixed thumbnail every image-line probe and the CDN/direct race fetches. */
+export const IMAGE_PROBE_URL = 'https://derpicdn.net/img/2017/12/27/1617129/thumb.png';
 
 /** 搜索引擎图片搜索 API (Next.js rewrite to picpony.top/search-api) */
 export const SEARCH_IMAGE_API = '/search-api/api/upload-search';
@@ -37,9 +70,14 @@ export const LS_KEYS = {
   banAnthro: 'trixie_ban_anthro',
   banDiscomfort: 'trixie_ban_discomfort',
   onlyPony: 'trixie_only_pony',
+  /* The four line preferences, and they sit on *two* axes — `lib/route.ts` owns the
+     split. `useCdn` and `usePicponyProxy` steer images; `useApiAccel` and
+     `useHongKongRelay` steer the Derpibooru API. `usePicponyProxy` used to gate the
+     API proxy as well, which is how one toggle came to gate both pipelines. */
   useCdn: 'trixie_use_cdn',
   usePicponyProxy: 'picpony_use_proxy',
   useApiAccel: 'picpony_api_accel',
+  useHongKongRelay: 'picpony_hk_relay',
   homeSort: 'picpony_default_home_sort',
   searchSort: 'picpony_default_search_sort',
   devBannerDismissed: 'picpony_dev_banner_dismissed',

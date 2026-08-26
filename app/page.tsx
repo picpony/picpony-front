@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { MdAdd } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
-import { api, PonyImage, applyCdn, ForumPost } from '@/lib/api';
+import { api, PonyImage, applyImageLine, ForumPost } from '@/lib/api';
 import FeaturedBanner, { FeaturedBannerSkeleton } from '@/components/FeaturedBanner';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
@@ -88,16 +88,7 @@ function ImageList({ onRetry }: { onRetry?: () => void }) {
       .then((res) => {
         if (isMounted) {
           served.current = signature;
-          let imgs = res.images;
-          if (localStorage.getItem('trixie_use_cdn') === 'true') {
-            imgs = imgs.map((img) => ({
-              ...img,
-              representations: Object.fromEntries(
-                Object.entries(img.representations).map(([k, v]) => [k, applyCdn(v)]),
-              ) as unknown as PonyImage['representations'],
-              view_url: applyCdn(img.view_url),
-            }));
-          }
+          const imgs = res.images.map(applyImageLine);
           setImages(imgs);
           setHasMore(imgs.length === 50);
           setIsLoading(false);

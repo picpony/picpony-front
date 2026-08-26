@@ -1,4 +1,5 @@
 import { PICPONY_API_BASE } from '@/lib/constants';
+import type { SiteStatusResponse } from '@/lib/types/site';
 import { readJson } from './client';
 
 // ---------------------------------------------------------------------------
@@ -245,7 +246,17 @@ export async function adminEditBadge(
 // 运维管理
 // ---------------------------------------------------------------------------
 
-export async function getMaintenanceStatus() {
+/**
+ * The site status document, for the console's own editors.
+ *
+ * It also carries the global route policy, which `lib/route.ts` reads for itself at
+ * boot — deliberately with its own `fetch` rather than this one, because that module is
+ * on every page's request path and this one may not be imported outside `/admin`
+ * (`api` is a runtime spread, so an import from here would pull all 48 admin calls into
+ * a gallery bundle). `SiteStatusResponse` is the shared piece, so the two cannot drift
+ * on the shape.
+ */
+export async function getMaintenanceStatus(): Promise<SiteStatusResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`);
   return readJson(res);
 }
