@@ -446,6 +446,27 @@ export default function BlockGroupsPage() {
         onClose={() => setEditModalOpen(false)}
         title={editGroupId ? '编辑屏蔽组' : '创建新屏蔽组'}
         maxWidth="lg"
+        /* The action row goes through `footer`, which is what the app's other nineteen
+           dialogs do — including the delete confirm forty lines below. It was two
+           full-width buttons in a 12px-gap flex row of its own, and that is broken rather
+           than merely unconventional: `buttonClasses` always emits a no-shrink rule, so two
+           buttons at 100% came to 200% plus the gap with neither allowed to give, and
+           `Modal`'s panel clips its overflow — 保存屏蔽组 was cut off the right edge of the
+           dialog. `cn` is a plain join and resolves no Tailwind conflict, so nothing was
+           going to drop that rule.
+           The footer also pins the row outside the body's scroller, where it belongs: this
+           dialog is tall enough to scroll, and the buttons used to scroll away with the
+           tag wells. */
+        footer={
+          <>
+            <Button variant="text" onClick={() => setEditModalOpen(false)}>
+              取消
+            </Button>
+            <Button variant="danger" onClick={handleSaveGroup}>
+              保存屏蔽组
+            </Button>
+          </>
+        }
       >
         {' '}
         <div className="space-y-4">
@@ -532,7 +553,6 @@ export default function BlockGroupsPage() {
               <MdBlock size={ICON.dense} className="inline mr-0.5" /> 隐藏标签列表：
             </p>
             <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-10 max-h-30 overflow-y-auto">
-              
               {hiddenTags.length === 0 ? (
                 <EmptyState size="inline" title="暂无标签" />
               ) : (
@@ -550,7 +570,6 @@ export default function BlockGroupsPage() {
               <MdVisibility size={ICON.dense} className="inline mr-0.5" /> 遮挡标签列表：
             </p>
             <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-10 max-h-30 overflow-y-auto">
-              
               {spoileredTags.length === 0 ? (
                 <EmptyState size="inline" title="暂无标签" />
               ) : (
@@ -561,14 +580,6 @@ export default function BlockGroupsPage() {
                 ))
               )}
             </div>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="tonal" fullWidth onClick={() => setEditModalOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" fullWidth onClick={handleSaveGroup}>
-              保存屏蔽组
-            </Button>
           </div>
         </div>
       </Modal>

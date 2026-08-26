@@ -103,7 +103,7 @@ export default function Avatar({
     <div
       className={cn(
         'relative shrink-0 overflow-hidden rounded-full bg-surface-container-high text-on-surface-variant',
-        ringed && 'ring-2 ring-primary',
+        ringed && 'ring-2 ring-primary-ink',
         !inline && heroBox,
         className,
       )}

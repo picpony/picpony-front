@@ -10,7 +10,6 @@ import {
   useSyncExternalStore,
   useTransition,
 } from 'react';
-import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation';
 import {
@@ -52,14 +51,21 @@ import Button from '@/components/Button';
 import Tabs from '@/components/Tabs';
 import IconButton, { iconButtonClasses } from '@/components/IconButton';
 import {
-  circularReveal,
+  changeScheme,
   setTabIntent,
   startTabTransition,
   useDrawerSwipe,
 } from '@/lib/motion';
+import {
+  MOTION_SPEED_SCALE,
+  refreshSystemMotion,
+  useScheme,
+  useSchemeSetting,
+  type SchemeSetting,
+} from '@/lib/appearance';
 import { readUserInfo, useMediaQuery } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
-import { MEDIA } from '@/lib/constants';
+import { COOKIE_KEYS, LS_KEYS, MEDIA } from '@/lib/constants';
 
 function SearchBar() {
   const router = useRouter();
@@ -113,8 +119,15 @@ interface UserInfo {
  *
  * It also swallows a burst of taps into one push, which is what it was
  * originally for.
+ *
+ * Scaled by the *slowest* speed rather than held at 520, for the reason
+ * `useExitAnimation` gives about the same class of timer: the slide's own clock now goes
+ * through `--motion-scale`, so at 缓慢 it settles at about 722ms and a 520ms push would land
+ * ~200ms inside the travel — the dropped frame this constant exists to avoid. The maximum is
+ * the only value that is right at every speed, and pushing the URL later costs nothing
+ * because nothing on screen is waiting for it.
  */
-const TAB_PUSH_COALESCE_MS = 520;
+const TAB_PUSH_COALESCE_MS = Math.round(520 * MOTION_SPEED_SCALE.slow);
 
 function TabNavBar({ hidden }: { hidden: boolean }) {
   const searchParams = useBackgroundSearchParams();
@@ -221,8 +234,8 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
       inert={hidden ? true : undefined}
       className={`pointer-events-none absolute inset-x-0 bottom-0 z-page-chrome flex items-center justify-center py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[opacity,translate] ${
         hidden
-          ? 'translate-y-2 opacity-0 duration-200 ease-[var(--ease-accelerate)]'
-          : 'translate-y-0 opacity-100 duration-400 ease-[var(--ease-decelerate)]'
+          ? 'translate-y-2 opacity-0 duration-exit ease-[var(--ease-accelerate)]'
+          : 'translate-y-0 opacity-100 duration-enter ease-[var(--ease-decelerate)]'
       }`}
     >
       {/* `Tabs variant="pill"`, not a hand-rolled segmented control. This was one
@@ -251,12 +264,10 @@ export default function AppLayout({
   children,
   overlay,
   initialCollapsed,
-  initialDark,
 }: {
   children: React.ReactNode;
   overlay: React.ReactNode;
   initialCollapsed: boolean;
-  initialDark: boolean;
 }) {
   // Keep the first client render identical to SSR. Browser-only sources
   // (viewport, localStorage) are applied after mount to avoid hydration mismatch.
@@ -264,9 +275,15 @@ export default function AppLayout({
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
-  const [darkMode, setDarkMode] = useState(initialDark);
 
-  const [followSystem, setFollowSystem] = useState(true);
+  /* The colour scheme is not local state. It is two localStorage keys, a cookie and a
+     class on `<html>`, all owned by `lib/appearance`; these two hooks are a view onto
+     that store, which is what keeps the app bar's glyph and /settings' dropdown from
+     disagreeing about which mode is on. The old `useState(initialDark)` pair could not:
+     changing the mode from /settings left this button showing the previous one. */
+  const schemeSetting = useSchemeSetting();
+  const darkMode = useScheme() === 'dark';
+  const followSystem = schemeSetting === 'system';
   const themeButtonRef = useRef<HTMLButtonElement>(null);
   const themeIconRef = useRef<HTMLSpanElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -352,22 +369,6 @@ export default function AppLayout({
     });
   }, [router]);
 
-  const applyDarkMode = useCallback((dark: boolean) => {
-    document.documentElement.classList.toggle('dark', dark);
-    document.cookie = `darkMode=${dark};path=/;max-age=${365 * 24 * 60 * 60}`;
-  }, []);
-
-  const commitTheme = useCallback(
-    (dark: boolean, followsSystem?: boolean) => {
-      flushSync(() => {
-        if (followsSystem !== undefined) setFollowSystem(followsSystem);
-        setDarkMode(dark);
-      });
-      applyDarkMode(dark);
-    },
-    [applyDarkMode],
-  );
-
   const getRevealOrigin = useCallback(() => {
     // The icon, not the button's box: every entry point into a theme change grows
     // the wipe out of the glyph itself. They share a centre while the button is a
@@ -384,83 +385,64 @@ export default function AppLayout({
     };
   }, []);
 
-  // Apply browser-only preferences after mount so the first paint matches SSR.
-  // queueMicrotask keeps setState out of the effect's synchronous body
-  // (react-hooks/set-state-in-effect) while still running before the next paint.
+  /* Restore the docked drawer's remembered state after mount.
+   *
+   * This effect used to apply the colour scheme too, and no longer needs to: the layout
+   * puts all four appearance preferences on `<html>` from cookies and the pre-paint
+   * script corrects them from localStorage before the first paint, so by the time this
+   * runs the scheme is already right and re-applying it here could only introduce a
+   * second write. What is left is genuinely post-mount, because it depends on the
+   * viewport. queueMicrotask keeps setState out of the effect's synchronous body
+   * (react-hooks/set-state-in-effect) while still running before the next paint. */
   useEffect(() => {
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
-
-      const storedFollowSystem = localStorage.getItem('followSystemPrefersColorScheme');
-      const shouldFollowSystem = storedFollowSystem === null || storedFollowSystem === 'true';
-      setFollowSystem(shouldFollowSystem);
-
-      if (shouldFollowSystem) {
-        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setDarkMode(isDark);
-        applyDarkMode(isDark);
-      } else {
-        const storedDark = localStorage.getItem('darkMode');
-        const isDark = storedDark === 'true';
-        setDarkMode(isDark);
-        applyDarkMode(isDark);
-      }
-
       // Width is handled during render above; this only restores the docked
       // drawer's remembered state, and must not fight it on a phone.
       if (window.matchMedia(MEDIA.md).matches) {
-        const savedSidebar = localStorage.getItem('sidebar_collapsed');
+        const savedSidebar = localStorage.getItem(LS_KEYS.sidebarCollapsed);
         if (savedSidebar !== null) setIsCollapsed(savedSidebar === 'true');
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [applyDarkMode]);
+  }, []);
 
+  /* While following the system, an OS-level scheme flip re-runs the wipe.
+   *
+   * This is the one theme change reachable with no user input at all, which is why
+   * `circularReveal` consults `heroOwnsScreen()` before it freezes rendering to snapshot
+   * a frame. `changeScheme` is a no-op when the resolved scheme already matches, so the
+   * old `e.matches === darkMode` guard is gone rather than duplicated. */
   useEffect(() => {
-    if (!followSystem) return;
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => {
-      if (e.matches === darkMode) return;
-      circularReveal(() => {
-        commitTheme(e.matches);
-      }, getRevealOrigin());
-    };
+    if (schemeSetting !== 'system') return;
+    const mediaQuery = window.matchMedia(MEDIA.dark);
+    const handler = () => changeScheme('system', getRevealOrigin());
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
-  }, [followSystem, darkMode, commitTheme, getRevealOrigin]);
+  }, [schemeSetting, getRevealOrigin]);
+
+  /* And the same for the motion tier, which is the other `system`-resolved preference.
+   *
+   * Without this, choosing 跟随系统 and then turning on the OS's reduce-motion setting
+   * changed nothing until a reload: the store's own listener bumps a version, but the
+   * *attribute* — which is what the CSS is keyed on and what `motionTier()` reads — was
+   * never rewritten. The two watchers are separate because only the scheme's is a visible
+   * change worth a wipe; a tier change has nothing to animate by definition. */
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MEDIA.reducedMotion);
+    mediaQuery.addEventListener('change', refreshSystemMotion);
+    return () => mediaQuery.removeEventListener('change', refreshSystemMotion);
+  }, []);
 
   const cycleThemeMode = () => {
-    const currentMode = followSystem ? 'system' : darkMode ? 'dark' : 'light';
-    const nextMode = currentMode === 'light' ? 'dark' : currentMode === 'dark' ? 'system' : 'light';
-
-    if (nextMode === 'system') {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      localStorage.setItem('followSystemPrefersColorScheme', 'true');
-      if (systemDark === darkMode) {
-        commitTheme(systemDark, true);
-      } else {
-        circularReveal(() => {
-          commitTheme(systemDark, true);
-        }, getRevealOrigin());
-      }
-      return;
-    }
-
-    const nextDark = nextMode === 'dark';
-    localStorage.setItem('followSystemPrefersColorScheme', 'false');
-    localStorage.setItem('darkMode', String(nextDark));
-    if (nextDark === darkMode) {
-      commitTheme(nextDark, false);
-    } else {
-      circularReveal(() => {
-        commitTheme(nextDark, false);
-      }, getRevealOrigin());
-    }
+    const next: SchemeSetting =
+      schemeSetting === 'light' ? 'dark' : schemeSetting === 'dark' ? 'system' : 'light';
+    changeScheme(next, getRevealOrigin());
   };
+
 
   useEffect(() => {
     const fetchUnreadCounts = async () => {
@@ -561,9 +543,9 @@ export default function AppLayout({
   const toggleSidebar = () => {
     setIsCollapsed((prev) => {
       const newState = !prev;
-      localStorage.setItem('sidebar_collapsed', String(newState));
+      localStorage.setItem(LS_KEYS.sidebarCollapsed, String(newState));
       // Cookie keeps SSR in sync with the last desktop preference.
-      document.cookie = `sidebarCollapsed=${newState};path=/;max-age=${365 * 24 * 60 * 60}`;
+      document.cookie = `${COOKIE_KEYS.sidebarCollapsed}=${newState};path=/;max-age=${365 * 24 * 60 * 60}`;
       return newState;
     });
   };

@@ -115,7 +115,7 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(
       // is also what the old `rounded-md` resolved to before the scale moved,
       // so migrated cards keep their exact silhouette.
       className={cn(
-        'rounded-md transition-shadow duration-200 ease-[var(--ease-standard)]',
+        'rounded-md transition-shadow duration-standard ease-[var(--ease-standard)]',
         VARIANTS[variant],
         PADDINGS[padding],
         /* A card that is a button still reads as a card: no pill, no label role,

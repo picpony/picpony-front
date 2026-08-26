@@ -734,6 +734,32 @@ export const HERO_REVEAL_WINDOW: Record<
  * Animations `easing:` string, where a failed `var()` falls back to `ease` in silence.
  */
 export const REVEAL_CONTENT_DURATION_MS = 200;
+
+/**
+ * How long a superseded flyer takes to fade out.
+ *
+ * A new flight has already taken the screen when this runs, so it is a leave rather than a
+ * transition: the motion table's "leaves the screen" row, 200ms. It was a default parameter
+ * value written as a bare `200` at the one call site that omits the argument, which is the
+ * shape a duration should never take — nothing scaled it, so at 缓慢 the retiring flyer
+ * finished before the flight replacing it had started moving.
+ */
+export const FLIGHT_RETIRE_MS = 200;
+
+/**
+ * Floor on the leg a mid-flight rebuild produces.
+ *
+ * A viewport change in the last few frames of a flight would otherwise re-aim the box over a
+ * span too short to sample — `HERO_PROGRESS_SAMPLES` divides whatever it is given — and the
+ * result is a jump rather than a correction. 80ms is under a third of the flight's own clock,
+ * so the rebuild still reads as continuing rather than as restarting.
+ *
+ * Like every other figure here it is a *base* value: `lib/hero/motion.ts` multiplies by
+ * `motionScale()` at the point of use, because this file is imported directly by
+ * `scripts/heroPath.mjs` and cannot reach `lib/appearance` without pulling `matchMedia` into
+ * a Node script.
+ */
+export const FLIGHT_REBUILD_MIN_MS = 80;
 /** On the 4dp grid. Were 10 / 16 / 22 — the same slip `REVEAL_SHIFT` was fixed for. */
 export const REVEAL_DISTANCE_PX = {
   chrome: 8,

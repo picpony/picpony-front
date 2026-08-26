@@ -125,7 +125,7 @@ export default function ImageSearchModal({
               fill
               className="object-contain rounded-md"
             />
-            <div className="bg-media-plate absolute inset-0 flex items-center justify-center rounded-md opacity-0 transition-opacity duration-300 ease-[var(--ease-standard)] hover:opacity-100">
+            <div className="bg-media-plate absolute inset-0 flex items-center justify-center rounded-md opacity-0 transition-opacity duration-composite ease-[var(--ease-standard)] hover:opacity-100">
               <span className="text-on-media text-label-l">更换图片</span>
             </div>
           </div>
@@ -140,7 +140,7 @@ export default function ImageSearchModal({
       <div className="mb-2 px-2">
         <div className="flex justify-between items-center mb-2">
           <p className="text-label-l text-on-surface">容差</p>
-          <span className="text-label-l-emphasized text-primary">{distance.toFixed(2)}</span>
+          <span className="text-label-l-emphasized text-primary-ink">{distance.toFixed(2)}</span>
         </div>
         <Slider
           min={0.01}

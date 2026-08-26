@@ -254,7 +254,7 @@ export default function RichTextEditor({
        `.m3-field[data-labelled]:focus-within > fieldset` does. And a text field is
        `CornerExtraSmall`, so `rounded-sm` (the chip's 8dp step) was one step too
        round. */
-    <div className="w-full overflow-hidden rounded-xs border border-outline transition-ui focus-within:border-2 focus-within:border-primary">
+    <div className="w-full overflow-hidden rounded-xs border border-outline transition-ui focus-within:border-2 focus-within:border-primary-ink">
       <style>{`
         /* wangEditor is themed entirely through its own \`--w-e-*\` variables.
            These used to be set only under \`.dark\`, and to a cold slate palette:
@@ -274,8 +274,12 @@ export default function RichTextEditor({
           --w-e-textarea-slight-border-color: var(--md-sys-color-outline-variant);
           --w-e-textarea-slight-color: var(--md-sys-color-on-surface-variant);
           --w-e-textarea-slight-bg-color: var(--md-sys-color-surface-container);
-          --w-e-textarea-selected-border-color: var(--md-sys-color-primary);
-          --w-e-textarea-handler-bg-color: var(--md-sys-color-primary);
+          /* A selection border and four drag handles: marks on the composer's surface with
+             nothing sitting inside them, so they take the ink rather than the fill — the
+             same call the focus outline twenty lines above makes. On a light-coated palette
+             the fill would put the handles at 1.23:1 against the container behind them. */
+          --w-e-textarea-selected-border-color: var(--md-sys-color-primary-ink);
+          --w-e-textarea-handler-bg-color: var(--md-sys-color-primary-ink);
           --w-e-toolbar-color: var(--md-sys-color-on-surface-variant);
           --w-e-toolbar-bg-color: var(--md-sys-color-surface-container-low);
           --w-e-toolbar-active-color: var(--md-sys-color-on-surface);
@@ -364,8 +368,8 @@ export default function RichTextEditor({
           padding: 0 8px;
           border-radius: 9999px;
           transition:
-            background-color 200ms var(--ease-standard),
-            color 200ms var(--ease-standard);
+            background-color var(--transition-duration-standard) var(--ease-standard),
+            color var(--transition-duration-standard) var(--ease-standard);
         }
 
         /* The three state weights read the tokens rather than repeating numbers.

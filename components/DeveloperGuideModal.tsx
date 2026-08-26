@@ -181,7 +181,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
           <>
             {isDeveloper ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-body-m text-primary">
+                <div className="flex items-center gap-2 text-body-m text-primary-ink">
                   <MdConstruction size={ICON.control} />
                   当前已处于开发者模式
                 </div>

@@ -63,7 +63,7 @@ function CommentAvatar({ comment }: { comment: Comment }) {
       }
       aria-label={`查看 ${comment.username} 的个人资料`}
       scroll={false}
-      className="block shrink-0 rounded-full ring-2 ring-transparent transition-ui hover:ring-primary focus-visible:focus-ring"
+      className="block shrink-0 rounded-full ring-2 ring-transparent transition-ui hover:ring-primary-ink focus-visible:focus-ring"
     >
       {face}
     </Link>

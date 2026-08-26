@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Observer, gsap, prefersReducedMotion, spring, useGSAP } from '@/lib/motion';
+import { Observer, gsap, spring, useGSAP } from '@/lib/motion';
+import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
 import {
@@ -125,12 +126,18 @@ export default function Sheet({
       const scrim = scrimRef.current;
       if (!panel || !rendering) return;
 
-      if (prefersReducedMotion()) {
+      if (motionTier() === 'off') {
         gsap.set(panel, { y: isOpen ? 0 : '100%' });
         if (scrim) gsap.set(scrim, { opacity: isOpen ? 1 : 0 });
         return;
       }
 
+      /* The reduced tier rises like the standard one. It briefly faded in place instead,
+         and that was the wrong substitution twice over: `defaultEffects` is critically
+         damped, so there was no overshoot to remove, and a panel that appears in the middle
+         of the screen without arriving from anywhere reads as a dialog rather than as a
+         sheet — the travel *is* what says which edge it belongs to. One composited
+         `translate` is also the cheapest thing this component does. */
       if (isOpen) {
         gsap.fromTo(panel, { y: '100%' }, { y: 0, ...spring('defaultEffects'), overwrite: true });
         if (scrim)
@@ -187,10 +194,14 @@ export default function Sheet({
         const target = dismiss ? height : 0;
         const scrim = scrimRef.current;
 
-        /* Reduced motion keeps the gesture and drops the flight: land on the
-           target in one frame. `gsap.set` rather than a 1ms tween so there is no
-           frame in which a competing tween could be created. */
-        if (prefersReducedMotion()) {
+        /* Off keeps the gesture and drops the flight: land on the target in one
+           frame. `gsap.set` rather than a 1ms tween so there is no frame in which a
+           competing tween could be created.
+           Only `off`. A drag release under `reduced` still springs, because the finger has
+           already carried the panel most of the way and cutting the remainder reads as the
+           gesture being dropped rather than as less motion — the same line `useDrawerSwipe`
+           and `lib/hero/pull.ts` draw. */
+        if (motionTier() === 'off') {
           gsap.set(panel, { y: target });
           if (scrim) gsap.set(scrim, { opacity: dismiss ? 0 : 1 });
           if (dismiss) onCloseRef.current();

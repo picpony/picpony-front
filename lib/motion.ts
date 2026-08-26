@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { CustomEase } from 'gsap/CustomEase';
@@ -9,9 +9,39 @@ import { Observer } from 'gsap/Observer';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { BREAKPOINTS } from '@/lib/constants';
+import {
+  commitPalette,
+  commitScheme,
+  currentPalette,
+  currentScheme,
+  motionScale,
+  motionTier,
+  resolveScheme,
+  setMotionScaleListener,
+  useEntranceMotion,
+  useMotionTier,
+  type PaletteId,
+  type SchemeSetting,
+} from '@/lib/appearance';
 import { SPRINGS, SPRING_DURATION, springEase, type SpringName } from '@/lib/spring';
 
 gsap.registerPlugin(useGSAP, CustomEase, Flip, Observer, ScrollToPlugin, ScrollTrigger);
+
+/* One line reaches every GSAP tween and delay in the app.
+ *
+ * `timeScale` on the global timeline is the idiomatic lever and the only one that covers
+ * animations built by forty call sites without touching any of them. The `off` tier is
+ * *not* expressed as a scale of 0: `timeScale(0)` stops the clock — every tween would
+ * hang at its first frame forever — where what `off` means is that the tween should be
+ * over. So the tier is clamped here and the JS branches skip outright, which is what they
+ * already did under the old preference.
+ *
+ * Registering the listener also applies it once, so a cold load with a stored speed does
+ * not run its first transition at 1x. */
+setMotionScaleListener((scale) => {
+  gsap.globalTimeline.timeScale(scale > 0 ? 1 / scale : 1);
+});
+
 
 /**
  * Motion tokens for GSAP-driven animation. The same curves live in
@@ -92,17 +122,29 @@ export const SPRING = SPRING_DURATION;
 /**
  * A spring as a ready-made `{ duration, ease }` pair, so the two cannot drift
  * apart at a call site.
+ *
+ * Under the **reduced** tier the three under-damped shapes are swapped for the critically
+ * damped one, which is the GSAP half of the three-line rule in globals.css: a handle still
+ * travels, it just stops when it arrives instead of passing the target and coming back.
+ * The *duration* is the requested tier's, so nothing changes length — nine springs share
+ * four shapes precisely because the shape depends on ζ alone. `SPRING_EFFECTS_FOR` maps
+ * each spatial tier onto the effects tier with the nearest settle time, so a `fastSpatial`
+ * does not become a `slowEffects` on the way through.
  */
+const SPRING_EFFECTS_FOR: Partial<Record<SpringName, SpringName>> = {
+  fastSpatial: 'fastEffects',
+  defaultSpatial: 'defaultEffects',
+  slowSpatial: 'slowEffects',
+  expressiveFastSpatial: 'fastEffects',
+  expressiveDefaultSpatial: 'defaultEffects',
+  expressiveSlowSpatial: 'slowEffects',
+};
+
 export function spring(name: SpringName): { duration: number; ease: string } {
-  return { duration: SPRING_DURATION[name], ease: `spring-${name}` };
+  const shape = motionTier() === 'reduced' ? (SPRING_EFFECTS_FOR[name] ?? name) : name;
+  return { duration: SPRING_DURATION[name], ease: `spring-${shape}` };
 }
 
-/* Matches the CSS safety net (`--default-transition-duration: 200ms` +
-   `--ease-standard`). It read 0.4s, which pairs `standard` with a duration from
-   another row of the table, so the two renderers' fallbacks disagreed. Spelled as a
-   literal rather than `DURATION.short` because this call runs at module load, above
-   that declaration. */
-gsap.defaults({ ease: eases.standard, duration: 0.2, overwrite: 'auto' });
 
 /* Never let a stalled frame be charged to an animation.
  *
@@ -149,7 +191,7 @@ gsap.ticker.lagSmoothing(100, 33);
  * globals.css. It is listed because a state layer is the most frequent piece of
  * motion in the app and it was the only timing with no entry here — which is
  * how `ToggleSwitch`, whose switch track cannot use the utility's `::before`,
- * ended up hand-typing `duration-150` with nothing to point at. Change one and
+ * ended up hand-typing the 150ms utility with nothing to point at. Change one and
  * change the other.
  */
 export const DURATION = {
@@ -161,32 +203,46 @@ export const DURATION = {
   emphasized: 0.5,
 } as const;
 
-export const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* Matches the CSS safety net (`--default-transition-duration` +
+   `--ease-standard`). It read 0.4s, which pairs `standard` with a duration from
+   another row of the table, so the two renderers' fallbacks disagreed. It then read a
+   bare `0.2` with a comment explaining that `DURATION.short` was out of reach at module
+   load — which was true only because this call sat above the declaration. It does not
+   any more.
 
-const REDUCED_QUERY = '(prefers-reduced-motion: reduce)';
+   No `motionScale()` here: `gsap.globalTimeline.timeScale` above already scales every
+   tween, and scaling the default as well would apply it twice. */
+gsap.defaults({ ease: eases.standard, duration: DURATION.short, overwrite: 'auto' });
 
-/**
- * Reactive counterpart to `prefersReducedMotion()`.
+/* `prefersReducedMotion()` and `useReducedMotion()` used to live here, and both are gone
+ * rather than renamed. What replaced them is `motionTier()` / `useMotionTier()` in
+ * `lib/appearance`, which answer three-way instead of yes/no.
  *
- * The plain function is a point-in-time read, which is right inside a tween
- * setup but wrong in a component: flipping the OS setting left already-mounted
- * components animating until something else happened to re-render them. This
- * subscribes, so the switch takes effect immediately.
+ * Deleting the names rather than aliasing them was the point. The old boolean had ~30
+ * call sites and at more than twenty of them the "reduced" branch was a bare `return` —
+ * not a degraded animation, an absent one. A compatibility alias would have left every
+ * one of those quietly meaning "off" for a user who asked for *less*, which is the one
+ * outcome this change exists to fix. Making the compiler name all thirty was the only
+ * way to be sure each was actually looked at.
+ *
+ * The rule those thirty were rewritten against, so a new one does not have to be
+ * guessed at:
+ *
+ *   reduced — **basic** motion, not absent motion. Keep the fades, the short travels, the
+ *             state layers, the ripple, the indicator that slides. Drop the performance:
+ *             the container-transform flight, a slide across the whole window, stagger,
+ *             overshoot, decorative loops, Lottie playback. The clock is the speed axis's,
+ *             the same as `standard` — this tier changes the form, not the length.
+ *   off     — drop opacity and colour too, and keep only what carries information:
+ *             indeterminate progress, a determinate meter's value, a position the finger
+ *             is holding, and a scroll offset. Those four are listed in AGENTS.md.
+ *
+ * The first version of this rule said "keep opacity and colour, drop travel, scale,
+ * rotation and stagger; one short step" — which is a fair description of *off* and left
+ * `reduced` with nothing moving anywhere in the app. That is the defect this wording
+ * replaces, and it is why so many of the branches below now do something rather than
+ * nothing.
  */
-export function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mql = window.matchMedia(REDUCED_QUERY);
-      mql.addEventListener('change', onChange);
-      return () => mql.removeEventListener('change', onChange);
-    },
-    () => window.matchMedia(REDUCED_QUERY).matches,
-    // Server default is "animations on": it matches the CSS, which only opts
-    // out inside a media query, so the first paint cannot disagree.
-    () => false,
-  );
-}
 
 /**
  * How long the wave takes to cross the control. `long1` on the M3 duration
@@ -218,9 +274,16 @@ const RIPPLE_START_SCALE = 0.2;
  * first of them half again the spec's — so the press read as a flash followed by
  * a wash rather than as one gesture. `standard`, not `decelerate`, for the same
  * reason: this begins and ends on screen.
+ *
+ * **The reduced tier gets the same wave.** It briefly did not — it appeared at full size
+ * and faded — and there was nothing to justify that: a wave growing from the point of
+ * contact is already the plainest possible press cue, it is one composited `scale` on a
+ * span that removes itself, and standing it down left the tier's most-repeated interaction
+ * with no feedback but a colour. Under **off** there is no wave at all (`.ripple` is
+ * `display: none`) and `state-layer`'s `:active` tint is the whole of the press.
  */
 export function spawnRipple(host: HTMLElement, x: number, y: number) {
-  if (prefersReducedMotion()) return;
+  if (motionTier() === 'off') return;
   // Radius reaching the farthest corner keeps the wave circular.
   const { width, height } = host.getBoundingClientRect();
   const radius = Math.hypot(Math.max(x, width - x), Math.max(y, height - y));
@@ -297,10 +360,15 @@ export function beginPageTransit(): () => void {
  * this way the easing matches the rest of the app's motion.
  *
  * Falls back to the window for any surface rendered outside the shell.
+ *
+ * A scroll offset is *state*, not decoration, so every tier still lands on it — only the
+ * travel is dropped, and only by the tier that drops all travel. That distinction is the
+ * same one `applyInstantTabScroll` makes and it is worth keeping in one sentence: the
+ * preference asks for less movement, not for less positioning.
  */
 export function scrollAppToTop({ smooth = true }: { smooth?: boolean } = {}) {
   const scroller = getAppScroller();
-  const jump = !smooth || prefersReducedMotion();
+  const jump = !smooth || motionTier() === 'off';
 
   if (!scroller) {
     window.scrollTo(jump ? { top: 0 } : { top: 0, behavior: 'smooth' });
@@ -326,6 +394,10 @@ export function scrollAppToTop({ smooth = true }: { smooth?: boolean } = {}) {
  * scrolling motion in the app that did not match the rest — so a "reply to this
  * comment" jump felt different depending on whether you had opened the picture
  * from the gallery or navigated to it directly.
+ *
+ * The glide survives the reduced tier — a scroll is the one motion where the destination
+ * only makes sense in terms of where you came from, and it costs nothing but a composited
+ * offset. Only `off` teleports.
  */
 export function scrollAppToElement(
   target: Element | null,
@@ -337,7 +409,7 @@ export function scrollAppToElement(
 ) {
   if (!target) return;
   const scroller = override ?? getAppScroller();
-  const jump = !smooth || prefersReducedMotion();
+  const jump = !smooth || motionTier() === 'off';
 
   if (!scroller) {
     const top = window.scrollY + target.getBoundingClientRect().top - offset;
@@ -412,7 +484,7 @@ export function useSlidingIndicator<
       );
       if (!indicator || !target) return;
       const place = { x: target.offsetLeft, width: target.offsetWidth };
-      if (!placed.current || prefersReducedMotion()) {
+      if (!placed.current || motionTier() === 'off') {
         placed.current = true;
         gsap.set(indicator, place);
         return;
@@ -428,7 +500,13 @@ export function useSlidingIndicator<
          travel rather than arrival.
          Before either, this was `back.out(1.55)` on a 400ms clock — a guess at a
          spring, on a duration taken from the transition scale rather than from the
-         physics. */
+         physics.
+
+         The reduced tier slides too. It briefly cross-faded the pill from the old
+         position to the new one instead, which is a worse answer than it sounds: the
+         indicator's whole job is to connect two labels, and a mark that vanishes here and
+         reappears there is the one shape that does not. `spring()` hands the reduced tier
+         the critically damped table, so what it loses is the overshoot, not the travel. */
       gsap.to(indicator, { ...place, ...spring('defaultSpatial') });
     },
     // No `revertOnUpdate` here, deliberately — unlike every other hook in this
@@ -507,13 +585,92 @@ function measureSnapshotBox() {
   return { width, height, topInset };
 }
 
+/* ---------------------------------------------------------------------------
+ * Where the wipe starts
+ *
+ * A theme change grows out of the control that caused it, which means every caller has to
+ * hand over a point — and one of them cannot. `Select`'s `onChange` reports a value and
+ * nothing else, so /settings' 主题模式 row had no rect to pass and the wipe fell back to the
+ * centre of the screen: the same gesture behaved one way from the app bar and another way
+ * from the settings page, for no reason the user can see.
+ *
+ * So the fallback is the last place the pointer went down, captured passively at the window,
+ * and after that the focused element's box — which is the keyboard's answer to the same
+ * question. The viewport's centre stays as the last resort, for a change nothing visible
+ * triggered.
+ *
+ * Armed at import, which is what makes it useful: the press that *causes* the first theme
+ * change has already happened by the time anything in here is called, so a listener attached
+ * on demand would always be one gesture late. This module is `'use client'` and already runs
+ * `gsap.registerPlugin` and `gsap.ticker.lagSmoothing` at import; the window guard is for the
+ * server-side pass over a client module, not for a real environment without a DOM.
+ * ------------------------------------------------------------------------ */
+
+type RevealPoint = { x: number; y: number };
+
+let lastPointerPoint: RevealPoint | null = null;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'pointerdown',
+    (event) => {
+      /* A keyboard-driven activation reports 0/0, which is a corner of the screen rather
+         than a place anything was pressed — that path wants the focused element instead.
+         `pointerdown` rather than `click`, because a press on a menu row inside a popover
+         that closes itself may never produce a `click` at all. */
+      if (event.clientX === 0 && event.clientY === 0) return;
+      lastPointerPoint = { x: event.clientX, y: event.clientY };
+    },
+    { capture: true, passive: true },
+  );
+}
+
+/** The centre of `el`'s box, or null if it has none (unmounted, or `display: none`). */
+function centreOf(el: Element | null | undefined): RevealPoint | null {
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return null;
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+const usablePoint = (point: RevealPoint | null): RevealPoint | null =>
+  point && Number.isFinite(point.x) && Number.isFinite(point.y) ? point : null;
+
+function resolveRevealOrigin(
+  origin: RevealPoint | undefined,
+  box: { width: number; height: number },
+): RevealPoint {
+  /* The finiteness check is not defensive dressing. A caller measuring a control that has
+     already unmounted hands over a rect of zeros, and a `NaN` from an arithmetic slip reaches
+     the emitted `clip-path` as `at NaN%` — which invalidates the whole declaration, so the
+     keyframes carry no clip and the wipe silently becomes a cut. */
+  return (
+    usablePoint(origin ?? null) ??
+    usablePoint(lastPointerPoint) ??
+    centreOf(typeof document === 'undefined' ? null : document.activeElement) ?? {
+      x: box.width / 2,
+      y: box.height / 2,
+    }
+  );
+}
+
 /**
  * Circular reveal for theme changes, growing from `origin` (viewport
- * coordinates — pass the icon's centre) out to the farthest corner.
+ * coordinates — pass the pressed control's centre) out to the farthest corner.
+ *
+ * `origin` is optional and the fallback chain above resolves it, so a caller that has no rect
+ * to offer — `Select`, which reports a value and not an event — still gets a wipe that starts
+ * where the user was looking.
  *
  * View Transitions are assumed present — every current engine ships them — so
- * the only branch left is reduced motion, which is a stated preference rather
+ * the only branch left is the animation preference, which is a stated preference rather
  * than a capability.
+ *
+ * Three tiers, and the middle one is a real wipe rather than an absent one: **reduced**
+ * cross-fades the two schemes in place. That keeps what the wipe is *for* — the two
+ * palettes are visibly the same page rather than two pages — while dropping the only part
+ * a motion-sensitive reader could object to, which is a hard edge sweeping the screen.
+ * **off** applies the change with no transition at all.
  */
 export function circularReveal(applyChange: () => void, origin?: { x: number; y: number }) {
   /* A flight owns these pixels; the wipe would snapshot the flyer mid-air and
@@ -532,15 +689,17 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
 
   const doc = document as ViewTransitionDocument;
   const root = document.documentElement;
+  const tier = motionTier();
 
-  if (prefersReducedMotion()) {
+  if (tier === 'off') {
     applyChange();
     return;
   }
 
   const box = measureSnapshotBox();
-  const x = origin?.x ?? box.width / 2;
-  const y = (origin?.y ?? box.height / 2) + box.topInset;
+  const seed = resolveRevealOrigin(origin, box);
+  const x = seed.x;
+  const y = seed.y + box.topInset;
   // Position as a fraction of the snapshot box, so the wipe starts on the icon
   // whatever units that box is measured in.
   const fx = box.width > 0 ? x / box.width : 0.5;
@@ -582,14 +741,31 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
    * the view-transition pseudo tree, where a `var()` that failed to resolve
    * would silently fall back to `ease`. Same documented exception the hero's
    * REVEAL_EASING and the top loader make. The value IS `--ease-loop`'s; keep
-   * the two in sync. */
-  style.textContent = `
+   * the two in sync.
+   *
+   * 550ms goes through `motionScale()` so the three standard speeds reach it; the reduced
+   * tier gets its own shorter cross-fade and does not use this curve at all — a
+   * cross-fade has no radius, so the argument above does not apply to it and the
+   * one-sided decelerate is the right shape for something arriving. */
+  const wipeMs = Math.round(550 * motionScale());
+  style.textContent =
+    tier === 'reduced'
+      ? `
+    @keyframes ${animationName} {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    html:root[data-theme-vt="${id}"]::view-transition-new(root) {
+      animation: ${animationName} ${Math.round(400 * motionScale())}ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+    }
+  `
+      : `
     @keyframes ${animationName} {
       from { clip-path: circle(0% ${at}); }
       to { clip-path: circle(${radiusPercent.toFixed(3)}% ${at}); }
     }
     html:root[data-theme-vt="${id}"]::view-transition-new(root) {
-      animation: ${animationName} 550ms cubic-bezier(0.4, 0, 0.6, 1) both;
+      animation: ${animationName} ${wipeMs}ms cubic-bezier(0.4, 0, 0.6, 1) both;
     }
   `;
 
@@ -609,6 +785,33 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
     if (root.dataset.themeVt === id) delete root.dataset.themeVt;
   };
   void transition.finished.then(cleanup, cleanup);
+}
+
+/* ---------------------------------------------------------------------------
+ * The two changes that ride the wipe
+ *
+ * These live here rather than in `lib/appearance` because what they are is a *wipe* —
+ * the preference write is one line of it — and the wipe is this module's. The reverse
+ * arrangement would make `lib/appearance` import GSAP, and it is reached by anything
+ * that reads a preference.
+ *
+ * Both are no-ops when nothing visible changes, which is what lets the call sites drop
+ * their own "is it already this?" guards. Both take the origin from the control that was
+ * pressed, so the circle grows out of the thing you touched.
+ * ------------------------------------------------------------------------ */
+
+export function changeScheme(setting: SchemeSetting, origin?: { x: number; y: number }) {
+  const next = resolveScheme(setting);
+  if (next === currentScheme()) {
+    commitScheme(setting);
+    return;
+  }
+  circularReveal(() => commitScheme(setting), origin);
+}
+
+export function changePalette(id: PaletteId, origin?: { x: number; y: number }) {
+  if (id === currentPalette()) return;
+  circularReveal(() => commitPalette(id), origin);
 }
 
 /**
@@ -794,7 +997,12 @@ export function useDrawerSwipe({
           }
         };
 
-        if (!d || prefersReducedMotion()) {
+        /* The drag itself is never gated — a direct manipulation is not an animation —
+           so what a tier can affect is only the *release*. Off snaps to the committed
+           end; reduced and standard both spring, because the finger has already put the
+           panel most of the way there and cutting the last few pixels reads as the
+           gesture being dropped rather than as less motion. */
+        if (!d || motionTier() === 'off') {
           release();
           return;
         }
@@ -976,22 +1184,32 @@ export function useScrollReveal<T extends HTMLElement = HTMLElement>({
      This hook keeps firing for the whole session — every block below the fold
      waits for a scroll that may be minutes away — so it is one of the two
      places where a preference changed mid-session genuinely has something left
-     to affect. Subscribing means turning reduced motion ON tears the batch down
-     (and `clearProps` restores anything still hidden), and turning it OFF
+     to affect. Subscribing means turning the tier down tears the batch down
+     (and `clearProps` restores anything still hidden), and turning it up
      builds one without waiting for an unrelated re-render. */
-  const reduced = useReducedMotion();
+  const tier = useMotionTier();
+  /* And the entrance switch, which is a *harder* stop than the tier: this hook is the
+     definition of an entrance, so with it off there is nothing here to reduce. */
+  const entrances = useEntranceMotion();
 
   useGSAP(
     () => {
       const root = ref.current;
-      if (!root || !enabled || reduced) return;
+      if (!root || !enabled || !entrances || tier === 'off') return;
+
+      /* Reduced halves the rise and drops the stagger: the blocks still arrive as you
+         reach them and still travel a little to get there, but 40 of them do not arrive one
+         after another — a stagger is travel in the time axis, and it is also the part that
+         costs a low-end device a tween per card. */
+      const shift = tier === 'reduced' ? REVEAL_SHIFT / 2 : REVEAL_SHIFT;
+      const step = tier === 'reduced' ? 0 : stagger;
 
       const targets = selector
         ? gsap.utils.toArray<HTMLElement>(root.querySelectorAll(selector))
         : [root];
       if (targets.length === 0) return;
 
-      gsap.set(targets, { autoAlpha: 0, y: REVEAL_SHIFT });
+      gsap.set(targets, { autoAlpha: 0, y: shift });
 
       const triggers = ScrollTrigger.batch(targets, {
         scroller: getAppScroller() ?? undefined,
@@ -1008,7 +1226,7 @@ export function useScrollReveal<T extends HTMLElement = HTMLElement>({
                disagreed by 100ms about what an entrance is. */
             duration: DURATION.long,
             ease: 'decelerate',
-            stagger,
+            stagger: step,
             overwrite: true,
           }),
       });
@@ -1046,7 +1264,7 @@ export function useScrollReveal<T extends HTMLElement = HTMLElement>({
     // ScrollTriggers on the same targets.
     {
       scope: ref,
-      dependencies: [selector, stagger, enabled, reduced, ...deps],
+      dependencies: [selector, stagger, enabled, tier, entrances, ...deps],
       revertOnUpdate: true,
     },
   );
@@ -1078,12 +1296,13 @@ export function useStaggerGrid<T extends HTMLElement = HTMLElement>(
   const ref = useRef<T>(null);
   // Reactive for the same reason as `useScrollReveal`: this re-runs on every
   // page of results, so a preference changed mid-session still has work to skip.
-  const reduced = useReducedMotion();
+  const tier = useMotionTier();
+  const entrances = useEntranceMotion();
 
   useGSAP(
     () => {
       const root = ref.current;
-      if (!root || reduced) return;
+      if (!root || !entrances || tier === 'off') return;
       const items = gsap.utils.toArray<HTMLElement>(root.querySelectorAll(selector));
       if (items.length === 0) return;
 
@@ -1096,18 +1315,29 @@ export function useStaggerGrid<T extends HTMLElement = HTMLElement>(
         .sort((a, b) => a.band - b.band || a.x - b.x)
         .map((m) => m.el);
 
+      /* Reduced halves the rise and drops the cascade and the scale. The cascade is what
+         costs a tween per card on a device that cannot afford 100 of them, and the scale is
+         the flourish; the rise is what says "arriving". `scale` has to be absent from
+         *both* ends rather than set to 1 at both: a card mid-tween would otherwise carry an
+         identity transform, and a transform on a card is exactly what the hero flight
+         measures on press. */
+      const reduced = tier === 'reduced';
       const tween = gsap.fromTo(
         ordered,
-        { autoAlpha: 0, y: REVEAL_SHIFT, scale: 0.985 },
+        reduced
+          ? { autoAlpha: 0, y: REVEAL_SHIFT / 2 }
+          : { autoAlpha: 0, y: REVEAL_SHIFT, scale: 0.985 },
         {
           autoAlpha: 1,
           y: 0,
-          scale: 1,
+          ...(reduced ? {} : { scale: 1 }),
           duration: DURATION.long,
           ease: 'decelerate',
           // Capped: with 100 cards a linear stagger would still be arriving
           // several seconds after the images finished decoding.
-          stagger: { each: 0.035, from: 'start', amount: Math.min(items.length * 0.035, 0.9) },
+          stagger: reduced
+            ? 0
+            : { each: 0.035, from: 'start', amount: Math.min(items.length * 0.035, 0.9) },
           clearProps: 'opacity,visibility,transform',
         },
       );
@@ -1125,7 +1355,7 @@ export function useStaggerGrid<T extends HTMLElement = HTMLElement>(
     // returned cleanup, which useGSAP otherwise defers to unmount. Every page
     // turn was therefore leaving another capture-phase listener on the grid,
     // each one calling `progress(1)` on a long-dead tween on every card press.
-    { scope: ref, dependencies: [selector, reduced, ...deps], revertOnUpdate: true },
+    { scope: ref, dependencies: [selector, tier, entrances, ...deps], revertOnUpdate: true },
   );
 
   return ref;
@@ -1237,6 +1467,15 @@ const AXIS_ROW_BAND = 64;
 const AXIS_NEAR_MARGIN = 240;
 /** Runaway guard on the descent; nothing legitimate nests a row this deep. */
 const PANE_DESCEND_LIMIT = 6;
+/**
+ * How far the reduced tier shifts each side, instead of a whole window's width.
+ *
+ * Enough to carry the *direction* of the move and short enough not to read as a slide —
+ * the same 24dp M3's own shared axis uses for its small-container form, and the same order
+ * as the 8px an entrance travels here. The point of keeping any distance at all is that a
+ * cross-fade cannot say which way you went, and on a tab bar that is half the information.
+ */
+const REDUCED_AXIS_SHIFT_PX = 24;
 
 export interface SharedAxisHandle {
   /** Jump to the end state and run the settle callback. Idempotent. */
@@ -1489,8 +1728,49 @@ export function playSharedAxis(opts: {
     onSettle?.();
   };
 
-  if (prefersReducedMotion() || distance <= 0) {
+  const tier = motionTier();
+  if (tier === 'off' || distance <= 0) {
     queueMicrotask(finish);
+    return { finish };
+  }
+
+  /* Reduced: the panes cross-fade with a short shift instead of sliding a window's width.
+   *
+   * This is the tier's rule applied to the biggest gesture in the app. What gets dropped is
+   * the *distance* and the wave: a full-window slide is the performance, and the wave is a
+   * transform per block per frame on a device that has told us it cannot afford them. What
+   * survives is direction — 24px is enough for the eye to read "the next one came from the
+   * right" — so the gesture still says which way you moved, which a bare cross-fade cannot.
+   *
+   * `leavingOffsetY` is still applied, as a `set` rather than a tween. It is not travel:
+   * `runTabTransition` has already moved the scroller to the destination tab's remembered
+   * offset, and this holds the outgoing pane over the pixels the eye was on so it fades
+   * from where it was rather than from wherever the new offset put it. */
+  if (tier === 'reduced') {
+    view?.setAttribute('data-axis-running', axis);
+    if (leavingOffsetY) gsap.set(leaving, { y: leavingOffsetY });
+    const shift = REDUCED_AXIS_SHIFT_PX * direction;
+    const prop = axis === 'x' ? 'x' : 'y';
+    timeline = gsap.timeline({ onComplete: finish });
+    timeline
+      .set([leaving, entering], { willChange: 'opacity, transform' }, 0)
+      .to(
+        leaving,
+        { [prop]: -shift, autoAlpha: 0, duration: DURATION.press, ease: 'accelerate' },
+        0,
+      )
+      .fromTo(
+        entering,
+        { [prop]: shift, autoAlpha: 0 },
+        {
+          [prop]: 0,
+          autoAlpha: 1,
+          duration: DURATION.short,
+          ease: 'decelerate',
+          clearProps: 'transform',
+        },
+        0,
+      );
     return { finish };
   }
 
@@ -1749,9 +2029,9 @@ function applyTabScroll(
 }
 
 /**
- * The reduced-motion half of the same behaviour, applied *after* the commit.
+ * The off tier's half of the same behaviour, applied *after* the commit.
  *
- * Under the preference the panes swap through `display: none` rather than sliding, so there is
+ * Under that tier the panes swap through `display: none` rather than sliding, so there is
  * no run to hold an offset across and `applyTabScroll`'s prediction of the settled height is
  * unnecessary: at the moment this runs the arriving pane is the only one with a box, so
  * `scrollHeight` is already final and the clamp is the browser's real maximum. What it does
@@ -1759,6 +2039,9 @@ function applyTabScroll(
  * above its panel, so restoring there drags the banner, which is the jump this whole rule
  * exists to stop. Leaving it out would have made that jump reachable by turning the preference
  * on, which is the population least able to absorb one.
+ *
+ * (It was named `applyReducedTabScroll` and only ever reached from the `off` branch, which is
+ * the kind of name that sends the next reader looking for a second caller.)
  *
  * **What it can restore is bounded by who records.** The origin's offset is written by
  * `applyTabScroll` (every animated run, tap or reactive) and by `startTabTransition` (the tap
@@ -1770,7 +2053,7 @@ function applyTabScroll(
  * screen with a low `panelTop` and no tap path would need a pre-commit hook the reactive path
  * does not have.
  */
-function applyReducedTabScroll(panel: HTMLElement, to: string) {
+function applyInstantTabScroll(panel: HTMLElement, to: string) {
   const scroller = getAppScroller();
   if (!scroller) return;
   if (tabPanelTop(panel, scroller) > TAB_SHARED_CHROME_PX) return;
@@ -2013,12 +2296,15 @@ export function startTabTransition(
   if (from === to) return;
   const panel = document.querySelector<HTMLElement>('[data-tab-panel]');
   if (!panel) return;
-  /* Recorded before the reduced-motion bail, and keyed on the panel, so the two writers
+  /* Recorded before the tier check, and keyed on the panel, so the two writers
      agree. It used to be `tabScrollMemory.set(from, …)` above the panel lookup, i.e. a
      flat key written before the thing that scopes it was even in hand. */
   const scroller = getAppScroller();
   if (scroller) rememberTabScroll(panel, from, scroller.scrollTop);
-  if (prefersReducedMotion()) return;
+  /* Only `off` returns here. `reduced` runs the transition, which cross-fades the panes
+     instead of sliding them — that branch is inside `playSharedAxis`, and `lean` is
+     ignored there, so passing it through is harmless. */
+  if (motionTier() === 'off') return;
   runTabTransition(panel, from, to, direction, lean);
 }
 
@@ -2100,9 +2386,9 @@ export function useTabPanes<T extends HTMLElement = HTMLElement>(
     // Already animated to this tab optimistically; the commit is only catching
     // up. Flags were cleared above, so React's own `-active` now holds it.
     if (lastTabTarget.get(panel) === active) return;
-    if (prefersReducedMotion()) {
-      // Positioning is not motion — see `applyReducedTabScroll`.
-      applyReducedTabScroll(panel, active);
+    if (motionTier() === 'off') {
+      // Positioning is not motion — see `applyInstantTabScroll`.
+      applyInstantTabScroll(panel, active);
       return;
     }
 

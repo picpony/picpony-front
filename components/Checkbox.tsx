@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 
+import CheckGlyph from './CheckGlyph';
+
 interface CheckboxProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -89,7 +91,7 @@ export default function Checkbox({
       <span
         aria-hidden="true"
         className={`spring-fast-effects pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity ${
-          checked ? 'text-primary' : 'text-on-surface'
+          checked ? 'text-primary-ink' : 'text-on-surface'
         } ${
           disabled
             ? ''
@@ -110,7 +112,7 @@ export default function Checkbox({
         aria-hidden="true"
         className={`peer-focus-visible:focus-ring transition-ui pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
           checked
-            ? 'bg-primary border-primary animate-control-pop'
+            ? 'bg-primary-ink border-primary-ink animate-control-pop'
             : /* Transparent, which is `Checkbox.kt`'s `uncheckedBoxColor =
                  Color.Transparent` — `CheckboxTokens` defines no unselected
                  container at all, because an unchecked box is an outline and
@@ -122,29 +124,20 @@ export default function Checkbox({
               'border-on-surface-variant bg-transparent'
         }`}
       />
-      <svg
+      <CheckGlyph
         className="text-on-primary pointer-events-none absolute size-3"
-        viewBox="0 0 12 12"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M2.5 6L5 8.5L9.5 3.5"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray="10.5"
-          strokeDashoffset={checked ? 0 : 10.5}
+        pathProps={{
+          strokeDasharray: '10.5',
+          strokeDashoffset: checked ? 0 : 10.5,
           /* An *effects* spring, not a spatial one: this is a mark being drawn,
              so it must not overshoot — a dash offset that overshoots draws past
              the end of the path and then retracts. The 80ms delay holds the
              stroke until the container's pop has finished, so the two read as one
              gesture rather than as a race. */
-          className="spring-fast-effects transition-[stroke-dashoffset]"
-          style={{ transitionDelay: checked ? '80ms' : '0ms' }}
-        />
-      </svg>
+          className: 'spring-fast-effects transition-[stroke-dashoffset]',
+          style: { transitionDelay: checked ? '80ms' : '0ms' },
+        }}
+      />
       </span>
       {/* `label-l`, matching `Radio` and `ToggleSwitch`. The three selection controls
           had two answers for one object — this one was `body-m` (400) against their

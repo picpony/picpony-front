@@ -157,7 +157,7 @@ function FadeInImageInner({
         src={displaySrc}
         alt={props.alt || ''}
         ref={imgRef}
-        className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} relative transition-opacity duration-200 ease-[var(--ease-standard)]`}
+        className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} relative transition-opacity duration-standard ease-[var(--ease-standard)]`}
         onLoad={handleLoad}
         onError={handleError}
         loading={props.loading ?? (eager ? 'eager' : 'lazy')}

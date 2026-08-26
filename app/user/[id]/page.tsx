@@ -598,7 +598,7 @@ export default function UserProfilePage() {
                 className={buttonClasses({
                   variant: 'text',
                   size: 'xs',
-                  className: 'text-primary',
+                  className: 'text-primary-ink',
                 })}
               >
                 <MdSearch size={ICON.dense} />
@@ -664,7 +664,7 @@ export default function UserProfilePage() {
                           className="object-cover"
                           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         />
-                        <div className="media-caption-gradient absolute inset-x-0 bottom-0 p-2 opacity-0 transition-opacity duration-300 ease-[var(--ease-standard)] group-hover:opacity-100">
+                        <div className="media-caption-gradient absolute inset-x-0 bottom-0 p-2 opacity-0 transition-opacity duration-composite ease-[var(--ease-standard)] group-hover:opacity-100">
                           <p className="text-on-media text-body-s truncate">
                             {item.name || `#${item.id}`}
                           </p>

@@ -182,21 +182,21 @@ export default function OtherTab({ token }: { token: string }) {
           <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">图片总数</div>
-            <div className="text-title-l-emphasized text-primary">
+            <div className="text-title-l-emphasized text-primary-ink">
               {stats.images?.toLocaleString() || 0}
             </div>
           </div>
           <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">标签总数</div>
-            <div className="text-title-l-emphasized text-primary">
+            <div className="text-title-l-emphasized text-primary-ink">
               {stats.tags?.toLocaleString() || 0}
             </div>
           </div>
           <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">评论总数</div>
-            <div className="text-title-l-emphasized text-primary">
+            <div className="text-title-l-emphasized text-primary-ink">
               {stats.comments?.toLocaleString() || 0}
             </div>
           </div>

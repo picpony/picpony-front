@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { cn } from '@/lib/utils';
-import { prefersReducedMotion } from '@/lib/motion';
+import { motionTier } from '@/lib/appearance';
 
 interface LottieIconProps {
   /** Resolves the animation JSON. A function so the chunk stays out of the
@@ -44,7 +44,7 @@ let playerPromise: Promise<
  * the spinner the splash used to have — it says "wait" without saying what for,
  * and it never resolves. This plays, lands, and stays put.
  *
- * Under `prefers-reduced-motion` nothing is fetched at all and the static
+ * Under any tier below standard nothing is fetched at all and the static
  * `fallback` is the whole component.
  */
 export default function LottieIcon({
@@ -67,7 +67,16 @@ export default function LottieIcon({
   }, [load]);
 
   useEffect(() => {
-    if (prefersReducedMotion()) return;
+    /* Standard only, and the `fallback` is what the other two tiers get.
+       This gated on `off` alone, arguing that these are one-shot marks a few kilobytes each
+       drawn in response to something that just happened — a badge earned, a task completed.
+       No call site is that: the two are `AuthModal`'s login illustration (3257×2148, 60% of a
+       640px dialog) and /search's resting empty state (3000×1553), both decorative artwork
+       behind a 60KB player. The reduced tier's rule names Lottie playback among the things it
+       drops, and its audience is a device that cannot afford the hero flight. If a small
+       earned-badge mark ever does arrive, it wants its own component rather than this one's
+       exception. */
+    if (motionTier() !== 'standard') return;
     let cancelled = false;
     let animation: { destroy: () => void } | null = null;
 

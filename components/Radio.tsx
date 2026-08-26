@@ -99,8 +99,8 @@ export default function Radio({
                have to agree with it explicitly. `Radio` and `Checkbox` were on a
                108ms spring and `ToggleSwitch` on the 150ms curve: one object, two
                clocks, decided by which file you were looking at. */
-            'pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity duration-150 ease-[var(--ease-standard)]',
-            checked ? 'text-primary' : 'text-on-surface',
+            'pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity duration-state ease-[var(--ease-standard)]',
+            checked ? 'text-primary-ink' : 'text-on-surface',
             !disabled &&
               'group-hover:opacity-[var(--md-sys-state-hover-opacity)] group-active:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]',
           )}
@@ -110,7 +110,7 @@ export default function Radio({
           className={cn(
             'relative h-5 w-5 rounded-full border-2 transition-ui pointer-events-none',
             'peer-focus-visible:ring-2 peer-focus-visible:focus-ring',
-            checked ? 'border-primary' : 'border-on-surface-variant',
+            checked ? 'border-primary-ink' : 'border-on-surface-variant',
           )}
         />
         {/* The dot is 12dp (`RadioButtonDotSize`); it was 10.
@@ -127,7 +127,7 @@ export default function Radio({
         <span
           aria-hidden="true"
           className={cn(
-            'bg-primary pointer-events-none absolute h-3 w-3 rounded-full',
+            'bg-primary-ink pointer-events-none absolute h-3 w-3 rounded-full',
             '[transition:scale_var(--duration-spring-expressive-fast-spatial)_var(--ease-spring-expressive-spatial-fast),opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]',
             checked ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
           )}

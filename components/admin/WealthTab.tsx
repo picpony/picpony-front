@@ -118,7 +118,7 @@ export default function WealthTab({ token }: { token: string }) {
       key: 'name',
       header: '用户名',
       primary: true,
-      render: (u) => <span className="text-body-m-emphasized text-primary">{u.username}</span>,
+      render: (u) => <span className="text-body-m-emphasized text-primary-ink">{u.username}</span>,
     },
     { key: 'exp', header: '当前经验', render: (u) => u.experience || 0 },
     {

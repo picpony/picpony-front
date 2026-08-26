@@ -282,7 +282,7 @@ function LoginForm({
           <button
             type="button"
             onClick={() => onSwitch('register')}
-            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+            className="text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             立即注册
           </button>
@@ -291,7 +291,7 @@ function LoginForm({
           <button
             type="button"
             onClick={() => onSwitch('reset')}
-            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+            className="text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             忘记密码？
           </button>
@@ -483,7 +483,7 @@ function RegisterForm({
           <button
             onClick={handleResend}
             disabled={isResending}
-            className="text-body-m text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring disabled:disabled-content disabled:cursor-not-allowed"
+            className="text-body-m text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring disabled:disabled-content disabled:cursor-not-allowed"
           >
             {isResending ? '发送中…' : '未收到？重新发送验证码'}
           </button>
@@ -545,7 +545,7 @@ function RegisterForm({
           <button
             type="button"
             onClick={() => onSwitch('login')}
-            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+            className="text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             立即登录
           </button>
@@ -710,7 +710,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
             <button
               type="button"
               onClick={() => setStep('request')}
-              className="text-body-m text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+              className="text-body-m text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
             >
               重新发送验证码
             </button>

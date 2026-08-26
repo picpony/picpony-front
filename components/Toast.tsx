@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
-import { gsap, useGSAP, prefersReducedMotion, DURATION } from '@/lib/motion';
+import { gsap, useGSAP, DURATION } from '@/lib/motion';
+import { motionScale, motionTier } from '@/lib/appearance';
 import { ICON } from '@/lib/icons';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -116,10 +117,20 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
       if (!wrap) return;
       const card = wrap.firstElementChild as HTMLElement;
 
-      if (prefersReducedMotion()) {
+      const tier = motionTier();
+      if (tier === 'off') {
         const timer = setTimeout(() => onClose(toast.id), toast.duration);
         return () => clearTimeout(timer);
       }
+
+      /* Reduced halves the slide rather than removing it. A snackbar docked to the top edge
+         that fades in place has nothing to say about where it came from, and 8px is the same
+         distance every other entrance takes under this tier. The height collapse is not
+         travel of the *message* — it is the gap under it closing, so the queue reads as
+         emptying rather than as jumping. */
+      const reduced = tier === 'reduced';
+      const slide = reduced ? -8 : -16;
+      const slideOut = reduced ? -4 : -8;
 
       /* A snackbar's own motion is a fade plus a short slide from the edge it
          is docked to — this one is top-centre, so it comes down. No scale and
@@ -135,17 +146,30 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
          message had vanished. The small negative offset stays: the gap starts
          closing just before the card is fully gone, so the queue reads as emptying
          rather than as jumping. */
+
+      /* The dwell is wall-clock, so it has to be divided back out of the global time scale.
+       *
+       * `gsap.globalTimeline.timeScale(1 / motionScale())` reaches every tween in the app,
+       * which is right for the two legs above and wrong for the gap between them: a snackbar's
+       * duration is how long there is to *read* it, not how long it takes to arrive. Left
+       * alone, a 3000ms message was on screen for 1500ms at the reduced tier and 2100ms at
+       * 快速 — the tier a motion-sensitive reader is most likely to pick was the one that took
+       * half the message away. A timeline position `p` is reached at wall-clock `p * scale`,
+       * so `p = d / scale` lands on `d` whatever the speed. The `off` tier never gets here;
+       * it uses a real `setTimeout` above, which is why dividing by a possible zero is safe. */
+      const dwell = toast.duration / 1000 / motionScale();
+
       const tl = gsap
         .timeline({ onComplete: () => onClose(toast.id) })
         .fromTo(
           card,
-          { y: -16, autoAlpha: 0 },
+          { y: slide, autoAlpha: 0 },
           { y: 0, autoAlpha: 1, duration: DURATION.long, ease: 'decelerate' },
         )
         .to(
           card,
-          { y: -8, autoAlpha: 0, duration: DURATION.short, ease: 'accelerate' },
-          toast.duration / 1000,
+          { y: slideOut, autoAlpha: 0, duration: DURATION.short, ease: 'accelerate' },
+          dwell,
         )
         .to(wrap, { height: 0, duration: DURATION.short, ease: 'accelerate' }, '<0.08');
 

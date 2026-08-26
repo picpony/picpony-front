@@ -88,7 +88,7 @@ export default function SectionHeading({
            fraction low and by a different amount per glyph — the same fix the
            sidebar's nav rows make. */
         <span
-          className="text-primary grid shrink-0 place-items-center [&>svg]:block"
+          className="text-primary-ink grid shrink-0 place-items-center [&>svg]:block"
           aria-hidden="true"
         >
           {icon}

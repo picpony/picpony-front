@@ -310,7 +310,7 @@ function FavoritesPane({ source }: { source: FaveSource }) {
   return (
     <div
       aria-busy={isLoading || undefined}
-      className={`transition-opacity duration-200 ease-[var(--ease-standard)] ${
+      className={`transition-opacity duration-standard ease-[var(--ease-standard)] ${
         isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
       }`}
     >

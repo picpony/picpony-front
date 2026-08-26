@@ -54,7 +54,7 @@ const TONE_SELECTED: Record<ChipTone, string> = {
 
 const TONE_TEXT: Record<ChipTone, string> = {
   neutral: 'text-on-surface-variant',
-  primary: 'text-primary',
+  primary: 'text-primary-ink',
   success: 'text-success',
   warning: 'text-warning',
   error: 'text-error',

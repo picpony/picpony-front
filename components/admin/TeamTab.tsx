@@ -229,7 +229,7 @@ export default function TeamTab({ token }: { token: string }) {
             size="sm"
             onClick={() => handleEdit(m)}
             icon={<MdEdit size={ICON.dense} />}
-            aria-label={`编辑 ${m.name}`} className="text-primary"
+            aria-label={`编辑 ${m.name}`} className="text-primary-ink"
           />
           <IconButton
             size="sm"

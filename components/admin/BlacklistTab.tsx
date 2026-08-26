@@ -120,7 +120,7 @@ export default function BlacklistTab({ token }: { token: string }) {
           href={`/pic/${item.image_id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-link inline-flex items-center gap-1 hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+          className="prose-link inline-flex items-center gap-1 focus-visible:ring-2 focus-ring"
         >
           查看原帖 <MdOpenInNew size={ICON.dense} />
         </a>

@@ -1004,7 +1004,7 @@ export default function GlossaryTab() {
     return (
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md bg-surface-container-low p-3">
         <div className="min-w-0 flex-1">
-          <p className="text-label-l text-primary">
+          <p className="text-label-l text-primary-ink">
             正在处理用户工单 #{workOrder.id} · {workOrder.username || '游客'}
           </p>
           <p className="mt-0.5 break-words text-body-m text-on-surface-variant">
@@ -1052,7 +1052,7 @@ export default function GlossaryTab() {
                 icon={<MdHistory size={ICON.dense} />}
                 onClick={() => openTagHistory(tag)}
                 title="查看该标签的历史编辑记录"
-                className="text-primary"
+                className="text-primary-ink"
               >
                 查看编辑历史
               </Button>
@@ -1211,7 +1211,7 @@ export default function GlossaryTab() {
             href={`/search?q=${encodeURIComponent(tag.en)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-link flex items-center gap-1 font-mono text-body-m hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+            className="prose-link flex items-center gap-1 font-mono text-body-m focus-visible:ring-2 focus-ring"
           >
             {tag.en} <MdSearch size={ICON.dense} />
           </a>
@@ -1495,7 +1495,7 @@ export default function GlossaryTab() {
       <div className="p-4 rounded-md">
         <div className="text-center mb-3">
           <span className="text-body-m text-on-surface-variant">
-            词库翻译进度：已翻译 <strong className="text-primary">{stats.translated}</strong> /
+            词库翻译进度：已翻译 <strong className="text-primary-ink">{stats.translated}</strong> /
             总标签 <strong>{stats.total}</strong> ({' '}
             <strong className="text-success">{translationPercentage}%</strong> )
           </span>
@@ -1667,7 +1667,7 @@ export default function GlossaryTab() {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-body-m">
                 <span className="text-on-surface-variant">{syncProgress.message}</span>
-                <span className="text-primary">
+                <span className="text-primary-ink">
                   {syncProgress.current} / {syncProgress.total}
                 </span>
               </div>
@@ -1855,7 +1855,7 @@ export default function GlossaryTab() {
                             : '已忽略'}
                       </Badge>
                     </div>
-                    <div className="font-mono text-label-l-emphasized text-primary mb-2">
+                    <div className="font-mono text-label-l-emphasized text-primary-ink mb-2">
                       {feedback.tag_name}
                     </div>
                     <Card

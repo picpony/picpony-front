@@ -1338,14 +1338,16 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                             `spring-slow-effects`, the same spring `ProgressBar`
                             takes: `ProgressIndicatorDefaults.ProgressAnimationSpec`
                             is critically damped, and an overshoot here would push one
-                            segment over the other. It ran `duration-200` with
+                            segment over the other. It ran a 200ms clock with
                             `--ease-symmetric`, which is the *loop* curve, under a
                             comment claiming the 300ms `standard` row — neither of
                             which was what the code did.
-                            The `motion-reduce:` guard is gone with them: the global
-                            reduced-motion rule re-declares `transition-property` with
-                            `!important`, so Tailwind's un-important
-                            `motion-reduce:transition-none` never won anyway. */}
+                            The per-element motion guard is gone with them: the off
+                            tier's rule re-declares `transition-property` with
+                            `!important`, so an un-important transition-none utility
+                            never won anyway. The reduced tier leaves it alone, which
+                            is right — a meter travelling to its value is the plainest
+                            kind of motion there is. */}
                         <div
                           className="bg-success-fill spring-slow-effects absolute inset-y-0 left-0 w-full origin-left transition-transform"
                           style={{
@@ -1477,7 +1479,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                         >
                           {image.description}
                         </p>
-                        <span className="text-label-l text-primary mt-2 block text-center">
+                        <span className="text-label-l text-primary-ink mt-2 block text-center">
                           {isDescriptionExpanded ? '折叠简介' : '展开简介'}
                         </span>
                       </Card>
@@ -1511,7 +1513,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                       href={image.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-link touch-target inline-block break-words hover:text-link-hover hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+                      className="prose-link touch-target inline-block break-words focus-visible:ring-2 focus-ring"
                     >
                       {image.source_url}
                     </a>

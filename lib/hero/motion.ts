@@ -17,6 +17,8 @@ import {
   HERO_UNCLIP_SELECTOR,
   HIDE_DISTANCE_PX,
   HIDE_EASING,
+  FLIGHT_REBUILD_MIN_MS,
+  FLIGHT_RETIRE_MS,
   REVEAL_CONTENT_DURATION_MS,
   REVEAL_DISTANCE_PX,
   REVEAL_EASING,
@@ -56,10 +58,12 @@ import { planeRectToScreen, screenRectToPlane, type HeroScrollPlane } from './pl
 import { intervalProgress, progressAt, sampleProgress, type ProgressFrame } from './progress';
 import { interpolate } from './spring';
 import type { HeroChoreography, HeroDirection } from './types';
-/* One `prefersReducedMotion` for the app, and it is the reactive form —
-   `lib/motion`'s reads a live `matchMedia` listener, where the private copies
-   these two files carried could not pick up a mid-session change. */
-import { prefersReducedMotion } from '@/lib/motion';
+/* One reader for the app, and it is the attribute rather than the media query:
+   `lib/appearance` resolves "follow the system" once and writes the result onto `<html>`,
+   so a mid-session change to either the OS setting or the app's own is already reflected
+   here. The private `matchMedia` copies these two files used to carry could not see the
+   second of those at all. */
+import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
 import { clamp01 } from '@/lib/utils';
 
 type AnimationOwner = {
@@ -455,7 +459,7 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   if (choreography === 'dismiss') {
     return buildDismissAnimations(overlay, floatingBack, surface, leg);
   }
-  const reduced = prefersReducedMotion();
+  const reduced = motionTier() !== 'standard';
   const fade = HERO_CONTAINER_FADE[direction];
   /* One table for the whole leg. The LRU in `progress.ts` keys on the model, so the mask, the
      fit, both fades, the staircase and the sink all get the same array for free. */
@@ -507,7 +511,12 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
      rather than a block inside the box, and it keeps the motion table's "small thing entering"
      row. Do not "finish the job" by moving it onto the leg's progress. */
   if (floatingBack) {
-    const distance = reduced ? 0 : REVEAL_DISTANCE_PX.chrome;
+    /* Unconditional, where this used to be `reduced ? 0 : …`. The constant *is* 8, which is
+       the same weak form `Reveal`, the grid, `Toast`, the route clone and the detail's own
+       arrive keyframe all keep for the reduced tier — zeroing it made this the one control
+       in the app that fades in with no travel at all on that tier. Under `off` the clock is
+       0 and the distance never renders. */
+    const distance = REVEAL_DISTANCE_PX.chrome;
     const pose = `translate3d(0, ${distance}px, 0)`;
     owners.push(
       animateAt(
@@ -522,8 +531,11 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
               { opacity: 0, transform: pose },
             ],
         direction === 'forward'
-          ? { duration: REVEAL_CONTENT_DURATION_MS, easing: REVEAL_EASING }
-          : { duration: Math.min(duration, REVEAL_CONTENT_DURATION_MS), easing: HIDE_EASING },
+          ? { duration: scaledMs(REVEAL_CONTENT_DURATION_MS), easing: REVEAL_EASING }
+          : {
+              duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS)),
+              easing: HIDE_EASING,
+            },
       ),
     );
   }
@@ -545,7 +557,9 @@ function buildDismissAnimations(
   leg: HeroLeg,
 ) {
   const owners: AnimationOwner[] = [];
-  const distance = prefersReducedMotion() ? 0 : HIDE_DISTANCE_PX;
+  /* 8px at every tier that animates: it is already the weak form, so the tier has nothing
+     to weaken. `off` collapses the clock instead, which is where a dismiss stops moving. */
+  const distance = HIDE_DISTANCE_PX;
   const targets = new Set<HTMLElement>([
     ...(surface ? [surface] : []),
     ...overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR),
@@ -635,7 +649,19 @@ export class HeroMotion {
 
     const to = screenRectToPlane(options.to, this.flight.plane);
     const radii = getFlightRadii(this.flight, direction);
-    const duration = HERO_DURATIONS[direction];
+    /* The animation speed reaches the flight here rather than in `constants.ts`, and it has
+       to: `scripts/heroPath.mjs` imports that file directly and cannot resolve
+       `lib/appearance` (it needs `matchMedia`), so a dependency there would take
+       `npm run hero:path` down with it. `HERO_DURATIONS` therefore stays a plain number and
+       the scale is applied at the moment the leg is built.
+
+       It has to be applied at all because the gallery card's chrome fade is
+       `--transition-duration-standard` and globals.css asserts that clock stays inside the
+       flight's — at 缓慢 an unscaled flight would be 250ms against a 280ms fade.
+       `HERO_PROGRESS_SAMPLES` is safe across the range: 48 samples of 350ms is 7.3ms a
+       segment, still inside a frame at 120Hz. `HERO_REVERSE_MIN_DURATION_MS`'s 90ms floor,
+       which has never bound, starts binding at 快速 — which is what a floor is for. */
+    const duration = Math.round(HERO_DURATIONS[direction] * motionScale());
     this.leg = createHeroLeg({
       from,
       to,
@@ -773,9 +799,14 @@ export class HeroMotion {
     const returnTravel = heroRectCenterDistance(from, to);
     const ratio = fullTravel > 0.5 ? clamp01(returnTravel / fullTravel) : 1;
     const duration = Math.max(
-      HERO_REVERSE_MIN_DURATION_MS,
+      /* Scaled with the product it floors. Left absolute, this stopped being a floor on the
+         *proportion* of the leg and became a wall-clock minimum: at 快速 the shortest reverse
+         is 0.7 × 250 × 0.35 = 61ms, so an unscaled 90 would have made a fast reversal
+         *longer* than the same reversal at the default speed. */
+      scaledMs(HERO_REVERSE_MIN_DURATION_MS),
       Math.round(
         HERO_DURATIONS[direction] *
+          motionScale() *
           (HERO_REVERSE_BASE_RATIO + HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(ratio)),
       ),
     );
@@ -845,8 +876,12 @@ export class HeroMotion {
 
     /* Preserve the current speed so a resize mid-flight is not a visible restart — which also
        means an uninterrupted leg converts from the curve to a spring here. That is forced
-       rather than chosen: only a spring can be solved for a launch slope. */
-    const duration = Math.max(80, previous.duration - pose.elapsed);
+       rather than chosen: only a spring can be solved for a launch slope.
+
+       The floor is scaled with everything else: it exists so a resize in the last few frames
+       does not produce a leg too short to sample, and "too short" is a fraction of the
+       flight's own clock rather than a wall-clock figure. */
+    const duration = Math.max(scaledMs(FLIGHT_REBUILD_MIN_MS), previous.duration - pose.elapsed);
     this.leg = createHeroLeg({
       from,
       to,
@@ -887,7 +922,7 @@ export class HeroMotion {
     if (!previous || !this.overlay || this.choreography === 'dismiss') return;
     settle(this.containerTracks, false);
     this.containerTracks = [];
-    if (prefersReducedMotion()) return;
+    if (motionTier() !== 'standard') return;
 
     if (!this.clip || !this.unclip) return;
     const host = readRect(this.overlay);
@@ -945,8 +980,9 @@ export class HeroMotion {
    * `unprojectHeroContainerRect`.
    *
    * The `containerTracks` guard fixes a **pre-existing** defect rather than guarding a new one:
-   * reduced motion does not skip the flight (`skipFlight` is only `!source`), but it does skip
-   * these tracks, so this used to divide by a transform that was not on screen.
+   * the flight is built for tiers that cannot fly (`skipFlight` is only `!source`), but below
+   * the standard tier these tracks are never created, so this used to divide by a transform
+   * that was not on screen.
    */
   unprojectRect(rect: HeroRect): HeroRect {
     const container = this.containerLeg;
@@ -982,7 +1018,7 @@ export class HeroMotion {
    * M3's duration scale. Deliberately not pushed into `visual`/`shared` — it has to outlive
    * both tracks — and safe uncancelled because `dispose()` detaches the layer it paints.
    */
-  fadeRetiring(duration = 200) {
+  fadeRetiring(duration = scaledMs(FLIGHT_RETIRE_MS)) {
 
     if (this.disposed) return Promise.resolve();
     try {
@@ -1092,7 +1128,7 @@ export class HeroMotion {
           this.clip &&
           this.unclip &&
           this.choreography !== 'dismiss' &&
-          !prefersReducedMotion()
+          motionTier() === 'standard'
         ) {
           this.containerTracks = buildContainerAnimations(
             { clip: this.clip, unclip: this.unclip, flightLayer: this.containedFlightLayer() },

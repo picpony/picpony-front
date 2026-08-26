@@ -52,7 +52,7 @@ function OutLink({ href, children }: { href: string; children: ReactNode }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-link hover:text-link-hover hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+      className="prose-link focus-visible:ring-2 focus-ring"
     >
       {children}
     </a>

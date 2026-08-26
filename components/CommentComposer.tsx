@@ -92,7 +92,7 @@ export default function CommentComposer({
         <div className="mb-2 flex items-center gap-2 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-m text-on-surface-variant">
           <MdReply size={ICON.dense} />
           <span>
-            回复 <strong className="text-primary">{replyTo.username}</strong>：
+            回复 <strong className="text-primary-ink">{replyTo.username}</strong>：
           </span>
           {/* Quieter by *size*, not by a dimmed copy of the same role. An
               eyeballed opacity is the same bug as an alpha on a token — nothing

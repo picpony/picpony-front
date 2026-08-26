@@ -124,7 +124,7 @@ export default function Slider({
           6dp of gap plus the 2dp half-width of the handle itself. */}
       <span
         aria-hidden="true"
-        className="bg-primary absolute left-0 h-4 rounded-full"
+        className="bg-primary-ink absolute left-0 h-4 rounded-full"
         style={{ width: 'max(0px, calc(var(--slider-pos) - 0.5rem))' }}
       />
       {/* Inactive segment. `secondary-container` is M3's inactive track role — the
@@ -148,7 +148,7 @@ export default function Slider({
       <span
         aria-hidden="true"
         className={cn(
-          'bg-primary spring-fast-spatial pointer-events-none absolute h-11 w-1 -translate-x-1/2 rounded-full transition-[width]',
+          'bg-primary-ink spring-fast-spatial pointer-events-none absolute h-11 w-1 -translate-x-1/2 rounded-full transition-[width]',
           !disabled && 'peer-active:w-0.5 peer-focus-visible:w-0.5',
         )}
         style={{ left: 'var(--slider-pos)' }}

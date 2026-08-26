@@ -127,13 +127,13 @@ export default function DropZone({
       onDrop={onDrop}
       className={cn(
         'relative flex flex-col items-center justify-center rounded-md border-2 border-dashed text-center outline-none',
-        'transition-[background-color,border-color,box-shadow] duration-200 ease-[var(--ease-standard)]',
+        'transition-[background-color,border-color,box-shadow] duration-standard ease-[var(--ease-standard)]',
         'focus-visible:ring-2 focus-ring',
         SIZES[size],
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
         state === 'idle' && !disabled && 'state-layer border-outline',
-        state === 'dragging' && 'border-primary bg-primary-container',
-        state === 'filled' && 'border-primary bg-primary-container',
+        state === 'dragging' && 'border-primary-ink bg-primary-container',
+        state === 'filled' && 'border-primary-ink bg-primary-container',
         className,
       )}
     >

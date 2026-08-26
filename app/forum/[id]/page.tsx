@@ -350,7 +350,7 @@ export default function ForumPostPage() {
                     <Link
                       scroll={false}
                       href={`/user/${post.user_id}`}
-                      className="text-label-l-emphasized text-on-surface hover:text-primary truncate transition-ui"
+                      className="text-label-l-emphasized text-on-surface hover:text-primary-ink truncate transition-ui"
                     >
                       {post.username}
                     </Link>
@@ -466,7 +466,7 @@ export default function ForumPostPage() {
                   <Link
                     scroll={false}
                     href={`/user/${comment.user_id}`}
-                    className="block shrink-0 self-start rounded-full ring-2 ring-transparent transition-ui hover:ring-primary focus-visible:focus-ring"
+                    className="block shrink-0 self-start rounded-full ring-2 ring-transparent transition-ui hover:ring-primary-ink focus-visible:focus-ring"
                     aria-label={`查看 ${comment.username} 的个人资料`}
                   >
                     <Avatar src={comment.avatar} name={comment.username} size={40} />
@@ -476,7 +476,7 @@ export default function ForumPostPage() {
                       <Link
                         scroll={false}
                         href={`/user/${comment.user_id}`}
-                        className="text-label-l-emphasized text-on-surface hover:text-primary truncate transition-ui"
+                        className="text-label-l-emphasized text-on-surface hover:text-primary-ink truncate transition-ui"
                       >
                         {comment.username}
                       </Link>

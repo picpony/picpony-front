@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 export type StatusViewSize = 'page' | 'pane' | 'inline';
 
 interface StatusViewProps {
-  /** Glyph above the title. Size it 48 for `page`/`pane`, 32 for `inline`. */
+  /** Glyph above the title. Size it 48 for `page`/`pane`; `inline` draws none by default. */
   icon?: ReactNode;
   title: string;
   /** Supporting line. Kept to one short sentence — this is not a place to explain. */
@@ -70,7 +70,12 @@ interface StatusViewProps {
 const SIZES: Record<StatusViewSize, string> = {
   page: 'min-h-[50dvh] px-4 py-8',
   pane: 'min-h-[32dvh] px-4 py-8',
-  inline: 'px-4 py-10',
+  /* No minimum and barely any padding. It read 40px of block padding, which with the
+     default 36px glyph and its 24px gap came to ~155px of content inside wells that cap at
+     120px — so the empty state was itself what made the well scroll. An inline status view
+     is one sentence; 8px keeps it clear of a 40dp row's ink without pretending to be a
+     block, and neither preset draws a glyph at this size unless a call site passes one. */
+  inline: 'px-4 py-2',
 };
 
 /**
@@ -161,9 +166,21 @@ export default function StatusView({
      trick: the shell is `Reveal`'s own div, and `min-height: 100%` there resolved
      against a parent whose height comes from flex distribution — indefinite, so it
      computed to `auto` and centred nothing. `flex-1` needs no definite parent. It does
-     need the page-content wrapper to be a flex column, which is why that is one. */
+     need the page-content wrapper to be a flex column, which is why that is one.
+
+     **`w-full` on the wrapper**, which is not decoration. In a block enclosure it changes
+     nothing, and in a *flex* one it is the difference between a centred block and a
+     shrink-to-fit item pinned at the start of the row: `items-center justify-center
+     text-center` inside can only centre within the width it is given. /block-groups' two
+     tag wells are `flex flex-wrap`, so "暂无标签" sat hard against their left edge, and the
+     obvious call-site fix — passing `w-full` — cannot work, because `className` lands on
+     the inner shell whose 100% resolves against the already-collapsed wrapper. Note the
+     `inPane` branch is the exception that proves it: there the shell *is* this element, so
+     the two /messages call sites passing `flex-1` were landing on the right box all along
+     and were never affected. Do not read this note as licence to hoist `className` up
+     unconditionally — the non-pane branch is what the well fix depends on. */
   return (
-    <div ref={hostRef} className={cn(fill && 'flex flex-1 flex-col', inPane && shell)}>
+    <div ref={hostRef} className={cn('w-full', fill && 'flex flex-1 flex-col', inPane && shell)}>
       {inPane ? body : <Reveal className={cn(shell, fill && 'flex-1')}>{body}</Reveal>}
     </div>
   );

@@ -23,6 +23,7 @@ import { tabId, tabPanelId } from '@/components/TabPanes';
 import Skeleton from '@/components/Skeleton';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 import { ICON } from '@/lib/icons';
+import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { readUserInfo } from '@/lib/hooks';
 
 /* One loading shape for all fourteen lazy tabs. Without it, the first switch to
@@ -173,8 +174,12 @@ const DEFAULT_TAB: TabId = 'welcome';
  * is on screen — so the only cost of deferring is how soon the address bar
  * agrees. It also swallows a run down the sidebar into a single push rather
  * than one history entry per tab passed through.
+ *
+ * Scaled by the *slowest* speed, not held at 400: the fade's clock goes through
+ * `--motion-scale`, so at 缓慢 it runs 560ms and the unscaled figure would push inside it.
+ * The maximum is the only value that is right at every speed.
  */
-const TAB_PUSH_COALESCE_MS = 400;
+const TAB_PUSH_COALESCE_MS = Math.round(400 * MOTION_SPEED_SCALE.slow);
 
 function readAdminIdentity(): { userRole: string; token: string } {
   const user = readUserInfo();

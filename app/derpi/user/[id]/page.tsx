@@ -339,11 +339,11 @@ export default function DerpiUserPage() {
                         <img
                           src={thumbUrl}
                           alt=""
-                          className="w-full h-full object-cover transition-transform duration-300 ease-[var(--ease-standard)] group-hover:scale-105 motion-reduce:group-hover:scale-100"
+                          className="w-full h-full object-cover transition-transform duration-composite ease-[var(--ease-standard)] group-hover:scale-105 no-motion:group-hover:scale-100"
                           loading="lazy"
                         />
                         <div className="media-hover-scrim absolute inset-0" />
-                        <div className="media-caption-gradient absolute bottom-0 left-0 right-0 p-2 opacity-100 transition-opacity duration-300 ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100">
+                        <div className="media-caption-gradient absolute bottom-0 left-0 right-0 p-2 opacity-100 transition-opacity duration-composite ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100">
                           <span className="text-on-media text-label-m">#{img.id}</span>
                         </div>
                         {img.score !== undefined && (
@@ -354,7 +354,7 @@ export default function DerpiUserPage() {
                           <Badge
                             tone="media"
                             icon={<MdStar />}
-                            className="absolute top-2 right-2 opacity-100 transition-opacity duration-300 ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100"
+                            className="absolute top-2 right-2 opacity-100 transition-opacity duration-composite ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100"
                           >
                             {img.score}
                           </Badge>

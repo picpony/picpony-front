@@ -97,7 +97,7 @@ export default function ReportsTab({ token }: { token: string }) {
           href={`/pic/${r.image_id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-link inline-flex items-center gap-1 hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+          className="prose-link inline-flex items-center gap-1 focus-visible:ring-2 focus-ring"
         >
           #{r.image_id} <MdOpenInNew size={ICON.dense} />
         </a>

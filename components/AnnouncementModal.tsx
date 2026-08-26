@@ -44,7 +44,7 @@ export default function AnnouncementModal() {
       title="系统公告"
       maxWidth="lg"
       footer={
-        <Button variant="text" className="text-primary" onClick={handleClose}>
+        <Button variant="text" className="text-primary-ink" onClick={handleClose}>
           我已知悉
         </Button>
       }

@@ -18,6 +18,7 @@ card radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | Button                   | `components/Button.tsx`                                    | a `<button>` with `bg-primary text-on-primary …`  |
 | Text input / textarea    | `Input` / `Textarea` / `Field` from `components/Input.tsx` | a bare `<input>` with border + focus-ring classes |
 | Colour picker            | `ColorSwatch` (`components/Input.tsx`)                     | a bare `<input type="color">`                     |
+| Choosing one of the ten themes | `PaletteSwatches` — one call site, /settings          | `ColorSwatch` (that is a free choice from 16 million) or a `Select` of colour *names* |
 | Radio button             | `components/Radio.tsx`                                     | a bare `<input type="radio">`                     |
 | Slider / range           | `components/Slider.tsx`                                    | `<input type="range">` plus a global class        |
 | A one-time code          | `components/CodeInput.tsx`                                 | six `<input maxLength={1}>` and a ref array       |
@@ -26,6 +27,8 @@ card radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | Dropdown (picks a value) | `components/Select.tsx`                                    | a hand-rolled absolutely-positioned menu          || Menu (runs a command)    | `components/Menu.tsx`                                      | a `role="menu"` div with no keyboard support      |
 | Any other floating panel | `components/Popover.tsx`                                   | a fifth recipe for corner + elevation + border    |
 | Dialog                   | `components/Modal.tsx`                                     | a hand-rolled scrim + panel                       |
+| A dialog's action row    | `Modal`'s `footer` prop                                    | your own flex row — two `fullWidth` buttons in one cannot fit, since `buttonClasses` always emits `shrink-0` |
+| A tick in a selection control | `components/CheckGlyph.tsx`                           | `MdCheck`, or a second copy of the same path       |
 | "Are you sure?"          | `useConfirm` (`components/ConfirmDialog.tsx`)              | `window.confirm`, or a `Modal` + 4 useStates      |
 | Asking for one value     | `usePrompt` (`components/ConfirmDialog.tsx`)               | `window.prompt`                                   |
 | Copying to the clipboard | `copyText` (`lib/utils.ts`)                                | `navigator.clipboard.writeText` with no fallback  |
@@ -152,7 +155,10 @@ or a press that turns into a scroll leaves the handle swollen.
 `Spinner`'s colour is one `tone` axis — `primary` / `on-primary` / `inherit`. It was
 `white?: boolean` plus `inheritColor?: boolean`: a raw colour name as a prop in a
 system that forbids raw colours, an illegal fourth state nothing prevented, and a
-mapping `Button` was doing at the call site from its own variant.
+mapping `Button` was doing at the call site from its own variant. Note `primary` resolves to
+**`primary-ink`**: the arc is a mark on a surface over a `secondary-container` track, and on
+the three light-coated palettes the fill measures 1.23:1 against its own `surface` where the
+ink measures 2.93 — every non-filled `Button`'s busy indicator.
 
 
 Press feedback is `data-ripple` plus the `state-layer` utility. This table used to
@@ -190,7 +196,7 @@ computed once and ScrollTrigger auto-refreshes on resize and `load` and nothing
 else — an image decoding after the batch is built moves every start line below
 it. Its `batchMax` is a *function*, re-evaluated per refresh, because a flat
 value put a whole phone screen into one batch and left the stagger nothing to
-stagger. And it takes `useReducedMotion` rather than the one-shot read, because
+stagger. And it takes `useMotionTier` rather than the point-in-time read, because
 this is one of the two hooks that keeps firing all session (the other is
 `useStaggerGrid`) and so is one of the two where changing the preference midway
 still has something to affect. It deliberately has no `refreshPriority`: that
@@ -217,6 +223,15 @@ inside a hidden subtree, which is its own violation.
 that is empty and a list that failed have one silhouette. Both take
 `size="page" | "pane" | "inline"` — match the enclosure, because a half-viewport
 block inside a 120px well makes the well scroll.
+
+**`inline` is one sentence and no glyph.** It had the default tray at 36px with a 24px gap
+inside `py-10`, which came to ~155px in wells that cap at 120 — so the empty state was itself
+what made them scroll. At this size the words *are* the empty state; a call site with
+something better to show can still pass `icon`, and several do. `StatusView`'s outer wrapper
+is `w-full` for the same family of reason: in a flex enclosure it was a shrink-to-fit item
+pinned at the start of the row, so "暂无标签" sat against the left edge of a `flex flex-wrap`
+well, and the obvious call-site fix cannot work — `className` lands on the inner shell, whose
+100% resolves against the collapsed wrapper.
 
 **Every** "nothing here" / "that failed" goes through them, including the ones
 that do not look like a list: the 404, the route error boundary, the image
@@ -431,13 +446,17 @@ Pair only within a role — `primary`/`on-primary`, `surface-container`/`on-surf
 Dividers use `outline-variant`; text-field borders use `outline`.
 
 **`scripts/palette.mjs` generates every tonal value, and it is the authority.** Run
-`npm run colors` for a diff and the contrast table, `npm run colors:write` to
-substitute the declarations in place — it only touches
-`--md-sys-color-<token>: #hex;` lines, so the ~40 paragraphs of reasoning between
-them survive. It is **idempotent** against the current file, which is the check that
-those values are still the recipe's output rather than someone's edit, and it exits
-non-zero rather than writing if a tone lands off target or the neutral-variant
-palette's chroma moves.
+`npm run colors` for the diff, the contrast table and the ten-theme matrix,
+`npm run colors:write` to write. Three products: the **default** theme's declarations are
+substituted in place in `globals.css` — it only touches `--md-sys-color-<token>: #hex;`
+lines, so the ~40 paragraphs of reasoning between them survive — while the nine character
+themes are written wholesale to `app/theme-palettes.css` and their brand colours to
+`lib/generated/themeColors.ts`. Both generated files are also *checked* on a plain run, so
+a stale one is a failure rather than a silent disagreement. It is **idempotent** against
+the current file, which is the check that those values are still the recipe's output rather
+than someone's edit, and it exits non-zero rather than writing if a tone lands off target,
+the neutral-variant palette's chroma moves, or any theme drifts from the default on any
+measured pair.
 
 The basis is **HCT**, because that is the space M3 quotes its own numbers in: "neutral
 chroma 6" means 6 in HCT, and no single OKLCH chroma means the same thing at every
@@ -446,10 +465,192 @@ lightness. Role → tone is verbatim from AOSP's `ColorLightTokens.kt` /
 inconsistency — an even hue sweep at fixed lightness and chroma is the entire point of
 that scale, and OKLCH is where that relationship is expressible.
 
-To change the brand: edit `SEED` in the script, run it, paste, then update
-`viewport.themeColor` in `app/layout.tsx` by hand (the browser reads that meta tag
-before any stylesheet exists, so it cannot be a `var()`) and re-check `.logo-keyline`
-against the Lottie artwork, whose hand-drawn roses do not follow the token.
+### The palette is an axis: ten themes from one recipe
+
+`data-palette` on `<html>` selects one of ten, and they differ in **one input** — the
+seed, all three of its coordinates. Everything else is shared: the role→tone map,
+`NEUTRAL_CHROMA`, the harmony offsets, the semantic ramps, the vividness the brand chroma
+is held to, and the four lines that turn a seed into a brand tone, an ink tone and a choice
+of `on-primary`.
+
+**What is shared is the derivation, not its output.** It used to be one number —
+`BRAND_TONE = 61 / 54` for all of them — on the argument that contrast against white ink is a
+function of tone alone, so one tone gives provably identical figures. That is true and
+it was the wrong thing to hold fixed: at tone 61 a yellow can only be `#b88d00`, because the
+whole 40–130° band is dark gold, and the contrast that made the guarantee cheap is the same
+quantity that decides how light a hue is allowed to be. 小蝶 is a pale yellow pony and no
+amount of hue adjustment makes tone 61 pale.
+
+The rules, all in `scripts/palette.mjs`, with every threshold either a WCAG bar or the
+default theme's own measured value — which is what makes the default a fixed point of the
+rule, and the UNCHANGED list its proof:
+
+```
+chroma      = max(seed.chroma, 67.4% of the most chroma sRGB holds at that hue and tone)
+brand light = round(seed.tone); if white ink misses 3:1, darken up to 2 tones to reach it,
+              and if that is not enough this is a light brand and takes P20 ink instead
+brand dark  = light − 7, lightened only if that misses 3:1 against the dark page (tone 42)
+on-primary  = white where white clears 3:1 in *both* schemes, else P20 — one ink per theme,
+              never flipping between schemes
+ink light   = the lightest tone at or below the brand tone that still makes 2.9:1 on surface
+```
+
+**The chroma floor is relative, and that is what replaced AOSP's `max(48, chroma)`.** An
+absolute floor means something different at every hue, because the gamut does: measured
+against the most sRGB can hold at each theme's own hue and tone, 48 is 55% of what is
+available at 瑞瑞's violet, 81% at 云宝黛西's blue, and **unreachable** at 邪茧's teal, which
+tops out at 40. So the "floor" was pinning some themes to the gamut edge while leaving others
+muted — the exact unevenness a shared constant was supposed to prevent. 67.4% is the default
+theme's own figure (56.8 of 84.3), so the brand defines the scale rather than participating
+in it, and it is applied as a floor: a character more saturated than the brand keeps their own
+chroma (碧琪 79, 苹果嘉儿 65), a flatter one is brought up to it (瑞瑞 46 → 58, 暮光闪闪 49 → 60).
+It can never desaturate anyone.
+
+| id | 标签 | primary 浅 / 深 | on-primary | Where it comes from |
+| --- | --- | --- | --- | --- |
+| `default` | 默认 | `#e06c9f` / `#cb5b8d` | white | The brand seed `#e06c9f`, unchanged |
+| `applejack` | 苹果嘉儿 | `#ed6e2e` / `#d55c1c` | white | Coat Outline `#EF6F2F` |
+| `fluttershy` | 小蝶 | `#f6e46e` / `#e2d05d` | P20 `#373100` | Coat Shadow Fill `#F3E488` |
+| `lyra` | 天琴 | `#62dfb2` / `#4bcb9f` | P20 `#003828` | Coat Shadow Fill `#62DFB2` |
+| `chrysalis` | 邪茧 | `#208480` / `#00726e` | white | Carapace mid `#1E837F` |
+| `rainbow` | 云宝黛西 | `#6cacdb` / `#599ac8` | P20 `#00344e` | Coat Outline `#6BABDA` |
+| `luna` | 露娜 | `#1e4dc3` / `#2f5ad0` | white | Mane Main Fill `#1C4CC2` |
+| `rarity` | 瑞瑞 | `#5e49b8` / `#6551c0` | white | Mane Fill `#5E50A0` |
+| `twilight` | 暮光闪闪 | `#ab63cd` / `#9850ba` | white | Coat Outline `#A46BBD` |
+| `pinkie` | 碧琪 | `#eb458b` / `#d43279` | white | Mane Fill `#EB458B` |
+
+**Every seed is a hex the colour guide lists, unaltered** — the MLP-VectorClub guide, which
+extracts them from the show's own artwork and publishes a machine-readable dump at
+`https://mlpvector.club/dist/mlpvc-colorguide.json` (`Appearances[id].ColorGroups`). That is
+worth stating because for three rounds it was not, and the reason is one detail of the guide
+that is easy to miss: **a coat is not a colour, it is four labelled values** — Outline, Fill,
+Shadow Outline, Shadow Fill — and the Outline is the dark line drawn *around* the shape rather
+than the colour the character reads as. Five of the original seven seeds were outlines. 小蝶's
+yellow was reported ugly three times and every attempt moved her hue, when the actual fault was
+that her Outline (`#E9D461`, tone 85) was standing in for a coat whose Fill is `#FAF5AB` (tone
+95). Reading the right row retires both hand-mixed seeds — a warmed yellow and a cooled indigo
+— so `THEMES` is now id, label and a guide hex, with nothing invented anywhere in it.
+
+Which row a character takes is still a judgement, and the reason is one line each:
+
+- 苹果嘉儿, 云宝黛西, 暮光闪闪 take their coat's **Outline** — the orange, sky blue and purple
+  they read as. Their Fills are 15–18 tones lighter and, in 苹果嘉儿's case, hue 73, which would
+  land 30° from 小蝶.
+- 小蝶 and 天琴 take the **Shadow Fill**, because their Fill is tone 93–95, where a brand fill
+  stops having a boundary against a near-white page (ASSERTION 5 rejects it).
+- 瑞瑞's coat is `#BDC1C2`, near-achromatic, and 邪茧's is `#2A2A2A` at chroma 1.0, so they take
+  the next feature the guide gives them: 瑞瑞's mane, and 邪茧's **carapace** — the changeling
+  anatomy that is not black. Her mane (`#1E5972`) was the other candidate and sits 11° from
+  云宝黛西, where the carapace is 23° clear of 天琴 and 50° clear of 云宝黛西.
+- 露娜's coat Outline is tone 8 and her coat Fill tone 28, both under ASSERTION 5's floor, so
+  she takes her **mane's Main Fill** — the night sky she is known for, and at tone 37 it keeps
+  her two schemes 5 tones apart where the coat would have made it 14.
+- 碧琪 takes her mane because her *coat* is hue 353.5 chroma 50.4 against the brand's
+  355.7/56.8 — the same colour. The mane's chroma of 79.4 is what distinguishes her theme; the
+  hues are 4.2° apart, and that pair is the one exemption in ASSERTION 6.
+
+Sorted by hue the ten leave **20.5°** between the closest pair that is not that one, 露娜
+against 瑞瑞 — two purples the guide gives no way to separate further, since 瑞瑞's only other
+stop (316.2) is 3° from 暮光闪闪.
+
+**The brand goes deeper in dark, except where the page is black.** Eight of the ten are
+`light − 7`, which is what the `.dark` block has always documented. 露娜 (tone 37) and 瑞瑞 (39)
+are darker than the tone-42 floor, the lightest tone at which a fill still makes 3:1 against a
+tone-6 page, so they move *up* to it — by 5 tones and 3, less movement between schemes than the
+default's own 7. That floor is WCAG 1.4.11 and not the default's own 4.79, and the difference is
+not pedantry: at 4.79 the floor is tone 54, which pinned every brand darker than 61 to that one
+tone — 邪茧, 暮光闪闪, 碧琪, 瑞瑞 and 露娜 all landed there, so three came out *lighter* in dark
+than in light, 暮光闪闪 came out identical in both, and 碧琪's shift was cut from seven tones to
+two. Separation from a near-black page is very nearly a function of tone alone (measured across
+the ten, within ±0.05 at every tone), so a floor set above what the spec asks converts a shift
+into a destination.
+
+One consequence of the lower floor, stated because it is a real trade rather than a free win:
+邪茧, 露娜 and 瑞瑞's dark brand now sits at tone 42–43 instead of 54, which takes `primary-ink`
+against `surface-container-highest` to 2.04–2.14:1 for those three — the tab indicator and the
+focused field's outline, on a card. Both of those pairs are `report` rather than `floor` in
+`PAIRS`, and the default theme already measures 2.39 on the same pair in light, so this is the
+existing divergence getting worse for three palettes in one scheme rather than a new one. The
+alternative is the tone-54 pinning above, which is visibly wrong in every scheme.
+
+**The one yellow that cannot be lighter is the ink.** `primary-ink` sits at the tone where the
+brand still makes 2.9:1 on the page, which for a yellow hue is 61 — a brass gold. It is what a
+section heading's glyph, a switch's tick and the tab indicator take, so it is the most visible
+thing in that palette after the app bar, and it looks darker than the fill by a third of the
+tone scale. Lightening it is a straight trade against legibility: tone 66 measures 2.48:1 and
+tone 70 measures 2.18:1, against a 3:1 non-text bar this role is already under.
+
+**What consistency means now that the brand tone is per-seed.** `npm run colors` holds the
+ten to three different standards, declared per pair in `PAIRS`:
+
+- `spread` — both members' tone maps are shared, so the pair varies only with hue. Held to
+  ±0.25 of the default; measured, the worst is 0.16. This covers every surface step, both
+  neutral-variant roles, the whole secondary/tertiary harmony, the semantic containers and
+  the two link roles, and it is where the uniformity lives.
+- `floor` — a brand member, so the value is a design consequence. `on-primary`/`primary`
+  must clear 3:1 (3.06–10.14 light, 3.87–8.37 dark) and `primary-ink`/`surface` must clear
+  the default's own 2.9 in light and WCAG's 3:1 in dark (2.91–6.86 and 3.07–11.87).
+- `report` — printed, asserted nowhere: either the default already fails it and globals.css
+  says why, or it measures a brand *fill* against a surface, which is exactly the quantity a
+  per-seed tone is allowed to move.
+
+Three assertions came with the per-seed tone. `on-primary` must be the same ink in both
+schemes, which used to hold for free when every theme's was white. A seed's own tone must be
+inside 30–92, asserted rather than clamped — a clamp would hand back a theme that is quietly
+not the colour that was asked for, where the assertion sends you to a different row of the
+guide. And no two hues may sit closer than 15°, with the brand/碧琪 pair exempt, because the
+picker is a row of coloured circles and nobody reads the captions.
+
+**`primary` is a fill role; `primary-ink` is the brand as a mark.** Same hue, at whichever
+tone can be read on the page. For seven of the ten palettes it is the same hex as `primary`,
+byte for byte; for the three light-coated characters (小蝶, 天琴, 云宝黛西) it is a darker step.
+Every place the brand is ink rather than a container reads it — `text-primary-ink`, a selected
+glyph, the checkbox's box, the tab indicator, the slider's fill, the focused field's outline, a
+quoted block's rule. Use `primary` where the thing is a container with `on-primary` over it:
+the app bar, a `filled` button, the switch track, the active pagination pill. The rule of thumb
+is whether you could put a label inside it.
+
+The name existed once before, for a role that served links *and* active states and did
+neither well. This one has a single job and cannot invert: never lighter than the brand in
+light, never darker in dark.
+
+**What follows the theme and what does not.** A theme re-skins the *system*; it is not a
+licence to recolour everything:
+
+| Follows | Fixed in all ten |
+| --- | --- |
+| `primary` / `primary-ink` / `secondary` / `tertiary` families | `error` / `success` / `warning` — a severity that changes colour with a theme is not a severity |
+| every `surface` step, `on-surface`, `inverse-*` | the four `*-fill` + `on-fill`, for the same reason and because they already do not flip between schemes |
+| `on-surface-variant`, `outline`, `outline-variant` | `accent-*` — a categorical scale; a 分级 chip that changed hue per theme would change meaning |
+| `focus*`, through their `var()` indirection on `secondary` | `plate-1..6` — the /about plate's own hue ring, taken off the Lottie artwork |
+| `link` / `link-hover` — the brand hue at P40 / P80 | `media-*`, `on-media*`, `scrim` — things sitting on a photograph |
+| | the wordmark. `.logo-keyline` is `currentColor` and the Lottie roses are hand-drawn pink; a brand mark does not recolour with a user preference |
+
+**Links follow the palette, and the underline is what pays for it.** They were a fixed blue
+in both schemes, on the argument that blue is a link's affordance rather than a brand element
+— true, and it left every link in the app ignoring the theme, including the source URL under
+a picture. They are the brand hue at a text tone now (6.12–6.19:1 on light `surface`,
+10.81–10.94:1 dark, against the old blue's 6.34 and 10.09 — a hue swap with no legibility
+change), and prose links carry a **rest-state underline** so the affordance no longer rests
+on hue. The underline is what pays for the swap rather than a nicety: under the old fixed
+blue a link sat 22.6° from 云宝黛西's brand and 23.0° from 瑞瑞's in OKLab hue, close enough
+to read as one colour, and now it *is* that hue — 0.2°–2.1° from `primary-ink` across the
+ten — so the line is the only thing left distinguishing a link from an emphasis mark.
+
+The selectors carry `html` (`html[data-palette='x']`, `html.dark[data-palette='x']`) and
+that is load-bearing: `@import` has to precede every rule, so the generated blocks land
+*above* `:root`, and `:root` and `[data-palette=x]` are both specificity (0,1,0). With the
+element name they are (0,1,1) and (0,2,1) and beat `:root` and `.dark` whatever the order.
+
+To **add** a theme: add one entry to `THEMES` in the script and run `npm run colors:write`.
+Nothing else — the CSS, the swatch colours and the `<meta name="theme-color">` values are
+all products of that run, and the brand tone, the ink tone and the choice of `on-primary`
+are derived from the hex you pasted in. To **move the brand**: edit `SEED`, run it, and
+re-check `.logo-keyline` against the Lottie artwork. The hand-copy step that used to follow
+(two literals in `viewport.themeColor`) is gone: that export no longer carries `themeColor`
+at all, because a static array cannot express ten palettes and mutating Next's own tag does
+not survive a client navigation. The tag is rendered from the cookie in `app/layout.tsx`.
+
 
 **Which container step a component takes is the spec's decision, not the
 designer's eye.** M3 names one per component, and getting it wrong is invisible in
@@ -684,17 +885,21 @@ Deliberate divergences from the spec, all commented where they live. Do not
   from the surface it sits on and that surface is near-white in one scheme and
   near-black in the other, so the spec's light tone is the *darker* of the two. This
   app holds the pink instead of a tone of it, seven tones apart, which reads as one
-  colour with a little separation from each ground.
+  colour with a little separation from each ground. Those two tones are the *default
+  seed's own lightness*, not a constant — see the palette-axis section for the rule, for the
+  three palettes whose brand is light enough to take dark ink instead, and for the two whose
+  brand is dark enough that the dark scheme has to step *up* rather than down.
   **What it costs, so nobody rediscovers it as a bug:** white ink on it is 3.08:1 light
   and 3.87:1 dark, under the 4.5:1 AA floor for 14px text — the label of every `filled`
   button, the active pagination number, the featured badge. It is not fixable in place:
   contrast is a function of the fill and the ink, and both levers have a visible price
   (a single tone at 48 clears it at 4.81:1 but reads deeper and duller; `on-primary` at
-  P10 clears it at 5.71/4.54 but puts dark glyphs and a dark wordmark on the app bar).
-  Neither is taken. The bar itself is not the failing case — glyphs and a wordmark are
-  non-text and need 3:1. As *ink on a surface* the tone is 2.94:1 light / 4.79:1 dark,
-  so `text-primary` is for a glyph or an emphasis mark, body text takes
-  `on-surface-variant` and navigable text takes `link` — which is why that role exists.
+  P10 clears it at 5.55/4.41 but puts dark glyphs and a dark wordmark on the app bar).
+  Neither is taken *for this seed*. The bar itself is not the failing case — glyphs and a
+  wordmark are non-text and need 3:1. As *ink on a surface* the tone is 2.94:1 light /
+  4.79:1 dark, which is why the brand-as-a-mark role exists: `text-primary-ink` is for a
+  glyph or an emphasis mark, body text takes `on-surface-variant` and navigable text takes
+  `link`.
 - **Body** line-heights run looser than the spec and tracking runs at half the spec
   value, because Han glyphs fill the em box. The **label** roles do not — all six are
   at the spec exactly, and this line used to claim otherwise. `body-l` is 1.75 (the
@@ -1256,6 +1461,15 @@ Those six are the whole scale, and every duration in it is a step on M3's own
 `duration-150` is the state layer's and nothing else's, and it belongs to the
 `state-layer` utility rather than to a call site.
 
+**That scale is what the 默认 speed declares.** 快速 and 缓慢 scale the whole system by 0.7
+and 1.4, so a *rendered* duration in those tiers is not itself a step on the grid; the grid
+constrains the base values, and the reciprocal pair is what keeps the ratio between any two
+of them intact. Every base goes through `--motion-scale` — see the three-tiers section. The
+CSS names are semantic (`duration-standard`, `duration-exit`, `duration-enter`,
+`duration-emphasized`, `duration-press`, `duration-state`, `duration-composite`); the
+numeric `duration-200` form still works and still scales, but it cannot say whether it means
+"settling in place" or "leaving", so prefer the role.
+
 **A panel travelling in place is not in this table at all**, and the road to that
 answer is worth keeping. Three collapsible panels needed it — the navigation drawer,
 /messages' contact rail, /search's advanced block — and none of the rows above fits:
@@ -1787,24 +2001,152 @@ And always name the curve, even for a one-property fade. A bare
 safety net pointed at `standard`, not a decision — it cannot know whether the
 thing is arriving, leaving, or settling in place.
 
-Anything decorative must collapse under `prefers-reduced-motion: reduce`. The
-enumeration lives at the bottom of `globals.css`; GSAP helpers branch on
-`prefersReducedMotion()`. Note that the enumeration has to cover **transitions**
-as well as `@keyframes`: `transition-ui` lists `transform, translate, scale,
-rotate` (it must — Tailwind compiles `translate-x-*` and `scale-*` to those
-standalone properties), so for a long time the drawer still slid its full width,
-the tab pill still translated, the switch handle still travelled and `Select`'s
-chevron still rotated under the preference. One rule re-declaring
-`transition-property` now drops every moving property while keeping colour,
-opacity and shadow, because losing those would turn hover and focus into a
-flicker rather than a state.
+### Three tiers and three speeds
 
-The `spring-*` utilities are covered by that rule automatically, because they set
-only a timing function and a duration and are always composed with a
-`transition-[…]` the enumeration already matches. A keyframe animation is not:
-each `--animate-*` token needs its class listed in the reduced-motion block by
-name. That block used to match on a substring of the `animate-[…]` arbitrary-value
-syntax, which meant adding a sixth micro-interaction silently opted it out.
+The animation preference is **关闭 / 减弱 / 标准**, and independently a speed of
+**快速 / 默认 / 缓慢** and a switch for **入场动画**. `lib/appearance.ts` owns all of it and
+writes `data-motion` / `data-motion-speed` / `data-entrance` onto `<html>`; `app/layout.tsx`
+puts them there from cookies at SSR and corrects them from localStorage before the first
+paint, so the tier is never wrong on a cold load and the CSS never has to wait for React.
+
+**The two axes are orthogonal: the tier decides what kind of motion plays, the speed decides
+how long it takes.** That is worth stating because it was not true at first — 减弱 carried
+its own 0.5 scale as well as stripping travel, so choosing "less motion" answered one
+question twice and the tier that most needed to feel calm instead felt broken. Speed applies
+to both tiers that animate; only 关闭 ignores it, because its length is zero.
+
+`prefers-reduced-motion` reaches this **through** the attribute rather than around it:
+`system` is resolved in JS and `reduce` maps to **减弱, not 关闭**. Before there was a
+middle tier the two were the same thing and the OS preference switched twenty-odd
+animations off outright; what the preference asks for is less movement, and a user who
+wants none at all now has somewhere to say so. There is no 跟随系统 *option* in the control —
+the stored value is `system` until something is picked, and the select shows the tier that
+resolved, so a visitor whose OS asks for less motion sees 减弱动画 rather than a label that
+only says where the answer came from. The scripting-off floor is one blunt rule in a
+`<noscript><style>` in the layout.
+
+**Everything is one variable.** Every duration in the app is
+`calc(<base> * var(--motion-scale))`; the speed rules do nothing but set that number — 0.7 /
+1 / 1.4, and **0** for 关闭. Two consequences worth stating:
+
+- **The keyframe enumeration is gone.** It listed eleven `--animate-*` classes by name to
+  collapse them, with a comment recording that a sixth micro-interaction had already opted
+  itself out silently. A duration derived from the scale obeys the tier by construction. So
+  the invariant is: *every `transition-duration` and `animation-duration` in the built CSS
+  goes through `--motion-scale`* — greppable (note a duration reached through
+  `var(--transition-duration-*)` or `var(--duration-spring-*)` satisfies it), and the only
+  exceptions are the four indeterminate progress indicators, each of which says why beside
+  its value, plus the two third-party stylesheets.
+- **The M3 duration scale is what 默认 declares.** 快速 and 缓慢 are an equal scaling of the
+  whole system, so a scaled value is not itself a step on the 50ms grid — and that is the
+  point. 0.7 and 1.4 are reciprocals, so the *ratios* between the parts of one gesture (a
+  100ms press against a 150ms state layer) are identical at all three speeds, which three
+  separately-rounded duration tables could not have promised.
+
+Scaling a spring's clock is legitimate where scaling one of its two halves would not be:
+normalised by settle time the curve depends only on ζ, so a uniform scale is the same
+spring at a different speed.
+
+**A wall-clock timer that bounds an animation takes `MOTION_SPEED_SCALE.slow`, not the
+animation's own number and not the live speed.** Every duration in the CSS now stretches by up
+to 1.4, so a `setTimeout` written against the unscaled figure fires inside the motion it was
+meant to outlast: `useExitAnimation` unmounted `Modal` at 71% of its fade before this was
+understood, the splash overlay dropped a full-screen `bg-surface` at roughly 0.6 opacity, and
+both tab bars pushed their route ~200ms into a slide. The *maximum* rather than the current
+value, because the number bounds the animation and the speed can change between the two reads;
+holding an already-invisible node 40% longer costs nothing. Four call sites do this
+(`lib/overlay.ts`, `components/LoadingOverlay.tsx`, `components/AppLayout.tsx`,
+`app/admin/page.tsx`), and a fifth that needs it is a bug you will only see at 缓慢.
+
+**入场动画 is the third axis, and it is a call-site decision rather than a token.** It answers
+a different question from the tier: the tier is about how much motion a gesture *you* asked for
+may use, and this is about whether the app volunteers any of its own — the scroll reveal, the
+grid cascade, `Reveal`, `Logo`'s draw-on, the splash. `entranceMotion()` reads `data-entrance`
+off `<html>`, and the invariant is *an animation is an entrance iff its call site reads
+`entranceMotion()`*.
+
+It shipped as a second CSS multiplier, `--motion-entrance`, on the argument that a token is
+where the question belongs — and that had to come out, because **two keyframes serve both kinds
+at once.** `--animate-page-transition` is a cold mount's own fade *and* the route cross-fade's
+incoming half *and* `AuthModal`'s login/register pane swap; `--animate-fade-in` is a gallery
+skeleton appearing *and* the captcha's success state. Multiplying the token therefore suppressed
+a pane swap the user had just asked for, while `playRouteCrossFade` — which sets
+`animation: none` and drives the fade itself — ignored the preference on the path most
+navigations take. And `--animate-detail-arrive`, the substitute the two lower tiers get for the
+hero flight, turned a tapped thumbnail into a hard cut. A route transition, a pane swap, an
+overlay opening and status feedback are the *tier's* business; only motion nothing asked for is
+this switch's. What it gives up is four CSS mount fades that keep playing with the switch off
+(the gallery skeleton, the dev banner, the admin panel, the upload preview), all 400ms on
+opacity alone.
+
+**减弱 is basic motion, not absent motion**, and that is the rule to check a new branch
+against:
+
+> Keep the fades, the short travels, the state layers, the ripple, the indicator that
+> slides. Drop the performance: the container-transform flight, a slide across the whole
+> window, stagger, overshoot, decorative loops, Lottie playback.
+
+Two readings of that rule are worth spelling out, because both were got wrong once. **"Drop
+Lottie playback" means every Lottie**, including the ones whose call sites argue they are a
+response rather than a performance: `LottieIcon` gated on `off` alone on the grounds that it
+draws "one-shot marks a few kilobytes each", when its two call sites are a 3257×2148 login
+illustration filling 60% of a dialog and /search's 3000×1553 empty state, both behind a 60KB
+player — and `Logo`'s hover trace did the same, warming that player on an idle callback for a
+tier whose audience cannot afford the hero flight. Both are standard-only now. **And the
+skeleton shimmer is not a decorative loop**: it is the same class as the four indeterminate
+indicators, a band that says "this is a placeholder, not content", so it keeps looping under
+减弱 and only `off` stops it.
+
+The first version of this rule said *keep opacity and colour, drop travel, scale, rotation
+and stagger* — which is a fair description of 关闭 and left 减弱 with nothing moving anywhere
+in the app, because the CSS block it named re-declared `transition-property` without
+`transform`. It is worth knowing what that cost: the drawer did not slide, the switch handle
+did not travel, the tab indicator did not glide, a determinate meter's `scaleX` snapped. That
+block is `off`-only now.
+
+**8px is the weak form's travel, and it has to be the same 8px everywhere.** `Reveal`, the
+grid, `Toast`, the route clone, the detail's own arrive keyframe, the floating back button and
+the swipe-dismiss all take it under 减弱; two of those last three were zeroing it, which made
+them the only things in the app that faded in with no travel at all on the tier whose whole
+point is that something still moves.
+
+Overshoot is the one part a stylesheet can remove on its own, and it takes three declarations
+because nine springs share four `linear()` tables: `html[data-motion='reduced']` points the
+three under-damped shapes at the critically damped one, so a handle still travels and simply
+stops when it arrives. `spring()` in `lib/motion.ts` does the same substitution for GSAP.
+Everything else is per-component, because "what the basic form of this gesture is" is not a
+question CSS can answer: a cross-fade with a 24px shift where there was a full-window slide
+(the shared axis), a half-height rise where there was a full one (`Reveal`, the grid, `Toast`,
+the route clone), no cascade where there was one, and the hero flight replaced by the detail
+route's own fade — that last one on measurement rather than principle, since the flight is the
+most expensive thing the app does (36fps on a machine that idles at 60) and this tier's
+audience is a device that cannot afford it.
+
+JS reads `motionTier()` — `prefersReducedMotion()` and `useReducedMotion()` are **deleted**,
+not aliased, because at more than twenty of their thirty call sites the "reduced" branch was a
+bare `return`: an absent animation rather than a weaker one, and an alias would have left every
+one of them quietly meaning 关闭 for a user who asked for less.
+
+**关闭 has four documented exceptions**, and they are the answer to "why is something still
+moving": indeterminate progress (`Spinner`, `.m3-progress-*`, the top loader) slows rather
+than stopping, because a frozen ring claims the opposite of what it means; a determinate
+meter still shows its *value*, only the transition between values goes; a position the
+finger is holding is the input's own projection, not an animation — the drag itself is never
+gated, only the release; and a scroll offset is state, so every tier still lands on it and
+only the travel is dropped.
+
+`no-motion:` is the call-site variant, and it replaces Tailwind's built-in `motion-reduce:`,
+which is a media query and therefore cannot see the app's own setting. Its five uses all do
+one job: standing a hover *end state* down, because the off tier drops `rotate`/`scale` from
+the transition list and what is left without a guard is the same 180° turn arriving in one
+frame. It matches `off` alone — it was `low-motion` and matched 减弱 too, which was right
+only while that tier stripped transforms. Unlike `dark`, it is built on `:is()` rather than
+`:where()` — it exists to beat the utility beside it, so it needs that specificity.
+
+The `spring-*` utilities are covered by the transition rule automatically, because they set
+only a timing function and a duration and are always composed with a `transition-[…]` it
+already matches.
+
 
 ## Three traps that make a fix look applied when it is not
 
@@ -1823,7 +2165,12 @@ does not skip comments, so a comment naming a class you just deleted can put it
 straight back into the stylesheet. The cost is not weight — it is that you can no
 longer grep the built CSS to prove a class is gone. When documenting a value you
 removed, spell it in prose ("a 25% alpha on `ring-primary`") rather than as a
-class name.
+class name. Measured again in this pass: a `.tsx` comment does it (a note reading "it read
+`py-10`" put `.py-10` back into the bundle, from a component where the class appears nowhere
+else), while a comment inside `app/globals.css` does **not** — `motion-reduce` and
+`duration-200` are both named in comments there and neither emits a rule. Do not lean on
+that asymmetry; the rule to follow is the same in both files, because it is the one you can
+remember.
 
 **The extractor is wider than it looks, and the earlier version of this note got the
 line in the wrong place.** It claimed that anything with a `/`, a `[`, a `:` or a `-`
@@ -2593,10 +2940,10 @@ left alone and only `finalMax`'s clamp can move it. Per-screen rather than per-s
 purpose: a rule that fires depending on how far you happen to have scrolled is not one a user can
 learn.
 
-**And it positions under `prefers-reduced-motion`.** It did not: both the tap path and the
+**And it positions under the 关闭 tier.** It did not: both the tap path and the
 reactive path returned before positioning, so the panes swapped through `display: none` and the
 browser clamped and nothing else happened. A scroll position is state, not decoration; the
-preference asks for less movement, not for less positioning. `applyReducedTabScroll` runs after
+preference asks for less movement, not for less positioning. `applyInstantTabScroll` runs after
 the commit, where the arriving pane is the only one with a box and the clamp is the browser's real
 maximum rather than a prediction — and it applies the same `panelTop` test, which is the half that
 must not be dropped: without it, turning the preference on is what makes a profile's 697px jump
@@ -2618,6 +2965,28 @@ unless you pass `revertOnUpdate: true`. Without it, listeners, `Observer`s and
 value in a ref and shrink the dependency list.
 
 ## Module boundaries
+
+**`lib/appearance.ts` owns the five device-local appearance preferences** — colour scheme,
+palette, motion tier, motion speed, entrance animations — and it is the only module that reads
+or writes them. They are one concern with one shape: a stored setting that may say "follow the
+system", a resolved value on `<html>`, a cookie so the server can put it there before first
+paint, and one subscription so the app bar's glyph and /settings' dropdowns cannot disagree.
+Read the **root**, not the store: `motionTier()`, `currentPalette()` and `entranceMotion()`
+read the attribute, because that is what the CSS is keyed on and therefore what is in force —
+a stored setting can say `system`, an attribute never does.
+
+It is deliberately GSAP-free. `lib/motion` registers a callback through
+`setMotionScaleListener` that sets `gsap.globalTimeline.timeScale`, which is how one line
+reaches every GSAP tween and delay in the app — a seam rather than an import, for the same
+reason `setHeroBusyCheck` is one: this module is reached by anything that reads a
+preference. Note the `off` tier is clamped there rather than here, because a `timeScale` of
+0 stops the clock instead of collapsing the duration.
+
+`changeScheme` / `changePalette` live in `lib/motion` beside `circularReveal`, because what
+they are is a *wipe* with a one-line preference write inside it.
+
+**`lib/generated/` is script output.** Nothing in it is hand-edited and `npm run colors`
+fails if it is stale.
 
 **`lib/api.ts`'s `api` is a runtime spread, so it cannot be tree-shaken.** Every
 importer of it pulls every member, and 39 files import it — including `app/page.tsx`,
@@ -2643,3 +3012,18 @@ request since it was written.
 **`LS_KEYS` is complete and has to stay that way.** It covered 9 of the 27 keys the
 app writes, so 32 call sites restated a literal that *was* in the table — 25 of them
 in `app/settings/page.tsx`, the one module whose entire job is settings persistence.
+That file is now the largest *consumer* of the table rather than the largest evader: 66
+literals went, and `AppLayout` — which imported the table not at all and wrote `darkMode`
+and `followSystemPrefersColorScheme` by hand — goes through `lib/appearance`.
+
+**`COOKIE_KEYS` is its sibling, and it exists because the two sets are not the same.** Six
+preferences are mirrored into a cookie so `app/layout.tsx` can put them on `<html>` at SSR;
+without that the first paint is the default theme and the pre-paint script corrects it, which
+is a visible flash of the wrong brand on every cold load. `darkMode`'s cookie name matches
+its storage key and `sidebarCollapsed`'s does not, which is precisely why the mapping is a
+table rather than a derivation.
+
+**`MEDIA` holds every `matchMedia` string, including the two preference queries.**
+`(prefers-color-scheme: dark)` was hand-typed at three sites and
+`(prefers-reduced-motion: reduce)` at four — seven copies of two strings, in the two places
+where a typo fails silently by never matching.

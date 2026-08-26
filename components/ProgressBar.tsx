@@ -91,7 +91,7 @@ const HAS_WIDTH = /(?:^|\s)(?:\S+:)?w-\S+/;
  * pipeline.
  *
  * **Motion is a spring, not the loop curve.** All seven hand-rolled bars ran
- * `duration-200` on `--ease-symmetric`, which is the *loop* curve.
+ * a 200ms clock on `--ease-symmetric`, which is the *loop* curve.
  * `ProgressIndicatorDefaults.ProgressAnimationSpec` is
  * `spring(dampingRatio = DampingRatioNoBouncy, stiffness = StiffnessVeryLow)` — a
  * critically damped spring, which is this app's *effects* family and the one that

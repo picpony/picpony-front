@@ -4,6 +4,8 @@ import { ReactNode, useRef, useState } from 'react';
 import { spawnRipple } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
+import CheckGlyph from './CheckGlyph';
+
 interface ToggleSwitchProps {
   checked: boolean;
   onChange: (v: boolean) => void;
@@ -48,19 +50,19 @@ interface ToggleSwitchProps {
 /** Handle geometry: `FastSpatial`, per `Switch.kt`. Colour is not geometry, so it
  *  keeps its own short clock. */
 const HANDLE_TRANSITION =
-  '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),background-color_100ms_var(--ease-standard)]';
+  '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),background-color_var(--transition-duration-press)_var(--ease-standard)]';
 /** Press is contact, so it is the scale's shortest step and linear — a curve on a
  *  100ms squash is a shape nobody can see. Applied only while the press is held; the
  *  release falls back to the base spring above, which is the same `FastSpatial` the
  *  travel runs on, so the two land together. */
 const PRESSED_HANDLE_TRANSITION =
-  '[transition:width_100ms_linear,height_100ms_linear,background-color_100ms_var(--ease-standard)]';
+  '[transition:width_var(--transition-duration-press)_linear,height_var(--transition-duration-press)_linear,background-color_var(--transition-duration-press)_var(--ease-standard)]';
 /** The check crosses while the handle is still travelling, so it takes the fastest
  *  *effects* spring (ζ1.0 k3800, 108ms) rather than a hand-counted 33ms. */
 const ICON_TRANSITION = '[transition:opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** Track and outline recolour together with the handle, on the same short step. */
 const TRACK_TRANSITION =
-  '[transition:background-color_100ms_var(--ease-standard),border-color_100ms_var(--ease-standard)]';
+  '[transition:background-color_var(--transition-duration-press)_var(--ease-standard),border-color_var(--transition-duration-press)_var(--ease-standard)]';
 
 /**
  * Material 3 switch, at the spec's own numbers (material-web `md-switch`,
@@ -224,7 +226,7 @@ export default function ToggleSwitch({
               ref={stateLayerRef}
               data-ripple={disabled ? undefined : ''}
               className={`grid h-10 w-10 place-items-center rounded-full ${
-                checked ? 'text-primary' : 'text-on-surface'
+                checked ? 'text-primary-ink' : 'text-on-surface'
               }`}
             >
               {/* The tint is its own node rather than the `state-layer`
@@ -237,7 +239,7 @@ export default function ToggleSwitch({
                   gates itself on `:disabled`; this hand-rolled twin has to do the
                   same by hand. */}
               <span
-                className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity duration-150 ease-[var(--ease-standard)] ${
+                className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity duration-state ease-[var(--ease-standard)] ${
                   disabled
                     ? ''
                     : 'group-hover/switch:opacity-[var(--md-sys-state-hover-opacity)] group-has-[:focus-visible]/switch:opacity-[var(--md-sys-state-focus-opacity)] group-active/switch:opacity-[var(--md-sys-state-pressed-opacity)]'
@@ -264,22 +266,11 @@ export default function ToggleSwitch({
                 )}
               >
                 {/* Only the selected state carries a mark. */}
-                <svg
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  aria-hidden="true"
-                  className={`absolute inset-0 m-auto size-4 text-primary ${ICON_TRANSITION} ${
+                <CheckGlyph
+                  className={`absolute inset-0 m-auto size-4 text-primary-ink ${ICON_TRANSITION} ${
                     checked ? 'opacity-100' : 'opacity-0'
                   }`}
-                >
-                  <path
-                    d="M2.5 6L5 8.5L9.5 3.5"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                />
               </span>
             </span>
           </span>

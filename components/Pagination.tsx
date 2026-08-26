@@ -264,7 +264,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
               {[0, 1, 2].map((i) => (
                 <span
                   key={i}
-                  className="bg-primary animate-dot-bounce h-1.5 w-1.5 rounded-full"
+                  className="bg-primary-ink animate-dot-bounce h-1.5 w-1.5 rounded-full"
                   style={{ animationDelay: `${i * 0.15}s` }}
                 />
               ))}
@@ -272,7 +272,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
           ) : (
             <MdRefresh
               size={ICON.control}
-              className="transition-transform duration-200 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
+              className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
             />
           )
         }

@@ -1,7 +1,8 @@
 'use client';
 
 import { ReactNode, useRef } from 'react';
-import { gsap, useGSAP, prefersReducedMotion, DURATION } from '@/lib/motion';
+import { gsap, useGSAP, DURATION } from '@/lib/motion';
+import { entranceMotion, motionTier } from '@/lib/appearance';
 
 interface RevealProps {
   children: ReactNode;
@@ -35,17 +36,27 @@ export default function Reveal({
 
   useGSAP(
     () => {
-      if (!ref.current || prefersReducedMotion()) return;
+      const tier = motionTier();
+      /* `entranceMotion()` is the harder stop: this component *is* an entrance, so with the
+         switch off there is nothing to reduce. Read once at mount rather than subscribed,
+         because that is when the whole of this animation happens — the two reactive readers
+         are the scroll reveal and the grid, which keep firing all session. */
+      if (!ref.current || !entranceMotion() || tier === 'off') return;
+      /* Reduced halves the rise and drops the stagger. The rise is what makes an entrance
+         read as arriving rather than as a repaint; the cascade is the performance, and it is
+         also a tween per child. Half of 16 is the same 8px the detail overlay and the grid
+         take under this tier, so the three entrances agree. */
+      const reduced = tier === 'reduced';
       gsap.from(ref.current.children, {
         autoAlpha: 0,
-        y: distance,
+        y: reduced ? distance / 2 : distance,
         /* `long`, the enters-the-screen duration. It was `emphasized` (500),
            which the spec reserves for a large container transform — and the two
            scroll-driven helpers in `lib/motion.ts` use `long`, so the same
            entrance ran at two speeds depending on which helper produced it. */
         duration: DURATION.long,
         ease: 'decelerate',
-        stagger,
+        stagger: reduced ? 0 : stagger,
         delay,
         clearProps: 'all',
       });

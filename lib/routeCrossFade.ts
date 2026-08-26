@@ -2,13 +2,13 @@
 
 import {
   gsap,
-  prefersReducedMotion,
   DURATION,
   playSharedAxis,
   setThemeWipeGuard,
   setHeroBusyCheck,
   beginPageTransit,
 } from '@/lib/motion';
+import { motionTier } from '@/lib/appearance';
 import { getImageHeroRuntime, subscribeImageHeroRuntime } from '@/lib/hero';
 import { captureVisualClone, type RouteSnapshot } from '@/lib/pageSnapshot';
 
@@ -122,7 +122,10 @@ let active: ActiveFade | null = null;
  */
 export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot | null {
   if (!layer) return null;
-  if (prefersReducedMotion()) return null;
+  /* Only `off` skips the snapshot. Under `reduced` there is still a cross-fade — the
+     branches below drop the 12px rise and the shared axis becomes a fade — and skipping
+     here would have taken that away before either had a chance to. */
+  if (motionTier() === 'off') return null;
   // A backgrounded tab would animate a frame nobody saw and resume mid-way.
   if (document.visibilityState !== 'visible') return null;
 
@@ -223,6 +226,11 @@ export function playRouteCrossFade(
   }
 
   const timeline = gsap.timeline({ onComplete: () => cancelRouteCrossFade() });
+  /* Reduced halves the outgoing leg's rise rather than removing it. 12px was never the
+     performative part of this transition — the clone itself is — and a screen that leaves
+     without moving at all reads as a cut with a fade on it. 8px is what every other
+     entrance in the app travels under this tier. */
+  const rise = motionTier() === 'reduced' ? -8 : -12;
   timeline
     .set(snapshot.node, { willChange: 'transform, opacity' })
     /* The outgoing leg is the mirror of `pageIn`: it leaves upward over the
@@ -232,7 +240,7 @@ export function playRouteCrossFade(
        micro-interaction, and the same value the press feedback uses. It was a
        bare 0.12, which is not on the scale. */
     .to(snapshot.node, { opacity: 0, duration: DURATION.press, ease: 'accelerate' }, 0)
-    .to(snapshot.node, { y: -12, duration: DURATION.long, ease: 'standard' }, 0);
+    .to(snapshot.node, { y: rise, duration: DURATION.long, ease: 'standard' }, 0);
 
   /* The incoming page's entrance is driven here, on opacity alone, instead of
      being left to `pageIn`.

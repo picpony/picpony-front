@@ -192,7 +192,7 @@ export default function ShopTab({ token }: { token: string }) {
             size="sm"
             onClick={() => startEdit(item)}
             icon={<MdEdit size={ICON.dense} />}
-            aria-label={`编辑 ${item.name}`} className="text-primary"
+            aria-label={`编辑 ${item.name}`} className="text-primary-ink"
           />
           <IconButton
             size="sm"

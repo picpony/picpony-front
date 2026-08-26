@@ -595,7 +595,7 @@ function SearchPageContent() {
                             {tag.cn ? (
                               <span className="text-body-m text-on-surface">
                                 {' '}
-                                <span className="text-primary ">{tag.cn}</span>
+                                <span className="text-primary-ink ">{tag.cn}</span>
                                 <span className="ml-1.5 text-on-surface-variant">{tag.en}</span>
                               </span>
                             ) : (

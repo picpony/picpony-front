@@ -218,7 +218,7 @@ export function buttonClasses({
     /* Colour and shadow only, on `standard`/200ms — a recolour is not geometry, and
        there is no geometry here to animate: see the note above `SIZES` for why the
        pressed corner morph came out. */
-    '[transition:background-color_200ms_var(--ease-standard),box-shadow_200ms_var(--ease-standard)] focus-visible:ring-2',
+    '[transition:background-color_var(--transition-duration-standard)_var(--ease-standard),box-shadow_var(--transition-duration-standard)_var(--ease-standard)] focus-visible:ring-2',
     /* Hover/focus/press are the shared M3 state layer. No press *scale* and no press
        *corner*: M3 gives no size feedback on press that survives on a pill, and a
        transforming button is one more thing the hero flight's rect read can catch

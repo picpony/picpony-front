@@ -55,7 +55,12 @@ export default function ErrorRetry({
       fill={fill}
       title={title}
       description={message}
-      icon={icon ?? <MdErrorOutline size={size === 'inline' ? ICON.large : ICON.display} />}
+      /* No glyph at `inline`, matching `EmptyState`: the two are presets over one
+         `StatusView` so that a list which is empty and a list which failed have one
+         silhouette, and this default was leaving ~120px of tray-and-gap inside wells that
+         cap at 120px. At that size the words are the status. A call site with something
+         better to show still passes `icon`. */
+      icon={icon ?? (size === 'inline' ? undefined : <MdErrorOutline size={ICON.display} />)}
       action={
         action ??
         (onRetry && (
@@ -66,7 +71,7 @@ export default function ErrorRetry({
             icon={
               <MdRefresh
                 size={ICON.control}
-                className="transition-transform duration-200 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
+                className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
               />
             }
           >

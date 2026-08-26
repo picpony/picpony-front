@@ -454,7 +454,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       key: 'name',
       header: '用户名',
       primary: true,
-      render: (u) => <span className="text-body-m-emphasized text-primary">{u.username}</span>,
+      render: (u) => <span className="text-body-m-emphasized text-primary-ink">{u.username}</span>,
     },
     {
       key: 'role',

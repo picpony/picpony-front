@@ -190,10 +190,10 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           order and the accessibility tree together, which `aria-hidden` alone
           would not: that leaves a focusable element inside a hidden subtree.
 
-          No `motion-reduce:` guard, and it is not an omission — one was here and
-          it did nothing. The reduced-motion block re-declares `transition-property`
-          with `!important`, which outranks `.motion-reduce\:transition-none`
-          (Tailwind emits that without one), so the guard lost every time. It was
+          No per-element motion guard, and it is not an omission — one was here and
+          it did nothing. The off tier's block re-declares `transition-property`
+          with `!important`, which outranks a Tailwind transition-none utility
+          (emitted without one), so the guard lost every time. It was
           also arguing against the paragraph above it: the dissolve is the one
           transition on this card that carries information, and the global rule
           already does the right thing here — it keeps `opacity` and drops
@@ -204,7 +204,7 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           onClick={handleReveal}
           inert={isRevealed}
           aria-label="显示被剧透标签遮住的图片"
-          className={`absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-lg bg-media-plate backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-300 ease-[var(--ease-standard)] outline-none select-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
+          className={`absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-lg bg-media-plate backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-composite ease-[var(--ease-standard)] outline-none select-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
             isRevealed ? 'pointer-events-none opacity-0 backdrop-blur-0' : 'opacity-100'
           }`}
         >

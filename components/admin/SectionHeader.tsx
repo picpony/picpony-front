@@ -43,7 +43,7 @@ export default function SectionHeader({
   return (
     <SectionHeading
       as="h2"
-      icon={<span className="text-primary [&>svg]:block">{icon}</span>}
+      icon={<span className="text-primary-ink [&>svg]:block">{icon}</span>}
       subtitle={subtitle}
       actions={
         <>

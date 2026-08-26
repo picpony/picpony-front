@@ -16,7 +16,8 @@
  * the transform is supposed to look like.
  */
 
-import { DURATION, gsap, heroOwnsScreen, prefersReducedMotion, spring } from '@/lib/motion';
+import { DURATION, gsap, heroOwnsScreen, spring } from '@/lib/motion';
+import { motionTier } from '@/lib/appearance';
 
 /** Viewport-space box of the row that was pressed. */
 interface ForumOrigin {
@@ -39,9 +40,13 @@ const ORIGIN_TTL_MS = 1500;
 
 let pending: ForumOrigin | null = null;
 
-/** Call on the press, before pushing the route. */
+/** Call on the press, before pushing the route.
+ *
+ * Nothing is remembered under `off`, so `readForumOrigin` finds nothing and the transform
+ * never runs. `reduced` still records: the transform degrades to a fade rather than
+ * vanishing, and that fade is built in `playForumContainerTransform` below. */
 export function rememberForumOrigin(id: number | string, row: HTMLElement) {
-  if (prefersReducedMotion()) return;
+  if (motionTier() === 'off') return;
   const rect = row.getBoundingClientRect();
   pending = {
     id: String(id),
@@ -98,6 +103,24 @@ export function playForumContainerTransform(
 ): () => void {
   const to = card.getBoundingClientRect();
   if (to.width === 0 || to.height === 0) return () => {};
+
+  /* Reduced: the card fades up in place. A container transform is travel *and* a
+     non-uniform scale — the two things the tier's rule removes — so what is left of the
+     gesture is "the post you pressed is now the surface in front of you", which a fade
+     says. Held to one clock so it cannot read as two events. */
+  if (motionTier() === 'reduced') {
+    const fade = gsap.fromTo(
+      [card, content].filter((el): el is HTMLElement => Boolean(el)),
+      { autoAlpha: 0 },
+      { autoAlpha: 1, ...spring('defaultEffects'), clearProps: 'opacity,visibility' },
+    );
+    return () => {
+      fade.kill();
+      gsap.set([card, content].filter(Boolean) as HTMLElement[], {
+        clearProps: 'opacity,visibility',
+      });
+    };
+  }
 
   const timeline = gsap.timeline().fromTo(
     card,

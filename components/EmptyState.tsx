@@ -35,6 +35,13 @@ interface EmptyStateProps {
  * Override it where the screen has something more specific to say — a bookmark
  * for a collection, a chat bubble for a thread.
  *
+ * **`inline` gets no glyph unless one is asked for.** It had a 36px tray, which with its
+ * gap was taller than the wells this size exists for — /block-groups' tag boxes cap at
+ * 120px, so the empty state was what made them scroll. At this size the sentence *is* the
+ * empty state: a table's blank row and a tag well's "暂无标签" both read better as one line
+ * of `body-m` than as a small illustration of an absence. A call site with something to
+ * show can still pass `icon`.
+ *
  * Geometry, type scale and entrance all come from `StatusView`, which
  * `ErrorRetry` also renders. Empty and failed are the same shape on purpose.
  */
@@ -55,11 +62,7 @@ export default function EmptyState({
       title={title}
       description={description}
       action={action}
-      icon={
-        /* `inline` is a hint inside a small well; a 48px tray there is larger
-           than the box it is apologising for. */
-        icon ?? (size === 'inline' ? <MdInbox size={ICON.large} /> : <MdInbox size={ICON.display} />)
-      }
+      icon={icon ?? (size === 'inline' ? undefined : <MdInbox size={ICON.display} />)}
     />
   );
 }

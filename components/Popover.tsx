@@ -13,7 +13,7 @@ import {
 import { createPortal } from 'react-dom';
 import { cn, clamp } from '@/lib/utils';
 import { MEDIA } from '@/lib/constants';
-import { prefersReducedMotion } from '@/lib/motion';
+import { motionTier, scaledMs } from '@/lib/appearance';
 import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
 import { useEscapeToClose, useExitAnimation, useMounted } from '@/lib/overlay';
 
@@ -237,23 +237,29 @@ export default function Popover({
     if (open || !rendering || closingRef.current) return;
     const panel = panelRef.current;
     const anchor = anchorRef.current;
-    if (!panel || !anchor || prefersReducedMotion()) return;
+    if (!panel || !anchor || motionTier() === 'off') return;
 
     const anchorRect = anchor.getBoundingClientRect();
     const panelRect = panel.getBoundingClientRect();
     if (panelRect.width === 0 || panelRect.height === 0) return;
 
     closingRef.current = true;
-    /* `useExitAnimation` already holds the panel for `EXIT_MS` and then drops
+    /* `useExitAnimation` already holds the panel — for the slowest speed's figure — and drops
        it, so this only has to draw those milliseconds — it does not have to
        report when it is done.
 
        It does have to be cancellable, though, and that is what the cleanup is for.
        `fill: 'forwards'` keeps the last keyframe applied after the animation ends,
        and `useExitAnimation` reuses the same node when the panel is reopened inside
-       `EXIT_MS`: without this, that still-live forwards fill would reassert
+       the hold: without this, that still-live forwards fill would reassert
        `opacity: 0` and the shrunken transform on a panel that is now open, so a
-       fast close-then-open left an invisible menu holding the focus trap. */
+       fast close-then-open left an invisible menu holding the focus trap.
+
+       The reduced tier collapses into the anchor like the standard one. It briefly faded
+       instead, and the argument for that — "a container transform is a box changing shape,
+       which is what the tier removes" — proves too much: the shape change *is* the menu, it
+       is one composited scale on one small panel, and what the tier is actually there to
+       remove is distance, overshoot and cascade. None of those are here. */
     const exit = panel.animate(
       [
         {},
@@ -265,7 +271,7 @@ export default function Popover({
           opacity: 0,
         },
       ],
-      { duration: EXIT_MS, easing: EXIT_EASING, fill: 'forwards' },
+      { duration: scaledMs(EXIT_MS), easing: EXIT_EASING, fill: 'forwards' },
     );
     return () => exit.cancel();
   }, [open, rendering, anchorRef]);
@@ -284,7 +290,8 @@ export default function Popover({
     const panel = panelRef.current;
     const anchor = anchorRef.current;
     if (!open || !rendering || !panel || !anchor) return;
-    if (prefersReducedMotion()) return;
+    const tier = motionTier();
+    if (tier === 'off') return;
 
     const anchorRect = anchor.getBoundingClientRect();
     const panelRect = panel.getBoundingClientRect();
@@ -298,9 +305,17 @@ export default function Popover({
     // reproduces the translate half of the reference for free.
     panel.style.transformOrigin = placement.up ? 'bottom left' : 'top left';
 
+    /* Reduced keeps the morph and drops the rows' own leg. The stagger between the container
+       and its contents is the flourish — and with the rows arriving on the same clock as the
+       plate there is one entrance rather than two, which is what this tier wants. */
+    const reduced = tier === 'reduced';
     const container = panel.animate(
       [{ transform: `scale(${sx}, ${sy})`, opacity: 0 }, { transform: 'none', opacity: 1 }],
-      { duration: ENTER_MS, easing: ENTER_EASING, fill: 'backwards' },
+      {
+        duration: scaledMs(ENTER_MS),
+        easing: ENTER_EASING,
+        fill: 'backwards',
+      },
     );
 
     /* The rows wait out the container's morph and then fade on their **own**
@@ -311,16 +326,17 @@ export default function Popover({
        split at a call site. The wait is a `delay` because that is what a delay is
        for; it used to be an `offset: 0.33` keyframe inside a doubled duration,
        which is the same idea expressed as a number nobody could check. */
-    const rows = animateChildren
-      ? [...panel.children].map((row) =>
-          row.animate([{ opacity: 0 }, { opacity: 1 }], {
-            duration: ROW_MS,
-            delay: ENTER_MS * 0.5,
-            easing: ROW_EASING,
-            fill: 'backwards',
-          }),
-        )
-      : [];
+    const rows =
+      animateChildren && !reduced
+        ? [...panel.children].map((row) =>
+            row.animate([{ opacity: 0 }, { opacity: 1 }], {
+              duration: scaledMs(ROW_MS),
+              delay: scaledMs(ENTER_MS * 0.5),
+              easing: ROW_EASING,
+              fill: 'backwards',
+            }),
+          )
+        : [];
 
     return () => {
       container.cancel();

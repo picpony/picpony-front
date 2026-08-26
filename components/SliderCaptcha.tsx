@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { encodeTrack, clamp, clamp01 } from '@/lib/utils';
-import { gsap, prefersReducedMotion, spring } from '@/lib/motion';
+import { gsap, spring } from '@/lib/motion';
+import { motionTier } from '@/lib/appearance';
 import Spinner from './Spinner';
 import Skeleton from './Skeleton';
 
@@ -115,7 +116,10 @@ const SHAKE_SECONDS = 0.45;
     snapTweenRef.current?.kill();
     const from = sliderXRef.current;
     sliderXRef.current = 0;
-    if (from <= 0 || prefersReducedMotion()) {
+    /* Only `off`. The knob returning home is the control reporting that the attempt was
+       rejected — a value snapping back with no travel reads as the input never having been
+       registered — so `reduced` keeps the glide and the tier's own scale shortens it. */
+    if (from <= 0 || motionTier() === 'off') {
       setSliderX(0);
       return;
     }
@@ -146,7 +150,9 @@ const SHAKE_SECONDS = 0.45;
   // Physical feedback on failure: shake the puzzle while the error overlay
   // fades in.
   useEffect(() => {
-    if (!errorMsg || prefersReducedMotion()) return;
+    /* The shake is pure feedback with no state in it, so both non-standard tiers drop it
+       and the error overlay's own fade carries the message. */
+    if (!errorMsg || motionTier() !== 'standard') return;
     const el = containerRef.current;
     if (!el) return;
     const tween = gsap.to(el, {
@@ -467,7 +473,7 @@ const SHAKE_SECONDS = 0.45;
 
           <div
             ref={sliderBtnRef}
-            /* `duration-100` + `standard`, i.e. the motion table's press row.
+            /* `duration-press` + `standard`, i.e. the motion table's press row.
                Grabbing the handle is a press, and the 200ms this carried — with
                no curve at all, so it fell through to the default — left the
                fill and the scale still catching up after the handle had already
@@ -482,7 +488,7 @@ const SHAKE_SECONDS = 0.45;
                elevation steps was three simultaneous answers to one gesture — and
                in M3 Expressive a pressed slider handle narrows rather than grows,
                so the direction was wrong as well as the amount. */
-            className={`bg-surface-raised text-title-m state-layer absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline transition-[color,background-color,border-color] duration-100 ease-[var(--ease-standard)] select-none ${
+            className={`bg-surface-raised text-title-m state-layer absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline transition-[color,background-color,border-color] duration-press ease-[var(--ease-standard)] select-none ${
               isDragging
                 ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill'
                 : 'cursor-grab text-on-surface-variant'

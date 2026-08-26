@@ -60,6 +60,31 @@ export const LS_KEYS = {
   emailNotifReply: 'picpony_email_notif_reply',
   activeHiddenTags: 'trixie_active_hidden_tags',
   activeSpoileredTags: 'trixie_active_spoilered_tags',
+  palette: 'picpony_palette',
+  motion: 'picpony_motion',
+  motionSpeed: 'picpony_motion_speed',
+  entranceMotion: 'picpony_entrance_motion',
+} as const;
+
+/**
+ * Cookie names, for the preferences the server has to know before first paint.
+ *
+ * All five appearance preferences are mirrored into a cookie so `app/layout.tsx`
+ * can put them on `<html>` at SSR: without that, the first paint is the default
+ * theme and the pre-paint script corrects it, which is a visible flash of the
+ * wrong brand on every cold load. The sixth is the sidebar's collapsed state, for
+ * the same reason. The names deliberately do *not* all match their `LS_KEYS`
+ * counterparts — `darkMode` does and `sidebarCollapsed` does not — which is the
+ * reason this table exists rather than the cookie name being derived from the
+ * storage key.
+ */
+export const COOKIE_KEYS = {
+  darkMode: 'darkMode',
+  sidebarCollapsed: 'sidebarCollapsed',
+  palette: 'palette',
+  motion: 'motion',
+  motionSpeed: 'motionSpeed',
+  entranceMotion: 'entranceMotion',
 } as const;
 
 /**
@@ -92,4 +117,12 @@ export const MEDIA = {
      keep JS in step with `sm:`/`md:`. */
   pointerCoarse: '(pointer: coarse)',
   pointerFine: '(pointer: fine)',
+  /* The two user-preference queries. Neither was in here, so
+     `(prefers-color-scheme: dark)` was hand-typed at three sites in `AppLayout`
+     and `(prefers-reduced-motion: reduce)` at two in `lib/motion` plus two more
+     that bypass it (`lib/hero/media.ts`, `components/LoadingOverlay.tsx`) — seven
+     copies of two strings, in the two places where a typo fails silently by
+     never matching. */
+  dark: '(prefers-color-scheme: dark)',
+  reducedMotion: '(prefers-reduced-motion: reduce)',
 } as const;

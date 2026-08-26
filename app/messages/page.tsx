@@ -1421,7 +1421,7 @@ export default function MessagesPage() {
                                     }
                                     status={
                                       isMe && msg.id === lastOwnMessageId ? (
-                                        <span className={msg.is_read ? 'text-primary' : undefined}>
+                                        <span className={msg.is_read ? 'text-primary-ink' : undefined}>
                                           {msg.is_read ? '已读' : '已送达'}
                                         </span>
                                       ) : undefined

@@ -13,10 +13,11 @@ import { getHeroBackgroundVisual, type DomLease } from './dom';
 import { getHeroBackgroundSinkTransform } from './geometry';
 import { heroFrameScheduler } from './scheduler';
 import { progressAt, relaunch } from './progress';
-/* One `prefersReducedMotion` for the app, and it is the reactive form —
-   `lib/motion`'s reads a live `matchMedia` listener, where the private copies
-   these two files carried could not pick up a mid-session change. */
-import { prefersReducedMotion } from '@/lib/motion';
+/* One reader for the app; see the note in `lib/hero/motion.ts`. Only `off` is checked
+   below: a drag release is the finger's own momentum being honoured, not an animation
+   played at the user, which is the same line M3 draws when it settles a drawer's drag on
+   a spring while closing it on an effects curve. */
+import { motionScale, motionTier } from '@/lib/appearance';
 
 const PULL_ATTRIBUTE = 'imageHeroPulling';
 const VAR_OFFSET = '--hero-pull-y';
@@ -137,17 +138,22 @@ export class HeroPullSurface {
       return Promise.resolve();
     }
     const start = Math.max(0, sample.raw);
-    if (start < 0.5 || prefersReducedMotion()) {
+    if (start < 0.5 || motionTier() === 'off') {
       this.reset();
       return Promise.resolve();
     }
 
-    // Shorter pulls snap back proportionally faster.
+    /* Shorter pulls snap back proportionally faster, and the whole range rides the speed
+       preference — the release is WAAPI, so neither `--motion-scale` nor GSAP's `timeScale`
+       reaches it and the multiplication has to be here. The floor is scaled with it rather
+       than left absolute: it exists to stop a flick from a near-closed position reading as a
+       cut, which is a proportion of the gesture rather than a wall-clock minimum. */
+    const scale = motionScale();
     const duration = Math.max(
-      PULL_RELEASE_MIN_DURATION_MS,
+      PULL_RELEASE_MIN_DURATION_MS * scale,
       Math.min(
-        PULL_RELEASE_DURATION_MS,
-        PULL_RELEASE_DURATION_MS * Math.sqrt(start / DISMISS_DISTANCE_PX),
+        PULL_RELEASE_DURATION_MS * scale,
+        PULL_RELEASE_DURATION_MS * scale * Math.sqrt(start / DISMISS_DISTANCE_PX),
       ),
     );
     // Travel runs start → 0, so a finger still moving away is negative progress

@@ -1,0 +1,13 @@
+# The two files `scripts/palette.mjs` rewrites wholesale.
+#
+# The repo runs with `core.autocrlf=true`, so without this git checks these out CRLF while the
+# script writes them LF — and `npm run colors`, which byte-compares its own output against what
+# is on disk, would report both stale on a clean tree from the first fresh clone onwards. The
+# check also normalises newlines, so either half alone is enough; both are here because they fix
+# different halves of it (this one keeps the working tree from showing a whole-file diff after
+# every `colors:write`).
+#
+# `app/globals.css` is deliberately not listed: it is patched declaration by declaration rather
+# than rewritten, so its own line endings are never touched.
+app/theme-palettes.css eol=lf
+lib/generated/*.ts eol=lf

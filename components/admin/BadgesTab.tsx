@@ -276,7 +276,7 @@ export default function BadgesTab({ token }: { token: string }) {
             onClick={() => handleEditBadge(b)}
             icon={<MdEdit size={ICON.dense} />}
             aria-label={`编辑徽章 ${b.badge_name}`}
-            className="text-primary"
+            className="text-primary-ink"
           />
           <IconButton
             size="sm"
@@ -333,7 +333,7 @@ export default function BadgesTab({ token }: { token: string }) {
           onClick={() => copyBadgeLink(l)}
           icon={<MdContentCopy size={ICON.dense} />}
           aria-label={`复制 ${l.badge_name} 的领取链接`}
-          className="text-primary"
+          className="text-primary-ink"
         />
       ),
     },

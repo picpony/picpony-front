@@ -7,6 +7,7 @@ import {
   type DetailRequestPriority,
 } from '@/lib/detail';
 import { HERO_GALLERY_ANCHOR_SELECTOR } from './constants';
+import { motionTier } from '@/lib/appearance';
 import { getHeroRect, getVisualMedia, normalizeHeroSrc } from './dom';
 import { captureHeroFrame } from './frameCache';
 import type { ImageHeroSnapshot } from './types';
@@ -68,9 +69,20 @@ export function prepareImageHero(
 export function canAnimateImageHero(snapshot: ImageHeroSnapshot) {
   return Boolean(
     snapshot.canAnimate &&
-    // Reduced motion opts out of the transition entirely and falls back to an
-    // ordinary navigation — this is a stated preference, not a device tier.
-    !window.matchMedia('(prefers-reduced-motion: reduce)').matches &&
+    /* The flight is a container transform: a box travelling and resizing across the
+       screen, which is the whole of what the reduced tier removes. So only the standard
+       tier flies, and the other two fall back to an ordinary navigation.
+       That is not the same as having no weak form. Under `reduced` the overlay fades in
+       instead — `.image-detail-route` in globals.css carries the keyframe for exactly
+       the two tiers that do not fly — and under `off` the same rule collapses to 0s.
+
+       Read through `motionTier()` rather than `matchMedia` directly. This file used to
+       hold one of the app's two private copies of the OS query, which was deliberate
+       (this is the flight's master gate and runs before anything is mounted) and is no
+       longer necessary: the tier is an attribute on `<html>`, already correct before the
+       first paint, so reading it here is a synchronous attribute lookup with no listener
+       and no import cycle. */
+    motionTier() === 'standard' &&
     typeof HTMLElement !== 'undefined' &&
     typeof HTMLElement.prototype.animate === 'function' &&
     document.querySelector(HERO_GALLERY_ANCHOR_SELECTOR),

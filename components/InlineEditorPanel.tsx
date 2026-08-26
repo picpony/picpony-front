@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
-import { Flip, gsap, prefersReducedMotion, spring, useGSAP } from '@/lib/motion';
+import { Flip, gsap, spring, useGSAP } from '@/lib/motion';
+import { motionTier } from '@/lib/appearance';
 
 interface InlineEditorPanelProps {
   id: string;
@@ -80,7 +81,25 @@ export default function InlineEditorPanel({
       const pendingState = pendingLayoutState;
       pendingLayoutState = null;
 
-      if (prefersReducedMotion()) {
+      /* Reduced cross-fades the panel and leaves its box alone: the clip-path expand and
+         the `Flip` reflow are a container changing size, which is what the tier removes.
+         Off keeps the original behaviour of appearing outright. */
+      const tier = motionTier();
+      if (tier === 'reduced') {
+        const fade = isClosing
+          ? gsap.to(panel, {
+              autoAlpha: 0,
+              ...spring('fastEffects'),
+              onComplete: () => onExitCompleteRef.current(),
+            })
+          : gsap.fromTo(
+              panel,
+              { autoAlpha: 0 },
+              { autoAlpha: 1, ...spring('fastEffects'), clearProps: 'opacity,visibility' },
+            );
+        return () => fade.kill();
+      }
+      if (tier === 'off') {
         if (isClosing) queueMicrotask(() => onExitCompleteRef.current());
         return;
       }

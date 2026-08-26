@@ -177,8 +177,8 @@ export default function CodeInput({
           className={cn(
             'text-title-m-emphasized h-14 w-10 rounded-xs border border-outline text-center sm:w-11',
             'text-on-surface outline-none',
-            'transition-[border-color,border-width] duration-200 ease-[var(--ease-standard)]',
-            'focus:border-2 focus:border-primary',
+            'transition-[border-color,border-width] duration-standard ease-[var(--ease-standard)]',
+            'focus:border-2 focus:border-primary-ink',
             'disabled:cursor-not-allowed disabled:disabled-content',
           )}
         />

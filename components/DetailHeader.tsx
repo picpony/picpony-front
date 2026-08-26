@@ -123,7 +123,7 @@ export default function DetailHeader({
           scroll={false}
           ref={uploaderRef as React.Ref<HTMLAnchorElement>}
           {...uploaderProps}
-          className="relative flex shrink-0 items-center gap-1.5 transition-ui hover:text-primary"
+          className="relative flex shrink-0 items-center gap-1.5 transition-ui hover:text-primary-ink"
         >
           <MdPerson size={ICON.dense} className="text-outline" aria-hidden="true" />
           <span className="max-w-32 truncate underline decoration-dotted underline-offset-2 sm:max-w-38">

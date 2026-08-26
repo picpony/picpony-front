@@ -14,11 +14,18 @@ interface SpinnerProps {
    * lightbox sits on `media-stage` and needs `on-media`, which is neither of the
    * other two.
    *
-   * One axis, not two booleans. It was `white?: boolean` plus
-   * `inheritColor?: boolean` — a raw colour name as a prop in a system that forbids
-   * raw colours, and an illegal fourth state (`white` *and* `inheritColor`) that
-   * nothing stopped a call site reaching. `Button` also derived `white` from its own
-   * variant, which is a mapping the primitive should own.
+   * `primary` resolves to **`primary-ink`**, not `primary`, and the distinction is the
+   * whole reason that role exists: this arc is a mark drawn on a surface with a
+   * `secondary-container` track behind it, not a container with a label inside it. On the
+   * three light-coated palettes the brand fill measures 1.23:1 against its own `surface`
+   * where the ink measures 2.93 — i.e. the busy indicator on every non-filled `Button`
+   * would have been invisible. `ProgressBar` records deleting its own `primary` fill for
+   * the same measurement against the same track.
+   *
+   * One axis, not two booleans. It was `white?: boolean` plus `inheritColor?: boolean` — a
+   * raw colour name as a prop in a system that forbids raw colours, and an illegal fourth
+   * state (`white` *and* `inheritColor`) that nothing stopped a call site reaching. `Button`
+   * also derived `white` from its own variant, which is a mapping the primitive should own.
    */
   tone?: 'primary' | 'on-primary' | 'inherit';
   /** 0–100. Omit for the indeterminate sweep. */
@@ -68,7 +75,7 @@ export default function Spinner({
       ? undefined
       : tone === 'on-primary'
         ? 'var(--md-sys-color-on-primary)'
-        : 'var(--md-sys-color-primary)';
+        : 'var(--md-sys-color-primary-ink)';
   /* The track is a *role*, not an alpha of the active indicator. It was
      `strokeOpacity={0.16}` — an alpha on a token, which the colour rules call a
      bug precisely because it has to be eyeballed once per scheme and drifts.

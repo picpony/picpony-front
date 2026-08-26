@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { prefersReducedMotion } from '@/lib/motion';
+import { entranceMotion, motionTier } from '@/lib/appearance';
 
 interface LogoProps {
   className?: string;
@@ -91,8 +91,11 @@ export const INTRO_CHUNK_BUDGET_MS = 600;
  * the first hover is not the one that pays for it, and shared across every
  * instance on the page.
  *
- * Under `prefers-reduced-motion` nothing is loaded at all and the base simply
- * stays. A colour reveal is decorative; the mark is legible without it.
+ * Below the standard tier nothing is loaded at all and the base simply stays — the player
+ * is a 60KB chunk plus the artwork, warmed speculatively on idle, and a colour reveal is
+ * decorative where the mark is legible without it. That is the reduced tier's own rule
+ * ("drop the performance … decorative loops, Lottie playback"), and the tier's audience is a
+ * device that cannot afford the flight, let alone a speculative fetch for a hover.
  */
 export default function Logo({
   className = 'w-32 h-auto',
@@ -135,7 +138,18 @@ export default function Logo({
   }, [kind]);
 
   useEffect(() => {
-    if (!intro || prefersReducedMotion()) return;
+    /* Standard only, and this one stays that way while the hover trace below does not.
+       The splash is on the critical path: a 60KB player chunk fetched before anything else
+       is on screen, and `LoadingOverlay` holds the whole app until it reports done. The
+       reduced tier's audience is a device that cannot spare either. It is also the one
+       animation here whose weak form would be *worse* than nothing — the overlay's own
+       short hold would cut the trace off mid-stroke — so the two agree instead: no player,
+       static mark, overlay gone in under a second.
+
+       `entranceMotion()` for the same reason the overlay reads it: the splash is the app's
+       first entrance, and the two have to answer the question the same way or the overlay
+       waits for a draw that never starts. */
+    if (!intro || !entranceMotion() || motionTier() !== 'standard') return;
     /* The splash cannot warm on idle — it is the first thing on the screen and
        the chunk is 60KB. So it is requested immediately and *not* waited on:
        the masked base is server-rendered and already visible, so a slow network
@@ -176,10 +190,11 @@ export default function Logo({
   }, [ensure, intro]);
 
   useEffect(() => {
-    if (intro || !interactive || prefersReducedMotion()) return;
+    if (intro || !interactive || motionTier() !== 'standard') return;
     /* Warm on idle. The player is a 60KB chunk and the first hover would
        otherwise wait on the network for it — which is the one moment the
-       animation has to be instant, because the pointer is already there. */
+       animation has to be instant, because the pointer is already there.
+       Standard only: below it there is no hover trace to warm for. */
     const idle =
       typeof window.requestIdleCallback === 'function'
         ? window.requestIdleCallback(() => void ensure(), { timeout: 4000 })
@@ -193,7 +208,12 @@ export default function Logo({
   }, [ensure, interactive, intro]);
 
   const onEnter = useCallback(() => {
-    if (intro || !interactive || prefersReducedMotion()) return;
+    /* Standard only. This was `off` only, on the argument that a hover trace is a response
+       to something the pointer just did and plays once — true, and it ignored the cost: the
+       trace needs a 60KB player and six layers of trim paths rasterised per frame, which is
+       the second most expensive thing in the app and exactly what the reduced tier's rule
+       names. Below standard the static mark is the answer. */
+    if (intro || !interactive || motionTier() !== 'standard') return;
     wantedRef.current = true;
     hostRef.current?.setAttribute('data-shown', '');
     void ensure().then((animation) => {

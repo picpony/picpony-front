@@ -186,13 +186,13 @@ export default function DeveloperTab({ token }: { token: string }) {
       {/* Developer Password */}
       <Card variant="transparent" className="space-y-4">
         <h3 className="text-label-l text-on-surface">维护密码</h3>
-        <div className="text-body-s text-primary p-3">
+        <div className="text-body-s text-primary-ink p-3">
           此密码为系统随机生成的8位纯数字，每3天自动更新一次。用户开启开发者模式需输入此密码。
         </div>
 
         <div className="flex items-center gap-4">
           <span className="text-body-m text-on-surface-variant">当前密码：</span>
-          <code className="text-title-l-emphasized tracking-widest px-4 py-2 bg-surface-container-high rounded-xs text-primary">
+          <code className="text-title-l-emphasized tracking-widest px-4 py-2 bg-surface-container-high rounded-xs text-primary-ink">
             {devPassword || '----'}
           </code>
         </div>

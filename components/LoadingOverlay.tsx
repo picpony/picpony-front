@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Logo, { INTRO_DURATION_MS, INTRO_CHUNK_BUDGET_MS } from './Logo';
+import { MOTION_SPEED_SCALE, entranceMotion, motionTier } from '@/lib/appearance';
 
 /** How long the finished mark holds before the overlay leaves. */
 const HOLD_MS = 200;
@@ -13,6 +14,13 @@ const HOLD_MS = 200;
  * the first 300ms almost imperceptible and then rips the screen away.
  */
 const FADE_MS = 200;
+/* The unmount has to outlast the fade at *every* speed, and `duration-exit` goes through
+ * `--motion-scale` — so at 缓慢 the fade takes 280ms while a 200ms timer drops the splash at
+ * 37% of an `accelerate` curve, i.e. a full-screen cut at roughly 0.6 opacity. The slowest
+ * multiplier rather than the live one, for the reason `useExitAnimation` gives: this number
+ * bounds the animation, so it has to be the maximum the animation can ever take, and holding
+ * an already-invisible node 40% longer costs nothing. */
+const FADE_HOLD_MS = Math.round(FADE_MS * MOTION_SPEED_SCALE.slow);
 /** Reduced motion loads nothing, so there is no animation to wait for. */
 const REDUCED_HOLD_MS = 300;
 
@@ -36,7 +44,7 @@ const REDUCED_HOLD_MS = 300;
  * The ceiling below is the backstop for the case where that report never comes
  * at all. A splash is a decoration and must never be why the app is unreachable.
  *
- * Under `prefers-reduced-motion` nothing is loaded and the static mark simply
+ * Below the standard motion tier nothing is loaded and the static mark simply
  * fades, so the whole overlay is over in well under a second.
  */
 export default function LoadingOverlay() {
@@ -47,7 +55,15 @@ export default function LoadingOverlay() {
   const onSettled = useCallback(() => setSettled(true), []);
 
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    /* Read through `motionTier()`, which is an attribute lookup. This was the app's second
+       private copy of the OS media query, kept because this component runs before anything
+       else is mounted — and the tier is on `<html>` before the first paint, so there is
+       nothing left to justify the copy.
+
+       `entranceMotion()` joins it because `Logo` reads the same pair before it loads a
+       player: if the two disagreed, this would sit waiting for a `settled` report from a
+       draw that was never going to start, until the ceiling below fired. */
+    if (!entranceMotion() || motionTier() !== 'standard') {
       const timer = setTimeout(() => setSettled(true), REDUCED_HOLD_MS);
       return () => clearTimeout(timer);
     }
@@ -61,7 +77,7 @@ export default function LoadingOverlay() {
   useEffect(() => {
     if (!settled) return;
     const fadeOutTimer = setTimeout(() => setIsVisible(false), HOLD_MS);
-    const unmountTimer = setTimeout(() => setIsMounted(false), HOLD_MS + FADE_MS);
+    const unmountTimer = setTimeout(() => setIsMounted(false), HOLD_MS + FADE_HOLD_MS);
     return () => {
       clearTimeout(fadeOutTimer);
       clearTimeout(unmountTimer);
@@ -72,7 +88,7 @@ export default function LoadingOverlay() {
 
   return (
     <div
-      className={`bg-surface fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-200 ease-[var(--ease-accelerate)] ${
+      className={`bg-surface fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-exit ease-[var(--ease-accelerate)] ${
         isVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
       }`}
     >

@@ -14,6 +14,10 @@ import {
   MdHome,
   MdVerifiedUser,
   MdLinkOff,
+  MdPalette,
+  MdBrightness6,
+  MdAnimation,
+  MdSpeed as MdSpeedIcon,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
 import Badge from '@/components/Badge';
@@ -30,14 +34,39 @@ import { useAuthModal } from '@/components/AuthModal';
 import { Input, Textarea } from '@/components/Input';
 import PageHeader from '@/components/PageHeader';
 import SectionHeading from '@/components/SectionHeading';
+import PaletteSwatches from '@/components/PaletteSwatches';
+import Tabs from '@/components/Tabs';
+import TabPanes, { TabPane } from '@/components/TabPanes';
 import { ICON } from '@/lib/icons';
 import { readUserInfo } from '@/lib/hooks';
+import { LS_KEYS } from '@/lib/constants';
+import { changeScheme } from '@/lib/motion';
+import {
+  commitEntranceMotion,
+  commitMotion,
+  useEntranceMotion,
+  useMotionSetting,
+  useMotionSpeed,
+  useMotionTier,
+  useSchemeSetting,
+  type MotionSetting,
+  type MotionSpeed,
+  type SchemeSetting,
+} from '@/lib/appearance';
 import { getAssetUrl, processImageFile } from '@/lib/utils';
 
 /* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run
-   of rows as one cut block rather than as separate floating cards. */
-const rowClass =
-  'm3-row flex flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 sm:flex-nowrap sm:gap-x-4 bg-surface-container-low transition-ui state-layer';
+   of rows as one cut block rather than as separate floating cards.
+   Two variants rather than one string plus an override, because `align-items` can only be
+   spelled once: the palette row used to append `items-start` to a base carrying
+   `items-center`, which renders left-aligned only for as long as Tailwind happens to emit
+   `.items-center` first. Change the base to `items-end` some day and the swatch grid
+   silently re-centres, with no diff at that call site to explain it. */
+const rowBase =
+  'm3-row flex flex-wrap justify-between gap-x-2 gap-y-3 p-4 sm:gap-x-4 bg-surface-container-low transition-ui state-layer';
+const rowClass = `${rowBase} items-center sm:flex-nowrap`;
+/** A row whose control needs the full width under its label — the palette picker's ten chips. */
+const rowStackedClass = `${rowBase} flex-col items-start`;
 /* The label column of a row. `min-w-0` is what lets a long value truncate
    instead of pushing the action out of the card. */
 const rowLabelClass = 'min-w-0 flex-1';
@@ -48,6 +77,9 @@ const rowLabelClass = 'min-w-0 flex-1';
    a switch announced two different hierarchies inside one card. */
 const labelClass = 'text-label-l text-on-surface mb-0.5';
 const valueClass = 'text-body-m-emphasized text-on-surface';
+
+/** The two halves of this screen: what the device remembers, and what the account does. */
+type SettingsTab = 'personalise' | 'general';
 
 /** 计算年龄 */
 function calcAge(birthday: string): number {
@@ -74,6 +106,144 @@ function lsBool(key: string, def: boolean): boolean {
 function lsSet(key: string, val: string | boolean) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(key, String(val));
+}
+
+/**
+ * 外观 — the five device-local appearance preferences, and the whole of the 个性化 tab.
+ *
+ * It renders **outside** the cloud-config gate the rest of this page sits behind, which is
+ * also what makes it a tab of its own: that gate exists so a default cannot be written back
+ * over a value the server has not returned yet, and none of these five has a server value, so
+ * behind it they would be dimmed and inert for the length of a fetch they are not waiting on.
+ * The tab split says the same thing in the UI — this side is the device, the other side is the
+ * account.
+ *
+ * `lsGet`/`lsSet` are not used here either. These are owned by `lib/appearance`, which keeps
+ * the stored keys, the cookie, the attribute on `<html>` and the subscription in one place —
+ * the reason the app bar's glyph and the 主题模式 row below cannot disagree about which mode
+ * is on, which two independent `useState`s could not have managed.
+ *
+ * **No supporting lines.** Four of these rows carried one, and all four were implementation
+ * notes: "七套配色共用同一套色调映射与对比度", "等比缩放全站时长，不改变各段动画之间的节奏".
+ * Those are true, they are the sort of thing this repo writes down at length — in `AGENTS.md`,
+ * where the audience is whoever changes the code. A settings row needs a name.
+ *
+ * 主题模式 is new rather than moved: until now the only way to change the colour scheme was
+ * the app bar's three-state cycle button, which is not a discoverable control and does not
+ * say what the third state is.
+ */
+function AppearanceSection() {
+  const schemeSetting = useSchemeSetting();
+  const motionSetting = useMotionSetting();
+  const motionSpeed = useMotionSpeed();
+  const motionTier = useMotionTier();
+  const entrances = useEntranceMotion();
+
+  /* Speed applies to every tier that has a length, which is both of the tiers that animate:
+     the tier decides the form and the speed decides the clock. It used to be standard-only,
+     because `reduced` carried its own 0.5 — that is gone, and with it the one row on this
+     page that was disabled while still describing what it would do.
+     Disabled rather than hidden, because a control that vanishes is a control the user has to
+     rediscover, and `disabled-content` says why it is unavailable. */
+  const speedAvailable = motionTier !== 'off';
+
+  return (
+    <section className="mb-8">
+      <SectionHeading icon={<MdPalette size={ICON.control} />} subtitle="仅保存在本设备，不随账号同步">
+        外观
+      </SectionHeading>
+
+      <div className={rowStackedClass}>
+        <div className={rowLabelClass}>
+          <p className={labelClass}>主题配色</p>
+        </div>
+        <PaletteSwatches className="w-full" />
+      </div>
+
+      <div className={rowClass}>
+        <div className="flex items-center gap-2">
+          <MdBrightness6 size={ICON.control} className="text-outline" />
+          <div className={rowLabelClass}>
+            <p className={labelClass}>主题模式</p>
+          </div>
+        </div>
+        <Select
+          size="sm"
+          value={schemeSetting}
+          onChange={(v) => changeScheme(v as SchemeSetting)}
+          aria-label="主题模式"
+          className="w-full sm:w-auto"
+          options={[
+            { value: 'system', label: '跟随系统' },
+            { value: 'light', label: '浅色' },
+            { value: 'dark', label: '深色' },
+          ]}
+        />
+      </div>
+
+      <div className={rowClass}>
+        <div className="flex items-center gap-2">
+          <MdAnimation size={ICON.control} className="text-outline" />
+          <div className={rowLabelClass}>
+            <p className={labelClass}>动画效果</p>
+          </div>
+        </div>
+        {/* Three options, not four. 跟随系统 was one of them and it is gone: the OS
+            preference still decides what an unset value resolves to — `readMotionSetting`
+            defaults to `system` and `resolveMotionTier` maps `reduce` to 减弱 — but the
+            *control* shows the tier that is in force, so a visitor whose system asks for
+            less motion sees 减弱动画 selected rather than a label that only says where the
+            answer came from. Picking any option fixes it; nothing has to be migrated,
+            because `system` remains the stored value until then. */}
+        <Select
+          size="sm"
+          value={motionTier}
+          onChange={(v) => commitMotion(v as MotionSetting, motionSpeed)}
+          aria-label="动画效果"
+          className="w-full sm:w-auto"
+          options={[
+            { value: 'off', label: '关闭动画' },
+            { value: 'reduced', label: '减弱动画' },
+            { value: 'standard', label: '标准动画' },
+          ]}
+        />
+      </div>
+
+      <div className={rowClass}>
+        <div className="flex items-center gap-2">
+          <MdSpeedIcon size={ICON.control} className="text-outline" />
+          <div className={rowLabelClass}>
+            <p className={labelClass}>动画速度</p>
+          </div>
+        </div>
+        <Select
+          size="sm"
+          value={motionSpeed}
+          disabled={!speedAvailable}
+          onChange={(v) => commitMotion(motionSetting, v as MotionSpeed)}
+          aria-label="动画速度"
+          className="w-full sm:w-auto"
+          options={[
+            { value: 'fast', label: '快速' },
+            { value: 'default', label: '默认' },
+            { value: 'slow', label: '缓慢' },
+          ]}
+        />
+      </div>
+
+      {/* `layout="row"` so the label leads and the switch sits at the trailing edge, which
+          is the reading order every other value row on this page has. */}
+      <div className={rowClass}>
+        <ToggleSwitch
+          layout="row"
+          checked={entrances}
+          onChange={commitEntranceMotion}
+          disabled={motionTier === 'off'}
+          label="入场动画"
+        />
+      </div>
+    </section>
+  );
 }
 
 type CloudSettings = {
@@ -170,6 +340,9 @@ export default function SettingsPage() {
 
   // 云端配置获取完成前禁用整页交互（防止默认值误写 localStorage/云端）
   const [settingsReady, setSettingsReady] = useState(false);
+
+  /** 设置 / 个性化. Local state — see the note above `<Tabs>`. */
+  const [tab, setTab] = useState<SettingsTab>('general');
 
   const [userToken, setUserToken] = useState('');
   const [isDeveloper, setIsDeveloper] = useState(false);
@@ -291,23 +464,23 @@ export default function SettingsPage() {
       }
     };
 
-    apply('contentFilter', 'trixie_content_filter', setContentFilter);
-    apply('showTagCounts', 'trixie_show_tag_counts', setShowTagCounts);
-    apply('banAnthro', 'trixie_ban_anthro', setBanAnthro);
-    apply('banDiscomfort', 'trixie_ban_discomfort', setBanDiscomfort);
-    apply('onlyPony', 'trixie_only_pony', setOnlyPony);
-    apply('showChineseTags', 'picpony_show_chinese_tags', setShowChineseTags);
-    apply('useCdn', 'trixie_use_cdn', setUseCdn);
-    apply('usePicponyProxy', 'picpony_use_proxy', setUsePicponyProxy);
-    apply('useApiAccel', 'picpony_api_accel', setUseApiAccel);
-    apply('showUploads', 'picpony_show_uploads', setShowUploads);
-    apply('showFaves', 'picpony_show_faves', setShowFaves);
-    apply('showPosts', 'picpony_show_posts', setShowPosts);
-    apply('showComments', 'picpony_show_comments', setShowComments);
-    apply('emailNotifMessage', 'picpony_email_notif_message', setEmailNotifMessage);
-    apply('emailNotifReply', 'picpony_email_notif_reply', setEmailNotifReply);
-    apply('defaultHomeSort', 'picpony_default_home_sort', setDefaultHomeSort);
-    apply('defaultSearchSort', 'picpony_default_search_sort', setDefaultSearchSort);
+    apply('contentFilter', LS_KEYS.contentFilter, setContentFilter);
+    apply('showTagCounts', LS_KEYS.showTagCounts, setShowTagCounts);
+    apply('banAnthro', LS_KEYS.banAnthro, setBanAnthro);
+    apply('banDiscomfort', LS_KEYS.banDiscomfort, setBanDiscomfort);
+    apply('onlyPony', LS_KEYS.onlyPony, setOnlyPony);
+    apply('showChineseTags', LS_KEYS.showChineseTags, setShowChineseTags);
+    apply('useCdn', LS_KEYS.useCdn, setUseCdn);
+    apply('usePicponyProxy', LS_KEYS.usePicponyProxy, setUsePicponyProxy);
+    apply('useApiAccel', LS_KEYS.useApiAccel, setUseApiAccel);
+    apply('showUploads', LS_KEYS.showUploads, setShowUploads);
+    apply('showFaves', LS_KEYS.showFaves, setShowFaves);
+    apply('showPosts', LS_KEYS.showPosts, setShowPosts);
+    apply('showComments', LS_KEYS.showComments, setShowComments);
+    apply('emailNotifMessage', LS_KEYS.emailNotifMessage, setEmailNotifMessage);
+    apply('emailNotifReply', LS_KEYS.emailNotifReply, setEmailNotifReply);
+    apply('defaultHomeSort', LS_KEYS.homeSort, setDefaultHomeSort);
+    apply('defaultSearchSort', LS_KEYS.searchSort, setDefaultSearchSort);
   }, []);
 
   useEffect(() => {
@@ -324,7 +497,7 @@ export default function SettingsPage() {
         setCurrentAvatar(String(user.avatar ?? ''));
         setUserToken(user.token || '');
 
-        const dev = localStorage.getItem('picpony_developer') === 'true';
+        const dev = localStorage.getItem(LS_KEYS.developer) === 'true';
         setIsDeveloper(dev);
       });
 
@@ -339,8 +512,8 @@ export default function SettingsPage() {
             setCurrentApiKey(u.api_key || '');
             setDerpiUserId(u.derpi_user_id || '');
             setDerpiUsername(u.derpi_username || '');
-            if (u.api_key) localStorage.setItem('derpi_api_key', u.api_key);
-            else localStorage.removeItem('derpi_api_key');
+            if (u.api_key) localStorage.setItem(LS_KEYS.derpiApiKey, u.api_key);
+            else localStorage.removeItem(LS_KEYS.derpiApiKey);
 
             if (u.avatar) {
               const fullUrl = u.avatar.startsWith('http')
@@ -348,7 +521,7 @@ export default function SettingsPage() {
                 : getAssetUrl(u.avatar);
               setCurrentAvatar(fullUrl);
               const updatedUser = { ...user, avatar: fullUrl };
-              localStorage.setItem('user_info', JSON.stringify(updatedUser));
+              localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
             }
 
             setCurrentEmail(u.email || '');
@@ -380,22 +553,22 @@ export default function SettingsPage() {
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
-      setShowTagCounts(lsBool('trixie_show_tag_counts', false));
-      setBanAnthro(lsBool('trixie_ban_anthro', false));
-      setBanDiscomfort(lsBool('trixie_ban_discomfort', true));
-      setOnlyPony(lsBool('trixie_only_pony', false));
-      setShowChineseTags(lsBool('picpony_show_chinese_tags', true));
-      setUseCdn(lsBool('trixie_use_cdn', false));
-      setUsePicponyProxy(lsBool('picpony_use_proxy', true));
-      setUseApiAccel(lsBool('picpony_api_accel', true));
-      setShowUploads(lsBool('picpony_show_uploads', true));
-      setShowFaves(lsBool('picpony_show_faves', true));
-      setShowPosts(lsBool('picpony_show_posts', true));
-      setShowComments(lsBool('picpony_show_comments', true));
-      setEmailNotifMessage(lsBool('picpony_email_notif_message', true));
-      setEmailNotifReply(lsBool('picpony_email_notif_reply', true));
-      setDefaultHomeSort(lsGet('picpony_default_home_sort', 'created_at'));
-      setDefaultSearchSort(lsGet('picpony_default_search_sort', 'created_at'));
+      setShowTagCounts(lsBool(LS_KEYS.showTagCounts, false));
+      setBanAnthro(lsBool(LS_KEYS.banAnthro, false));
+      setBanDiscomfort(lsBool(LS_KEYS.banDiscomfort, true));
+      setOnlyPony(lsBool(LS_KEYS.onlyPony, false));
+      setShowChineseTags(lsBool(LS_KEYS.showChineseTags, true));
+      setUseCdn(lsBool(LS_KEYS.useCdn, false));
+      setUsePicponyProxy(lsBool(LS_KEYS.usePicponyProxy, true));
+      setUseApiAccel(lsBool(LS_KEYS.useApiAccel, true));
+      setShowUploads(lsBool(LS_KEYS.showUploads, true));
+      setShowFaves(lsBool(LS_KEYS.showFaves, true));
+      setShowPosts(lsBool(LS_KEYS.showPosts, true));
+      setShowComments(lsBool(LS_KEYS.showComments, true));
+      setEmailNotifMessage(lsBool(LS_KEYS.emailNotifMessage, true));
+      setEmailNotifReply(lsBool(LS_KEYS.emailNotifReply, true));
+      setDefaultHomeSort(lsGet(LS_KEYS.homeSort, 'created_at'));
+      setDefaultSearchSort(lsGet(LS_KEYS.searchSort, 'created_at'));
     });
     return () => {
       cancelled = true;
@@ -404,13 +577,13 @@ export default function SettingsPage() {
 
   // 开发者模式激活/关闭后（关于页向导广播）即时刷新，让下拉框选项跟上
   useEffect(() => {
-    const read = () => setIsDeveloper(localStorage.getItem('picpony_developer') === 'true');
+    const read = () => setIsDeveloper(localStorage.getItem(LS_KEYS.developer) === 'true');
     window.addEventListener('developer_mode_changed', read);
     return () => window.removeEventListener('developer_mode_changed', read);
   }, []);
 
   useEffect(() => {
-    const storedFilter = lsGet('trixie_content_filter', 'safe');
+    const storedFilter = lsGet(LS_KEYS.contentFilter, 'safe');
     let validFilter = storedFilter;
     if (!['safe', 'spoilers', 'developer'].includes(storedFilter)) {
       validFilter = 'safe';
@@ -419,12 +592,12 @@ export default function SettingsPage() {
       const age = calcAge(profileBirthday);
       if (!userToken || age < 16) {
         validFilter = 'safe';
-        lsSet('trixie_content_filter', 'safe');
+        lsSet(LS_KEYS.contentFilter, 'safe');
       }
     }
     if (validFilter === 'developer' && !isDeveloper) {
       validFilter = 'safe';
-      lsSet('trixie_content_filter', 'safe');
+      lsSet(LS_KEYS.contentFilter, 'safe');
     }
     queueMicrotask(() => setContentFilter(validFilter));
   }, [userToken, profileBirthday, isDeveloper]);
@@ -466,7 +639,7 @@ export default function SettingsPage() {
           : getAssetUrl(data.avatar_url);
         setCurrentAvatar(fullUrl);
         const updatedUser = { ...user, avatar: fullUrl };
-        localStorage.setItem('user_info', JSON.stringify(updatedUser));
+        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
         window.dispatchEvent(new Event('user_info_updated'));
       } else {
         showToast(data.message || '上传失败', 'error');
@@ -509,7 +682,7 @@ export default function SettingsPage() {
           : getAssetUrl(data.banner_url);
         setCurrentBanner(fullUrl);
         const updatedUser = { ...user, banner: fullUrl };
-        localStorage.setItem('user_info', JSON.stringify(updatedUser));
+        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
         window.dispatchEvent(new Event('user_info_updated'));
       } else {
         showToast(data.message || '上传失败', 'error');
@@ -547,7 +720,7 @@ export default function SettingsPage() {
       if (data.success) {
         showToast('Derpibooru API Key 已保存', 'success');
         setCurrentApiKey(key);
-        localStorage.setItem('derpi_api_key', key);
+        localStorage.setItem(LS_KEYS.derpiApiKey, key);
         closeApiKeyModal();
         window.dispatchEvent(new Event('user_info_updated'));
       } else {
@@ -619,7 +792,7 @@ export default function SettingsPage() {
           derpi_user_id: identity.id,
           derpi_username: identity.name,
         });
-        localStorage.setItem('derpi_api_key', currentApiKey);
+        localStorage.setItem(LS_KEYS.derpiApiKey, currentApiKey);
         window.dispatchEvent(new Event('user_info_updated'));
       }
       showToast(`核验成功，已确认您的身份：${identity.name}`, 'success');
@@ -649,7 +822,7 @@ export default function SettingsPage() {
       setCurrentApiKey('');
       setDerpiUserId('');
       setDerpiUsername('');
-      localStorage.removeItem('derpi_api_key');
+      localStorage.removeItem(LS_KEYS.derpiApiKey);
       window.dispatchEvent(new Event('user_info_updated'));
       showToast('API Key 已解除绑定', 'success');
     } catch {
@@ -676,7 +849,7 @@ export default function SettingsPage() {
         showToast('密码修改成功，即将重新登录', 'success');
         closePasswordModal();
         setTimeout(() => {
-          localStorage.removeItem('user_info');
+          localStorage.removeItem(LS_KEYS.userInfo);
           window.dispatchEvent(new Event('user_info_updated'));
           openAuth('login');
         }, 1500);
@@ -706,7 +879,7 @@ export default function SettingsPage() {
         showToast('用户名已更新', 'success');
         setCurrentUsername(newUsername.trim());
         const updatedUser = { ...user, username: newUsername.trim() };
-        localStorage.setItem('user_info', JSON.stringify(updatedUser));
+        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
         window.dispatchEvent(new Event('user_info_updated'));
         closeModal();
       } else {
@@ -840,7 +1013,7 @@ export default function SettingsPage() {
       }
     }
     setContentFilter(val);
-    lsSet('trixie_content_filter', val);
+    lsSet(LS_KEYS.contentFilter, val);
     syncSettingsToCloud({ contentFilter: val });
     showToast(
       `内容过滤器已切换至：${val === 'safe' ? '安全模式' : val === 'spoilers' ? '中等限制' : '开发者模式'}`,
@@ -850,10 +1023,10 @@ export default function SettingsPage() {
 
   const handleUsePicponyProxyChange = (val: boolean) => {
     setUsePicponyProxy(val);
-    lsSet('picpony_use_proxy', val);
+    lsSet(LS_KEYS.usePicponyProxy, val);
     if (val) {
       setUseCdn(true);
-      lsSet('trixie_use_cdn', true);
+      lsSet(LS_KEYS.useCdn, true);
     }
     syncSettingsToCloud({ usePicponyProxy: val, useCdn: val || useCdn });
   };
@@ -864,7 +1037,7 @@ export default function SettingsPage() {
       return;
     }
     setUseApiAccel(val);
-    lsSet('picpony_api_accel', val);
+    lsSet(LS_KEYS.useApiAccel, val);
     syncSettingsToCloud({ useApiAccel: val });
   };
 
@@ -878,8 +1051,34 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto" aria-busy={!settingsReady}>
+    <div className="max-w-4xl mx-auto">
       <PageHeader title="设置" />
+      {/* Two tabs, and the line between them is not a matter of taste: 设置 is what the
+          account does and 个性化 is what this device remembers. That is also why only one
+          side needs the gate below — see `AppearanceSection`. 设置 leads because it is the
+          page's own name and the reason most visits happen; the pane order matches, because
+          `TabPanes` derives its direction from DOM order.
+
+          Local state rather than `?tab=`. `/policy` does the same, and `AGENTS.md` says why:
+          a tab whose value lives in `useState` needs nothing but `TabPanes`, because the
+          state update and its layout effect are the same commit. The URL form exists for
+          screens that have to be linkable into a tab, and buys an optimistic-state dance
+          plus a coalesced `router.push` that this page has no use for.
+
+          No `lean`: the 设置 pane replaces most of its subtree the moment the cloud config
+          lands, which is exactly the case `AGENTS.md` names as the counter-example. */}
+      <Tabs
+        tabs={[
+          { value: 'general', label: '设置' },
+          { value: 'personalise', label: '个性化' },
+        ]}
+        value={tab}
+        onChange={setTab}
+        label="设置分区"
+        className="mb-6"
+      />
+      <TabPanes value={tab}>
+        <TabPane value="general">
       {/* The cloud config gate: until the fetch resolves the page is dimmed and
           inert, so a default value cannot be written back over a setting the server
           has not returned yet.
@@ -891,7 +1090,12 @@ export default function SettingsPage() {
           200ms `standard`, which is what the two gallery sites use and what the
           comment here already claimed. */}
       <div
-        className={`transition-[opacity] duration-200 ease-[var(--ease-standard)] ${
+        aria-busy={!settingsReady}
+        /* `aria-busy` belongs on the gate, not on the page. It sat on the `max-w-4xl`
+           wrapper, which since the split encloses the tablist *and* the 个性化 pane — so a
+           screen-reader user switching tabs to turn animations off was told the region was
+           still loading, which is the one state the split exists to keep out of that pane. */
+        className={`transition-[opacity] duration-standard ease-[var(--ease-standard)] ${
           settingsReady ? '' : 'disabled-content pointer-events-none'
         }`}
       >
@@ -1185,7 +1389,7 @@ export default function SettingsPage() {
               <ToggleSwitch
                 layout="row"
                 checked={banAnthro}
-                onChange={(v) => updateSetting('banAnthro', v, 'trixie_ban_anthro', setBanAnthro)}
+                onChange={(v) => updateSetting('banAnthro', v, LS_KEYS.banAnthro, setBanAnthro)}
                 label="禁止类人生物 (马头人)"
                 description="隐藏 anthropomorphic 标签的图片"
               />
@@ -1196,7 +1400,7 @@ export default function SettingsPage() {
                 layout="row"
                 checked={banDiscomfort}
                 onChange={(v) =>
-                  updateSetting('banDiscomfort', v, 'trixie_ban_discomfort', setBanDiscomfort)
+                  updateSetting('banDiscomfort', v, LS_KEYS.banDiscomfort, setBanDiscomfort)
                 }
                 label="屏蔽可能令您不适的内容"
                 description="隐藏血腥、恐怖等内容"
@@ -1207,7 +1411,7 @@ export default function SettingsPage() {
               <ToggleSwitch
                 layout="row"
                 checked={onlyPony}
-                onChange={(v) => updateSetting('onlyPony', v, 'trixie_only_pony', setOnlyPony)}
+                onChange={(v) => updateSetting('onlyPony', v, LS_KEYS.onlyPony, setOnlyPony)}
                 label="只看小马 (含类马)"
                 description="仅显示 pony 相关标签的图片"
               />
@@ -1223,7 +1427,7 @@ export default function SettingsPage() {
                 layout="row"
                 checked={showTagCounts}
                 onChange={(v) =>
-                  updateSetting('showTagCounts', v, 'trixie_show_tag_counts', setShowTagCounts)
+                  updateSetting('showTagCounts', v, LS_KEYS.showTagCounts, setShowTagCounts)
                 }
                 label="显示各标签数量"
                 description="在标签列表旁显示图片计数"
@@ -1238,7 +1442,7 @@ export default function SettingsPage() {
                   updateSetting(
                     'showChineseTags',
                     v,
-                    'picpony_show_chinese_tags',
+                    LS_KEYS.showChineseTags,
                     setShowChineseTags,
                   )
                 }
@@ -1259,7 +1463,7 @@ export default function SettingsPage() {
                 value={defaultHomeSort}
                 onChange={(v) => {
                   setDefaultHomeSort(v);
-                  lsSet('picpony_default_home_sort', v);
+                  lsSet(LS_KEYS.homeSort, v);
                   syncSettingsToCloud({ defaultHomeSort: v });
                 }}
                 aria-label="首页瀑布流默认排序"
@@ -1280,7 +1484,7 @@ export default function SettingsPage() {
                 value={defaultSearchSort}
                 onChange={(v) => {
                   setDefaultSearchSort(v);
-                  lsSet('picpony_default_search_sort', v);
+                  lsSet(LS_KEYS.searchSort, v);
                   syncSettingsToCloud({ defaultSearchSort: v });
                 }}
                 aria-label="搜索默认排序"
@@ -1298,7 +1502,7 @@ export default function SettingsPage() {
               <ToggleSwitch
                 layout="row"
                 checked={useCdn}
-                onChange={(v) => updateSetting('useCdn', v, 'trixie_use_cdn', setUseCdn)}
+                onChange={(v) => updateSetting('useCdn', v, LS_KEYS.useCdn, setUseCdn)}
                 label="启用图片 CDN 加速"
                 description="通过 wsrv.nl 加速图片加载"
               />
@@ -1349,28 +1553,28 @@ export default function SettingsPage() {
                   label: '公开我的上传',
                   val: showUploads,
                   setter: setShowUploads,
-                  lsKey: 'picpony_show_uploads',
+                  lsKey: LS_KEYS.showUploads,
                 },
                 {
                   key: 'showFaves' as const,
                   label: '公开我的收藏',
                   val: showFaves,
                   setter: setShowFaves,
-                  lsKey: 'picpony_show_faves',
+                  lsKey: LS_KEYS.showFaves,
                 },
                 {
                   key: 'showPosts' as const,
                   label: '公开我的帖子',
                   val: showPosts,
                   setter: setShowPosts,
-                  lsKey: 'picpony_show_posts',
+                  lsKey: LS_KEYS.showPosts,
                 },
                 {
                   key: 'showComments' as const,
                   label: '公开我的评论',
                   val: showComments,
                   setter: setShowComments,
-                  lsKey: 'picpony_show_comments',
+                  lsKey: LS_KEYS.showComments,
                 },
               ].map((item) => (
                 <div key={item.key} className={rowClass}>
@@ -1402,7 +1606,7 @@ export default function SettingsPage() {
                     updateSetting(
                       'emailNotifMessage',
                       v,
-                      'picpony_email_notif_message',
+                      LS_KEYS.emailNotifMessage,
                       setEmailNotifMessage,
                     )
                   }
@@ -1418,7 +1622,7 @@ export default function SettingsPage() {
                     updateSetting(
                       'emailNotifReply',
                       v,
-                      'picpony_email_notif_reply',
+                      LS_KEYS.emailNotifReply,
                       setEmailNotifReply,
                     )
                   }
@@ -1665,7 +1869,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleResendCode}
                 disabled={isResending}
-                className="text-body-m text-link hover:underline disabled:disabled-content"
+                className="prose-link text-body-m focus-visible:ring-2 focus-ring disabled:disabled-content"
               >
                 {isResending ? '发送中…' : '重新发送'}
               </button>
@@ -1777,6 +1981,11 @@ export default function SettingsPage() {
         </div>
       </Modal>
       </div>
+        </TabPane>
+        <TabPane value="personalise">
+          <AppearanceSection />
+        </TabPane>
+      </TabPanes>
     </div>
   );
 }

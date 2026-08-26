@@ -28,7 +28,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useReducedMotion } from '@/lib/motion';
+import { useMotionTier } from '@/lib/appearance';
 import { cn } from '@/lib/utils';
 import { getMarkField } from '@/lib/ascii/markRaster';
 import {
@@ -334,7 +334,8 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
    * preference — neither of which is a new arrival.
    */
   const decodeRef = useRef<number | null>(null);
-  const reduced = useReducedMotion();
+  /* Both non-standard tiers draw the settled plate and stop; see the branch below. */
+  const reduced = useMotionTier() !== 'standard';
   const [grid, setGrid] = useState<Grid>(EMPTY);
 
   /* Measure the cell from a real run of glyphs rather than from the type scale, because the
@@ -649,7 +650,7 @@ export default function AsciiWordmark({ className = '' }: { className?: string }
       };
 
       /**
-       * Under `prefers-reduced-motion` it draws the settled plate and stops. No decode, no drift,
+       * Below the standard tier it draws the settled plate and stops. No decode, no drift,
        * no pointer — the early return is before the listeners are attached, so the lens is absent
        * rather than damped, deliberately. The preference asks for less movement, not for an empty
        * box, and this is the container's only texture. The `await` above is why this branch is

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import { getAppScroller } from '@/lib/motion';
+import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 
 /* ---------------------------------------------------------------------------
  * Overlay behaviour, shared by every surface that covers the page.
@@ -30,20 +31,34 @@ export function useMounted(): boolean {
  * Keeps a surface in the tree for `durationMs` after `isOpen` goes false, so its
  * exit animation has something to play on. Returns false until the first open,
  * so a closed overlay costs nothing on first paint.
+ *
+ * **`durationMs` is the animation's length at the *default* speed; the hold is scaled to
+ * the slowest.** Callers pass a constant — a token's settle time, a keyframe's duration —
+ * and every one of those now goes through `--motion-scale` or GSAP's `timeScale`, so at
+ * 缓慢 the animation runs 1.4x longer than the number handed in. Holding for the unscaled
+ * figure unmounted `Modal` at 71% of its fade, `Sheet` at 71% of its slide and `Tooltip` at
+ * 71% of its fade — a dialog that blinks out instead of leaving.
+ *
+ * The *slowest* multiplier at every speed, not the current one: this number bounds the
+ * animation, so it has to be the maximum the animation can ever take. Reading the live
+ * speed would leave a surface unmounted mid-fade the moment someone chose 缓慢. Holding an
+ * already-invisible node for an extra 40% of a short duration costs nothing, and the tier
+ * that shortens the animation further only makes the margin larger.
  */
 export function useExitAnimation(isOpen: boolean, durationMs: number): boolean {
   const [rendering, setRendering] = useState(isOpen);
   const everOpened = useRef(isOpen);
+  const hold = Math.round(durationMs * MOTION_SPEED_SCALE.slow);
 
   useEffect(() => {
     if (isOpen) {
       everOpened.current = true;
       queueMicrotask(() => setRendering(true));
     } else if (everOpened.current) {
-      const timer = setTimeout(() => setRendering(false), durationMs);
+      const timer = setTimeout(() => setRendering(false), hold);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, durationMs]);
+  }, [isOpen, hold]);
 
   return rendering;
 }

@@ -76,7 +76,7 @@ const VARIANTS: Record<IconButtonVariant, string> = {
   filled: 'bg-primary text-on-primary focus-ring',
   tonal: 'bg-secondary-container text-on-secondary-container focus-ring',
   outlined:
-    'border border-outline bg-transparent text-on-surface-variant enabled:hover:border-primary focus-ring',
+    'border border-outline bg-transparent text-on-surface-variant enabled:hover:border-primary-ink focus-ring',
   /* A destructive icon-only action, and the only reason it is a variant rather
      than a `className` at the call site is that `cn` is a plain join: the upload
      page's remove badge was passing `bg-error-fill text-on-fill shadow-e3`, so
@@ -171,7 +171,7 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
    * Written out at four sites before this — `Modal`'s close, `AuthModal`'s,
    * `DevBanner`'s and the upload page's remove-image button — on three
    * different box sizes and two different transitions, each with its own
-   * `motion-reduce` guard. It is one affordance, so it is one flag.
+   * `no-motion` guard. It is one affordance, so it is one flag.
    */
   dismiss?: boolean;
   /**
@@ -222,7 +222,7 @@ export function iconButtonClasses({
 }: IconButtonClassOptions = {}): string {
   return cn(
     'inline-flex shrink-0 cursor-pointer items-center justify-center outline-none',
-    'transition-[background-color,box-shadow,border-color,color,opacity,rotate] duration-200 ease-[var(--ease-standard)]',
+    'transition-[background-color,box-shadow,border-color,color,opacity,rotate] duration-standard ease-[var(--ease-standard)]',
     /* One indicator, and the width has to agree with the colour: `media` sets
        `--tw-inset-ring-color`, so pairing it with the outset `ring-2` would leave
        that ring at `currentcolor` and draw two. `selected` replaces the variant
@@ -232,7 +232,7 @@ export function iconButtonClasses({
       : 'focus-visible:ring-2',
     !disabled && 'state-layer',
     disabled && 'cursor-not-allowed disabled-content',
-    dismiss && !disabled && 'hover:rotate-90 motion-reduce:hover:rotate-0',
+    dismiss && !disabled && 'hover:rotate-90 no-motion:hover:rotate-0',
     /* A selected toggle takes the container/on-container pair rather than a
        tinted border plus a third text colour, which is how the favourite
        button ended up with a 40%-alpha warning border — an alpha on a token, so

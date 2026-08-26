@@ -7,7 +7,7 @@ import Card from '@/components/Card';
 import AsciiWordmark from '@/components/AsciiWordmark';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import DeveloperGuideModal from '@/components/DeveloperGuideModal';
-import { useReducedMotion } from '@/lib/motion';
+import { useMotionTier } from '@/lib/appearance';
 import ErrorRetry from '@/components/ErrorRetry';
 import Logo from '@/components/Logo';
 import { api } from '@/lib/api';
@@ -33,7 +33,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   /* Reactive, not the one-shot read this used to make: with the one-shot the
      branch below was decided at mount, so turning the preference on mid-session
      left the animation running until something else re-rendered the page. */
-  const reduced = useReducedMotion();
+  const reduced = useMotionTier() !== 'standard';
 
   // 已登录状态下快速连点 10 次（点击间隔超 1.5s 重置）触发开发者向导
   const handleClick = () => {
@@ -254,7 +254,7 @@ function TeamSection() {
         <div className="space-y-5">
           {groups.map((group) => (
             <div key={group.label}>
-              <h3 className="mb-3 text-label-l text-primary">{group.label}</h3>
+              <h3 className="mb-3 text-label-l text-primary-ink">{group.label}</h3>
               <div className="flex flex-wrap gap-x-4 gap-y-5">
                 {group.items.map((m) => {
                   const href = resolveMemberLink(m.link_url);
