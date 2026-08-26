@@ -1588,6 +1588,23 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         onClose={() => setTagInfoModal({ open: false, tag: '', data: null, loading: false })}
         title={tagInfoModal.tag}
         maxWidth="md"
+        /* Through `footer`, like every other dialog in the app. It was a flex row at the end
+           of the body, which put the one action inside the body's scroller — this dialog's
+           content is a variable-length list of tag fields, so on a phone the button scrolled
+           away with it. `fullWidth` survives the move: the footer row is `justify-end`, and a
+           member at 100% fills it, so this stays the prominent single CTA it was. */
+        footer={
+          <Button
+            variant="accent"
+            fullWidth
+            onClick={() => {
+              router.push(`/search?q=${encodeURIComponent(tagInfoModal.tag)}`, { scroll: false });
+              setTagInfoModal((prev) => ({ ...prev, open: false }));
+            }}
+          >
+            搜索此标签
+          </Button>
+        }
       >
         {' '}
         {tagInfoModal.loading ? (
@@ -1649,19 +1666,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             description="登录后可以查询更多标签信息"
           />
         )}{' '}
-        <div className="flex gap-3 mt-4">
-          
-          <Button
-            variant="accent"
-            fullWidth
-            onClick={() => {
-              router.push(`/search?q=${encodeURIComponent(tagInfoModal.tag)}`, { scroll: false });
-              setTagInfoModal((prev) => ({ ...prev, open: false }));
-            }}
-          >
-            搜索此标签
-          </Button>
-        </div>
       </Modal>
       {/* ========== Report Modal ========== */}{' '}
       <Modal

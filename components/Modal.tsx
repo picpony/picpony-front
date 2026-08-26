@@ -166,7 +166,20 @@ export default function Modal({
         >
           {children}
         </div>
-        {footer && <div className="flex shrink-0 justify-end gap-3 px-6 pb-6">{footer}</div>}
+        {/* The action row, and the only place a dialog's actions belong — `AGENTS.md` says
+            why, and /block-groups is the worked example of getting it wrong.
+            A member that wants the leading edge takes `mr-auto`: an auto margin in a
+            `justify-end` row absorbs the free space to its right, which is one class instead
+            of a nested flex wrapper (/settings' 重新发送 beside 取消 and 验证邮箱).
+            `flex-wrap` is a guard rather than a fix for anything on screen today: measured in
+            the browser, that three-member row still fits a 280px panel and only wraps below
+            it, so no real phone reaches it. What it buys is the *shape* of the failure — a
+            fourth action or a longer label wraps to a second line instead of being clipped by
+            the panel, which is exactly how the /block-groups row failed. It changes nothing
+            for a row that fits, which is the other eighteen call sites. */}
+        {footer && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-3 px-6 pb-6">{footer}</div>
+        )}
       </div>
     </div>,
     document.body,

@@ -1809,31 +1809,42 @@ export default function SettingsPage() {
           的绑定吗？解除后部分功能（如黑名单过滤同步）将无法使用。{' '}
         </p>
       </Modal>
-      <Modal isOpen={isEmailModalOpen} onClose={closeEmailModal} title="邮箱设置">
-        {!showVerifyInput ? (
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="new-email" className="block text-label-l text-on-surface mb-2">
-                新邮箱地址
-              </label>
-              <Input
-                id="new-email"
-                data-autofocus
-                type="email"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="example@email.com"
-                disabled={emailLoading}
-              />
-            </div>
-            <div className="flex justify-end gap-3">
-              
-              <Button
-                variant="text"
-                type="button"
-                onClick={closeEmailModal}
-                disabled={emailLoading}
+      <Modal
+        isOpen={isEmailModalOpen}
+        onClose={closeEmailModal}
+        title="邮箱设置"
+        /* One `footer` with two branches rather than an action row inside each half of the
+           body. Both halves used to hand-roll their own, which is the defect the /block-groups
+           dialog is the worked example of: the buttons sat inside the body's scroller, so on a
+           short viewport with the verification step open 验证邮箱 scrolled out of view while
+           every sibling dialog on this screen pinned its own.
+           重新发送 keeps the leading edge through `mr-auto` — an auto margin in `Modal`'s
+           `justify-end` row absorbs the space to its right — where it used to need a nested
+           flex wrapper around the two buttons. */
+        footer={
+          showVerifyInput ? (
+            <>
+              <button
+                onClick={handleResendCode}
+                disabled={isResending}
+                className="prose-link text-body-m focus-visible:ring-2 focus-ring disabled:disabled-content mr-auto"
               >
+                {isResending ? '发送中…' : '重新发送'}
+              </button>
+              <Button variant="text" type="button" onClick={closeEmailModal} disabled={emailLoading}>
+                取消
+              </Button>
+              <Button
+                variant="filled"
+                onClick={handleVerifyEmail}
+                disabled={emailLoading || !verifyCode.trim()}
+              >
+                {emailLoading ? '验证中…' : '验证邮箱'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="text" type="button" onClick={closeEmailModal} disabled={emailLoading}>
                 取消
               </Button>
               <Button
@@ -1843,7 +1854,26 @@ export default function SettingsPage() {
               >
                 {emailLoading ? '提交中…' : '更新邮箱'}
               </Button>
-            </div>
+            </>
+          )
+        }
+      >
+        {!showVerifyInput ? (
+          /* No `space-y-*` wrapper: this half is one field now that its action row has moved
+             to the footer, and the other half keeps one because it holds two blocks. */
+          <div>
+            <label htmlFor="new-email" className="block text-label-l text-on-surface mb-2">
+              新邮箱地址
+            </label>
+            <Input
+              id="new-email"
+              data-autofocus
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="example@email.com"
+              disabled={emailLoading}
+            />
           </div>
         ) : (
           <div className="space-y-4">
@@ -1863,33 +1893,6 @@ export default function SettingsPage() {
                 placeholder="请输入验证码"
                 disabled={emailLoading}
               />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              
-              <button
-                onClick={handleResendCode}
-                disabled={isResending}
-                className="prose-link text-body-m focus-visible:ring-2 focus-ring disabled:disabled-content"
-              >
-                {isResending ? '发送中…' : '重新发送'}
-              </button>
-              <div className="flex gap-3">
-                <Button
-                  variant="text"
-                  type="button"
-                  onClick={closeEmailModal}
-                  disabled={emailLoading}
-                >
-                  取消
-                </Button>
-                <Button
-                  variant="filled"
-                  onClick={handleVerifyEmail}
-                  disabled={emailLoading || !verifyCode.trim()}
-                >
-                  {emailLoading ? '验证中…' : '验证邮箱'}
-                </Button>
-              </div>
             </div>
           </div>
         )}

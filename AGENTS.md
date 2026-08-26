@@ -27,7 +27,7 @@ card radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | Dropdown (picks a value) | `components/Select.tsx`                                    | a hand-rolled absolutely-positioned menu          || Menu (runs a command)    | `components/Menu.tsx`                                      | a `role="menu"` div with no keyboard support      |
 | Any other floating panel | `components/Popover.tsx`                                   | a fifth recipe for corner + elevation + border    |
 | Dialog                   | `components/Modal.tsx`                                     | a hand-rolled scrim + panel                       |
-| A dialog's action row    | `Modal`'s `footer` prop                                    | your own flex row — two `fullWidth` buttons in one cannot fit, since `buttonClasses` always emits `shrink-0` |
+| A dialog's action row    | `Modal`'s `footer` prop                                    | your own flex row — two `fullWidth` buttons in one cannot fit, since `buttonClasses` always emits `shrink-0`, and a row inside the body scrolls away with the content |
 | A tick in a selection control | `components/CheckGlyph.tsx`                           | `MdCheck`, or a second copy of the same path       |
 | "Are you sure?"          | `useConfirm` (`components/ConfirmDialog.tsx`)              | `window.confirm`, or a `Modal` + 4 useStates      |
 | Asking for one value     | `usePrompt` (`components/ConfirmDialog.tsx`)               | `window.prompt`                                   |
@@ -99,6 +99,19 @@ both simpler and layout-neutral.
 text*, where the attribute is supplementing rather than naming — a truncated tag
 name, a relative timestamp's absolute value. Twenty-three of those remain and
 should.
+
+**`Modal`'s `footer` is one flex row, and it takes a leading member through `mr-auto`.**
+The row is `flex flex-wrap justify-end gap-3`, so the ordinary case is "spell the buttons in
+order and they land at the trailing edge". Two things it answers that call sites used to
+hand-roll: a member that belongs at the *leading* edge — /settings' 重新发送 beside 取消 and
+验证邮箱 — takes `mr-auto` rather than a nested flex wrapper, because an auto margin in a
+`justify-end` row absorbs the free space to its right; and the row wraps, which is a guard
+rather than a fix for anything on screen today. Measured in the browser, that three-member
+row still fits a 280px panel and only wraps below it, so no phone reaches it — what the wrap
+buys is the *shape* of the failure, since a fourth action or a longer label then takes a
+second line instead of being clipped by the panel, which is exactly how the /block-groups row
+failed. A dialog with two branches gives `footer` a conditional rather than moving the row
+back into the body.
 
 **`Card interactive` renders a `<button>`.** It used to render a `<div>` with a
 cursor, a state layer and a ripple — a control no keyboard could reach and no
