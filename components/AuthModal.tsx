@@ -13,7 +13,8 @@ import Logo from './Logo';
 import { showToast } from './Toast';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
-import { readJson } from '@/lib/api/client';
+import { sessionUser } from '@/lib/resources';
+import { LS_KEYS } from '@/lib/constants';
 import { ICON } from '@/lib/icons';
 
 export type AuthView = 'login' | 'register' | 'reset';
@@ -212,16 +213,18 @@ function LoginForm({
           derpi_user_id: data.derpi_user_id,
           derpi_username: data.derpi_username,
         };
-        localStorage.setItem('user_info', JSON.stringify(baseUserInfo));
+        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(baseUserInfo));
         try {
-          const userRes = await api.getUser(data.token);
-          const userData = await readJson(userRes);
-          if (userData.success && userData.user) {
+          /* Through the shared resource, so the shell does not immediately ask the same question
+             again: this fills the cache entry for the new token, and `AppLayout`'s own read of it —
+             which fires as soon as `user_info_updated` below lands — is then a hit. */
+          const result = await sessionUser.read({ token: data.token });
+          if (result.kind === 'ok') {
             localStorage.setItem(
-              'user_info',
+              LS_KEYS.userInfo,
               JSON.stringify({
                 ...baseUserInfo,
-                ...userData.user,
+                ...result.user,
                 token: data.token,
                 api_key: data.api_key,
                 derpi_user_id: data.derpi_user_id,
@@ -396,7 +399,7 @@ function RegisterForm({
       const data = await res.json();
       if (data.success) {
         localStorage.setItem(
-          'user_info',
+          LS_KEYS.userInfo,
           JSON.stringify({
             token: data.token,
             username: data.username,

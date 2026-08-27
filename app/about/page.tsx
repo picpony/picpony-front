@@ -10,7 +10,8 @@ import DeveloperGuideModal from '@/components/DeveloperGuideModal';
 import { useMotionTier } from '@/lib/appearance';
 import ErrorRetry from '@/components/ErrorRetry';
 import Logo from '@/components/Logo';
-import { api } from '@/lib/api';
+import { useResource } from '@/lib/resource';
+import { teamMembers, type TeamMember } from '@/lib/resources';
 import PageHeader from '@/components/PageHeader';
 import PageBack from '@/components/PageBack';
 import { readToken, useEscapeBack } from '@/lib/hooks';
@@ -132,17 +133,6 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   );
 }
 
-interface TeamMember {
-  id: number;
-  name: string;
-  role: string;
-  category: 'developer' | 'manager' | 'editor' | 'special';
-  avatar_url: string | null;
-  account_avatar: string | null;
-  link_url: string | null;
-  order_num: number;
-}
-
 const CATEGORY_LABELS: Record<string, string> = {
   developer: '开发团队',
   manager: '管理团队',
@@ -168,37 +158,10 @@ function resolveMemberLink(linkUrl: string | null | undefined): string | null {
 
 /** 运营团队板块：按分类分组展示成员 */
 function TeamSection() {
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    // Deferred so the reset is not a synchronous cascade inside the effect —
-    // the same shape `/derpi/user/[id]` and the forum thread already use.
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setLoading(true);
-      setError(false);
-    });
-    api
-      .getTeamMembers()
-      .then((data: { success: boolean; members?: TeamMember[] }) => {
-        if (cancelled) return;
-        if (data?.success && Array.isArray(data.members)) setMembers(data.members);
-        else setError(true);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [retryCount]);
+  const read = useResource(teamMembers, {});
+  const members = read.data ?? [];
+  const loading = read.data === undefined && read.error === undefined;
+  const error = Boolean(read.error);
 
   // 按分类分组，组内按 order_num 排序
   const groups = (['developer', 'manager', 'editor', 'special'] as const)
@@ -246,7 +209,7 @@ function TeamSection() {
         <ErrorRetry
           size="inline"
           title="运营团队信息加载失败"
-          onRetry={() => setRetryCount((c) => c + 1)}
+          onRetry={read.refresh}
         />
       )}
 

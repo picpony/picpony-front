@@ -1,8 +1,10 @@
 'use client';
 
-import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, Announcement, Notification } from '@/lib/api';
+import { SKIP, useResource } from '@/lib/resource';
+import { unreadCounts as unreadCountsResource } from '@/lib/resources';
 import {
   MdOutlineChatBubbleOutline,
   MdOutlineEmojiEmotions,
@@ -38,7 +40,7 @@ import ErrorRetry from '@/components/ErrorRetry';
 import Sheet from '@/components/Sheet';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
-import { readUserInfo, useEscapeBack, useMediaQuery } from '@/lib/hooks';
+import { readToken, readUserInfo, useEscapeBack, useMediaQuery } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import Popover from '@/components/Popover';
@@ -340,11 +342,6 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiList, setEmojiList] = useState<string[]>([]);
-  const [unreadCounts, setUnreadCounts] = useState({
-    messages: 0,
-    notifications: 0,
-    interactions: 0,
-  });
   const [interactionNotifications, setInteractionNotifications] = useState<Notification[]>(
     snapshot?.value.interactions ?? [],
   );
@@ -397,30 +394,26 @@ export default function MessagesPage() {
     }
   }, [messages, activeTab]);
 
-  const fetchUnreadCounts = useCallback(async () => {
-    try {
-      const user = readUserInfo();
-      if (!user) return;
-      const data = await api.getUnreadCounts(user.token);
-      if (data.success) {
-        setUnreadCounts({
-          messages: data.unread_messages,
-          notifications: data.unread_notifications,
-          interactions: data.unread_interactions,
-        });
-        const event = new CustomEvent('unread_counts_updated');
-        window.dispatchEvent(event);
-      }
-    } catch (err) {
-      console.error('获取未读数量失败', err);
-    }
-  }, []);
+  /* The same entry the app bar's badge reads, so this screen and the shell share one request
+     instead of sending three between them. Reading a tab marks it read server-side, which is why
+     the loaders below still force a re-read — but that is one request that updates both, where the
+     old arrangement fetched here, dispatched an event, and made the shell fetch it again to learn
+     the same number. */
+  const token = readToken();
+  const unreadRead = useResource(unreadCountsResource, token ? { token } : SKIP);
+  const unreadCounts = useMemo(
+    () => ({
+      messages: unreadRead.data?.messages ?? 0,
+      notifications: unreadRead.data?.notifications ?? 0,
+      interactions: unreadRead.data?.interactions ?? 0,
+    }),
+    [unreadRead.data],
+  );
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      void fetchUnreadCounts();
-    });
-  }, [fetchUnreadCounts]);
+  const fetchUnreadCounts = useCallback(async () => {
+    if (!token) return;
+    await unreadCountsResource.read({ token }, { force: true }).catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     const loadEmojis = async () => {

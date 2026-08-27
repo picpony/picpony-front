@@ -11,6 +11,7 @@ import LoadingOverlay from '@/components/LoadingOverlay';
 import RippleLayer from '@/components/RippleLayer';
 import { COOKIE_KEYS } from '@/lib/constants';
 import { PALETTES } from '@/lib/generated/themeColors';
+import { inlineRoutePolicyScript, readRoutePolicy } from '@/lib/route.server';
 
 /* Validation lists for the cookie reads below. Spelled out rather than imported from
    `lib/appearance` because that module is client-only — it holds hooks — and this is a
@@ -114,7 +115,10 @@ export default async function RootLayout({
   children: React.ReactNode;
   imageDetail: React.ReactNode;
 }>) {
-  const cookieStore = await cookies();
+  /* Both awaited together. The policy read is bounded by its own timeout and cached across
+     visitors, and `cookies()` is already what makes this route dynamic, so overlapping them costs
+     nothing and serialising them would put the two latencies end to end. */
+  const [cookieStore, routePolicy] = await Promise.all([cookies(), readRoutePolicy()]);
   const sidebarCollapsed = cookieStore.get(COOKIE_KEYS.sidebarCollapsed)?.value === 'true';
   const darkMode = cookieStore.get(COOKIE_KEYS.darkMode)?.value === 'true';
 
@@ -166,6 +170,18 @@ export default async function RootLayout({
             attribute mismatch on every load. Declaring the spec default makes both sides agree and
             changes nothing about how either script executes. */}
         <script type="text/javascript" dangerouslySetInnerHTML={{ __html: PRE_PAINT }} />
+        {/* The request-line policy, if the server managed to read one. A plain inline script
+            rather than a prop into a client component, because it has to be in force before the
+            first *effect* in the tree runs and effect order across a tree is not something a
+            layout can promise; a script in `<head>` runs before hydration. Absent when the read
+            timed out or failed, and `ensureRoutePolicy` then fetches it itself — see
+            `lib/route.server.ts`. */}
+        {routePolicy && (
+          <script
+            type="text/javascript"
+            dangerouslySetInnerHTML={{ __html: inlineRoutePolicyScript(routePolicy) }}
+          />
+        )}
         <Script id="recaptcha-options" strategy="beforeInteractive" type="text/javascript">
           {`window.recaptchaOptions = { useRecaptchaNet: true };`}
         </Script>

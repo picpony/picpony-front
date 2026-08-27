@@ -2970,6 +2970,21 @@ back button has nothing recorded and the position stays where the browser's clam
 screen with a low `panelTop` and no tap path would need a pre-commit hook the reactive path does not
 have.
 
+**A tab with no remembered offset opens at its own top — on a screen whose panel is the page.** The
+fallback used to be "stay exactly where you are", which is right on a screen with shared chrome (the
+header does not move, so neither should the page) and is the same bug wearing the other face where
+the panel *is* the page. Measured at 1440×900: leave the gallery at 1500, switch to a forum whose
+whole content is 1708 against a 768px scrollport, and `finalMax` is 1160 — so the carried-over
+offset clamps to exactly the maximum and **the forum opens on its last row**. Both paths take the
+`?? 0` (`applyTabScroll` and `applyInstantTabScroll`), and the memory is untouched: switching back
+still lands on 1500. `node scripts/netAuditTabHeight.mjs` asserts all three numbers.
+
+That script also checks the half that was already right, because it is the half that looks wrong:
+during the run the panel measures `max(H_out, H_in)`, so a tall gallery leaves ~2000px under a
+short forum for 500ms. That is deliberate — see `runTabTransition`, which explains why nothing
+animates the panel's box — and it is invisible because the footer is held at `opacity: 0` for the
+transit and the offset is clamped against the *settled* height.
+
 ## `useGSAP`
 
 `@gsap/react`'s `useGSAP` does **not** run your cleanup on a dependency change
@@ -3040,6 +3055,177 @@ table rather than a derivation.
 `(prefers-color-scheme: dark)` was hand-typed at three sites and
 `(prefers-reduced-motion: reduce)` at four — seven copies of two strings, in the two places
 where a typo fails silently by never matching.
+
+## Data requests
+
+**A screen does not fetch. It reads a resource, and the resource decides whether that
+costs a request.** `lib/resource.ts` is the primitive, `lib/resources.ts` is the
+catalogue, and `useResource(forumThread, { id })` is the whole of the call site.
+
+Every screen used to write its own: a `useState` per field, an `isMounted` flag, a
+`retryCount`, a `served` ref, and — in three cases out of fourteen — a render snapshot
+from `lib/pageCache.ts`. Twenty-odd copies of one recipe, disagreeing in ways only a
+request ledger could see. `npm run net:audit` is that ledger, and the four things it
+found on the first run are the argument for the whole layer:
+
+- **The shell asked twice.** `AppLayout`'s session effect was keyed on the pathname and
+  called `setUserInfo` twice per run; its unread-count effect was keyed on the `userInfo`
+  *object*. So a signed-in cold load sent `get_user` twice and `get_unread_counts` two to
+  four times, and **every navigation after it sent them again**. That is the same
+  dependency-identity cascade `useAuth`'s docstring records `/favorites` hitting a rate
+  limit on, grown back in the one component every screen mounts inside.
+- **Screens re-read what they had just read.** A second visit to a profile cost all six
+  of its requests again, because a page is keyed on the pathname and a remount starts
+  from nothing.
+- **Screens read in series when they could read in parallel.** A profile took four
+  rounds: the policy, then the profile, then the shared faves *and* the uploads, then the
+  fave images — with the default tab's own content behind a round trip for the heading
+  above it.
+- **Screens read things nobody asked for.** That same profile fetched two pages of
+  favourites on mount whether or not the tab was ever opened.
+
+### The two stores, and why they are two
+
+| What | Where | Keyed on |
+| --- | --- | --- |
+| What the server said | `lib/resource.ts` | the arguments of the read |
+| What this screen was showing | `lib/screenState.ts` | a string the screen picks |
+
+`lib/pageCache.ts` was both at once, and its own docstring says why it had to be:
+*"including the page number, which a plain request cache would lose."* That is exactly
+right and it is two problems in one coat — which is why only three components ever
+adopted it, since using it meant lifting your whole render into one snapshot object.
+Split apart, a remount reads its page number from `useScreenState` and its rows from the
+resource cache, and paints in the first frame with neither a skeleton nor a request.
+
+`useScreenStateFor` is the same thing scoped to a record. Two profiles are two screens
+sharing a component, and a flat key carries page 4 of one into the other — the identical
+bug AGENTS.md already records in the per-tab scroll memory, where offsets leaked between
+profiles because the map was keyed on a tab name and tab names are unique app-wide.
+Unique is not the same as sufficient.
+
+### Reading a snapshot
+
+`useResource` returns `{ data, error, isLoading, isStale, refresh }`, and **`data` and
+`isLoading` are independent on purpose**. A cached screen refreshing underneath has both;
+that is the entire point of the layer. So:
+
+- the *placeholder* branches on `data === undefined`
+- a *dim* may branch on `isLoading`
+- branching the placeholder on `isLoading` puts a skeleton over content that is already
+  correct, which undoes the reason for having a cache at all
+
+Pass `SKIP` for a read that should not happen yet — an unselected tab, a signed-out
+visitor, an id that has not resolved. That is the mechanism that stops a screen paying
+for content nobody asked for.
+
+**A paged list must pass `keepPrevious`, and forgetting it is a scroll bug rather than a
+data one.** Changing the page changes the key, and a key with nothing cached reports
+`data === undefined` — so the rows unmount for one round trip, the scroll container
+collapses, the browser clamps `scrollTop` to the new tiny maximum, and the page snaps to
+the very top with the pager's own scroll-to-the-list undone. `app/page.tsx` carried a
+comment about exactly this before it had a cache at all, and the first version of this
+layer reintroduced it. `node scripts/netAuditScroll.mjs` samples the card count every
+frame across a page turn and fails on a single empty frame, because one commit is enough.
+It is off by default because for an unpaged screen it is wrong: showing the *previous*
+profile while the next one loads is worse than a skeleton.
+
+### Speculation may move a request earlier. It may never add one.
+
+That is the rule, and `npm run net:audit` asserts it: every journey's request count may
+fall and may not rise. Three consequences worth knowing:
+
+- **Prefetch is intent-driven, never idle.** `useIntentPrefetch` is `useHeroLink`'s ladder
+  with the gallery card taken out of it — hover at 70ms, focus at 120ms, press
+  immediately, cancel on leave, gated by `isScrollLikelyActive()`. `prefetchRoute` maps a
+  path to the reads that path starts, in one table rather than scattered across the four
+  components that link there.
+- **The obvious pagination win is not taken.** Warming page *n+1* as soon as page *n*
+  settles was written and removed: page turns are predictable enough that the guess is
+  usually right, but it is a request for a page that may never be looked at, on every
+  paged screen. What survives is the intent ladder on the controls, which buys the same
+  head start and costs nothing until somebody reaches for them.
+- **Guessing cannot starve a real read.** Background work is capped at two of the four
+  concurrent slots, so a prefetch can never take the last one. `saveData` and the two
+  slowest `effectiveType`s switch speculation off entirely — the concurrency cap protects
+  latency, and nothing but that switch protects *bytes*.
+
+**A `<Link>` prefetch is not a data prefetch.** Next warms the RSC payload and the chunk
+when the link is in the viewport, which is real and is not the expensive half: every
+screen here is a client component that starts its reads in its first effect, so a warm
+chunk still arrives at an empty page.
+
+### Coming back
+
+`bindResourceRefresh`, mounted once in the shell, re-reads what is on screen when the tab
+returns after a minute away and whenever the network reconnects. It **expires rather than
+invalidates**, and that is the whole difference between a refresh and a reload: every
+mounted screen keeps what it is showing and re-reads underneath, with no loading state.
+Dropping the entries instead would empty every screen in the app in one frame.
+
+`expire` also has to *start* the re-read rather than merely mark. That was got wrong
+first: `useResource`'s effect is keyed on the resource and the key, and neither changes
+when a value goes stale, so a tab left open for an hour marked everything and fetched
+nothing. The entry holds its own args for this.
+
+### Two mistakes this layer made, both worth not repeating
+
+**A subscriber arrives before the reader.** `useSyncExternalStore` subscribes during
+render and the read happens in the effect a tick later, so every mounted component
+creates a listener slot for a key nothing has requested. The first version did not tell
+that slot apart from a real queued entry: `read` found it, saw `status: 'queued'`, and
+returned its promise — which is already resolved and carries nothing. **Every migrated
+screen went silent at once.** `Entry.placeholder` is the distinction.
+
+**And the ledger called it a triumph.** The home page "improved" from five requests to
+one, with the gallery empty behind it, because the only assertion was an upper bound. An
+upper bound cannot tell an optimisation from a breakage. `net:audit` now also holds a
+floor — a step that read something before must still read something, and a step whose own
+content request was identified before must still identify it.
+
+### `npm run net:audit`
+
+Drives Edge over CDP through a fixed set of journeys and counts requests per step. It
+asserts **counts** and the **round** of each step's own content request; wall-clock
+timings are printed and asserted nowhere, which is the same split `palette.mjs` draws
+between a `floor` pair and a `report` pair.
+
+The upstream is **stubbed** (`netAuditFixtures.mjs`), and not because it is down. It
+answers, slowly, and `proxyFetch`'s retry ladder turns one logical read into one *or*
+three depending on which line is reachable — so the count stops being a property of the
+code. `--live` runs against the real thing for a payload-shape check and refuses to write
+a baseline. A second fixture server is handed to `next start` through
+`PICPONY_UPSTREAM_ORIGIN`, because CDP intercepts the *browser* and reaches nothing the
+server does — without it the SSR-side policy read could not be measured at all.
+
+Two numbers it reports and does not assert. The maximum `rounds` over a step is jittery,
+because an idle-scheduled request inherits depth it does not owe (a gap threshold was
+tried and made it worse: the gap between a policy fetch landing and the effects it
+unblocks is dominated by *hydration*). And chrome reads — `get_user`,
+`get_unread_counts`, `get_announcement` — are excluded from the rounds chain entirely,
+because they fire on every screen in parallel with whatever it is doing and were making
+`contentRound` race.
+
+### What is not in the catalogue
+
+**The opened picture.** `lib/detail.ts` holds that one, and it is where this layer's
+machinery came from: TTL, LRU, priority queue, concurrency cap, real cancellation and a
+paint-bound notification tuned so a response can never land inside a hero flight's
+geometry frame. It stays separate because its publication is gated on
+`imageHeroController.isDetailDataPublishable`; `ResourceOptions.publishGate` is the seam
+that would let it fold in, and folding it in has not been done.
+
+**`/messages`' three list reads.** That screen keeps `lib/pageCache.ts`, and it is the
+last consumer. Its per-pane `loading`/`error`/`silent` system already hand-rolls much of
+what this layer does; the unread counts *were* unified (the shell and the page shared one
+endpoint through three separate requests, one of them a round trip caused by the page
+dispatching an event the shell listened to), and the lists were left.
+
+**Persistence.** The store is a `Map` and a reload genuinely reloads, which is
+`pageCache`'s own rule. `lib/tagCounts.ts` and `lib/tagTranslations.ts` keep their own
+localStorage caches on week-long TTLs; that is a different problem from "do not re-read
+the list I am looking at", and keeping it separate is what stops this from growing a
+quota policy.
 
 ## Request lines
 

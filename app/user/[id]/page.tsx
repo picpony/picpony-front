@@ -4,7 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { api, PonyImage, UserComment, UserPost } from '@/lib/api';
+import { UserComment } from '@/lib/api';
+import { SKIP, useResource } from '@/lib/resource';
+import { useScreenStateFor } from '@/lib/screenState';
+import {
+  imagesByIds,
+  sharedFaveIds,
+  userComments,
+  userPosts,
+  userProfile,
+  userUploads,
+} from '@/lib/resources';
 import FadeInImage from '@/components/FadeInImage';
 import RichTextRenderer from '@/components/RichTextRenderer';
 import Card from '@/components/Card';
@@ -39,7 +49,6 @@ import ErrorRetry from '@/components/ErrorRetry';
 import { buttonClasses } from '@/components/Button';
 import { ICON } from '@/lib/icons';
 import { formatDate, formatDateTime, formatLastOnline } from '@/lib/format';
-import { PICPONY_API_BASE } from '@/lib/constants';
 import { getAssetUrl } from '@/lib/utils';
 
 type ProfileTab = 'uploads' | 'faves' | 'posts' | 'comments';
@@ -76,15 +85,6 @@ interface UserProfile {
   };
 }
 
-interface UploadItem {
-  id: number;
-  name: string;
-  representations: PonyImage['representations'];
-  view_url: string;
-  width: number;
-  height: number;
-}
-
 const PER_PAGE = 12;
 
 
@@ -93,197 +93,95 @@ export default function UserProfilePage() {
   const router = useRouter();
   const id = params.id as string;
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  /* Bumped by the error state's 重试, which re-runs the profile fetch. Same
-     shape the forum thread uses. */
-  const [retryCount, setRetryCount] = useState(0);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(
-    () => (readUserInfo()?.id as number) ?? null,
-  );
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
-  const [tabValue, setTabValue] = useState<ProfileTab>('uploads');
-
-  const [faveIds, setFaveIds] = useState<number[]>([]);
-  const [faveImages, setFaveImages] = useState<PonyImage[]>([]);
-  const [isFavesLoading, setIsFavesLoading] = useState(true);
-  const [favesPage, setFavesPage] = useState(1);
-  const [totalFavePages, setTotalFavePages] = useState(1);
-
-  const [comments, setComments] = useState<UserComment[]>([]);
-  const [isCommentsLoading, setIsCommentsLoading] = useState(true);
-  const [commentsPage, setCommentsPage] = useState(1);
-  const [totalCommentPages, setTotalCommentPages] = useState(1);
-
-  const [posts, setPosts] = useState<UserPost[]>([]);
-  const [isPostsLoading, setIsPostsLoading] = useState(true);
-  const [postsPage, setPostsPage] = useState(1);
-  const [totalPostPages, setTotalPostPages] = useState(1);
-
-  const [uploads, setUploads] = useState<UploadItem[]>([]);
-  const [isUploadsLoading, setIsUploadsLoading] = useState(true);
-  const [uploadsPage, setUploadsPage] = useState(1);
-  const [totalUploadPages, setTotalUploadPages] = useState(1);
+  /* Every page number survives a remount, so coming back to a profile lands on the page you left
+     rather than on page 1. That is the half of `lib/pageCache.ts` that was never a cache — see
+     `lib/screenState.ts`. Scoped per profile id, because two profiles are two screens that happen
+     to share a component. */
+  const [tabValue, setTabValue] = useScreenStateFor<ProfileTab>('profile:tab', id, 'uploads');
+  const [favesPage, setFavesPage] = useScreenStateFor('profile:faves', id, 1);
+  const [commentsPage, setCommentsPage] = useScreenStateFor('profile:comments', id, 1);
+  const [postsPage, setPostsPage] = useScreenStateFor('profile:posts', id, 1);
+  const [uploadsPage, setUploadsPage] = useScreenStateFor('profile:uploads', id, 1);
 
   useEffect(() => {
     const user = readUserInfo();
     if (user) queueMicrotask(() => setCurrentUserId(user.id as number));
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    if (id) {
-      api
-        .getUserProfile(id)
-        .then((res) => {
-          if (isMounted) {
-            if (res.success && res.user) {
-              setProfile(res.user);
-            } else {
-              setError(res.message || '获取用户资料失败');
-            }
-            setIsLoading(false);
-          }
-        })
-        .catch((err) => {
-          if (isMounted) {
-            setError(err.message || '获取用户资料失败');
-            setIsLoading(false);
-          }
-        });
-    }
-    return () => {
-      isMounted = false;
-    };
-  }, [id, retryCount]);
+  const token = readToken();
 
-  useEffect(() => {
-    if (!profile) return;
-    let isMounted = true;
-    api
-      .getSharedFaves(profile.username)
-      .then((res) => {
-        if (isMounted && res.success) {
-          setFaveIds(res.faves);
-          setTotalFavePages(Math.max(1, Math.ceil(res.faves.length / PER_PAGE)));
-          setFavesPage(1);
-        }
-      })
-      .catch(() => {
-        if (isMounted) setIsFavesLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [profile]);
+  /**
+   * Five reads, and what matters is which of them are *not* gated on each other.
+   *
+   * This screen used to take four rounds and send two requests nobody asked for. The profile came
+   * first, and then **every other read waited for it** — including the uploads, which is the
+   * default tab and needs nothing from the profile but the id that is already in the URL. So the
+   * content of the tab you land on could not begin loading until a round trip for the heading
+   * above it had come back.
+   *
+   * Now only the favourites wait, and they have to: `get_shared_faves` is keyed by *username*, and
+   * the username only arrives with the profile. That is a property of the endpoint rather than of
+   * the screen — so the answer is not to parallelise it but to not send it at all until somebody
+   * opens the tab, which is what `SKIP` does below. It used to run unconditionally on mount, twice
+   * over (the ids, then the images), for a tab most visitors never open.
+   */
+  const profileRead = useResource(userProfile, id ? { id } : SKIP);
+  const profile = profileRead.data as UserProfile | null | undefined;
 
-  useEffect(() => {
-    if (faveIds.length === 0) return;
-    let isMounted = true;
-    api
-      .searchImagesByIds(faveIds, favesPage, PER_PAGE)
-      .then((res) => {
-        if (isMounted) setFaveImages(res.images || []);
-      })
-      .catch(() => {
-        if (isMounted) setFaveImages([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsFavesLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [faveIds, favesPage]);
+  const uploadsRead = useResource(
+    userUploads,
+    id && tabValue === 'uploads' ? { id, page: uploadsPage, perPage: PER_PAGE, token } : SKIP,
+    { keepPrevious: true },
+  );
+  const postsRead = useResource(
+    userPosts,
+    id && tabValue === 'posts' ? { id, page: postsPage } : SKIP,
+    { keepPrevious: true },
+  );
+  const commentsRead = useResource(
+    userComments,
+    id && tabValue === 'comments' ? { id, page: commentsPage } : SKIP,
+    { keepPrevious: true },
+  );
 
-  useEffect(() => {
-    if (!profile || tabValue !== 'posts') return;
-    let isMounted = true;
-    api
-      .getUserPosts(id, postsPage)
-      .then((res) => {
-        if (isMounted) {
-          setPosts(res.posts || []);
-          setTotalPostPages(res.total_pages || 1);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setPosts([]);
-          setTotalPostPages(1);
-        }
-      })
-      .finally(() => {
-        if (isMounted) setIsPostsLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [profile, id, tabValue, postsPage]);
+  const favesActive = tabValue === 'faves' && Boolean(profile?.username);
+  const faveIdsRead = useResource(
+    sharedFaveIds,
+    favesActive ? { username: profile!.username } : SKIP,
+  );
+  const allFaveIds = faveIdsRead.data ?? [];
+  const faveImagesRead = useResource(
+    imagesByIds,
+    favesActive && allFaveIds.length > 0
+      ? { ids: allFaveIds, page: favesPage, perPage: PER_PAGE }
+      : SKIP,
+    { keepPrevious: true },
+  );
 
-  useEffect(() => {
-    if (!profile || tabValue !== 'comments') return;
-    let isMounted = true;
-    api
-      .getUserComments(id, commentsPage)
-      .then((res) => {
-        if (isMounted) {
-          setComments(res.comments || []);
-          setTotalCommentPages(res.total_pages || 1);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setComments([]);
-          setTotalCommentPages(1);
-        }
-      })
-      .finally(() => {
-        if (isMounted) setIsCommentsLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [profile, id, tabValue, commentsPage]);
+  const uploads = uploadsRead.data?.uploads ?? [];
+  const totalUploadPages = uploadsRead.data?.totalPages ?? 1;
+  const posts = postsRead.data?.posts ?? [];
+  const totalPostPages = postsRead.data?.totalPages ?? 1;
+  const comments = commentsRead.data?.comments ?? [];
+  const totalCommentPages = commentsRead.data?.totalPages ?? 1;
+  const faveImages = faveImagesRead.data?.images ?? [];
+  const totalFavePages = Math.max(1, Math.ceil(allFaveIds.length / PER_PAGE));
 
-  useEffect(() => {
-    if (!profile || tabValue !== 'uploads') return;
-    let isMounted = true;
+  /* A placeholder is for having nothing to draw, never for "a request is in flight". A cached page
+     re-renders with `isLoading` true while it refreshes underneath, and branching on that would
+     put a skeleton over content that is already correct — which is the whole thing this layer
+     exists to stop. */
+  const isUploadsLoading = uploadsRead.data === undefined;
+  const isPostsLoading = postsRead.data === undefined;
+  const isCommentsLoading = commentsRead.data === undefined;
+  const isFavesLoading = favesActive && faveImagesRead.data === undefined && allFaveIds.length > 0;
 
-    const fetchUploads = async () => {
-      try {
-        const token = readToken();
-
-        /* `PICPONY_API_BASE`, not a hard-coded origin. This was the only PicPony
-           endpoint reached by a literal `https://picpony.top/api.php`, which
-           bypasses the `/api.php` route handler the rest of the app goes through —
-           and that handler is what rewrites the backend's `Secure` session cookie
-           so it survives plain HTTP. */
-        const res = await fetch(
-          `${PICPONY_API_BASE}?action=get_user_uploads&user_id=${id}&page=${uploadsPage}&per_page=${PER_PAGE}${token ? `&token=${encodeURIComponent(token)}` : ''}`,
-        );
-        const data = await res.json();
-        if (isMounted) {
-          if (data.success) {
-            setUploads(data.uploads || []);
-            setTotalUploadPages(Math.max(1, data.total_pages || 1));
-          } else {
-            setUploads([]);
-          }
-        }
-      } catch {
-        if (isMounted) setUploads([]);
-      } finally {
-        if (isMounted) setIsUploadsLoading(false);
-      }
-    };
-
-    fetchUploads();
-    return () => {
-      isMounted = false;
-    };
-  }, [profile, id, tabValue, uploadsPage]);
+  const isLoading = profileRead.data === undefined && profileRead.error === undefined;
+  const error = profileRead.error
+    ? (profileRead.error as Error).message || '获取用户资料失败'
+    : null;
 
   const getCommentTargetLink = (comment: UserComment): string => {
     return comment.type === 'post' ? `/forum/${comment.target_id}` : `/pic/${comment.target_id}`;
@@ -338,14 +236,7 @@ export default function UserProfilePage() {
         <PageBack onClick={handleBack} title="返回 (Esc)" />
         {/* `onRetry`, because this was the one `ErrorRetry` in the app with an
             empty action slot — a failure that offered no way forward at all. */}
-        <ErrorRetry
-          title="加载失败"
-          message={error || '用户可能不存在'}
-          onRetry={() => {
-            setError(null);
-            setRetryCount((c) => c + 1);
-          }}
-        />
+        <ErrorRetry title="加载失败" message={error || '用户可能不存在'} onRetry={profileRead.refresh} />
       </>
     );
   }
@@ -676,10 +567,10 @@ export default function UserProfilePage() {
                     <Pagination
                       currentPage={uploadsPage}
                       totalPages={totalUploadPages}
-                      onPageChange={(next) => {
-                        setIsUploadsLoading(true);
-                        setUploadsPage(next);
-                      }}
+                      onPageChange={setUploadsPage}
+                      onPrefetchPage={(next) =>
+                        userUploads.prefetch({ id, page: next, perPage: PER_PAGE, token })
+                      }
                       className="mt-8 mb-4"
                     />
                   )}
@@ -731,10 +622,11 @@ export default function UserProfilePage() {
                     <Pagination
                       currentPage={favesPage}
                       totalPages={totalFavePages}
-                      onPageChange={(next) => {
-                        setIsFavesLoading(true);
-                        setFavesPage(next);
-                      }}
+                      onPageChange={setFavesPage}
+                      onPrefetchPage={(next) =>
+                        allFaveIds.length > 0 &&
+                        imagesByIds.prefetch({ ids: allFaveIds, page: next, perPage: PER_PAGE })
+                      }
                       className="mt-8 mb-4"
                     />
                   )}
@@ -831,10 +723,8 @@ export default function UserProfilePage() {
                     <Pagination
                       currentPage={postsPage}
                       totalPages={totalPostPages}
-                      onPageChange={(next) => {
-                        setIsPostsLoading(true);
-                        setPostsPage(next);
-                      }}
+                      onPageChange={setPostsPage}
+                      onPrefetchPage={(next) => userPosts.prefetch({ id, page: next })}
                       className="mt-8 mb-4"
                     />
                   )}
@@ -925,10 +815,8 @@ export default function UserProfilePage() {
                     <Pagination
                       currentPage={commentsPage}
                       totalPages={totalCommentPages}
-                      onPageChange={(next) => {
-                        setIsCommentsLoading(true);
-                        setCommentsPage(next);
-                      }}
+                      onPageChange={setCommentsPage}
+                      onPrefetchPage={(next) => userComments.prefetch({ id, page: next })}
                       className="mt-8 mb-4"
                     />
                   )}

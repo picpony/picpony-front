@@ -10,8 +10,12 @@
  * Three things it deliberately is not:
  *
  * - **Not a preference in `lib/appearance.ts`'s sense.** No cookie, no attribute on
- *   `<html>`, no pre-paint script. A line affects `fetch` after hydration, so there
- *   is nothing for the server to know before first paint.
+ *   `<html>`, no pre-paint script — those five are the *device's* and are echoed back to
+ *   the server in a cookie, where this one is the server's and travels one way. It *is*
+ *   inlined into the document, and the reason is not painting: nothing here changes a
+ *   pixel. It is that `proxyFetch` awaits the policy before it will send anything, so
+ *   fetching it on the client made it round 1 of every screen in the app and pushed every
+ *   Derpibooru read into round 2 behind it. See `lib/route.server.ts`.
  * - **Not a swap of the base constants.** `DERPIBOORU_API_BASE` stays canonical and
  *   the line is applied per request, which is what the old frontend does and what
  *   sidesteps a bundler folding an `export const` string into 140 call sites.
@@ -221,6 +225,25 @@ function applyRoutePolicy(status: SiteStatusResponse) {
 let ready: Promise<void> | null = null;
 
 /**
+ * Where the server left the policy, if it managed to read one.
+ *
+ * `app/layout.tsx` inlines it as a `<script>` rather than handing it to a client component,
+ * because it has to be in force before the *first effect* in the tree runs — and effect order
+ * across a tree is not something a layout can promise. A script in `<head>` executes before
+ * hydration, so by the time anything can call `proxyFetch` the value is already here.
+ */
+declare global {
+  interface Window {
+    __picponyRoutePolicy?: {
+      api?: string;
+      image?: string;
+      thirdPartyUrl?: string;
+      thirdPartyPassApiKey?: boolean;
+    };
+  }
+}
+
+/**
  * Resolve the policy once, before anything is allowed to pick a line.
  *
  * `proxyFetch` awaits this on every call, which is the old frontend's
@@ -229,16 +252,51 @@ let ready: Promise<void> | null = null;
  * would silently use the wrong host. After the first resolution it is a settled
  * promise, so the cost is one microtask.
  *
+ * **The document normally already carries the answer**, in which case this sends nothing at all:
+ * `lib/route.server.ts` reads it during SSR and `app/layout.tsx` inlines it. That is worth one
+ * request and — the part that mattered — one *round*. Measured with `npm run net:audit` before the
+ * change, `get_maintenance_status` was round 1 on every screen in the app and every Derpibooru read
+ * was round 2 behind it, `/policy` included; against the real upstream on a slow link that gate was
+ * over six seconds wide. The client fetch survives as the fallback for a server read that timed out
+ * or failed, which is also the whole of what happens in a dev server with no backend.
+ *
  * It **never rejects.** A failure of any kind leaves the `auto` defaults in place;
  * rejecting here would lock every Derpibooru request in the app behind a dead fetch.
  */
 export function ensureRoutePolicy(): Promise<void> {
-  ready ??= loadRoutePolicy();
+  ready ??= adoptInlinePolicy() ?? loadRoutePolicy();
   return ready;
 }
 
-/** Re-read the policy, for /settings' refresh control. */
+/**
+ * Take the server's answer, or `null` if there isn't one.
+ *
+ * Synchronous, so the returned promise is already settled and `await ensureRoutePolicy()` costs a
+ * microtask on the very first call rather than only on later ones.
+ */
+function adoptInlinePolicy(): Promise<void> | null {
+  if (typeof window === 'undefined') return null;
+  const inline = window.__picponyRoutePolicy;
+  if (!inline) return null;
+  applyRoutePolicy({
+    success: true,
+    global_api_route_policy: inline.api,
+    global_image_route_policy: inline.image,
+    global_api_third_party_url: inline.thirdPartyUrl,
+    global_api_third_party_pass_api_key: inline.thirdPartyPassApiKey,
+  });
+  return Promise.resolve();
+}
+
+/**
+ * Re-read the policy, for /settings' refresh control.
+ *
+ * Always a real request: the point of the control is "tell me what the server says *now*", and the
+ * inlined document is up to `SERVER_POLICY_REVALIDATE_S` old. The global is dropped so nothing can
+ * later adopt the value this call just superseded.
+ */
 export function refreshRoutePolicy(): Promise<void> {
+  if (typeof window !== 'undefined') delete window.__picponyRoutePolicy;
   ready = loadRoutePolicy();
   return ready;
 }

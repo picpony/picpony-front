@@ -1,9 +1,13 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { MdAdd } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
-import { api, PonyImage, applyImageLine, ForumPost } from '@/lib/api';
+import { getBrowsingSettings } from '@/lib/api';
+import { useResource } from '@/lib/resource';
+import { useScreenState } from '@/lib/screenState';
+import { forumPosts, homeFeed } from '@/lib/resources';
+import { runWhenIdle } from '@/lib/utils';
 import FeaturedBanner, { FeaturedBannerSkeleton } from '@/components/FeaturedBanner';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
@@ -13,122 +17,52 @@ import ForumPostList from '@/components/ForumPostList';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 import { useDeferredLoading } from '@/lib/hooks';
 import TabPanes, { TabPane } from '@/components/TabPanes';
-import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
 import Button from '@/components/Button';
 import SectionHeading from '@/components/SectionHeading';
 import { ICON } from '@/lib/icons';
 
 type HomeTab = 'gallery' | 'forum';
 
-/** What each home tab had loaded last time, so coming back is not a reload.
- *  See `lib/pageCache.ts` for why this is a render snapshot and not a request
- *  cache — the page number has to survive too, or you land back on page 1. */
-interface GallerySnapshot {
-  page: number;
-  images: PonyImage[];
-  hasMore: boolean;
-}
-interface ForumSnapshot {
-  page: number;
-  posts: ForumPost[];
-  totalPages: number;
-}
-const GALLERY_KEY = 'home:gallery';
-const FORUM_KEY = 'home:forum';
-
 /* Notifies the caller when its 重试 is pressed. The home pane uses this to
    reload the 近日推荐 banner in the same retry, so a failed load does not
    come back with just the feed. */
 function ImageList({ onRetry }: { onRetry?: () => void }) {
-  /* Seeded from whatever this tab was showing when it was last unmounted, so a
-     trip to /search and back paints the same grid on the first frame instead of
-     an empty page, a skeleton and a fresh request. A stale snapshot is still
-     shown — the refetch below happens underneath it, with no loading state, so
-     nothing flashes on the way in. */
-  const snapshot = useState(() => readSnapshot<GallerySnapshot>(GALLERY_KEY))[0];
-  const [images, setImages] = useState<PonyImage[]>(snapshot?.value.images ?? []);
-  const [page, setPage] = useState(snapshot?.value.page ?? 1);
-  const [hasMore, setHasMore] = useState(snapshot?.value.hasMore ?? true);
-  const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(!snapshot);
-  const [retryCount, setRetryCount] = useState(0);
+  /* The page number is the only thing this component now remembers for itself; the images come
+     from the cache, keyed on the page. That split is the point — `lib/pageCache.ts` stored the
+     whole render in one object precisely because it had nowhere to put the page number, and the
+     `served` ref, the staleness branch and the delivery-vs-dispatch note that used to live here
+     were all the machinery of hand-rolling one cache for one screen. See `lib/screenState.ts`. */
+  const [page, setPage] = useScreenState('home:gallery:page', 1);
+  const sort = getBrowsingSettings().homeSort;
 
-  /* The fetch this component has already *delivered*, so a remount that was
-     seeded from a fresh snapshot does not immediately re-request the same page.
-     A stale one deliberately does not match, which is what makes the background
-     refresh happen exactly once.
-     Recorded on delivery, never on dispatch. StrictMode mounts, tears down and
-     remounts every component in development; a signature written when the
-     request went out makes the second run bail while the first run's response
-     is dropped for being unmounted, and the component then waits forever.
-     Measured on the forum pane: `run 1:0 served=null` / `run 1:0 served=1:0` /
-     `resolved 17 mounted=false`, and fifteen skeletons shimmering for as long
-     as the page stayed open. */
-  const served = useRef<string | null>(
-    snapshot && !snapshot.stale ? `${snapshot.value.page}:0` : null,
-  );
-
-  useEffect(() => {
-    const signature = `${page}:${retryCount}`;
-    if (served.current === signature) return;
-    const firstRun = served.current === null;
-    let isMounted = true;
-    // page/retry handlers set loading; first load starts true. Avoid sync setState in effect.
-    queueMicrotask(() => {
-      if (!isMounted) return;
-      // A stale snapshot is refreshed underneath what is already on screen.
-      // Dimming the grid for that would be the flash this exists to remove —
-      // a page change or a retry still shows its loading state.
-      if (!(firstRun && snapshot)) setIsLoading(true);
-      setError(null);
-    });
-
-    api
-      .getImages(undefined, page)
-      .then((res) => {
-        if (isMounted) {
-          served.current = signature;
-          const imgs = res.images.map(applyImageLine);
-          setImages(imgs);
-          setHasMore(imgs.length === 50);
-          setIsLoading(false);
-          writeSnapshot<GallerySnapshot>(GALLERY_KEY, {
-            page,
-            images: imgs,
-            hasMore: imgs.length === 50,
-          });
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(err);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [page, retryCount, snapshot]);
+  /* `keepPrevious`: turning a page must not unmount the grid. See the option's own note — the
+     scroller collapses, the browser clamps `scrollTop`, and the page snaps to the very top. */
+  const read = useResource(homeFeed, { page, sort }, { keepPrevious: true });
+  const images = read.data?.images ?? [];
+  const hasMore = images.length === 50;
+  const error = read.error as Error | null;
 
   const handleRetry = useCallback(() => {
-    setRetryCount((c) => c + 1);
+    read.refresh();
     onRetry?.();
-  }, [onRetry]);
-  const handlePageChange = useCallback((newPage: number) => {
-    if (newPage >= 1) {
-      setIsLoading(true);
-      setError(null);
-      setPage(newPage);
+  }, [read, onRetry]);
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (newPage >= 1) setPage(newPage);
       // Scrolling is handled by <Pagination>, which targets the list anchor
       // below. The manual window.scrollTo that used to live here never fired:
       // the scroll container is the app shell's <main>, not the window.
-    }
-  }, []);
+    },
+    [setPage],
+  );
 
+  /* `isLoading` covers a refresh of something already on screen too, so the dim below keys on it
+     while the *placeholder* keys on having nothing at all. Getting that the wrong way round is how
+     a cache stops being worth having. */
+  const isLoading = read.isLoading;
   // Held back briefly so a warm response does not flash the placeholder, and
   // held on briefly once shown so it cannot appear for a single frame.
-  const showSkeleton = useDeferredLoading(isLoading);
+  const showSkeleton = useDeferredLoading(read.data === undefined && !error);
   const hasContent = images.length > 0;
 
   // Only the *first* load swaps in a placeholder. On a page change the previous
@@ -179,6 +113,10 @@ function ImageList({ onRetry }: { onRetry?: () => void }) {
         currentPage={page}
         hasMore={hasMore}
         onPageChange={handlePageChange}
+        /* Warmed when a pointer or the keyboard rests on a page control, so the commonest
+           navigation in a gallery stops being the one with no head start. Never speculatively —
+           see `Pagination`. */
+        onPrefetchPage={(next) => homeFeed.prefetch({ page: next, sort })}
         disabled={isLoading}
       />
     </div>
@@ -187,66 +125,20 @@ function ImageList({ onRetry }: { onRetry?: () => void }) {
 
 function ForumTab() {
   const router = useRouter();
-  /* Same snapshot treatment as the gallery above — and it matters more here,
-     because the forum pane is also mounted lazily on idle, so without it a
-     switch straight back to 论坛 could land on an empty list twice over. */
-  const snapshot = useState(() => readSnapshot<ForumSnapshot>(FORUM_KEY))[0];
-  const [posts, setPosts] = useState<ForumPost[]>(snapshot?.value.posts ?? []);
-  const [page, setPage] = useState(snapshot?.value.page ?? 1);
-  const [totalPages, setTotalPages] = useState(snapshot?.value.totalPages ?? 1);
-  const [isLoading, setIsLoading] = useState(!snapshot);
-  const [error, setError] = useState<Error | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const served = useRef<string | null>(
-    snapshot && !snapshot.stale ? `${snapshot.value.page}:0` : null,
-  );
+  const [page, setPage] = useScreenState('home:forum:page', 1);
+  const read = useResource(forumPosts, { page }, { keepPrevious: true });
+  const posts = read.data?.posts ?? [];
+  const totalPages = read.data?.totalPages ?? 1;
+  const isLoading = read.data === undefined && read.error === undefined;
+  const error = read.error as Error | null;
 
-  useEffect(() => {
-    const signature = `${page}:${retryCount}`;
-    if (served.current === signature) return;
-    let isMounted = true;
-    // `served` is recorded on delivery, not dispatch — see the gallery's note.
-    api
-      .getForumPosts(page)
-      .then((res) => {
-        if (isMounted) {
-          served.current = signature;
-          setPosts(res.posts);
-          setTotalPages(res.total_pages);
-          setIsLoading(false);
-          writeSnapshot<ForumSnapshot>(FORUM_KEY, {
-            page,
-            posts: res.posts,
-            totalPages: res.total_pages,
-          });
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(err);
-          setIsLoading(false);
-        }
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [page, retryCount]);
-
-  const handleRetry = useCallback(() => {
-    setIsLoading(true);
-    setError(null);
-    setRetryCount((c) => c + 1);
-  }, []);
+  const handleRetry = useCallback(() => read.refresh(), [read]);
 
   const handlePageChange = useCallback(
     (newPage: number) => {
-      if (newPage >= 1 && newPage <= totalPages) {
-        setIsLoading(true);
-        setError(null);
-        setPage(newPage);
-      }
+      if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
     },
-    [totalPages],
+    [totalPages, setPage],
   );
 
   const handlePostClick = useCallback(
@@ -316,16 +208,7 @@ function HomeContent() {
   const handleBannerReload = useCallback(() => setBannerReloadKey((k) => k + 1), []);
   useEffect(() => {
     if (forumMounted) return;
-    const w = window as typeof window & {
-      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
-      cancelIdleCallback?: (h: number) => void;
-    };
-    if (!w.requestIdleCallback) {
-      const t = window.setTimeout(() => setForumMounted(true), 1200);
-      return () => window.clearTimeout(t);
-    }
-    const h = w.requestIdleCallback(() => setForumMounted(true), { timeout: 4000 });
-    return () => w.cancelIdleCallback?.(h);
+    return runWhenIdle(() => setForumMounted(true));
   }, [forumMounted]);
 
   return (

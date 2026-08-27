@@ -5,34 +5,48 @@ import { api, type Announcement } from '@/lib/api';
 import Modal from './Modal';
 import Button from './Button';
 import SectionHeading from '@/components/SectionHeading';
+import { LS_KEYS } from '@/lib/constants';
+import { runWhenIdle } from '@/lib/utils';
 
 export default function AnnouncementModal() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
-  useEffect(() => {
-    const fetchAnnouncement = async () => {
-      try {
-        const data = await api.getAnnouncement();
-
-        if (data.success && data.announcement) {
-          const savedVersion = localStorage.getItem('read_announcement_version');
-          if (savedVersion !== data.announcement.version) {
-            setAnnouncement(data.announcement);
-            setIsVisible(true);
+  /* On idle, not on mount.
+   *
+   * This request used to leave with the first burst of every cold load, in front of the feed the
+   * visitor actually came for — measured as one of four shell requests racing the gallery's own,
+   * on every screen in the app including the ones that read nothing. What it decides is whether to
+   * open a dialog over content that has not arrived yet, which is the definition of work that can
+   * wait: an announcement is no less announced 400ms later, and a modal that appears *after* the
+   * page has painted is the better of the two orderings anyway.
+   *
+   * Not gated on the stored version, because the version to compare against is what this request
+   * returns. */
+  useEffect(
+    () =>
+      runWhenIdle(() => {
+        void (async () => {
+          try {
+            const data = await api.getAnnouncement();
+            if (data.success && data.announcement) {
+              const savedVersion = localStorage.getItem(LS_KEYS.readAnnouncementVersion);
+              if (savedVersion !== data.announcement.version) {
+                setAnnouncement(data.announcement);
+                setIsVisible(true);
+              }
+            }
+          } catch (error) {
+            console.error('获取公告失败', error);
           }
-        }
-      } catch (error) {
-        console.error('获取公告失败', error);
-      }
-    };
-
-    fetchAnnouncement();
-  }, []);
+        })();
+      }),
+    [],
+  );
 
   const handleClose = () => {
     if (announcement) {
-      localStorage.setItem('read_announcement_version', announcement.version);
+      localStorage.setItem(LS_KEYS.readAnnouncementVersion, announcement.version);
     }
     setIsVisible(false);
   };

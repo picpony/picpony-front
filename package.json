@@ -9,7 +9,10 @@
     "lint": "eslint",
     "colors": "node scripts/palette.mjs",
     "colors:write": "node scripts/palette.mjs --write",
-    "hero:path": "node scripts/heroPath.mjs"
+    "hero:path": "node scripts/heroPath.mjs",
+    "net:audit": "node scripts/netAudit.mjs",
+    "net:scroll": "node scripts/netAuditScroll.mjs",
+    "net:tabs": "node scripts/netAuditTabHeight.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

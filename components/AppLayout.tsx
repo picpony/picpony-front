@@ -34,9 +34,10 @@ import DevBanner from './DevBanner';
 import SidebarNav from './SidebarNav';
 import { useAuthModal } from './AuthModal';
 import { BackgroundLocationProvider, useBackgroundSearchParams } from './BackgroundLocation';
-import { api } from '@/lib/api';
-import { readJson } from '@/lib/api/client';
+import { bindResourceRefresh, clearAllResources, SKIP, useResource } from '@/lib/resource';
+import { clearScreenState } from '@/lib/screenState';
 import { clearSnapshots } from '@/lib/pageCache';
+import { sessionUser, unreadCounts } from '@/lib/resources';
 import {
   getImageHeroRuntime,
   getImageHeroBackgroundLocation,
@@ -274,9 +275,7 @@ export default function AppLayout({
   // Keep the first client render identical to SSR. Browser-only sources
   // (viewport, localStorage) are applied after mount to avoid hydration mismatch.
   const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-  const [totalUnread, setTotalUnread] = useState(0);
 
   /* The colour scheme is not local state. It is two localStorage keys, a cookie and a
      class on `<html>`, all owned by `lib/appearance`; these two hooks are a view onto
@@ -451,6 +450,10 @@ export default function AppLayout({
     void ensureRoutePolicy();
   }, []);
 
+  /* Coming back to the tab after a while, and coming back online, re-read whatever is on screen —
+     underneath it, with no loading state and nothing removed. See `bindResourceRefresh`. */
+  useEffect(() => bindResourceRefresh(), []);
+
   const cycleThemeMode = () => {
     const next: SchemeSetting =
       schemeSetting === 'light' ? 'dark' : schemeSetting === 'dark' ? 'system' : 'light';
@@ -458,81 +461,85 @@ export default function AppLayout({
   };
 
 
+  /* The stored session, which is the *only* thing that decides whether the shell renders as signed
+     in. It changes when the device's storage changes — a sign-in, a sign-out, /settings saving a
+     field — and those all announce themselves with `user_info_updated`.
+     It starts `null` and is filled after mount, which is not an oversight: `localStorage` does not
+     exist on the server, so seeding it during render would make the first client render disagree
+     with the SSR markup for every signed-in visitor. That is the rule the state block above states
+     for the whole component. */
+  const [storedSession, setStoredSession] = useState<UserInfo | null>(null);
   useEffect(() => {
-    const fetchUnreadCounts = async () => {
-      if (userInfo && userInfo.token) {
-        try {
-          const data = await api.getUnreadCounts(userInfo.token);
-          if (data.success) {
-            setTotalUnread(data.total_unread);
-          }
-        } catch (error) {
-          console.error('Failed to fetch unread counts:', error);
-        }
-      } else {
-        setTotalUnread(0);
-      }
-    };
+    const reread = () => setStoredSession(readUserInfo() as unknown as UserInfo | null);
+    reread();
+    window.addEventListener('user_info_updated', reread);
+    return () => window.removeEventListener('user_info_updated', reread);
+  }, []);
 
-    fetchUnreadCounts();
+  const token = storedSession?.token ?? null;
 
-    window.addEventListener('unread_counts_updated', fetchUnreadCounts);
-    return () => window.removeEventListener('unread_counts_updated', fetchUnreadCounts);
-  }, [userInfo]);
+  /* Two shell reads, both through `lib/resource.ts`, and the point is what they are *not* keyed on.
+     They used to be a pair of effects: one keyed on the pathname, which re-read the session on
+     every navigation, and one keyed on the `userInfo` **object**, which re-ran whenever the first
+     one called `setUserInfo` — twice per run. Measured with `npm run net:audit`, a signed-in cold
+     load sent `get_user` twice and `get_unread_counts` two to four times, and every navigation
+     after it sent them again. That is the dependency-identity cascade `useAuth`'s docstring records
+     `/favorites` hitting a rate limit on, grown back in the one component every screen mounts
+     inside.
+     Keyed on the token string, deduplicated by the resource, and refreshed on their own TTLs: five
+     minutes for a session only its owner can change, one minute for a badge somebody else can. */
+  const session = useResource(sessionUser, token ? { token } : SKIP);
+  const unread = useResource(unreadCounts, token ? { token } : SKIP);
 
+  /* `/messages` marking a tab read moves this badge with no event and no second request: it
+     force-reads the same resource entry, and this component is subscribed to it. */
+  const totalUnread = token ? (unread.data?.total ?? 0) : 0;
+
+  /* Fold the server's answer back into storage.
+   *
+   * Separate from the read because it is a *write*: the merge keeps the four fields the server does
+   * not return (the token and the three Derpibooru identifiers) and hands the rest over. Guarded on
+   * the serialised result so a cache hit on a navigation does not set state with an identical
+   * object — which would re-render the whole shell on every navigation for nothing. */
+  const mergedRef = useRef<string | null>(null);
   useEffect(() => {
-    const updateUserInfo = async () => {
-      const parsedUser = readUserInfo();
-      if (parsedUser) {
-        try {
-          setUserInfo(parsedUser as unknown as UserInfo);
+    const result = session.data;
+    if (!result) return;
+    /* Storage read here rather than taken from `storedSession`, so this effect does not depend on
+       the state it sets. With `storedSession` in the dependency list the guard below is the only
+       thing standing between this and a loop; without it there is nothing to loop through. */
+    const stored = readUserInfo();
+    if (!stored) return;
 
-          if (parsedUser.token) {
-            try {
-              const res = await api.getUser(parsedUser.token);
+    if (result.kind === 'unauthorized') {
+      localStorage.removeItem(LS_KEYS.userInfo);
+      mergedRef.current = null;
+      /* Out of the effect's synchronous body, per `react-hooks/set-state-in-effect`, and the same
+         `queueMicrotask` the drawer's own restore uses a few effects above. Still before paint. */
+      queueMicrotask(() => setStoredSession(null));
+      return;
+    }
+    /* `unreadable` means a 200 with an empty body — a dropped PHP session or a proxy hiccup. The
+       stored user is left exactly as it is, which is what this branch has always done. */
+    if (result.kind !== 'ok') return;
 
-              if (res.status === 401) {
-                localStorage.removeItem('user_info');
-                setUserInfo(null);
-                return;
-              }
-
-              /* `readJson`, not `res.json()`. This endpoint answers 200 with an
-                 empty body when the PHP session is gone or the proxy hiccups,
-                 and `res.json()` then throws `Unexpected end of JSON input` out
-                 of an effect that runs on every navigation. The branch below
-                 already treats a missing `success` as "leave the stored user
-                 alone", which is the right answer for an unreadable body too. */
-              const data = await readJson(res);
-              if (data.success && data.user) {
-                const updatedUser = {
-                  ...parsedUser,
-                  ...data.user,
-                  token: parsedUser.token,
-                  api_key: parsedUser.api_key,
-                  derpi_user_id: parsedUser.derpi_user_id,
-                  derpi_username: parsedUser.derpi_username,
-                };
-                localStorage.setItem('user_info', JSON.stringify(updatedUser));
-                setUserInfo(updatedUser);
-              }
-            } catch (err) {
-              console.error('Failed to fetch latest user info', err);
-            }
-          }
-        } catch (e) {
-          console.error('Failed to parse user info', e);
-        }
-      } else {
-        setUserInfo(null);
-      }
+    /* The four fields the server does not return, kept from storage. */
+    const merged = {
+      ...stored,
+      ...result.user,
+      token: stored.token,
+      api_key: stored.api_key,
+      derpi_user_id: stored.derpi_user_id,
+      derpi_username: stored.derpi_username,
     };
+    const serialised = JSON.stringify(merged);
+    if (mergedRef.current === serialised) return;
+    mergedRef.current = serialised;
+    localStorage.setItem(LS_KEYS.userInfo, serialised);
+    setStoredSession(merged as unknown as UserInfo);
+  }, [session.data]);
 
-    updateUserInfo();
-
-    window.addEventListener('user_info_updated', updateUserInfo);
-    return () => window.removeEventListener('user_info_updated', updateUserInfo);
-  }, [backgroundPathname]);
+  const userInfo = storedSession;
 
   // Below `md` the drawer overlays the content; at and above it is docked, and
   // the swipe gesture and auto-collapse-on-navigate both switch off.
@@ -583,11 +590,17 @@ export default function AppLayout({
   };
 
   const handleLogoutConfirm = () => {
-    localStorage.removeItem('user_info');
-    // Signing out does not reload the document, so the render snapshots have to
-    // be dropped by hand or the next account inherits this one's inbox.
+    localStorage.removeItem(LS_KEYS.userInfo);
+    /* Signing out does not reload the document, so every in-memory store has to be dropped by hand
+       or the next account inherits this one's inbox. Three of them, because they hold three
+       different things: what the server said, which page each screen was on, and — until
+       `/messages` is migrated — that screen's whole render. Dropping `clearSnapshots` when the
+       other two arrived is exactly the privacy hole this call was added to close. */
+    clearAllResources();
+    clearScreenState();
     clearSnapshots();
-    setUserInfo(null);
+    mergedRef.current = null;
+    setStoredSession(null);
     setIsLogoutDialogOpen(false);
     router.push('/', { scroll: false });
   };

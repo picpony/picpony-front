@@ -2012,16 +2012,22 @@ function applyTabScroll(
      threshold is the app bar's own 64dp, which is the smallest piece of chrome this design
      system treats as a region. */
   const mayRestore = tabPanelTop(panel, scroller) <= TAB_SHARED_CHROME_PX;
-  /* No memory for the destination means stay exactly where you are. This used
-     to scroll to put the tab bar at the top of the scrollport, which is fine
-     on the home page — the bar is near the top of the document — and wrong on
-     a profile, where it sits below a tall header card, so a first visit to a
-     tab jumped *down* to find it. Worse, a short destination pane makes
-     `finalMax` small, so that downward target clamped straight to the
-     bottom of the page: switching to 上传记录 or 收藏夹 landed at the end of
-     the list. */
+  /* No memory for the destination, and the answer depends on the same thing `mayRestore` does.
+     It used to scroll to put the tab bar at the top of the scrollport, which is fine on the home
+     page — the bar is near the top of the document — and wrong on a profile, where it sits below a
+     tall header card, so a first visit to a tab jumped *down* to find it. Worse, a short
+     destination pane makes `finalMax` small, so that downward target clamped straight to the
+     bottom of the page: switching to 上传记录 or 收藏夹 landed at the end of the list.
+     "Stay where you are" replaced it, and on a screen with shared chrome that is right — the
+     header does not move, so neither should the page. On a screen whose panel *is* the page it is
+     the same bug wearing the other face: leave the gallery at 1500, switch to a forum whose whole
+     content is 1708, and `finalMax` is 1160 — so the carried-over offset clamps to exactly the
+     bottom and the forum opens on its last row. Measured at 1440x900 with the tab bar.
+     A tab that has never been opened starts at its own beginning, which is what a list you have
+     not seen should do, and there is nothing above the panel to lose by going there. */
   const remembered = mayRestore ? recallTabScroll(panel, to) : undefined;
-  const next = Math.min(remembered ?? before, finalMax);
+  const fallback = mayRestore ? 0 : before;
+  const next = Math.min(remembered ?? fallback, finalMax);
   // Scroll anchoring would "correct" a deliberate jump; same guard as runScroll.
   scroller.style.overflowAnchor = 'none';
   scroller.scrollTop = next;
@@ -2057,8 +2063,11 @@ function applyInstantTabScroll(panel: HTMLElement, to: string) {
   const scroller = getAppScroller();
   if (!scroller) return;
   if (tabPanelTop(panel, scroller) > TAB_SHARED_CHROME_PX) return;
-  const remembered = recallTabScroll(panel, to);
-  if (remembered === undefined) return;
+  /* `?? 0`, matching `applyTabScroll`'s fallback: on a panel that is the page, a tab with no
+     remembered offset opens at its own top. Returning early instead left the outgoing tab's offset
+     in place, and the browser then clamped it to the shorter pane's maximum — which lands on the
+     destination's *last* row. The preference asks for less movement, not for the wrong position. */
+  const remembered = recallTabScroll(panel, to) ?? 0;
   const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
   /* No `overflowAnchor` guard, deliberately, and it is not an omission of `applyTabScroll`'s:
      that one suspends anchoring because it writes and then animates for 500ms, with the panes

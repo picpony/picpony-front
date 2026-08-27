@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { api, PonyImage, applyImageLine } from '@/lib/api';
+import { useResource } from '@/lib/resource';
+import { featuredImage } from '@/lib/resources';
 import { MdThumbUp, MdComment, MdPerson } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import Badge from '@/components/Badge';
 import Skeleton from '@/components/Skeleton';
 import { useHeroLink } from '@/lib/useHero';
-import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
 import { ICON } from '@/lib/icons';
 import { readUserInfo } from '@/lib/hooks';
 
@@ -17,8 +17,6 @@ import { readUserInfo } from '@/lib/hooks';
    or a change to `scrim` silently skips these two gradients. */
 const scrim = (alpha: number) =>
   `color-mix(in oklab, var(--md-sys-color-scrim) ${alpha * 100}%, transparent)`;
-
-const FEATURED_KEY = 'home:featured';
 
 /**
  * The banner's placeholder, shared with the home page's Suspense fallback.
@@ -41,69 +39,27 @@ export function FeaturedBannerSkeleton() {
 
 export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }) {
   const heroElementRef = useRef<HTMLDivElement>(null);
-  /* The banner is the first thing on the page, so its skeleton is the one you
-     cannot miss. Seeded from the last load, refreshed underneath — see
-     `lib/pageCache.ts`. */
-  const snapshot = useState(() => readSnapshot<PonyImage>(FEATURED_KEY))[0];
-  const [featured, setFeatured] = useState<PonyImage | null>(snapshot?.value ?? null);
-  const [loading, setLoading] = useState(!snapshot);
-  const [error, setError] = useState(false);
-  /* Whether a render has already been served. Once it has, the banner only
-     re-requests when the parent bumps `reloadKey` — which the home feed's
-     retry does, so clicking 重试 reloads the 近日推荐 banner alongside the
-     信息流. Served is flagged on delivery (not dispatch), the same reason as
-     `app/page.tsx`. */
-  const served = useRef(snapshot && !snapshot.stale ? 'snap' : '');
+  /* The banner is the first thing on the page, so its skeleton is the one you cannot miss. It gets
+     the cached picture in the first frame and is refreshed underneath — which is what the whole
+     `served` / `hasContent` / `snapshot.stale` apparatus here used to hand-roll, and what
+     `lib/resource.ts` now does for every screen. */
+  const apiKey = (readUserInfo()?.api_key as string) || undefined;
+  const read = useResource(featuredImage, { apiKey });
+  const featured = read.data ?? null;
+  const loading = read.data === undefined && read.error === undefined;
+  /* A refresh that fails leaves the picture on screen rather than replacing something correct with
+     an error — the resource keeps the last good value beside the error, so this is just "we have
+     nothing *and* it went wrong". */
+  const error = Boolean(read.error) && read.data === undefined;
+
+  /* The home feed's 重试 reloads the banner alongside the 信息流. It skips the TTL, because the
+     point of pressing 重试 is that you do not believe what is on screen. */
   const lastReload = useRef(reloadKey);
-  /* True the moment there is something to put on screen, so a reload of an
-     already-loaded banner refreshes underneath without flashing its skeleton,
-     while a reload of an errored (blank) banner shows the placeholder again. */
-  const hasContent = useRef<boolean>(Boolean(snapshot?.value));
-
   useEffect(() => {
-    /* An explicit reload is the difference from the other served paths: the
-       guard below normally drinks the snapshot result to keep a remount from
-       re-requesting, but a retry must break through it. */
-    const reloadRequested = lastReload.current !== reloadKey;
+    if (lastReload.current === reloadKey) return;
     lastReload.current = reloadKey;
-    if (served.current && !reloadRequested) return;
-    let isMounted = true;
-    if (reloadRequested && !hasContent.current) {
-      setLoading(true);
-      setError(false);
-    }
-    // Flagged on delivery, not on dispatch — see `app/page.tsx` for why.
-    const getApiKey = (): string | undefined =>
-      (readUserInfo()?.api_key as string) || undefined;
-
-    api
-      .getFeatured(getApiKey())
-      .then((data) => {
-        if (isMounted) {
-          served.current = 'snap';
-          if (data && data.image) {
-            hasContent.current = true;
-            const img = applyImageLine(data.image);
-            setFeatured(img);
-            writeSnapshot<PonyImage>(FEATURED_KEY, img);
-          }
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          served.current = 'snap';
-          // A refresh that fails leaves the snapshot on screen rather than
-          // replacing something correct with an error.
-          if (!hasContent.current) setError(true);
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [reloadKey, snapshot]);
+    read.refresh();
+  }, [reloadKey, read]);
 
   const fullUrl = featured?.representations?.full || featured?.view_url || '';
   const imgFormat = (

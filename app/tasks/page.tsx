@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { api } from '@/lib/api';
+import { SKIP, useResource } from '@/lib/resource';
+import { useScreenState } from '@/lib/screenState';
+import { tasks } from '@/lib/resources';
 import { showToast } from '@/components/Toast';
 import Skeleton from '@/components/Skeleton';
 import EmptyState from '@/components/EmptyState';
@@ -14,7 +17,7 @@ import UserBadge from '@/components/UserBadge';
 import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
 import { ICON } from '@/lib/icons';
-import { readUserInfo } from '@/lib/hooks';
+import { readToken, readUserInfo } from '@/lib/hooks';
 
 interface TaskData {
   success: boolean;
@@ -59,40 +62,25 @@ const tabs: { id: TaskTab; label: string; subtitle: string }[] = [
 ];
 
 export default function TasksPage() {
-  const [data, setData] = useState<TaskData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TaskTab>('novice');
+  const token = readToken();
+  const [activeTab, setActiveTab] = useScreenState<TaskTab>('tasks:tab', 'novice');
   const [claiming, setClaiming] = useState<string | null>(null);
 
-  const loadTasks = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const user = readUserInfo();
-      if (!user) {
-        setError('请先登录');
-        setLoading(false);
-        return;
-      }
-      const res = await api.getTasks(user.token);
-      if (res.success) {
-        setData(res);
-      } else {
-        setError(res.error || '加载失败');
-      }
-    } catch {
-      setError('网络错误，请稍后再试');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const read = useResource(tasks, token ? { token } : SKIP);
+  const data = read.data as TaskData | undefined;
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      void loadTasks();
-    });
-  }, [loadTasks]);
+  /* Nothing to draw only while there is genuinely nothing — a cached screen refreshing underneath
+     has `data` and `isLoading` at once, and drawing the skeleton then is the flash this layer
+     exists to remove. */
+  const loading = Boolean(token) && data === undefined && read.error === undefined;
+  const error = !token
+    ? '请先登录'
+    : read.error
+      ? '网络错误，请稍后再试'
+      : data && !data.success
+        ? '加载失败'
+        : null;
+  const loadTasks = read.refresh;
 
   const handleClaim = async (taskType: string) => {
     setClaiming(taskType);

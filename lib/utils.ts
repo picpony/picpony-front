@@ -180,3 +180,32 @@ export function encodeTrack(track: [number, number, number][]): string {
   }
   return btoa(binary);
 }
+
+/**
+ * Run something once the browser is idle, and hand back a way to cancel it.
+ *
+ * `requestIdleCallback` is what five places in the app already reach for, and each of them wrote
+ * its own fallback for the browsers that lack it — `app/page.tsx` used a 1200ms `setTimeout`,
+ * `Logo.tsx` simply skipped the work, and the two inside `lib/hero` have a budget of their own.
+ * Three different behaviours for "this browser has no idle callback" is one too many, and the
+ * skipping one is the wrong answer: the work still needs doing, just not now.
+ *
+ * `timeoutMs` is the deadline, in both senses — it is `requestIdleCallback`'s own `timeout`, so the
+ * callback runs by then whether or not the browser ever went idle, and it is the delay the
+ * `setTimeout` fallback uses. So the guarantee is the same either way: not before idle if idle
+ * comes first, and never later than this.
+ *
+ * The two calls inside `lib/hero` are deliberately not routed through here. They belong to the
+ * flight's own scheduler, run against a 400ms budget rather than this one, and are interleaved with
+ * `isHeroInteractionQuiet` — reaching for a general helper there would flatten a distinction that
+ * file spends paragraphs on.
+ */
+export function runWhenIdle(task: () => void, timeoutMs = 4000): () => void {
+  if (typeof window === 'undefined') return () => {};
+  if (typeof window.requestIdleCallback === 'function') {
+    const handle = window.requestIdleCallback(task, { timeout: timeoutMs });
+    return () => window.cancelIdleCallback?.(handle);
+  }
+  const handle = window.setTimeout(task, timeoutMs);
+  return () => window.clearTimeout(handle);
+}

@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { MdCollectionsBookmark, MdKey } from 'react-icons/md';
-import { api, PonyImage } from '@/lib/api';
+import { PonyImage } from '@/lib/api';
 import { useAuth, useDeferredLoading } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 import MasonryGrid from '@/components/MasonryGrid';
@@ -15,6 +15,7 @@ import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { useRouter } from 'next/navigation';
 import { applyImageLine, proxyFetch, readJson } from '@/lib/api/client';
+import { faveIds as faveIdsResource, imagesByIds, sessionUser } from '@/lib/resources';
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import PageHeader from '@/components/PageHeader';
 import { ICON } from '@/lib/icons';
@@ -147,12 +148,11 @@ function FavoritesPane({ source }: { source: FaveSource }) {
           return;
         }
 
-        const data = await searchDerpi(
-          idsForPage.map((id) => `id:${id}`).join(' OR '),
-          1,
-          null,
-          signal,
-        );
+        /* Through the shared resource rather than a bare search, so a second visit to this screen
+           costs nothing — measured, this was the one request left on a return, and it is the same
+           `id:X OR id:Y` query `searchImagesByIds` already builds. The favourite order is restored
+           below because the API answers in its own. */
+        const data = await imagesByIds.read({ ids: idsForPage, page: 1, perPage: PAGE_SIZE });
         if (isStale(run)) return;
 
         // The API returns them in its own order; restore the favourite order.
@@ -175,7 +175,7 @@ function FavoritesPane({ source }: { source: FaveSource }) {
         }
       }
     },
-    [searchDerpi, commit, isStale],
+    [commit, isStale],
   );
 
   useEffect(() => {
@@ -198,24 +198,31 @@ function FavoritesPane({ source }: { source: FaveSource }) {
           return;
         }
 
-        const userRes = await api.getUser(userInfo.token);
-        const userData = await readJson(userRes);
+        /* The shared session, not a second `get_user`. The shell already reads it and holds it for
+           five minutes, so this is a cache hit and the Derpibooru key arrives without a request —
+           measured, this screen was sending `get_user` twice on every cold load, and the second one
+           was a whole round in front of the list. */
+        const sessionResult = await sessionUser.read({ token: userInfo.token });
         if (isStale(run)) return;
-        const currentApiKey = userData.success && userData.user ? userData.user.api_key : null;
+        const currentApiKey =
+          sessionResult.kind === 'ok'
+            ? ((sessionResult.user as { api_key?: string }).api_key ?? null)
+            : null;
         setApiKey(currentApiKey);
 
         if (source === 'picpony') {
-          const res = await api.getFaves(userInfo.token);
+          /* Shared with the profile page's favourites tab, so opening one after the other costs
+             one read rather than two. */
+          const ids = await faveIdsResource.read({ token: userInfo.token });
           if (isStale(run)) return;
-          if (!res.success || !res.faves) throw new Error(res.message || '收藏列表读取失败');
-          setFaveIds(res.faves);
-          if (res.faves.length === 0) {
+          setFaveIds(ids);
+          if (ids.length === 0) {
             setImages([]);
             setHasMore(false);
             setIsLoading(false);
             return;
           }
-          await loadImages(res.faves, 1, run, signal);
+          await loadImages(ids, 1, run, signal);
           return;
         }
 

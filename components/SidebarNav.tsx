@@ -1,7 +1,9 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
+import { prefetchRoute } from '@/lib/prefetchRoute';
 import {
   MdHome,
   MdForum,
@@ -86,6 +88,15 @@ function NavItem({
   badge?: number;
   onClick?: () => void;
 }) {
+  /* Only the rows that navigate. The drawer's two `<button>` rows (sign out, sign in) have no
+     destination to warm, and `useIntentPrefetch` is given a null warmer rather than being called
+     conditionally — a hook cannot be. */
+  const intent = useIntentPrefetch(
+    useCallback(() => {
+      if (href) prefetchRoute(href);
+    }, [href]),
+  );
+
   const inner = (
     <>
       {/* A fixed, centred cell rather than a bare span around the glyph. An
@@ -146,6 +157,11 @@ function NavItem({
       scroll={false}
       href={href}
       onClick={onClick}
+      /* Hover, focus and press each start the destination's *data*, not only its code. Next's own
+         `<Link>` prefetch already warms the RSC payload and the chunk, and on this app that buys
+         less than it looks like: every screen here is a client component that begins its reads in
+         its first effect, so a warm chunk still arrives at an empty page. See `prefetchRoute`. */
+      {...intent}
       data-ripple
       aria-current={active ? 'page' : undefined}
       className={className}

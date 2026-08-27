@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from 'react-icons/md';
 import Button from './Button';
 import { scrollAppToTop, scrollAppToElement } from '@/lib/motion';
@@ -18,6 +19,18 @@ interface PaginationProps {
   siblings?: number;
   /** Opt out of the automatic scroll reset (e.g. an inline widget mid-page). */
   scrollToTop?: boolean;
+  /**
+   * Warm a page's data before it is asked for.
+   *
+   * The pager calls this for whichever page a pointer, focus or press is resting on — never
+   * speculatively; see the note on `pageIntent` below. It is a prop rather than something the pager
+   * derives, because only the call site knows which resource a page number means, and the pager
+   * must not grow an opinion about the thirteen different lists it serves.
+   *
+   * Everything it starts goes out at `background` priority, so a guessed page can never take a
+   * slot from the page somebody is waiting for; see `lib/resource.ts`.
+   */
+  onPrefetchPage?: (page: number) => void;
   className?: string;
 }
 
@@ -60,12 +73,53 @@ export default function Pagination({
   disabled,
   siblings = 2,
   scrollToTop = true,
+  onPrefetchPage,
   className = '',
 }: PaginationProps) {
   const rootRef = useRef<HTMLElement>(null);
   const known = typeof totalPages === 'number' && totalPages > 0;
   const canPrev = currentPage > 1;
   const canNext = known ? currentPage < totalPages : Boolean(hasMore);
+
+  /**
+   * Whichever page the pointer or the keyboard is resting on, through the same intent ladder every
+   * link in the app uses — 70ms for a hover, 120ms for focus, immediate on press.
+   *
+   * **On intent only, never on idle**, and that is a decision rather than an omission. Warming the
+   * next page as soon as the current one settles is the obvious move and it was written first: page
+   * turns are the most predictable thing anyone does to a list, so the guess is usually right. But
+   * it is a request for a page that may never be looked at, on every paged screen in the app, and
+   * the rule this whole exercise is held to is that speculation may move a request *earlier* and
+   * may never add one. `npm run net:audit` asserts exactly that, so the idle version failed its own
+   * check.
+   *
+   * What it gives up is small. A hover buys the round trip 70ms before the click, and on a touch
+   * screen — where there is no hover — `onPointerDown` still fires typically 100ms or more before
+   * the click does. The head start survives; the unasked-for request does not.
+   */
+  const warmRef = useRef<((page: number) => void) | undefined>(undefined);
+  useEffect(() => {
+    warmRef.current = onPrefetchPage;
+  }, [onPrefetchPage]);
+  const [intentPage, setIntentPage] = useState<number | null>(null);
+  const intent = useIntentPrefetch(
+    useCallback(() => {
+      if (intentPage !== null) warmRef.current?.(intentPage);
+    }, [intentPage]),
+  );
+  const pageIntent = (page: number) => ({
+    onPointerEnter: () => {
+      setIntentPage(page);
+      intent.onPointerEnter();
+    },
+    onPointerLeave: intent.onPointerLeave,
+    onFocus: () => {
+      setIntentPage(page);
+      intent.onFocus();
+    },
+    onBlur: intent.onBlur,
+    onPointerDown: intent.onPointerDown,
+  });
 
   const go = (page: number) => {
     if (disabled) return;
@@ -149,6 +203,7 @@ export default function Pagination({
 
       <button
         onClick={() => go(currentPage - 1)}
+        {...pageIntent(currentPage - 1)}
         disabled={!canPrev || disabled}
         aria-label="上一页"
         data-ripple
@@ -165,6 +220,7 @@ export default function Pagination({
             <button
               key={page}
               onClick={() => go(page)}
+              {...pageIntent(page)}
               disabled={disabled}
               aria-label={`第 ${page} 页`}
               aria-current={active ? 'page' : undefined}
@@ -202,6 +258,7 @@ export default function Pagination({
 
       <button
         onClick={() => go(currentPage + 1)}
+        {...pageIntent(currentPage + 1)}
         disabled={!canNext || disabled}
         aria-label="下一页"
         data-ripple

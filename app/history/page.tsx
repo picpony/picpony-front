@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { SKIP, useResource } from '@/lib/resource';
+import { useScreenState } from '@/lib/screenState';
+import { browsingHistory } from '@/lib/resources';
 import Link from 'next/link';
 import { MdHistory, MdDelete, MdDeleteSweep, MdImage, MdPerson } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
@@ -17,63 +20,25 @@ import { useAuthModal } from '@/components/AuthModal';
 import PageHeader from '@/components/PageHeader';
 import { ICON } from '@/lib/icons';
 import { formatDateTime } from '@/lib/format';
-import { readUserInfo } from '@/lib/hooks';
-
-interface HistoryItem {
-  id: number;
-  preview_url: string | null;
-  uploader: string | null;
-  last_view_time: string;
-}
-
-interface HistoryResponse {
-  success: boolean;
-  history: HistoryItem[];
-  total_pages: number;
-  current_page: number;
-}
+import { readToken, readUserInfo } from '@/lib/hooks';
 
 export default function HistoryPage() {
   const { openAuth } = useAuthModal();
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [error, setError] = useState<string | null>(null);
+  const token = readToken();
+  /* The page number survives a remount, so leaving page 3 for a picture and coming back lands on
+     page 3 — see `lib/screenState.ts`. */
+  const [page, setPage] = useScreenState('history:page', 1);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
-  const fetchHistory = useCallback(
-    async (targetPage: number) => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const user = readUserInfo();
-        if (!user) {
-          openAuth('login');
-          return;
-        }
-        const data: HistoryResponse = await api.getBrowsingHistory(user.token, targetPage);
-        if (data.success) {
-          setHistory(data.history);
-          setTotalPages(data.total_pages);
-          setPage(targetPage);
-        } else {
-          setError('获取浏览历史失败');
-        }
-      } catch {
-        setError('网络请求失败');
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [openAuth],
-  );
+  const read = useResource(browsingHistory, token ? { token, page } : SKIP, { keepPrevious: true });
+  const history = read.data?.history ?? [];
+  const totalPages = read.data?.totalPages ?? 1;
+  const isLoading = Boolean(token) && read.data === undefined && read.error === undefined;
+  const error = read.error ? ((read.error as Error).message ?? '网络请求失败') : null;
 
   useEffect(() => {
-    queueMicrotask(() => {
-      void fetchHistory(1);
-    });
-  }, [fetchHistory]);
+    if (!token) openAuth('login');
+  }, [token, openAuth]);
 
   const handleClear = async () => {
     setIsClearModalOpen(true);
@@ -88,8 +53,11 @@ export default function HistoryPage() {
       const data = await res.json();
       if (data.success) {
         showToast('浏览历史已清空', 'success');
-        setHistory([]);
-        setTotalPages(1);
+        /* Every page of it, not just the one on screen: clearing empties the list, so any other
+           page still in the cache is now a lie. `invalidate` with no argument drops them all, and
+           the next read of page 1 is a real request. */
+        browsingHistory.invalidate();
+        setPage(1);
       } else {
         showToast(data.error || '清空失败', 'error');
       }
@@ -112,7 +80,14 @@ export default function HistoryPage() {
       const res = await api.deleteBrowsingHistoryItem(user.token, imageId);
       const data = await res.json();
       if (data.success) {
-        setHistory((prev) => prev.filter((item) => item.id !== imageId));
+        /* Written through rather than re-read. The row is gone from the server and the screen
+           should say so in the same frame; a refetch would blank the list and bring back an
+           identical one a round trip later. The write leaves the entry's age alone, so the next
+           revalidation still confirms it — see `resource.write`. */
+        browsingHistory.write({ token: user.token, page }, (previous) => ({
+          history: (previous?.history ?? []).filter((item) => item.id !== imageId),
+          totalPages: previous?.totalPages ?? 1,
+        }));
         showToast('已删除', 'success');
       } else {
         showToast(data.error || '删除失败', 'error');
@@ -170,7 +145,7 @@ export default function HistoryPage() {
           }
         />
         {error ? (
-          <ErrorRetry message={error} onRetry={() => fetchHistory(page)} />
+          <ErrorRetry message={error} onRetry={read.refresh} />
         ) : history.length === 0 ? (
           <EmptyState
             icon={<MdHistory size={ICON.display} />}
@@ -249,7 +224,10 @@ export default function HistoryPage() {
               <Pagination
                 currentPage={page}
                 totalPages={totalPages}
-                onPageChange={fetchHistory}
+                onPageChange={setPage}
+                onPrefetchPage={(next) =>
+                  token && browsingHistory.prefetch({ token, page: next })
+                }
                 className="mt-8"
               />
             )}

@@ -4,6 +4,14 @@
  * A snapshot of what a page had already loaded, kept for the length of the
  * session.
  *
+ * **Superseded. `/messages` is its last consumer; do not adopt it for a new screen.**
+ * What it does is now two things: `lib/resource.ts` holds what the *server said*, keyed by the
+ * arguments of the read and shared between every screen that asks the same question, and
+ * `lib/screenState.ts` holds what a screen *was showing* — its page number, its selected tab.
+ * The note below about the page number is exactly right and is the reason the split had to happen:
+ * conflating the two meant a component could only use this by lifting its whole render into one
+ * object, which is why three adopted it and eleven did not.
+ *
  * Navigating away unmounts a page — `[data-page-content]` is keyed on the
  * pathname — so coming back re-ran every `useEffect`, which meant an empty list,
  * a skeleton, a request, and a layout that jumped when the data landed. On the
