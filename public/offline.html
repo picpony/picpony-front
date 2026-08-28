@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>离线 · PicPony</title>
+    <!--
+      Plain HTML with no script, and that is the whole point rather than a simplification.
+
+      This was an `app/offline/page.tsx` first, and it did not work: the worker serves the cached
+      response at the URL the user asked for, so Next hydrated a document built for `/offline`
+      against `location.pathname === '/tasks'`, decided the route was `/tasks`, and re-rendered it
+      — an app shell full of "加载失败" instead of an explanation. Measured exactly that. A fallback
+      served under a foreign URL cannot be a routed page.
+
+      So: no framework, no hydration, no fonts, no requests. It has to render from a cache entry
+      written days ago on a build that no longer exists.
+
+      The colours are the **default** palette's `surface` / `on-surface` / `on-surface-variant`,
+      spelled out because there is no stylesheet here to read a token from. That is a knowing
+      divergence from "only `--md-sys-color-*` tokens": this document is outside the design
+      system's reach by construction. Keep them in step with `app/globals.css` if the default
+      palette moves — nothing automated checks it, because nothing can.
+    -->
+    <style>
+      :root {
+        color-scheme: light dark;
+        --surface: #fff8f8;
+        --on-surface: #22191b;
+        --on-surface-variant: #524345;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface: #191114;
+          --on-surface: #f0dee0;
+          --on-surface-variant: #d6c2c4;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--surface);
+        color: var(--on-surface);
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          'Noto Sans SC',
+          sans-serif;
+        text-align: center;
+      }
+      main {
+        max-width: 22rem;
+      }
+      svg {
+        display: block;
+        margin: 0 auto 24px;
+        color: var(--on-surface-variant);
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        line-height: 1.4;
+        font-weight: 400;
+      }
+      p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--on-surface-variant);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Material Symbols' wifi_off, inlined: an external icon font is a request. -->
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path
+          d="M21.9 8.9 20.5 7.5C18.2 5.6 15.2 4.5 12 4.5c-.9 0-1.8.1-2.6.2l2.3 2.3c2.4.1 4.7 1 6.5 2.6l1.2-1.2ZM2.1 3.5.7 4.9l2.9 2.9c-.6.4-1.2.8-1.7 1.3l1.4 1.4c.6-.5 1.2-1 1.9-1.4l2.2 2.2c-.8.4-1.6.9-2.2 1.6l1.4 1.4c.8-.8 1.8-1.4 2.9-1.7l2.3 2.3c-1 .1-1.9.6-2.6 1.3l3.8 3.8 3.5-3.5 4.1 4.1 1.4-1.4L2.1 3.5Z"
+        />
+      </svg>
+      <h1>当前处于离线状态</h1>
+      <p>网络恢复后刷新页面即可继续浏览。</p>
+    </main>
+  </body>
+</html>

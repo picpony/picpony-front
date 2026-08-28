@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { entranceMotion, motionTier } from '@/lib/appearance';
+import { isAppPainted } from '@/lib/splash';
 
 interface LogoProps {
   className?: string;
@@ -70,6 +71,16 @@ const INTRO_SPEED = 1.65;
 export const INTRO_DURATION_MS = Math.round((140 / 60 / INTRO_SPEED) * 1000);
 /** If the chunk is slower than this, the splash leaves without it. */
 export const INTRO_CHUNK_BUDGET_MS = 600;
+
+/**
+ * How long to wait before deciding this cold start is slow enough to be worth animating.
+ *
+ * Two frames at 60Hz plus a little slack. Short enough that a genuinely slow start loses
+ * almost nothing off the front of the signature, long enough that a warm start — where the
+ * shell paints on the frame after its first commit — has always reported in by the time this
+ * fires, so the 60KB player is never requested at all. See the intro effect below.
+ */
+const INTRO_PROBE_MS = 40;
 
 /**
  * The wordmark.
@@ -150,39 +161,60 @@ export default function Logo({
        first entrance, and the two have to answer the question the same way or the overlay
        waits for a draw that never starts. */
     if (!intro || !entranceMotion() || motionTier() !== 'standard') return;
-    /* The splash cannot warm on idle — it is the first thing on the screen and
-       the chunk is 60KB. So it is requested immediately and *not* waited on:
-       the masked base is server-rendered and already visible, so a slow network
-       costs the animation, never the mark. Past the budget the splash gives up
-       and lets the overlay leave on schedule rather than holding a cold start
-       open for a decoration. */
+    /* The chunk is only requested if this is actually a slow start.
+     *
+     * It used to be requested immediately, on the reasoning that the splash is the first
+     * thing on screen and cannot afford to warm on idle. That was right while the overlay
+     * dismissed on a timer — it was going to be there for ~1.8s regardless, so the animation
+     * had time to arrive and play. It is wrong now that the overlay leaves as soon as the app
+     * paints (`lib/splash.ts`): on a warm load the mark is gone within a couple of frames, so
+     * requesting the player meant downloading 60KB plus a 27KB artwork that nobody would ever
+     * see — and downloading it in the one window where it competes with the gallery's own
+     * images for bandwidth.
+     *
+     * So: wait one short beat, and only load if the app still has nothing on screen. A slow
+     * start still gets the full signature, over a wait that is genuinely happening. A fast one
+     * never pays for it at all.
+     */
     let cancelled = false;
-    /* Past the budget the splash gives up: the overlay is told to carry on
-       without the animation rather than holding a cold start open for a
-       decoration. */
-    const deadline = window.setTimeout(() => {
-      cancelled = true;
-      settledRef.current?.();
-    }, INTRO_CHUNK_BUDGET_MS);
-    void ensure().then((animation) => {
-      window.clearTimeout(deadline);
-      if (cancelled || !animation) return;
-      hostRef.current?.setAttribute('data-shown', '');
-      /* The base steps aside once the mark is written — see `.logo-intro` in
-         globals.css for why it has to — and the overlay leaves on the same
-         signal. Both key off the player's own completion rather than a second
-         copy of the duration: the chunk takes a few hundred ms to arrive, so a
-         clock started at mount runs ahead of the animation and was dismissing
-         the splash while the mark was still drawing. */
-      animation.addEventListener('complete', () => {
-        hostRef.current?.setAttribute('data-settled', '');
+    let deadline = 0;
+    const probe = window.setTimeout(() => {
+      if (cancelled) return;
+      if (isAppPainted()) {
+        /* Nothing to cover. Report settled so the overlay does not sit on its ceiling
+           waiting for a draw that is deliberately never going to start. */
         settledRef.current?.();
+        return;
+      }
+      /* Past the budget the splash gives up: the overlay is told to carry on
+         without the animation rather than holding a cold start open for a
+         decoration. */
+      deadline = window.setTimeout(() => {
+        cancelled = true;
+        settledRef.current?.();
+      }, INTRO_CHUNK_BUDGET_MS);
+      void ensure().then((animation) => {
+        window.clearTimeout(deadline);
+        if (cancelled || !animation) return;
+        hostRef.current?.setAttribute('data-shown', '');
+        /* The base steps aside once the mark is written — see `.logo-intro` in
+           globals.css for why it has to — and the overlay leaves on the same
+           signal. Both key off the player's own completion rather than a second
+           copy of the duration: the chunk takes a few hundred ms to arrive, so a
+           clock started at mount runs ahead of the animation and was dismissing
+           the splash while the mark was still drawing. */
+        animation.addEventListener('complete', () => {
+          hostRef.current?.setAttribute('data-settled', '');
+          settledRef.current?.();
+        });
+        animation.setSpeed(INTRO_SPEED);
+        animation.goToAndPlay(0, true);
       });
-      animation.setSpeed(INTRO_SPEED);
-      animation.goToAndPlay(0, true);
-    });
+    }, INTRO_PROBE_MS);
+
     return () => {
       cancelled = true;
+      window.clearTimeout(probe);
       window.clearTimeout(deadline);
       animationRef.current?.destroy();
       animationRef.current = null;

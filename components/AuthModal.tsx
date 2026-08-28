@@ -1,11 +1,29 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import { createContext, useCallback, useContext, useState, useRef } from 'react';
 import { MdClose, MdEmail, MdLock, MdSend, MdArrowBack } from 'react-icons/md';
 import IconButton from './IconButton';
 import Modal from './Modal';
 import CodeInput from './CodeInput';
-import CaptchaModal from './CaptchaModal';
+/**
+ * The captcha is behind `dynamic()` and behind a "has ever opened" flag, and the second half is
+ * what makes the first one work.
+ *
+ * `CaptchaModal` renders a `SliderCaptcha`, which was this file's only path to `lib/motion` — and
+ * that module registers GSAP and five plugins at module scope. `AuthModal` is mounted by six
+ * screens that want nothing else from GSAP (/upload, /history, /favorites, /block-groups,
+ * /forum/create and the image detail), so a slider nobody has asked for was putting 43 KB of
+ * animation engine on each of them.
+ *
+ * `dynamic()` alone would not have helped: the modal was rendered unconditionally with
+ * `isOpen={false}`, so its chunk would have been fetched the moment the sign-in dialog mounted.
+ * `captchaMounted` is a one-way latch rather than `showCaptchaModal` itself, so the chunk arrives
+ * on the first challenge and the element then *stays* mounted — which is what `Modal`'s exit
+ * animation needs, and what conditional rendering on `isOpen` would have taken away.
+ */
+const CaptchaModal = dynamic(() => import('./CaptchaModal'), { ssr: false });
 import Button from './Button';
 import { Input } from './Input';
 import LottieIcon from './LottieIcon';
@@ -183,7 +201,12 @@ function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
 
+  /* One-way: once the challenge has been shown the element stays mounted, so its exit animation
+     has something to run on. See the note on the import. */
+  const [captchaMounted, setCaptchaMounted] = useState(false);
+
   const setCaptcha = (open: boolean) => {
+    if (open) setCaptchaMounted(true);
     setShowCaptchaModal(open);
     onCaptchaChange(open);
   };
@@ -270,11 +293,13 @@ function LoginForm({
           required
           placeholder="请输入密码"
         />
-        <CaptchaModal
-          isOpen={showCaptchaModal}
-          onClose={() => setCaptcha(false)}
-          onVerify={onCaptchaVerify}
-        />
+        {captchaMounted && (
+          <CaptchaModal
+            isOpen={showCaptchaModal}
+            onClose={() => setCaptcha(false)}
+            onVerify={onCaptchaVerify}
+          />
+        )}
         <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading}>
           登录
         </Button>
@@ -330,7 +355,12 @@ function RegisterForm({
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
+  /* One-way: once the challenge has been shown the element stays mounted, so its exit animation
+     has something to run on. See the note on the import. */
+  const [captchaMounted, setCaptchaMounted] = useState(false);
+
   const setCaptcha = (open: boolean) => {
+    if (open) setCaptchaMounted(true);
     setShowCaptchaModal(open);
     onCaptchaChange(open);
   };
@@ -533,11 +563,13 @@ function RegisterForm({
           maxLength={20}
           helper="长度 8-20 位，必须包含字母和数字或特殊字符"
         />
-        <CaptchaModal
-          isOpen={showCaptchaModal}
-          onClose={() => setCaptcha(false)}
-          onVerify={onCaptchaVerify}
-        />
+        {captchaMounted && (
+          <CaptchaModal
+            isOpen={showCaptchaModal}
+            onClose={() => setCaptcha(false)}
+            onVerify={onCaptchaVerify}
+          />
+        )}
         <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading}>
           注册
         </Button>

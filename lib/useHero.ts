@@ -19,6 +19,7 @@ import {
   prepareImageHero,
   requestImageHeroOpen,
   warmImageHero,
+  warmImageHeroSource,
   warmImageHeroFrame,
   type ImageHeroSnapshot,
 } from '@/lib/hero';
@@ -74,6 +75,12 @@ export function useHeroLink<T extends HTMLElement>({
       if (!image) return;
       router.prefetch(href);
       void warmImageHero(image.id, priority);
+      /* The detail-sized bytes, on the same ladder. The flight paints the gallery thumbnail, and
+         in production that is a ~300px variant filling the media well. This warms the detail's own
+         picture — the exact bytes the final layer will request, now that it is served untouched —
+         and `prepareImageHero` uses it only once it has actually decoded, so a warm that has not
+         landed changes nothing. */
+      warmImageHeroSource(image);
       cancelFrameWarmRef.current?.();
       /* `immediate` on the press path. Hover warming cannot reach a touch screen, so
          without it the tapped card's capture always lands synchronously in the click

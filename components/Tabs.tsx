@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, type ReactNode } from 'react';
-import { useSlidingIndicator } from '@/lib/motion';
+import { useSlidingIndicator } from '@/lib/slidingIndicator';
 import { cn } from '@/lib/utils';
 import { CountBadge } from './Badge';
 import { tabId, tabPanelId } from './TabPanes';

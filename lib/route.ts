@@ -25,6 +25,7 @@
  */
 
 import {
+  COOKIE_KEYS,
   IMAGE_CDN_BASE,
   IMAGE_PROBE_URL,
   IMAGE_WORKER_BASE,
@@ -145,8 +146,26 @@ const imageState = {
 let version = 0;
 const listeners = new Set<() => void>();
 
+/**
+ * Mirror the resolved image line into a cookie so the server can render the same `<img src>` the
+ * client is about to want.
+ *
+ * Written on every change rather than once, because the line moves during a session: the policy
+ * lands, a line degrades, the user flips a switch. It is only ever read at SSR, so a value one
+ * navigation stale costs a single corrected `src`, not a wrong one.
+ */
+function mirrorImageLineCookie() {
+  if (typeof document === 'undefined') return;
+  const line = resolveImageLine();
+  document.cookie = `${COOKIE_KEYS.imageLine}=${line};path=/;max-age=${IMAGE_LINE_COOKIE_MAX_AGE};samesite=lax`;
+}
+
+/** A year, matching the appearance cookies. */
+const IMAGE_LINE_COOKIE_MAX_AGE = 31_536_000;
+
 function emit() {
   version += 1;
+  mirrorImageLineCookie();
   for (const fn of listeners) fn();
 }
 

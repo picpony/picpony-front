@@ -141,6 +141,17 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
               src={displayImageUrl}
               alt={featured.name || `近日推荐 #${featured.id}`}
               eager
+              /* This is the LCP element on the front page, and `eager` alone does not say
+                 so. `eager` only removes the lazy-loading gate — the request still waits
+                 for the layout pass that discovers this node. `preload` emits a
+                 `<link rel="preload">` in the document head, so the fetch starts while the
+                 HTML is still being parsed.
+
+                 `preload`, not `priority`: Next 16 deprecated `priority` in favour of it
+                 (image.md's v16.0.0 changelog). They do the same thing; only the name that
+                 is not going away is used here. `FadeInImage` spreads `{...props}` straight
+                 into `next/image`, so no prop needs adding to the wrapper. */
+              preload
               width={featured.width || 0}
               height={featured.height || 0}
               quality={88}

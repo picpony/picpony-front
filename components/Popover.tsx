@@ -344,16 +344,34 @@ export default function Popover({
     };
   }, [open, rendering, placement.up, anchorRef, animateChildren]);
 
-  // Reposition against scroll and resize rather than trapping the page. A
-  // popover is not modal: the page behind it stays live.
+  /* Reposition against scroll and resize rather than trapping the page. A
+     popover is not modal: the page behind it stays live.
+
+     Passive and rAF-coalesced, which it was not. `measure` reads
+     `getBoundingClientRect`, so a non-passive listener on the capture phase meant
+     every scroll event in the document — one per frame at best, several per frame
+     during a fling — waited on a layout read before the compositor could scroll.
+     It was the one unthrottled layout-reading scroll listener left in the app;
+     everything in `lib/hero/` and `lib/scrollMemory.ts` already does this.
+
+     One frame is requested at most: `frame` guards re-entry and the cleanup
+     cancels a pending one, so a burst of events collapses to a single measure. */
   useEffect(() => {
     if (!open) return;
-    const onScroll = () => measure();
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onScroll);
+    let frame = 0;
+    const onReflow = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        measure();
+      });
+    };
+    window.addEventListener('scroll', onReflow, { capture: true, passive: true });
+    window.addEventListener('resize', onReflow, { passive: true });
     return () => {
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onReflow, true);
+      window.removeEventListener('resize', onReflow);
     };
   }, [open, measure]);
 

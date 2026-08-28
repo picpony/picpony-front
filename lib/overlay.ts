@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
-import { getAppScroller } from '@/lib/motion';
+import { getAppScroller } from '@/lib/appScroller';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 
 /* ---------------------------------------------------------------------------

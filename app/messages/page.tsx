@@ -1,5 +1,7 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import { Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, Announcement, Notification } from '@/lib/api';
@@ -37,7 +39,18 @@ import Badge, { CountBadge } from '@/components/Badge';
 import ChatBubble, { ChatRun, markRuns } from '@/components/ChatBubble';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import Sheet from '@/components/Sheet';
+/**
+ * The emoji sheet is the phone-only half of this picker, and it was this screen's only path to
+ * `lib/motion` — which registers GSAP and five plugins at module scope. It is already gated on
+ * `!isWide`, so a desktop session never *renders* it; a static import made it load the engine
+ * anyway.
+ *
+ * `dynamic()` plus a one-way latch, the same pair `AuthModal` uses for its captcha: the chunk
+ * arrives on the first tap of 表情 and the element then stays mounted, which is what `Sheet`'s
+ * exit animation needs. `Sheet` cannot take a no-animation fallback the way the other lazy motion
+ * does — it drives its own open position through GSAP, so without it there is no sheet at all.
+ */
+const Sheet = dynamic(() => import('@/components/Sheet'), { ssr: false });
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
 import { readToken, readUserInfo, useEscapeBack, useMediaQuery } from '@/lib/hooks';
@@ -341,6 +354,9 @@ export default function MessagesPage() {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  /* One-way: once the sheet has been opened it stays mounted, so its exit animation has
+     something to run on. See the note on the import. */
+  const [emojiSheetMounted, setEmojiSheetMounted] = useState(false);
   const [emojiList, setEmojiList] = useState<string[]>([]);
   const [interactionNotifications, setInteractionNotifications] = useState<Notification[]>(
     snapshot?.value.interactions ?? [],
@@ -492,7 +508,12 @@ export default function MessagesPage() {
      out to the contact list first, so both controls agree. */
   useEscapeBack(handleBack, !showEmojiPicker);
 
-  const toggleEmojiPicker = () => setShowEmojiPicker((open) => !open);
+  const toggleEmojiPicker = () =>
+    setShowEmojiPicker((open) => {
+      /* Latched on the way *open*, so the chunk is requested by the gesture that needs it. */
+      if (!open) setEmojiSheetMounted(true);
+      return !open;
+    });
 
   /* `silent` on every loader, not just `fetchContacts`: the refresh that happens
      on arrival with a snapshot already showing must not blank the list back to
@@ -1614,7 +1635,7 @@ export default function MessagesPage() {
                 button near the bottom edge, and it overflowed on the narrowest
                 devices — `max-w-[calc(100vw-2rem)]` was the tell. A sheet is
                 M3's answer and puts the grid under the thumb. */}
-            {!isWide && (
+            {!isWide && emojiSheetMounted && (
               <Sheet
                 isOpen={showEmojiPicker}
                 onClose={handleCloseEmojiPicker}

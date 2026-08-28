@@ -123,6 +123,8 @@ export default function ImageSearchModal({
               src={selectedImage}
               alt="已选择的图片"
               fill
+              /* The default `Modal` is `max-w-xl` (576px) less its own padding. */
+              sizes="(min-width: 640px) 544px, 100vw"
               className="object-contain rounded-md"
             />
             <div className="bg-media-plate absolute inset-0 flex items-center justify-center rounded-md opacity-0 transition-opacity duration-composite ease-[var(--ease-standard)] hover:opacity-100">

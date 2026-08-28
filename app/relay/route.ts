@@ -27,6 +27,9 @@ import { PICPONY_API_ORIGIN, PICPONY_RELAY_UPSTREAM } from '@/lib/constants';
 const ALLOWED_HOSTS = new Set(['derpibooru.org', 'trixiebooru.org']);
 /** And only its API. */
 const ALLOWED_PATH = '/api/';
+/* Long enough for a slow upstream on a bad link, short enough that a wedged one cannot hold a
+   Node connection for the platform's whole socket lifetime. Matches the api.php handler. */
+const RELAY_TIMEOUT_MS = 30_000;
 /** `xp_user` is the relay's per-user accounting label. Bounded, because it is unauthenticated. */
 const XP_USER_MAX = 64;
 const XP_USER_OK = /^[\w.-]+$/;
@@ -86,6 +89,12 @@ async function relay(request: NextRequest): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(upstream, {
+      /* Bounded, for the reason `app/api.php/[[...path]]/route.ts` states about itself — and
+         this route needs it more, not less. `picpony_api` is the *default* line, a forced or
+         defaulted policy has no failover, and `proxyFetch` retries it three times in place, so
+         a wedged `cdn.picpony.top` holds three Node connections per client request for the
+         platform's socket lifetime with nothing bounding them. */
+      signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
       method: request.method,
       headers: {
         /* The allowlist the relay checks. Also the reason this handler exists. */

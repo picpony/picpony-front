@@ -170,7 +170,16 @@ export default function HistoryPage() {
                     <div className="size-14 rounded-sm overflow-hidden bg-surface-container-high shrink-0">
                       {' '}
                       {item.preview_url ? (
-                        <FadeInImage src={item.preview_url} alt="" fill className="object-cover" />
+                        <FadeInImage
+                          src={item.preview_url}
+                          alt=""
+                          fill
+                          /* The box is `size-14`. Without this, `fill` resolves to `100vw`,
+                             so every row of this list was downloading a full-viewport-width
+                             variant to paint a 56px thumbnail. */
+                          sizes="56px"
+                          className="object-cover"
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-outline">
                           

@@ -4,7 +4,7 @@ import { useRef } from 'react';
 
 import CheckGlyph from '@/components/CheckGlyph';
 import { PALETTES, usePalette, useScheme, type PaletteId } from '@/lib/appearance';
-import { changePalette } from '@/lib/motion';
+import { changePalette } from '@/lib/motionLazy';
 import { cn } from '@/lib/utils';
 
 /**

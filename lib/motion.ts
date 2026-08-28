@@ -1,4 +1,16 @@
 'use client';
+/* `'use no memo'`, for the first release with `reactCompiler` on.
+
+   This file hands `useGSAP` hand-tuned `dependencies` arrays, and that array is a *runtime*
+   argument the compiler does not model — while it does memoise the values that go into it. How
+   often those identities change is how often `@gsap/react` disposes its context, and getting that
+   wrong is the "a second Observer accumulates holding a stale closure" bug this repo has already
+   shipped once (see `useDrawerSwipe`). Two of the call sites here also omit `revertOnUpdate` on
+   purpose, so the deferred-cleanup path is exactly the one in question.
+
+   Lift it one file at a time, with `npm run net:tabs` and `npm run hero:path` as the guardrails.
+   A compiler bailout is information, not noise: it says this file was not optimised. */
+'use no memo';
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import gsap from 'gsap';
@@ -7,8 +19,6 @@ import { CustomEase } from 'gsap/CustomEase';
 import { Flip } from 'gsap/Flip';
 import { Observer } from 'gsap/Observer';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { BREAKPOINTS } from '@/lib/constants';
 import {
   commitPalette,
   commitScheme,
@@ -23,9 +33,21 @@ import {
   type PaletteId,
   type SchemeSetting,
 } from '@/lib/appearance';
+import { getAppScroller, heroOwnsScreen, setHeroBusyCheck } from '@/lib/appScroller';
+import { DURATION, EASE } from '@/lib/motionTokens';
 import { SPRINGS, SPRING_DURATION, springEase, type SpringName } from '@/lib/spring';
+import { SPRING_EFFECTS_FOR } from '@/lib/springTiming';
+import { beginPageTransit, notifyThemeWipeStart, setThemeWipeGuard } from '@/lib/pageTransit';
+import { setTabIntent, tabIntent } from '@/lib/tabIntent';
+import {
+  applyInstantTabScroll,
+  recallTabScroll,
+  rememberTabScroll,
+  tabPanelTop,
+  TAB_SHARED_CHROME_PX,
+} from '@/lib/tabScroll';
 
-gsap.registerPlugin(useGSAP, CustomEase, Flip, Observer, ScrollToPlugin, ScrollTrigger);
+gsap.registerPlugin(useGSAP, CustomEase, Flip, Observer, ScrollToPlugin);
 
 /* One line reaches every GSAP tween and delay in the app.
  *
@@ -90,13 +112,10 @@ export const eases = {
   symmetric: CustomEase.create('symmetric', '0.4, 0, 0.6, 1'),
   /** Alias of `symmetric`, kept because "loop" is the role at its call sites. */
   loop: CustomEase.create('loop', '0.4, 0, 0.6, 1'),
-  /**
-   * Long-distance scrolling. Starts and ends at rest, so it needs to ease at
-   * both ends — the M3 curves above are one-sided (`accelerate` is for content
-   * leaving the screen and lands at full speed, which reads as the page being
-   * yanked into place).
-   */
-  scroll: CustomEase.create('scroll', '0.33, 0, 0, 1'),
+  /* The long-distance *scroll* curve was here and moved to `lib/scrollTo.ts` with the two
+     functions that used it. It is a plain cubic (`0.33, 0, 0, 1`) evaluated in JS there,
+     because `scrollTop` is not a CSS property and the tween has to be per-frame either way.
+     Keep the two literals in step if either moves. */
 } as const;
 
 /**
@@ -123,23 +142,10 @@ export const SPRING = SPRING_DURATION;
  * A spring as a ready-made `{ duration, ease }` pair, so the two cannot drift
  * apart at a call site.
  *
- * Under the **reduced** tier the three under-damped shapes are swapped for the critically
- * damped one, which is the GSAP half of the three-line rule in globals.css: a handle still
- * travels, it just stops when it arrives instead of passing the target and coming back.
- * The *duration* is the requested tier's, so nothing changes length — nine springs share
- * four shapes precisely because the shape depends on ζ alone. `SPRING_EFFECTS_FOR` maps
- * each spatial tier onto the effects tier with the nearest settle time, so a `fastSpatial`
- * does not become a `slowEffects` on the way through.
+ * `SPRING_EFFECTS_FOR` — the reduced tier's shape substitution — lives in
+ * `lib/springTiming.ts`, next to the WAAPI twin of this function, because both renderers need
+ * one table and that module is the one of the two that does not drag GSAP in.
  */
-const SPRING_EFFECTS_FOR: Partial<Record<SpringName, SpringName>> = {
-  fastSpatial: 'fastEffects',
-  defaultSpatial: 'defaultEffects',
-  slowSpatial: 'slowEffects',
-  expressiveFastSpatial: 'fastEffects',
-  expressiveDefaultSpatial: 'defaultEffects',
-  expressiveSlowSpatial: 'slowEffects',
-};
-
 export function spring(name: SpringName): { duration: number; ease: string } {
   const shape = motionTier() === 'reduced' ? (SPRING_EFFECTS_FOR[name] ?? name) : name;
   return { duration: SPRING_DURATION[name], ease: `spring-${shape}` };
@@ -163,45 +169,15 @@ export function spring(name: SpringName): { duration: number; ease: string } {
 gsap.ticker.lagSmoothing(100, 33);
 
 /**
- * The M3 duration scale, in seconds (GSAP's unit).
+ * `DURATION` now lives in `lib/motionTokens.ts`, with the curve literals, and is re-exported
+ * here so GSAP call sites keep one import.
  *
- * These existed only as prose in globals.css and as ~10 different inline
- * literals across this file, so nothing in the app shared a timing. Pair them
- * with the curve the spec prescribes:
- *
- *   entering the screen → `long` + `decelerate`
- *   leaving the screen  → `short` + `accelerate`
- *   begins and ends on screen → `medium` + `standard`
- *   large container transform → `emphasized` + `standard`
- *
- * This is the **transition** scale. A component's own motion — a handle
- * travelling, a mark landing, a container growing — takes a spring instead; see
- * `spring()` above. Duration is then a *result* of the physics rather than a
- * value picked from a list, which is why those numbers are not in this table.
- *
- * `press` is below the scale on purpose: a press-down must feel like contact,
- * not like an animation. It is `short2` (100ms), the smallest step M3 defines
- * above the 50ms micro-interaction — it read 120ms until this pass, which is
- * not a step on the scale at all and was the value three call sites had copied.
- * CSS twins are the `duration-*` utilities — 100/200/300/400 all exist in
- * Tailwind by default, so no theme entry is needed.
- *
- * `state` is below it again, and is the one value here that this file does not
- * own: it is the `state-layer` utility's own `transition: opacity 150ms` in
- * globals.css. It is listed because a state layer is the most frequent piece of
- * motion in the app and it was the only timing with no entry here — which is
- * how `ToggleSwitch`, whose switch track cannot use the utility's `::before`,
- * ended up hand-typing the 150ms utility with nothing to point at. Change one and
- * change the other.
+ * It is a plain object of numbers and never needed this module — but this module registers
+ * GSAP and five plugins at module scope, so importing it to ask “how long is a state layer”
+ * pulled the whole engine into the asker’s chunk. `Toast` and `Reveal` are both mounted from
+ * the root layout and both did exactly that.
  */
-export const DURATION = {
-  state: 0.15,
-  press: 0.1,
-  short: 0.2,
-  medium: 0.3,
-  long: 0.4,
-  emphasized: 0.5,
-} as const;
+export { DURATION, EASE };
 
 /* Matches the CSS safety net (`--default-transition-duration` +
    `--ease-standard`). It read 0.4s, which pairs `standard` with a duration from
@@ -245,281 +221,43 @@ gsap.defaults({ ease: eases.standard, duration: DURATION.short, overwrite: 'auto
  */
 
 /**
- * How long the wave takes to cross the control. `long1` on the M3 duration
- * scale, and the figure Material Web's own ripple uses — a press wave is
- * deliberately slower than any other feedback in the app, because it is
- * describing the *shape* of the control rather than reporting a state change.
+ * The press wave now lives in `lib/ripple.ts`, on WAAPI rather than a GSAP timeline.
+ *
+ * That was the single edge putting GSAP in the root layout’s chunk: `<RippleLayer />` is
+ * mounted by `app/layout.tsx` on every route and imported `spawnRipple` from here, and this
+ * module registers GSAP and five plugins at module scope. The app’s most trivial animation
+ * was dragging the whole engine onto `/policy`.
+ *
+ * Re-exported so `components/ToggleSwitch.tsx` — which calls it directly, for the one case
+ * event delegation cannot reach — keeps a single import path.
  */
-const RIPPLE_GROW = 0.45;
-/**
- * Scale the wave starts at, as a fraction of its final radius. Material Web's
- * value. Starting nearer zero reads as a dot appearing and then expanding;
- * starting here reads as contact already having been made.
- */
-const RIPPLE_START_SCALE = 0.2;
+export { spawnRipple } from '@/lib/ripple';
 
-/**
- * Paints one Material press wave inside `host`, centred on (`x`, `y`) given in
- * the host's own coordinates. The span cleans itself up.
- *
- * Normally you never call this — `<RippleLayer />` delegates it to anything
- * carrying `data-ripple`. It is exported for the one case delegation cannot
- * reach: a control whose ripple target is not an ancestor of what the pointer
- * actually hits, such as the switch, where the press lands on a full-size
- * input overlay but the wave belongs to the 40dp circle around the handle.
- *
- * The wave holds **one** opacity for its whole life and then fades, which is how
- * M3 draws it: the ripple *is* the pressed state layer, spreading. It used to
- * open at 0.18 and settle to 0.12 — two values, neither of them a token, the
- * first of them half again the spec's — so the press read as a flash followed by
- * a wash rather than as one gesture. `standard`, not `decelerate`, for the same
- * reason: this begins and ends on screen.
- *
- * **The reduced tier gets the same wave.** It briefly did not — it appeared at full size
- * and faded — and there was nothing to justify that: a wave growing from the point of
- * contact is already the plainest possible press cue, it is one composited `scale` on a
- * span that removes itself, and standing it down left the tier's most-repeated interaction
- * with no feedback but a colour. Under **off** there is no wave at all (`.ripple` is
- * `display: none`) and `state-layer`'s `:active` tint is the whole of the press.
- */
-export function spawnRipple(host: HTMLElement, x: number, y: number) {
-  if (motionTier() === 'off') return;
-  // Radius reaching the farthest corner keeps the wave circular.
-  const { width, height } = host.getBoundingClientRect();
-  const radius = Math.hypot(Math.max(x, width - x), Math.max(y, height - y));
 
-  const ripple = document.createElement('span');
-  ripple.className = 'ripple';
-  const size = radius * 2;
-  ripple.style.width = `${size}px`;
-  ripple.style.height = `${size}px`;
-  ripple.style.left = `${x - radius}px`;
-  ripple.style.top = `${y - radius}px`;
-  host.appendChild(ripple);
 
-  gsap
-    .timeline({ onComplete: () => ripple.remove() })
-    /* Only the scale is tweened. The wave's opacity is the pressed state-layer
-       token, set on `.ripple` in globals.css, so the value has one owner rather
-       than being restated as a number here. */
-    .fromTo(ripple, { scale: RIPPLE_START_SCALE }, { scale: 1, duration: RIPPLE_GROW, ease: 'standard' })
-    /* Ends with the grow rather than after it, so the wave is still spreading as
-       it goes. A fade that waits for the spread to finish leaves a static disc
-       sitting on the control for its whole duration. */
-    .to(ripple, { opacity: 0, duration: DURATION.state, ease: 'none' }, `-=${DURATION.state}`);
-}
+/* `scrollAppToTop`, `scrollAppToElement` and their tween moved to `lib/scrollTo.ts`, off
+   ScrollToPlugin and onto rAF. `scrollTop` is not a CSS property, so this is the one piece of
+   motion in the app that WAAPI cannot express and it has to be a per-frame write either way —
+   which is what the plugin was doing. What the plugin cost was its host: `components/Pagination.tsx`
+   is on ten screens and imported this module for those two functions alone.
 
-/**
- * The element that actually scrolls the page.
- *
- * `<body>` is `overflow: hidden` and the scroller is the `<main>` inside the
- * app shell, so every `window.scrollTo({ top: 0 })` in the app was a no-op —
- * which is why paginating never returned you to the top of the list. There
- * were ~25 of those calls across the pages.
- */
-export function getAppScroller(): HTMLElement | null {
-  if (typeof document === 'undefined') return null;
-  return document.querySelector<HTMLElement>('[data-image-hero-gallery-scroll]');
-}
+   Re-exported below, so a call site that legitimately wants GSAP as well keeps one import. */
+export { scrollAppToTop, scrollAppToElement } from '@/lib/scrollTo';
 
-/**
- * Flags the app scroller for the length of any page-to-page move.
- *
- * The footer lives inside `[data-page-content]`, so the outgoing copy travels
- * with the page as part of the clone. This covers the *incoming* one, which is
- * a live node that would otherwise simply be there from the first frame — the
- * mark appearing before the page it belongs to has arrived. Held out for the
- * length of the move and faded in at settle. See `[data-page-transit]` in
- * globals.css.
- *
- * Armed for tab switches and route changes alike: the footer is below the
- * panes in a tab switch and inside the page in a route change, and in neither
- * case should it arrive ahead of the content.
- *
- * Reference-counted: two moves can be armed in the same tick, and the first to
- * settle must not un-flag the other.
- */
-let transitDepth = 0;
-export function beginPageTransit(): () => void {
-  transitDepth += 1;
-  getAppScroller()?.setAttribute('data-page-transit', '');
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    transitDepth = Math.max(0, transitDepth - 1);
-    if (transitDepth === 0) getAppScroller()?.removeAttribute('data-page-transit');
-  };
-}
+/* `beginPageTransit`, the theme-wipe guard and `setTabIntent` moved to `lib/pageTransit.ts`
+   and `lib/tabIntent.ts`. None of the three touches an animation engine, and between them
+   they were one of the two reasons GSAP was in the root shell of every route: the first two
+   are what `lib/routeCrossFade.ts` needed from here, and the third is written by `AppLayout`
+   for one screen's tab bar. Re-exported so nothing that legitimately wants GSAP too has to
+   change its import. */
+export { beginPageTransit, setThemeWipeGuard, setTabIntent };
 
-/**
- * Scrolls the app's real scroll container back to the top.
- *
- * Uses a GSAP tween rather than `scrollTo({ behavior: 'smooth' })`: native
- * smooth scrolling over a long masonry list janks while thumbnails decode, and
- * this way the easing matches the rest of the app's motion.
- *
- * Falls back to the window for any surface rendered outside the shell.
- *
- * A scroll offset is *state*, not decoration, so every tier still lands on it — only the
- * travel is dropped, and only by the tier that drops all travel. That distinction is the
- * same one `applyInstantTabScroll` makes and it is worth keeping in one sentence: the
- * preference asks for less movement, not for less positioning.
- */
-export function scrollAppToTop({ smooth = true }: { smooth?: boolean } = {}) {
-  const scroller = getAppScroller();
-  const jump = !smooth || motionTier() === 'off';
 
-  if (!scroller) {
-    window.scrollTo(jump ? { top: 0 } : { top: 0, behavior: 'smooth' });
-    return;
-  }
+/* `useSlidingIndicator` moved to `lib/slidingIndicator.ts` and onto Web Animations. It was this
+   module's only reason to be imported by `components/Tabs.tsx`, which `AppLayout` mounts — so
+   four lines of GSAP were putting the engine and its five plugins into the root shell of every
+   route. Nothing here is left that a tab row needs. */
 
-  if (scroller.scrollTop === 0) return;
-  runScroll(scroller, 0, jump);
-}
-
-/**
- * Scrolls so that `target`'s top edge sits at the top of the viewport.
- *
- * Paginating a gallery should land on the first row of the new page, not back
- * above the featured banner — you already chose to move past that, and
- * replaying it on every page turn just adds a scroll.
- *
- * `scroller` overrides which element is moved. It exists because not everything
- * that scrolls is the app scroller: an image-detail overlay brings its own, and
- * the two calls that used to reach for `element.scrollIntoView({ behavior:
- * 'smooth' })` did so precisely because they could not name it. That got them the
- * browser's own smooth curve — symmetric, ~variable duration, and the one
- * scrolling motion in the app that did not match the rest — so a "reply to this
- * comment" jump felt different depending on whether you had opened the picture
- * from the gallery or navigated to it directly.
- *
- * The glide survives the reduced tier — a scroll is the one motion where the destination
- * only makes sense in terms of where you came from, and it costs nothing but a composited
- * offset. Only `off` teleports.
- */
-export function scrollAppToElement(
-  target: Element | null,
-  {
-    smooth = true,
-    offset = 8,
-    scroller: override,
-  }: { smooth?: boolean; offset?: number; scroller?: HTMLElement | null } = {},
-) {
-  if (!target) return;
-  const scroller = override ?? getAppScroller();
-  const jump = !smooth || motionTier() === 'off';
-
-  if (!scroller) {
-    const top = window.scrollY + target.getBoundingClientRect().top - offset;
-    window.scrollTo(jump ? { top } : { top, behavior: 'smooth' });
-    return;
-  }
-
-  const delta = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-  const next = Math.max(0, scroller.scrollTop + delta - offset);
-  // Already within a few pixels — moving would read as a twitch.
-  if (Math.abs(next - scroller.scrollTop) < 4) return;
-  runScroll(scroller, next, jump);
-}
-
-function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
-  if (jump) {
-    scroller.scrollTop = to;
-    return;
-  }
-  const distance = Math.abs(scroller.scrollTop - to);
-  // Scroll anchoring is normally welcome here — it keeps the gallery steady as
-  // thumbnails decode above the viewport. During a deliberate programmatic
-  // scroll it fights us: the incoming page re-lays out mid-tween, the browser
-  // "corrects" scrollTop to preserve the anchored element, and the result is a
-  // visible lurch before the glide. Suspended for the length of the tween only.
-  scroller.style.overflowAnchor = 'none';
-  gsap.to(scroller, {
-    scrollTo: { y: to },
-    // Duration follows the square root of the distance, not the distance
-    // itself: perceived travel speed scales sub-linearly, so a linear map makes
-    // short hops feel sluggish and long ones feel frantic. The band keeps even
-    // a whole-page jump under about a second.
-    duration: gsap.utils.clamp(0.36, 1.1, 0.28 * Math.sqrt(distance / 300)),
-    ease: 'scroll',
-    overwrite: true,
-    onComplete: () => {
-      scroller.style.overflowAnchor = '';
-    },
-    onInterrupt: () => {
-      scroller.style.overflowAnchor = '';
-    },
-  });
-}
-
-/**
- * Sliding active-indicator for tab groups. The indicator element (absolutely
- * positioned inside the container) glides to whichever child carries
- * `data-tab={active}`; the first placement is instant so nothing flies in
- * from x=0 on mount. Pass `extraDeps` when the tab list mounts late (e.g.
- * after data loads) so the initial measurement re-runs.
- */
-export function useSlidingIndicator<
-  C extends HTMLElement = HTMLDivElement,
-  I extends HTMLElement = HTMLSpanElement,
->(
-  active: string,
-  extraDeps: unknown[] = [],
-): { containerRef: RefObject<C | null>; indicatorRef: RefObject<I | null> } {
-  const containerRef = useRef<C>(null);
-  const indicatorRef = useRef<I>(null);
-  const placed = useRef(false);
-
-  useGSAP(
-    () => {
-      const indicator = indicatorRef.current;
-      /* `CSS.escape`, because `active` is a caller's value: a tab key containing a
-         quote or a bracket would otherwise throw inside the `useGSAP` callback and
-         take the indicator down with it. `paneOf` already escapes for the same
-         reason. */
-      const target = containerRef.current?.querySelector<HTMLElement>(
-        `[data-tab="${CSS.escape(active)}"]`,
-      );
-      if (!indicator || !target) return;
-      const place = { x: target.offsetLeft, width: target.offsetWidth };
-      if (!placed.current || motionTier() === 'off') {
-        placed.current = true;
-        gsap.set(indicator, place);
-        return;
-      }
-      /* `DefaultSpatial`, which is what `TabRow.kt` assigns
-         (`MotionSchemeKeyTokens.DefaultSpatial`). It ran on the *expressive* scheme's
-         default spatial spring — ζ0.8 k380, settling in 326ms against the standard
-         scheme's 194 — which is the more general problem this pass is fixing: the
-         nine `spring-*` utilities expose ζ and k directly, so call sites were each
-         picking a tier out of a different scheme. The app's scheme is `standard`
-         (which is `MaterialTheme`'s own default); the expressive trio is reserved
-         for a small mark landing in place, and a pill sliding between two labels is
-         travel rather than arrival.
-         Before either, this was `back.out(1.55)` on a 400ms clock — a guess at a
-         spring, on a duration taken from the transition scale rather than from the
-         physics.
-
-         The reduced tier slides too. It briefly cross-faded the pill from the old
-         position to the new one instead, which is a worse answer than it sounds: the
-         indicator's whole job is to connect two labels, and a mark that vanishes here and
-         reappears there is the one shape that does not. `spring()` hands the reduced tier
-         the critically damped table, so what it loses is the overshoot, not the travel. */
-      gsap.to(indicator, { ...place, ...spring('defaultSpatial') });
-    },
-    // No `revertOnUpdate` here, deliberately — unlike every other hook in this
-    // file. The callback's lasting effect is the `gsap.set` above, and
-    // reverting it on each `active` change would drop the pill back to x=0
-    // before every glide. Nothing accumulates either: the only thing it leaves
-    // behind is a tween, and `gsap.defaults({ overwrite: 'auto' })` kills the
-    // conflicting one for us.
-    { scope: containerRef, dependencies: [active, ...extraDeps] },
-  );
-
-  return { containerRef, indicatorRef };
-}
 
 type ViewTransitionDocument = Document & {
   startViewTransition: (update: () => void | Promise<void>) => {
@@ -685,7 +423,7 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
      globals.css) but not GSAP tweens or CSS animations, so a tab cross-fade or
      a route clone caught mid-flight would be baked into the outgoing frame. */
   finishTabTransition();
-  onThemeWipeStart?.();
+  notifyThemeWipeStart();
 
   const doc = document as ViewTransitionDocument;
   const root = document.documentElement;
@@ -815,53 +553,25 @@ export function changePalette(id: PaletteId, origin?: { x: number; y: number }) 
 }
 
 /**
- * Set by whatever owns a transient overlay that must not be captured by the
- * theme wipe. Kept as a setter rather than an import so `lib/routeCrossFade`
- * can depend on this module without a cycle.
+ * The hero gate and the app scroller now live in `lib/appScroller.ts`.
+ *
+ * Neither touches GSAP, and this module registers GSAP and its plugins at module scope — so
+ * importing either of them from here pulled the whole engine into the importer’s chunk.
+ * `lib/scrollMemory.ts` and `lib/overlay.ts` are both mounted by the root layout, which is
+ * how ~180KB of animation engine came to be on `/policy` to answer “which element scrolls”.
+ *
+ * Re-exported rather than moved-and-forgotten: this module’s own transitions consult
+ * `heroOwnsScreen`, and call sites that want both a duration and the scroller keep one import.
+ *
+ * AGENTS.md: “The hero owns the same pixels. Every other transition stands down while a
+ * flight is in progress.” Two things here could otherwise start on top of one: the theme
+ * wipe, whose `startViewTransition` freezes rendering to capture a static frame of a flyer
+ * that is still moving; and the tab shared axis, which sets `overflow-x: clip` on the very
+ * scroller hosting the flight layer.
  */
-let onThemeWipeStart: (() => void) | null = null;
-export function setThemeWipeGuard(fn: (() => void) | null) {
-  onThemeWipeStart = fn;
-}
+export { getAppScroller, heroOwnsScreen, setHeroBusyCheck };
 
-/**
- * True while a shared-element image flight owns the screen.
- *
- * AGENTS.md: "The hero owns the same pixels. Every other transition stands down
- * while a flight is in progress." Two things in this module could still start on
- * top of one and had no way to know:
- *
- *   - the theme wipe, whose `startViewTransition` freezes rendering to capture
- *     the old frame — a static image of the flyer mid-air — while the flight's
- *     own WAAPI animations keep advancing underneath, so the flyer teleports on
- *     completion. It is reachable with no user input at all, from the
- *     system-scheme listener.
- *   - the tab shared axis, which sets `data-axis-running` and thereby
- *     `overflow-x: clip` on the very scroller that hosts the flight layer,
- *     clipping the flyer for the whole 500ms.
- *
- * A registered predicate rather than an import: `lib/hero` is a large module and
- * `lib/motion` is imported nearly everywhere, so importing it here would pull the
- * hero controller into every bundle that wanted a duration constant. Same
- * reasoning as `setThemeWipeGuard` above.
- */
-let isHeroBusy: (() => boolean) | null = null;
-export function setHeroBusyCheck(fn: (() => boolean) | null) {
-  isHeroBusy = fn;
-}
-/**
- * Whether a shared-element flight owns the screen.
- *
- * Exported because it is the app's fourth page-level transition that needed it:
- * the theme wipe and the tab shared axis consulted it, the route cross-fade gates
- * equivalently by reading the runtime it already imports, and `lib/forumTransition`
- * consulted nothing at all.
- */
-export function heroOwnsScreen(): boolean {
-  return isHeroBusy?.() ?? false;
-}
-
-interface DrawerSwipeOptions {
+export interface DrawerSwipeOptions {
   /** The sliding panel. Assumed to sit at `translateX(-width)` when closed. */
   drawerRef: RefObject<HTMLElement | null>;
   /** The dimming layer behind it; its opacity tracks the drag. */
@@ -1101,10 +811,19 @@ export function useDrawerSwipe({
 /* ---------------------------------------------------------------------------
  * Entrance / list motion
  *
- * These four cover every animation the app was missing, and all of them take
- * the app's own scroller (`getAppScroller()`) rather than the window — a
- * ScrollTrigger left on its default would never fire here, for the same reason
- * `window.scrollTo` never did.
+ * `useStaggerGrid` here and `<Reveal>` (components/Reveal.tsx) are the two, and
+ * both play on mount. There is no scroll-driven reveal: `useScrollReveal` lived
+ * here, had zero call sites for its entire existence, and was the only consumer
+ * of GSAP's ScrollTrigger — so it and the plugin were removed together rather
+ * than kept as a documented no-op that cost every route ~40KB.
+ *
+ * If a below-the-fold reveal is ever wanted back, it does not need ScrollTrigger:
+ * an `IntersectionObserver` with the app scroller as `root` is a dozen lines, and
+ * `components/PicDetail.tsx` already has two of them. The constraints worth
+ * carrying over are that it must never wrap a gallery card (it parks targets at a
+ * `y` offset, and the hero flight reads `getBoundingClientRect` on press) and
+ * never sit inside a tab pane whose content swaps (the pane transition already
+ * animates the same nodes' `autoAlpha` and `y`).
  * ------------------------------------------------------------------------ */
 
 /** Distance an entering element travels, px. Small on purpose: a long throw
@@ -1113,164 +832,6 @@ export function useDrawerSwipe({
  *  and did not match `useStaggerGrid`'s 14 either, so the app's two entrance
  *  helpers rose by different amounts. */
 const REVEAL_SHIFT = 16;
-
-interface ScrollRevealOptions {
-  /** Children matching this selector animate individually; omit to reveal the container. */
-  selector?: string;
-  /** Seconds between successive children. */
-  stagger?: number;
-  /** Re-run when this changes (e.g. a page of results was replaced). */
-  deps?: unknown[];
-  enabled?: boolean;
-}
-
-/* No `refreshPriority`, deliberately.
- *
- * It exists to fix refresh *order* when one ScrollTrigger's recalculation moves
- * another's measurements — which in practice means pinning, since a pin inserts
- * a spacer and shifts everything below it. Nothing here pins: a reveal sets
- * `autoAlpha` and a transform, neither of which takes the element out of flow
- * or changes the height of anything. So the triggers are mutually independent
- * and any order gives the same answer.
- *
- * Worth stating rather than leaving out, because "several reveal roots on one
- * page, created in React's mount order" reads like exactly the case the option
- * was made for. It is not, and `ScrollTrigger.batch` has no way to pass it
- * anyway. */
-
-/** How many elements may share one reveal batch.
- *
- * A function, not the constant this used to be: `batchMax` is re-evaluated on
- * every refresh, which is what it exists for. At a flat 12 a phone — where at
- * most three or four blocks are on screen at once — put everything visible into
- * a single batch and the stagger had nothing left to stagger, so the whole
- * screen arrived as one block. That is precisely the failure the cascade is
- * there to avoid, and it only showed on the viewport most people use. */
-const revealBatchMax = () => (window.innerWidth < BREAKPOINTS.sm ? 4 : 12);
-
-/** Debounce for the content-growth refresh below. Long enough that a run of
- *  images decoding in sequence costs one recalculation rather than twenty. */
-const REVEAL_REFRESH_DEBOUNCE_MS = 150;
-
-/**
- * Reveals elements as they enter the viewport, in batches.
- *
- * The below-the-fold counterpart to `<Reveal>`: that one plays on mount, which
- * is right for content the route commits with already on screen and wrong for a
- * long page, where everything would have "revealed" before you scrolled to it.
- *
- * **Currently unused, by decision.** An entrance cascade is for *picture*
- * content, where the wait is real and the reveal is the picture arriving. On
- * text — a settings form, a forum list, a team roster — it makes rows the user
- * came to read behave like an animation, and on the forum tab it landed on top
- * of the shared axis so the list arrived twice. The gallery has its own cascade
- * in `useStaggerGrid`, ordered by visual position rather than DOM order.
- *
- * Kept rather than deleted because the tool is right for the job it names, and
- * because the two constraints below are the expensive part to rediscover: never
- * above a gallery card, since it parks targets at a `y` offset and the hero
- * flight reads `getBoundingClientRect` on press; and never inside a tab pane
- * whose content swaps, since the pane transition already animates the same
- * nodes' `autoAlpha` and `y`.
- */
-export function useScrollReveal<T extends HTMLElement = HTMLElement>({
-  selector,
-  stagger = 0.06,
-  deps = [],
-  enabled = true,
-}: ScrollRevealOptions = {}): RefObject<T | null> {
-  const ref = useRef<T>(null);
-  /* The reactive read, not the one-shot.
-     This hook keeps firing for the whole session — every block below the fold
-     waits for a scroll that may be minutes away — so it is one of the two
-     places where a preference changed mid-session genuinely has something left
-     to affect. Subscribing means turning the tier down tears the batch down
-     (and `clearProps` restores anything still hidden), and turning it up
-     builds one without waiting for an unrelated re-render. */
-  const tier = useMotionTier();
-  /* And the entrance switch, which is a *harder* stop than the tier: this hook is the
-     definition of an entrance, so with it off there is nothing here to reduce. */
-  const entrances = useEntranceMotion();
-
-  useGSAP(
-    () => {
-      const root = ref.current;
-      if (!root || !enabled || !entrances || tier === 'off') return;
-
-      /* Reduced halves the rise and drops the stagger: the blocks still arrive as you
-         reach them and still travel a little to get there, but 40 of them do not arrive one
-         after another — a stagger is travel in the time axis, and it is also the part that
-         costs a low-end device a tween per card. */
-      const shift = tier === 'reduced' ? REVEAL_SHIFT / 2 : REVEAL_SHIFT;
-      const step = tier === 'reduced' ? 0 : stagger;
-
-      const targets = selector
-        ? gsap.utils.toArray<HTMLElement>(root.querySelectorAll(selector))
-        : [root];
-      if (targets.length === 0) return;
-
-      gsap.set(targets, { autoAlpha: 0, y: shift });
-
-      const triggers = ScrollTrigger.batch(targets, {
-        scroller: getAppScroller() ?? undefined,
-        start: 'top 92%',
-        once: true,
-        batchMax: revealBatchMax,
-        onEnter: (batch) =>
-          gsap.to(batch, {
-            autoAlpha: 1,
-            y: 0,
-            /* `long`, the enters-the-screen duration. It was `emphasized` (500),
-               which is the large-container-transform value — and `useStaggerGrid`
-               below already used `long`, so the app's two entrance helpers
-               disagreed by 100ms about what an entrance is. */
-            duration: DURATION.long,
-            ease: 'decelerate',
-            stagger: step,
-            overwrite: true,
-          }),
-      });
-
-      /* Trigger positions are computed once, from the layout as it stands at
-       * creation. Everything that arrives afterwards — an image decoding, a web
-       * font swapping in, a lazy list appending — pushes the blocks below it
-       * down, and the start lines stay where they were. The symptom is a block
-       * that reveals while still well under the fold, or never reveals at all
-       * because its line ended up above the current scroll position.
-       *
-       * ScrollTrigger auto-refreshes on resize and on `load`, and on nothing
-       * else; dynamic content is explicitly not covered. A `ResizeObserver` on
-       * the root is the general answer — it fires for images, fonts and content
-       * alike — debounced, because a gallery of images decoding in sequence
-       * would otherwise request one full recalculation per image. */
-      let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-      const observer = new ResizeObserver(() => {
-        clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => ScrollTrigger.refresh(), REVEAL_REFRESH_DEBOUNCE_MS);
-      });
-      observer.observe(root);
-
-      return () => {
-        clearTimeout(refreshTimer);
-        observer.disconnect();
-        triggers.forEach((t) => t.kill());
-        // Anything still hidden when the effect tears down must be restored,
-        // or a fast unmount/remount leaves permanently invisible content.
-        gsap.set(targets, { clearProps: 'opacity,visibility,transform' });
-      };
-    },
-    // `revertOnUpdate`: without it the cleanup above never runs on a dependency
-    // change (only on unmount), so every change stacked another batch of
-    // ScrollTriggers on the same targets.
-    {
-      scope: ref,
-      dependencies: [selector, stagger, enabled, tier, entrances, ...deps],
-      revertOnUpdate: true,
-    },
-  );
-
-  return ref;
-}
 
 /**
  * Cascade for grid/masonry children, played on mount rather than on scroll.
@@ -1289,15 +850,57 @@ export function useScrollReveal<T extends HTMLElement = HTMLElement>({
  *  share an exact `top`, and comparing raw values would zig-zag between them. */
 const ROW_BAND_PX = 48;
 
-export function useStaggerGrid<T extends HTMLElement = HTMLElement>(
+/**
+ * The ref is a **parameter**, not something this creates.
+ *
+ * **Whatever renders this must be a *sibling after* the ref'd element, never a child of it.**
+ * React attaches a parent's ref only after its children's layout effects have run, so a component
+ * rendered *inside* the grid reads `ref.current === null` on the commit that mounts them together
+ * — which is every commit, once `warmMotion()` has made the engine resident before first paint.
+ * `MasonryGrid` did exactly that, and the failure was silent in the worst way: the mount pass
+ * returned early, nothing re-ran it (no dependency changes when a ref attaches), and the first
+ * pass that ever found a root was a **page turn**. So the gallery had no entrance on load at all,
+ * and the cascade the user did see was the one meant for the mount, played with the viewport at
+ * the bottom of the grid. Measured: `no-root cards=50` at 543ms, then nothing until the click.
+ *
+ * `lib/motionLazy.tsx` mounts this from a child component that only exists once GSAP has
+ * arrived — and a ref created here would not exist during the renders before that, when the
+ * caller already has to attach one to its grid. So the caller owns the `useRef` and this owns
+ * the animation. The old `useStaggerGrid(selector, deps)` shape is gone rather than kept as a
+ * wrapper: two ways to call one hook is how the `lean` default came to disagree with itself.
+ */
+export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
+  ref: RefObject<T | null>,
   selector: string,
   deps: unknown[] = [],
-): RefObject<T | null> {
-  const ref = useRef<T>(null);
+): void {
   // Reactive for the same reason as `useScrollReveal`: this re-runs on every
   // page of results, so a preference changed mid-session still has work to skip.
   const tier = useMotionTier();
   const entrances = useEntranceMotion();
+  /**
+   * Once per mounted grid, not once per page of results.
+   *
+   * The cascade parks every card at `autoAlpha: 0` and reveals them in visual order, top to
+   * bottom, over as much as 0.9s of stagger. That is right for a grid *arriving*. On a page turn
+   * it is wrong twice over, and the second one is what made the screen blank:
+   *
+   *  - `Pagination` glides the scroller to the top of the list, so the viewport starts at the
+   *    **bottom** of the grid — where the cards are **last** in the cascade order. Every card the
+   *    user is actually looking at was therefore held invisible for the full stagger, and content
+   *    appeared only as the glide climbed into the part that had already been revealed. On an
+   *    already-cached page the rows are present in the first frame, so the whole delay is spent
+   *    hiding content that was ready.
+   *  - A page turn is a content *replacement* inside a grid that never left the screen. The
+   *    motion carrying it is the glide; a second entrance on top is the "动画重叠" failure this
+   *    file names elsewhere, not extra polish.
+   *
+   * A breakpoint reflow no longer replays it either, and that is the same argument: a resize is
+   * not an arrival. `deps` is still the full list because the *early return* has to re-evaluate —
+   * a grid that mounted empty and then received rows has to cascade when they land, which is why
+   * the latch is set after the `items.length` check rather than before it.
+   */
+  const played = useRef(false);
 
   useGSAP(
     () => {
@@ -1305,6 +908,8 @@ export function useStaggerGrid<T extends HTMLElement = HTMLElement>(
       if (!root || !entrances || tier === 'off') return;
       const items = gsap.utils.toArray<HTMLElement>(root.querySelectorAll(selector));
       if (items.length === 0) return;
+      if (played.current) return;
+      played.current = true;
 
       const rootTop = root.getBoundingClientRect().top;
       const ordered = items
@@ -1358,7 +963,6 @@ export function useStaggerGrid<T extends HTMLElement = HTMLElement>(
     { scope: ref, dependencies: [selector, tier, entrances, ...deps], revertOnUpdate: true },
   );
 
-  return ref;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1888,48 +1492,6 @@ export function playSharedAxis(opts: {
 type TabRun = { panel: HTMLElement; to: string; finish(): void };
 let activeTabRun: TabRun | null = null;
 
-/**
- * Per-tab scroll offset, so switching back lands where you left that tab.
- *
- * Keyed by the **panel element**, then by tab name. It was one flat
- * `Map<tabName, offset>` at module scope, and the collision that produced is between
- * *instances of one screen* rather than between screens: `posts`/`uploads`/`faves`/
- * `comments` carried an offset from one profile to the next, and `picpony`/`derpibooru`
- * across two visits to `/favorites`. Tab values happen to be unique app-wide, which is
- * what `TabPanes` relies on for its own reasons, and that is exactly why the flat map
- * looked safe.
- *
- * The panel element *is* the tab group's identity, so this also handles a nested group
- * (`BadgesTab` inside `/admin`) and answers "when is it cleared" for free: the page
- * content is keyed on the pathname, so `/user/1` → `/user/2` unmounts the panel and the
- * entry goes with it. Leaving home and coming back drops the per-tab offsets, and
- * `lib/scrollMemory.ts` restores the scroller itself.
- */
-const tabScrollMemory = new WeakMap<HTMLElement, Map<string, number>>();
-
-function rememberTabScroll(panel: HTMLElement, tab: string, offset: number) {
-  let group = tabScrollMemory.get(panel);
-  if (!group) {
-    group = new Map();
-    tabScrollMemory.set(panel, group);
-  }
-  group.set(tab, offset);
-}
-
-function recallTabScroll(panel: HTMLElement, tab: string) {
-  return tabScrollMemory.get(panel)?.get(tab);
-}
-
-/**
- * Shared chrome above the panel, past which a tab switch stops *restoring* an offset.
- *
- * The app bar's own 64dp — the smallest thing this design system calls a region. Below it the
- * panel is effectively the page (the home route's gutter is 24, /policy is 209, a profile is
- * 697); above it there is a header the two tabs share, and moving it is what reads as a jump.
- * "Stops restoring" rather than "never moves": `finalMax`'s clamp still applies on every screen,
- * because a destination pane shorter than the current offset leaves the browser no choice.
- */
-const TAB_SHARED_CHROME_PX = 64;
 
 /**
  * Records the tab being left and lands on the one being entered, and it is the whole of
@@ -1946,19 +1508,6 @@ const TAB_SHARED_CHROME_PX = 64;
  * Returns the scroller and how far it moved, which is what the animated path needs to hold
  * the outgoing pane over the pixels the user was looking at.
  */
-/**
- * How much shared chrome sits above the panel: the distance from the top of the scroller's
- * *content* to the panel's own top edge, so it is invariant to where the user has scrolled.
- *
- * Both writers consult it, which is the point — it is the one rule that decides whether a tab
- * switch may move the scroller at all, and having the animated path apply it while the
- * reduced-motion path did not is how a profile could still jump under the preference.
- */
-function tabPanelTop(panel: HTMLElement, scroller: HTMLElement) {
-  return (
-    scroller.scrollTop + panel.getBoundingClientRect().top - scroller.getBoundingClientRect().top
-  );
-}
 
 function applyTabScroll(
   panel: HTMLElement,
@@ -2059,24 +1608,6 @@ function applyTabScroll(
  * screen with a low `panelTop` and no tap path would need a pre-commit hook the reactive path
  * does not have.
  */
-function applyInstantTabScroll(panel: HTMLElement, to: string) {
-  const scroller = getAppScroller();
-  if (!scroller) return;
-  if (tabPanelTop(panel, scroller) > TAB_SHARED_CHROME_PX) return;
-  /* `?? 0`, matching `applyTabScroll`'s fallback: on a panel that is the page, a tab with no
-     remembered offset opens at its own top. Returning early instead left the outgoing tab's offset
-     in place, and the browser then clamped it to the shorter pane's maximum — which lands on the
-     destination's *last* row. The preference asks for less movement, not for the wrong position. */
-  const remembered = recallTabScroll(panel, to) ?? 0;
-  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-  /* No `overflowAnchor` guard, deliberately, and it is not an omission of `applyTabScroll`'s:
-     that one suspends anchoring because it writes and then animates for 500ms, with the panes
-     re-laying-out underneath. This write is synchronous and nothing lays out after it in the
-     same task, so there is nothing for anchoring to "correct" — and leaving it on is what
-     absorbs a late shrink above the viewport, which is the job `restoreAnchor` hands back to it
-     on the animated path. */
-  scroller.scrollTop = Math.min(remembered, max);
-}
 
 /* The tab a panel has already been animated to.
  *
@@ -2089,30 +1620,7 @@ const lastTabTarget = new WeakMap<HTMLElement, string>();
 
 /* The tab the tab bar is optimistically showing, for as long as the URL has not
  * caught up with it — see `setTabIntent`. */
-let pendingTabIntent: string | null = null;
 
-/**
- * Tells the panes which tab the user is actually on while the URL catches up.
- *
- * The tab bar and the panes are in different components and share nothing but
- * the URL, and the URL is the one thing that lags: the switch plays on the tap,
- * the push is coalesced behind it, and a burst of taps therefore drags the
- * address bar through tabs the user has already left. `useTabPanes` cannot tell
- * one of those from a real destination — a sidebar link or the back button
- * arrive looking exactly the same — so it chased them, and each one restarted
- * the transition in the opposite direction.
- *
- * Measured on two taps 520ms apart, 图库 -> 论坛 -> 图库: the panes ran three
- * animations, the middle one backwards, and the switch visibly sprang back to
- * 论坛 before completing. This is that "还是有概率会回弹".
- *
- * Pass the optimistic tab while one is outstanding and `null` once the URL
- * agrees. The tab bar unmounts when the route leaves home, so its cleanup is
- * also what guarantees a stale intent cannot outlive the page it belongs to.
- */
-export function setTabIntent(to: string | null): void {
-  pendingTabIntent = to;
-}
 
 const paneOf = (panel: HTMLElement, name: string) =>
   panel.querySelector<HTMLElement>(`[data-tab-pane="${CSS.escape(name)}"]`);
@@ -2340,7 +1848,11 @@ export function startTabTransition(
  *
  * Attach the returned ref to the element carrying `data-tab-panel`.
  */
-export function useTabPanes<T extends HTMLElement = HTMLElement>(
+export function useTabPanesOn<T extends HTMLElement = HTMLElement>(
+  /* The ref is a parameter for the reason `useStaggerGridOn` gives: this hook is mounted from a
+     child that only exists once GSAP has loaded, and the panel element it drives has to have been
+     attached long before that. */
+  ref: RefObject<T | null>,
   active: string,
   /* `false`, matching `TabPanes` and matching what AGENTS.md says. It defaulted to
      `true` here and `false` in the component, so a caller that wired this hook by
@@ -2351,8 +1863,7 @@ export function useTabPanes<T extends HTMLElement = HTMLElement>(
      descendants for the whole 500ms run, i.e. a switch with no animation at all. Two
      defaults for one option is a bug regardless of which is right. */
   { lean = false }: { lean?: boolean } = {},
-): RefObject<T | null> {
-  const ref = useRef<T>(null);
+): void {
   const previous = useRef(active);
   /* Read through a ref so it never widens the dependency list: this effect must
      run on `active` and nothing else, or a parent re-render that happens to
@@ -2375,7 +1886,7 @@ export function useTabPanes<T extends HTMLElement = HTMLElement>(
        the motion flags are the only thing still holding the right pane on
        screen. Clearing them here would swap the panes with no animation at all,
        which is the same bounce arriving instantly instead of over 500ms. */
-    if (pendingTabIntent !== null && pendingTabIntent !== active) return;
+    if (tabIntent() !== null && tabIntent() !== active) return;
 
     /* Where the panes actually are, which is not necessarily where the URL says.
        `lastTabTarget` is written by every run, optimistic or reactive, whereas
@@ -2406,9 +1917,13 @@ export function useTabPanes<T extends HTMLElement = HTMLElement>(
     );
     const direction: 1 | -1 = order.indexOf(active) > order.indexOf(from) ? 1 : -1;
     runTabTransition(panel, from, active, direction, leanRef.current);
+    /* `active` and nothing else, `ref` included. This effect must run on a tab change and on no
+       other cause — a parent re-render that happens to change an option would otherwise restart a
+       live transition, which is the bounce this hook's own note documents. A ref object is stable
+       for the life of the component, so listing it would be noise that can only cause that. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  return ref;
 }
 
 /** Ends any in-flight tab transition immediately. */
@@ -2421,4 +1936,4 @@ export function finishTabTransition() {
    lazily-loaded component is how a plugin ends up half-initialised. `Observer`
    joined this list for `Sheet`'s drag-to-dismiss, which is the same gesture
    mechanism `useDrawerSwipe` above uses. */
-export { Flip, gsap, useGSAP, Observer, ScrollTrigger };
+export { Flip, gsap, useGSAP, Observer };

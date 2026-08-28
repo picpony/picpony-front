@@ -12,7 +12,17 @@
     "hero:path": "node scripts/heroPath.mjs",
     "net:audit": "node scripts/netAudit.mjs",
     "net:scroll": "node scripts/netAuditScroll.mjs",
-    "net:tabs": "node scripts/netAuditTabHeight.mjs"
+    "net:tabs": "node scripts/netAuditTabHeight.mjs",
+    "net:tabnav": "node scripts/netAuditTabNav.mjs",
+    "perf:weight": "node scripts/probeWeight.mjs",
+    "perf:metrics": "node scripts/probeMetrics.mjs",
+    "perf:hydration": "node scripts/probeHydration.mjs",
+    "perf:motion": "node scripts/probeMotion.mjs",
+    "perf:sw": "node scripts/probeServiceWorker.mjs",
+    "perf:ripple": "node scripts/probeRipple.mjs",
+    "perf:pageturn": "node scripts/probePageTurn.mjs",
+    "perf:sharpness": "node scripts/probeHeroSharpness.mjs",
+    "perf:sharpness:warm": "node scripts/probeHeroSharpness.mjs 1920 --fake-cdn"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -37,6 +47,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-google-recaptcha": "^2.1.9",
+    "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
     "tailwindcss": "^4",

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from 'react-icons/md';
 import Button from './Button';
-import { scrollAppToTop, scrollAppToElement } from '@/lib/motion';
+import { scrollAppToTop, scrollAppToElement } from '@/lib/scrollTo';
 import { cn } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
 
@@ -136,6 +136,21 @@ export default function Pagination({
        surface the user is not looking at. */
     const scroller =
       rootRef.current?.closest<HTMLElement>('[data-app-scroll-container]') ?? undefined;
+    /* The distance law, which is `scrollAppToElement`'s default — no `duration` override here.
+
+       This went round three times and the third answer is the first one. The law scales the
+       length with the square root of the travel, so the *rate* is non-linear in the distance:
+       a short hop is brisk and a long one takes its time instead of whipping past. A fixed
+       length does the opposite — the speed then rises with however far you happened to be
+       scrolled, so a page turn from the bottom of a long gallery is a whip-pan and the same
+       turn from near the top is a crawl.
+
+       What made the long glide look wrong the first time was not its length. The cards it
+       travelled past were *blank* — `FadeInImage` was treating a failed or swapped image as
+       loaded and dropping its shimmer, so a 750ms glide ran through nothing at all. With that
+       fixed the same glide passes over skeletons in the row geometry, which is what a list
+       loading is supposed to look like, and `npm run perf:pageturn` asserts no in-view card is
+       ever bare. Fixing the placeholder is what made the honest duration affordable. */
     const anchor = rootRef.current?.closest('[data-pagination-anchor]');
     if (anchor) scrollAppToElement(anchor, { scroller });
     else if (!scroller) scrollAppToTop();

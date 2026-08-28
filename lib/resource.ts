@@ -327,6 +327,27 @@ export interface Resource<Args, T> {
   expire: (args?: Args) => void;
   /** Correct the answer in place — an optimistic write, or a response to a mutation. */
   write: (args: Args, update: T | ((previous: T | undefined) => T)) => void;
+  /**
+   * Install a server-rendered answer as if it had been fetched at `fetchedAt`.
+   *
+   * The seam for SSR: a Server Component reads the first page, hands it to the client island as
+   * a prop, and the island installs it here before its first `read` — so the effect finds a
+   * fresh entry, takes the cached-and-not-stale branch, and sends nothing.
+   *
+   * **Not `write`, and the difference is not cosmetic.** `write`'s cold-key branch calls
+   * `create()`, which ends in `enqueue()` → `pump()` → `job.run()` *synchronously* — so it
+   * fires the very request the seed exists to prevent. Worse, the `dropQueued` immediately
+   * after it may cancel that job, and `cancel` does `store.delete(key)`, leaving `write` to
+   * populate and publish an entry that is no longer in the store; `peekKey` then returns
+   * `EMPTY` for it forever. Neither is reachable from `write`'s only current caller, and both
+   * are exactly why seeding needed its own primitive.
+   *
+   * **Browser only.** `lib/resource.ts` carries `'use client'`, but a client module is still
+   * *evaluated in the Node process* for the SSR pass, so `store` is shared across concurrent
+   * requests on the server. Seeding during SSR would hand request A's feed to request B's
+   * render. Call sites must guard on `typeof window`.
+   */
+  seed: (args: Args, value: T, fetchedAt: number) => void;
   /** Abort a *background* read for these args. An immediate one is somebody's screen. */
   cancelBackground: (args: Args) => boolean;
 }
@@ -663,6 +684,69 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       const entry = store.get(keyOf(args));
       if (entry) mark(entry);
     },
+    seed(args, value, fetchedAt) {
+      /* See the interface docstring: the store is shared across requests on the server. */
+      if (typeof window === 'undefined') return;
+
+      const key = keyOf(args);
+      const stored = store.get(key);
+
+      /* Never clobber something the client already has that is at least as fresh. This is what
+         makes a remount from the router cache — navigate away, come back — harmless, and what
+         stops a stale RSC payload overwriting a value the user has since refreshed. */
+      if (
+        stored &&
+        !stored.placeholder &&
+        stored.status === 'resolved' &&
+        stored.fetchedAt >= fetchedAt
+      ) {
+        return;
+      }
+
+      /* Built literally rather than through `create()`, which would enqueue a real request. */
+      let resolve!: (v: T) => void;
+      let reject!: (e: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      promise.catch(() => {});
+
+      const entry: Entry<T> = {
+        key,
+        /* `args` matters: `expire()` and `bindResourceRefresh` start their own revalidation from
+           it, so a seeded entry without it is invisible to the tab-return refresh. */
+        args,
+        status: 'resolved',
+        value,
+        /* Clamped forward, never back. The RSC payload can be minutes old — Next's client router
+           cache, or a `revalidate` hit — and an entry marked fresh-now would pin stale HTML for a
+           full TTL. A server clock *ahead* of the browser clamps to now, which is safe; a server
+           clock *behind* makes the entry immediately stale, which costs one background
+           revalidation with no loading state. It can never fail in the "fresh forever" direction. */
+        fetchedAt: Math.min(fetchedAt, Date.now()),
+        priority: 'immediate',
+        promise,
+        settle: { resolve, reject },
+        snapshot: EMPTY as ResourceSnapshot<T>,
+        /* Carried over for the same reason `read` and `write` do it: `subscribeKey` runs during
+           render and may already have created a placeholder holding this key's listeners. */
+        listeners: stored?.listeners ?? new Set(),
+      };
+      entry.settle.resolve(value);
+
+      /* Written synchronously, *not* through `publish()`. `publish` is rAF-bound, and the
+         hydration render happens before the next frame — so a published seed would arrive one
+         frame after React had already rendered `EMPTY`, which is precisely the skeleton flash
+         this exists to remove. */
+      entry.snapshot = buildSnapshot(entry);
+
+      /* `touch` is delete-then-set, i.e. it also inserts — so this is the LRU-correct
+         way to place a new entry at the most-recent end. `trim` preserves this key, because a
+         seed is the one entry we know a component is about to read. */
+      touch(key, entry);
+      trim(key);
+    },
     write(args, update) {
       const key = keyOf(args);
       const stored = store.get(key);
@@ -761,10 +845,41 @@ export function useResource<Args, T>(
      * profile while the next one loads is worse than showing a skeleton.
      */
     keepPrevious?: boolean;
+    /**
+     * A server-rendered answer for this exact key.
+     *
+     * Both halves matter. `getServerSnapshot` returns it so the SSR pass renders content rather
+     * than a skeleton; the render-phase `seed` below installs it so the effect's `read` finds a
+     * fresh entry and sends nothing. Without the first there is no content in the HTML; without
+     * the second the hydration render paints content and then immediately re-fetches it.
+     *
+     * `key` is checked against the key this render computed, and that check is the single gate
+     * for both. It is what makes a disagreement safe: the server and the client can compute
+     * different keys (a cleared cookie, a setting changed in another tab), and when they do the
+     * seed simply does not apply and the screen behaves exactly as it does today — one request,
+     * no hydration mismatch, because *both* the SSR pass and the hydration render used the
+     * server's value.
+     */
+    initial?: { key: string; data: T; generatedAt: number };
   },
 ): ResourceSnapshot<T> & { refresh: () => void } {
   const key = args === SKIP ? null : resource.keyOf(args as Args);
   const keepPrevious = options?.keepPrevious ?? false;
+  const initial = options?.initial;
+  const initialApplies = initial !== undefined && initial.key === key;
+
+  /* Installed during render, before `useSyncExternalStore` reads.
+   *
+   * Render-phase mutation of a module-scope `Map` has precedent in this file — `subscribeKey`
+   * inserts a placeholder entry into the same store during render — and `seed` is idempotent by
+   * key with a `fetchedAt` guard, so a discarded render costs nothing and a double invoke in
+   * development is a no-op the second time. An effect would be one frame too late: the first
+   * committed frame is exactly the one that must not be a skeleton.
+   *
+   * `seed` no-ops on the server, so this cannot leak one request's data into another's render. */
+  if (initialApplies) {
+    resource.seed(args as Args, initial.data, initial.generatedAt);
+  }
 
   /* Render-phase reads go through the *key*, which is a string computed here from `args`. The
      effect below closes over `args` itself, which is safe for the same reason: it re-runs whenever
@@ -784,7 +899,29 @@ export function useResource<Args, T>(
     [resource, key],
   );
 
-  const getServerSnapshot = useCallback(() => EMPTY as ResourceSnapshot<T>, []);
+  /* Must be a *stable* object, and not merely for tidiness: react-dom throws
+     "The result of getServerSnapshot should be cached to avoid an infinite loop" if it returns a
+     fresh one each call. `EMPTY` is a frozen module constant; the seeded branch builds its
+     snapshot once per distinct payload.
+
+     Split into a memoised value and a callback returning it, rather than one `useCallback` that
+     builds the object inline, so the dependencies the React Compiler infers match the ones
+     written down — it refuses to optimise a component whose manual memoization it cannot
+     preserve, and `initial?.data` reads as less specific than the `initial` it infers. */
+  const initialData = initialApplies ? initial.data : undefined;
+  const serverSnapshot = useMemo(
+    () =>
+      initialData === undefined
+        ? (EMPTY as ResourceSnapshot<T>)
+        : (Object.freeze({
+            data: initialData,
+            error: undefined,
+            isLoading: false,
+            isStale: false,
+          }) as ResourceSnapshot<T>),
+    [initialData],
+  );
+  const getServerSnapshot = useCallback(() => serverSnapshot, [serverSnapshot]);
 
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 

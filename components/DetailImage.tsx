@@ -13,6 +13,7 @@ import { MdFullscreen } from 'react-icons/md';
 import IconButton from './IconButton';
 import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
 import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
+import { getRawImageUrl } from '@/lib/imageLoader';
 import { warmImageHeroFrame } from '@/lib/hero';
 import { ICON } from '@/lib/icons';
 
@@ -51,9 +52,48 @@ type ImagePrefetchLease = {
   release: () => void;
 };
 
+/**
+ * Derpibooru's own derivatives: `large`, `medium`, `small`, the thumbs. These are already
+ * size-appropriate files off a CDN, which is what makes running them through `/_next/image` a pure
+ * loss — see `shouldBypassImageOptimization`.
+ *
+ * Matched on the *raw* URL, because the image line may have wrapped it in a proxy's `?url=`.
+ */
+const CDN_DERIVATIVE = /\/(?:large|medium|small|tall|thumb|thumb_small|thumb_tiny)\.[a-z0-9]+$/;
+
+/**
+ * **The detail's picture is served as-is, not re-encoded, and this is the fix for the blur.**
+ *
+ * `.gif` / `.svg` / `.apng` were here because the optimizer mangles them. The larger case is
+ * everything else: the source is already one of Derpibooru's derivatives, sized for exactly this
+ * job, and putting it through `/_next/image` at `q=82` measurably destroys it. For one real
+ * picture, at **identical pixel dimensions** — the optimizer clamps to the source, so `w=1920` and
+ * `w=3840` return the same image:
+ *
+ *     source large.jpg      373,365 bytes
+ *     /_next/image q=82     170,826 bytes   (46%)
+ *     /_next/image q=88     217,511 bytes   (58%)
+ *
+ * Less than half the bytes for the same resolution, on a detailed photograph. That is why the
+ * report was "production is soft, dev is completely fine": `next.config.ts` sets
+ * `images.unoptimized` in development, so dev has always been showing the untouched file. Nothing
+ * about the flight or its timing was ever involved — resolution was not the problem either, since
+ * `sizes` resolves to 944px and the srcset offers 1920.
+ *
+ * It also costs **3–4 seconds of this server's CPU** per variant, measured, which is the latency
+ * the picture used to take to sharpen.
+ *
+ * What it gives up is bytes: 373KB instead of 171KB for an opened picture. That is the right way
+ * round — the picture *is* the content here, and it now arrives in one hop from a CDN instead of
+ * waiting on our own re-encode. The gallery cards keep the optimizer, where it earns its place:
+ * a 308px card from a 1280px source is a real saving.
+ */
 function shouldBypassImageOptimization(src: string) {
-  const pathname = src.split(/[?#]/, 1)[0].toLowerCase();
-  return pathname.endsWith('.gif') || pathname.endsWith('.svg') || pathname.endsWith('.apng');
+  const pathname = getRawImageUrl(src).split(/[?#]/, 1)[0].toLowerCase();
+  if (pathname.endsWith('.gif') || pathname.endsWith('.svg') || pathname.endsWith('.apng')) {
+    return true;
+  }
+  return CDN_DERIVATIVE.test(pathname);
 }
 
 function getPrefetchCandidate(
@@ -142,6 +182,13 @@ export default function DetailImage({
   // final underneath so clearing heroActive is only a CSS swap (no mount jank).
   const mountFinal = Boolean(finalSrc) && (!heroActive || !hasPreview || preloadFinal);
   const responsiveSizes = getHeroMediaResponsiveSizes({ width, height });
+
+  /* The preview layer needs no resolution ladder of its own. It paints the bitmap the gallery card
+     already decoded — instant, and soft, because that bitmap was picked for a ~300px slot — and the
+     final layer above now arrives as the CDN's own file in one hop rather than waiting on a local
+     re-encode, so there is nothing left for a middle rung to be faster than. One was built and
+     removed: it asked the optimizer for an in-between variant, which is the very thing that was
+     making the picture soft in the first place. */
 
   const publishPreviewReady = useCallback(() => {
     const readySurfaceId = surfaceIdRef.current;

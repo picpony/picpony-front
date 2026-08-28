@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { spawnRipple } from '@/lib/motion';
+import { spawnRipple } from '@/lib/ripple';
 
 /**
  * Global press-ripple system. Mount once (root layout); any element carrying

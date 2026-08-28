@@ -37,7 +37,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { getImageHeroRuntime } from '@/lib/hero';
-import { getAppScroller, heroOwnsScreen } from '@/lib/motion';
+import { getAppScroller, heroOwnsScreen } from '@/lib/appScroller';
 
 /** The Navigation API surface this needs, which TypeScript's DOM lib does not have yet. */
 type NavigationEntryLike = { key?: string };

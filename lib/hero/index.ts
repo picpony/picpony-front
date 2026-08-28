@@ -33,7 +33,12 @@ export type {
 export { warmImageHeroFrame } from './frameCache';
 export { isScrollLikelyActive } from './input';
 export { publishWhenHeroSettled } from './publish';
-export { canAnimateImageHero, prepareImageHero, warmImageHero } from './media';
+export {
+  canAnimateImageHero,
+  prepareImageHero,
+  warmImageHero,
+  warmImageHeroSource,
+} from './media';
 
 // --- Setup ---------------------------------------------------------------
 

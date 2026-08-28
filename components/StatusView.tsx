@@ -63,9 +63,9 @@ interface StatusViewProps {
  *           anything else makes a 120px well scroll.
  *
  * The entrance is `Reveal`, i.e. the same staggered rise every other
- * arriving-on-mount block in the app uses. It is deliberately *not* a
- * ScrollTrigger: an empty state is on screen at commit by definition, so
- * `useScrollReveal` would never fire.
+ * arriving-on-mount block in the app uses. It is deliberately not scroll-driven:
+ * an empty state is on screen at commit by definition, so a trigger line it never
+ * crosses would mean it never animates at all.
  */
 const SIZES: Record<StatusViewSize, string> = {
   page: 'min-h-[50dvh] px-4 py-8',

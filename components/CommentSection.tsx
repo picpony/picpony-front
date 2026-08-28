@@ -26,7 +26,6 @@ interface CommentSectionProps {
   replyTo: ReplyTo | null;
   commentsSectionRef: React.RefObject<HTMLDivElement | null>;
   commentEditorMountRef: React.RefObject<HTMLDivElement | null>;
-  shouldMountCommentEditor: boolean;
   fetchComments: () => Promise<Comment[]>;
   handleReply: (comment: Comment) => void;
   handleCancelReply: () => void;
@@ -77,7 +76,6 @@ export default function CommentSection({
   replyTo,
   commentsSectionRef,
   commentEditorMountRef,
-  shouldMountCommentEditor,
   fetchComments,
   handleReply,
   handleCancelReply,
@@ -95,7 +93,6 @@ export default function CommentSection({
           <CommentComposer
             key={imageId}
             imageId={imageId}
-            mounted={shouldMountCommentEditor}
             replyTo={replyTo}
             loadComments={fetchComments}
             onCancelReply={handleCancelReply}

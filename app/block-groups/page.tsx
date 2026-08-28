@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
@@ -26,18 +26,15 @@ import Chip from '@/components/Chip';
 import Popover from '@/components/Popover';
 import { ICON } from '@/lib/icons';
 import { readUserInfo } from '@/lib/hooks';
+import { useResource, SKIP } from '@/lib/resource';
+import { blockGroups, type BlockGroup } from '@/lib/resources';
 
 const MAX_GROUPS = 50;
 const MAX_TAGS_PER_GROUP = 100;
 
-interface BlockGroup {
-  id: number;
-  name: string;
-  tags: string[];
-  hidden_tags: string[];
-  spoilered_tags: string[];
-  is_active: number;
-}
+/* `BlockGroup` is imported from `lib/resources` rather than re-declared here. It was
+   declared in both places, which is fine until the resource is the thing that produces it —
+   then two structurally-identical types is one type and a copy that can drift. */
 
 type UserInfo = {
   id: number;
@@ -50,8 +47,34 @@ type UserInfo = {
 export default function BlockGroupsPage() {
   const { openAuth } = useAuthModal();
   const [userInfo] = useState<UserInfo | null>(() => readUserInfo() as UserInfo | null);
-  const [groups, setGroups] = useState<BlockGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  /* The list comes from the resource layer rather than a `useState` + effect of its own,
+     which is what makes the sidebar's hover prefetch (`lib/prefetchRoute.ts`) worth
+     anything. It warmed `blockGroups` and this screen then fetched independently, so the
+     hover cost a request nobody read — the exact thing AGENTS.md's speculation rule
+     forbids. `SKIP` while signed out, because there is no token to key on. */
+  const read = useResource(blockGroups, userInfo?.token ? { token: userInfo.token } : SKIP);
+  const groups = useMemo(() => read.data?.groups ?? [], [read.data]);
+  /* The placeholder branches on having nothing at all, never on `isLoading` — a revalidation
+     under a warm screen has both, and dimming that to a skeleton is what makes a cache not
+     worth having. */
+  const loading = read.data === undefined && read.error === undefined;
+
+  /* Local edits go through the resource's own store so a refresh cannot resurrect a value the
+     user just changed. `write` is the optimistic path: it leaves `fetchedAt` where it was, so
+     the next read still confirms against the server. */
+  const setGroups = useCallback(
+    (update: (previous: BlockGroup[]) => BlockGroup[]) => {
+      const token = userInfo?.token;
+      if (!token) return;
+      blockGroups.write({ token }, (previous) => ({
+        ...(previous ?? {}),
+        success: true,
+        groups: update(previous?.groups ?? []),
+      }));
+    },
+    [userInfo?.token],
+  );
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -81,31 +104,22 @@ export default function BlockGroupsPage() {
     }
   }, [userInfo, openAuth]);
 
-  const loadGroups = useCallback(async () => {
-    if (!userInfo?.token) return;
-    setLoading(true);
-    try {
-      const data = await api.getBlockGroups(userInfo.token);
-      if (data.success) {
-        setGroups(data.groups || []);
-        updateLocalStorageCache(data.groups || []);
-      } else {
-        showToast(data.error || '加载失败', 'error');
-      }
-    } catch {
-      showToast('网络错误，请稍后再试', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [userInfo?.token]);
+  /* `refresh` rather than a hand-rolled reload: the resource owns the request, the dedup and
+     the in-flight state. Mutations below call this to reconcile with the server. */
+  const loadGroups = useCallback(() => {
+    void read.refresh();
+  }, [read]);
+
+  /* The localStorage mirror that `lib/api/client.ts`'s browsing settings read from. It has to
+     follow whatever the list currently is, whether that came from the server or from an
+     optimistic write, so it keys off the rendered value rather than off the fetch. */
+  useEffect(() => {
+    if (read.data?.groups) updateLocalStorageCache(read.data.groups);
+  }, [read.data]);
 
   useEffect(() => {
-    if (!userInfo) return;
-    // Defer so setLoading inside loadGroups is not sync in the effect body
-    queueMicrotask(() => {
-      void loadGroups();
-    });
-  }, [userInfo, loadGroups]);
+    if (read.error) showToast('网络错误，请稍后再试', 'error');
+  }, [read.error]);
 
   function updateLocalStorageCache(groups: BlockGroup[]) {
     const hidden = new Set<string>();
@@ -265,7 +279,7 @@ export default function BlockGroupsPage() {
         loadGroups();
       }
     },
-    [userInfo?.token, loadGroups],
+    [userInfo?.token, loadGroups, setGroups],
   );
 
   const confirmDeleteGroup = useCallback((id: number) => {

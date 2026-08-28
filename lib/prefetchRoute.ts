@@ -27,6 +27,7 @@ import { readToken, readUserInfo } from '@/lib/hooks';
 import { getBrowsingSettings } from '@/lib/api/client';
 import {
   blockGroups,
+  browsingFingerprint,
   browsingHistory,
   faveIds,
   featuredImage,
@@ -72,7 +73,10 @@ export function prefetchRoute(href: string) {
       forumPosts.prefetch({ page: 1 });
       return;
     }
-    homeFeed.prefetch({ page: 1, sort: settings.homeSort });
+    /* `fp` is an argument now rather than something the key function reads for itself — see
+       `homeFeed` in `lib/resources.ts`. It has to be the same string the screen will compute, or
+       the warm entry lands under a key nothing reads. */
+    homeFeed.prefetch({ page: 1, sort: settings.homeSort, fp: browsingFingerprint() });
     featuredImage.prefetch({ apiKey: (readUserInfo()?.api_key as string) || undefined });
     return;
   }
@@ -87,7 +91,7 @@ export function prefetchRoute(href: string) {
 
   if (path.startsWith('/forum/')) {
     const id = path.slice('/forum/'.length);
-    if (id && id !== 'create') forumThread.prefetch({ id });
+    if (id && id !== 'create') forumThread.prefetch({ id, page: 1 });
     return;
   }
 

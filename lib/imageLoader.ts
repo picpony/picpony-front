@@ -5,6 +5,7 @@
 // direct race all belong to `lib/route.ts`, because a forced policy has to beat the
 // ladder and because the same health state decides API lines too.
 
+import type { ImageLine } from '@/lib/route';
 import { IMAGE_CDN_BASE, IMAGE_WORKER_BASE } from '@/lib/constants';
 import {
   isImageForced,
@@ -82,9 +83,23 @@ function tierAttempt(
   return { url: buildImageUrl(rawUrl, tier, bust, thumb), tier, retries, giveUp: false };
 }
 
-/** 首次尝试：线路策略优先，其次是用户开关与健康状态 */
-export function createInitialAttempt(rawUrl: string, thumb = false): LoadAttempt {
-  return tierAttempt(rawUrl, TIER_OF[resolveImageLine()], false, thumb);
+/**
+ * 首次尝试：线路策略优先，其次是用户开关与健康状态。
+ *
+ * `line` overrides that resolution for the **first** attempt only, and exists for one reason:
+ * `resolveImageLine()` reads `localStorage` and the fetched policy, so it answers differently in
+ * Node than in the browser and every server-rendered `<img>` was a hydration mismatch for anyone
+ * whose stored preference was not the default. `app/layout.tsx` passes the line the server
+ * assumed (from a cookie) down through `ImageLineProvider`, so the first render on both sides
+ * asks the same question. The ladder is untouched — `resolveNextAttempt` still reads the live
+ * answer, so a stale cookie costs one corrected attempt rather than the wrong line.
+ */
+export function createInitialAttempt(
+  rawUrl: string,
+  thumb = false,
+  line?: ImageLine | null,
+): LoadAttempt {
+  return tierAttempt(rawUrl, TIER_OF[line ?? resolveImageLine()], false, thumb);
 }
 
 /**
@@ -139,3 +154,17 @@ export function resolveNextAttempt(
   if (attempt.retries >= DIRECT_MAX_RETRIES) return { ...attempt, giveUp: true };
   return tierAttempt(rawUrl, 2, true, thumb, attempt.retries + 1);
 }
+
+/* `upgradedVariant` was here: a middle rung that asked the optimizer for an in-between variant of
+   the card's bitmap, to bridge the gap between the ~300px thumbnail the flight paints and the
+   detail's own picture. It is gone, because the gap it bridged was self-inflicted — the detail's
+   picture was slow *because* it was going through the optimizer too, and 3–4 seconds of re-encode
+   is what the middle rung was racing. `shouldBypassImageOptimization` (components/DetailImage.tsx)
+   removed the cause; a middle rung built out of the same re-encode could only ever have been
+   slower and softer than the thing it was standing in for.
+
+   Two measurements worth keeping from it. The upscale it was fixing was real — 384px in a 944px
+   box at 1920, 2.46x — and the trap it fell into is general: it multiplied a *constant* 1280 by
+   the device pixel ratio, so on any 2x screen it asked for the 3840 bucket and never landed at
+   all. A fix that measures perfectly at DPR 1 and is inert on every real phone. Measure image work
+   at DPR 2. */

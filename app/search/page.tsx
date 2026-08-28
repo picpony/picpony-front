@@ -1,11 +1,11 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef, useCallback, useId } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback, useId, useMemo } from 'react';
 import { MdSearch, MdImageSearch, MdSearchOff, MdArrowBack, MdExpandMore } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import Badge from '@/components/Badge';
-import { api, PonyImage, applyImageLine } from '@/lib/api';
+import { api, PonyImage } from '@/lib/api';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
@@ -26,6 +26,8 @@ import { readToken, useEscapeBack } from '@/lib/hooks';
 import SectionHeading from '@/components/SectionHeading';
 import Popover from '@/components/Popover';
 import { ICON } from '@/lib/icons';
+import { useResource, SKIP } from '@/lib/resource';
+import { searchFeed } from '@/lib/resources';
 
 interface DictionaryEntry {
   id: number;
@@ -86,16 +88,33 @@ function SearchPageContent() {
       : 'created_at';
 
   const [inputValue, setInputValue] = useState(q);
-  const [images, setImages] = useState<PonyImage[]>([]);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
   const [customResults, setCustomResults] = useState<PonyImage[] | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
   const [sortBy, setSortBy] = useState(sortParam || defaultSort);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>((dirParam as 'asc' | 'desc') || 'desc');
+
+  /* `SKIP` covers the two states with nothing to ask for: an empty query, and a 以图搜图
+     result already on screen (which comes from a different endpoint entirely and is held in
+     `customResults`). Skipping rather than guarding inside a fetch is the mechanism that
+     stops a screen paying for content nobody asked for.
+
+     `keepPrevious` for the same reason the home feed uses it: the page number is in the key,
+     so without it a page turn unmounts the grid for a round trip and the browser clamps the
+     scroll position to the collapsed height. */
+  const read = useResource(
+    searchFeed,
+    q && !customResults
+      ? { query: q, page, sortField: sortBy === 'random' ? undefined : sortBy, sortDir }
+      : SKIP,
+    { keepPrevious: true },
+  );
+  const images = useMemo(() => read.data?.images ?? [], [read.data]);
+  const hasMore = images.length === 50;
+  const error = (read.error as Error | null) ?? null;
+  /* Nothing yet, rather than `isLoading` — which is also true while a warm result
+     revalidates underneath, and swapping that for a skeleton undoes the point of the cache. */
+  const isLoading = Boolean(q) && !customResults && read.data === undefined && !read.error;
 
   // Advanced search panel state
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -325,48 +344,14 @@ function SearchPageContent() {
     tokenRef.current = readToken();
   }, []);
 
-  useEffect(() => {
-    if (customResults) return;
+  /* The fetch, the `isMounted` flag and the four `setState`s that used to live here are
+     `useResource`’s now — see `read` above. `searchFeed` had sat in the catalogue with zero
+     references since it was written; this is the consumer it was missing, and wiring it is what
+     makes going back to a search cost nothing.
 
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (!isMounted) return;
-      setIsLoading(true);
-      setError(null);
-
-      if (!q) {
-        setIsLoading(false);
-        setImages([]);
-      }
-    });
-
-    if (!q) {
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    api
-      .getImages(q, page, sortBy === 'random' ? undefined : sortBy, sortDir)
-      .then((res) => {
-        if (isMounted) {
-          const imgs = res.images.map(applyImageLine);
-          setImages(imgs);
-          setHasMore(imgs.length === 50);
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(err);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [q, page, retryCount, customResults, sortBy, sortDir]);
+     `applyImageLine` is not re-applied either: `lib/api/derpi.ts` applies it centrally to every
+     image-bearing response (`withImageLine`), so the map that used to be on that line was a
+     second, idempotent pass over 50 images on every render. */
 
   useEffect(() => {
     const isSingleTag = !!q && !/[ ,:*?]/.test(q) && !q.startsWith('-');
@@ -430,8 +415,9 @@ function SearchPageContent() {
 
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1) {
-      setIsLoading(true);
-      setError(null);
+      /* Only the page number. The loading and error states used to be cleared by hand here
+         and are the resource's now: changing the page changes the key, which is the signal
+         `useResource` reads. */
       setPage(newPage);
       // <Pagination> scrolls the shell's real scroll container back to the top.
     }
@@ -447,8 +433,8 @@ function SearchPageContent() {
   };
 
   const handleRetry = useCallback(() => {
-    setRetryCount((c) => c + 1);
-  }, []);
+    void read.refresh();
+  }, [read]);
 
   return (
     <>
@@ -714,7 +700,22 @@ function SearchPageContent() {
                 搜索：{q} — 第 {page} 页
               </div>
               <MasonryGrid images={images} />
-              <Pagination currentPage={page} hasMore={hasMore} onPageChange={handlePageChange} />
+              <Pagination
+                currentPage={page}
+                hasMore={hasMore}
+                onPageChange={handlePageChange}
+                /* Warmed on hover/focus/press of a page control, like the home feed's. This
+                   pager had no warmer because the screen had no resource to warm. */
+                onPrefetchPage={(next) =>
+                  q &&
+                  searchFeed.prefetch({
+                    query: q,
+                    page: next,
+                    sortField: sortBy === 'random' ? undefined : sortBy,
+                    sortDir,
+                  })
+                }
+              />
             </div>
             {/* Bottom sort controls */}
             {q && (

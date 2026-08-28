@@ -2,7 +2,10 @@
 
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
 <!-- END:nextjs-agent-rules -->
 
 # Design system
@@ -58,9 +61,9 @@ card radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | Chat message             | `components/ChatBubble.tsx`                                | a radius picked by eye                            |
 | Overlay behaviour        | `lib/overlay.ts` hooks                                     | a second copy of the focus trap / scroll lock     |
 | Press feedback           | `data-ripple` + `state-layer`                              | an active-scale utility                           |
-| Component motion         | `spring-*` utilities / `spring()` (`lib/motion.ts`)         | a duration and a curve chosen independently        |
-| Scroll-in reveal         | `useScrollReveal` (`lib/motion.ts`) — see note below       | mount-time fades                                  |
-| Scrolling to an element  | `scrollAppToElement` (`lib/motion.ts`)                     | `el.scrollIntoView({ behavior: 'smooth' })`       |
+| Component motion         | `spring-*` utilities / `spring()` (GSAP) or `springTiming()` (WAAPI) | a duration and a curve chosen independently |
+| Entrance for a block     | `components/Reveal.tsx` — plays on mount; see note below    | a hand-rolled fade, or a scroll trigger           |
+| Scrolling to an element  | `scrollAppToElement` (`lib/scrollTo.ts`)                   | `el.scrollIntoView({ behavior: 'smooth' })`       |
 
 **There is one tab control and it is `Tabs`.** There were four: `TabBar`, a
 hand-rolled floating pill in `AppLayout`, the admin console's vertical rail, and
@@ -176,45 +179,37 @@ ink measures 2.93 — every non-filled `Button`'s busy indicator.
 
 Press feedback is `data-ripple` plus the `state-layer` utility. This table used to
 name a `usePressable` hook; nothing in the repo has ever defined one — the row was
-the only occurrence of the string. Press lives in `spawnRipple` (`lib/motion.ts`)
+the only occurrence of the string. Press lives in `spawnRipple` (`lib/ripple.ts`)
 and the `state-layer` utility in `globals.css`, and `Button`/`IconButton` already
 carry both.
 
-`useScrollReveal` (`lib/motion.ts`) is the hook for a long-content screen — /settings' six
-sections, a forum thread's reply list. Pick by *position*, not preference: on screen at commit
-uses `<Reveal>`, further down uses this. **It currently has no call sites at all**, by decision,
-and its own docstring says so; /about in particular does not use it, despite this paragraph
-having claimed otherwise — an entrance cascade on a text roster is explicitly rejected there.
-Read `lib/motion.ts` before assuming a screen has one. /settings is the worked example of getting that wrong — it wrapped all
-six sections in one mount-time `<Reveal>`, so the three below the fold had
-finished revealing before you ever scrolled to them.
+**There is no scroll-driven reveal, and that is a decision rather than a gap.** A hook for it
+existed — `useScrollReveal` in `lib/motion.ts`, on GSAP’s ScrollTrigger — and it is gone. It
+never had a single call site, for a reason this file used to record two paragraphs below its own
+usage instructions: an entrance cascade is for *picture* content, and the gallery already has one
+in `useStaggerGridOn`, ordered by visual position rather than DOM order. On text — a settings form,
+a forum list, a team roster — it makes rows the reader came for behave like an animation.
 
-Four places it must **not** go, and the last two are why the list of call sites
-is shorter than the list of long pages:
+It was not free to keep. It was the only consumer of ScrollTrigger, and `lib/motion.ts` registers
+its plugins at module scope, so the plugin shipped in the root chunk of all twenty routes to serve
+nothing. A documented no-op is still a payload.
 
-- **Above a gallery card.** It parks its targets at a `y` offset and the hero
-  flight reads `getBoundingClientRect` on press.
-- **Inside a `TabPanes` pane running `lean`** (i.e. /policy). The shared axis is
-  already sampling the same nodes' `autoAlpha` and `y`.
-- **Inside any tab pane whose content swaps**, `lean` or not — /user/[id],
-  /messages, /favorites, the home route. The pane transition and the reveal would
-  animate the same nodes on two different clocks.
-- **Over content that already cascades on mount** — /tasks' rows stagger via
-  their own delays, /admin's panel cross-fades as one block. A second entrance on
-  top of the first is the "动画重叠" failure, not extra polish.
+`<Reveal>` is therefore the app’s one general entrance helper, and it plays on mount. If a
+below-the-fold reveal is ever genuinely wanted, it does not need ScrollTrigger — an
+`IntersectionObserver` rooted on the app scroller is a dozen lines, and `PicDetail` already has two
+of them. Four constraints are worth carrying over, and the last two are why the call-site list was
+empty rather than short:
 
-The hook owns three things a call site would otherwise get wrong. It refreshes
-ScrollTrigger through a debounced `ResizeObserver`, because trigger positions are
-computed once and ScrollTrigger auto-refreshes on resize and `load` and nothing
-else — an image decoding after the batch is built moves every start line below
-it. Its `batchMax` is a *function*, re-evaluated per refresh, because a flat
-value put a whole phone screen into one batch and left the stagger nothing to
-stagger. And it takes `useMotionTier` rather than the point-in-time read, because
-this is one of the two hooks that keeps firing all session (the other is
-`useStaggerGrid`) and so is one of the two where changing the preference midway
-still has something to affect. It deliberately has no `refreshPriority`: that
-option orders refreshes when one trigger's recalculation moves another's
-measurements, which means pinning, and nothing here pins.
+- **Never above a gallery card.** It parks targets at a `y` offset and the hero flight reads
+  `getBoundingClientRect` on press.
+- **Never inside a `TabPanes` pane running `lean`** (i.e. /policy). The shared axis is already
+  sampling the same nodes’ `autoAlpha` and `y`.
+- **Never inside any tab pane whose content swaps**, `lean` or not — /user/[id], /messages,
+  /favorites, the home route. The pane transition and the reveal would animate the same nodes on
+  two different clocks.
+- **Never over content that already cascades on mount** — /tasks’ rows stagger via their own
+  delays, /admin’s panel cross-fades as one block. A second entrance on top of the first is the
+  “动画重叠” failure, not extra polish.
 
 **An interactive element may not be nested inside another one.** A `<button>`
 inside an `<a>` is invalid HTML, and it fails in exactly the way invalid HTML
@@ -283,6 +278,18 @@ indefinite. `min-h-full` therefore computed to `auto` and centred nothing — th
 attempt at this shipped and did exactly that. It also needs
 `[data-page-content]`'s inner wrapper to be a flex column, which it is; measured safe
 because every route puts exactly one element in there.
+
+**"Complete" is not "loaded".** `HTMLImageElement.complete` is true for an image that has
+**failed**, so a `complete` check alone marks a dead image as ready: `FadeInImage` removed its
+shimmer and left the `<img>` at `opacity-1` with nothing in it — a card that is blank with no
+placeholder of any kind. The predicate is `complete && naturalWidth > 0`.
+
+And it has to be **assigned, not raised**. That check runs on every change of the layered loader's
+`displaySrc`, and it only ever set `true` — so once a card had shown anything it never shimmered
+again, and returning to a page whose images had already failed once brought the cards back bare.
+Measured going next-then-previous on the gallery: in-view cards with neither a shimmer nor an image
+climbed 0 → 1 → 3 → 4 → 5 → 6 over two seconds. `npm run perf:pageturn` asserts that count stays
+zero — every card in view must be showing a shimmer or the give-up plate.
 
 **Loading is the destination's own shape, not a spinner.** A list loads as
 `Skeleton` rows in the row's own geometry, a grid as `ImageGridSkeleton`, a card
@@ -2246,8 +2253,27 @@ Three mechanisms, in order of how much they own:
 | Change                          | Mechanism                             | Lives in                         |
 | ------------------------------- | ------------------------------------- | -------------------------------- |
 | Opening/closing an image        | Shared-element hero flight            | `lib/hero/**`                    |
-| Gallery <-> forum, profile tabs | Shared axis (X), 500ms `emphasized`   | `playSharedAxis` / `useTabPanes` |
+| Gallery <-> forum, profile tabs | Shared axis (X), 500ms `emphasized`   | `playSharedAxis` / `useTabPanesOn` |
 | Any other route                 | Cross-fade over an inert clone, 400ms | `lib/routeCrossFade.ts`          |
+
+**A tab change writes the URL synchronously, with `history.pushState`.** Not `router.push`: a tab
+is a query parameter on the route you are already on, and treating it as a navigation makes it an
+RSC request inside a transition that **races any other navigation started nearby**. It was also
+*deferred* by `TAB_PUSH_COALESCE_MS`, so it could land after the user had gone somewhere else and
+overwrite it. Measured over five runs, tapping 论坛 and opening a thread 200ms later gave three
+different answers — the thread opened once, the queued tab update clobbered it twice, and twice
+both navigations were lost, leaving the gallery pane on screen under a tab bar still reading 论坛.
+Tapping 论坛 then 搜索 left the URL reading `/?tab=forum` while `/search` was the route rendering,
+and the route cross-fade never ran because the pathname it watches never changed.
+
+Cancelling the queued write when the tab bar unmounts does **not** fix it — the timer fires while
+the other navigation is still committing, so it wins the race anyway. Removing the queue does.
+Next integrates native `pushState`/`replaceState` into its own router and syncs `usePathname` and
+`useSearchParams`, so the panes and the pill still see the change; nothing is started, so nothing
+can race, and a tab switch stops costing an RSC round trip. The coalescing window survives as the
+**push-vs-replace** decision, which is all it was buying: the first change in a burst adds a
+history entry and the rest rewrite it. `npm run net:tabnav` is the regression check — it taps a
+tab, opens a thread after a configurable gap, and asserts where back lands.
 
 **Tabs.** Render `TabPanes` / `TabPane`; do not wire this by hand. Panes are
 marked, never unmounted — `data-tab-pane="name"` plus `data-tab-pane-active` —
@@ -2279,7 +2305,7 @@ about to replace. `/messages` is the counter-example and must stay without it.
 
 **"Off by default" has now been true three times and false twice**, so check it rather
 than trusting it: the option had a default in four places — `playSharedAxis`,
-`runTabTransition`, `TabPanes` and `useTabPanes` — and the first two said `true` while the
+`runTabTransition`, `TabPanes` and `useTabPanesOn` — and the first two said `true` while the
 last two said `false`. `startTabTransition` passes four arguments and therefore took the
 parameter default, so the home page's *tab bar* ran the lean while its own comment and this
 file both said it did not, and while the reactive path (a sidebar link, back/forward, the
@@ -2499,6 +2525,22 @@ globals.css and reads the pressed token; `spawnRipple` drives only the scale and
 the fade-out. It used to open at .18 and settle to .12 — two numbers, neither of
 them a token, the first half again the spec's — which read as a flash followed by
 a wash rather than as one gesture.
+
+**Its fade is one keyframe, and that is a rule rather than a shorthand.** A WAAPI keyframe list
+is *absolute*, where `gsap.to(el, { opacity: 0 })` starts from whatever the element currently
+is — so `[{ opacity: 1 }, { opacity: 0 }]` does not mean "fade out from here". Moving the ripple
+off GSAP wrote exactly that, and because the fade carries a 300ms delay with no `backwards` fill,
+the wave jumped from the token's 0.10 to **1** at the instant the animation became in-effect and
+then fell: a full-strength `currentColor` flash at the end of every press — black on a text
+button, white on a filled one. Measured per frame, the opacity read 0.100 for 291ms and then
+1.000. A single keyframe at offset 1 takes an **implicit start from the underlying value**, which
+is the token, so the wave fades from what it was actually painting.
+
+Two things make this one element the only casualty, and they are the test for the next
+conversion: it is the only animated element whose **CSS sets a non-default opacity**, and the only
+fade with a **delay and no `backwards` fill**. `Toast`, `Reveal`, `Popover` and the hero's retire
+fade all start from a CSS opacity of 1, so an absolute `1` happens to be the underlying value
+there. `npm run perf:ripple` samples it per frame.
 
 A **selection control needs its own state layer** and cannot use this utility.
 `Checkbox`, `Radio` and `ToggleSwitch` each paint a real 40dp circle instead,
@@ -2891,8 +2933,8 @@ Four situations, and the last two are one rule:
 
 | a new pathname | jump to 0. A new page starts at its top |
 | back / forward | restore what that history entry had |
-| a page turn (`?page=`) | `Pagination` owns it |
-| a tab switch (`?tab=`) | `startTabTransition` / `useTabPanes` own it |
+| a page turn (`?page=`) | `Pagination` owns it, and it **positions rather than travels** — see below |
+| a tab switch (`?tab=`) | `startTabTransition` / `useTabPanesOn` own it |
 
 The owner depends on `pathname` alone, so it does not run for a search-only change at all —
 which is stronger than testing for one. The image detail stays the hero subsystem's, guarded
@@ -2914,6 +2956,236 @@ with a URL fallback whose one observable difference is documented at the call si
 merge a key into `history.state`: the App Router rebuilds that object on every commit and
 drops anything it does not own, which is what `lib/hero/history.ts` already spends three
 mechanisms working around.
+
+**A page turn glides on the distance law, like every other programmatic scroll, and there is no
+fixed-length escape hatch.** `scrollAppToElement` scales its tween with the square root of the
+travel (360–1100ms), so the *rate* is non-linear in the distance: a short hop is brisk, a long one
+takes its time. That is the property worth having, and it is what a fixed length destroys — hold
+the duration still and the speed rises with however far you happened to be scrolled, so the same
+turn is a whip-pan from the bottom of a long gallery and a crawl from near the top.
+
+**This went round three times and the third answer is the first one, which is the part worth
+recording.** The long glide was reported as incoherent, and the duration was the wrong suspect:
+what made it look wrong is that the cards it travelled past were **blank**. `FadeInImage` treated
+a failed or swapped image as loaded and dropped its shimmer, so a 750ms glide from the bottom of a
+50-card gallery ran through nothing at all — pressing 下一页, watching the page slide upward past
+empty space, and having content appear once it stopped. Shortening it to 300ms made that window
+narrower without making it right, and an instant jump removed the motion along with the problem,
+which reads as a cut.
+
+With the placeholder fixed the same glide passes over skeletons in the row's own geometry, which is
+what a list loading is supposed to look like, and `npm run perf:pageturn` asserts that no in-view
+card is ever bare. **Fixing the placeholder is what made the honest duration affordable** — the
+lesson being that when a transition reads wrong, check what is on screen during it before changing
+how long it lasts. That is the same conclusion the hero flight reached twice, from the same
+direction.
+
+**The blank stretch at the start of a page turn was the entrance cascade, and the cause was a ref
+attached one commit too late.** Worth reading in full, because one ordering bug produced two
+opposite-looking symptoms and neither of them failed anything.
+
+`useStaggerGridOn` parks every card at `autoAlpha: 0` and reveals them in visual order, top to
+bottom, over as much as 0.9s of stagger. `MasonryGrid` rendered `<StaggerGrid>` **inside** the
+`<div ref={gridRef}>` it targets — and React attaches a parent's ref only *after* its children's
+layout effects have run, so the mount pass read `ref.current === null`, returned early, and was
+never re-run, because nothing in a dependency array changes when a ref attaches. Measured:
+`no-root cards=50` at 543ms, then silence until a page turn at 6957ms. So:
+
+- the gallery had **no entrance cascade at all** on load, which nobody noticed because an absent
+  entrance looks like content simply being there; and
+- the first pass that ever found a root was a **page turn**, where `Pagination` has just started
+  gliding the scroller to the top of the list — so the viewport sits at the *bottom* of the grid,
+  where the cascade order puts the cards **last**. Every card the user was looking at was held
+  invisible for the full stagger, and content appeared only as the glide climbed into the part
+  already revealed. On an already-cached page the rows are present in the first frame, so the
+  whole delay is spent hiding content that was ready.
+
+The fix is both halves: `<StaggerGrid>` is a **sibling after** the grid, so the mount pass finds
+its root; and the hook **latches once per mount**, so a page turn no longer replays it. A page turn
+is a content replacement inside a grid that never left the screen — the motion carrying it is the
+glide, and a second entrance on top is the 动画重叠 failure rather than extra polish. A breakpoint
+reflow no longer replays it either, on the same argument: a resize is not an arrival.
+
+**`FadeInImage`'s placeholder cross-fades rather than unmounting**, which is the same defect one
+size down. `{shimmer && !isLoaded && <Skeleton/>}` removed the shimmer in the very commit that
+flipped the image to `opacity-100`, so the 200ms fade started from 0 with nothing behind it.
+Measured on a real page turn: 2 of 16 in-view cards, for one sample, showing neither placeholder
+nor picture. The skeleton now fades out on the image's own clock and is released one
+`MOTION_SPEED_SCALE.slow`-scaled duration later — the wall-clock rule, because a timer written
+against the unscaled figure fires inside the motion it is meant to outlast.
+
+**`npm run perf:pageturn` could not see any of this, and fixing the probe was most of the work.**
+Four defects, each of which made it pass while the screen was blank:
+
+- It stubbed the **server** but not the **browser**, so page 2 was read from the real derpibooru,
+  never landed, and `keepPrevious` held page 1 — the URL, the first card and the row set were
+  identical before and after. It had never turned a page. It now intercepts via CDP `Fetch` from
+  the same fixtures `net:audit` uses, unwrapping a proxy line's `?url=`.
+- It pressed 上一页 from wherever the forward glide had left the scroller, which is the **top** —
+  no travel, no glide, and the one configuration that shows the bug could not occur. It now
+  re-scrolls to the bottom first, which is the reported sequence.
+- It tested the `<img>`'s opacity and took a shimmer as proof of life, but the cascade sets
+  `autoAlpha` on the **card**: a perfectly good shimmer inside a box painting nothing. It tests the
+  card's own visibility first, and reports `HIDDEN` separately from `BARE` so a cascade can be told
+  from a fade.
+- Its cascade watch polled a 1.5s window opening 900ms after navigation, and the lazy GSAP chunk
+  lands later than that in this harness. The window is 6s and hoisted to the first statement of the
+  block.
+
+**And the cascade must not play on a cold load at all**, which is the third answer to this and the
+one worth keeping. Restoring the mount pass was only half a fix: `StaggerGrid` waited for the
+dynamic import and *then* mounted the hook, and `/` renders its first feed page on the server — so
+on a cold load the cards are in the HTML and painted before the engine arrives, and the cascade
+parked fifty already-visible cards at `autoAlpha: 0` and faded them back in. The grid blinked out a
+few hundred milliseconds after paint and took ~1.3s to return. An entrance that begins after the
+content has arrived is worse than no entrance, which is exactly what "its absent form is the cards
+simply being there" means.
+
+So `StaggerGrid` decides **once, at mount**, on whether the engine is already resident: a client
+navigation or a warm second visit cascades, from a layout effect that beats the first paint of those
+cards; a cold load does not, and nothing subscribes to the load to change its mind. `warmMotion()`
+still fetches the engine on an idle callback for every other consumer.
+
+`npm run perf:pageturn` asserts the predicate rather than the mechanism, in both places it applies:
+**no in-view card may be blank during a page turn, and none may be hidden after a cold load has
+painted it.** Stating it as "the entrance must play on load" — which this section did for one pass —
+asserted the thing that was wrong.
+
+`runScroll` therefore takes no length argument. A parameter with no call sites is one the next
+screen reaches for, and this particular one encoded a claim about page turns that turned out to be
+false. `npm run perf:pageturn` samples what each in-view card is showing per frame.
+
+**The server cannot see which image line this device is on, and that became visible the moment the
+home page started rendering fifty `<img>` tags.** `resolveImageLine()` reads `localStorage` and the
+fetched route policy; in Node it falls back to the defaults and emits the proxy line for everybody.
+A visitor who had turned the image proxy off got a hydration mismatch on every card — and React
+does not patch mismatched attributes, so their browser kept the *server's* URL and their preference
+was ignored for the whole first screen. `COOKIE_KEYS.imageLine` is the answer, in the same shape as
+`browsing`: `lib/route.ts` mirrors its own resolution into the cookie on every change, and
+`app/layout.tsx` hands it down through `ImageLineProvider` so the client's first render asks the
+same question. `createInitialAttempt` takes the line as an argument for that first attempt only;
+the failover ladder still reads the live answer, so a stale cookie costs one corrected attempt.
+A first visit has no cookie and uses the defaults on both sides — correct — and the cookie written
+during that load makes every load after it exact.
+
+**The detail's picture is served as the CDN made it, not re-encoded.** This is a bytes-and-CPU
+change, and it is worth reading together with the section below it — it was *believed* to be the
+answer to "production is soft, dev is completely fine", and it was not.
+
+`next.config.ts` sets `images.unoptimized` in development, so dev has always shown the untouched
+file. Production put it through `/_next/image` at `q=82`, and for one real picture, at **identical
+pixel dimensions** (the optimizer clamps to the source, so `w=1920` and `w=3840` return the same
+image byte for byte):
+
+    source large.jpg      373,365 bytes
+    /_next/image q=82     170,826 bytes   (46%)
+    /_next/image q=88     217,511 bytes   (58%)
+
+Less than half the bytes for the same resolution, on a detailed photograph, plus **3–4 seconds of
+this server's CPU** per variant. `shouldBypassImageOptimization` covers Derpibooru's own
+derivatives now — `large`, `medium`, `small`, the thumbs — matched on the *raw* URL, since the image
+line may have wrapped it in a proxy's `?url=`. They are already size-appropriate files off a CDN;
+there was never anything for the optimizer to do but lose information. It gives up bytes (373KB
+against 171KB for an opened picture) and that is the right way round: the picture *is* the content
+here, and it now arrives in one hop instead of waiting on a local re-encode. Gallery cards keep the
+optimizer, where a 308px card from a 1280px source is a real saving.
+
+**The flight paints a `<canvas>` blitted from the gallery card's bitmap, and that — not the
+detail's `<img>` — is what "the hero flight is very blurry, but only in production" was about.**
+
+`launchFlight` hands `createHeroFlight` the snapshot's `previewFrame`, which `captureHeroFrame`
+draws from the card's own `<img>`. So the flight's sharpness is a property of *that bitmap* and of
+nothing else, and `[data-image-detail-layer]` — preview and final alike — is the surface
+**underneath** it. Measured in a browser on the real grid at 1920x1080:
+
+| | card bitmap | flight box | upscale |
+| --- | --- | --- | --- |
+| production | **304px** (`/_next/image`, `sizes` resolving to `304px`) | 944px | **3.11x** |
+| development | **800px** (raw — `images.unoptimized`) | 944px | 1.18x |
+
+That table is the whole report. Dev is not doing anything clever: it skips the optimizer, so the
+card happens to hold 2.6x the pixels the card itself needs and the flight gets them free. In
+production the card is correctly sized *for a card* and the flight blows it up 3.11x.
+
+So `warmedDetailFrames` (`lib/hero/media.ts`) rasterises a detail-sized source on the intent ladder
+and `prepareImageHero` hands **that** canvas to the flight.
+
+**And the rung it warms is `medium`, not the `large` the detail displays** — which is the second half
+of the fix, and the answer to "the first open is still soft, the second is fine". That report is the
+mechanism working with the bytes missing: on the second open they are in the HTTP cache, so the
+decode is instant. Priced on the probe's shaped CDN at 10Mbps, `medium` is 110KB arriving in
+**132ms** where `large` is 370KB arriving in **344ms**; with the 70ms intent delay and a decode on
+top, large needs over 430ms of hover before the flight can use it and medium needs about 230ms. So
+the flight warms the *smallest rung that is sharp enough*: 800px against the 944px well is
+**1.18x**, which is development's own figure and the configuration nobody reports as blurry.
+
+Those bytes are not speculative waste, which is the rule this would otherwise breach — the same URL
+becomes `previewSrc`, so the detail's preview layer paints it too, where it used to paint the card's
+384px variant at 2.46x. One fetch, two consumers. The picture the user then looks at is still
+`large`, fetched by the final layer as always, landing at 0.74x. The `<img>` is dropped
+once the canvas exists, because retaining 24 decoded 1280x853 bitmaps is ~105MB; the canvas is
+already the unit `heroFrameCache` budgets in pixels. Animated sources are excluded rather than
+captured — a fresh decode is at frame 0, and taking off on a frame the user was not looking at is a
+visible jump.
+
+**The cold tap is still the floor, and it is inherent.** `onPointerDown` starts the warm, which is the
+earliest honest moment (a touch screen has no hover, and pointerdown-to-click is ≥100ms) — but a
+tap with no hover cannot paint bytes that have not arrived, so frame 0 is the card's bitmap and the
+leg runs at 3.11x before the final layer lands sharp at ~430ms. Closing that would mean enlarging
+every card: measured through the optimizer at q=75 on three real pictures, the card's variant costs
+62KB and the next step up costs 103KB, i.e. **+2MB on a fifty-card page** to improve the first
+250ms of the few cards anyone opens. Not taken.
+
+**This took five wrong answers, and four of them were plausible theories about resolution.**
+Worth recording, because the shape repeats:
+
+- *A bigger `sizes` on the card.* Rejected without measuring — and it is the one that was closest
+  to the real mechanism, which is why it now carries a number (above) rather than a dismissal.
+- *Warm `representations.large` on the intent ladder.* Measured: the request never even left, and
+  the flight stayed at 2.46x. Every image went through `/_next/image`, so the raw host URL was
+  bytes nothing would ever request again. **Warming only works when it warms what the consumer
+  fetches** — and note this lesson was learned here and then *not applied*, because the fixed
+  version warmed a URL for `previewSrc`, which the flyer also never reads.
+- *A middle rung — the same optimizer URL at a larger `w`.* This measured beautifully: 2.46x →
+  1.18x at DPR 1. It was also inert on every real device, because it multiplied a **constant**
+  1280 by the device pixel ratio and therefore asked for the 3840 bucket on any 2x screen, which
+  never landed. A fix that is perfect at DPR 1 and does nothing on a phone. **Measure image work at
+  DPR 2** — `npm run perf:sharpness` takes `PROBE_DPR`, and that flag was the difference between
+  the two conclusions.
+- *The same middle rung with the box's real width.* Correct, and still the wrong idea: the gap it
+  was bridging was self-inflicted. Removed.
+- *The optimizer bypass above.* A real improvement — 373KB in one hop instead of 171KB after 3–4
+  seconds of server CPU — and **not the cause**. It was reported as still-blurry immediately, which
+  is the tell that should have redirected the search much earlier.
+
+**The reason four rounds of measurement agreed with the wrong theory is that the probe measured the
+wrong element.** `scripts/probeHeroSharpness.mjs` sampled `[data-image-detail-layer]`, so it
+answered "what will this look like once it has landed" and never "what does the flight look like".
+A number that moves while the picture does not is a measurement of something else. It samples
+`.image-hero-flyer-image` first now, and **asserts** it: `npm run perf:sharpness:warm` fails if the
+flight's canvas is no bigger than the card's own bitmap, which is exactly the state that shipped.
+Verified in both directions — it exits 1 with a warm window too short to land and 0 otherwise.
+
+**`--throttle=<mbps>` shapes the faked CDN by delaying each fulfillment in proportion to the rung's
+weight, and it must not be `Network.emulateNetworkConditions`.** A CDP-fulfilled response is
+synthesised inside the browser and is not subject to it: measured, with the browser throttled to
+10Mbps a 370KB rung still reported `transferSize: 0` and a 21ms duration, so the first version of
+that flag silently measured localhost and would have called any rung a winner. The rungs are also
+padded to their real weights with a tEXt chunk, because the checkerboard compresses to a few KB and
+every rung would otherwise arrive in one packet. If a throttle appears to make no difference, check
+whether the bytes are travelling at all.
+
+Two more harness notes, since they bound what this repo can check. The probe's `--fake-cdn` answers the
+**browser's** derpicdn requests with a locally generated checkerboard PNG, because this machine
+takes **25.7 seconds** to fetch derpicdn directly and no plausible hover covers that; it intercepts
+CDP, which cannot reach the Next server, so `/_next/image` still fetches the real file through the
+real optimizer and the card-versus-flight comparison stays honest. A checkerboard rather than a
+flat fill, because a flat image is sharp at every scale and could not tell a 304px canvas from a
+1152px one. And the assertion is skipped without that flag, so a plain `npm run perf:sharpness`
+remains a report.
+
+**And none of it was ever about the animation.** Reaching for the duration or the easing is the
+mistake the report invites; both times the fault was which bitmap was on screen.
 
 **Every pager needs a `[data-pagination-anchor]`, and it has to be an *ancestor* of the pager.**
 There were three anchors and thirteen pagers, so most page turns replayed the banner and the page
@@ -2992,7 +3264,226 @@ unless you pass `revertOnUpdate: true`. Without it, listeners, `Observer`s and
 `ScrollTrigger`s accumulate on every dep change. Pass it, or keep the changing
 value in a ref and shrink the dependency list.
 
+## Offline, and the service worker
+
+`public/sw.js` is hand-written; there is no Workbox. Its job is narrow on purpose: make the static
+assets instant on a repeat visit, and give an offline hard refresh somewhere to land. It is **not**
+an offline-first shell — `lib/resource.ts` already holds a TTL'd cache with SWR, revalidation on
+tab return and real cancellation, and a second cache underneath it, one that cannot see request
+identity or staleness or the route policy, would fight it.
+
+Rule zero is `if (request.method !== 'GET') return;` — a bare `return`, not `respondWith`, so every
+mutation goes through the browser's own stack untouched.
+
+| | |
+| --- | --- |
+| Documents / navigations | network only; the `catch` serves `/offline.html` |
+| `/_next/static/*` | cache-first, **network fallback** |
+| `/_next/image*` | stale-while-revalidate, LRU 120, cache name **unversioned** |
+| `/api.php`, `/relay`, `/search-api/*`, RSC payloads | never touched |
+| `derpicdn.net`, `wsrv.nl`, `147052.xyz` | never touched |
+
+Each "never" is a bug avoided rather than a preference:
+
+- **Documents** carry three request-scoped things since the SSR pass — the first page of the feed
+  on a 2-minute TTL, the inlined request-line policy (whose whole purpose is to be in force
+  *before* the session's first request), and the `<html>` attributes from the appearance cookies.
+  A cached document paints the previous visitor's theme, which is exactly the flash `COOKIE_KEYS`
+  exists to prevent. It is also the update mechanism: because the document always comes from the
+  network it always names the current build's chunk URLs, and `/_next/static/*`'s network fallback
+  is what lets a client still running an old document fetch a chunk this cache has never seen.
+- **`/api.php`** carries the PHP session, and its route handler exists solely to rewrite
+  `Set-Cookie` so that session survives plain HTTP. A cached body plus a cached `Set-Cookie` on a
+  shared device hands one user's session to the next.
+- **`/relay`** validates protocol, host, port, credentials **and path**, and this file states that
+  the path check *is* the security of the endpoint. A cache serves an old validated response for a
+  URL the current policy may no longer allow, and it echoes the upstream `content-type`.
+- **The three image proxies** are cross-origin with no `crossorigin` on the `<img>`, so their
+  responses are **opaque** — a 500 is indistinguishable from a 200, the same blindness this file
+  records the image *probes* hitting. One cached failure pins a dead line for the session and
+  defeats `lib/imageLoader.ts`'s degrade ladder. Opaque entries also bill ~7 MB each against the
+  origin quota and a gallery page holds fifty. `/_next/image` already covers the gallery.
+
+**No `skipWaiting()` and no `clients.claim()`**, and that is this app rather than caution in
+general: it is a long-lived document with a module-scope resource store and a live hero session,
+and it now lazy-loads chunks. Swapping the worker mid-session means the page's loaded chunks are
+build N while the ones it is about to `import()` come from build N+1's cache — a `ChunkLoadError`,
+introduced by the very pass that added the dynamic imports. A `message` listener is there for a
+future "new version ready" prompt; there is no UI for it.
+
+**`/offline.html` is a static file, not a route, and that was measured.** It was an
+`app/offline/page.tsx` first: the worker serves the cached response at the URL the user asked for,
+so Next hydrated a document built for `/offline` against `location.pathname === '/tasks'`, decided
+the route was `/tasks`, and re-rendered it as an app shell full of 加载失败. A fallback served under
+a foreign URL cannot be a routed page. It carries no script, no font and no request, and its three
+colours are the default palette's spelled out — a knowing divergence from the token rule, because
+this document is outside the design system's reach by construction.
+
+`experimental.useOffline` is the other half and they do not overlap: it keeps a soft navigation,
+prefetch, RSC fetch or Server Action **pending and retrying** through a drop, which the worker
+cannot do; the worker covers the one case no retry reaches, a hard refresh with nothing on the
+wire. `<OfflineBanner>` is what tells the user why something is taking a while — without it,
+"pending" and "broken" look the same.
+
+`app/manifest.ts` omits **`theme_color`** deliberately: the app has ten palettes, so any single
+value is wrong for nine, and `app/layout.tsx` already renders that tag from the palette cookie —
+the same reason Next's own `viewport.themeColor` export was removed. `background_color` is safe to
+fix because it paints only the installed app's splash, before any CSS is in force. The icons are
+**128px only**, which is a gap rather than a decision: an install prompt wants 192, 512 and a
+maskable, and the app's only other mark is a 2851x1001 wordmark. Nothing here is invented; add two
+PNGs and it becomes installable with no other change.
+
+Registration is `components/ServiceWorker.tsx`, on an idle callback, with a `?v=<buildId>` query (a
+file in `public/` cannot read a build-time variable, and a changing script URL is what makes the
+browser find a new worker) and `updateViaCache: 'none'` (without it the browser may satisfy its own
+update check from the HTTP cache and never see one; `next.config.ts`'s `headers()` covers the other
+half of that failure). It opts out under `navigator.webdriver` so `npm run net:audit` measures the
+code rather than a cache.
+
+## The React Compiler
+
+On, through **Babel**, with `experimental.turbopackRustReactCompiler` deliberately off.
+
+**The Rust port emits nothing here.** Next reports the flag as enabled and the build succeeds; the
+built client chunks then contain **0** memo-cache call sites against **356** with the Babel
+transform, and the only `useMemoCache` references left are React's own runtime definitions. A
+compiler that silently optimises no files is worse than one that is off, because the flag says
+otherwise. The count is one grep over `.next/static/chunks/*.js` for the compiler's slot idiom, and
+it belongs in any Next upgrade; `next.config.ts` spells the command out beside the flag.
+
+**What it buys** (`npm run perf:metrics`, `Performance.getMetrics` deltas, median of 9): a tab
+switch's `ScriptDuration` 0.076s → 0.062s, **−18%**; a cold load of `/` 0.211s → 0.223s, +6%. That
+is memoisation's usual shape — the first render pays to fill the caches and every render after it
+collects — and the trade is taken because a cold load happens once while the interactions happen
+all session. **A 5-sample run of the same probe reported the cold regression at +33%**; it is noise
+at that size, worth knowing before someone re-measures and panics.
+
+**What it costs is bytes**, and that half is not noise: `npm run perf:weight` puts `/policy` at
+270,655 brotli with the compiler on against 254,873 with it off — **+15.8 KB on every route**, which
+is the memo-cache code itself. It is a real trade rather than a free win: 16 KB is downloaded once
+and then cached, while the 14ms per interaction repeats all session, so it is taken — but if this
+app ever optimises for a first visit on a slow link above everything else, this is the first flag to
+reconsider, and one `reactCompiler: false` reverses it.
+
+It was enabled **last** on purpose, so anything it broke would be attributable to it rather than to
+the SSR seams or the lazy-motion split. The risk surface here is not the usual one:
+
+- Three **render-phase writes** exist on purpose and each is guarded by an *identity* comparison —
+  `lib/resource.ts`'s `setRetained` against `snapshot.data`, and `AppLayout`'s drawer state. A
+  memoised snapshot that changed identity for an unchanged value loops rather than merely
+  re-renders, so this is the first place to look.
+- **`useGSAP`'s `dependencies`** is a runtime argument the compiler does not model while still
+  memoising the values fed into it. How often those identities change is how often the GSAP
+  context is disposed, which is the accumulated-`Observer` bug this file already records.
+  `lib/motion.ts` and `components/Sheet.tsx` pass hand-tuned lists and two of those call sites omit
+  `revertOnUpdate` on purpose, so both carry **`'use no memo'`** for the first release. Lift them
+  one file at a time with `npm run net:tabs` and `npm run hero:path` as guardrails.
+- `RouteCrossFade` is **not** a risk: it is a class component, which the compiler does not touch.
+
+A bailout is information, not noise — it says that file was not optimised.
+
+## Measuring it
+
+Six probes beside the four checks, all driving Edge over CDP against the same stubbed upstream as
+`net:audit`. None asserts; they print, and the numbers in this file come from them.
+
+| | |
+| --- | --- |
+| `npm run perf:weight [routes…]` | every `<script src>` a document pulls, raw and brotli |
+| `npm run perf:metrics [runs]` | `Performance.getMetrics` deltas for a cold load and a tab switch |
+| `npm run perf:hydration [routes…]` | content in the first byte, and console warnings |
+| `npm run perf:motion` | the lazy chunks warmed; the indicator glides; the cross-fade clone exists |
+| `npm run perf:sw` | the worker controls; what is in its caches; a dead-origin navigation |
+| `npm run perf:ripple` | a press wave's computed opacity per frame — peak must be the token, 0.1 |
+| `npm run net:tabnav [w] [back] [gap]` | tab tap → open a thread → back; where it lands and which pane shows |
+| `npm run perf:pageturn` | a gallery page turn per frame: scroll offset, and what each in-view card shows |
+| `npm run perf:sharpness [w]` | the flight's bitmap vs the box it is painted into, on real images |
+
+`perf:sw` stops the **server** rather than emulating offline, and that is not a shortcut:
+`Network.emulateNetworkConditions` is scoped to the page target and does not reach the service
+worker's own thread, so the worker's `fetch()` kept succeeding and the first version of that probe
+reported the app rendering normally "offline".
+
 ## Module boundaries
+
+### GSAP is not in any route's first document
+
+**Measured**: 42–45 KB brotli (126 KB raw) off every one of the twenty-odd routes, verified by
+listing each document's `<script src>` set and grepping the files for `CustomEase`. Zero routes
+reach `lib/motion.ts` through a static import; the check is a graph walk over
+`from '@/…'` / `from './…'` edges with `import type` and `import()` excluded, and it must keep
+answering **0**.
+
+The engine used to arrive on `/policy` — a page of text — because `lib/motion.ts` registers GSAP
+and five plugins at module scope, so *any* static import of it pulls the lot. And it was reached
+by nine paths, most of them for something that needed no engine at all.
+
+**Turbopack decides the chunks, not the import graph, and that distinction cost a whole pass.**
+Cutting the two shell edges (`AppLayout` and `lib/routeCrossFade`) moved the module graph and
+moved **nothing else**: seven routes still needed GSAP statically, so it stayed in a shared chunk
+that every document loaded, including the routes that no longer referenced it. A lazy import only
+buys bytes once the *last* static importer is gone. Do not measure this by reading the graph —
+measure the documents.
+
+Four kinds of fix, and which one applies is decided by what the code actually wanted:
+
+- **It never wanted GSAP.** `getAppScroller`/`heroOwnsScreen` (`lib/appScroller.ts`), `DURATION`
+  and the curve literals (`lib/motionTokens.ts`), `beginPageTransit` and the theme-wipe guard
+  (`lib/pageTransit.ts`), `setTabIntent` (`lib/tabIntent.ts`), the per-tab scroll memory and
+  `applyInstantTabScroll` (`lib/tabScroll.ts`), the reduced-tier spring substitution
+  (`lib/springTiming.ts`). Each of these is a few lines, and between them they were most of the
+  reach: a `querySelector`, a reference count and a one-line setter were putting an animation
+  engine into the shell of every screen in the app.
+- **It wanted an animation, but not this engine.** `useSlidingIndicator` (the tab indicator's
+  glide) is `lib/slidingIndicator.ts` on Web Animations; `Reveal`'s cascade is WAAPI;
+  `scrollAppToTop`/`scrollAppToElement` are `lib/scrollTo.ts` on rAF. The tab indicator is the
+  instructive one: four lines of GSAP inside `components/Tabs.tsx`, which `AppLayout` mounts, and
+  which eight route pages also import.
+- **It is genuinely rare.** `CaptchaModal` and `Sheet` are `dynamic()`. Both needed a *latch* as
+  well: each was rendered unconditionally with an `isOpen={false}`, so `dynamic()` alone would
+  have fetched the chunk at mount. A one-way "has ever opened" flag fixes that and keeps the exit
+  animation, which conditional rendering on `isOpen` would have taken away.
+- **It is common but deferrable.** `lib/motionLazy.tsx` — see below.
+
+### `lib/motionLazy.tsx`, and the rule that makes it safe
+
+Six entry points behind one dynamic import: `changeScheme`, `changePalette`, `startTabTransition`,
+`<DrawerSwipe>`, `<TabPanesMotion>`, `<StaggerGrid>`. `warmMotion()` and `warmRouteCrossFade()`
+are called from the shell inside `runWhenIdle`, so in practice the engine is resident long before
+any of them is reached.
+
+**Nothing in it awaits inside an event handler**, and that is the whole rule. An `await` before
+`preventDefault()` loses the gesture; an `await` before a state write puts a frame of nothing on
+screen. So every entry point instead does what the **关闭 tier** already does — a real, shipped,
+documented path — and starts the load in the background:
+
+| Entry point | Fallback before the chunk lands |
+| --- | --- |
+| `changeScheme` / `changePalette` | `commitScheme` / `commitPalette` — the preference is written, it just does not wipe |
+| `startTabTransition` | record the outgoing offset and return, which is its own `off` branch line for line |
+| `<TabPanesMotion>` | `applyInstantTabScroll`; the panes still swap, on React's `data-tab-pane-active` |
+| `<StaggerGrid>` | nothing — an entrance's absent form is the cards being there, i.e. 入场动画 off |
+| `<DrawerSwipe>` | nothing — one swipe; the button, the scrim and Escape are not this hook's |
+| route cross-fade | `captureRouteSnapshot` returns `null`, so the navigation is a cut |
+
+A user who beats the chunk loses **one** interaction's animation, never the interaction.
+
+**Two of the three hooks had to change shape, because a hook cannot live behind an `import()`.**
+`useDrawerSwipe` became a component that renders `null` — mounted only once the module exists, so
+its hook call is unconditional for its whole life. `useTabPanes` and `useStaggerGrid` return a
+**ref**, which the caller needs in its first render, before the engine exists; so they are
+`useTabPanesOn(ref, …)` / `useStaggerGridOn(ref, …)` now — the caller owns the `useRef` and passes
+it down. The old two-argument forms are gone rather than kept as wrappers: two ways to call one
+hook is exactly how `lean`'s default came to disagree with itself.
+
+**And `lib/routeCrossFade.ts` is split rather than lazy-per-call.** The GSAP half is
+`lib/routeCrossFadePlay.ts`; the front half keeps the snapshot, the layer and the cell map. The
+gate is in `captureRouteSnapshot`, not in `playRouteCrossFade`, and that ordering is the point:
+cloning a page that nothing can animate leaves a stale frame frozen over the new one, which is
+worse than no transition. `lib/forumTransition.ts` is split the same way, and its warm is driven
+by the gesture — `rememberForumOrigin` *is* a press on a post, and the detail route is a network
+round trip away, so the chunk is fetched exactly when it is about to be needed.
+
 
 **`lib/appearance.ts` owns the five device-local appearance preferences** — colour scheme,
 palette, motion tier, motion speed, entrance animations — and it is the only module that reads
@@ -3130,6 +3621,55 @@ frame across a page turn and fails on a single empty frame, because one commit i
 It is off by default because for an unpaged screen it is wrong: showing the *previous*
 profile while the next one loads is worse than a skeleton.
 
+### Arriving with the answer: `seed` and `initial`
+
+Three screens render their first read on the server and hand it down: `/` (the first page of the
+gallery), `/about` (the team roster) and `/user/[id]` (the profile header, not the four tabs). Each
+has a `.server.ts` module beside it, a server shell that awaits it, and an island that takes it as
+a prop and passes it to `useResource` as `initial`.
+
+**The seam is `resource.seed(args, value, fetchedAt)`, and `write()` could not be it.** `write`'s
+cold-key branch calls `create(key, args, 'background')`, which ends in `enqueue` → `pump` →
+`job.run()` **synchronously** — firing the very request the seed exists to prevent — and the
+`dropQueued` that follows may `cancel()`, which deletes the entry, leaving `write` to publish one
+that is no longer in the store so `peekKey` returns `EMPTY` for ever. `seed` builds the `Entry`
+literally instead: no queue, no controller, nothing to cancel.
+
+Four details of it are load-bearing:
+
+- **The snapshot is built synchronously, not through `publish()`.** `publish` is rAF-bound, and
+  hydration renders before the next frame — so a seed that went through it would arrive one frame
+  late, which is exactly the skeleton flash it exists to remove.
+- **`args` is set.** It is what `expire()` and `bindResourceRefresh` re-read from; a seed without
+  it is invisible to "the tab came back after a minute".
+- **`fetchedAt` is `Math.min(generatedAt, Date.now())`.** An RSC payload can be minutes old, and
+  stamping it "just fetched" would pin stale HTML for a whole TTL. The clamp only ever errs toward
+  *stale*, never toward *fresh*: a fast server clock is pulled back to now, a slow one costs one
+  background revalidation with no loading state.
+- **It is a no-op on the server** (`typeof window === 'undefined'`). `lib/resource.ts` is a
+  `'use client'` module, and such a module is still *evaluated in Node* during SSR — so its
+  module-scope `store` is shared across concurrent requests. Seeding there would hand one
+  visitor's feed to another's render.
+
+**The keys have to agree on both sides, and one of them was impure.** `homeFeed` used to key on
+`{page, sort}` and read the browsing fingerprint out of `localStorage` *inside* its key function —
+harmless while both sides rendered a skeleton, and a hydration mismatch the moment content comes
+from the key. It takes `{page, sort, fp}` now, and `COOKIE_KEYS.browsing` mirrors
+`browsingFingerprint()`'s own output so the server can compute the same string. The island renders
+its first frame with the **server's** fingerprint and switches to the device's after mount:
+identical, and there is no mismatch; different, and the key changes once, costing one request with
+`keepPrevious` holding the server's rows on screen. `DEFAULT_BROWSING_FINGERPRINT` is what an
+*absent* cookie means — without it a first-time visitor's server keyed on `''` while their browser
+keyed on `safe|-|d|-|`, and the seed never applied.
+
+**What does not move, and why.** `featuredImage` stays on the client: `getFeatured` puts the
+user's Derpibooru API key in the URL, so a shared server cache would leak it. `/favorites`,
+`/history`, `/tasks`, `/messages` and `/block-groups` are token-gated and the token is in
+`localStorage`, which the server cannot read — moving them means moving auth into a cookie, which
+is a security decision rather than a performance one. `/search` reads `searchParams` and would
+explode the cache key. And the forum pane is already `api: 0` on tap, mounted on an idle callback,
+so SSR would only add bytes for the majority who never open it.
+
 ### Speculation may move a request earlier. It may never add one.
 
 That is the rule, and `npm run net:audit` asserts it: every journey's request count may
@@ -3205,6 +3745,62 @@ unblocks is dominated by *hydration*). And chrome reads — `get_user`,
 `get_unread_counts`, `get_announcement` — are excluded from the rounds chain entirely,
 because they fire on every screen in parallel with whatever it is doing and were making
 `contentRound` race.
+
+**A third column, `srv`, and a third round value, `r0`.** Once a read moves to the server, CDP
+cannot see it — it intercepts the *browser* — so from the ledger's point of view the request
+vanished, which is indistinguishable from the screen having stopped loading. That is precisely
+what the floor exists to catch, so the floor would fire on every SSR change and the command
+would become unusable at the moment it was most needed.
+
+So the fixture server that `PICPONY_UPSTREAM_ORIGIN` points at now tallies what the Next server
+asks it for. `srv` is that count, `r0` means "this screen's own read was already in the first
+byte", and the two assertions split by what is reproducible:
+
+- **The ceiling is applied twice** — to browser requests, which is what a user waits on, and to
+  `api + srv`, because "speculation may move a request earlier, never add one" is a rule about
+  requests and not about which process sends them.
+- **The floor counts both layers**, and asks only "did this step read anything, anywhere". A step
+  that reads nothing on either side is a screen that has stopped loading.
+
+`get_maintenance_status` is excluded from `srv` for the same reason `get_user` is excluded from
+the rounds chain: the server does it on every route, including ones that read nothing, so
+counting it would make the column a function of how many navigations a journey contains rather
+than of what actually moved.
+
+**`srv` was unassertable for one pass, and both reasons were the harness rather than the app.**
+This section used to record it as jittery — "10 hits across 20 steps, neither 1 nor 20" — and
+that measurement is what the two fixes below were found by. Two consecutive runs are now
+byte-identical, which is why the ceiling could be tightened onto it.
+
+- **The tally was never emptied**, so every step reported the run's running total rather than its
+  own cost. That is not merely a confusing table: the `r0` classification tests that list, so a
+  read one screen made would mark a later screen's content as "already in the first byte" — the
+  floor passing on a step that had in fact stopped fetching, which is the one failure the floor
+  exists to catch. It is cleared before each step now.
+- **Next's Data Cache persists to disk** — `.next/cache/fetch-cache`, 114 entries after a few
+  runs — so a count was partly a function of what previous runs had left behind. And it is real:
+  contrary to what this file said, an explicit `next: { revalidate }` is **not** vetoed by an
+  upstream `Cache-Control: no-store`; the veto applies to the default heuristic, not to an
+  explicit instruction.
+
+`PICPONY_SERVER_MEMO_TTL_MS=0` is what the harness sets, and it reaches **both** caches through
+`cacheSeconds` (`lib/serverMemo.ts`) — the memo and the `revalidate` argument share one number, so
+one switch makes every server read cold. It has to be both or it is neither: either cache alone
+serves the second journey to open `/` from memory, and from outside a cache hit and a screen that
+has stopped loading are the same observation.
+
+**In-flight coalescing is not caching and survives the switch.** `/user/[id]` has two callers per
+request — `generateMetadata` and the page — and Next renders them concurrently, so a slot that is
+only written on resolution has both miss and both fetch. The memo joins an **unsettled** slot
+whatever the TTL says, which is de-duplication rather than staleness; with a TTL of zero and
+without that rule the ledger measured the profile at two server reads for one navigation, which
+is not what ships.
+
+**The other thing this surfaced is worth keeping.** A server-side read is reached by `<Link>`
+prefetching, not only by a visit: the footer links to /about from every route, Next prefetches the
+RSC payload of every visible link, and rendering that payload runs the read. So without a cache in
+front of it, one page view *anywhere* becomes one upstream fetch. All three `.server.ts` reads go
+through `createServerMemo`, and any future one should too.
 
 ### What is not in the catalogue
 

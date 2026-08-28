@@ -422,9 +422,11 @@ export const useMotionSpeed = () => useAppearance(motionSpeed, 'default' as Moti
 export const useEntranceMotion = () => useAppearance(entranceMotion, true);
 
 /**
- * The reactive tier, for the two hooks that keep firing all session — `useStaggerGrid`
- * and `useScrollReveal`. Everything else reads `motionTier()` at the moment it animates,
- * which is later and therefore fresher.
+ * The reactive tier, for the hook that keeps firing all session — `useStaggerGrid`, which
+ * re-runs on every page of results. Everything else reads `motionTier()` at the moment it
+ * animates, which is later and therefore fresher.
+ *
+ * It was two hooks; `useScrollReveal` was the other and has been removed.
  *
  * The server value is `standard` for the reason its predecessor's was "animations on":
  * it matches the CSS, which only opts out under an attribute the server sets, so the

@@ -1,4 +1,9 @@
 'use client';
+/* `'use no memo'` for the same reason `lib/motion.ts` carries it: this component passes a
+   hand-tuned `useGSAP` dependency list and deliberately omits `revertOnUpdate`, so it sits on the
+   one path where a change in memoised identity changes when the GSAP context is torn down. Lift
+   it with the tab and hero probes as guardrails. */
+'use no memo';
 
 import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';

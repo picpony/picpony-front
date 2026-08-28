@@ -32,7 +32,7 @@ import { defineResource } from '@/lib/resource';
 import type { ApiResponse, PonyImage } from '@/lib/types/image';
 import type { ForumPost, ForumPostDetailResponse } from '@/lib/types/forum';
 import type { UserComment, UserPost } from '@/lib/types/user';
-import { LS_KEYS, PICPONY_API_BASE } from '@/lib/constants';
+import { COOKIE_KEYS, LS_KEYS, PICPONY_API_BASE } from '@/lib/constants';
 
 /** Minutes, spelled out so the numbers below read as durations rather than as magic. */
 const SECONDS = 1000;
@@ -79,6 +79,38 @@ export function browsingFingerprint(): string {
     s.onlyPony ? 'p' : '-',
     hidden,
   ].join('|');
+}
+
+/**
+ * Mirror the fingerprint and the home sort into cookies, so the server can compute the same feed
+ * key the client will.
+ *
+ * The same mechanism `lib/appearance.ts` uses for the five appearance preferences and for the
+ * same reason: the settings live in `localStorage`, which the server cannot read, and without a
+ * mirror the server would have to render the *default* feed and the client would immediately
+ * replace it — one visible content swap on every load for anyone who has changed a setting.
+ *
+ * It writes the fingerprint *string* rather than the five inputs, so the derivation above stays
+ * the only copy. It writes nothing when the value has not changed, because `document.cookie` is
+ * a parse-and-serialise on every assignment and this is called from a mount effect on a hot path.
+ *
+ * Called from three places, and the redundancy is deliberate: the settings page's `lsSet` and
+ * /block-groups' tag writer, so a change takes effect on the very next load; and the home
+ * island's mount effect, which is the self-healing catch-all — a cookie cleared by the browser,
+ * or a setting written by some future call site that forgets the first two, costs one load and
+ * then corrects itself.
+ */
+export function syncBrowsingCookie() {
+  if (typeof document === 'undefined') return;
+  const write = (name: string, value: string) => {
+    /* Compared **encoded**, because that is what the next line writes. A fingerprint always
+       contains a `|`, which serialises as `%7C`, so comparing the raw value could never match:
+       the guard never fired once and the cookie was re-serialised on every call. */
+    if (document.cookie.includes(`${name}=${encodeURIComponent(value)}`)) return;
+    document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+  };
+  write(COOKIE_KEYS.browsing, browsingFingerprint());
+  write(COOKIE_KEYS.homeSort, getBrowsingSettings().homeSort);
 }
 
 // ---------------------------------------------------------------------------
@@ -174,9 +206,15 @@ export const unreadCounts = defineResource<{ token: string }, UnreadBreakdown>({
  * refreshing. A feed changes, but not in the ninety seconds it takes to look at a picture and come
  * back.
  */
-export const homeFeed = defineResource<{ page: number; sort: string }, ApiResponse>({
+export const homeFeed = defineResource<{ page: number; sort: string; fp: string }, ApiResponse>({
   name: 'home-feed',
-  key: ({ page, sort }) => `${sort}:${page}:${browsingFingerprint()}`,
+  /* The fingerprint is an *argument* now, not something the key function reads for itself.
+     A key that reads its own inputs can only be computed in the browser, and the server has to be
+     able to compute this one — it renders page 1 and hands the client a seed, which lands under
+     this key or under none. The docstring at the top of this file calls that "the sharp edge of
+     caching functions that read their own inputs"; this is that edge closed for the one resource
+     that needed it. */
+  key: ({ page, sort, fp }) => `${sort}:${page}:${fp}`,
   ttl: 2 * MINUTES,
   /* A page of 50 images is a large object, so fewer keys than the default. Eight pages is more
      back-and-forth than a paged gallery sees in one session. */
@@ -184,17 +222,26 @@ export const homeFeed = defineResource<{ page: number; sort: string }, ApiRespon
   fetch: ({ page }) => derpi.getImages(undefined, page),
 });
 
-/** A page of search results. Same shape as the feed; the query joins the key. */
+/**
+ * A page of search results. Same shape as the feed; the query joins the key.
+ *
+ * `sortDir` is in both the key and the fetch, and it was in neither. That is the same class
+ * of bug `forumThread` had — an argument the underlying API function accepts, dropped on the
+ * way through, so ascending and descending would have shared one cache entry and the fetcher
+ * could only ever have returned descending. It went unnoticed because this resource had no
+ * consumer at all until /search was wired onto it.
+ */
 export const searchFeed = defineResource<
-  { query: string; page: number; sort: string; sortField?: string },
+  { query: string; page: number; sortField?: string; sortDir: 'asc' | 'desc' },
   ApiResponse
 >({
   name: 'search-feed',
-  key: ({ query, page, sort, sortField }) =>
-    `${query}\n${sortField ?? sort}:${page}:${browsingFingerprint()}`,
+  key: ({ query, page, sortField, sortDir }) =>
+    `${query}\n${sortField ?? 'random'}:${sortDir}:${page}:${browsingFingerprint()}`,
   ttl: 2 * MINUTES,
   maxEntries: 8,
-  fetch: ({ query, page, sortField }) => derpi.getImages(query, page, sortField),
+  fetch: ({ query, page, sortField, sortDir }) =>
+    derpi.getImages(query, page, sortField, sortDir),
 });
 
 /**
@@ -246,12 +293,17 @@ export const forumPosts = defineResource<{ page: number }, { posts: ForumPost[];
  * are reading it, and the whole value of a short TTL here is that coming back from a tab lands on
  * the replies rather than on what was there when you left.
  */
-export const forumThread = defineResource<{ id: string }, ForumPostDetailResponse>({
+export const forumThread = defineResource<{ id: string; page: number }, ForumPostDetailResponse>({
   name: 'forum-thread',
-  key: ({ id }) => id,
+  /* The page is in the key *and* in the fetch. It was in neither: the resource took only an
+     `id`, so page 2 of a thread would have been answered from page 1's cache — and the
+     fetcher dropped the argument `picpony.getForumPostDetail` accepts, so it could only ever
+     have returned page 1 anyway. Invisible until now because nothing read this resource;
+     `lib/prefetchRoute.ts` warmed it and the screen fetched independently. */
+  key: ({ id, page }) => `${id}:${page}`,
   ttl: 30 * SECONDS,
   maxEntries: 12,
-  fetch: ({ id }) => picpony.getForumPostDetail(id),
+  fetch: ({ id, page }) => picpony.getForumPostDetail(id, page),
 });
 
 // ---------------------------------------------------------------------------
@@ -422,7 +474,31 @@ export const tasks = defineResource<{ token: string }, unknown>({
   fetch: ({ token }) => picpony.getTasks(token),
 });
 
-export const blockGroups = defineResource<{ token: string }, unknown>({
+export interface BlockGroup {
+  id: number;
+  name: string;
+  tags: string[];
+  hidden_tags: string[];
+  spoilered_tags: string[];
+  is_active: number;
+}
+
+export interface BlockGroupsResult {
+  success?: boolean;
+  error?: string;
+  groups?: BlockGroup[];
+}
+
+/**
+ * The signed-in user's 屏蔽组.
+ *
+ * Typed rather than `unknown`, because it now has a consumer. It was warmed by
+ * `lib/prefetchRoute.ts` on a sidebar hover and read by nobody — `/block-groups` called
+ * `api.getBlockGroups` in an effect of its own — so the hover sent a request whose answer
+ * was thrown away. That is the one thing this app's speculation rule forbids: a prefetch
+ * may move a request earlier, never add one.
+ */
+export const blockGroups = defineResource<{ token: string }, BlockGroupsResult>({
   name: 'block-groups',
   key: ({ token }) => token,
   ttl: 5 * MINUTES,

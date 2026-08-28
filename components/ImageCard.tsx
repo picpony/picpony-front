@@ -9,6 +9,8 @@ import { PonyImage } from '@/lib/api';
 import { useHeroLink } from '@/lib/useHero';
 import { ICON } from '@/lib/icons';
 import Badge from './Badge';
+import { useSsrSpoilerTags } from './ImageLineProvider';
+import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
 
 interface ImageCardProps {
   image: PonyImage;
@@ -20,7 +22,7 @@ let spoilerTags = new Set<string>();
 function getActiveSpoilerTags() {
   if (typeof window === 'undefined') return spoilerTags;
   try {
-    const nextRaw = localStorage.getItem('trixie_active_spoilered_tags') || '[]';
+    const nextRaw = localStorage.getItem(LS_KEYS.spoilerTags) || '[]';
     if (nextRaw === spoilerTagsRaw) return spoilerTags;
     spoilerTagsRaw = nextRaw;
     const values: unknown = JSON.parse(nextRaw);
@@ -31,6 +33,18 @@ function getActiveSpoilerTags() {
             .map((value) => value.trim().toLowerCase())
         : [],
     );
+    /* Mirrored for the *next* document, so the server can draw the cover before hydration.
+       Written here rather than in /settings because this is the one place that already parses
+       the list, and it runs on the first card of the first render — so a device that has never
+       opened /settings since this shipped still heals itself in one load. */
+    try {
+      const joined = [...spoilerTags].join(',');
+      document.cookie = `${COOKIE_KEYS.spoilerTags}=${encodeURIComponent(joined)};path=/;max-age=${
+        60 * 60 * 24 * 365
+      };samesite=lax`;
+    } catch {
+      /* Cookies blocked. The effect still covers the card; only the first frame is exposed. */
+    }
   } catch {
     spoilerTagsRaw = null;
     spoilerTags = new Set();
@@ -63,7 +77,21 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
   ).toUpperCase();
   const isWebm = format === 'WEBM' || format === 'MP4';
 
-  const [isSpoilered, setIsSpoilered] = useState(false);
+  /* **Covered from the very first render when the server knew to cover it.**
+
+     This was `useState(false)` with the real answer arriving in the effect below, which was
+     invisible while `/` rendered a skeleton and fetched after hydration. Now the server emits
+     fifty `<img>` tags and the browser paints them before any effect runs, so a user who had
+     spoilered a tag saw exactly the pictures they had asked to hide, on every cold load, for
+     the whole hydration window. `COOKIE_KEYS.spoilerTags` carries the list so this render can
+     ask the same question the effect will; the effect still runs and still wins, so a stale or
+     absent cookie costs one frame rather than a wrong answer. */
+  const ssrSpoilerTags = useSsrSpoilerTags();
+  const [isSpoilered, setIsSpoilered] = useState(() =>
+    ssrSpoilerTags.length === 0
+      ? false
+      : (image.tags || []).some((tag) => ssrSpoilerTags.includes(tag.trim().toLowerCase())),
+  );
   const [isRevealed, setIsRevealed] = useState(false);
   const { sourceKey: heroSourceKey, ...heroLinkProps } = useHeroLink({
     image,

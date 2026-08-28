@@ -79,6 +79,8 @@ export const LS_KEYS = {
   useApiAccel: 'picpony_api_accel',
   useHongKongRelay: 'picpony_hk_relay',
   homeSort: 'picpony_default_home_sort',
+  /** The tag list whose pictures wear a cover. Was a bare literal at its one call site. */
+  spoilerTags: 'trixie_active_spoilered_tags',
   searchSort: 'picpony_default_search_sort',
   devBannerDismissed: 'picpony_dev_banner_dismissed',
   darkMode: 'darkMode',
@@ -118,11 +120,54 @@ export const LS_KEYS = {
  */
 export const COOKIE_KEYS = {
   darkMode: 'darkMode',
+  /**
+   * The active spoiler tags, so the server can draw the cover.
+   *
+   * `ImageCard` computed `isSpoilered` in an effect from `localStorage`, which was invisible
+   * while `/` rendered a skeleton and fetched after hydration. Now the server emits fifty
+   * `<img>` tags and the browser paints them *before* that effect runs — so a user who had
+   * spoilered a tag saw those pictures uncovered for the whole hydration window on every cold
+   * load, which is the one thing the feature exists to prevent. The `q=` filter does not help:
+   * a spoiler is a per-tag cover, not a query exclusion.
+   *
+   * Same shape as `browsing` and `imageLine`: the device mirrors its own preference into a
+   * cookie, the layout reads it, and the first render asks the same question the effect will.
+   */
+  spoilerTags: 'spoilerTags',
   sidebarCollapsed: 'sidebarCollapsed',
   palette: 'palette',
   motion: 'motion',
   motionSpeed: 'motionSpeed',
   entranceMotion: 'entranceMotion',
+  /**
+   * The browsing fingerprint, for the server to compute the same feed key the client will.
+   *
+   * The seventh entry and the first that is not about first paint. It holds
+   * `browsingFingerprint()`'s output — the content filter, the three toggles and the sorted
+   * blocked-tag list, already joined — rather than the five inputs, so the derivation stays in
+   * `lib/resources.ts` and there is no second copy of it to drift.
+   *
+   * The sort is *not* in it. `homeSort` and `searchSort` are separate settings that change
+   * independently of the filter, and folding them in would make every sort change look like a
+   * filter change to the cache.
+   */
+  browsing: 'browsing',
+  homeSort: 'homeSort',
+  /**
+   * Which image line this device is on: `picpony` / `cdn` / `direct`.
+   *
+   * The eighth entry, and it exists because the home page now server-renders fifty `<img>` tags.
+   * The line is chosen by `resolveImageLine()`, which reads `localStorage` and the fetched route
+   * policy — neither of which the server can see — so it fell back to the *defaults* and emitted
+   * the proxy line for everybody. A visitor who had turned the image proxy off got a hydration
+   * mismatch on every card, and React does not patch attributes: their browser kept the server's
+   * URL and their preference was ignored for the whole first screen.
+   *
+   * Mirrored rather than derived, for the same reason `browsing` holds the joined fingerprint:
+   * the decision has one owner (`lib/route.ts`) and the cookie is its output, so there is no
+   * second copy of the ladder to drift.
+   */
+  imageLine: 'imageLine',
 } as const;
 
 /**

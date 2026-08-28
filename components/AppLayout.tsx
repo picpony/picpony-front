@@ -8,7 +8,6 @@ import {
   useRef,
   useCallback,
   useSyncExternalStore,
-  useTransition,
 } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation';
@@ -36,6 +35,7 @@ import { useAuthModal } from './AuthModal';
 import { BackgroundLocationProvider, useBackgroundSearchParams } from './BackgroundLocation';
 import { bindResourceRefresh, clearAllResources, SKIP, useResource } from '@/lib/resource';
 import { clearScreenState } from '@/lib/screenState';
+import { markAppPainted } from '@/lib/splash';
 import { clearSnapshots } from '@/lib/pageCache';
 import { sessionUser, unreadCounts } from '@/lib/resources';
 import {
@@ -47,16 +47,24 @@ import {
 import HeroStage from '@/components/HeroStage';
 import Badge from '@/components/Badge';
 import RouteCrossFade from '@/components/RouteCrossFade';
+import { warmRouteCrossFade } from '@/lib/routeCrossFade';
 import RouteScrollMemory from '@/lib/scrollMemory';
 import Button from '@/components/Button';
 import Tabs from '@/components/Tabs';
 import IconButton, { iconButtonClasses } from '@/components/IconButton';
+/* Through the lazy facade, not `lib/motion` directly. This component wraps every route and that
+   module registers GSAP and five plugins at module scope, so a theme toggle, a tab tap and a
+   phone-only swipe were putting the whole engine in the first document of every screen — including
+   the ones that are a page of text. Each entry point falls back to the 关闭 tier's own behaviour
+   until the chunk lands, and `warmMotion()` below fetches it on an idle callback after first
+   paint. See `lib/motionLazy.tsx`. */
 import {
   changeScheme,
+  DrawerSwipe,
   setTabIntent,
   startTabTransition,
-  useDrawerSwipe,
-} from '@/lib/motion';
+  warmMotion,
+} from '@/lib/motionLazy';
 import {
   MOTION_SPEED_SCALE,
   refreshSystemMotion,
@@ -67,7 +75,7 @@ import {
 import { readUserInfo, useMediaQuery } from '@/lib/hooks';
 import { ensureRoutePolicy, setLineNotifier } from '@/lib/route';
 import { showToast } from '@/components/Toast';
-import { cn } from '@/lib/utils';
+import { cn, runWhenIdle } from '@/lib/utils';
 import { COOKIE_KEYS, LS_KEYS, MEDIA } from '@/lib/constants';
 
 function SearchBar() {
@@ -134,7 +142,6 @@ const TAB_PUSH_COALESCE_MS = Math.round(520 * MOTION_SPEED_SCALE.slow);
 
 function TabNavBar({ hidden }: { hidden: boolean }) {
   const searchParams = useBackgroundSearchParams();
-  const router = useRouter();
   const currentTab = searchParams.get('tab') === 'forum' ? 'forum' : 'gallery';
   // Optimistic tab so the pill and label colors respond on click, before the
   // route (and its search params) actually commit.
@@ -145,44 +152,66 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
      run inside this transition purely so React will tell us — it is the only
      signal that distinguishes "the URL agrees with the user" from "the URL is
      briefly agreeing on its way somewhere else". */
-  const [isNavigating, startNavigation] = useTransition();
+  /* **The URL is written on the tap, synchronously, and a burst replaces rather than accumulates.**
+     There is no queue and no timer, which is the whole point.
 
-  /* Pushing on every tap queues one navigation per tap, and each of those
-     commits later lands as its own `tab` change — so after a burst of taps the
-     panes replayed the whole burst back at you. The animation is optimistic
-     and instant, so only the *final* destination needs to reach the router;
-     this collapses a burst into one push. */
-  const pushTimer = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
-    },
-    [],
-  );
+     It used to defer a `router.push` by `TAB_PUSH_COALESCE_MS` so that a run down the tab bar cost
+     one history entry instead of one per tab passed through. Two things were wrong with that. A
+     tab change is a query parameter on the route you are already on, so `router.push` treated it
+     as a navigation — an RSC request and a transition — and a *deferred* one at that, which meant
+     it could land after some other navigation the user had started in the meantime and overwrite
+     it. Measured: tapping 论坛 and opening a thread 200ms later gave three different answers over
+     five runs — the thread opened once, the queued tab update clobbered it twice, and twice both
+     were lost, leaving the gallery on screen under a tab bar still reading 论坛. That is the
+     "returning from a thread lands on the gallery with the wrong control" report. Clicking 搜索
+     instead left the URL reading `/?tab=forum` while `/search` was the route being rendered.
 
-  /* Adjust-during-render: once the route commits, the optimistic tab is stale.
-     Once it has *finished* committing, though. The URL trails the taps by a
-     coalescing window plus a navigation, so during a burst it passes through
-     values the user has already moved on from — and one of those can equal the
-     optimistic tab by coincidence. Releasing there handed control back to a URL
-     that was still in motion, and the next commit dragged the tab backwards:
-     measured on taps 180ms apart, 论坛 → 图库 → 论坛 landed on 图库, because the
-     third tap then read as a no-op against the tab it had just been dragged
-     onto and was swallowed. `isNavigating` is the missing piece — with nothing
-     in flight the URL cannot move again on its own.
+     Cancelling the queue on unmount does not fix it: the timer fires while the other navigation is
+     still committing, so it wins the race anyway. Removing the queue does.
 
-     A queued push needs no guard of its own: it always targets `pendingTab`,
-     so if the URL already agrees with `pendingTab` that push is a no-op. */
-  if (pendingTab && pendingTab === currentTab && !isNavigating) setPendingTab(null);
+     `window.history.pushState`/`replaceState` are integrated into Next's router and sync
+     `usePathname` and `useSearchParams` (`linking-and-navigating.md`), so the panes and the pill
+     still see the change — but nothing is started, so there is nothing to race, and a tab switch
+     stops costing an RSC round trip. The coalescing window survives as the *push-vs-replace*
+     decision, which is all it was ever buying: the first change in a burst adds an entry and the
+     rest rewrite it. */
+  const lastTabWrite = useRef(0);
 
-  /* The panes live in the page and see only the URL, which trails these taps by
-     a coalescing window plus a navigation. Hand them the tab the user is really
-     on so they do not animate to a waypoint on the way. Cleared on unmount,
-     which is what keeps an intent from outliving the home route. */
+  /* The panes see only the URL. It no longer *lags* — `switchTab` writes it synchronously — but
+     `useSearchParams` still propagates on the router's own schedule, so during a burst there is a
+     commit or two where the panes would otherwise animate towards a tab the user has already left.
+     Hand them the tab the user is really on. Cleared on unmount, which is what keeps an intent from
+     outliving the home route. */
   useEffect(() => {
     setTabIntent(pendingTab);
     return () => setTabIntent(null);
   }, [pendingTab]);
+
+  /* **The optimistic tab must not outlive the URL catching up, in either direction.**
+
+     `pendingTab` exists only to cover the commits between the synchronous `history.pushState`
+     and `useSearchParams` propagating. Removing the deferred `router.push` also removed the
+     reset that used to sit in render, and nothing replaced it — so it was cleared on unmount
+     and at no other time.
+
+     What that costs is the report this whole change was meant to fix, arriving from the other
+     end. Tap 论坛, then press Back: the URL returns to `/`, but `pendingTab` is still `forum`,
+     so `setTabIntent` keeps reporting `forum`, and `useTabPanesOn` bails at
+     `tabIntent() !== active` *before* `clearPaneFlags` — leaving the gallery pane
+     `display: none` on a stale `-done` and the forum pane on screen on a stale `-entering`,
+     under a URL that says gallery. The pill stays on 论坛 too, and `switchTab`'s
+     `tab === activeTab` early return makes tapping 论坛 a no-op, so the only way out is to tap
+     图库.
+
+     Keyed on `currentTab` alone, so it fires whether the URL *caught up with* the tap or moved
+     somewhere else entirely (Back, a sidebar link, the `/forum` redirect). Either way the
+     optimistic value has done its job. `queueMicrotask` because
+     `react-hooks/set-state-in-effect` rejects a synchronous setState here; on mount the write
+     is `null` over `null`, which React bails out of without a re-render. */
+  useEffect(() => {
+    queueMicrotask(() => setPendingTab(null));
+  }, [currentTab]);
+
 
   const switchTab = (tab: string) => {
     if (tab === activeTab) return;
@@ -205,13 +234,12 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
     const qs = params.toString();
     const href = qs ? `/?${qs}` : '/';
 
-    if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
-    pushTimer.current = window.setTimeout(() => {
-      pushTimer.current = null;
-      /* `scroll: false`: Next scrolls the new segment into view on commit,
-         which would fight the per-tab offset `startTabTransition` restored. */
-      startNavigation(() => router.push(href, { scroll: false }));
-    }, TAB_PUSH_COALESCE_MS);
+    const now = performance.now();
+    const withinBurst = now - lastTabWrite.current < TAB_PUSH_COALESCE_MS;
+    lastTabWrite.current = now;
+    if (href !== `${window.location.pathname}${window.location.search}`) {
+      window.history[withinBurst ? 'replaceState' : 'pushState'](null, '', href);
+    }
   };
 
   return (
@@ -454,6 +482,40 @@ export default function AppLayout({
      underneath it, with no loading state and nothing removed. See `bindResourceRefresh`. */
   useEffect(() => bindResourceRefresh(), []);
 
+  /* Tell the splash the app is on screen, so it can leave.
+   *
+   * A double `requestAnimationFrame`, which is the standard way to land *after* a commit has
+   * actually been presented rather than merely committed: the first callback runs before the
+   * paint that this effect's own commit produces, the second runs after it. A single frame
+   * would report "painted" on the frame that is still being composited, and the overlay would
+   * begin fading over a blank page.
+   *
+   * This is the shell rather than any one route on purpose. The shell is what every route
+   * renders inside, so it is the one place that can say "something is on screen" without
+   * needing to know what that something is — and it is above `[data-page-content]`, so it does
+   * not re-fire on navigation. See `lib/splash.ts`. */
+  useEffect(() => {
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => markAppPainted());
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      if (inner) cancelAnimationFrame(inner);
+    };
+  }, []);
+
+  /* The animation engine, after the page is on screen.
+   *
+   * Both of these are needed at the *first interaction* — a navigation, a theme toggle, a tab tap
+   * — which is at minimum a user gesture away, so neither belongs in the document. `runWhenIdle`
+   * rather than a bare call, because the whole point is not to compete with hydration; each has a
+   * documented no-animation fallback for the case where somebody beats it. */
+  useEffect(() => runWhenIdle(() => {
+    warmMotion();
+    warmRouteCrossFade();
+  }), []);
+
   const cycleThemeMode = () => {
     const next: SchemeSetting =
       schemeSetting === 'light' ? 'dark' : schemeSetting === 'dark' ? 'system' : 'light';
@@ -577,13 +639,7 @@ export default function AppLayout({
 
   const setDrawerOpen = useCallback((next: boolean) => setIsCollapsed(!next), []);
 
-  useDrawerSwipe({
-    drawerRef: sidebarRef,
-    scrimRef: scrimRef,
-    open: !isCollapsed,
-    onOpenChange: setDrawerOpen,
-    enabled: isOverlayDrawer && !isImageDetailRoute && !imageHeroRuntime.background,
-  });
+
 
   const handleLogoutClick = () => {
     setIsLogoutDialogOpen(true);
@@ -1086,6 +1142,15 @@ export default function AppLayout({
                   See `lib/scrollMemory.ts`. */}
               <RouteScrollMemory />
               <RouteCrossFade pathname={backgroundPathname} enabled={crossFadeEnabled} />
+              {/* Renders nothing; it exists so the swipe's hook can be mounted only once the
+                  engine has arrived. Above 768px the drawer is docked and this never loads. */}
+              <DrawerSwipe
+                drawerRef={sidebarRef}
+                scrimRef={scrimRef}
+                open={!isCollapsed}
+                onOpenChange={setDrawerOpen}
+                enabled={isOverlayDrawer && !isImageDetailRoute && !imageHeroRuntime.background}
+              />
               {/* Where `PageBack` lands.
                   The back affordance is chrome, not content. Rendered inside
                   `[data-page-content]` it was cloned by the route snapshot and

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, ForumPostDetail, ForumComment } from '@/lib/api';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { api, ForumPostDetail } from '@/lib/api';
 import {
   MdErrorOutline,
   MdThumbUp,
@@ -35,10 +35,12 @@ import ErrorRetry from '@/components/ErrorRetry';
 import { readUserInfo, useEscapeBack } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 import { readForumOrigin, playForumContainerTransform } from '@/lib/forumTransition';
-import { scrollAppToElement } from '@/lib/motion';
+import { scrollAppToElement } from '@/lib/scrollTo';
 import { copyText, getAssetUrl } from '@/lib/utils';
 import SectionHeading from '@/components/SectionHeading';
 import { formatDateTime, formatShortDateTime } from '@/lib/format';
+import { useResource } from '@/lib/resource';
+import { forumThread } from '@/lib/resources';
 
 export default function ForumPostPage() {
   const params = useParams();
@@ -49,20 +51,45 @@ export default function ForumPostPage() {
   const pageParam = searchParams.get('page');
   const initialPage = pageParam ? parseInt(pageParam, 10) : 1;
 
-  const [post, setPost] = useState<ForumPostDetail | null>(null);
-  const [comments, setComments] = useState<ForumComment[]>([]);
   const [page, setPage] = useState(initialPage);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+
+  /* The thread comes from the resource layer, which is what makes the hover prefetch in
+     `lib/prefetchRoute.ts` worth anything: it warmed `forumThread` while this screen fetched
+     independently, so hovering a thread link sent a request nobody read.
+
+     `keepPrevious` because the page number is in the key — without it, turning a page
+     unmounts the comment list for a round trip, the scroller collapses, and the browser
+     clamps `scrollTop` to the new tiny maximum. See the option's own note in
+     `lib/resource.ts`. */
+  const read = useResource(forumThread, { id, page }, { keepPrevious: true });
+  const post = read.data?.post ?? null;
+  const comments = useMemo(() => read.data?.comments ?? [], [read.data]);
+  const totalPages = read.data?.total_pages ?? 1;
+  /* Nothing at all yet — not `isLoading`, which is also true for a revalidation under a
+     thread that is already on screen. */
+  const isLoading = read.data === undefined && read.error === undefined;
+  const error = (read.error as Error | null) ?? null;
+
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
+  /* The like is read from the cached thread and written back to it, so it survives a
+     remount and cannot disagree with the list the resource is holding. */
+  const isLiked = post?.is_liked === 1;
+  const likeCount = post?.like_count ?? 0;
   const [isLikeLoading, setIsLikeLoading] = useState(false);
+
+  /* Patches the cached thread in place. `write` is the optimistic path: it leaves
+     `fetchedAt` alone, so the next revalidation still confirms against the server. */
+  const patchPost = useCallback(
+    (patch: Partial<ForumPostDetail>) => {
+      forumThread.write({ id, page }, (previous) =>
+        previous?.post ? { ...previous, post: { ...previous.post, ...patch } } : previous!,
+      );
+    },
+    [id, page],
+  );
 
   // Reply state
   const [replyTo, setReplyTo] = useState<{
@@ -80,37 +107,9 @@ export default function ForumPostPage() {
     return () => window.removeEventListener('user_info_updated', checkLoginStatus);
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (!isMounted) return;
-      setIsLoading(true);
-      setError(null);
-    });
-
-    api
-      .getForumPostDetail(id, page)
-      .then((res) => {
-        if (isMounted) {
-          setPost(res.post);
-          setComments(res.comments);
-          setTotalPages(res.total_pages);
-          setIsLiked(res.post.is_liked === 1);
-          setLikeCount(res.post.like_count);
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(err);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [id, page, retryCount]);
+  /* The fetch, the `isMounted` flag, the `retryCount` and the four `setState`s that used to
+     live here are all `useResource`'s now — including cancellation on unmount and dedup
+     against the hover prefetch that may already have this exact key in flight. */
 
   const handleToggleLike = useCallback(async () => {
     const userInfo = readUserInfo();
@@ -123,15 +122,14 @@ export default function ForumPostPage() {
       const res = await api.toggleForumPostLike(userInfo.token, parseInt(id));
       const data = await res.json();
       if (data.success) {
-        setIsLiked(data.is_liked === 1);
-        setLikeCount(data.like_count);
+        patchPost({ is_liked: data.is_liked, like_count: data.like_count });
       }
     } catch (err) {
       console.error('Toggle like error:', err);
     } finally {
       setIsLikeLoading(false);
     }
-  }, [id]);
+  }, [id, patchPost]);
 
   const handleCopyLink = useCallback(() => {
     const shareUrl = `${window.location.origin}/forum/${id}`;
@@ -257,7 +255,7 @@ export default function ForumPostPage() {
       if (data.success) {
         setNewComment('');
         setReplyTo(null); // Clear reply state
-        setRetryCount((c) => c + 1); // Reload comments
+        void read.refresh(); // Reload comments
       } else {
         setSubmitError(data.message || '发送评论失败');
       }
@@ -267,7 +265,7 @@ export default function ForumPostPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [id, newComment, isSubmitting, replyTo]);
+  }, [id, newComment, isSubmitting, replyTo, read]);
 
   /* The loading state is the destination's own layout, not a separate page:
      same wrapper, same back button, same card, so React reuses those DOM nodes
@@ -310,7 +308,7 @@ export default function ForumPostPage() {
           <ErrorRetry
             title="帖子加载失败"
             message={error?.message || '帖子不存在'}
-            onRetry={() => setRetryCount((c) => c + 1)}
+            onRetry={() => void read.refresh()}
           />
         </div>
       </>

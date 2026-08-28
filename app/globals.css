@@ -1958,7 +1958,7 @@ html[data-motion='off'] {
  * same conclusion the reduced tier reaches one block down. `entranceMotion()` in
  * `lib/appearance.ts` reads `data-entrance` off `<html>` (the attribute is still written at
  * SSR and corrected before first paint, for the same reason the tier's is), and `Reveal`,
- * `useScrollReveal`, `useStaggerGrid`, `Logo`'s draw-on and the splash overlay each consult
+ * `useStaggerGrid`, `Logo`'s draw-on and the splash overlay each consult
  * it. The invariant that *is* true: an animation is an entrance iff its call site reads
  * `entranceMotion()`, which greps as cleanly and cannot be quietly wrong.
  *
@@ -3046,10 +3046,36 @@ html[data-motion='off'] [data-tab-panel] > [data-tab-pane][data-tab-pane-leaving
 }
 
 /* Isolate each gallery tile's paint invalidation while its image decodes or
-   its metadata chips change. */
+   its metadata chips change.
+
+   **`content-visibility: auto` was tried here and measured worse. Do not add it.**
+   The reasoning for adding it is sound right up until you measure: `contain` below
+   lists `layout paint style` and *not* `size`, and nothing in the app sets
+   `content-visibility`, so the `contain-intrinsic-size` on the next line — and the
+   per-card inline one in `ImageCard.tsx` — never activate. They are inert, and they
+   look exactly like a skipped optimisation.
+
+   They are not, because there is nothing left for it to skip. The tile's height is
+   already known without rendering it (the media box carries an `aspect-ratio`), its
+   paint is already contained, and its image is already `loading="lazy"`. What
+   `content-visibility: auto` adds on top of that is per-frame on-screen-ness
+   tracking and a re-render each time a tile crosses the boundary. Measured over a
+   13-step scroll sweep of a 50-card grid, median of three runs, `Performance`
+   counter deltas:
+
+       metric                  cv:auto    cv:visible
+       LayoutCount              31         0
+       RecalcStyleCount         35        23
+       TaskDuration              0.277s    0.113s
+
+   Zero layouts against thirty-one: without it the scroll is fully composited, and
+   with it every boundary crossing costs a layout pass. The intrinsic-size
+   declarations stay because they cost nothing and would become correct if a future
+   change ever does introduce size containment. */
 .image-card {
   contain: layout paint style;
-  /* Per-card JS sets a better intrinsic height; this is the fallback only. */
+  /* Per-card JS sets a better intrinsic height; this is the fallback only.
+     Currently inert — see the note above, which is the point. */
   contain-intrinsic-size: auto 320px;
 }
 

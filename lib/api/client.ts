@@ -1,4 +1,5 @@
 import { LS_KEYS } from '@/lib/constants';
+import { buildSearchQueryFrom } from '@/lib/searchQuery';
 import { toCurrentImageLine } from '@/lib/imageLoader';
 import type { PonyImage } from '@/lib/types/image';
 import {
@@ -89,54 +90,35 @@ export function applyImageLine<T extends PonyImage>(image: T): T {
 // 搜索查询构建
 // ---------------------------------------------------------------------------
 
+/**
+ * The query, from the settings this device currently has.
+ *
+ * A wrapper now: the rules live in `lib/searchQuery.ts` as a pure function, because the server
+ * has to build the same query for the SSR’d home feed and cannot read `localStorage`. This
+ * supplies the inputs; `lib/feed.server.ts` supplies the same ones out of a cookie.
+ */
 export function buildSearchQuery(search?: string): string {
   const s = getBrowsingSettings();
-  let tags = '';
-
-  if (s.contentFilter !== 'developer') {
-    switch (s.contentFilter) {
-      case 'safe':
-        tags = '-suggestive, -explicit, -questionable, -grotesque, -grimdark';
-        break;
-      case 'spoilers':
-        tags = '-explicit, -questionable, -grotesque, -grimdark';
-        break;
-    }
-  }
-
-  if (s.banAnthro) {
-    tags = tags ? `${tags}, -anthro, -humanized` : '-anthro, -humanized';
-  }
-
-  if (s.onlyPony) {
-    tags = tags ? `${tags}, pony` : 'pony';
-  }
-
+  let hiddenTags: string[] = [];
   try {
-    const activeHidden: string[] = JSON.parse(
-      localStorage.getItem(LS_KEYS.activeHiddenTags) || '[]',
-    );
-    const blockNegations = activeHidden
-      .filter((t) => t && typeof t === 'string')
-      .map((t) => `-${t.trim().toLowerCase()}`);
-    if (blockNegations.length > 0) {
-      tags = tags ? `${tags}, ${blockNegations.join(', ')}` : blockNegations.join(', ');
+    const active: unknown = JSON.parse(localStorage.getItem(LS_KEYS.activeHiddenTags) || '[]');
+    if (Array.isArray(active)) {
+      hiddenTags = active
+        .filter((t): t is string => typeof t === 'string' && Boolean(t))
+        .map((t) => t.trim().toLowerCase());
     }
   } catch {
-    /* ignore */
+    /* A corrupt list is an empty one. */
   }
-
-  if (!tags && s.contentFilter !== 'developer') {
-    tags = '-suggestive, -explicit, -questionable, -grotesque, -grimdark, pony';
-  }
-
-  if (search) {
-    tags = tags ? `${search}, ${tags}` : search;
-  }
-
-  // 开发者模式无附加过滤时，空关键词会请求 `q=`（Derpibooru 视为未指定）——
-  // 旧前端以 '*' 表示"全部内容"，此处保持一致
-  return encodeURIComponent(tags || '*');
+  return buildSearchQueryFrom(
+    {
+      contentFilter: s.contentFilter,
+      banAnthro: s.banAnthro,
+      onlyPony: s.onlyPony,
+      hiddenTags,
+    },
+    search,
+  );
 }
 
 function getSortParams(isSearch: boolean): string {

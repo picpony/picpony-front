@@ -1,5 +1,6 @@
 import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
+import { cacheSeconds } from '@/lib/serverMemo';
 
 /**
  * The route policy, read on the server so the first request of a cold load does not have to wait
@@ -97,7 +98,12 @@ export async function readRoutePolicy(): Promise<InlineRoutePolicy | null> {
        the same trap `app/user/[id]/layout.tsx` documents falling into, and there is no cookie to
        rewrite on a policy read anyway. */
     const res = await fetch(`${UPSTREAM_ORIGIN}${PICPONY_API_BASE}?action=get_maintenance_status`, {
-      next: { revalidate: SERVER_POLICY_REVALIDATE_S },
+      /* Through `cacheSeconds`, like the other three server reads. Without it
+         `PICPONY_SERVER_MEMO_TTL_MS=0` did not reach this one at all: `npm run net:audit`'s own
+         readiness probe warms Next's Data Cache, so every measured document then read the
+         policy from that cache and the harness was measuring a warm path while claiming every
+         server read was cold. */
+      next: { revalidate: cacheSeconds(SERVER_POLICY_REVALIDATE_S) },
       signal: AbortSignal.timeout(SERVER_POLICY_TIMEOUT_MS),
     });
     if (!res.ok) return null;

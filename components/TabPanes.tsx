@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useContext, type ReactNode } from 'react';
-import { useTabPanes } from '@/lib/motion';
+import { createContext, useContext, useRef, type ReactNode } from 'react';
+import { TabPanesMotion } from '@/lib/motionLazy';
 import { cn } from '@/lib/utils';
 
 /**
@@ -99,13 +99,30 @@ export function TabPanes<T extends string = string>({
      Screens whose tabs live in local state need nothing else: the state update
      and this layout effect are in the same commit, so there is no URL to wait
      for and no optimistic `startTabTransition` to coalesce behind. */
-  const panelRef = useTabPanes<HTMLDivElement>(value, { lean });
+  /* The ref is owned here and the motion is mounted beside it. `TabPanesMotion` renders nothing;
+     it exists so the hook that drives the slide can live behind a dynamic import — this component
+     is on seven routes, and `lib/motion.ts` registers GSAP and five plugins at module scope, so a
+     static import of it is what decides whether the engine is in the chunk every route loads.
+     Until it arrives the panes still swap, on `data-tab-pane-active` and the scroll memory, which
+     is the 关闭 tier's own path. */
+  const panelRef = useRef<HTMLDivElement>(null);
 
   return (
-    /* No `key` on this element, ever — see the note above. */
-    <div ref={panelRef} data-tab-panel className={cn(className)}>
-      <ActiveTabContext.Provider value={value}>{children}</ActiveTabContext.Provider>
-    </div>
+    <>
+      {/* No `key` on this element, ever — see the note above. */}
+      <div ref={panelRef} data-tab-panel className={cn(className)}>
+        <ActiveTabContext.Provider value={value}>{children}</ActiveTabContext.Provider>
+      </div>
+      {/* A **sibling after** the panel, not a child of it. React attaches a parent's ref only
+          after its children's layout effects have run, so mounted inside the div this read
+          `panelRef.current === null` on every commit that mounted the two together — the same
+          ordering bug `useStaggerGridOn` documents, where it cost the gallery its entrance and
+          left a page turn as the first pass that ever found a root. Here the mount pass would
+          have returned at `from === active` anyway, so what it silently skipped was
+          `clearPaneFlags` and the `off`-tier `applyInstantTabScroll`. Correct by construction
+          now, rather than by luck. */}
+      <TabPanesMotion panelRef={panelRef} active={value} lean={lean} />
+    </>
   );
 }
 

@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Logo, { INTRO_DURATION_MS, INTRO_CHUNK_BUDGET_MS } from './Logo';
+import Logo, { INTRO_DURATION_MS } from './Logo';
 import { MOTION_SPEED_SCALE, entranceMotion, motionTier } from '@/lib/appearance';
+import { isAppPainted, subscribeAppPainted } from '@/lib/splash';
 
 /** How long the finished mark holds before the overlay leaves. */
 const HOLD_MS = 200;
@@ -48,11 +49,30 @@ const REDUCED_HOLD_MS = 300;
  * fades, so the whole overlay is over in well under a second.
  */
 export default function LoadingOverlay() {
-  const [isVisible, setIsVisible] = useState(true);
-  const [isMounted, setIsMounted] = useState(true);
+  /* Read synchronously rather than defaulted to `true`. A client navigation can remount this
+     (the shell is above the route, but development's double-invoke and a fast refresh both
+     do it), and an overlay that fades in over a painted app to fade straight back out is
+     worse than no overlay. */
+  const [isVisible, setIsVisible] = useState(() => !isAppPainted());
+  const [isMounted, setIsMounted] = useState(() => !isAppPainted());
   const [settled, setSettled] = useState(false);
 
   const onSettled = useCallback(() => setSettled(true), []);
+
+  /**
+   * The dismissal is the app's to trigger, not the animation's.
+   *
+   * This used to be a pure timer: the draw-on's own length, plus the budget for the Lottie
+   * chunk that draws it, plus a hold — ~1.8s of opaque `bg-surface` on *every* cold load,
+   * whether or not the app behind it was ready. It was both the largest single wait in the
+   * app and the one thing that could not be justified by anything being fetched.
+   *
+   * `subscribeAppPainted` fires on the frame after the shell's first commit is presented, so
+   * the overlay now covers exactly the gap it was supposed to and nothing more. The timers
+   * below survive as *ceilings*, for the case where that signal never arrives at all — a
+   * splash is decoration and must never be the reason the app is unreachable.
+   */
+  useEffect(() => subscribeAppPainted(onSettled), [onSettled]);
 
   useEffect(() => {
     /* Read through `motionTier()`, which is an attribute lookup. This was the app's second
@@ -67,17 +87,23 @@ export default function LoadingOverlay() {
       const timer = setTimeout(() => setSettled(true), REDUCED_HOLD_MS);
       return () => clearTimeout(timer);
     }
-    const ceiling = setTimeout(
-      () => setSettled(true),
-      INTRO_DURATION_MS + INTRO_CHUNK_BUDGET_MS + FADE_MS,
-    );
+    /* `INTRO_CHUNK_BUDGET_MS` is deliberately *not* in this sum any more. It is the grace
+       period `Logo` gives the 60KB Lottie player to arrive, and adding it here meant the
+       screen stayed covered while a decoration downloaded. `Logo` still honours it for its
+       own draw; the overlay no longer waits on it. */
+    const ceiling = setTimeout(() => setSettled(true), INTRO_DURATION_MS + FADE_MS);
     return () => clearTimeout(ceiling);
   }, []);
 
   useEffect(() => {
     if (!settled) return;
-    const fadeOutTimer = setTimeout(() => setIsVisible(false), HOLD_MS);
-    const unmountTimer = setTimeout(() => setIsMounted(false), HOLD_MS + FADE_HOLD_MS);
+    /* No hold once the app has painted: the point of the paint signal is that there is
+       something behind this to look at, so holding an opaque plate over it is the wait all
+       over again. The hold survives only for the ceiling path, where nothing has reported
+       and the mark finishing is the only event there is. */
+    const hold = isAppPainted() ? 0 : HOLD_MS;
+    const fadeOutTimer = setTimeout(() => setIsVisible(false), hold);
+    const unmountTimer = setTimeout(() => setIsMounted(false), hold + FADE_HOLD_MS);
     return () => {
       clearTimeout(fadeOutTimer);
       clearTimeout(unmountTimer);
@@ -88,8 +114,11 @@ export default function LoadingOverlay() {
 
   return (
     <div
-      className={`bg-surface fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-exit ease-[var(--ease-accelerate)] ${
-        isVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
+      /* `pointer-events-none` unconditionally, not only once it has begun fading. The overlay
+         is decoration over a live app from the first frame; leaving it hit-testable meant a
+         tap in its first ~1.8s went nowhere at all. */
+      className={`bg-surface pointer-events-none fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-exit ease-[var(--ease-accelerate)] ${
+        isVisible ? 'opacity-100' : 'opacity-0'
       }`}
     >
       {/* Nothing to point at on a splash, so the hover cut is never loaded.

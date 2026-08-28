@@ -56,7 +56,7 @@ import ErrorRetry from '@/components/ErrorRetry';
 import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/Input';
 import { getHeroMediaStyle } from '@/lib/hero/geometry';
-import { scrollAppToElement } from '@/lib/motion';
+import { scrollAppToElement } from '@/lib/scrollTo';
 import { peekImageDetail, prefetchImageDetail, subscribeImageDetail } from '@/lib/detail';
 import {
   bindImageHeroDismissGesture,
@@ -307,7 +307,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const [replyTo, setReplyTo] = useState<{ id: number; username: string; body: string } | null>(
     null,
   );
-  const [commentEditorMountId, setCommentEditorMountId] = useState<number | null>(null);
   const commentEditorMountRef = useRef<HTMLDivElement>(null);
   const commentsSectionRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLElement>(null);
@@ -318,7 +317,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const detailTargetRef = useRef<HTMLDivElement>(null);
   const previewSurfaceRef = useRef<string | null>(null);
   const shouldLoadComments = commentsViewport.imageId === imageId && commentsViewport.ready;
-  const shouldMountCommentEditor = commentEditorMountId === imageId;
 
   const heroNavigation = useMemo(
     () => ({
@@ -533,23 +531,13 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     };
   }, [deferredBodyReady]);
 
-  useEffect(() => {
-    if (!deferredBodyReady || !shouldLoadComments) return;
-    const element = commentEditorMountRef.current;
-    if (!element) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
-        setCommentEditorMountId(imageId);
-        observer.disconnect();
-      },
-      { rootMargin: '500px' },
-    );
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [deferredBodyReady, id, image?.id, imageId, shouldLoadComments]);
+  /* The IntersectionObserver that used to live here is gone with what it gated.
+     It existed to mount the comment editor once the composer came within 500px of the
+     viewport — a 774KB raw / 176KB brotli wangEditor + Uppy chunk, downloaded for anyone who
+     scrolled past the comments on any picture. `CommentComposer` now renders a placeholder
+     button and mounts the editor when it is pressed, which is both a far better predictor of
+     intent and one fewer observer on this screen. `commentEditorMountRef` survives because
+     the reply flow still scrolls to it. */
 
   useEffect(() => {
     if (!deferredBodyReady) return;
@@ -1567,7 +1555,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   replyTo={replyTo}
                   commentsSectionRef={commentsSectionRef}
                   commentEditorMountRef={commentEditorMountRef}
-                  shouldMountCommentEditor={shouldMountCommentEditor}
                   fetchComments={fetchComments}
                   handleReply={handleReply}
                   handleCancelReply={handleCancelReply}

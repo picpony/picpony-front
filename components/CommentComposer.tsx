@@ -21,7 +21,6 @@ type ReplyTarget = {
 
 type CommentComposerProps = {
   imageId: number;
-  mounted: boolean;
   replyTo: ReplyTarget | null;
   loadComments: () => Promise<Comment[]>;
   onCancelReply: () => void;
@@ -30,7 +29,6 @@ type CommentComposerProps = {
 
 export default function CommentComposer({
   imageId,
-  mounted,
   replyTo,
   loadComments,
   onCancelReply,
@@ -39,6 +37,21 @@ export default function CommentComposer({
   const { openAuth } = useAuthModal();
   const [comment, setComment] = useState('');
   const [editorRevision, setEditorRevision] = useState(0);
+  /* Whether the visitor has asked to write. See the placeholder below for why the editor is
+     not mounted until they have.
+     Derived rather than synced: pressing 回复 on a comment *is* asking to write, and an effect
+     mirroring `replyTo` into this would be a setState in an effect — which the linter rejects
+     here for the right reason, since the value is a pure function of props and state. */
+  const [pressedWrite, setPressedWrite] = useState(false);
+  const editorOpen = pressedWrite || replyTo !== null;
+
+  /* Warm the chunk on intent rather than on press, so the editor is already in the module
+     cache by the time the click lands. Same ladder as `useIntentPrefetch`, minus the timers:
+     a pointer resting on a 354px box is a much stronger signal than one crossing a link, and
+     `import()` is idempotent — the second call gets the first one's promise. */
+  const warmEditor = () => {
+    void import('@/components/RichTextEditor');
+  };
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isMountedRef = useRef(true);
   const trimmedComment = comment.trim();
@@ -49,6 +62,7 @@ export default function CommentComposer({
       isMountedRef.current = false;
     };
   }, []);
+
 
   const handleSubmit = async () => {
     if (!trimmedComment || isSubmitting) return;
@@ -116,7 +130,27 @@ export default function CommentComposer({
           />
         </div>
       )}
-      {mounted ? (
+      {/* The editor loads when you go to write, not when the comments scroll into view.
+       *
+       * `RichTextEditor` is `@wangeditor/editor` plus its Uppy upload stack: **774KB raw,
+       * 176KB brotli**, the largest chunk in the app by a factor of three. It used to mount as
+       * soon as `mounted` went true — which `PicDetail` sets from an IntersectionObserver with
+       * a 500px root margin — so scrolling anywhere near the comments on *any* picture
+       * downloaded and instantiated a full rich-text editor, whether or not the visitor had
+       * any intention of typing. Most do not.
+       *
+       * The placeholder is a real `<button>` rather than a styled div: it is the control that
+       * starts the editor, so it has to be reachable by keyboard and announce itself. Pressing
+       * it (or focusing it and pressing Enter/Space, which a button gives for free) swaps in
+       * the editor and the `autoFocus`-equivalent is handled by wangEditor's own mount.
+       *
+       * **`mounted` no longer gates this, and must not.** It comes from an
+       * IntersectionObserver in `PicDetail`, and its entire purpose was to defer the heavy
+       * mount until the composer was near the viewport — which pressing the placeholder now
+       * does explicitly and far more precisely. Leaving it in the condition made the button
+       * `disabled` until the observer happened to fire, so the first press on a composer the
+       * user had scrolled straight to did nothing at all. */}
+      {editorOpen ? (
         <RichTextEditor
           key={editorRevision}
           value={comment}
@@ -129,8 +163,22 @@ export default function CommentComposer({
            2×1px border. `min-h` rather than a fixed height because the toolbar
            wraps to a second row on narrow screens, and under-reserving is much
            less disruptive than over-reserving: the editor grows into the space
-           instead of the page collapsing around it. */
-        <div className="min-h-[354px] rounded-sm border border-outline-variant bg-surface-container-low" />
+           instead of the page collapsing around it.
+
+           The same box in both states, so opening the editor does not move the page. */
+        <button
+          type="button"
+          onClick={() => setPressedWrite(true)}
+          onPointerEnter={warmEditor}
+          onFocus={warmEditor}
+          className="min-h-[354px] w-full cursor-text rounded-sm border border-outline-variant bg-surface-container-low p-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:ring-2 focus-visible:focus-ring"
+        >
+          {/* Always the plain prompt: `editorOpen` is true whenever `replyTo` is set, so this
+              branch only ever renders with no reply target. TypeScript narrows `replyTo` to
+              `never` here, which is how the reply-flavoured label that used to be on this line
+              was found to be unreachable. */}
+          写下你的评论…
+        </button>
       )}
       <div className="mt-2 flex justify-end">
         <Button

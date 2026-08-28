@@ -284,6 +284,9 @@ async function waitFor(label, probe, timeoutMs = 30_000) {
   }
 }
 
+/** See `Cdp.send`. Long enough for a cold navigate, short enough to fail rather than hang. */
+const CDP_SEND_TIMEOUT_MS = 60_000;
+
 class Cdp {
   constructor(socket) {
     this.socket = socket;
@@ -302,6 +305,17 @@ class Cdp {
       }
       for (const handler of this.handlers) handler(message);
     });
+    /* A closed socket rejects everything still waiting. Without this a browser that dies
+       mid-journey leaves `await cdp.send('Page.navigate', …)` pending for ever: `STEP_CAP_MS`
+       bounds only the idle loop *after* navigate resolves, so the run never reaches its exit
+       code at all — and a guard that hangs is indistinguishable from a slow one. */
+    socket.addEventListener('close', () => {
+      const waiting = [...this.pending.values()];
+      this.pending.clear();
+      for (const entry of waiting) {
+        entry.reject(new Error(`${entry.method}: CDP socket closed`));
+      }
+    });
   }
 
   static async connect(wsUrl) {
@@ -316,7 +330,24 @@ class Cdp {
   send(method, params = {}) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method });
+      /* Bounded as well as close-aware: a command the browser simply never answers is the
+         other way this used to hang. Generous, because a cold `Page.navigate` on a slow
+         machine is legitimately seconds. */
+      const timer = setTimeout(() => {
+        if (!this.pending.delete(id)) return;
+        reject(new Error(`${method}: no CDP response in ${CDP_SEND_TIMEOUT_MS}ms`));
+      }, CDP_SEND_TIMEOUT_MS);
+      this.pending.set(id, {
+        method,
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
   }
@@ -408,7 +439,7 @@ function computeRounds(entries) {
   return worst;
 }
 
-async function runStep(cdp, step, origin) {
+async function runStep(cdp, step, origin, serverReads) {
   const entries = [];
   const byId = new Map();
   let lastAt = 0;
@@ -491,12 +522,37 @@ async function runStep(cdp, step, origin) {
     ? api.find((e) => step.content.test(e.name) || step.content.test(e.url.href))
     : undefined;
 
+  /* Reads the *server* made during this step — the caller empties the tally before each one, so
+     this is not the run's running total. `r0` — "the content was in the first byte" — is an
+     honest value and the one that keeps the floor meaningful: the read moved from the browser to
+     the server, it did not disappear. */
+  const serverApi = serverReads ? serverReads.slice() : [];
+  /* `r0` is only offered to a step that **navigated**, and only when the browser sent nothing
+     matching. Without the navigation test any server read landing in the window could satisfy
+     the content regex — and a tab tap already proves a server feed read can appear on a step
+     that did not navigate — so a screen that had stopped fetching could be scored as an
+     improvement, which is the one thing the floor exists to catch.
+
+     A route change is `navigate`, `click` or `back`; what it excludes is a step that stays put,
+     which today is the tab tap. */
+  const changesRoute = Boolean(step.navigate || step.click || step.back);
+  const serverContent =
+    step.content && changesRoute && !contentEntry
+      ? serverApi.some((action) => step.content.test(action))
+      : false;
+
   return {
     label: step.label,
     api: api.length,
     media: media.length,
+    serverApi: serverApi.length,
     rounds,
-    contentRound: contentEntry && typeof contentEntry.round === 'number' ? contentEntry.round : null,
+    contentRound:
+      contentEntry && typeof contentEntry.round === 'number'
+        ? contentEntry.round
+        : serverContent
+          ? 0
+          : null,
     firstApiMs: api.length ? Math.round(Math.min(...api.map((e) => e.at))) : null,
     contentMs: contentEntry ? Math.round(contentEntry.at) : null,
     entries: api.map((e) => ({
@@ -635,12 +691,44 @@ const origin = `http://127.0.0.1:${appPort}`;
  * `next start` is pointed at it with `PICPONY_UPSTREAM_ORIGIN`. It answers from the same fixture
  * table the browser side uses, so the two halves cannot disagree about what the backend said.
  */
+/**
+ * What the Next server has asked this fixture for, since the tally was last reset.
+ *
+ * The audit's assertions have always had a **floor** as well as a ceiling — "a step that read
+ * something before must still read something" — and that floor exists because a one-line bug once
+ * silenced every screen in the app while the report called it a triumph. Moving a read to the
+ * server trips it, correctly: from CDP's point of view the request vanished.
+ *
+ * It did not vanish, it changed layer. So the tally below is what lets the floor keep meaning what
+ * it says: `serverApi` counts the same reads on the other side of the boundary, and a step whose
+ * content now arrives in the first byte reports `r0` rather than `null`.
+ */
+const serverReads = [];
 const upstream = createHttpServer((req, res) => {
-  const stub = stubFor(`http://127.0.0.1:${upstreamPort}${req.url}`);
+  /* Two kinds of server-side read reach this one fixture. PicPony's own actions arrive as
+     `/api.php?action=…` and `stubFor` matches those on the path. A Derpibooru read — the SSR'd
+     home feed — arrives as `/api/v1/json/…` because `PICPONY_DERPI_ORIGIN` points here, and
+     `stubFor` matches those on the *hostname*, so it is re-addressed to the real one first. One
+     fixture table answering both halves is what stops the browser side and the server side
+     disagreeing about what the backend said. */
+  const asUpstream = req.url?.startsWith('/api/v1/json')
+    ? `https://trixiebooru.org${req.url}`
+    : `http://127.0.0.1:${upstreamPort}${req.url}`;
+  const stub = stubFor(asUpstream);
   if (!stub) {
     res.writeHead(404).end();
     return;
   }
+  /* Recorded before the response, so a read that is in flight when a step ends is still counted.
+     The `action` is what the browser-side matcher keys on too, so the two columns name the same
+     things. */
+  const action = /[?&]action=([^&]+)/.exec(req.url ?? '')?.[1] ?? req.url ?? '';
+  /* `get_maintenance_status` is excluded for the same reason `CHROME_READS` excludes
+     `get_user` on the browser side: it is shell overhead the server does on *every* route,
+     including ones that read nothing, so counting it would make `serverApi` a function of how
+     many navigations a journey happens to contain rather than of what moved to the server.
+     What is left is content — which is exactly the quantity the floor needs to see. */
+  if (action !== 'get_maintenance_status') serverReads.push(action);
   res.writeHead(200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
@@ -656,7 +744,16 @@ const server = spawn(process.execPath, [NEXT_BIN, 'start', '-p', String(appPort)
   stdio: 'ignore',
   env: LIVE
     ? process.env
-    : { ...process.env, PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${upstreamPort}` },
+    : {
+        ...process.env,
+        PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${upstreamPort}`,
+        PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${upstreamPort}/api/v1/json`,
+        /* Every server-side memo cold, so the ledger measures the path that costs something.
+           Warm, the second journey to open a screen reads nothing on either layer — a cache hit
+           that is indistinguishable from the bug the floor exists to catch, since from outside
+           both are "this step made no requests". See `lib/serverMemo.ts`. */
+        PICPONY_SERVER_MEMO_TTL_MS: '0',
+      },
 });
 const browser = spawn(
   edge,
@@ -688,6 +785,16 @@ const cleanup = () => {
   }
 };
 process.on('exit', cleanup);
+/* Node does not emit `exit` for signal termination, so without these a Ctrl-C during the
+   four-minute run orphans `next start`, a headless Edge, the fixture server and the temp
+   profile — and this harness binds random ports, so the orphans poison the pool rather than
+   just the next run. */
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => {
+    cleanup();
+    process.exit(130);
+  });
+}
 
 try {
   await waitFor('next start', async () => {
@@ -740,13 +847,22 @@ try {
     }
     await resetSession(cdp, origin, { auth: journey.auth });
     console.log(`\n${journey.name}  — ${journey.why}${journey.auth ? '  [signed in]' : ''}`);
-    console.log('  step                 api  media  rounds   content     first');
+    console.log('  step                 api  srv  media  rounds   content     first');
     const steps = [];
     for (const step of journey.steps) {
-      const result = await runStep(cdp, step, origin);
+      /* Emptied per step, so the column is what *this* step cost rather than what the run has
+         cost so far. It was cumulative, and that is not merely a confusing table: `serverContent`
+         below tests this list to decide whether a step's content arrived in the first byte, so a
+         read one screen made would classify a later screen's content as `r0` — the floor passing
+         on a step that had in fact stopped fetching, which is the exact failure the floor exists
+         to catch. Reads still in flight from the previous step land here and are counted against
+         this one; that is the same jitter `rounds` has, and the reason `serverApi` is reported
+         rather than asserted. */
+      serverReads.length = 0;
+      const result = await runStep(cdp, step, origin, LIVE ? null : serverReads);
       steps.push(result);
       console.log(
-        `  ${result.label.padEnd(20)} ${String(result.api).padStart(3)}  ${String(result.media).padStart(5)}  ` +
+        `  ${result.label.padEnd(20)} ${String(result.api).padStart(3)}  ${String(result.serverApi).padStart(3)}  ${String(result.media).padStart(5)}  ` +
           `${String(result.rounds).padStart(6)}  ` +
           `${(result.contentRound === null ? '—' : `r${result.contentRound} ${result.contentMs}ms`).padStart(9)}  ` +
           `${(result.firstApiMs === null ? '—' : `${result.firstApiMs}ms`).padStart(7)}`,
@@ -764,12 +880,21 @@ try {
       label: s.label,
       api: s.api,
       media: s.media,
+      /* Reads the *server* made for this step. Recorded so the floor below can be asserted on
+         `api + serverApi`: moving a read to the server must not read as the screen having
+         stopped loading. */
+      serverApi: s.serverApi,
       contentRound: s.contentRound,
     }));
   }
 
   if (WRITE && LIVE) {
     fail('harness', '--write refuses --live: a live run\'s counts are not reproducible');
+  } else if (WRITE && ONLY) {
+    /* Or the baseline is silently truncated to whatever `--only` selected, and the next full
+       run prints “new journey, nothing to compare” for everything that was dropped and exits
+       0 — the whole ledger gone, reported as a pass. */
+    fail('harness', '--write refuses --only: it would truncate the baseline to the filtered set');
   } else if (WRITE) {
     writeFileSync(BASELINE_PATH, `${JSON.stringify(results, null, 2)}\n`);
     console.log(`\nbaseline written — ${path.relative(ROOT, BASELINE_PATH)}`);
@@ -792,7 +917,23 @@ try {
           console.log(`  ${name} / ${step.label}: shape changed, re-record the baseline`);
           continue;
         }
+        /* **Both layers are asserted, and getting there took removing two sources of noise.**
+           This block used to say `serverApi` could not be held to a number, on a measurement of
+           10 hits across 20 steps — and that measurement was of the harness, not of the app. Two
+           causes, both since fixed: the tally was never emptied, so every step reported the run's
+           running total; and Next's Data Cache persists to `.next/cache/fetch-cache` on disk, so
+           a count was partly a function of what previous runs had left behind. With the tally
+           per-step and `PICPONY_SERVER_MEMO_TTL_MS=0` reaching both caches, two consecutive runs
+           are byte-identical.
+
+           So the ceiling is applied twice — to browser requests, which is what a user waits on,
+           and to the total, because "speculation may move a request earlier, never add one" is a
+           rule about requests, not about which process sends them. And the floor is applied to
+           the total, because it exists to catch a screen that stopped loading, and moving a read
+           to the server looks identical to that from CDP alone. */
         const dApi = step.api - was.api;
+        const wasTotal = was.api + (was.serverApi ?? 0);
+        const stepTotal = step.api + (step.serverApi ?? 0);
         const dRound =
           step.contentRound !== null && was.contentRound !== null
             ? step.contentRound - was.contentRound
@@ -802,10 +943,23 @@ try {
           was.contentRound === null && step.contentRound === null
             ? 'content —'
             : `content r${was.contentRound ?? '—'}→r${step.contentRound ?? '—'}`;
-        console.log(`  ${mark} ${`${name} / ${step.label}`.padEnd(40)} api ${was.api}→${step.api}   ${roundCell}`);
+        /* `browser+server` when either side has a server read, so a step whose content moved
+           layers reads as such at a glance. The server half is reported, never asserted — see the
+           split above. */
+        const apiCell =
+          (was.serverApi ?? 0) || step.serverApi
+            ? `api ${was.api}+${was.serverApi ?? 0}→${step.api}+${step.serverApi}`
+            : `api ${was.api}→${step.api}`;
+        console.log(`  ${mark} ${`${name} / ${step.label}`.padEnd(40)} ${apiCell.padEnd(20)} ${roundCell}`);
         /* A journey may always get cheaper — that is the work — and may never get dearer, because
            every optimisation here is meant to move a request earlier rather than add one. */
         if (dApi > 0) fail(name, `${step.label} sends ${dApi} more request(s) than the baseline`);
+        if (stepTotal > wasTotal) {
+          fail(
+            name,
+            `${step.label} costs ${stepTotal - wasTotal} more request(s) than the baseline across both layers`,
+          );
+        }
         if (dRound > 0) {
           fail(name, `${step.label}'s own read fell ${dRound} round(s) deeper than the baseline`);
         }
@@ -815,7 +969,20 @@ try {
            it. An upper bound alone cannot tell an optimisation from a breakage. So: a step that
            read something before must still read something, and a step whose own content request
            was identified before must still identify it. */
+        /* “This step used to fetch something — does it still fetch anything, on either layer?”
+
+           `srv` is deliberately **not** allowed to satisfy this on its own. A step's server
+           tally picks up reads no part of that screen asked for: Next prefetches the sidebar's
+           account link, whose `/user/[id]` layout runs `generateMetadata`, so `GET /tasks` and
+           `GET /favorites` both carry a `get_user_profile` they have nothing to do with. With
+           the floor keyed on `api + srv` those steps could stop fetching entirely and still
+           pass — measured: breaking the resource layer printed `api 4+1 → 0+1` with an
+           improvement mark and exit 0. So the browser layer has to carry the floor by itself
+           unless the step genuinely had no browser reads to begin with, in which case there is
+           nothing for it to lose and `contentRound` is the check that still bites. */
         if (was.api > 0 && step.api === 0) {
+          fail(name, `${step.label} now sends no browser requests at all — the screen is not loading`);
+        } else if (wasTotal > 0 && stepTotal === 0) {
           fail(name, `${step.label} now sends no requests at all — the screen is not loading`);
         }
         if (was.contentRound !== null && step.contentRound === null) {

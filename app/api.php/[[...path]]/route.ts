@@ -25,6 +25,19 @@ import type { NextRequest } from 'next/server';
 const UPSTREAM_ORIGIN = 'https://picpony.top';
 const UPSTREAM_PATH = '/api.php';
 
+/**
+ * How long one upstream call may take before this route gives up on it.
+ *
+ * Generous rather than tight, and the difference from `lib/route.server.ts`'s 1500ms is
+ * the point: that one bounds a *document*, where every visitor pays the wait whether or
+ * not they needed the answer. This bounds a request the client explicitly made and is
+ * waiting on, so the failure it is guarding against is the connection never closing at
+ * all — an upstream that answers in eight seconds should still be allowed to answer.
+ * The observed latency of this backend is ~9s under load, so anything much under 20s
+ * would turn a slow answer into a failover.
+ */
+const UPSTREAM_TIMEOUT_MS = 30_000;
+
 /** Hop-by-hop headers, plus ones `fetch` must recompute for the new request. */
 const SKIP_REQUEST_HEADERS = new Set([
   'host',
@@ -90,13 +103,32 @@ async function proxy(
   });
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
-  const upstream = await fetch(target, {
-    method: request.method,
-    headers,
-    body: hasBody ? await request.arrayBuffer() : undefined,
-    redirect: 'manual',
-    cache: 'no-store',
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: request.method,
+      headers,
+      body: hasBody ? await request.arrayBuffer() : undefined,
+      redirect: 'manual',
+      cache: 'no-store',
+      /* Without this the handler inherits the platform's own socket timeout, which on a
+         hung upstream means this route hangs with it — holding a Node connection open for
+         as long as the backend takes to give up. `app/relay/route.ts` already had the
+         try/catch half of this and this route had neither half, so a network throw here
+         became an unhandled rejection and a bare 500 rather than something the client
+         could act on. */
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch {
+    /* The same shape `app/relay/route.ts` returns for the same condition, and for the same
+       reason: `proxyFetch` (lib/api/client.ts) treats 502 as a failover trigger, which is
+       exactly what it would have concluded from the network throw this is standing in for.
+       A timeout and a refused connection are one answer here — the line is not answering. */
+    return Response.json(
+      { success: false, message: 'PicPony 接口暂时不可用' },
+      { status: 502 },
+    );
+  }
 
   const secure = isSecureRequest(request);
   const responseHeaders = new Headers();

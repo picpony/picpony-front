@@ -9,9 +9,16 @@ import NextTopLoader from 'nextjs-toploader';
 import { ToastContainer } from '@/components/Toast';
 import LoadingOverlay from '@/components/LoadingOverlay';
 import RippleLayer from '@/components/RippleLayer';
+import { ImageLineProvider, SpoilerTagsProvider } from '@/components/ImageLineProvider';
+import type { ImageLine } from '@/lib/route';
+import OfflineBanner from '@/components/OfflineBanner';
+import ServiceWorker from '@/components/ServiceWorker';
 import { COOKIE_KEYS } from '@/lib/constants';
 import { PALETTES } from '@/lib/generated/themeColors';
 import { inlineRoutePolicyScript, readRoutePolicy } from '@/lib/route.server';
+
+/** The three the cookie may legitimately hold; anything else is treated as absent. */
+const IMAGE_LINES: readonly ImageLine[] = ['direct', 'cdn', 'picpony'];
 
 /* Validation lists for the cookie reads below. Spelled out rather than imported from
    `lib/appearance` because that module is client-only — it holds hooks — and this is a
@@ -129,6 +136,29 @@ export default async function RootLayout({
   const paletteCookie = cookieStore.get(COOKIE_KEYS.palette)?.value;
   const palette = PALETTES.find((p) => p.id === paletteCookie) ?? PALETTES[0];
   const motionCookie = cookieStore.get(COOKIE_KEYS.motion)?.value;
+  /* Which image line this device is on, so the fifty `<img>` tags this document renders carry the
+     same URLs the client is about to want. Without it every card mismatched at hydration for
+     anyone who had changed the setting, and React leaves a mismatched attribute alone — so their
+     preference was ignored for the whole first screen. `null` on a first visit, which is correct:
+     with nothing stored, both sides compute the defaults. See `components/ImageLineProvider.tsx`. */
+  /* The spoiler tags, so the gallery's covers are in the server's own HTML rather than appearing
+     after hydration. Bounded and split here rather than trusted: it is a cookie, it reaches a
+     per-card comparison on fifty cards, and a hostile one is free. 64 tags and 64 characters
+     each is far above anything the UI produces. */
+  const spoilerCookie = cookieStore.get(COOKIE_KEYS.spoilerTags)?.value ?? '';
+  const spoilerTags =
+    spoilerCookie.length > 4096
+      ? []
+      : spoilerCookie
+          .split(',')
+          .map((tag) => tag.trim().toLowerCase())
+          .filter((tag) => tag.length > 0 && tag.length <= 64)
+          .slice(0, 64);
+
+  const imageLineCookie = cookieStore.get(COOKIE_KEYS.imageLine)?.value;
+  const imageLine = IMAGE_LINES.includes(imageLineCookie as ImageLine)
+    ? (imageLineCookie as ImageLine)
+    : null;
   const motion = MOTION_TIERS.includes(motionCookie ?? '') ? motionCookie! : 'standard';
   const speedCookie = cookieStore.get(COOKIE_KEYS.motionSpeed)?.value;
   const motionSpeed = MOTION_SPEEDS.includes(speedCookie ?? '') ? speedCookie! : 'default';
@@ -151,6 +181,31 @@ export default async function RootLayout({
             OS's. The two media-keyed tags Next used to generate meant that forcing dark
             mode on a light desktop left the browser chrome painted the light colour. */}
         <meta name="theme-color" content={palette[darkMode ? 'dark' : 'light'].primary} />
+        {/* The four hosts the first screen cannot be drawn without, warmed while the HTML is
+            still parsing. The app had none of these — not one `preconnect` or `dns-prefetch`
+            anywhere — so a cold load spent a DNS lookup plus a TLS handshake on each of them
+            *after* the layout pass discovered the first `<img>`.
+
+            The three image hosts are the tiers of `lib/imageLoader.ts`'s ladder, in the order
+            it tries them: the PicPony worker, the CDN, then Derpibooru direct. All three are
+            worth warming rather than only the current line, because the ladder can move
+            between them mid-page and the second one is reached exactly when the first is
+            already failing — the worst moment to also be paying for a handshake.
+
+            `crossOrigin` is required on every one of them: these are fetched as CORS
+            requests by `next/image`'s optimizer origin and as anonymous requests by the
+            font loader, and a preconnect whose CORS mode does not match the request it is
+            meant to serve opens a second connection instead of being reused — which is
+            worse than not having it, since it costs a socket and warms nothing.
+
+            No font host is listed, and that is worth stating because it is the obvious fourth
+            entry: `next/font/google` downloads the faces at build time and serves them from
+            this origin (the built CSS resolves them to `../media/*.woff2`), so neither
+            `fonts.googleapis.com` nor `fonts.gstatic.com` is ever contacted. A preconnect to
+            either would open a socket to a host this app does not use. */}
+        <link rel="preconnect" href="https://147052.xyz" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://wsrv.nl" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://derpicdn.net" crossOrigin="anonymous" />
         {/* The no-JS floor for the motion preference. With scripting off nothing can read
             the stored tier, so the OS query is all there is.
             It keys on `data-motion='standard'` rather than on the attribute's *absence*: the
@@ -212,13 +267,23 @@ export default async function RootLayout({
           easing="cubic-bezier(0.2, 0, 0, 1)"
           speed={200}
         />
-        <AuthProvider>
-          <AppLayout initialCollapsed={sidebarCollapsed} overlay={imageDetail}>
-            {children}
-          </AppLayout>
-        </AuthProvider>
+        <ImageLineProvider value={imageLine}>
+          <SpoilerTagsProvider value={spoilerTags}>
+            <AuthProvider>
+              <AppLayout initialCollapsed={sidebarCollapsed} overlay={imageDetail}>
+                {children}
+              </AppLayout>
+            </AuthProvider>
+          </SpoilerTagsProvider>
+        </ImageLineProvider>
         <ToastContainer />
         <RippleLayer />
+        <OfflineBanner />
+        {/* Both render nothing. The worker is registered on an idle callback and controls the
+            *next* load, never this one; the banner is inert unless `experimental.useOffline` is
+            on. `buildId` is what versions the worker's caches — a file in `public/` cannot read a
+            build-time variable, so it arrives in the registration URL. */}
+        <ServiceWorker version={process.env.NEXT_PUBLIC_BUILD_ID ?? 'dev'} />
       </body>
     </html>
   );

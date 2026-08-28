@@ -167,7 +167,16 @@ const PICPONY = {
     })),
     total_pages: 2,
   }),
-  get_team_members: () => ({ success: true, members: [] }),
+  /* Two real rows rather than an empty list. The roster is server-rendered now, so an empty
+     fixture would make the one journey that proves it indistinguishable from a broken one — the
+     HTML would contain no names either way. */
+  get_team_members: () => ({
+    success: true,
+    members: [
+      { id: 1, name: 'FixtureDev', role: '开发', category: 'developer', avatar_url: null, account_avatar: null, link_url: null, order_num: 1 },
+      { id: 2, name: 'FixtureEditor', role: '编辑', category: 'editor', avatar_url: null, account_avatar: null, link_url: null, order_num: 2 },
+    ],
+  }),
   get_faves: () => ({ success: true, faves: Array.from({ length: 30 }, (_, i) => 2000 + i) }),
   get_browsing_history: () => ({
     success: true,
@@ -193,7 +202,14 @@ const PICPONY = {
 
 /** Derpibooru path → envelope. Matched on the path with the `/api/v1/json` prefix removed. */
 const DERPI = [
-  [/^\/search\/images$/, (params) => imagePage(Number(params.get('per_page')) || 50)],
+  /* Seeded on the page number, so page 2's ids differ from page 1's. Without that every page is
+     byte-identical and a probe cannot tell a cache hit from a re-fetch — nor a page turn that
+     rendered nothing from one that rendered the same thing again. */
+  [
+    /^\/search\/images$/,
+    (params) =>
+      imagePage(Number(params.get('per_page')) || 50, 1000 + (Number(params.get('page')) || 1) * 1000),
+  ],
   [/^\/images\/featured$/, () => ({ image: image(9001, { width: 1920, height: 1080 }), interactions: [] })],
   [/^\/images\/\d+$/, (_params, pathname) => ({ image: image(Number(pathname.split('/').pop())) })],
   [/^\/search\/tags$/, () => ({ tags: [], total: 0 })],

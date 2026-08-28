@@ -1,10 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
-import { gsap, useGSAP, DURATION } from '@/lib/motion';
-import { motionScale, motionTier } from '@/lib/appearance';
+import { DURATION, EASE } from '@/lib/motionTokens';
+import { motionTier, scaledMs } from '@/lib/appearance';
 import { ICON } from '@/lib/icons';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -111,7 +118,18 @@ export function ToastContainer() {
 function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: number) => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  useGSAP(
+  /* A plain effect, not `useGSAP`. Nothing in here is a GSAP tween any more, and `useGSAP` is
+     re-exported from `lib/motion.ts` — which registers the engine at module scope, so keeping
+     it would have left this component pulling GSAP into the root layout's chunk in order to
+     run three `element.animate()` calls.
+
+     Empty deps: `ToastItem` is keyed by `toast.id` at its call site, so a different message is
+     a different component rather than a re-run of this one. */
+  /* A **layout** effect, because `enter` carries a backwards fill: created in a passive effect
+     the browser paints the card at its CSS resting position first and only then snaps it back
+     to the start of the slide, which is one frame of the settled toast.
+     `components/Reveal.tsx` records choosing `useLayoutEffect` for exactly this. */
+  useLayoutEffect(
     () => {
       const wrap = wrapRef.current;
       if (!wrap) return;
@@ -147,37 +165,79 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
          closing just before the card is fully gone, so the queue reads as emptying
          rather than as jumping. */
 
-      /* The dwell is wall-clock, so it has to be divided back out of the global time scale.
+      /* The dwell is wall-clock and the two legs are not.
        *
-       * `gsap.globalTimeline.timeScale(1 / motionScale())` reaches every tween in the app,
-       * which is right for the two legs above and wrong for the gap between them: a snackbar's
-       * duration is how long there is to *read* it, not how long it takes to arrive. Left
-       * alone, a 3000ms message was on screen for 1500ms at the reduced tier and 2100ms at
-       * 快速 — the tier a motion-sensitive reader is most likely to pick was the one that took
-       * half the message away. A timeline position `p` is reached at wall-clock `p * scale`,
-       * so `p = d / scale` lands on `d` whatever the speed. The `off` tier never gets here;
-       * it uses a real `setTimeout` above, which is why dividing by a possible zero is safe. */
-      const dwell = toast.duration / 1000 / motionScale();
+       * A snackbar's duration is how long there is to *read* it, not how long it takes to
+       * arrive, so the speed preference must not touch it — under the GSAP timeline this
+       * needed dividing back out of `gsap.globalTimeline.timeScale`, because that reaches
+       * every tween in the app. Left alone, a 3000ms message was on screen for 1500ms at
+       * 快速 and 2100ms at the reduced tier: the tier a motion-sensitive reader is most
+       * likely to pick was the one that took half the message away.
+       *
+       * On WAAPI there is no global scale to fight, so the split is simply stated: the two
+       * travel legs go through `scaledMs`, the dwell does not. */
+      const enterMs = scaledMs(DURATION.long * 1000);
+      const exitMs = scaledMs(DURATION.short * 1000);
+      /* `'<0.08'` on the old timeline: the gap starts closing 80ms after the card starts
+         leaving, so the queue reads as emptying rather than as jumping. */
+      const collapseDelay = toast.duration + scaledMs(80);
 
-      const tl = gsap
-        .timeline({ onComplete: () => onClose(toast.id) })
-        .fromTo(
-          card,
-          { y: slide, autoAlpha: 0 },
-          { y: 0, autoAlpha: 1, duration: DURATION.long, ease: 'decelerate' },
-        )
-        .to(
-          card,
-          { y: slideOut, autoAlpha: 0, duration: DURATION.short, ease: 'accelerate' },
-          dwell,
-        )
-        .to(wrap, { height: 0, duration: DURATION.short, ease: 'accelerate' }, '<0.08');
+      /* The height has to be a number for WAAPI to interpolate it — `auto` is not a value it
+         can animate from. Read once, before anything is written, so this is one measurement
+         rather than a layout read per frame. */
+      const wrapHeight = wrap.offsetHeight;
+
+      const enter = card.animate(
+        [
+          { transform: `translateY(${slide}px)`, opacity: 0 },
+          { transform: 'translateY(0px)', opacity: 1 },
+        ],
+        { duration: enterMs, easing: EASE.decelerate, fill: 'both' },
+      );
+
+      const exit = card.animate(
+        [
+          { transform: 'translateY(0px)', opacity: 1 },
+          { transform: `translateY(${slideOut}px)`, opacity: 0 },
+        ],
+        /* `forwards`, never `both`. A backwards fill puts an animation in effect during its
+           *delay* phase, and script-created animations resolve in creation order — so this
+           one's 0% keyframe (`translateY(0)`, opacity 1) replaced `enter`'s animated values
+           from the very first frame and the entrance never appeared at all: the card was
+           simply at rest until it left. Same mechanism `lib/ripple.ts` documents from the
+           other side, where the absence of a backwards fill is what keeps a delayed fade out
+           of the stack. */
+        { duration: exitMs, delay: toast.duration, easing: EASE.accelerate, fill: 'forwards' },
+      );
+
+      const collapse = wrap.animate(
+        [{ height: `${wrapHeight}px` }, { height: '0px' }],
+        /* `forwards` for the reason above, and here it costs something extra: a backwards fill
+           pinned the wrapper to its mount-time `offsetHeight` for the whole dwell, so a late
+           font swap or a narrowing viewport that reflowed the message to two lines overflowed
+           the box. */
+        { duration: exitMs, delay: collapseDelay, easing: EASE.accelerate, fill: 'forwards' },
+      );
+
+      /* The collapse is the last thing to finish, so it owns the dismissal. `finished` rejects
+         on `cancel()`, which is exactly what the cleanup below does on unmount — so the
+         rejection handler must be a no-op rather than a second `onClose`. */
+      collapse.finished.then(
+        () => onClose(toast.id),
+        () => {},
+      );
 
       return () => {
-        tl.kill();
+        enter.cancel();
+        exit.cancel();
+        collapse.cancel();
       };
     },
-    { scope: wrapRef },
+    /* Mount only, and legitimately: `ToastItem` is keyed by `toast.id`, `toast` is never
+       mutated, and `onClose` is a `useCallback([])` — so nothing this closes over can change
+       during the component's life. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by toast.id
+    [],
   );
 
   const style = severityStyles[toast.type];

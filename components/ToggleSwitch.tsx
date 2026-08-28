@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useRef, useState } from 'react';
-import { spawnRipple } from '@/lib/motion';
+import { spawnRipple } from '@/lib/ripple';
 import { cn } from '@/lib/utils';
 
 import CheckGlyph from './CheckGlyph';

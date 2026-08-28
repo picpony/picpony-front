@@ -11,6 +11,9 @@ import {
   type LoadAttempt,
 } from '@/lib/imageLoader';
 import Skeleton from '@/components/Skeleton';
+import { DURATION } from '@/lib/motionTokens';
+import { MOTION_SPEED_SCALE } from '@/lib/appearance';
+import { useSsrImageLine } from '@/components/ImageLineProvider';
 
 interface FadeInImageProps extends ImageProps {
   fallbackSrc?: string;
@@ -87,11 +90,26 @@ function FadeInImageInner({
   ...props
 }: FadeInImageProps & { useLayers: boolean }) {
   const [isLoaded, setIsLoaded] = useState(eager);
+  /**
+   * Whether the placeholder may leave the tree — one fade after `isLoaded`, not with it.
+   *
+   * `MOTION_SPEED_SCALE.slow` rather than the live speed, per the wall-clock rule: every CSS
+   * duration stretches by up to 1.4, and a timer written against the unscaled figure fires
+   * inside the motion it is meant to outlast. Holding an already-invisible node 40% longer
+   * costs nothing; releasing it early is the blank frame this exists to remove.
+   */
+  const [placeholderGone, setPlaceholderGone] = useState(eager);
   const imgRef = useRef<HTMLImageElement>(null);
   const src = typeof props.src === 'string' ? props.src : '';
   // 挂载时一次性初始化分层尝试（key 变化会重挂载）
+  /* The line the *server* used, when there is one. Without it this component resolves the line
+     itself on both sides of hydration — from `localStorage` in the browser and from the defaults
+     in Node — so every server-rendered `<img>` mismatched for anyone who had changed the setting,
+     and React leaves a mismatched attribute alone: the preference was ignored for the whole first
+     screen. See `components/ImageLineProvider.tsx`. */
+  const ssrLine = useSsrImageLine();
   const [attempt, setAttempt] = useState<LoadAttempt | null>(() =>
-    useLayers ? createInitialAttempt(getRawImageUrl(src), proxyThumb) : null,
+    useLayers ? createInitialAttempt(getRawImageUrl(src), proxyThumb, ssrLine) : null,
   );
   const rawUrlRef = useRef(getRawImageUrl(src));
   const loadedRef = useRef(false);
@@ -111,10 +129,39 @@ function FadeInImageInner({
     return () => window.clearTimeout(timerRef.current);
   }, [attempt, proxyThumb]);
 
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timer = window.setTimeout(
+      () => setPlaceholderGone(true),
+      /* DURATION.short is the 200ms step the duration-standard utility emits. */
+      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+    );
+    return () => window.clearTimeout(timer);
+  }, [isLoaded]);
+
   useLayoutEffect(() => {
-    // Synchronous complete check — no rAF (rAF during a fling is jank), and
-    // before paint so a decoded image never shows a transparent frame.
-    if (imgRef.current?.complete) setIsLoaded(true);
+    /* Synchronous, before paint, so a decoded image never shows a transparent frame — no rAF,
+       which during a fling is jank.
+
+       Two things it has to get right, and it got both wrong.
+
+       **`complete` alone is not "loaded".** It is also true for an image that has *failed*, so a
+       404 or a proxy line that is down set `isLoaded`, which removed the shimmer and left the
+       `<img>` fully opaque with nothing in it — a card that is blank with no placeholder at all.
+       `naturalWidth > 0` is the part that distinguishes a decoded image from a dead one.
+
+       **And it must reset.** `displaySrc` changes every time the layered loader steps down to the
+       next line, and this only ever set `true`, so once a card had loaded anything it never
+       shimmered again: on the way back to a page whose images had already failed once, the cards
+       came back bare. Measured going next-then-previous on the gallery — cards with neither a
+       shimmer nor an image climbed 0 → 1 → 3 → 4 → 5 → 6 across two seconds. Assigning the
+       predicate rather than only raising it is the whole fix. */
+    const img = imgRef.current;
+    const loaded = Boolean(img?.complete && img.naturalWidth > 0);
+    setIsLoaded(loaded);
+    /* The placeholder's own latch resets here rather than in an effect of its own: it is the same
+       fact as `isLoaded`, and a second effect writing it would be a sync setState in an effect. */
+    if (!loaded) setPlaceholderGone(false);
   }, [displaySrc]);
 
   const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -146,11 +193,22 @@ function FadeInImageInner({
 
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden contain-paint">
-      {shimmer && !isLoaded && (
+      {shimmer && !placeholderGone && (
         /* `Skeleton`, not a hand-built `.skeleton` span: same tone and sweep,
            but one owner for the app's loading language. `rounded-none` because
-           the media container already clips this to its own corner. */
-        <Skeleton className="absolute inset-0 block rounded-none" />
+           the media container already clips this to its own corner.
+
+           It **cross-fades with the image rather than unmounting on `isLoaded`**, and that is
+           not a flourish. Unmounting it in the same commit that flips the image to
+           `opacity-100` left the fade to start from 0 with nothing behind it, so the first
+           frames of every arriving image were a blank card. Measured on a gallery page turn:
+           2 of 16 cards in view, for one sample, showing neither a placeholder nor a picture —
+           a smaller instance of exactly the defect `isLoaded`'s own note above records. */
+        <Skeleton
+          className={`absolute inset-0 block rounded-none transition-opacity duration-standard ease-[var(--ease-standard)] ${
+            isLoaded ? 'opacity-0' : 'opacity-100'
+          }`}
+        />
       )}
       <Image
         {...props}

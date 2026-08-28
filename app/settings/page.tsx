@@ -42,7 +42,7 @@ import TabPanes, { TabPane } from '@/components/TabPanes';
 import { ICON } from '@/lib/icons';
 import { readUserInfo } from '@/lib/hooks';
 import { DERPIBOORU_API_BASE, LS_KEYS } from '@/lib/constants';
-import { changeScheme } from '@/lib/motion';
+import { changeScheme } from '@/lib/motionLazy';
 import {
   commitEntranceMotion,
   commitMotion,
@@ -1219,6 +1219,8 @@ export default function SettingsPage() {
                         src={currentAvatar}
                         alt="头像预览"
                         fill
+                        /* `w-16 h-16`. A `fill` image with no `sizes` resolves to `100vw`. */
+                        sizes="64px"
                         className="object-cover"
                         onLoad={() => setAvatarLoaded(true)}
                       />
@@ -1276,6 +1278,8 @@ export default function SettingsPage() {
                         }
                         alt="横幅预览"
                         fill
+                        /* `w-24 h-14`. Same reason as the avatar preview above. */
+                        sizes="96px"
                         className="object-cover"
                         onLoad={() => setBannerLoaded(true)}
                       />

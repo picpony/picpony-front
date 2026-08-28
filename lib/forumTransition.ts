@@ -16,11 +16,11 @@
  * the transform is supposed to look like.
  */
 
-import { DURATION, gsap, heroOwnsScreen, spring } from '@/lib/motion';
+import { heroOwnsScreen } from '@/lib/appScroller';
 import { motionTier } from '@/lib/appearance';
 
 /** Viewport-space box of the row that was pressed. */
-interface ForumOrigin {
+export interface ForumOrigin {
   id: string;
   left: number;
   top: number;
@@ -47,6 +47,11 @@ let pending: ForumOrigin | null = null;
  * vanishing, and that fade is built in `playForumContainerTransform` below. */
 export function rememberForumOrigin(id: number | string, row: HTMLElement) {
   if (motionTier() === 'off') return;
+  /* A press on a post is the signal that the transform is about to be wanted. See the facade.
+     Below the `off` guard rather than above it: this fetches the play half and therefore GSAP,
+     and on that tier the transform can never run — so above the guard it downloaded the engine
+     on the first press of any forum row to serve an animation that is unreachable. */
+  ensurePlay();
   const rect = row.getBoundingClientRect();
   pending = {
     id: String(id),
@@ -84,92 +89,44 @@ export function readForumOrigin(id: number | string): ForumOrigin | null {
 }
 
 /**
- * Grows `card` from `origin` to wherever it has just been laid out.
+ * The container transform itself lives in `lib/forumTransitionPlay.ts`, behind a dynamic import,
+ * and this is the facade for it.
  *
- * A FLIP: the card is already in its final position, so the tween only has to
- * put it back at the origin and release it. The scale is non-uniform, which
- * would smear the text — hence `content`, which is held out and faded in over
- * the back half. That is the spec's own answer, and it is why a container
- * transform reads as one surface changing shape rather than as a page being
- * zoomed.
+ * The split is about who reaches what. `rememberForumOrigin` is called by `ForumPostList`, which
+ * is rendered by `/forum` **and by the home page's forum pane** — so a function that records a
+ * `getBoundingClientRect` was putting GSAP and its five plugins into the app's front door. The
+ * transform itself is only ever wanted on `/forum/[id]`, one navigation later.
  *
- * Returns a cleanup that reverts everything, for a navigation that unmounts
- * mid-flight.
+ * The warm is driven by the gesture rather than by a timer: recording an origin *is* a press on a
+ * post, and the detail route is a network round trip away, so the chunk is fetched exactly when it
+ * is about to be needed and never otherwise. If it loses that race the card simply appears, which
+ * is what `motionTier() === 'off'` gives today.
  */
+let play: typeof import('@/lib/forumTransitionPlay') | null = null;
+let loading = false;
+
+function ensurePlay() {
+  if (play || loading) return;
+  loading = true;
+  void import('@/lib/forumTransitionPlay').then(
+    (module) => {
+      play = module;
+    },
+    () => {
+      /* A failed chunk fetch is not retried per press: every open is then a plain appearance,
+         which is what the module's absence already means. */
+    },
+  );
+}
+
 export function playForumContainerTransform(
   card: HTMLElement,
   content: HTMLElement | null,
   origin: ForumOrigin,
 ): () => void {
-  const to = card.getBoundingClientRect();
-  if (to.width === 0 || to.height === 0) return () => {};
-
-  /* Reduced: the card fades up in place. A container transform is travel *and* a
-     non-uniform scale — the two things the tier's rule removes — so what is left of the
-     gesture is "the post you pressed is now the surface in front of you", which a fade
-     says. Held to one clock so it cannot read as two events. */
-  if (motionTier() === 'reduced') {
-    const fade = gsap.fromTo(
-      [card, content].filter((el): el is HTMLElement => Boolean(el)),
-      { autoAlpha: 0 },
-      { autoAlpha: 1, ...spring('defaultEffects'), clearProps: 'opacity,visibility' },
-    );
-    return () => {
-      fade.kill();
-      gsap.set([card, content].filter(Boolean) as HTMLElement[], {
-        clearProps: 'opacity,visibility',
-      });
-    };
+  if (!play) {
+    ensurePlay();
+    return () => {};
   }
-
-  const timeline = gsap.timeline().fromTo(
-    card,
-    {
-      x: origin.left - to.left,
-      y: origin.top - to.top,
-      scaleX: origin.width / to.width,
-      scaleY: origin.height / to.height,
-      transformOrigin: 'top left',
-    },
-    {
-      x: 0,
-      y: 0,
-      scaleX: 1,
-      scaleY: 1,
-      /* `emphasized` at 500ms, which is the pairing for a large container
-         transform — and this file's own header calls this a container transform.
-         It read a literal `0.4` on `decelerate`: the wrong row of the table (that
-         pairing is for something *entering* the screen) and a hand-typed number
-         where `DURATION` was already imported. The shared axis was raised to 500
-         for the same reason. */
-      duration: DURATION.emphasized,
-      ease: 'emphasized',
-      /* Nothing may keep a transform: this card is an ancestor of the post's
-           images, and a residual one would make it a containing block for any
-           fixed descendant. */
-      clearProps: 'transform,transformOrigin,willChange',
-    },
-    0,
-  );
-
-  if (content) {
-    timeline.fromTo(
-      content,
-      { autoAlpha: 0 },
-      /* `defaultEffects`, the critically-damped spring — a fade is an *effects*
-         change, and `ease: 'none'` was a linear fade, which this file's own rules
-         allow only for a spinner's rotation or a pre-sampled track. The 150ms offset
-         stays: the container morphs first, its contents arrive behind it, which is
-         the same split `Popover` uses. */
-      { autoAlpha: 1, ...spring('defaultEffects'), clearProps: 'opacity,visibility' },
-      0.15,
-    );
-  }
-
-  return () => {
-    timeline.kill();
-    gsap.set(content ? [card, content] : card, {
-      clearProps: 'transform,transformOrigin,opacity,visibility,willChange',
-    });
-  };
+  return play.playForumContainerTransform(card, content, origin);
 }
