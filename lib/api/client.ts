@@ -34,8 +34,19 @@ export interface BrowsingSettings {
 // 浏览设置（来自 localStorage）
 // ---------------------------------------------------------------------------
 
+/**
+ * `localStorage` is guarded, and that is not defensiveness — it is a crash this function caused.
+ *
+ * These are device preferences, so the natural assumption is that only client code reads them. That
+ * stopped being true when the resource cache started folding them into its **keys**:
+ * `useResource` computes a key during render, Next renders client components on the server too, and
+ * an unguarded `localStorage` there is a `ReferenceError` that takes the whole route into client-only
+ * rendering. The defaults are the right answer for the server — it has no device to ask — and the
+ * first client render reads the real values.
+ */
 export function getBrowsingSettings(): BrowsingSettings {
-  const ls = (k: string, def: string) => localStorage.getItem(k) ?? def;
+  const ls = (k: string, def: string) =>
+    typeof window === 'undefined' ? def : (localStorage.getItem(k) ?? def);
   return {
     contentFilter: ls(LS_KEYS.contentFilter, 'safe') as 'safe' | 'spoilers' | 'developer',
     banAnthro: ls(LS_KEYS.banAnthro, 'false') === 'true',

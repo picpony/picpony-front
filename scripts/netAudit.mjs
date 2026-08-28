@@ -834,3 +834,8 @@ if (failures.length) {
   process.exit(1);
 }
 console.log('\nall checks passed');
+/* Explicit, because falling off the end does not end this process: the CDP socket is open and two
+   children are alive, so the event loop never drains and the command hangs after printing its
+   result — which reads exactly like a probe that is still working. The `exit` handler above does
+   the cleanup. The two UI probes already exit this way. */
+process.exit(0);

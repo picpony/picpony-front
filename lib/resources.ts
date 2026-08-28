@@ -57,7 +57,11 @@ export function browsingFingerprint(): string {
   const s = getBrowsingSettings();
   let hidden = '';
   try {
-    const active: unknown = JSON.parse(localStorage.getItem(LS_KEYS.activeHiddenTags) || '[]');
+    /* Guarded rather than left to the `catch`: this runs during render, and Next renders client
+       components on the server too, so an unguarded read would throw a `ReferenceError` on every
+       SSR pass and be swallowed below. Same reason `getBrowsingSettings` carries the guard. */
+    const raw = typeof window === 'undefined' ? '[]' : localStorage.getItem(LS_KEYS.activeHiddenTags);
+    const active: unknown = JSON.parse(raw || '[]');
     if (Array.isArray(active)) {
       hidden = active
         .filter((t): t is string => typeof t === 'string' && t !== '')
