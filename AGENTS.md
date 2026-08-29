@@ -642,9 +642,9 @@ licence to recolour everything:
 | `primary` / `primary-ink` / `secondary` / `tertiary` families | `error` / `success` / `warning` — a severity that changes colour with a theme is not a severity |
 | every `surface` step, `on-surface`, `inverse-*` | the four `*-fill` + `on-fill`, for the same reason and because they already do not flip between schemes |
 | `on-surface-variant`, `outline`, `outline-variant` | `accent-*` — a categorical scale; a 分级 chip that changed hue per theme would change meaning |
-| `focus*`, through their `var()` indirection on `secondary` | `plate-1..6` — the /about plate's own hue ring, taken off the Lottie artwork |
+| `focus*`, through their `var()` indirection on `secondary` | `glass-body` / `glass-body-b` / `glass-sheen` — the /about plate's own material: the two ends of its field and its specular. The pair is what every one of the glass's terms acts on, so their 21-code separation is the plate's most load-bearing number, not a tint — and it is a *pair* with how little colour they differ by, since the reference measures 12.3 code values of span at chroma 3.8 and reads as white silk |
 | `link` / `link-hover` — the brand hue at P40 / P80 | `media-*`, `on-media*`, `scrim` — things sitting on a photograph |
-| | the wordmark. `.logo-keyline` is `currentColor` and the Lottie roses are hand-drawn pink; a brand mark does not recolour with a user preference |
+| the /about plate's *ink*, which reads `primary` at run time — the one role in the app that follows the palette without having a token of its own, because a shader uniform is where a `var()` cannot reach | the wordmark. `.logo-keyline` is `currentColor` and the Lottie roses are hand-drawn pink; a brand mark does not recolour with a user preference |
 
 **Links follow the palette, and the underline is what pays for it.** They were a fixed blue
 in both schemes, on the argument that blue is a link's affordance rather than a brand element
@@ -3384,7 +3384,7 @@ A bailout is information, not noise — it says that file was not optimised.
 
 ## Measuring it
 
-Six probes beside the four checks, all driving Edge over CDP against the same stubbed upstream as
+Seven probes beside the four checks, all driving Edge over CDP against the same stubbed upstream as
 `net:audit`. None asserts; they print, and the numbers in this file come from them.
 
 | | |
@@ -3398,6 +3398,7 @@ Six probes beside the four checks, all driving Edge over CDP against the same st
 | `npm run net:tabnav [w] [back] [gap]` | tab tap → open a thread → back; where it lands and which pane shows |
 | `npm run perf:pageturn` | a gallery page turn per frame: scroll offset, and what each in-view card shows |
 | `npm run perf:sharpness [w]` | the flight's bitmap vs the box it is painted into, on real images |
+| `npm run perf:glass [w] [h]` | the /about plate, rendered to a PNG on the CPU — a design instrument, not a check. Every field of its four config objects is sweepable by name (`--refraction=`, `--momentum=`, `--detail=`, `--flank=`, …), plus `--colorA= --colorB= --sheen= --hue=`; `--stroke` walks a cursor through all four ink directions. One documented exception: two config objects declare `speed`, so the reeds' creep is `--fluteSpeed` and the flow's clock is `--swirlSpeed`. Note it renders on the CPU and so never compiles the GLSL — a shader change needs a browser as well |
 
 `perf:sw` stops the **server** rather than emulating offline, and that is not a shortcut:
 `Network.emulateNetworkConditions` is scoped to the page target and does not reach the service

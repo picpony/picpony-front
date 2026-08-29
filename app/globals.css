@@ -259,76 +259,47 @@
   --md-sys-color-outline: #807479;
   --md-sys-color-outline-variant: #d1c3c8;
 
-  /* The /about plate's six-hue ring.
+  /* The /about plate. Three roles, and they are tokens rather than literals in
+     `lib/flutedGlass.ts` for one reason: the band that holds the plate paints its own
+     background with the same colour, and the wordmark's 2px keyline is drawn in it too. As
+     literals they disagreed — a plate of pure white under a halo of
+     `surface-container-highest` — so the halo that exists to knock the mark out of the
+     texture read as a pink-grey outline around it instead.
 
-     **The hues are the logo's own.** `lib/lottie/logoTrace.json` draws the `o` of "Pony" as a ring
-     of thirteen filled segments, and these are six of them, in the ring's own hue order: HCT hues
-     3.4, 27.9, 94.7, 166.0, 238.9 and 322.2, taken from `#dc849b`, `#ef5c47`, `#f0cc49`,
-     `#42a97f`, `#98beda` and `#8f5f9d`. So the one place in the app that gets to be colourful
-     takes its colours from the one piece of artwork that already is, and the answer to "which
-     hue" stops being anybody's taste.
+     The body is the glass itself, `-b` the far end of the swirl's ramp. Twenty-one code
+     values apart, in this app's warm neutral rather than the reference's cold violet: on a
+     page whose every surface is warm pink, a lavender-white plate is a foreign colour.
 
-     A *documented divergence*: `lib/tagCategories.ts` is otherwise the only thing allowed to pick a
-     hue, and the rule holds because this is not a taxonomy — nothing here means "sage". They are
-     positions on a ring, which is why they are numbered rather than named, and the plate reads the
-     ring by angle about its own centre so the numbering is load-bearing.
+     That span is the one number the whole plate rests on, and it is a deliberate departure
+     from the reference's own eight. Every expressive term the glass has acts on this field
+     and on nothing else — displacing the sample coordinate on a uniform field returns the
+     same value, splitting three channels of a uniform field gives no fringe — so the field
+     is not the backdrop to the effect, it is the effect's whole subject. Eight code values
+     is right where the reference spends it: a bounded card, with a corner and an edge, on a
+     page that supplies the contrast around it. This plate runs off both sides of the column
+     and its ground is the page's own white, so there is no edge to carry it. Measured, eight
+     gave the refraction ~1.5 code values of visible modulation and the red-to-blue fringe
+     ~2; twenty-one gives ~5 and ~4.
 
-     **Hue and chroma are the artwork's, and so is the tone.** This started as hue-only, held at a
-     flat tone 53 and a flat chroma 38 so that all six landed within 3.11–3.14:1 of the plate's
-     ground — even in value, so no band read heavier than its neighbours. It was too even to be the
-     logo's colours: at chroma 38 the ring's coral-red (as drawn a chroma **70**) came out the same
-     weight as its powder blue (as drawn a chroma **27**), and at tone 53 a hue-95 yellow is
-     necessarily an olive-brass, because that is what any constant-value wheel does to yellow.
-     Neither is a hue error; both are the wheel. Giving each its own chroma and compressing the
-     tones toward their mean instead was the same mistake one step smaller.
+     **`-b` is barely tinted, and that matters more than the span.** The reference was
+     sampled off its own canvas: 12.3 code values of luminance in total at a mean chroma of
+     3.8 — it is white, and it reads as flowing silk because what little light and shade it
+     has is broad and uncoloured. A draft here took this token to a pink `#f0dae3` at
+     thirty-one code values and read as coloured corduroy rather than as glass. So the pair
+     to hold is span *and* chroma: `npm run perf:glass` prints both on every render beside
+     the reference's own figures, and this plate measures span 27 / chroma 4.1 — above the
+     reference on span because it is half the height and sits on a white page instead of
+     being a bounded card, level with it on colour.
 
-     **Light: the artwork's own tone, floored at 58 and capped at 78. Nothing else.** Four of the
-     six are therefore the logo's exact hexes. The two rounds of arithmetic before this both went
-     wrong in the same place, and the reason is worth keeping because it is not obvious: against a
-     near-white ground the contrast ratio is a pure function of *tone* — measured, all six hues at
-     tone 66 land within 2.01–2.03:1, and at 72 within 1.67–1.68 — so "even contrast" and "each
-     colour's own tone" are the same knob pulling in opposite directions, and holding the tone even
-     is exactly what destroys the colours.
-
-     Two ways it showed, and both were in the shipped values. A **yellow** is only yellow when it is
-     light: at hue 95 the largest in-gamut chroma is 50 at tone 60 against 60 at tone 78, so a tone
-     in the 60s cannot be bright whatever chroma is asked for — the token read `#d0ae2c` (the
-     artwork's chroma at tone 72), a mustard, and that is what "the yellow looks too dark" was. And
-     an **orange** at hue 28 cannot hold the artwork's chroma 71 much above tone 60: the request
-     clips against the red channel and comes back as `#ff6b55`, a neon, which is what "the orange
-     looks too bright" was. The artwork's own `#ef5c47` is in gamut by construction and reads as
-     coral.
-
-     The floor and the cap are the only two adjustments, and each answers one measurement. The
-     **cap** (78) is for the yellow, and it is the last step that has any margin at all: the tone
-     alone decides the ratio here, so hue 95 measures 1.40:1 at tone 78, **1.32:1 at tone 80 — the
-     ground lattice's own figure** (`outline-variant`), and 1.21:1 at the artwork's tone 83, i.e. a
-     mark stroke fainter than the paper it is drawn on. 78 keeps it a bright gold with 6% of margin
-     over the weave. The **floor** (58) is for the purple: at the artwork's tone 47.6 it measures
-     3.80:1, half again the next darkest, and read as one heavy band among five light ones.
-
-     Result: 1.40–2.63:1, a factor of 1.88. There is no legibility bar to clear beyond the lattice —
-     the plate is `aria-hidden` decorative texture whose own neutral steps sit at 1.32:1 and 3.47:1.
-     `on-surface-variant` used to be a third neutral in it and was removed for the opposite reason:
-     at 7.23:1 it was five times the ring's weight and read as black ink among pastels.
-
-     **The dark scheme is not derived that way and is deliberately left alone.** Its ground is
-     near-black, so tone is not the constraint it is on paper: the six sit at 6.06–8.65:1 (a factor
-     of 1.43) and the yellow is the *brightest* of them rather than the faintest. These are the
-     earlier even-tone construction — each hue's own chroma, tones compressed toward a base of 80 —
-     and they read correctly, so only one scheme needed fixing. The tones land at 80/78/86/79/84/74,
-     i.e. above the light scheme's cap throughout, which is the same lightening every other ink role
-     here does rather than an inversion.
-
-     Only the mark's strokes take them. The ground steps stay neutral in every band, because a
-     lattice that changes colour with the region reads as a stain rather than as the material
-     underneath. */
-  --md-sys-color-plate-1: #dc849b;
-  --md-sys-color-plate-2: #ef5c47;
-  --md-sys-color-plate-3: #e1be3c;
-  --md-sys-color-plate-4: #42a97f;
-  --md-sys-color-plate-5: #98beda;
-  --md-sys-color-plate-6: #ac79b9;
+     The sheen is the light source caught on the crown of a reed. Pure white here — and note
+     it still very nearly never appears in this scheme, which is arithmetic rather than
+     tuning and is not fixable by raising anything: an additive term cannot brighten a plate
+     that is already at linear 1.0, at any value. What shows a reed on a light plate is the
+     *flank* — a transmission loss toward the seam, which is a ratio and so cuts as deep as
+     it is asked to. See the note above `GrainConfig` in `lib/flutedGlass.ts`. */
+  --md-sys-color-glass-body: #ffffff;
+  --md-sys-color-glass-body-b: #f0e8ea;
+  --md-sys-color-glass-sheen: #ffffff;
 
   --md-sys-color-inverse-surface: #372e31;
   --md-sys-color-inverse-on-surface: #fdedf0;
@@ -582,16 +553,20 @@
   --md-sys-color-outline: #9a8d92;
   --md-sys-color-outline-variant: #4e4449;
 
-  /* See the light scheme for where these hues come from, and for why only that one is floored and
-     capped. They lighten rather than invert, the way every ink role here does: same six hues, same
-     per-hue chroma, tones compressed toward a base of 80, landing at 6.06–8.65:1 against this
-     scheme's plate ground. */
-  --md-sys-color-plate-1: #ffb1c3;
-  --md-sys-color-plate-2: #ffaa9c;
-  --md-sys-color-plate-3: #fad551;
-  --md-sys-color-plate-4: #72d7aa;
-  --md-sys-color-plate-5: #afd5f2;
-  --md-sys-color-plate-6: #d8a3e6;
+  /* The plate sits a step above `surface-container-high` rather than at the near-black it
+     used to be, and that is what makes this the scheme where the glass is actually visible
+     as glass: the specular's 0.02 is most of a plate at linear 0.025 where it clipped
+     against a light one, and the ink is a *lift* here rather than a shadow, so it needs
+     somewhere to lift from. Same twenty-one code values to `-b` as the light scheme —
+     the two schemes take one number and differ only in sign, which is `INK_SIGN`'s
+     arrangement applied to the field as well as to the ink.
+
+     The sheen is held off pure white, which would out-brighten `on-surface` and read as a
+     hole punched through the plate rather than as light on its surface. Warm, so the glint
+     belongs to the same light as the ink beside it. */
+  --md-sys-color-glass-body: #312a2d;
+  --md-sys-color-glass-body-b: #4c4447;
+  --md-sys-color-glass-sheen: #ffe3ee;
 
   --md-sys-color-inverse-surface: #eedfe2;
   --md-sys-color-inverse-on-surface: #372e31;
@@ -989,12 +964,8 @@
   --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
   --color-outline: var(--md-sys-color-outline);
   --color-outline-variant: var(--md-sys-color-outline-variant);
-  --color-plate-1: var(--md-sys-color-plate-1);
-  --color-plate-2: var(--md-sys-color-plate-2);
-  --color-plate-3: var(--md-sys-color-plate-3);
-  --color-plate-4: var(--md-sys-color-plate-4);
-  --color-plate-5: var(--md-sys-color-plate-5);
-  --color-plate-6: var(--md-sys-color-plate-6);
+  --color-glass-body: var(--md-sys-color-glass-body);
+  --color-glass-sheen: var(--md-sys-color-glass-sheen);
   --color-inverse-surface: var(--md-sys-color-inverse-surface);
   --color-inverse-on-surface: var(--md-sys-color-inverse-on-surface);
   --color-inverse-primary: var(--md-sys-color-inverse-primary);
@@ -2132,47 +2103,6 @@ html[data-motion='reduced'] {
   --logo-keyline: 2px;
 }
 
-/* The /about character plate's type, and the one place in the app where ink weight is a
- * function of the display rather than of the role.
- *
- * The plate is 11px monospace held at a very low contrast on purpose, and how heavy 11px text
- * paints is decided by the rasteriser, not by the token: at 1x the glyph is hinted and
- * stem-darkened and a stem snaps to a whole device pixel, so the field reads thick; at 2-3x the
- * coverage is closer to the truth and the thin strokes stop being filled in, so the same field
- * reads faint. Nothing else in the app cares — a 16px label is far enough above the hinting
- * threshold — but a whole card of 11px texture does, and the two reports were exactly
- * "too heavy on a laptop, washed out on a Retina".
- *
- * So the weight moves against the DPR: one step down under 1.5x, one step up over 2.5x, 500 in
- * between. The buckets are `.logo-keyline`'s own, which is the other DPR-aware thing on this
- * page, and Geist Mono arrives as a variable font (no `weight` is requested in `app/layout.tsx`)
- * so these are real axis positions rather than synthesised.
- *
- * The other three declarations are about the *grid* rather than the weight. `geometricPrecision`
- * turns off hinting-driven advance rounding, so the per-character advance is linear and equals
- * the average the probe in `AsciiWordmark` measures — without it a hinted advance drifts along a
- * 130-column row and the mark stops sitting on the grid it was rastered against. Kerning and
- * ligatures are off for the same reason: a monospace grid has no business adjusting pairs, and
- * `--font-mono`'s CJK fallback does have ligatures. */
-.ascii-plate {
-  --ascii-weight: 500;
-  font-weight: var(--ascii-weight);
-  text-rendering: geometricPrecision;
-  font-kerning: none;
-  font-variant-ligatures: none;
-}
-
-@media (max-resolution: 1.5dppx) {
-  .ascii-plate {
-    --ascii-weight: 400;
-  }
-}
-
-@media (min-resolution: 2.5dppx) {
-  .ascii-plate {
-    --ascii-weight: 560;
-  }
-}
 
 /* Once the splash's trace has finished drawing it is opaque and permanent, so
  * the base under it has no job left — and leaving it there is not free. Two

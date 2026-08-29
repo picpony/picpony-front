@@ -2,9 +2,12 @@
  *
  * The nine character palettes. Each is a *partial* override of `:root`: only the roles
  * whose palette rotates with the seed are here. The semantic ramps (error / success /
- * warning), the categorical `accent-*` scale, the `media-*` roles, `scrim` and `plate-*`
- * are shared by every theme and stay in globals.css — a severity that changed colour with
- * the theme would not be a severity, and a tag category that did would not be a category.
+ * warning), the categorical `accent-*` scale, the `media-*` roles, `scrim` and the
+ * `glass-body` / `glass-sheen` pair are shared by every theme and stay in globals.css —
+ * a severity that changed colour with the theme would not be a severity, a tag category
+ * that did would not be a category, and a material's own body and highlight are not
+ * brand colours. What the /about plate takes from the palette is its *ink*, which reads
+ * `primary` at run time rather than through a token of its own.
  *
  * The default theme is `:root` itself, so there is no `[data-palette='default']` block:
  * choosing it simply stops matching any of these.

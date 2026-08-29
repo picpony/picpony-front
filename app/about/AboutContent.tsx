@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Card from '@/components/Card';
-import AsciiWordmark from '@/components/AsciiWordmark';
+import FlutedGlass from '@/components/FlutedGlass';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import DeveloperGuideModal from '@/components/DeveloperGuideModal';
 import { useMotionTier } from '@/lib/appearance';
@@ -94,12 +94,14 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
 
        The keyline sits on the wrapper so the two colours can differ: the halo is
        `currentColor` of whatever carries the filter, and the mask's fill is
-       `currentColor` of whatever carries the mask. Surface outside, ink inside —
+       `currentColor` of whatever carries the mask. Plate outside, ink inside —
        a halo in the ink colour would only thicken the mark instead of knocking
-       it out of the texture behind it. */
+       it out of the texture behind it. `glass-body` rather than a surface step,
+       because the plate is what is actually behind the mark and the two used to
+       disagree by 28 code values, which turned the halo into an outline. */
     return (
       <span
-        className="logo-keyline logo-keyline-plate block text-surface-container-highest select-none"
+        className="logo-keyline logo-keyline-plate block text-glass-body select-none"
         onMouseDown={(e) => e.preventDefault()}
         onClick={handleClick}
       >
@@ -111,22 +113,22 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   /* `aspect-ratio` reserves the box before the player injects its SVG. Without
      it the host is 0px tall until the chunk resolves and then pushes the whole
      page down — a layout shift on every visit, on the one element above the
-     fold. The plate behind it does not read this box: it has no keep-out, by
-     decision — see `AsciiWordmark`, which puts a much larger character version
-     of this same mark behind this one on purpose.
+     fold. The plate behind it does not read this box: the glass has no keep-out, by
+     decision — it is a material rather than an image, so there is nothing
+     behind the mark for the mark to be clear of.
 
      `logo-keyline` is what keeps that decision from reading as clutter, and it
      is the same treatment the brand bar's mark gets. The filter draws a 1px
-     halo in `currentColor`, so `currentColor` has to be the *Card's* fill
-     rather than the page's ink: a halo in the surface colour knocks the mark
-     out of the texture behind it, where a halo in `on-surface` would only
-     thicken it. */
+     halo in `currentColor`, so `currentColor` has to be the *plate's* own body
+     rather than the page's ink: a halo in the glass colour knocks the mark out
+     of the texture behind it, where a halo in `on-surface` would only thicken
+     it. */
   return (
     <div
       ref={hostRef}
       role="img"
       aria-label="PicPony"
-      className={`logo-keyline logo-keyline-plate text-surface-container-highest select-none ${MARK_WIDTH}`}
+      className={`logo-keyline logo-keyline-plate text-glass-body select-none ${MARK_WIDTH}`}
       style={{ aspectRatio: TRACE_ASPECT }}
       onMouseDown={(e) => e.preventDefault()}
       onClick={handleClick}
@@ -276,49 +278,60 @@ export default function AboutContent({ teamSeed }: { teamSeed: TeamSeed | null }
   return (
     <>
       <PageBack onClick={handleBack} title="返回 (Esc)" />
-      <div className="mx-auto max-w-4xl pt-14">
-      <PageHeader title="关于本站" />
-
-      {/* The mark has a surface of its own rather than floating on the page
-          background. A filled `Card` — `surface-container-highest` at elevation 0, per
-          the container table — with `padding="none"`, because the character texture
-          behind the mark has to reach the corners and the corners are what clip it.
-
-          The height is fixed rather than derived from the mark: the texture is the
-          point of the box, and a box sized to the wordmark alone would have room for
-          the mark and nothing else. 256/320px is sixteen and twenty rows of grid.
-
-          Those two row counts are what pick the plate's subject: at twenty rows the
-          whole wordmark clears the legibility floor and is drawn at ~13.5 rows; at
-          sixteen it would be 5.2, so the plate draws the `Pic` monogram at ~13.0
-          instead. The rule lives in `AsciiWordmark`, derived from the stroke width
-          rather than from a breakpoint. */}
-      <Card
-        variant="filled"
-        padding="none"
-        className="relative mt-2 flex h-64 items-center justify-center overflow-hidden sm:h-80"
-      >
-        <AsciiWordmark />
-        {/* `relative` is what keeps the mark above the texture: the two are siblings at
-            the same z-index, so paint order is DOM order and only a *positioned*
-            element takes part in it. Without it the field's `absolute inset-0` would
-            cover the mark and swallow its clicks. */}
-        <div className="relative">
-          <TraceHeader onActivate={() => setGuideOpen(true)} />
+      <div className="pt-14">
+        <div className="mx-auto max-w-4xl">
+          <PageHeader title="关于本站" />
         </div>
-      </Card>
 
-      <div className="mt-8">
-        <Card variant="filled" padding="lg">
-          <SectionHeading className="mb-3">关于 PicPony</SectionHeading>
-          <p className="text-body-m text-on-surface-variant">
-            一个看图的网站，没了
-          </p>
-        </Card>
+        {/* The plate bleeds to the content area's edges. A negative inline margin exactly
+            cancels the shell's page padding, so the band's border box lands on the
+            scroller's own edges — not a viewport unit, because the scroller is narrower
+            than the window by the docked drawer and the reserved scrollbar gutter, and
+            anything measured against the viewport overflows sideways.
 
-        <TeamSection teamSeed={teamSeed} />
-      </div>
-      <DeveloperGuideModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
+            It has to sit on a block child rather than on the page root: the shell forces
+            the root to a definite width, and a flex item with a definite cross size does
+            not stretch, so the same margin there would shift the box left instead of
+            widening it.
+
+            No corner radius, and that is the role rather than a preference — a radius says
+            where a surface ends, and this one runs off both sides of the column. The
+            concentric rule gives the same answer directly, since the gap to the enclosure
+            is zero.
+
+            A floor rather than a fixed height: the glass is a material, not a picture, so
+            it may grow if anything else ever lands on it. 288/384px, up from 256/320 — at
+            the old height a band running the full width of the content area was better than
+            5:1 on a desktop, which reads as a strip of texture rather than as a panel. The
+            reeds are sized off the height (see `FluteConfig.frequency`), so the step also
+            moves their pitch — though `frequency` came down to 5 in the same pass, so the
+            reeds ended up at a 77px pitch rather than 48.
+            Width is not an axis here: the negative margin above already puts the band on the
+            scroller's own edges, and anything wider needs a viewport unit, which overflows.
+
+            `bg-glass-body` is the plate's own colour rather than a surface step, so what
+            shows if WebGL is unavailable is the material at rest instead of a differently
+            toned rectangle. */}
+        <div className="relative -mx-4 mt-2 flex min-h-72 items-center justify-center overflow-hidden bg-glass-body sm:-mx-6 sm:min-h-96">
+          <FlutedGlass />
+          {/* `relative` is what keeps the mark above the glass: the two are siblings at the
+              same z-index, so paint order is DOM order and only a *positioned* element
+              takes part in it. Without it the plate would cover the mark and swallow its
+              clicks. */}
+          <div className="relative">
+            <TraceHeader onActivate={() => setGuideOpen(true)} />
+          </div>
+        </div>
+
+        <div className="mx-auto mt-8 max-w-4xl">
+          <Card variant="filled" padding="lg">
+            <SectionHeading className="mb-3">关于 PicPony</SectionHeading>
+            <p className="text-body-m text-on-surface-variant">一个看图的网站，没了</p>
+          </Card>
+
+          <TeamSection teamSeed={teamSeed} />
+        </div>
+        <DeveloperGuideModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
       </div>
     </>
   );

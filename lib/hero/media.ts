@@ -60,9 +60,9 @@ let detailComponentWarmup: Promise<unknown> | null = null;
  *
  * Cross-origin is fine, and is new here — the card's optimized URL is same-origin where a
  * derpicdn derivative is not, so this canvas is *tainted*. Nothing in the hero path reads pixels
- * back (the repo's only `getImageData`/`toBlob` sites are `lib/ascii/*` and `ImageCropper`, on
- * their own canvases) and `drawImage` of a tainted image never throws. Do not add a readback here
- * without giving this an opt-in `crossOrigin`, which derpicdn may not answer.
+ * back (the repo's only `getImageData`/`toBlob` site is `ImageCropper`, on its own canvas) and
+ * `drawImage` of a tainted image never throws. Do not add a readback here without giving this an
+ * opt-in `crossOrigin`, which derpicdn may not answer.
  */
 const warmedDetailFrames = new Map<number, { src: string; asset: FrameAsset }>();
 /**

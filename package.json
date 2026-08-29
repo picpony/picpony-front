@@ -20,6 +20,7 @@
     "perf:motion": "node scripts/probeMotion.mjs",
     "perf:sw": "node scripts/probeServiceWorker.mjs",
     "perf:ripple": "node scripts/probeRipple.mjs",
+    "perf:glass": "node scripts/probeFlutedGlass.mjs",
     "perf:pageturn": "node scripts/probePageTurn.mjs",
     "perf:sharpness": "node scripts/probeHeroSharpness.mjs",
     "perf:sharpness:warm": "node scripts/probeHeroSharpness.mjs 1920 --fake-cdn"
