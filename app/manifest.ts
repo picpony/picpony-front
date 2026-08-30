@@ -7,7 +7,7 @@ import type { MetadataRoute } from 'next';
  * palettes, so any single value here would be wrong for nine of them — and it would compete with
  * the one owner that can get it right. `app/layout.tsx` renders `<meta name="theme-color">` from
  * the palette cookie at SSR, which is the same reason Next's own `viewport.themeColor` export was
- * removed from this app: a static array cannot express ten palettes, and mutating Next's tag does
+ * removed from this app: a static array cannot express eleven palettes, and mutating Next's tag does
  * not survive a client navigation.
  *
  * `background_color` is the default palette's `surface`, and that one is safe to fix: it is only

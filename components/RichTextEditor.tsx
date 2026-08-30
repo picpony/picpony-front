@@ -276,8 +276,9 @@ export default function RichTextEditor({
           --w-e-textarea-slight-bg-color: var(--md-sys-color-surface-container);
           /* A selection border and four drag handles: marks on the composer's surface with
              nothing sitting inside them, so they take the ink rather than the fill — the
-             same call the focus outline twenty lines above makes. On a light-coated palette
-             the fill would put the handles at 1.23:1 against the container behind them. */
+             same call the focus outline twenty lines above makes. On a palette whose brand
+             sits above tone 61 the fill would put the handles at 1.5–2.4:1 against the
+             container behind them. */
           --w-e-textarea-selected-border-color: var(--md-sys-color-primary-ink);
           --w-e-textarea-handler-bg-color: var(--md-sys-color-primary-ink);
           --w-e-toolbar-color: var(--md-sys-color-on-surface-variant);

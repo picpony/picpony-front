@@ -502,10 +502,10 @@ export const TRAIL_VELOCITY_TAU = 0.0984;
  * 0.646 where this gives 0.023 / 0.128 / 0.181 / 0.300). Half, because a fold is a fold by
  * being mostly light and shade; full chroma on six hues is what the rainbow draft was.
  *
- * The hue is `--md-sys-color-primary`, read off the host, so all ten palettes follow and a
- * `var()` never has to reach a uniform. Only its *direction* survives `inkColor` — level and
- * chroma come from this table — so a light-coated palette and a dark one land on the same
- * fold, in their own colour.
+ * The hue is `--md-sys-color-primary`, read off the host, so all eleven palettes follow —
+ * including the user's own — and a `var()` never has to reach a uniform. Only its *direction*
+ * survives `inkColor` — level and chroma come from this table — so a gold palette and a violet
+ * one land on the same fold, in their own colour.
  */
 export interface InkStop {
   /** Distance from the plate in sRGB code values, before `INK_SIGN`. */

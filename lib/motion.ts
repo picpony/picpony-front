@@ -20,8 +20,10 @@ import { Flip } from 'gsap/Flip';
 import { Observer } from 'gsap/Observer';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import {
+  commitCustomPalette,
   commitPalette,
   commitScheme,
+  currentCustomSeed,
   currentPalette,
   currentScheme,
   motionScale,
@@ -30,6 +32,8 @@ import {
   setMotionScaleListener,
   useEntranceMotion,
   useMotionTier,
+  CUSTOM_PALETTE,
+  type CustomPaletteInstall,
   type PaletteId,
   type SchemeSetting,
 } from '@/lib/appearance';
@@ -550,6 +554,25 @@ export function changeScheme(setting: SchemeSetting, origin?: { x: number; y: nu
 export function changePalette(id: PaletteId, origin?: { x: number; y: number }) {
   if (id === currentPalette()) return;
   circularReveal(() => commitPalette(id), origin);
+}
+
+/**
+ * The eleventh palette, as a wipe.
+ *
+ * It needs its own entry point rather than a branch in `changePalette`, because that
+ * function's "is it already this?" guard is on the id — and for the custom palette the id
+ * is constant while the *colour* is what moves, so re-picking would be a no-op. The guard
+ * here is the seed, which is the thing that actually changed.
+ *
+ * The derivation is the caller's: `resolveCustomPalette` in `lib/paletteLazy.ts` awaits a
+ * chunk, and nothing may await inside the wipe's capture callback.
+ */
+export function changeCustomPalette(
+  install: CustomPaletteInstall,
+  origin?: { x: number; y: number },
+) {
+  if (currentPalette() === CUSTOM_PALETTE && currentCustomSeed() === install.seed) return;
+  circularReveal(() => commitCustomPalette(install), origin);
 }
 
 /**

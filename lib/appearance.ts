@@ -26,9 +26,15 @@ import { useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 
 import { COOKIE_KEYS, LS_KEYS, MEDIA } from './constants';
-import { DEFAULT_PALETTE, PALETTES, isPaletteId, type PaletteId } from './generated/themeColors';
+import {
+  CUSTOM_PALETTE,
+  DEFAULT_PALETTE,
+  PALETTES,
+  isPaletteId,
+  type PaletteId,
+} from './generated/themeColors';
 
-export { DEFAULT_PALETTE, PALETTES };
+export { CUSTOM_PALETTE, DEFAULT_PALETTE, PALETTES };
 export type { PaletteId };
 
 export type ColorScheme = 'light' | 'dark';
@@ -172,6 +178,35 @@ export function currentPalette(): PaletteId {
   return isPaletteId(value) ? value : DEFAULT_PALETTE;
 }
 
+/**
+ * The seed behind the custom palette, or null when no custom palette is installed.
+ *
+ * Read off `<html>` for the same reason `currentPalette` is: the attribute is what the
+ * injected `<style>` was built from, so it is what is actually painted. The stored key is
+ * the pre-paint script's business, and that script cannot import from here.
+ *
+ * Note this returns a value even while `currentPalette()` is something else — a user can
+ * have a custom colour saved and be sitting on 露娜. That is what lets the picker show
+ * their colour on the eleventh chip rather than an empty one.
+ */
+export function currentCustomSeed(): string | null {
+  return root()?.dataset.paletteSeed ?? null;
+}
+
+/**
+ * The custom palette's two hexes, packed, or null when none is installed.
+ *
+ * The *string* is what the hook subscribes to, not the parsed object: `useSyncExternalStore`
+ * compares snapshots by identity, so a getter that built a fresh object every call would
+ * re-render for ever. Callers unpack it themselves.
+ */
+export function currentCustomTonesRaw(): string | null {
+  return root()?.dataset.paletteTones ?? null;
+}
+
+/** Non-reactive convenience for `applyThemeColorMeta`, which is already inside a commit. */
+export const currentCustomTones = () => unpackCustomTones(currentCustomTonesRaw());
+
 export function currentScheme(): ColorScheme {
   return root()?.classList.contains('dark') ? 'dark' : 'light';
 }
@@ -245,6 +280,84 @@ export function applyPalette(id: PaletteId) {
   applyThemeColorMeta(id, currentScheme());
 }
 
+/**
+ * The eleventh palette, resolved. `lib/paletteLazy.ts` produces one of these; this module
+ * installs it without ever importing the recipe, which is what keeps HCT out of every
+ * route that reads a preference.
+ */
+export interface CustomPaletteInstall {
+  /** The user's hex, normalised. It **is** `primary` in the light scheme. */
+  seed: string;
+  /** The two `html[data-palette='custom']` blocks, ready to be a stylesheet. */
+  css: string;
+  /** `primary` and `on-primary` per scheme, for the chrome colour and the picker's chip. */
+  tones: { light: PaletteTone; dark: PaletteTone };
+}
+
+/**
+ * What a swatch and the browser's chrome need. The same two fields
+ * `lib/generated/themeColors.ts` carries for the ten built-in themes, so the eleventh chip
+ * can be drawn by exactly the same code.
+ */
+export interface PaletteTone {
+  primary: string;
+  onPrimary: string;
+}
+
+/**
+ * The four hexes of a custom install, as one attribute value.
+ *
+ * They ride on `<html>` rather than being recomputed for two reasons, and the second is
+ * the one that is easy to miss. `applyThemeColorMeta` runs inside a View Transition
+ * capture, where a `getComputedStyle` would force a synchronous style recalc. And the
+ * picker's eleventh chip has to show the user's colour **while some other theme is in
+ * force** — reading `--md-sys-color-primary` there paints whichever palette is active, so
+ * switching to 露娜 turned the custom chip blue. That is the same trap
+ * `lib/generated/themeColors.ts` exists to keep the other ten out of.
+ */
+const FIELDS = ['primary', 'onPrimary'] as const;
+
+const packTones = (t: { light: PaletteTone; dark: PaletteTone }) =>
+  [...FIELDS.map((f) => t.light[f]), ...FIELDS.map((f) => t.dark[f])].join(' ');
+
+export function unpackCustomTones(
+  value: string | null | undefined,
+): { light: PaletteTone; dark: PaletteTone } | null {
+  const parts = (value ?? '').split(' ');
+  if (parts.length !== FIELDS.length * 2) return null;
+  const at = (offset: number) =>
+    Object.fromEntries(FIELDS.map((f, i) => [f, parts[offset + i]])) as unknown as PaletteTone;
+  return { light: at(0), dark: at(FIELDS.length) };
+}
+
+/** Where the injected rules live. The server renders one with the same id at SSR. */
+const CUSTOM_STYLE_ID = 'palette-custom';
+
+/**
+ * Install the custom palette's rules and remember what they were built from.
+ *
+ * A single `<style>` appended to `<head>`, **not** inline properties on `<html>`: an
+ * inline style beats every selector including `html.dark[data-palette='custom']`, so a
+ * scheme flip would silently keep painting the light values and `applyScheme` would have
+ * to rewrite all thirty. As a stylesheet the specificity works out exactly as it does for
+ * the generated file — (0,1,1) and (0,2,1), above `:root` and `.dark` — and `applyScheme`
+ * needs no knowledge of it at all.
+ */
+export function applyCustomPalette(install: CustomPaletteInstall) {
+  const el = root();
+  if (!el) return;
+  let style = document.getElementById(CUSTOM_STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement('style');
+    style.id = CUSTOM_STYLE_ID;
+    document.head.append(style);
+  }
+  style.textContent = install.css;
+  el.dataset.paletteSeed = install.seed;
+  el.dataset.paletteTones = packTones(install.tones);
+  writeCookie(COOKIE_KEYS.paletteCustom, install.seed);
+}
+
 export function applyMotion(tier: MotionTier, speed: MotionSpeed) {
   const el = root();
   if (!el) return;
@@ -279,12 +392,19 @@ export function applyEntranceMotion(on: boolean) {
  * from the OS's. Keying it on the media query — which is what the two generated tags
  * used to do — meant forcing dark mode on a light desktop left the browser painting its
  * chrome the light colour.
+ *
+ * The custom palette is not in `PALETTES` — its colours are the user's — so it reads the
+ * tones `applyCustomPalette` parked on `<html>`. The `?? PALETTES[0]` fallback below is
+ * what made that necessary rather than optional: without a branch it painted the default
+ * pink over whatever the user had chosen.
  */
 export function applyThemeColorMeta(id: PaletteId, scheme: ColorScheme) {
-  const entry = PALETTES.find((p) => p.id === id) ?? PALETTES[0];
+  const custom = id === CUSTOM_PALETTE ? currentCustomTones() : null;
+  const color =
+    custom?.[scheme].primary ?? (PALETTES.find((p) => p.id === id) ?? PALETTES[0])[scheme].primary;
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
     meta.removeAttribute('media');
-    meta.content = entry[scheme].primary;
+    meta.content = color;
   }
 }
 
@@ -386,6 +506,21 @@ export function commitPalette(id: PaletteId) {
   flushSync(emit);
 }
 
+/**
+ * Switch to the custom palette, or re-derive it from a new seed.
+ *
+ * The rules go in *before* the attribute, so there is never a frame where `<html>` says
+ * `custom` and no stylesheet answers to it — that frame would paint the default theme,
+ * and inside a View Transition it is the frame that gets captured.
+ */
+export function commitCustomPalette(install: CustomPaletteInstall) {
+  writeStored(LS_KEYS.paletteCustom, install.seed);
+  applyCustomPalette(install);
+  writeStored(LS_KEYS.palette, CUSTOM_PALETTE);
+  applyPalette(CUSTOM_PALETTE);
+  flushSync(emit);
+}
+
 export function commitMotion(setting: MotionSetting, speed: MotionSpeed) {
   writeStored(LS_KEYS.motion, setting);
   writeStored(LS_KEYS.motionSpeed, speed);
@@ -417,6 +552,8 @@ function useAppearance<T>(read: () => T, serverValue: T): T {
 export const useSchemeSetting = () => useAppearance(readSchemeSetting, 'system' as SchemeSetting);
 export const useScheme = () => useAppearance(currentScheme, 'light' as ColorScheme);
 export const usePalette = () => useAppearance(currentPalette, DEFAULT_PALETTE);
+export const useCustomSeed = () => useAppearance(currentCustomSeed, null as string | null);
+export const useCustomTonesRaw = () => useAppearance(currentCustomTonesRaw, null as string | null);
 export const useMotionSetting = () => useAppearance(readMotionSetting, 'system' as MotionSetting);
 export const useMotionSpeed = () => useAppearance(motionSpeed, 'default' as MotionSpeed);
 export const useEntranceMotion = () => useAppearance(entranceMotion, true);

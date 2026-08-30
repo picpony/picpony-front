@@ -8,15 +8,23 @@
 // comment calling them the app's only unavoidable ones; there are twenty now, which is
 // past what a human keeps in step, so they are generated and the layout inlines them.
 //
-// Both are also the swatch's, for the picker in /settings: a swatch has to show a theme that
-// is *not* the active one, so it cannot read the tokens — those are always the active theme's.
-// `onPrimary` is there because the selected swatch carries a tick, and which ink that tick
-// takes is a per-theme answer now: seven themes are white on their brand and the three
-// light-coated characters are dark.
+// Both are also the swatch's, for the picker in /settings: a swatch has to show a theme
+// that is *not* the active one, so it cannot read the tokens — those are always the active
+// theme's. `onPrimary` is there because the selected swatch carries a tick, and which ink that
+// tick takes is a per-theme answer: five themes are white on their brand and five are dark.
 //
-// Two fields have been removed over time — `primary-container`, then `surface` when the
-// swatch stopped drawing a surface ring behind the colour. A payload no consumer touches is
-// a payload that goes stale silently, so it goes.
+// Four fields have been removed over time and every removal was the same rule: `primary-container`
+// went, then `surface` when the swatch stopped drawing a ring behind the colour, then
+// `secondary` and `tertiary` when the chip went back to one flat colour. A payload no consumer
+// touches is a payload that goes stale silently, so it goes — and one a consumer needs is
+// generated rather than hand-copied, which is the same rule read the other way.
+//
+// The eleventh palette is **not** in this array and must not be: its colours come from the
+// user's own seed, so there is nothing to generate. It is here only as an id, because
+// `PaletteId` is what every consumer validates against and a union that cannot express the
+// palette the user has chosen is a union that silently downgrades them to the default. The
+// derivation lives in `lib/paletteRule.ts`; this file stays free of it so that importing a
+// swatch colour does not pull HCT into every route.
 
 export interface PaletteScheme {
   primary: string;
@@ -40,65 +48,69 @@ export const PALETTES = [
   {
     id: 'applejack',
     label: '苹果嘉儿',
-    light: { primary: '#ed6e2e', onPrimary: '#ffffff' },
-    dark: { primary: '#d55c1c', onPrimary: '#ffffff' },
+    light: { primary: '#faba62', onPrimary: '#462b00' },
+    dark: { primary: '#ef9c54', onPrimary: '#462b00' },
   },
   {
     id: 'fluttershy',
     label: '小蝶',
-    light: { primary: '#f6e46e', onPrimary: '#373100' },
-    dark: { primary: '#e2d05d', onPrimary: '#373100' },
+    light: { primary: '#faf5ab', onPrimary: '#343200' },
+    dark: { primary: '#f3e488', onPrimary: '#343200' },
   },
   {
     id: 'lyra',
     label: '天琴',
-    light: { primary: '#62dfb2', onPrimary: '#003828' },
-    dark: { primary: '#4bcb9f', onPrimary: '#003828' },
+    light: { primary: '#8cffdb', onPrimary: '#00382b' },
+    dark: { primary: '#62dfb2', onPrimary: '#00382b' },
   },
   {
     id: 'chrysalis',
     label: '邪茧',
-    light: { primary: '#208480', onPrimary: '#ffffff' },
-    dark: { primary: '#00726e', onPrimary: '#ffffff' },
+    light: { primary: '#1e837f', onPrimary: '#ffffff' },
+    dark: { primary: '#00454a', onPrimary: '#ffffff' },
   },
   {
     id: 'rainbow',
     label: '云宝黛西',
-    light: { primary: '#6cacdb', onPrimary: '#00344e' },
-    dark: { primary: '#599ac8', onPrimary: '#00344e' },
+    light: { primary: '#9bdbf5', onPrimary: '#003544' },
+    dark: { primary: '#8cc7e7', onPrimary: '#003544' },
   },
   {
     id: 'luna',
     label: '露娜',
-    light: { primary: '#1e4dc3', onPrimary: '#ffffff' },
-    dark: { primary: '#2f5ad0', onPrimary: '#ffffff' },
+    light: { primary: '#363e7a', onPrimary: '#ffffff' },
+    dark: { primary: '#282d5a', onPrimary: '#ffffff' },
   },
   {
     id: 'rarity',
     label: '瑞瑞',
-    light: { primary: '#5e49b8', onPrimary: '#ffffff' },
-    dark: { primary: '#6551c0', onPrimary: '#ffffff' },
+    light: { primary: '#5e50a0', onPrimary: '#ffffff' },
+    dark: { primary: '#4a1767', onPrimary: '#ffffff' },
   },
   {
     id: 'twilight',
     label: '暮光闪闪',
-    light: { primary: '#ab63cd', onPrimary: '#ffffff' },
-    dark: { primary: '#9850ba', onPrimary: '#ffffff' },
+    light: { primary: '#cc9cdf', onPrimary: '#500670' },
+    dark: { primary: '#bf89d1', onPrimary: '#500670' },
   },
   {
     id: 'pinkie',
     label: '碧琪',
     light: { primary: '#eb458b', onPrimary: '#ffffff' },
-    dark: { primary: '#d43279', onPrimary: '#ffffff' },
+    dark: { primary: '#bb1c76', onPrimary: '#ffffff' },
   },
 ] as const satisfies readonly PaletteEntry[];
 
-export type PaletteId = (typeof PALETTES)[number]['id'];
+/** The user's own palette. Mirrors `CUSTOM_PALETTE` in `lib/paletteRule.ts`. */
+export const CUSTOM_PALETTE = 'custom';
+
+export type BuiltInPaletteId = (typeof PALETTES)[number]['id'];
+export type PaletteId = BuiltInPaletteId | typeof CUSTOM_PALETTE;
 
 export const DEFAULT_PALETTE: PaletteId = 'default';
 
 const IDS: readonly string[] = PALETTES.map((p) => p.id);
 
 export function isPaletteId(value: unknown): value is PaletteId {
-  return typeof value === 'string' && IDS.includes(value);
+  return typeof value === 'string' && (value === CUSTOM_PALETTE || IDS.includes(value));
 }

@@ -6,55 +6,13 @@
  * failing in shipped code without anybody noticing. This runs them over a matrix of realistic
  * box pairs and exits non-zero.
  *
- * It imports the app's own modules rather than a copy of the maths. Node's synchronous
- * `module.registerHooks` (22.15+) plus unflagged type stripping (22.18+) is enough for that:
- * the resolve hook below rewrites `@/`-prefixed and relative specifiers and names the format,
- * and the `'use client'` directives are inert outside a bundler. **Bare specifiers must go
- * back to `next()`** or `react` resolves to `lib/react`, which is the one way to get this
- * wrong. `lib/hero/motion.ts` is deliberately out of reach — it pulls `@/lib/motion`, which
- * wants `matchMedia`.
+ * It imports the app's own modules rather than a copy of the maths, through the resolve
+ * hook in `scripts/tsResolve.mjs`. `lib/hero/motion.ts` is deliberately out of reach — it
+ * pulls `@/lib/motion`, which wants `matchMedia`.
  */
-import { registerHooks } from 'node:module';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
+import { requireTypeStripping } from './tsResolve.mjs';
 
-const REQUIRED_NODE = [22, 18];
-const [major, minor] = process.versions.node.split('.').map(Number);
-if (major < REQUIRED_NODE[0] || (major === REQUIRED_NODE[0] && minor < REQUIRED_NODE[1])) {
-  console.error(
-    `hero:path needs Node ${REQUIRED_NODE.join('.')}+ for synchronous module hooks and type ` +
-      `stripping; this is ${process.versions.node}.`,
-  );
-  process.exit(1);
-}
-
-const ROOT = path.resolve(import.meta.dirname, '..');
-
-function withExtension(filePath) {
-  if (path.extname(filePath)) return filePath;
-  for (const candidate of ['.ts', '.tsx', '.mjs', '.js', '/index.ts', '/index.tsx']) {
-    if (existsSync(filePath + candidate)) return filePath + candidate;
-  }
-  return filePath;
-}
-
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    const relative = specifier.startsWith('./') || specifier.startsWith('../');
-    if (!specifier.startsWith('@/') && !relative) return nextResolve(specifier, context);
-    const base = specifier.startsWith('@/')
-      ? path.join(ROOT, specifier.slice(2))
-      : path.resolve(path.dirname(fileURLToPath(context.parentURL)), specifier);
-    const resolved = withExtension(base);
-    const url = pathToFileURL(resolved).href;
-    return {
-      url,
-      shortCircuit: true,
-      format: resolved.endsWith('.ts') || resolved.endsWith('.tsx') ? 'module-typescript' : undefined,
-    };
-  },
-});
+requireTypeStripping('hero:path');
 
 const geometry = await import('../lib/hero/geometry.ts');
 const { createHeroRectArc, lerpHeroRectArc, getHeroMediaRenderedWidth } = geometry;

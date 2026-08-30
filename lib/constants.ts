@@ -101,6 +101,15 @@ export const LS_KEYS = {
   activeHiddenTags: 'trixie_active_hidden_tags',
   activeSpoileredTags: 'trixie_active_spoilered_tags',
   palette: 'picpony_palette',
+  /**
+   * The seed hex behind the eleventh palette, when `palette` is `custom`.
+   *
+   * A seed rather than the sixty resolved declarations, because the recipe is shared
+   * (`lib/paletteRule.ts`) and a stored *output* would go stale the moment the rule moves —
+   * which is exactly what happened to the ten built-in themes the last time the tone rule
+   * changed. Seven characters against ~430, and re-deriving costs one HCT run.
+   */
+  paletteCustom: 'picpony_palette_custom',
   motion: 'picpony_motion',
   motionSpeed: 'picpony_motion_speed',
   entranceMotion: 'picpony_entrance_motion',
@@ -136,6 +145,13 @@ export const COOKIE_KEYS = {
   spoilerTags: 'spoilerTags',
   sidebarCollapsed: 'sidebarCollapsed',
   palette: 'palette',
+  /**
+   * The custom palette's seed, so the server can derive its sixty declarations and put
+   * them in `<head>` before the first paint. Without it a user on a custom colour gets a
+   * flash of the default brand on every cold load, which is the whole reason this table
+   * exists.
+   */
+  paletteCustom: 'paletteCustom',
   motion: 'motion',
   motionSpeed: 'motionSpeed',
   entranceMotion: 'entranceMotion',

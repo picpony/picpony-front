@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
-import { commitPalette, commitScheme, type PaletteId, type SchemeSetting } from '@/lib/appearance';
+import {
+  commitCustomPalette,
+  commitPalette,
+  commitScheme,
+  type CustomPaletteInstall,
+  type PaletteId,
+  type SchemeSetting,
+} from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { applyInstantTabScroll, rememberTabScroll } from '@/lib/tabScroll';
 import type { DrawerSwipeOptions } from '@/lib/motion';
@@ -73,6 +80,26 @@ export function changePalette(id: PaletteId, origin?: { x: number; y: number }):
     return;
   }
   commitPalette(id);
+  void load();
+}
+
+/**
+ * The eleventh palette, as a wipe. Same contract as `changePalette` above: without the
+ * engine the colour still changes, it just arrives as a cut.
+ *
+ * The install is resolved by the caller through `lib/paletteLazy.ts`, so this function
+ * stays synchronous and the two chunks stay independent — a user who has the palette
+ * recipe but not GSAP gets their colour without a wipe, which is the right way round.
+ */
+export function changeCustomPalette(
+  install: CustomPaletteInstall,
+  origin?: { x: number; y: number },
+): void {
+  if (motion) {
+    motion.changeCustomPalette(install, origin);
+    return;
+  }
+  commitCustomPalette(install);
   void load();
 }
 

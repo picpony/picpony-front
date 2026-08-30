@@ -116,11 +116,14 @@
      enough to read as the same colour while each keeps a little separation from its
      own ground. Fills, switches, the app bar and active pills all use this.
 
-     **Those two tones are this seed's, not a constant.** `scripts/palette.mjs` derives
-     them from the seed's own lightness, which is why the default theme's are 61 and 54:
-     the brand pink measures tone 60.8. The other nine palettes each carry their
-     character's own lightness, so Fluttershy's brand is a pale yellow at 90 and Luna's a
-     night blue at 37. That is the whole reason `primary-ink` below exists.
+     **These two hexes are *given*, and the other ten themes' are *transcribed*.** This is
+     the one theme with no artwork behind it, so its pair is stated here; every other theme
+     is a character's coat Fill and that same surface's Shadow Fill, copied byte for byte
+     from the MLP-VectorClub colour guide. Nothing computes a brand fill any more —
+     `scripts/palette.mjs` tried twice, and both rules produced a defensible set with an
+     ugly yellow in it, because at every tone a rule was willing to visit a yellow is
+     either mud or a shout. The colour that worked was 小蝶's actual coat. So the fills
+     span tones 20–95 now, and that range is the whole reason `primary-ink` below exists.
 
      **What that costs, stated once, because it is real and not fixable in place.**
      White ink measures 3.08:1 on the light tone and 3.87:1 on the dark one, both under
@@ -131,11 +134,11 @@
      reads as a deeper, duller brand, and darkening `on-primary` to P10 clears it at
      5.55:1 / 4.41:1 but puts a dark wordmark and dark glyphs on the app bar. Neither
      is taken *here*. Note the app bar itself is *not* the failing case — it carries
-     glyphs and a wordmark, which are non-text and need 3:1. Three of the ten palettes
+     glyphs and a wordmark, which are non-text and need 3:1. Five of the ten built-in palettes
      do take the dark ink, and not as a preference: the script gives `on-primary` to
-     whichever of white and P20 clears 3:1 on that theme's own brand tone, and a pale
-     yellow leaves white at 1.3. Those three clear the text floor comfortably (10.14,
-     7.97 and 5.35), which is the one place a per-seed brand tone is an improvement. */
+     whichever of white and P20 clears 3:1 on **both** of that theme's bars, and a cream at
+     tone 95 leaves white at 1.1. Those five clear the text floor outright (5.9–11.7 light,
+     4.8–10.2 dark), which is the one place a pale character's theme is an improvement. */
   --md-sys-color-primary: #e06c9f;
   --md-sys-color-on-primary: #ffffff;
   --md-sys-color-primary-container: #ffd9e5;
@@ -143,12 +146,17 @@
 
   /* — The brand as ink —————————————————————————————————————————————————
      Same hue, at whichever tone can still be read on the page: in light, the lightest
-     tone at or below the brand that makes 2.9:1 against *that theme's own* `surface`; in
-     dark, the brand's own tone, which already clears it. Seven of the ten never move —
-     their brand is tone 61 or below, where it already reads on the page — so the ink is the
-     fill byte for byte. The three light-coated characters walk down: 小蝶 90→61, 天琴 81→61,
-     云宝黛西 68→**60**, that last one because tone 61 misses her own surface by 0.001, which
-     is why this is a floor and not a clamp at 61.
+     tone at or below the fill that makes 2.9:1 against *that theme's own* `surface`; in
+     dark, the darkest tone at or above the dark fill that makes 3:1 on the dark page.
+
+     **A theme's fill and its ink are allowed to be very different colours**, and eight of
+     the ten now are. 小蝶's bar is a cream `#faf5ab` and her ink is a gold `#9c9700`. That
+     is correct rather than a compromise: one answers a question about a surface and the
+     other about a mark, and it is what lets a character drawn at tone 95 have a usable
+     theme at all. The ramp those inks come off is built at a chroma measured at tone 61
+     rather than at the fill's own tone — read `lib/paletteRule.ts` before touching that,
+     because reading it at the fill's tone gives a tint a chroma-20 ramp and turns every
+     glyph in the app khaki-grey. `scripts/palette.mjs` asserts the ink's chroma floor.
      Every place the brand is a mark rather than a fill reads this — a selected glyph, the
      checkbox tick, a quoted block's rule, `text-primary-ink`.
 
@@ -156,12 +164,13 @@
      is judged against that, not against the page. As ink on a light surface the default
      tone is already only 2.94:1 — fine for a glyph or an emphasis mark under the 3:1
      non-text bar, wrong for prose, which is why body text takes `on-surface-variant` and
-     navigable text takes `link`. Once a palette's brand can be a pale yellow that figure
-     becomes 1.2:1, and a tick nobody can see is not a state.
+     navigable text takes `link`. Once a palette's brand can be a gold at tone 83 that
+     figure becomes 1.5:1, and a tick nobody can see is not a state.
 
      So this is a floor rather than a tone: 2.9:1 against `surface` in light — the default's
-     own figure, since the brand pink as ink is itself 2.94 — and WCAG 1.4.11's 3:1 in dark,
-     measured across all ten (2.91–6.86 and 3.07–11.87). `scripts/palette.mjs` asserts both.
+     own figure, since the brand pink as ink is itself 2.94 — and WCAG 1.4.11's 3:1 in dark.
+     `scripts/palette.mjs` asserts both, and `normalizeCustomSeed` holds the user's own hex
+     to the same chroma bar that keeps the eleventh theme inside the same range.
 
      The name was used once before, for a role that served links *and* active states and
      did neither well — a muted rose that read as "disabled brand", and it inverted
@@ -234,14 +243,14 @@
   --md-sys-color-focus-on-media: var(--md-sys-color-on-media);
 
   /* — Secondary / tertiary ———————————————————————————————————————————— */
-  --md-sys-color-secondary: #775562;
+  --md-sys-color-secondary: #735761;
   --md-sys-color-on-secondary: #ffffff;
   --md-sys-color-secondary-container: #ffd9e5;
-  --md-sys-color-on-secondary-container: #2d131f;
-  --md-sys-color-tertiary: #8c4f21;
+  --md-sys-color-on-secondary-container: #2a151e;
+  --md-sys-color-tertiary: #7e5537;
   --md-sys-color-on-tertiary: #ffffff;
-  --md-sys-color-tertiary-container: #ffdcc6;
-  --md-sys-color-on-tertiary-container: #311300;
+  --md-sys-color-tertiary-container: #ffdcc5;
+  --md-sys-color-on-tertiary-container: #301400;
 
   /* — Surfaces ———————————————————————————————————————————————————————— */
   /* Five container levels replace the shadow-sm/md/lg/xl mix that used to
@@ -255,9 +264,9 @@
   --md-sys-color-surface-container-high: #f4e4e8;
   --md-sys-color-surface-container-highest: #eedfe2;
   --md-sys-color-on-surface: #21191c;
-  --md-sys-color-on-surface-variant: #4e4449;
-  --md-sys-color-outline: #807479;
-  --md-sys-color-outline-variant: #d1c3c8;
+  --md-sys-color-on-surface-variant: #514347;
+  --md-sys-color-outline: #837378;
+  --md-sys-color-outline-variant: #d5c2c7;
 
   /* The /about plate. Three roles, and they are tokens rather than literals in
      `lib/flutedGlass.ts` for one reason: the band that holds the plate paints its own
@@ -510,19 +519,24 @@
      drifts about 5° toward coral. This is the inverse of AOSP's direction and the
      reasoning is in the light block.
 
-     Seven tones is a shift, not a destination: `scripts/palette.mjs` subtracts seven and
-     then lightens only if the result misses WCAG 1.4.11's 3:1 against the dark surface,
-     which is tone 42. Eight of the ten palettes never reach that floor. The two darker
-     than it — Luna's night blue at 37, Rarity's indigo at 39 — cannot go deeper without
-     losing the app bar's boundary against the page, so they move *up* to it instead, by
-     five tones and three, which is less than this scheme's own seven. */
+     Seven tones is this theme's own step and not a rule any more: the other nine take their
+     character's **Shadow Fill** — the artist's own answer to "this same material, one step
+     deeper" — which lands anywhere from 5 tones below the light fill (小蝶) to 24 (邪茧).
+     `DARK_SHIFT` survives for exactly one caller, the custom palette, which has only one
+     hex and therefore no shadow value to read.
+
+     Three of the nine land at tone 20–26 and so measure 1.42–1.72:1 against this near-black
+     page: 邪茧, 露娜, 瑞瑞. Their bar has no edge in dark mode, knowingly — lifting them to
+     the tone-42 floor makes 露娜's dark bar *lighter* than her light one, which is a defect
+     this repo has shipped before. The white ink on them is still 10.8–13.1:1. */
   --md-sys-color-primary: #cb5b8d;
   --md-sys-color-on-primary: #ffffff;
   --md-sys-color-primary-container: #811f51;
   --md-sys-color-on-primary-container: #ffd9e5;
-  /* Equal to `primary` here, and for seven of the ten palettes it is equal in both
-     schemes. On a near-black ground the brand is already 4.79:1, so there is nothing for
-     the ink step to fix; it exists for the light scheme and for the three pale palettes. */
+  /* Equal to `primary` here, and **in the dark scheme it is equal for every palette** —
+     the role's dark column is the brand's dark tone, unconditionally. On a near-black ground
+     the brand is already 3.98–9.74:1 across the eleven, so there is nothing for the ink step
+     to fix; it exists for the light scheme, where five palettes walk down to reach it. */
   --md-sys-color-primary-ink: #cb5b8d;
   /* The brand hue at P80. It was a fixed light blue — 10.1:1 against `surface`, 8.9:1
      against `surface-container`, 6.8:1 against the highest step — and the tonal answer
@@ -531,14 +545,14 @@
   --md-sys-color-link: #ffb0ce;
   --md-sys-color-link-hover: #ffc5d9;
 
-  --md-sys-color-secondary: #e6bbca;
-  --md-sys-color-on-secondary: #442834;
-  --md-sys-color-secondary-container: #5d3e4a;
+  --md-sys-color-secondary: #e1bdc9;
+  --md-sys-color-on-secondary: #412933;
+  --md-sys-color-secondary-container: #5a3f49;
   --md-sys-color-on-secondary-container: #ffd9e5;
-  --md-sys-color-tertiary: #ffb786;
-  --md-sys-color-on-tertiary: #502400;
-  --md-sys-color-tertiary-container: #6f380a;
-  --md-sys-color-on-tertiary-container: #ffdcc6;
+  --md-sys-color-tertiary: #f1bc96;
+  --md-sys-color-on-tertiary: #49290e;
+  --md-sys-color-tertiary-container: #633e22;
+  --md-sys-color-on-tertiary-container: #ffdcc5;
 
   --md-sys-color-surface: #191114;
   --md-sys-color-surface-dim: #191114;
@@ -549,9 +563,9 @@
   --md-sys-color-surface-container-high: #30282a;
   --md-sys-color-surface-container-highest: #3c3235;
   --md-sys-color-on-surface: #eedfe2;
-  --md-sys-color-on-surface-variant: #d1c3c8;
-  --md-sys-color-outline: #9a8d92;
-  --md-sys-color-outline-variant: #4e4449;
+  --md-sys-color-on-surface-variant: #d5c2c7;
+  --md-sys-color-outline: #9d8c91;
+  --md-sys-color-outline-variant: #514347;
 
   /* The plate sits a step above `surface-container-high` rather than at the near-black it
      used to be, and that is what makes this the scheme where the glass is actually visible

@@ -14,7 +14,8 @@ import type { ImageLine } from '@/lib/route';
 import OfflineBanner from '@/components/OfflineBanner';
 import ServiceWorker from '@/components/ServiceWorker';
 import { COOKIE_KEYS } from '@/lib/constants';
-import { PALETTES } from '@/lib/generated/themeColors';
+import { CUSTOM_PALETTE, PALETTES } from '@/lib/generated/themeColors';
+import { deriveThemeCached, normalizeCustomSeed, paletteBlocksCss } from '@/lib/paletteRule';
 import { inlineRoutePolicyScript, readRoutePolicy } from '@/lib/route.server';
 
 /** The three the cookie may legitimately hold; anything else is treated as absent. */
@@ -64,10 +65,11 @@ export const viewport: Viewport = {
   // tag that the browser reads to paint its own chrome *before* any stylesheet exists,
   // where a `var()` resolves to nothing.
   //
-  // A static array cannot express ten palettes, and mutating Next's own tag does not
-  // survive a client navigation (the App Router re-renders metadata). So the tag is
-  // rendered by hand below, from the cookie, out of the values `scripts/palette.mjs`
-  // generates — which also retires the hand-copy step that used to follow a re-seed.
+  // A static array cannot express eleven palettes — one of them the user's own — and mutating
+  // Next's own tag does not survive a client navigation (the App Router re-renders metadata).
+  // So the tag is rendered by hand below, from the cookie, out of the values
+  // `scripts/palette.mjs` generates — which also retires the hand-copy step that used to
+  // follow a re-seed.
   colorScheme: 'light dark',
   // Lets the shell paint under the notch/home indicator; the layout then pays
   // it back with env(safe-area-inset-*) padding at the edges that need it.
@@ -75,9 +77,39 @@ export const viewport: Viewport = {
 };
 
 /** `{ id: [lightPrimary, darkPrimary] }`, for the pre-paint script to index. */
-const BAR_COLORS = JSON.stringify(
-  Object.fromEntries(PALETTES.map((p) => [p.id, [p.light.primary, p.dark.primary]])),
+const BUILT_IN_BAR_COLORS = Object.fromEntries(
+  PALETTES.map((p) => [p.id, [p.light.primary, p.dark.primary]]),
 );
+
+/**
+ * The eleventh palette, resolved from the seed in the cookie.
+ *
+ * Returns the two `html[data-palette='custom']` blocks, so they are in the first byte and a
+ * user on a custom colour never sees a frame of the default brand. There is no client-side
+ * equivalent that could do this: the pre-paint script runs before any stylesheet resolves
+ * and cannot carry HCT, and by the time `lib/paletteLazy.ts` has its chunk the page has
+ * painted several times over.
+ *
+ * A malformed cookie yields null, and the pre-paint script's own lookup then falls the stored
+ * palette back to `default` — the two agree because both key off the same `BAR_COLORS` object.
+ */
+function customPalette(seedCookie: string | undefined) {
+  const seed = normalizeCustomSeed(seedCookie);
+  if (!seed) return null;
+  const derived = deriveThemeCached(seed);
+  return {
+    seed,
+    css: paletteBlocksCss(CUSTOM_PALETTE, derived),
+    /* `[lightPrimary, darkPrimary]`, the shape the pre-paint script indexes with `k?1:0`. */
+    bar: [derived.light.primary, derived.dark.primary] as const,
+    /* Four hexes for `<html>`: the fill and its ink, per scheme. The picker's eleventh chip
+       needs the user's colour *while another theme is in force*, which is exactly what a token
+       read cannot give it. The order is `unpackCustomTones`'s in `lib/appearance.ts`. */
+    tones: (['light', 'dark'] as const)
+      .flatMap((scheme) => [derived[scheme].primary, derived[scheme]['on-primary']])
+      .join(' '),
+  };
+}
 
 /* The pre-paint script: the only code that runs before the first paint, and therefore
    the only place a preference can be corrected without a flash of the wrong one.
@@ -95,11 +127,16 @@ const BAR_COLORS = JSON.stringify(
    stored value is an optional refinement of one. `lib/appearance.ts` wraps its reads
    individually for exactly this reason.
 
+   `C` doubles as the validation list, which is what makes the custom palette safe here
+   without any derivation: it gains a `custom` key **only** when this request's cookie
+   carried a usable seed, so a stored `custom` with nothing rendered for it falls back to
+   `default` rather than selecting a palette no stylesheet answers to.
+
    The keys are spelled out because this is a string, not a module: it cannot import
    `LS_KEYS`. They must stay in step with `lib/constants.ts`, which is why each one is
    named in a comment there. */
-const PRE_PAINT = `(function(){
-var d=document.documentElement,C=${BAR_COLORS};
+const prePaint = (barColors: Record<string, readonly string[]>) => `(function(){
+var d=document.documentElement,C=${JSON.stringify(barColors)};
 var get=function(k){try{return localStorage.getItem(k)}catch(e){return null}};
 var q=function(m){try{return matchMedia(m).matches}catch(e){return false}};
 var f=get('followSystemPrefersColorScheme');
@@ -134,7 +171,15 @@ export default async function RootLayout({
      silently mean "standard" — which is the one outcome a user who asked for no
      animation must not get by accident. */
   const paletteCookie = cookieStore.get(COOKIE_KEYS.palette)?.value;
-  const palette = PALETTES.find((p) => p.id === paletteCookie) ?? PALETTES[0];
+  /* The user's own palette, derived here rather than shipped: `lib/paletteRule.ts` is a
+     plain module, so the server can run it and put all sixty declarations in `<head>`. */
+  const custom = customPalette(cookieStore.get(COOKIE_KEYS.paletteCustom)?.value);
+  const builtIn = PALETTES.find((p) => p.id === paletteCookie) ?? PALETTES[0];
+  const onCustom = paletteCookie === CUSTOM_PALETTE ? custom : null;
+  const paletteId = onCustom ? CUSTOM_PALETTE : builtIn.id;
+  const barColors = custom
+    ? { ...BUILT_IN_BAR_COLORS, [CUSTOM_PALETTE]: custom.bar }
+    : BUILT_IN_BAR_COLORS;
   const motionCookie = cookieStore.get(COOKIE_KEYS.motion)?.value;
   /* Which image line this device is on, so the fifty `<img>` tags this document renders carry the
      same URLs the client is about to want. Without it every card mismatched at hydration for
@@ -170,17 +215,31 @@ export default async function RootLayout({
     <html
       lang="zh"
       className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} h-full antialiased ${darkMode ? 'dark' : ''}`}
-      data-palette={palette.id}
+      data-palette={paletteId}
+      data-palette-seed={custom?.seed}
+      data-palette-tones={custom?.tones}
       data-motion={motion}
       data-motion-speed={motionSpeed}
       data-entrance={entranceOff ? 'off' : undefined}
       suppressHydrationWarning
     >
       <head>
+        {/* The eleventh palette's rules, in the same shape `app/theme-palettes.css` carries
+            the other nine — same `paletteBlocksCss`, so the two cannot diverge. It is a
+            `<style>` rather than inline properties on `<html>` because an inline style beats
+            every selector including `html.dark[data-palette='custom']`, which would leave the
+            dark scheme painting the light values. The id is what `applyCustomPalette` finds
+            and replaces when the user picks a different colour. */}
+        {custom && <style id="palette-custom">{custom.css}</style>}
         {/* No `media`: this reports the scheme the *app* is in, which can differ from the
             OS's. The two media-keyed tags Next used to generate meant that forcing dark
             mode on a light desktop left the browser chrome painted the light colour. */}
-        <meta name="theme-color" content={palette[darkMode ? 'dark' : 'light'].primary} />
+        <meta
+          name="theme-color"
+          content={
+            onCustom ? onCustom.bar[darkMode ? 1 : 0] : builtIn[darkMode ? 'dark' : 'light'].primary
+          }
+        />
         {/* The four hosts the first screen cannot be drawn without, warmed while the HTML is
             still parsing. The app had none of these — not one `preconnect` or `dns-prefetch`
             anywhere — so a cold load spent a DNS lookup plus a TLS handshake on each of them
@@ -224,7 +283,7 @@ export default async function RootLayout({
             `type="text/javascript"` that the client render does not produce, and React reports the
             attribute mismatch on every load. Declaring the spec default makes both sides agree and
             changes nothing about how either script executes. */}
-        <script type="text/javascript" dangerouslySetInnerHTML={{ __html: PRE_PAINT }} />
+        <script type="text/javascript" dangerouslySetInnerHTML={{ __html: prePaint(barColors) }} />
         {/* The request-line policy, if the server managed to read one. A plain inline script
             rather than a prop into a client component, because it has to be in force before the
             first *effect* in the tree runs and effect order across a tree is not something a

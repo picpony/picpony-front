@@ -20,8 +20,8 @@ card radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | ------------------------ | ---------------------------------------------------------- | ------------------------------------------------- |
 | Button                   | `components/Button.tsx`                                    | a `<button>` with `bg-primary text-on-primary …`  |
 | Text input / textarea    | `Input` / `Textarea` / `Field` from `components/Input.tsx` | a bare `<input>` with border + focus-ring classes |
-| Colour picker            | `ColorSwatch` (`components/Input.tsx`)                     | a bare `<input type="color">`                     |
-| Choosing one of the ten themes | `PaletteSwatches` — one call site, /settings          | `ColorSwatch` (that is a free choice from 16 million) or a `Select` of colour *names* |
+| An arbitrary colour field | `ColorSwatch` (`components/Input.tsx`) — a badge's own colour, in /admin | a bare `<input type="color">` |
+| Choosing a theme colour | `PaletteSwatches` — one call site, /settings; the eleventh chip's own two dialogs are `ColorPicker` and `ImagePalettePicker` | a `Select` of colour *names*; `ColorSwatch` for any of the eleven, since the OS dialog speaks RGB where this system speaks HCT and shows a colour where a *theme* is being chosen |
 | Radio button             | `components/Radio.tsx`                                     | a bare `<input type="radio">`                     |
 | Slider / range           | `components/Slider.tsx`                                    | `<input type="range">` plus a global class        |
 | A one-time code          | `components/CodeInput.tsx`                                 | six `<input maxLength={1}>` and a ref array       |
@@ -173,8 +173,8 @@ or a press that turns into a scroll leaves the handle swollen.
 system that forbids raw colours, an illegal fourth state nothing prevented, and a
 mapping `Button` was doing at the call site from its own variant. Note `primary` resolves to
 **`primary-ink`**: the arc is a mark on a surface over a `secondary-container` track, and on
-the three light-coated palettes the fill measures 1.23:1 against its own `surface` where the
-ink measures 2.93 — every non-filled `Button`'s busy indicator.
+the five palettes whose fill is a pale coat it measures **1.07–2.13:1** against its own
+`surface` where the ink measures 2.91–2.92 — every non-filled `Button`'s busy indicator.
 
 
 Press feedback is `data-ripple` plus the `state-layer` utility. This table used to
@@ -485,150 +485,326 @@ lightness. Role → tone is verbatim from AOSP's `ColorLightTokens.kt` /
 inconsistency — an even hue sweep at fixed lightness and chroma is the entire point of
 that scale, and OKLCH is where that relationship is expressible.
 
-### The palette is an axis: ten themes from one recipe
+### The palette axis: eleven themes, and `primary` is not derived
 
-`data-palette` on `<html>` selects one of ten, and they differ in **one input** — the
-seed, all three of its coordinates. Everything else is shared: the role→tone map,
-`NEUTRAL_CHROMA`, the harmony offsets, the semantic ramps, the vividness the brand chroma
-is held to, and the four lines that turn a seed into a brand tone, an ink tone and a choice
-of `on-primary`.
+`data-palette` on `<html>` selects one of ten built-in themes or the user's own. Each theme
+is **two literal hexes from the MLP-VectorClub colour guide** — the character's coat Fill
+for the light scheme and the *same surface's Shadow Fill* for the dark one. Nothing computes
+them, nothing rounds them, and `npm run colors` emits them byte for byte. Everything else is
+shared: the role→tone map, the harmony (M3's own, see below), the semantic ramps, and the
+three things still solved from those two fills.
 
-**What is shared is the derivation, not its output.** It used to be one number —
-`BRAND_TONE = 61 / 54` for all of them — on the argument that contrast against white ink is a
-function of tone alone, so one tone gives provably identical figures. That is true and
-it was the wrong thing to hold fixed: at tone 61 a yellow can only be `#b88d00`, because the
-whole 40–130° band is dark gold, and the contrast that made the guarantee cheap is the same
-quantity that decides how light a hue is allowed to be. 小蝶 is a pale yellow pony and no
-amount of hue adjustment makes tone 61 pale.
+**This is the third answer to the problem and the first that survived looking at.** Worth
+recording, because both failures were reasonable and both were reached by reasoning rather
+than by looking:
 
-The rules, all in `scripts/palette.mjs`, with every threshold either a WCAG bar or the
-default theme's own measured value — which is what makes the default a fixed point of the
-rule, and the UNCHANGED list its proof:
+- **The seed's own tone.** A seed's lightness is a property of the **artwork** rather than
+  of the design system — a pony is drawn pale so a black outline reads against it — so the
+  ten scattered across tones 37–90 with no rule behind the scatter. Three near-fluorescent
+  pastels, three heavy near-navies, a washed-out blue at chroma 39.7.
+- **A rule: hue from the seed, tone from Material's own 500 row, chroma held to the
+  brand's.** Defensible, checkable, and it produced a series of ugly yellows. At every tone
+  that rule was willing to visit, a yellow is either **mud** (desaturated at mid tone —
+  khaki, olive, mustard) or a **shout** (saturated at high tone). It also, in its first
+  form, pinned six of ten themes to the sRGB gamut edge — channels at 0 or 255 — beside a
+  brand sitting at 67% of its own gamut, which is neon next to a dusty rose.
+
+The colour that finally looked right was `#FAF5AB`: 小蝶's actual coat, which an artist
+chose. So the rule stopped trying to *decide* the brand fill and started *reading* it.
+
+**The Shadow Fill is why the dark scheme needs no rule either.** Shading is the artist
+already answering "this same material, one step deeper", so the pair is guaranteed to read
+as one surface in two lights — which is exactly what `primary` is specified to be here (it
+does not invert between schemes). A tone shift computed from the light value is a second
+opinion about a question already answered, and measurably a worse one: the guide's own
+shadow values sit within 0.9–7.5° of hue for six characters, where a computed shift is
+exact — but for the three where it drifts (瑞瑞 23°, 苹果嘉儿 15°, 邪茧 12°) the drift *is*
+the artwork, and taking the artist's answer is the whole point.
+
+#### What is still derived
+
+| | |
+| --- | --- |
+| the ramp | the light fill's hue, at `rampChroma` |
+| `on-primary` | white where white clears 3:1 on **both** bars, else the ramp's tone 20 |
+| `primary-ink`, light | the lightest tone ≤ the light fill's that makes 2.9:1 on `surface` |
+| `primary-ink`, dark | the darkest tone ≥ the dark fill's that makes 3:1 on the dark page |
+| everything else | the role→tone map and the harmony, both M3's |
+
+#### The harmony is M3's, verbatim
 
 ```
-chroma      = max(seed.chroma, 67.4% of the most chroma sRGB holds at that hue and tone)
-brand light = round(seed.tone); if white ink misses 3:1, darken up to 2 tones to reach it,
-              and if that is not enough this is a light brand and takes P20 ink instead
-brand dark  = light − 7, lightened only if that misses 3:1 against the dark page (tone 42)
-on-primary  = white where white clears 3:1 in *both* schemes, else P20 — one ink per theme,
-              never flipping between schemes
-ink light   = the lightest tone at or below the brand tone that still makes 2.9:1 on surface
+secondaryPalette:      hue,        chroma 16
+tertiaryPalette:       hue + 60°,  chroma 24
+neutralPalette:        hue,        chroma  6
+neutralVariantPalette: hue,        chroma  8
 ```
 
-**The chroma floor is relative, and that is what replaced AOSP's `max(48, chroma)`.** An
-absolute floor means something different at every hue, because the gamut does: measured
-against the most sRGB can hold at each theme's own hue and tone, 48 is 55% of what is
-available at 瑞瑞's violet, 81% at 云宝黛西's blue, and **unreachable** at 邪茧's teal, which
-tops out at 40. So the "floor" was pinning some themes to the gamut edge while leaving others
-muted — the exact unevenness a shared constant was supposed to prevent. 67.4% is the default
-theme's own figure (56.8 of 84.3), so the brand defines the scale rather than participating
-in it, and it is applied as a floor: a character more saturated than the brand keeps their own
-chroma (碧琪 79, 苹果嘉儿 65), a flatter one is brought up to it (瑞瑞 46 → 58, 暮光闪闪 49 → 60).
-It can never desaturate anyone.
+They were three hexes reverse-engineered out of globals.css — `#755360`, `#894d1f`,
+`#7f7378` — held as offsets from the seed so they would rotate with it. The *mechanism* was
+right and the reason was wrong: they were kept because changing them would move the default
+theme, not because they were correct. Measured against the spec they were secondary chroma
+**19.4** (21% high), tertiary **+57.31° chroma 37.1** (55% high) and neutralVariant
+**−9.48° chroma 6.7** — a hue rotation with no argument behind it at all. Only `neutral` was
+already exact.
 
-| id | 标签 | primary 浅 / 深 | on-primary | Where it comes from |
-| --- | --- | --- | --- | --- |
-| `default` | 默认 | `#e06c9f` / `#cb5b8d` | white | The brand seed `#e06c9f`, unchanged |
-| `applejack` | 苹果嘉儿 | `#ed6e2e` / `#d55c1c` | white | Coat Outline `#EF6F2F` |
-| `fluttershy` | 小蝶 | `#f6e46e` / `#e2d05d` | P20 `#373100` | Coat Shadow Fill `#F3E488` |
-| `lyra` | 天琴 | `#62dfb2` / `#4bcb9f` | P20 `#003828` | Coat Shadow Fill `#62DFB2` |
-| `chrysalis` | 邪茧 | `#208480` / `#00726e` | white | Carapace mid `#1E837F` |
-| `rainbow` | 云宝黛西 | `#6cacdb` / `#599ac8` | P20 `#00344e` | Coat Outline `#6BABDA` |
-| `luna` | 露娜 | `#1e4dc3` / `#2f5ad0` | white | Mane Main Fill `#1C4CC2` |
-| `rarity` | 瑞瑞 | `#5e49b8` / `#6551c0` | white | Mane Fill `#5E50A0` |
-| `twilight` | 暮光闪闪 | `#ab63cd` / `#9850ba` | white | Coat Outline `#A46BBD` |
-| `pinkie` | 碧琪 | `#eb458b` / `#d43279` | white | Mane Fill `#EB458B` |
+Switching cost **18 declarations** in the default theme, `outline`, `on-surface-variant` and
+`outline-variant` among them, which are the two most repeated non-brand colours in the app.
+All of them moved by a step or two; the measured pairs did not (`outline`/`surface` is still
+4.27:1 light and 5.83:1 dark). Paid once.
 
-**Every seed is a hex the colour guide lists, unaltered** — the MLP-VectorClub guide, which
-extracts them from the show's own artwork and publishes a machine-readable dump at
-`https://mlpvector.club/dist/mlpvc-colorguide.json` (`Appearances[id].ColorGroups`). That is
-worth stating because for three rounds it was not, and the reason is one detail of the guide
-that is easy to miss: **a coat is not a colour, it is four labelled values** — Outline, Fill,
-Shadow Outline, Shadow Fill — and the Outline is the dark line drawn *around* the shape rather
-than the colour the character reads as. Five of the original seven seeds were outlines. 小蝶's
-yellow was reported ugly three times and every attempt moved her hue, when the actual fault was
-that her Outline (`#E9D461`, tone 85) was standing in for a coat whose Fill is `#FAF5AB` (tone
-95). Reading the right row retires both hand-mixed seeds — a warmed yellow and a cooled indigo
-— so `THEMES` is now id, label and a guide hex, with nothing invented anywhere in it.
+**The chroma stays flat even though `primary`'s is not.** M3 pairs a constant secondary 16
+with a constant primary 36 — a ratio of 0.44 — while this app's primary ramp runs **45.5–79.4**,
+so the ratio here lands between **0.202** (碧琪, chroma 79.4) and **0.352** (邪茧, chroma 45.5).
+Making secondary proportional would restore the ratio and would *not* be M3: the spec's number
+is a constant, and a focus ring that gets louder on the more saturated themes is a focus ring
+answering a question about the brand rather than about the keyboard.
 
-Which row a character takes is still a judgement, and the reason is one line each:
+**And ASSERTION 8 is what makes any of this checkable.** The four numbers above are M3's, and
+for a while nothing compared them to M3 — ASSERTION 2 measures emitted chroma against *this
+repo's own* constant, so it is self-referential and a dependency bump that retuned TonalSpot
+would have passed every check in the file. The assertion builds a real `SchemeTonalSpot` per
+theme and compares all four palettes at every tone the role map uses; `primary` is excluded,
+because the library pins it flat at 36 and this app's is `rampChroma`. It passes today for all
+ten, and it fires on a **one-unit** chroma drift — verified in both directions rather than
+assumed.
 
-- 苹果嘉儿, 云宝黛西, 暮光闪闪 take their coat's **Outline** — the orange, sky blue and purple
-  they read as. Their Fills are 15–18 tones lighter and, in 苹果嘉儿's case, hue 73, which would
-  land 30° from 小蝶.
-- 小蝶 and 天琴 take the **Shadow Fill**, because their Fill is tone 93–95, where a brand fill
-  stops having a boundary against a near-white page (ASSERTION 5 rejects it).
-- 瑞瑞's coat is `#BDC1C2`, near-achromatic, and 邪茧's is `#2A2A2A` at chroma 1.0, so they take
-  the next feature the guide gives them: 瑞瑞's mane, and 邪茧's **carapace** — the changeling
-  anatomy that is not black. Her mane (`#1E5972`) was the other candidate and sits 11° from
-  云宝黛西, where the carapace is 23° clear of 天琴 and 50° clear of 云宝黛西.
-- 露娜's coat Outline is tone 8 and her coat Fill tone 28, both under ASSERTION 5's floor, so
-  she takes her **mane's Main Fill** — the night sky she is known for, and at tone 37 it keeps
-  her two schemes 5 tones apart where the coat would have made it 14.
-- 碧琪 takes her mane because her *coat* is hue 353.5 chroma 50.4 against the brand's
-  355.7/56.8 — the same colour. The mane's chroma of 79.4 is what distinguishes her theme; the
-  hues are 4.2° apart, and that pair is the one exemption in ASSERTION 6.
+**`error` deliberately does not follow M3, and that is not an oversight.** The spec pins it
+at hue 25 / chroma 84; this one is hue 22 / chroma 67.2. The three degrees are worth nothing
+either way — what matters is that `success` (chroma 43.9) and `warning` (chroma 39.0) have
+**no M3 equivalent at all**, because the spec has no such roles. Taking 84 for the one ramp
+that has a spec would make the error toast visibly louder than the success toast beside it,
+which is a severity ordering nobody chose. The three are tuned as a set.
 
-Sorted by hue the ten leave **20.5°** between the closest pair that is not that one, 露娜
-against 瑞瑞 — two purples the guide gives no way to separate further, since 瑞瑞's only other
-stop (316.2) is 3° from 暮光闪闪.
+**`rampChroma` is measured at `CHROMA_REFERENCE_TONE` (61), not at the fill's own tone, and
+that is the one non-obvious line in `lib/paletteRule.ts`.** It was found by shipping the
+alternative. A pale fill is pale because it sits where the gamut is *narrow*: `#FAF5AB` is
+chroma 30 at tone 95 where only 62 is available, while at tone 61 the same hue holds 67.
+Reading the ramp's chroma at the fill's tone therefore built the entire primary palette at
+chroma 20 for a tint, and `primary-ink` — the colour of every glyph, tab indicator, checkbox
+and focused field outline in the app — came out `#a69166`, a khaki-grey. Measured at tone 61
+that theme's ink is `#9c9700`, a clean gold, and across the ten the inks run chroma 40–79
+with no muddy member. ASSERTION 6 is that floor.
 
-**The brand goes deeper in dark, except where the page is black.** Eight of the ten are
-`light − 7`, which is what the `.dark` block has always documented. 露娜 (tone 37) and 瑞瑞 (39)
-are darker than the tone-42 floor, the lightest tone at which a fill still makes 3:1 against a
-tone-6 page, so they move *up* to it — by 5 tones and 3, less movement between schemes than the
-default's own 7. That floor is WCAG 1.4.11 and not the default's own 4.79, and the difference is
-not pedantry: at 4.79 the floor is tone 54, which pinned every brand darker than 61 to that one
-tone — 邪茧, 暮光闪闪, 碧琪, 瑞瑞 and 露娜 all landed there, so three came out *lighter* in dark
-than in light, 暮光闪闪 came out identical in both, and 碧琪's shift was cut from seven tones to
-two. Separation from a near-black page is very nearly a function of tone alone (measured across
-the ten, within ±0.05 at every tone), so a floor set above what the spec asks converts a shift
-into a destination.
+The consequence to carry: **a theme's fill and its ink are allowed to be very different
+colours.** 小蝶's bar is a cream and her ink is a gold. That is correct — one answers a
+question about a surface and the other about a mark — and it is what lets a pale-coated
+character have a usable theme at all. Under the old rule three themes had `ink != fill`;
+now eight do.
 
-One consequence of the lower floor, stated because it is a real trade rather than a free win:
-邪茧, 露娜 and 瑞瑞's dark brand now sits at tone 42–43 instead of 54, which takes `primary-ink`
-against `surface-container-highest` to 2.04–2.14:1 for those three — the tab indicator and the
-focused field's outline, on a card. Both of those pairs are `report` rather than `floor` in
-`PAIRS`, and the default theme already measures 2.39 on the same pair in light, so this is the
-existing divergence getting worse for three palettes in one scheme rather than a new one. The
-alternative is the tone-54 pinning above, which is visibly wrong in every scheme.
+| id | 标签 | primary 浅 / 深 | primary-ink 浅 | on-primary | 出处 |
+| --- | --- | --- | --- | --- | --- |
+| `default` | 默认 | `#e06c9f` / `#cb5b8d` | = fill | white | 品牌，无出处可取 |
+| `applejack` | 苹果嘉儿 | `#faba62` / `#ef9c54` | `#ca8501` | `#462b00` | 毛色 Fill / Shadow Fill |
+| `fluttershy` | 小蝶 | `#faf5ab` / `#f3e488` | `#9c9700` | `#343200` | 毛色 Fill / Shadow Fill |
+| `lyra` | 天琴 | `#8cffdb` / `#62dfb2` | `#00a785` | `#00382b` | 毛色 Fill / Shadow Fill |
+| `chrysalis` | 邪茧 | `#1e837f` / `#00454a` | `#008581` | white | 甲壳上段 中段 / 前段 |
+| `rainbow` | 云宝黛西 | `#9bdbf5` / `#8cc7e7` | `#01a0c6` | `#003544` | 毛色 Fill / Shadow Fill |
+| `luna` | 露娜 | `#363e7a` / `#282d5a` | `#27359e` | white | 毛色 Fill / Shadow Fill |
+| `rarity` | 瑞瑞 | `#5e50a0` / `#4a1767` | `#5e4ab5` | white | 鬃毛 Fill / 渐变暗部 |
+| `twilight` | 暮光闪闪 | `#cc9cdf` / `#bf89d1` | `#bd77dc` | `#500670` | 毛色 Fill / Shadow Fill |
+| `pinkie` | 碧琪 | `#eb458b` / `#bb1c76` | = fill | white | 鬃毛 Fill / Outline |
+| `custom` | 自定义 | the user's hex / derived | — | — | 选择颜色，或 从图片取色 |
 
-**The one yellow that cannot be lighter is the ink.** `primary-ink` sits at the tone where the
-brand still makes 2.9:1 on the page, which for a yellow hue is 61 — a brass gold. It is what a
-section heading's glyph, a switch's tick and the tab indicator take, so it is the most visible
-thing in that palette after the app bar, and it looks darker than the fill by a third of the
-tone scale. Lightening it is a straight trade against legibility: tone 66 measures 2.48:1 and
-tone 70 measures 2.18:1, against a 3:1 non-text bar this role is already under.
+Three characters have no usable coat and take the next feature the guide gives them, which
+is also what ASSERTION 4 guards. **Cite the Fill row, not the Outline** — this paragraph got it
+wrong once in each direction, and the Outline is the dark line drawn around a shape rather than
+the colour a character reads as. 瑞瑞's coat **Fill** is `#EAEEF0` at chroma 5.3 (her Outline
+`#BDC1C2` is 4.9 — a white pony either way) and 邪茧's is `#2A2A2A` at chroma 1.0, so they take
+a mane and a carapace. 碧琪 takes her mane because her coat **Fill** is hue 353.2 against the
+brand's 355.7 — the same colour, two degrees apart.
 
-**What consistency means now that the brand tone is per-seed.** `npm run colors` holds the
-ten to three different standards, declared per pair in `PAIRS`:
+#### Three divergences, all deliberate, none to be "fixed"
 
-- `spread` — both members' tone maps are shared, so the pair varies only with hue. Held to
-  ±0.25 of the default; measured, the worst is 0.16. This covers every surface step, both
-  neutral-variant roles, the whole secondary/tertiary harmony, the semantic containers and
-  the two link roles, and it is where the uniformity lives.
-- `floor` — a brand member, so the value is a design consequence. `on-primary`/`primary`
-  must clear 3:1 (3.06–10.14 light, 3.87–8.37 dark) and `primary-ink`/`surface` must clear
-  the default's own 2.9 in light and WCAG's 3:1 in dark (2.91–6.86 and 3.07–11.87).
-- `report` — printed, asserted nowhere: either the default already fails it and globals.css
-  says why, or it measures a brand *fill* against a surface, which is exactly the quantity a
-  per-seed tone is allowed to move.
+- **Three dark bars have no boundary against the dark page.** 邪茧, 露娜 and 瑞瑞's Shadow
+  Fill lands at tone 20–26 against a tone-6 page, measuring **1.42–1.72:1** where WCAG
+  1.4.11 asks 3:1. The alternative measured worse: lifting them to the tone-42 floor makes
+  露娜's *dark* bar lighter than her light one (28 → 41), which is the "three themes came out
+  lighter in dark than in light" defect this repo has already shipped once. The white ink on
+  those bars is 10.8–13.1:1, so nothing on them is unreadable — what is lost is the bar's
+  edge, and for a night-sky character that is close to the intent. `DARK_SEPARATION` still
+  governs `primary-ink` in dark, and still governs the *custom* palette's derived fill.
+- **Two light bars have no boundary either**, for the mirror reason: 小蝶 1.07:1 and 天琴
+  1.15:1 against their own near-white page. Both characters are drawn at tone 93–95. Their
+  bars read by their dark ink rather than by an edge, which is how a yellow-branded app has
+  always looked.
+- **露娜 and 瑞瑞 are 13.8° apart in hue**, under ASSERTION 5's 15° bar, and are the second
+  named exemption beside 默认/碧琪. They are separated by **tone** — 28 against 39, a
+  near-navy beside an indigo — where 默认/碧琪 are separated by chroma. 露娜's *mane* would
+  clear the bar outright at 20.5°; her coat was chosen over it anyway.
 
-Three assertions came with the per-seed tone. `on-primary` must be the same ink in both
-schemes, which used to hold for free when every theme's was white. A seed's own tone must be
-inside 30–92, asserted rather than clamped — a clamp would hand back a theme that is quietly
-not the colour that was asked for, where the assertion sends you to a different row of the
-guide. And no two hues may sit closer than 15°, with the brand/碧琪 pair exempt, because the
-picker is a row of coloured circles and nobody reads the captions.
+#### Eight assertions
+
+ASSERTION 1 (tone fidelity, now skipping the five roles that are literal hexes rather than
+ramp positions) · 2 (the neutral-variant palette is at the chroma the recipe asked for —
+and note its second form is *gone*: comparing against globals.css's current values froze
+whatever the file happened to hold, so when the harmony moved to M3's numbers the check
+fired and, because failures flush before `--write` runs, **blocked the very write that
+would have legitimised the change**. The hand-edit case is already covered better by the
+CHANGED/idempotence check, which tests every token rather than three) · 3 (the `spread`/`floor`/`report` matrix) ·
+4 (**a built-in fill must define a hue** — chroma ≥ 15; this is the check that picks 瑞瑞's
+and 邪茧's rows for them, and it is deliberately *not* applied to the user's colour: ten themes
+chosen from a colour guide can afford to insist on a hue, and a person who wants a grey theme
+is not making a mistake. `rampChroma` tapers its chroma floor to zero as a fill runs out of
+hue, so `#808080` lands on a near-monochrome scheme — M3's own `SchemeMonochrome` reached
+from the other direction — rather than on a grey bar over a randomly-hued ramp. The taper is
+inert above chroma 15, so no built-in theme is touched by it) ·
+5 (the hue wheel and its two exemptions; the tightest gap that is *not* an exemption is 天琴
+against 邪茧 at 18.6°) · 6 (**every `primary-ink` is chroma ≥ 35** — the checkable form of the
+`CHROMA_REFERENCE_TONE` argument above) · 7 (no theme's `primary` is
+`DislikeAnalyzer.isDisliked`) · 8 (**the harmony matches a real `SchemeTonalSpot`**, at every
+tone the role map uses, for all ten themes — the one check that is not self-referential, see the
+harmony section).
+
+#### The eleventh palette: the user's own colour
+
+One hex, through either of two doors — 选择颜色, where a colour is named, or 从图片取色, where
+one is found. Both set `primary` directly, exactly as a character's coat Fill does:
+**there is one rule in this system and the custom palette is not an exception to it.** Only
+the dark fill differs, because the ten get a second hex from the guide and this one has no
+artist to ask — `deriveTheme` falls back to seven tones down, floored against the dark page.
+
+Nothing about it is generated, so it is **not** in `lib/generated/themeColors.ts`'s
+`PALETTES` array; that file carries only the id, because `PaletteId` is what every consumer
+validates against and a union that cannot express the palette the user chose is a union that
+silently downgrades them to the default.
+
+| Concern | Where |
+| --- | --- |
+| The recipe | `lib/paletteRule.ts` — no `'use client'`, so all three consumers can import it |
+| Naming a colour | `components/ColorPicker.tsx` — a `Modal`, and the app's own rather than the OS's |
+| Finding one in a picture | `components/ImagePalettePicker.tsx` — its own dialog, not a section of the other |
+| What either one shows | `components/PalettePreview.tsx`, shared, so the two cannot disagree |
+| The seed | `LS_KEYS.paletteCustom` and `COOKIE_KEYS.paletteCustom`, a seven-character hex |
+| First paint | `app/layout.tsx` derives it server-side into `<style id="palette-custom">` |
+| Re-deriving | `lib/paletteLazy.ts`, a dynamic-import seam like `lib/motionLazy.tsx` |
+| Installing | `applyCustomPalette` in `lib/appearance.ts` — replaces that same `<style>` |
+| The wipe | `changeCustomPalette`, which guards on the **seed** rather than the id |
+| The chip | an eleventh radio in `PaletteSwatches`, disabled until a colour exists |
+| The chip's face | `components/PaletteChipFace.tsx`, shared with the ten and with both dialogs |
+| Image extraction | `sourceColorsFromPixels` + `imageOptions`, both in the lazy chunk |
+
+Nine things about it are load-bearing:
+
+- **The cookie carries the seed, not the sixty declarations.** A stored *output* goes stale
+  the moment the rule moves, which is exactly what happened to the ten twice. Re-deriving
+  costs one HCT run, memoised by `deriveThemeCached`.
+- **The server derives it.** `lib/paletteRule.ts` is a plain module, so `app/layout.tsx` puts
+  all sixty declarations in the first byte. There is no client-side equivalent: the pre-paint
+  script runs before any stylesheet resolves and cannot carry HCT, and by the time the lazy
+  chunk lands the page has painted several times over.
+- **It is a `<style>`, never inline properties on `<html>`.** An inline style beats every
+  selector including `html.dark[data-palette='custom']`, so a scheme flip would keep painting
+  the light values and `applyScheme` would have to rewrite all thirty. As a stylesheet the
+  specificity works out exactly as it does for the generated file — (0,1,1) and (0,2,1) — and
+  `applyScheme` needs no knowledge of it. The rules are emitted by the same
+  `paletteBlocksCss` that shapes `theme-palettes.css`, so the two cannot diverge.
+- **The pre-paint script's `C` object is the validation list**, and it gains a `custom` key
+  only when *this request's* cookie carried a usable seed. So a stored `custom` with nothing
+  rendered for it falls back to `default` rather than selecting a palette no stylesheet
+  answers to — one line, covering the malformed and the cleared-cookie cases together.
+- **The chip cannot read the tokens**, for the same reason the other ten cannot: those are
+  always the *active* theme's, so its first draft turned 露娜's blue the moment you selected
+  露娜. `applyCustomPalette` parks the four hexes (`primary` and `on-primary`, per scheme) on
+  `<html>` as `data-palette-tones` and leaves them there when you switch away.
+- **A `dynamic()` dialog needs `loading`, and its absence is a page-level bug.** Both dialogs
+  are `dynamic()` because between them they carry a 32-cell gamut-aware grid, a hue rail and
+  Monet's quantiser, and /settings needs none of it until a button is pressed. Without a
+  `loading` option the returned component **suspends**, and the nearest boundary is the
+  *route's* — so the first press of 选择颜色 replaced the whole of /settings with its route
+  skeleton until the chunk landed, then put it back. `loading: () => null` puts the boundary on
+  the dialog, and the dialog's own skeleton covers the gap. Each has its own one-way
+  "has ever opened" latch as well, or `dynamic()` fetches at mount, and a user who only ever
+  names a colour would still pay for the quantiser.
+- **The extraction is Monet's ranking, and the summary of it was wrong twice.** `QuantizerCelebi`
+  then `Score`, and the arithmetic in `score.js` is: proportion × 100 × **0.7**, plus
+  `(chroma − 48) × w` where **`w` is asymmetric — 0.3 above the target, 0.1 below**; the filter
+  drops chroma < 5 **and** proportion ≤ **0.01**; and the hue spread is a **sweep from 90° down
+  to 15°** taking the first bar that yields `desired`, so 15° is the floor rather than the rule
+  and **fewer than `desired` may come back**. "Proportion" is not a cluster's own share either —
+  it is the summed share of a 30° hue neighbourhood. AOSP's own ranking is Monet's
+  `ColorScheme.score()`, which is this arithmetic verbatim (`ACCENT1_CHROMA = 48`,
+  `MIN_CHROMA = 5`, `proportion > 0.01`, `for (i in 90 downTo minimumHueDistance)`) with a hard
+  cap of 4 rather than a `desired` parameter; `Score.score()` is not what ThemePicker calls.
+- **Google Blue was reachable, and testing for chroma was not enough to stop it.** When the
+  filter leaves nothing, `Score` returns its own `fallbackColorARGB` — `#4285f4`, a colour that
+  is not in the picture (Monet's fallback is a *different* blue, `#1b6ef3`). The guard used to
+  ask whether any cluster had chroma ≥ 5, which misses the **0.01 proportion** cutoff entirely:
+  measured on 128×96 frames of a grey field with a red patch, the patch filtered out and Google
+  Blue came back at 0.1%, 0.3%, 0.6% **and 1.0%** of the frame, surviving only from 2%. A
+  photograph of a grey street with a small red sign lands in that band. The test is *identity*
+  now — every real candidate is a key of the quantised map and the fallback is not — which
+  covers the no-chroma case and the low-proportion case in one line, and a greyscale image gets
+  its own most populous tones spread 12 apart instead.
+- **The downsample is an area, not an edge, because that is what AOSP caps.** It was a 128px
+  longest edge; `WallpaperColors.java` caps `MAX_WALLPAPER_EXTRACTION_AREA = 112 × 112` and
+  rescales by `sqrt(cap / area)`, with a comment saying the point is to be "aspect ratio
+  independent". The old form kept 31% *more* pixels than AOSP on a square and 40% *fewer* on a
+  tall screenshot. One divergence is kept deliberately: AOSP scales with `filter = false`
+  (nearest neighbour) and this asks for `imageSmoothingQuality: 'high'`, because at a 30×
+  reduction nearest neighbour samples one pixel in nine hundred and can delete the small
+  saturated subject that then trips the cutoff above.
+
+**An image gives seeds, and a seed is installed verbatim. There is no style axis, and taking
+it out is the fix for "取的色很奇怪".** An image-derived option was a **(seed, style) pair** for
+one pass, which is AOSP's own unit: `ColorProvider.kt` crosses
+`styleList = [TONAL_SPOT, SPRITZ, VIBRANT, EXPRESSIVE]` with the seeds
+`ColorScheme.getSeedColors` ranks out of the wallpaper, splicing MONOCHROMATIC in at index 1,
+and 16-qpr2 takes two seeds — the eight chips Android shows. Correctly transcribed from the
+library's own scheme classes, and wrong here for two measured reasons. A style puts `primary`
+at M3's **P40 light / P80 dark**, and three of the five do not keep the seed's hue at all. For
+a sunset orange `#e8762c` lifted out of a photograph, the five options offered were:
+
+```
+tonalSpot   #8c4e29   a dark brown
+neutral     #71594e   a grey-brown
+vibrant     #9c4400   a dark rust
+expressive  #595799   a purple      (the hue rotated 240°)
+monochrome  #5e5e5e   grey
+```
+
+Not one of them is the colour in the picture, and all five are tone 40 — so whichever you
+picked, the app bar came out dark and muddy. AOSP gets away with this because **its app bar is
+`surface`**; this app's is `primary`, so the fill is the largest area on the screen and M3's
+"correct" P40 placement is the one thing it cannot take. That difference is the direct cause of
+several divergences in this file and it is worth carrying: a role's right tone is a function of
+how much of the screen it covers.
+
+So `deriveTheme` takes one hex and no mode, `PaletteStyle`, `stylePalettes`, `styledBrandTones`
+and `normalizeStyle` are gone, and `LS_KEYS`/`COOKIE_KEYS` no longer carry a style. What
+remains of AOSP's arrangement is the part that was always right: the extraction, and the ranked
+seeds it yields.
+
+- **Both dialogs open on the consequence, not on a swatch.** `<input type="color">` opens the
+  operating system's dialog, which carries none of this app's tokens, speaks RGB or HSV where
+  the whole system speaks HCT, and shows a *colour* where the thing being chosen is a *theme*.
+  `PalettePreview` is the answer and it is shared: the bar with its own ink, the `primary-ink`
+  every non-bar role will take, and what the dark scheme becomes.
+- **In `ColorPicker`, every cell is a real `Hct.from()` result, not a gradient**: sRGB's gamut
+  in HCT is an irregular solid, so a gradient offers values the browser then clips and a user
+  can aim at one colour and land on another. Chroma is offered as a *fraction of what is
+  available* at that hue and tone, because at tone 95 a hue may hold a third of what it holds
+  at 60. It holds **one** piece of state, the hex, with the three coordinates read back out of
+  it each render — three synced coordinates is three effects writing state synchronously, which
+  the React Compiler's lint rejects and which cascades.
+- **Two dialogs rather than one, and the second trigger is what forced it.** They were one
+  dialog with two entry points, the image one opening it already scrolled to a section at the
+  bottom — so that dialog held two models at once (a `picked` option *and* a hex, each clearing
+  the other on any touch) and its confirm button was ambiguous about which it was sending. They
+  ask different questions: one is *what colour*, answered with a rail and a grid; the other is
+  *which of these*, answered with a short list nothing can be typed into.
+
+HCT is behind that dynamic import for a reason and must stay there: `npm run perf:weight`
+plus a grep of the built chunks must keep showing the HCT chunk in **no** route's document.
+`warmPalette()` fetches it from `PaletteSwatches`' own mount, so /settings is the only screen
+that pays for it, and it is resident long before either dialog is opened.
 
 **`primary` is a fill role; `primary-ink` is the brand as a mark.** Same hue, at whichever
-tone can be read on the page. For seven of the ten palettes it is the same hex as `primary`,
-byte for byte; for the three light-coated characters (小蝶, 天琴, 云宝黛西) it is a darker step.
-Every place the brand is ink rather than a container reads it — `text-primary-ink`, a selected
-glyph, the checkbox's box, the tab indicator, the slider's fill, the focused field's outline, a
-quoted block's rule. Use `primary` where the thing is a container with `on-primary` over it:
-the app bar, a `filled` button, the switch track, the active pagination pill. The rule of thumb
-is whether you could put a label inside it.
+tone can be read on the page. Every place the brand is ink rather than a container reads it
+— `text-primary-ink`, a selected glyph, the checkbox's box, the tab indicator, the slider's
+fill, the focused field's outline, a quoted block's rule. Use `primary` where the thing is a
+container with `on-primary` over it: the app bar, a `filled` button, the switch track, the
+active pagination pill. The rule of thumb is whether you could put a label inside it.
 
 The name existed once before, for a role that served links *and* active states and did
 neither well. This one has a single job and cannot invert: never lighter than the brand in
@@ -637,7 +813,7 @@ light, never darker in dark.
 **What follows the theme and what does not.** A theme re-skins the *system*; it is not a
 licence to recolour everything:
 
-| Follows | Fixed in all ten |
+| Follows | Fixed in all eleven |
 | --- | --- |
 | `primary` / `primary-ink` / `secondary` / `tertiary` families | `error` / `success` / `warning` — a severity that changes colour with a theme is not a severity |
 | every `surface` step, `on-surface`, `inverse-*` | the four `*-fill` + `on-fill`, for the same reason and because they already do not flip between schemes |
@@ -662,13 +838,16 @@ that is load-bearing: `@import` has to precede every rule, so the generated bloc
 *above* `:root`, and `:root` and `[data-palette=x]` are both specificity (0,1,0). With the
 element name they are (0,1,1) and (0,2,1) and beat `:root` and `.dark` whatever the order.
 
-To **add** a theme: add one entry to `THEMES` in the script and run `npm run colors:write`.
-Nothing else — the CSS, the swatch colours and the `<meta name="theme-color">` values are
-all products of that run, and the brand tone, the ink tone and the choice of `on-primary`
-are derived from the hex you pasted in. To **move the brand**: edit `SEED`, run it, and
-re-check `.logo-keyline` against the Lottie artwork. The hand-copy step that used to follow
+To **add** a theme: add one entry to `THEMES` in `scripts/palette.mjs` — an id, a label, a
+light hex, a dark hex and a note saying which rows of the guide they are — and run
+`npm run colors:write`. Nothing else: the CSS, the swatch colours and the
+`<meta name="theme-color">` values are all products of that run. To **move the brand**: edit
+`BRAND_SEED` and `BRAND_SEED_DARK` in `lib/paletteRule.ts`, run it, and re-check
+`.logo-keyline` against the Lottie artwork. There is no lightness knob any more — a fill is
+a hex somebody drew, so retuning one means reading a different row of the guide. The hand-copy step that used to follow
 (two literals in `viewport.themeColor`) is gone: that export no longer carries `themeColor`
-at all, because a static array cannot express ten palettes and mutating Next's own tag does
+at all, because a static array cannot express eleven palettes — one of which is per-user —
+and mutating Next's own tag does
 not survive a client navigation. The tag is rendered from the cookie in `app/layout.tsx`.
 
 
@@ -905,10 +1084,10 @@ Deliberate divergences from the spec, all commented where they live. Do not
   from the surface it sits on and that surface is near-white in one scheme and
   near-black in the other, so the spec's light tone is the *darker* of the two. This
   app holds the pink instead of a tone of it, seven tones apart, which reads as one
-  colour with a little separation from each ground. Those two tones are the *default
-  seed's own lightness*, not a constant — see the palette-axis section for the rule, for the
-  three palettes whose brand is light enough to take dark ink instead, and for the two whose
-  brand is dark enough that the dark scheme has to step *up* rather than down.
+  colour with a little separation from each ground. Those two hexes are *given*, not
+  derived — the brand has no artwork to read a coat Fill from, so it is the one theme whose
+  pair is stated rather than transcribed. See the palette-axis section, and note five of the
+  ten palettes are light enough to take dark ink instead.
   **What it costs, so nobody rediscovers it as a bug:** white ink on it is 3.08:1 light
   and 3.87:1 dark, under the 4.5:1 AA floor for 14px text — the label of every `filled`
   button, the active pagination number, the featured badge. It is not fixable in place:
@@ -3325,7 +3504,7 @@ cannot do; the worker covers the one case no retry reaches, a hard refresh with 
 wire. `<OfflineBanner>` is what tells the user why something is taking a while — without it,
 "pending" and "broken" look the same.
 
-`app/manifest.ts` omits **`theme_color`** deliberately: the app has ten palettes, so any single
+`app/manifest.ts` omits **`theme_color`** deliberately: the app has eleven palettes, so any single
 value is wrong for nine, and `app/layout.tsx` already renders that tag from the palette cookie —
 the same reason Next's own `viewport.themeColor` export was removed. `background_color` is safe to
 fix because it paints only the installed app's splash, before any CSS is in force. The icons are

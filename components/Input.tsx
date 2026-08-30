@@ -484,13 +484,29 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
  * content box, so without the inset the border and the swatch touch and the
  * corner radius is lost under the fill.
  */
-export function ColorSwatch({
-  className = '',
-  'aria-label': ariaLabel,
-  ...rest
-}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> & { 'aria-label': string }) {
+type ColorSwatchProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> & {
+  'aria-label': string;
+};
+
+/**
+ * Forwards its ref, like `Input` and `Textarea` — a field primitive that cannot be handed a
+ * ref is one a call site has to wrap in a box to reach.
+ *
+ * No call site needs it today; the three in `components/admin/BadgesTab.tsx` pass none. It is
+ * here for consistency with the other two rather than for a consumer, and one thing it would be
+ * needed for is worth recording, because the trap is easy to hit: React's `onChange` on an
+ * `<input type="color">` is the native **`input`** event, which Chrome fires continuously while
+ * the pointer moves inside the OS dialog, so a call site that commits on it runs that commit
+ * dozens of times per drag. The native **`change`** event is the one that means "the dialog
+ * closed", and reaching it needs an `addEventListener` on the element.
+ */
+export const ColorSwatch = forwardRef<HTMLInputElement, ColorSwatchProps>(function ColorSwatch(
+  { className = '', 'aria-label': ariaLabel, ...rest },
+  ref,
+) {
   return (
     <input
+      ref={ref}
       type="color"
       aria-label={ariaLabel}
       className={cn(
@@ -506,6 +522,6 @@ export function ColorSwatch({
       {...rest}
     />
   );
-}
+});
 
 export default Input;

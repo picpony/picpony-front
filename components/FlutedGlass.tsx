@@ -14,7 +14,14 @@ import {
   fluteExponent,
 } from '@/lib/flutedGlass';
 import { FlutedGlassTrail } from '@/lib/flutedGlassTrail';
-import { MOTION_SPEED_SCALE, useMotionSpeed, useMotionTier, useScheme } from '@/lib/appearance';
+import {
+  MOTION_SPEED_SCALE,
+  useCustomSeed,
+  useMotionSpeed,
+  useMotionTier,
+  usePalette,
+  useScheme,
+} from '@/lib/appearance';
 import { cn } from '@/lib/utils';
 
 /**
@@ -149,6 +156,14 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
      mid-session left the loop running until something else re-rendered the page. */
   const tier = useMotionTier();
   const scheme = useScheme();
+  /* Not read directly — they are here so the drawing effect below re-runs when the palette
+     moves. The plate samples `--md-sys-color-primary` through `getComputedStyle`, which no
+     dependency array can see, so before this the /about glass kept the hue of whatever theme
+     was in force when it mounted. The custom palette made that visible; it was wrong for the
+     ten as well. `useCustomSeed` is the second half: the custom palette's id never changes,
+     so only its seed reports that its colour did. */
+  const palette = usePalette();
+  const customSeed = useCustomSeed();
   const speed = useMotionSpeed();
 
   /* The live speed, in a ref, so changing it does not re-arm the loop and reset the phase.
@@ -512,7 +527,7 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
       cancelAnimationFrame(frame);
       teardown();
     };
-  }, [box.w, box.h, scheme, tier, generation]);
+  }, [box.w, box.h, scheme, palette, customSeed, tier, generation]);
 
   /**
    * Context loss, and the release on unmount.
