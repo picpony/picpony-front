@@ -1,6 +1,6 @@
 /* Main-thread cost of a cold home load and a tab switch, from `Performance.getMetrics` deltas.
-   The React Compiler's whole point is fewer renders; if these numbers do not move, it bailed and
-   the risk was taken for nothing. Median of N runs, because a single run is noise. */
+   If these numbers do not move, the React Compiler bailed and the risk was taken for nothing.
+   Median of N runs, because a single run is noise. */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -74,8 +74,7 @@ await send('Performance.enable');
 const KEYS = ['ScriptDuration', 'RecalcStyleDuration', 'LayoutDuration', 'TaskDuration', 'RecalcStyleCount', 'LayoutCount'];
 const load = [], tab = [];
 
-/* The service worker would make run 2 onwards a different measurement from run 1. */
-await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
+/* The service worker would make run 2 onwards a different measurement from run 1. */await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
 await new Promise((r) => setTimeout(r, 3000));
 await evalIn(`(async () => {
   const rs = await navigator.serviceWorker.getRegistrations();

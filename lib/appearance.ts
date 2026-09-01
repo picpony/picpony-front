@@ -1,25 +1,15 @@
 'use client';
 
 /**
- * The five device-local appearance preferences, and their only owner.
- *
- * Colour scheme, palette, motion tier, motion speed, entrance animations. They are one
- * module because they are one concern with one shape: a stored setting that may say "follow
- * the system", a
- * resolved value that lives on `<html>` as an attribute or a class, a cookie so the
- * server can put it there before first paint, and a subscription so the app bar and
- * /settings cannot disagree about which one is active.
- *
- * None of them syncs to the account. That is deliberate and it predates this module —
- * `darkMode` was never in `CloudSettings` — because these describe the device you are
- * reading on, not the person: a phone in a dark room and a desktop in daylight want
- * different answers, and a user who turns animations off on a laptop with a weak GPU
- * does not mean it about their phone.
- *
- * **Read the root, not the store.** `motionTier()` and `currentPalette()` read the
- * attribute rather than localStorage, because the attribute is what the CSS is keyed on
- * and therefore what is actually in force. The stored setting can say `system`; the
- * attribute never does.
+ * The five device-local appearance preferences, and their only owner — the `LS_KEYS`/`COOKIE_KEYS`
+ * mapping lives here: colour scheme, palette, motion tier, motion speed, entrance animations. One
+ * module because they are one concern with one shape: a stored setting that may say "follow the
+ * system", a resolved value on `<html>` as an attribute or a class, a cookie so the server puts it
+ * there before first paint, and a subscription so the app bar glyph and /settings dropdowns cannot
+ * disagree. None syncs to the account (`darkMode` was never in `CloudSettings`) — these describe
+ * the device, not the person. **Read the root, not the store:** `motionTier()`, `currentPalette()`
+ * and `entranceMotion()` read the `<html>` attribute, not localStorage — that is what the CSS is
+ * keyed on and therefore what is in force; a stored setting may say `system`, an attribute never does.
  */
 
 import { useSyncExternalStore } from 'react';
@@ -46,20 +36,10 @@ export type MotionSetting = MotionTier | 'system';
 export type MotionSpeed = 'fast' | 'default' | 'slow';
 
 /**
- * The three speeds, as a multiplier on every duration in the app.
- *
- * 0.7 and 1.4 are reciprocals, so the ladder is symmetric about `default` in log space
- * and **the relative rhythm is unchanged**: the ratio between a 100ms press and a 150ms
- * state layer is the same at all three speeds. Three separate duration tables, each
- * rounded onto M3's 50ms grid, would have let those ratios drift — and the ratios are
- * what make one gesture read as one gesture. So M3's grid is what `default` declares,
- * and the other two are a scale of the whole system.
- *
- * Speed applies to the reduced tier too. It used to be standard-only, with `reduced`
- * pinned at its own 0.5 — so that tier both simplified every gesture *and* halved its
- * clock, which is two answers to one question. The tier decides the **form** of the
- * motion and the speed decides its **length**; they are orthogonal, and the only tier
- * that ignores the speed is `off`, where the length is zero.
+ * The three speeds, as a multiplier on every duration — speed scales everything via `--motion-scale`
+ * (0.7/1/1.4, reciprocals, so the rhythm between durations is unchanged; separate tables on M3's
+ * 50ms grid would have let it drift). The tier decides the **form** of motion, the speed its
+ * **length**; only `off` ignores the speed (zero).
  */
 export const MOTION_SPEED_SCALE: Record<MotionSpeed, number> = {
   fast: 0.7,
@@ -67,17 +47,13 @@ export const MOTION_SPEED_SCALE: Record<MotionSpeed, number> = {
   slow: 1.4,
 };
 
-/* `SchemeSetting` needs no validation list: it is derived from two booleans rather than
-   read as a string, so there is no unknown value it can take. The other two are read
-   straight out of storage and do. */
+/* `SchemeSetting` needs no validation list — derived from two booleans, not read as a string;
+   the other two come straight out of storage. */
 const MOTION_SETTINGS: readonly MotionSetting[] = ['off', 'reduced', 'standard', 'system'];
 const MOTION_SPEEDS: readonly MotionSpeed[] = ['fast', 'default', 'slow'];
 
-/* ---------------------------------------------------------------------------
- * Storage. Both halves are wrapped: `localStorage` throws outright in a private
- * window in some engines, and a preference failing to persist must not take the page
- * down with it.
- * ------------------------------------------------------------------------ */
+/* --- Storage: both halves are wrapped (localStorage throws in a private window in some
+   engines; a failed persist must not take the page down). --- */
 
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 
@@ -105,18 +81,12 @@ function writeCookie(name: string, value: string) {
 const oneOf = <T extends string>(value: string | null, allowed: readonly T[], fallback: T): T =>
   (allowed as readonly string[]).includes(value ?? '') ? (value as T) : fallback;
 
-/* ---------------------------------------------------------------------------
- * The stored settings
- * ------------------------------------------------------------------------ */
+/* --- The stored settings ------------------------------------------------- */
 
 /**
- * The colour-scheme setting.
- *
- * Stored as two keys rather than one, and they are not new: `darkMode` plus
- * `followSystemPrefersColorScheme` is what the app bar's cycle button has always
- * written, and rewriting them as one value would log every existing user out of their
- * own preference. The pair is collapsed to a single three-way setting here so nothing
- * downstream has to know there are two.
+ * The colour-scheme setting: the two keys the app bar's cycle button has always written (`darkMode` +
+ * `followSystemPrefersColorScheme`) collapsed to one three-way value — a single new key would log
+ * every existing user out of their own preference.
  */
 export function readSchemeSetting(): SchemeSetting {
   const follows = readStored(LS_KEYS.followSystemScheme);
@@ -132,16 +102,11 @@ export function readMotionSpeed(): MotionSpeed {
   return oneOf(readStored(LS_KEYS.motionSpeed), MOTION_SPEEDS, 'default');
 }
 
-/* There is no `readPalette` or `readEntranceMotion` beside these two, and the asymmetry is
-   deliberate: both had no consumer. Every reader of those two preferences wants the value
-   *in force*, which is the attribute on `<html>` — `currentPalette()` and `entranceMotion()`
-   below — and the stored string is only ever read by the pre-paint script in
-   `app/layout.tsx`, which cannot import from here anyway. A reader nothing calls is a reader
-   that drifts from the writer beside it without anything noticing. */
+/* No `readPalette`/`readEntranceMotion` beside these — deliberate: every reader wants the value in
+   force (the `<html>` attribute), and the stored string is read only by the pre-paint script in
+   `app/layout.tsx`, which cannot import from here; an uncalled reader drifts. */
 
-/* ---------------------------------------------------------------------------
- * Resolving `system`
- * ------------------------------------------------------------------------ */
+/* --- Resolving `system` ------------------------------------------------- */
 
 const matches = (query: string) =>
   typeof window !== 'undefined' && window.matchMedia(query).matches;
@@ -154,22 +119,14 @@ export function resolveScheme(setting: SchemeSetting): ColorScheme {
   return systemPrefersDark() ? 'dark' : 'light';
 }
 
-/**
- * `reduce` maps to the **reduced** tier, not to `off`.
- *
- * Before there was a reduced tier the two were the same thing and the OS preference
- * switched twenty-odd animations off outright. What the preference asks for is less
- * movement, which is what the reduced tier is; a user who wants nothing at all can say
- * so, and now has somewhere to say it.
- */
+/** `reduce` maps to the **reduced** tier, not `off`: the OS asks for less movement — that is the
+ * reduced tier; a user who wants nothing picks `off`. */
 export function resolveMotionTier(setting: MotionSetting): MotionTier {
   if (setting !== 'system') return setting;
   return systemPrefersReducedMotion() ? 'reduced' : 'standard';
 }
 
-/* ---------------------------------------------------------------------------
- * What is in force — read off `<html>`
- * ------------------------------------------------------------------------ */
+/* --- What is in force — read off `<html>` ------------------------------- */
 
 const root = () => (typeof document === 'undefined' ? null : document.documentElement);
 
@@ -178,28 +135,16 @@ export function currentPalette(): PaletteId {
   return isPaletteId(value) ? value : DEFAULT_PALETTE;
 }
 
-/**
- * The seed behind the custom palette, or null when no custom palette is installed.
- *
- * Read off `<html>` for the same reason `currentPalette` is: the attribute is what the
- * injected `<style>` was built from, so it is what is actually painted. The stored key is
- * the pre-paint script's business, and that script cannot import from here.
- *
- * Note this returns a value even while `currentPalette()` is something else — a user can
- * have a custom colour saved and be sitting on 露娜. That is what lets the picker show
- * their colour on the eleventh chip rather than an empty one.
- */
+/** The seed behind the custom palette, or null when none is installed — read off `<html>` like
+ * `currentPalette`: the attribute is what the injected `<style>` was built from, so it is what is
+ * painted. Non-null even while another theme is in force (the eleventh chip's data). */
 export function currentCustomSeed(): string | null {
   return root()?.dataset.paletteSeed ?? null;
 }
 
-/**
- * The custom palette's two hexes, packed, or null when none is installed.
- *
- * The *string* is what the hook subscribes to, not the parsed object: `useSyncExternalStore`
- * compares snapshots by identity, so a getter that built a fresh object every call would
- * re-render for ever. Callers unpack it themselves.
- */
+/** The custom palette's two hexes, packed, or null when none is installed. The *string* is the
+ * subscribed snapshot, not a parsed object — `useSyncExternalStore` compares by identity, so a
+ * fresh object per call would re-render for ever; callers unpack. */
 export function currentCustomTonesRaw(): string | null {
   return root()?.dataset.paletteTones ?? null;
 }
@@ -220,34 +165,21 @@ export function motionSpeed(): MotionSpeed {
 }
 
 /**
- * Whether an entrance may play, read off the root like every other in-force value.
- *
- * A separate switch from the tier because it answers a different question. The tier is about
- * *how much* motion a gesture you asked for may use; this is about whether the app volunteers
- * any — the scroll reveal, the grid cascade, `Reveal`, `Logo`'s draw-on, the splash. Those are
- * the ones that happen *to* you, and on a screen you visit twenty times a day they are the
- * first thing anybody wants to stop.
- *
- * The attribute is present only when the answer is no. **Every reader of it is a call site,
- * not a token**: it shipped with a `--motion-entrance` multiplier beside `--motion-scale` and
- * that had to come out, because two keyframes serve entrances and gesture responses at once
- * (see the note in globals.css). A route transition, a pane swap, an overlay opening and
- * status feedback are the tier's business; this switch is only for motion nothing asked for.
+ * Whether an entrance may play — the `data-entrance` attribute, present only when the answer is no.
+ * Separate from the tier: the tier bounds motion a gesture you asked for may use; this decides
+ * whether the app volunteers any (scroll reveal, results cascade, `Reveal`, splash — motion that
+ * happens *to* you). Every reader is a call site, not a token: a `--motion-entrance` multiplier
+ * beside `--motion-scale` had to come out — two keyframes serve entrances and gestures at once
+ * (see globals.css). Route changes, pane swaps, overlays, status feedback are the tier's business.
  */
 export function entranceMotion(): boolean {
   return root()?.dataset.entrance !== 'off';
 }
 
 /**
- * The multiplier JS has to apply by hand.
- *
- * CSS gets this for free — every duration token is `calc(<base> * var(--motion-scale))`
- * and the tier rules set that variable. WAAPI and GSAP take numbers, so they read it
- * from here. `off` returns 0, which is right for a duration and wrong for a `timeScale`;
- * see `setMotionScaleListener`.
- *
- * `reduced` reads the speed like `standard` does: the tier changes which animation plays,
- * not how long it takes.
+ * The multiplier JS applies by hand — CSS gets it free via `calc(<base> * var(--motion-scale))`;
+ * WAAPI and GSAP take numbers. `off` returns 0: right for a duration, wrong for a `timeScale`
+ * (see `setMotionScaleListener`). `reduced` reads the speed like `standard` does.
  */
 export function motionScale(): number {
   if (motionTier() === 'off') return 0;
@@ -257,12 +189,8 @@ export function motionScale(): number {
 /** `ms` at the current speed, for a WAAPI `duration` or a GSAP seconds value. */
 export const scaledMs = (ms: number) => ms * motionScale();
 
-/* ---------------------------------------------------------------------------
- * Applying — DOM only, no persistence
- *
- * These are what runs inside a View Transition's capture callback, so they must be
- * synchronous and must not touch React.
- * ------------------------------------------------------------------------ */
+/* --- Applying — DOM only, no persistence: runs inside a View Transition capture, so
+   synchronous and must not touch React. --- */
 
 export function applyScheme(scheme: ColorScheme) {
   const el = root();
@@ -281,9 +209,8 @@ export function applyPalette(id: PaletteId) {
 }
 
 /**
- * The eleventh palette, resolved. `lib/paletteLazy.ts` produces one of these; this module
- * installs it without ever importing the recipe, which is what keeps HCT out of every
- * route that reads a preference.
+ * The eleventh palette, resolved by `lib/paletteLazy.ts` and installed here without importing the
+ * recipe — which keeps HCT out of every route that reads a preference.
  */
 export interface CustomPaletteInstall {
   /** The user's hex, normalised. It **is** `primary` in the light scheme. */
@@ -294,29 +221,22 @@ export interface CustomPaletteInstall {
   tones: { light: PaletteTone; dark: PaletteTone };
 }
 
-/**
- * What a swatch and the browser's chrome need. The same two fields
- * `lib/generated/themeColors.ts` carries for the ten built-in themes, so the eleventh chip
- * can be drawn by exactly the same code.
- */
+/** Same two fields the ten built-ins carry in `lib/generated/themeColors.ts` — the eleventh
+ * chip and the chrome draw with the same code. */
 export interface PaletteTone {
   primary: string;
   onPrimary: string;
 }
 
 /**
- * The four hexes of a custom install, as one attribute value.
- *
- * They ride on `<html>` rather than being recomputed for two reasons, and the second is
- * the one that is easy to miss. `applyThemeColorMeta` runs inside a View Transition
- * capture, where a `getComputedStyle` would force a synchronous style recalc. And the
- * picker's eleventh chip has to show the user's colour **while some other theme is in
- * force** — reading `--md-sys-color-primary` there paints whichever palette is active, so
- * switching to 露娜 turned the custom chip blue. That is the same trap
- * `lib/generated/themeColors.ts` exists to keep the other ten out of.
+ * The four hexes of a custom install, parked on `<html>` as one attribute rather than recomputed —
+ * `applyThemeColorMeta` runs inside a View Transition capture, where a `getComputedStyle` would
+ * force a synchronous style recalc. And the eleventh chip must show the user's colour **while
+ * another theme is in force** — the chip cannot read the always-active tokens (reading
+ * `--md-sys-color-primary` there paints whichever palette is active, which turned the custom chip
+ * blue); the trap `lib/generated/themeColors.ts` avoids for the other ten.
  */
 const FIELDS = ['primary', 'onPrimary'] as const;
-
 const packTones = (t: { light: PaletteTone; dark: PaletteTone }) =>
   [...FIELDS.map((f) => t.light[f]), ...FIELDS.map((f) => t.dark[f])].join(' ');
 
@@ -335,13 +255,11 @@ const CUSTOM_STYLE_ID = 'palette-custom';
 
 /**
  * Install the custom palette's rules and remember what they were built from.
- *
- * A single `<style>` appended to `<head>`, **not** inline properties on `<html>`: an
- * inline style beats every selector including `html.dark[data-palette='custom']`, so a
- * scheme flip would silently keep painting the light values and `applyScheme` would have
- * to rewrite all thirty. As a stylesheet the specificity works out exactly as it does for
- * the generated file — (0,1,1) and (0,2,1), above `:root` and `.dark` — and `applyScheme`
- * needs no knowledge of it at all.
+ * A single `<style>` appended to `<head>`, **not** inline properties on `<html>`: an inline
+ * style beats every selector including `html.dark[data-palette='custom']`, so a scheme flip
+ * would silently keep painting the light values and `applyScheme` would have to rewrite all
+ * thirty. As a stylesheet the specificity matches the generated file — (0,1,1) and (0,2,1),
+ * above `:root` and `.dark` — and `applyScheme` needs no knowledge of it.
  */
 export function applyCustomPalette(install: CustomPaletteInstall) {
   const el = root();
@@ -380,23 +298,13 @@ export function applyEntranceMotion(on: boolean) {
 }
 
 /**
- * The browser's own chrome colour.
- *
- * `<meta name="theme-color">` is read before any stylesheet exists, so it cannot be a
- * `var()`. It is rendered by `app/layout.tsx` from the cookies rather than by Next's
- * `viewport.themeColor`, because that export is a static array and cannot express ten
- * palettes — and because the App Router re-renders metadata on a client navigation,
- * which would undo a mutation of Next's own tag.
- *
- * The tag carries no `media`: it reports the scheme the *app* is in, which can differ
- * from the OS's. Keying it on the media query — which is what the two generated tags
- * used to do — meant forcing dark mode on a light desktop left the browser painting its
- * chrome the light colour.
- *
- * The custom palette is not in `PALETTES` — its colours are the user's — so it reads the
- * tones `applyCustomPalette` parked on `<html>`. The `?? PALETTES[0]` fallback below is
- * what made that necessary rather than optional: without a branch it painted the default
- * pink over whatever the user had chosen.
+ * The browser's own chrome colour. `<meta name="theme-color">` is read before any stylesheet
+ * exists, so it cannot be a `var()`. Rendered by `app/layout.tsx` from the cookies rather than
+ * Next's static `viewport.themeColor`: that cannot express ten palettes, and the App Router
+ * re-renders metadata on client navigation, which would undo a mutation of Next's tag. It carries
+ * no `media`: it reports the scheme the *app* is in, which can differ from the OS's. The custom
+ * palette is not in `PALETTES`, so it reads the tones `applyCustomPalette` parked on `<html>`;
+ * the `?? PALETTES[0]` fallback guards unknown ids.
  */
 export function applyThemeColorMeta(id: PaletteId, scheme: ColorScheme) {
   const custom = id === CUSTOM_PALETTE ? currentCustomTones() : null;
@@ -408,12 +316,8 @@ export function applyThemeColorMeta(id: PaletteId, scheme: ColorScheme) {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * The store
- *
- * One version counter for all five, because a component that cares about one of them
- * re-rendering when another moves costs a render and saves five subscriptions.
- * ------------------------------------------------------------------------ */
+/* --- The store: one version counter for all five — a component caring about one re-rendering
+   when another moves costs a render and saves five subscriptions. --- */
 
 let version = 0;
 const listeners = new Set<() => void>();
@@ -423,11 +327,10 @@ function emit() {
   for (const fn of listeners) fn();
 }
 
-/* Memoised, and that is a fix rather than an optimisation: `window.matchMedia()` returns a
-   **new** object every call, so building the pair inside `subscribe` meant `removeEventListener`
-   was handed a different `MediaQueryList` than `addEventListener` had been. It is masked today
-   because the first subscriber is the app shell and never unmounts, so the count never returns
-   to zero — but any arrangement where it did would leak a retained query per cycle. */
+/* Memoised, and that is a correctness fix: `window.matchMedia()` returns a **new** object every call,
+   so building the pair inside `subscribe` handed `removeEventListener` a different `MediaQueryList`
+   than `addEventListener` had — masked today because the app-shell subscriber never unmounts, but a
+   count returning to zero would leak a retained query per cycle. */
 let mediaCache: MediaQueryList[] | null = null;
 const systemMedia = () =>
   (mediaCache ??= [window.matchMedia(MEDIA.dark), window.matchMedia(MEDIA.reducedMotion)]);
@@ -442,18 +345,11 @@ function subscribe(onChange: () => void) {
 }
 
 /**
- * Re-resolve the motion tier against the OS, for a `system` setting.
- *
- * The counterpart to the colour scheme's own watcher, and its absence was a regression:
- * `subscribe`'s listener above only bumps the version, and the hooks then read
- * `motionTier()`, which reads the attribute — an attribute nobody had rewritten. So with
- * 跟随系统 selected, turning on the OS's reduce-motion setting changed nothing at all until
- * a reload: `--motion-scale` stayed 1, the hero kept flying, GSAP's `timeScale` was
- * untouched. The deleted `useReducedMotion()` subscribed to the query for exactly this
- * reason, and the deleted `@media` blocks were live by construction.
- *
- * Storage is not rewritten — the stored value is already `system`; what changes is what
- * `system` resolves to. `AppLayout` mounts the listener.
+ * Re-resolve the motion tier against the OS, for a `system` setting — the counterpart to the colour
+ * scheme's own watcher. `subscribe`'s listener only bumps the version, and the hooks then read
+ * `motionTier()`, i.e. the attribute — an attribute nobody had rewritten, so with 跟随系统 selected,
+ * turning on the OS's reduce-motion changed nothing until a reload. Storage is not rewritten (the
+ * stored value is already `system`; what changes is what it resolves to). `AppLayout` mounts it.
  */
 export function refreshSystemMotion() {
   if (readMotionSetting() !== 'system') return;
@@ -462,13 +358,11 @@ export function refreshSystemMotion() {
 }
 
 /**
- * A seam rather than an import, for the reason `setHeroBusyCheck` is one: this module is
- * reached by anything that reads a preference, and `lib/motion` drags GSAP with it.
- *
- * `lib/motion` registers a callback that sets `gsap.globalTimeline.timeScale`, which is
- * how one line reaches every GSAP tween and delay in the app. Note it must not be handed
- * a scale of 0 — a `timeScale` of 0 stops the clock instead of collapsing the duration —
- * so the `off` tier is handled there, not here.
+ * A seam rather than an import, like `setHeroBusyCheck`: this module is reached by anything that
+ * reads a preference, and `lib/motion` drags GSAP with it. `lib/motion` registers a callback that
+ * sets `gsap.globalTimeline.timeScale` — one line reaching every GSAP tween and delay in the app.
+ * It must not be handed a scale of 0 (a `timeScale` of 0 stops the clock instead of collapsing the
+ * duration), so the `off` tier's clamp is handled there, not here.
  */
 let motionScaleListener: ((scale: number) => void) | null = null;
 
@@ -477,21 +371,12 @@ export function setMotionScaleListener(fn: (scale: number) => void) {
   fn(motionScale());
 }
 
-/* ---------------------------------------------------------------------------
- * Committing — persist, apply, then tell React
- *
- * The order is load-bearing twice over.
- *
- * `apply` before `emit`, because the hooks read the *root*: `useScheme` asks the class
- * list and `usePalette` asks the attribute, so a re-render queued before the DOM write
- * would report the value that is being replaced. That was a real defect — the app bar's
- * glyph showed the previous mode until something unrelated re-rendered it.
- *
- * `flushSync` around `emit`, because the caller is usually inside `circularReveal`'s
- * `startViewTransition` callback. Both the DOM write and React's commit have to land in
- * that one synchronous block or the transition snapshots a frame where only one of them
- * has happened.
- * ------------------------------------------------------------------------ */
+/* --- Committing — persist, apply, then tell React. The order is load-bearing twice over.
+   `apply` before `emit`: the hooks read the *root* (class list / attribute), so a re-render queued
+   before the DOM write would report the value being replaced, not the new one. `flushSync` around
+   `emit`: the caller is usually inside `circularReveal`'s `startViewTransition` callback, and both
+   the DOM write and React's commit must land in that one synchronous block or the transition
+   snapshots a frame where only one has. --- */
 
 export function commitScheme(setting: SchemeSetting) {
   writeStored(LS_KEYS.followSystemScheme, String(setting === 'system'));
@@ -507,11 +392,9 @@ export function commitPalette(id: PaletteId) {
 }
 
 /**
- * Switch to the custom palette, or re-derive it from a new seed.
- *
- * The rules go in *before* the attribute, so there is never a frame where `<html>` says
- * `custom` and no stylesheet answers to it — that frame would paint the default theme,
- * and inside a View Transition it is the frame that gets captured.
+ * Switch to the custom palette, or re-derive it from a new seed. The rules go in *before* the
+ * attribute, so there is never a frame where `<html>` says `custom` and no stylesheet answers to
+ * it — that frame paints the default theme, and inside a View Transition it is the captured one.
  */
 export function commitCustomPalette(install: CustomPaletteInstall) {
   writeStored(LS_KEYS.paletteCustom, install.seed);
@@ -534,16 +417,10 @@ export function commitEntranceMotion(on: boolean) {
   flushSync(emit);
 }
 
-/* ---------------------------------------------------------------------------
- * Hooks
- *
- * The server snapshots are the *defaults*, not the cookies, and they have to be: a
- * snapshot function cannot read a request. So a page whose cookie says otherwise renders
- * once with the default and re-renders after hydration — which is what `useMediaQuery`
- * already does here, and what `useSyncExternalStore` exists to make safe. Nothing
- * visible depends on it, because the *paint* comes from the attribute the server put on
- * `<html>`, not from these.
- * ------------------------------------------------------------------------ */
+/* --- Hooks: the server snapshots are the *defaults*, not the cookies — a snapshot function
+   cannot read a request, so a page whose cookie says otherwise renders once with the default and
+   re-renders after hydration (what `useSyncExternalStore` exists to make safe); nothing visible
+   depends on it, since the *paint* comes from the attribute the server put on `<html>`. --- */
 
 function useAppearance<T>(read: () => T, serverValue: T): T {
   return useSyncExternalStore(subscribe, read, () => serverValue);
@@ -559,20 +436,14 @@ export const useMotionSpeed = () => useAppearance(motionSpeed, 'default' as Moti
 export const useEntranceMotion = () => useAppearance(entranceMotion, true);
 
 /**
- * The reactive tier, for the hook that keeps firing all session — `useStaggerGrid`, which
- * re-runs on every page of results. Everything else reads `motionTier()` at the moment it
- * animates, which is later and therefore fresher.
- *
- * It was two hooks; `useScrollReveal` was the other and has been removed.
- *
- * The server value is `standard` for the reason its predecessor's was "animations on":
- * it matches the CSS, which only opts out under an attribute the server sets, so the
- * first paint cannot disagree with it.
+ * The reactive tier, for the hook that keeps firing all session (`useStaggerGrid` re-runs on every
+ * page of results); everything else reads `motionTier()` at the moment it animates — later, so
+ * fresher. Server value `standard` matches the CSS, which only opts out under an attribute the
+ * server sets, so the first paint cannot disagree.
  */
 export const useMotionTier = () => useAppearance(motionTier, 'standard' as MotionTier);
 
 /** `version` is exported for tests and for a dev-tools panel; nothing in the app reads it. */
 export const appearanceVersion = () => version;
 export { subscribe as subscribeAppearance };
-
 

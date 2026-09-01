@@ -3,18 +3,15 @@ import { SPRINGS, SPRING_MS, springToLinear, type SpringName } from '@/lib/sprin
 
 /**
  * A spring as a Web Animations `{ duration, easing }` pair — the twin of `spring()` in
- * `lib/motion.ts`, for the call sites that do not want GSAP.
+ * `lib/motion.ts`, for WAAPI call sites that want spring timing without lib/motion.
  *
- * The two differ in exactly one thing and it is not cosmetic: **this one is already scaled.**
- * GSAP's version returns the unscaled duration because `gsap.globalTimeline.timeScale` applies
- * the 快速 / 缓慢 preference to every tween in one place; WAAPI has no such global, so a helper
- * that did not scale would hand every caller the same trap — a duration written against the
- * 默认 speed and silently deaf to the other two. `lib/ripple.ts` documents having hit it.
+ * It differs from the GSAP twin in one way: **this duration is already scaled.** GSAP applies
+ * the speed preference globally through `gsap.globalTimeline.timeScale`; WAAPI has no global,
+ * so an unscaled helper would hand every caller a duration deaf to the 快速 / 缓慢 preference.
  *
- * The easing is spelled as a `linear()` string rather than read from a CSS token, for the
- * documented reason `Popover` and the hero flight give: a `var()` that fails to resolve inside a
- * WAAPI `easing:` string falls back to `ease` silently. Both come out of `lib/spring.ts`'s closed
- * form, which is what generates the CSS tables too, so they cannot drift.
+ * The easing is a linear() string, not a CSS var(): a var() that fails to resolve inside a WAAPI
+ * easing string falls back to `ease` silently. Both values come out of `lib/spring.ts`'s one
+ * closed form — the same form that generates the CSS tables — so they cannot drift.
  */
 export function springTiming(name: SpringName): { duration: number; easing: string } {
   const shape = motionTier() === 'reduced' ? (SPRING_EFFECTS_FOR[name] ?? name) : name;
@@ -22,17 +19,14 @@ export function springTiming(name: SpringName): { duration: number; easing: stri
 }
 
 /**
- * Under the **reduced** tier the three under-damped shapes are swapped for the critically damped
- * one — the same three-line rule globals.css states in CSS: a handle still travels, it just stops
- * when it arrives instead of passing the target and coming back. The *duration* stays the
- * requested tier's, so nothing changes length; nine springs share four shapes precisely because
- * the shape depends on ζ alone.
+ * Under the **reduced** tier the three under-damped shapes resolve to the critically damped
+ * one — the same rule globals.css states in CSS: a handle still travels, it just stops when it
+ * arrives instead of overshooting. Each spatial shape maps onto the effects shape with the
+ * nearest settle time; the *duration* stays the requested one, since nine springs share four
+ * shapes precisely because shape depends on ζ alone.
  *
- * Each spatial tier maps onto the effects tier with the nearest settle time, so a `fastSpatial`
- * does not come out a `slowEffects`.
- *
- * It lives here rather than in `lib/motion.ts` because both renderers need it and this module is
- * the one of the two that does not drag GSAP in.
+ * Lives here rather than in `lib/motion.ts` because both renderers need it and this module is
+ * the one that does not drag GSAP in.
  */
 export const SPRING_EFFECTS_FOR: Partial<Record<SpringName, SpringName>> = {
   fastSpatial: 'fastEffects',

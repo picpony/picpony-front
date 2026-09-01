@@ -28,44 +28,33 @@ import { cn } from '@/lib/utils';
  * The /about plate — a flowing field seen through fluted glass.
  *
  * All of the maths, and every number behind how it looks, is in `lib/flutedGlass.ts`; this
- * file is only the WebGL plumbing and the preference gates. It replaced a 764-line ASCII
- * character field, which is why the shape of the props is the same: an `absolute inset-0`
+ * file is only the WebGL plumbing and the preference gates. It is an `absolute inset-0`
  * decorative layer that its parent centres content over.
  *
- * **Why WebGL and not a canvas 2D blit.** Two properties of the effect rule 2D out. The
- * reeds run at an angle, so the deflection is a function of both axes and there is no
- * per-column table to precompute; and the thing behind them is a per-pixel procedural
- * whose three domain warps cost about thirty transcendentals a sample, which is tens of
- * millions a second on a plate this size. On a GPU it is one triangle. There is no
- * three.js and no library — the shader strings are compiled against a raw context.
+ * **Why WebGL and not a canvas 2D blit.** The reeds run at an angle, so the deflection is a
+ * function of both axes with no per-column table to precompute; and the procedural behind
+ * them costs about thirty transcendentals a sample — tens of millions a second on a plate
+ * this size, one triangle on a GPU. No library; the shader strings compile against a raw
+ * context.
  *
- * **Two passes, not one**, which is the reference's own arrangement rather than a local
- * optimisation: its glass node declares `requiresRTT`, so the field is rendered once into a
- * texture and the glass reads that texture three times for its dispersion. Evaluating the
- * procedural three times per fragment instead is about ninety transcendentals a pixel with
- * two thirds of the result thrown away, and it is what kept this at 30fps.
+ * **Two passes, not one** — the reference's own arrangement (`requiresRTT`): the field is
+ * rendered once into a texture and the glass reads it three times for dispersion.
+ * Evaluating the procedural three times per fragment is ~90 transcendentals a pixel with
+ * two thirds wasted, and it is what kept this at 30fps.
  *
  * **Why this does not reintroduce the backdrop-filter cost.** It does not sample what is
- * behind it. Everything the plate refracts, it draws; the whole effect is one opaque
- * surface with no readback, no `getImageData`, and no compositor work beyond presenting a
- * single texture. The measured objection in globals.css is to ~150 regions each
- * re-sampling a moving backdrop, which is a different thing entirely.
+ * behind it — everything the plate refracts it draws; one opaque surface, no readback, no
+ * compositor work beyond presenting a single texture.
  */
 
 /**
- * Cap on the backing store's long edge, in device pixels.
+ * Cap on the backing store's long edge, in device pixels — otherwise a 4K monitor asks
+ * for a 5120-wide surface for a decorative band. The plate is soft and low-frequency, so
+ * the resample is not visible.
  *
- * Without it a 4K monitor asks for a 5120-wide surface for a decorative band. The plate is
- * a soft, low-frequency image — its finest real feature is the prismatic seam, a few
- * pixels wide — so the resample from a capped buffer is not visible.
- *
- * It bounds the **width** only, so the cost is a function of the band's height at every
- * device ratio: the 320 → 384px change carried straight through as a uniform +20% (a
- * 1440 band at dpr 2 goes 1.28 → 1.54 Mpx per pass, and there are two). That is the same
- * regime rather than a new one — still low-power, still IntersectionObserver-gated, still
- * off entirely below the standard motion tier — but if a device ever regresses, the lever
- * is turning this into a pixel budget (`dpr = min(2, dpr, sqrt(BUDGET / (cssW * cssH)))`),
- * which at 1.3 Mpx pulls that same band from 1.667 to 1.53.
+ * It bounds the **width** only, so the cost scales with the band's height at every device
+ * ratio. If a device ever regresses, the lever is turning this into a pixel budget
+ * (`dpr = min(2, dpr, sqrt(BUDGET / (cssW * cssH)))`).
  */
 const MAX_DEVICE_WIDTH = 2400;
 
@@ -73,12 +62,9 @@ const MAX_DEVICE_WIDTH = 2400;
 const STILL_TIME = 7;
 
 /**
- * Frame budget in milliseconds. 60fps.
- *
- * It was 33, on the argument that the flow's fastest term turns over in seconds. That is
- * true of the flow and false of the cursor: direct-manipulation feedback at 30fps reads as
- * lag however correct the maths underneath it is, and the trail's position only advanced on
- * those gated frames. The two-pass split is what pays for this.
+ * Frame budget in milliseconds. 60fps, not 30: the flow's fastest term turns over in
+ * seconds, but direct-manipulation feedback (the cursor trail) at 30fps reads as lag,
+ * and the trail only advanced on gated frames. The two-pass split pays for this.
  */
 const FRAME_MS = 16;
 
@@ -88,9 +74,8 @@ function compile(gl: WebGLRenderingContext, type: number, source: string) {
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    /* Dev only, and worth the branch: a shader that fails to compile takes the whole plate
-       with it and leaves a plain coloured band, which looks like a design choice rather
-       than a bug. The one that shipped this way was two variables sharing a name. */
+    /* Dev only, and worth the branch: a failed compile takes the whole plate and
+       leaves a plain coloured band, which reads as a design choice rather than a bug. */
     if (process.env.NODE_ENV !== 'production') {
       console.error('FlutedGlass shader:', gl.getShaderInfoLog(shader));
     }
@@ -119,15 +104,13 @@ function link(gl: WebGLRenderingContext, vs: WebGLShader, fs: WebGLShader) {
 /**
  * A CSS colour to **linear-light** 0..1 RGB, via the canvas parser.
  *
- * Assigning to `fillStyle` and reading it back is what normalises any colour syntax the
- * browser understands into `#rrggbb`, which is more robust than parsing the token text:
- * `getPropertyValue` on a custom property returns the token *stream*, so a value that is
- * ever written as `color-mix()` would come back unevaluated. An invalid assignment is
- * silently ignored rather than throwing, hence the sentinel.
+ * Assigning to `fillStyle` and reading back normalises any colour syntax into
+ * `#rrggbb` — more robust than parsing the token text (`getPropertyValue` on a custom
+ * property returns the token *stream*, so a `color-mix()` value would come back
+ * unevaluated). An invalid assignment is silently ignored, hence the sentinel.
  *
- * The sRGB decode is the important half. Every uniform the shader reads is linear, because
- * the whole graph is — see the note at the top of `lib/flutedGlass.ts` for what doing it in
- * gamma space costs.
+ * The sRGB decode is the important half: every uniform the shader reads is linear —
+ * see the note at the top of `lib/flutedGlass.ts`.
  */
 function parseColor(probe: CanvasRenderingContext2D, value: string): [number, number, number] {
   probe.fillStyle = '#000000';
@@ -147,38 +130,34 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const glRef = useRef<WebGLRenderingContext | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
-  /* Bumped by `webglcontextrestored`, so a real loss comes back instead of leaving the
-     band a flat colour for the rest of the session. */
+  /* Bumped by `webglcontextrestored`, so a real loss comes back instead of leaving
+     the band a flat colour for the session. */
   const [generation, setGeneration] = useState(0);
 
-  /* Reactive, not a one-shot read. The component this replaced shipped the other choice and
-     recorded the bug: read once, the branch is decided at mount, so flipping the preference
-     mid-session left the loop running until something else re-rendered the page. */
+  /* Reactive, not a one-shot read: read once, the branch is decided at mount, and
+     flipping the preference mid-session left the loop running. */
   const tier = useMotionTier();
   const scheme = useScheme();
-  /* Not read directly — they are here so the drawing effect below re-runs when the palette
-     moves. The plate samples `--md-sys-color-primary` through `getComputedStyle`, which no
-     dependency array can see, so before this the /about glass kept the hue of whatever theme
-     was in force when it mounted. The custom palette made that visible; it was wrong for the
-     ten as well. `useCustomSeed` is the second half: the custom palette's id never changes,
-     so only its seed reports that its colour did. */
+  /* Not read directly — they are here so the drawing effect re-runs when the palette
+     moves: the plate samples the primary token through `getComputedStyle`, which no
+     dependency array can see. `useCustomSeed` is the second half — the custom
+     palette's id never changes, so only its seed reports that its colour did. */
   const palette = usePalette();
   const customSeed = useCustomSeed();
   const speed = useMotionSpeed();
 
-  /* The live speed, in a ref, so changing it does not re-arm the loop and reset the phase.
-     Written from an effect rather than during render: a render-phase ref write is the
-     pattern the compiler's own bailout rules call out, and this one has no reason to be
-     synchronous — a speed change that lands one frame late is not observable. */
+  /* The live speed, in a ref, so changing it does not re-arm the loop and reset the
+     phase. Written from an effect rather than render (a render-phase ref write is
+     the compiler's bailout pattern); a one-frame-late speed change is unobservable. */
   const scaleRef = useRef(1);
   useEffect(() => {
     scaleRef.current = MOTION_SPEED_SCALE[speed] ?? 1;
   }, [speed]);
 
   /* Measure. The DPR watcher has to re-arm: a window dragged between a Retina and a 1x
-     display changes the backing-store requirement without changing the box, so the
-     ResizeObserver never fires — and the query is pinned to the ratio it was built at, so
-     after one transition it is false and a second change fires nothing. */
+     display changes the backing-store requirement without changing the box (so the
+     ResizeObserver never fires), and a query pinned at build time goes false after one
+     transition and fires nothing more. */
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -220,20 +199,15 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     if (!canvas || !host || box.w === 0 || box.h === 0) return;
 
     /**
-     * The context is created once per canvas and cached, and that is not an optimisation —
-     * it is the whole of a bug worth stating, because the symptom pointed nowhere near it.
+     * The context is created once per canvas and cached — not an optimisation but a bug
+     * fix: `getContext` returns the *same* context object for a canvas, and this canvas
+     * never remounts (the effect re-runs on scheme change/resize/drawer toggle, React
+     * keeps the element). A teardown that called `loseContext()` was killing the context
+     * the next run would be handed back — and the failures are mute (`getShaderParameter`
+     * and `getShaderInfoLog` both return null on a lost context, so the console read
+     * `FlutedGlass shader: null`, which looks like a GLSL error and is not one).
      *
-     * `getContext` returns the *same* context object for a given canvas and type, and this
-     * canvas never remounts: the effect re-runs on a scheme change, a resize and a drawer
-     * toggle, but React keeps the element. So a teardown that called
-     * `WEBGL_lose_context.loseContext()` was killing the context the *next* run would be
-     * handed back. Every call on it then fails, and the failures are mute — a lost context
-     * returns null from `getShaderParameter` and null from `getShaderInfoLog`, so the
-     * console read `FlutedGlass shader: null` with no compiler message, which reads like a
-     * GLSL error and is not one. Measured: `isContextLost()` false after load, true after
-     * one resize, and the plate dead from then until a full navigation.
-     *
-     * So the per-run teardown deletes objects only, and the context is released on unmount
+     * So the per-run teardown deletes objects only; the context is released on unmount
      * by the effect below this one.
      */
     const gl =
@@ -243,18 +217,17 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
         antialias: false,
         depth: false,
         stencil: false,
-        /* The plate is drawn every frame it is visible and never read back, so there is
-           nothing to preserve and preserving it costs a copy. */
+        /* Drawn every frame while visible and never read back, so there is nothing
+           to preserve and preserving it costs a copy. */
         preserveDrawingBuffer: false,
         powerPreference: 'low-power',
       });
-    /* No WebGL is not a failure state worth branching the UI on: the band already carries
-       the page's own glass-body tone, so what is left is a plain coloured block. */
+    /* No WebGL is not a failure state worth branching the UI on: the band already
+       carries the page's own tone, so what is left is a plain coloured block. */
     if (!gl) return;
     glRef.current = gl;
-    /* A genuine loss — a GPU reset, a driver update — cannot be recovered on this canvas
-       without a restore event, and `generation` is what re-runs this when one arrives.
-       Bailing silently is the same fallback as no WebGL at all. */
+    /* A genuine loss (GPU reset, driver update) cannot be recovered on this canvas
+       without a restore event; `generation` is what re-runs this when one arrives. */
     if (gl.isContextLost()) return;
 
     const vs = compile(gl, gl.VERTEX_SHADER, FLUTED_GLASS_VERTEX_SHADER);
@@ -265,9 +238,9 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     const glassProgram = backdropProgram ? link(gl, vs, glassFs) : null;
     if (!backdropProgram || !glassProgram) return;
 
-    /* One triangle covering the clip cube, not two making a quad: it has no interior edge
-       for the rasteriser to walk twice, and it needs no index buffer. Both programs bind
-       the same buffer, and both declare `aPos` at whatever slot the linker gave them. */
+    /* One triangle covering the clip cube, not two making a quad: no interior edge
+       for the rasteriser to walk twice, no index buffer. Both programs bind the same
+       buffer and declare `aPos` at whatever slot the linker gave them. */
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -277,9 +250,8 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
       gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
     };
 
-    /* Read the tokens off the host, so the plate follows the scheme the way everything
-       else does. `scheme` is in this effect's deps, and it is a `useSyncExternalStore`
-       subscription, so a theme change re-runs all of this with the new values. */
+    /* Read the tokens off the host, so the plate follows the scheme like everything
+       else; `scheme` in this effect's deps re-runs it all on a theme change. */
     const style = getComputedStyle(host);
     const probe = document.createElement('canvas').getContext('2d');
     const colour = (value: string): [number, number, number] =>
@@ -287,10 +259,9 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     const token = (name: string, fallback: string) =>
       colour(style.getPropertyValue(name) || fallback);
 
-    /* The glass body is a token pair rather than a literal here, so the band's own
-       background and the wordmark's keyline can be painted the same colour — before this
-       they were `surface-container-highest` against a plate of pure white, which turned a
-       halo meant to knock the mark out of the texture into a visible pink-grey outline. */
+    /* The glass body is a token pair rather than a literal, so the band's own
+       background and the wordmark's keyline can be painted the same colour —
+       a literal halo around the mark read as a visible outline instead. */
     const bodyA = token('--md-sys-color-glass-body', '#ffffff');
     const bodyB = token('--md-sys-color-glass-body-b', '#f0e8ea');
     const hue = token('--md-sys-color-primary', '#e06c9f');
@@ -298,11 +269,11 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     canvas.width = box.w;
     canvas.height = box.h;
 
-    /* Pass 1's target. sRGB-encoded 8-bit — see the note in `lib/flutedGlass.ts`: linear in
-       eight bits would put the dark scheme's whole plate inside six code values. LINEAR
-       filtering because the glass samples it at three displaced points per fragment, and
-       CLAMP_TO_EDGE because the mirror the reference specifies is done in the shader
-       (WebGL 1 refuses MIRRORED_REPEAT on a non-power-of-two texture). */
+    /* Pass 1's target. sRGB-encoded 8-bit — see `lib/flutedGlass.ts`: linear in eight
+       bits would put the dark scheme's whole plate inside six code values. LINEAR
+       filtering because the glass samples it at three displaced points per fragment;
+       CLAMP_TO_EDGE because the reference's mirror is done in the shader (WebGL 1
+       refuses mirrored repeat on a non-power-of-two texture). */
     const backdropTexture = gl.createTexture();
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, backdropTexture);
@@ -328,8 +299,8 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
       return;
     }
 
-    /* The cursor's ink, as a texture. Linear filtering, because the grid is 128 across a
-       band that can be 2400 device pixels wide and nearest would show every cell. */
+    /* The cursor's ink, as a texture. Linear filtering: the grid is 128 across a band
+       that can be 2400 device pixels wide, and nearest would show every cell. */
     const trail = new FlutedGlassTrail();
     trail.setAspect(box.w / box.h);
     const trailTexture = gl.createTexture();
@@ -365,8 +336,8 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     const uSwirlTime = bu('uSwirlTime');
 
     /* --- Pass 2's constants ------------------------------------------------------- */
-    /* Nothing here is in CSS pixels: the reeds are a fraction of the plate's height and the
-       trail is in plate-relative coordinates, so the backing-store ratio only decides how
+    /* Nothing here is in CSS pixels: the reeds are a fraction of the plate's height
+       and the trail is plate-relative, so the backing-store ratio only decides how
        many samples the same picture is drawn with. */
     const rad = (FLUTE_DEFAULTS.angle * Math.PI) / 180;
     /* /360, not /180 — see `FluteConfig.lightAngle`. It is the reference's own half-angle. */
@@ -437,12 +408,11 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     };
 
     /* A decorative ambient loop is standard-tier only. Both lower tiers still get the
-       whole picture, drawn once — this is the container's only texture and it is above
-       the fold, so an empty box would be less content rather than less motion. */
+       whole picture, drawn once — an empty box would be less content, not less motion. */
     if (tier !== 'standard') {
-      /* No warm-up: nothing but the pointer paints ink, and there is no pointer on this
-         branch. The still frame is the swirl seen through the glass, which is a finished
-         picture rather than an empty one — see the note in `lib/flutedGlass.ts`. */
+      /* No warm-up: nothing but the pointer paints ink, and there is no pointer on
+         this branch. The still frame is a finished picture, not an empty one — see
+         the note in `lib/flutedGlass.ts`. */
       paint(STILL_TIME);
       return teardown;
     }
@@ -452,9 +422,9 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     let last = 0;
     let visible = true;
 
-    /* The pointer's position in client coordinates, converted once per frame rather than
-       once per event: `getBoundingClientRect` forces layout, and a high-poll mouse fires
-       well over a hundred times a second. */
+    /* The pointer's position in client coordinates, converted once per frame rather
+       than once per event: `getBoundingClientRect` forces layout, and a high-poll
+       mouse fires well over a hundred times a second. */
     let pointerClientX = 0;
     let pointerClientY = 0;
     let pointerDirty = false;
@@ -463,7 +433,7 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
       frame = requestAnimationFrame(tick);
       if (last && now - last < FRAME_MS) return;
       /* A capped delta, or a backgrounded tab returns as one enormous jump through the
-         flow. The scale divides rather than multiplies: `--motion-scale` is a factor on
+         flow. The scale divides rather than multiplies: the speed factor is on
          durations, so a longer duration is a slower advance. */
       const delta = last ? Math.min(now - last, 200) : 0;
       last = now;
@@ -477,14 +447,14 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
         );
         pointerDirty = false;
       }
-      /* The sim advances on the same scaled clock, so the speed preference reaches the ink
-         as well as the flow — which it did not while the sim clamped its own delta. */
+      /* The sim advances on the same scaled clock, so the speed preference reaches
+         the ink as well as the flow. */
       trail.step(scaled);
       paint(elapsed);
     };
 
-    /* The plate is pointer-events-none, so the listener goes on the band — the element the
-       pointer is actually over. */
+    /* The plate is pointer-events-none, so the listener goes on the band — the
+       element the pointer is actually over. */
     const surface = host.parentElement ?? host;
     const onMove = (event: PointerEvent) => {
       pointerClientX = event.clientX;
@@ -532,14 +502,13 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
   /**
    * Context loss, and the release on unmount.
    *
-   * Declared *after* the drawing effect so its cleanup runs last: on unmount React runs
-   * cleanups in declaration order, and the object deletes have to happen while the context
-   * is still alive.
+   * Declared *after* the drawing effect so its cleanup runs last: the object deletes
+   * have to happen while the context is still alive.
    *
-   * `preventDefault` on `webglcontextlost` is what makes the browser willing to restore at
-   * all — without it the loss is final. The restore then needs the whole setup to re-run,
-   * hence `generation`, since every program, texture and buffer belonged to the dead
-   * context.
+   * `preventDefault` on `webglcontextlost` is what makes the browser willing to
+   * restore at all — without it the loss is final. The restore needs the whole setup
+   * to re-run (`generation`), since every program, texture and buffer belonged to the
+   * dead context.
    */
   useEffect(() => {
     const canvas = canvasRef.current;

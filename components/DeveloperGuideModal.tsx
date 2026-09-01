@@ -158,10 +158,9 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       closeOnOverlayClick={false}
     >
       <div className="space-y-4">
-        {/* The destination's own shape — three prerequisite rows — rather than a
-            centred spinner. A dot says "something is happening somewhere" and
-            then reflows the whole dialog when the rows land; three bars say "a
-            checklist is arriving here", in the geometry it arrives in. */}
+        {/* The destination's own shape — three prerequisite rows — rather than
+            a centred spinner: three bars say "a checklist is arriving here",
+            in the geometry it arrives in. */}
         {status === 'loading' && (
           <div className="space-y-2" aria-hidden="true">
             {[0, 1, 2].map((i) => (

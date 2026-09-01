@@ -75,10 +75,8 @@ export function useHeroLink<T extends HTMLElement>({
       if (!image) return;
       router.prefetch(href);
       void warmImageHero(image.id, priority);
-      /* The detail-sized bytes, on the same ladder. The flight paints the gallery thumbnail, and
-         in production that is a ~300px variant filling the media well. This warms the detail's own
-         picture — the exact bytes the final layer will request, now that it is served untouched —
-         and `prepareImageHero` uses it only once it has actually decoded, so a warm that has not
+      /* The detail-sized bytes, on the same ladder: the exact bytes the final layer will
+         request. `prepareImageHero` uses them only once decoded, so a warm that has not
          landed changes nothing. */
       warmImageHeroSource(image);
       cancelFrameWarmRef.current?.();
@@ -201,8 +199,8 @@ export function useHeroLink<T extends HTMLElement>({
         return;
       }
       // Pressing is a firmer signal than hovering, and on touch there is no
-      // hover at all — this is the earliest honest moment to start fetching,
-      // typically 100ms or more before the click lands.
+      // hover at all — the earliest honest moment to start fetching, typically
+      // 100ms or more before the click lands.
       cancelIntent();
       warmRouteAndMedia('immediate');
       try {

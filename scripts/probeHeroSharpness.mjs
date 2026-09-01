@@ -1,9 +1,8 @@
 /* How sharp is the picture during a hero flight?
  *
- * The flight paints `previewSrc` on `[data-image-detail-layer="preview"]`. In production that is
- * whatever variant `next/image` chose for a ~300px gallery card, scaled to fill the viewport — so
- * the question is the ratio between the bitmap's `naturalWidth` and the box it is painted into.
- *
+ * The flight paints `previewSrc` on `[data-image-detail-layer="preview"]`; in production that is
+ * whatever variant `next/image` chose for a ~300px gallery card, scaled to fill the viewport. The
+ * question is the ratio between the bitmap's `naturalWidth` and the box it is painted into.
  * Unlike the other probes this one needs **real** images: `next/image` has to actually optimize
  * something, so the fixture serves a live page from derpibooru.org and the browser is pinned to
  * the direct image line.
@@ -23,9 +22,8 @@ const WIDTH = Number(ARGS.find((a) => /^\d+$/.test(a)) || 1920);
 const FAKE_CDN = process.env.PROBE_FAKE_CDN === '1' || ARGS.includes('--fake-cdn');
 const NO_WARM = process.env.PROBE_NO_WARM === '1' || ARGS.includes('--no-warm');
 
-/* Cached to disk after the first success. The live API rate-limits and answers a Cloudflare page
-   when it does, which is not something to re-provoke on every run of a probe. Delete the file to
-   refresh. */
+/* Cached to disk after the first success: the live API rate-limits and answers a Cloudflare page
+   when it does. Delete the file to refresh. */
 const CACHE = path.join(tmpdir(), 'picpony-hero-fixture.json');
 let live;
 try {
@@ -41,13 +39,9 @@ try {
   live = JSON.parse(text);
   writeFileSync(CACHE, text);
 }
-/* Static formats only. An animated GIF bypasses `next/image` entirely
-   (`shouldBypassImageOptimization`), so the card paints the original file and the flight is
-   already 1:1 — which is the one case that cannot show the defect. */
 /* Static formats only — an animated GIF bypasses the optimizer and is already 1:1, the one case
    that cannot show the defect — and a source with enough pixels to *be* sharp: a picture whose
-   own `medium` is 800px wide cannot fill a 1888 device-pixel box however it is fetched, and
-   measuring one of those confounds the ladder with the source's own ceiling. */
+   own `medium` is 800px wide cannot fill a 1888 device-pixel box however it is fetched. */
 live.images = live.images.filter(
   (i) => ['png', 'jpg', 'jpeg', 'webp'].includes((i.format || '').toLowerCase()) && (i.width || 0) >= 2400,
 );
@@ -77,8 +71,7 @@ const server = spawn(process.execPath, [path.join(ROOT, 'node_modules/next/dist/
     PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${UP}`,
     PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${UP}/api/v1/json`,
     /* Or the SSR'd feed comes from `.next/cache/fetch-cache`, which persists on disk between
-       runs — so a fixture change is invisible and the page keeps rendering the previous run's
-       images. Same switch `npm run net:audit` uses, and for the same reason. */
+       runs — a fixture change is invisible. Same switch `npm run net:audit` uses. */
     PICPONY_SERVER_MEMO_TTL_MS: '0' },
 });
 const until = async (fn, ms = 60000) => {
@@ -117,14 +110,14 @@ const send = (method, params = {}) => new Promise((r) => { const i = ++id; pendi
 const ev = async (e) => (await send('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true })).result?.result?.value;
 await send('Runtime.enable'); await send('Page.enable');
 
-/* `--throttle=<mbps>` shapes the faked CDN only, by delaying each fulfillment in proportion to the
-   rung's weight.
+/* `--throttle=<mbps>` shapes the faked CDN only, by delaying each fulfillment in proportion to
+ * the rung's weight.
  *
  * NOT `Network.emulateNetworkConditions`: a CDP-fulfilled response is synthesised inside the
- * browser and is **not** subject to it. Measured — with the browser throttled to 10Mbps a 370KB
- * rung still reported `transferSize: 0` and a 21ms duration, so the first version of this flag
- * silently measured localhost and would have called any rung a winner. If a throttle appears to
- * make no difference, check whether the bytes are travelling at all. */
+ * browser and is **not** subject to it — measured, a 370KB rung under a 10Mbps throttle still
+ * reported `transferSize: 0` and a 21ms duration, so the first version silently measured
+ * localhost. If a throttle appears to make no difference, check whether the bytes are travelling.
+ */
 const MBPS = Number((ARGS.find((a) => a.startsWith('--throttle=')) || '').split('=')[1] || 0);
 const LATENCY_MS = 40;
 const shapeDelay = (bytes) => (MBPS > 0 ? LATENCY_MS + (bytes * 8) / (MBPS * 1000) : 0);
@@ -132,15 +125,12 @@ if (MBPS > 0) console.log(`shaping the faked CDN to ${MBPS}Mbps, ${LATENCY_MS}ms
 
 /* PROBE_FAKE_CDN: answer the browser's own derpicdn requests locally.
  *
- * Not a convenience. Measuring the *warm* leg needs the detail-sized bytes to arrive inside a
- * plausible hover, and this machine takes ~25s to fetch derpicdn directly (recorded in the repo's
- * measurement constraints) — so without this the warm never lands and the probe can only ever
- * report the cold path, which is what happened for four rounds of this bug.
- *
- * It intercepts the BROWSER only. `/_next/image` is fetched by the Next server, which CDP cannot
- * reach, so the gallery card keeps coming from the real CDN through the real optimizer and the
- * card-versus-flight comparison stays honest. What is faked is exactly the one thing being tested:
- * a detail-sized source that can decode in time.
+ * Not a convenience — the warm leg needs the detail-sized bytes inside a plausible hover, and
+ * this machine takes ~25s to fetch derpicdn directly, so without this the warm never lands and
+ * the probe can only ever report the cold path. It intercepts the BROWSER only: CDP cannot reach
+ * the Next server, so `/_next/image` still fetches the real file through the real optimizer and
+ * the card-versus-flight comparison stays honest. A checkerboard rather than a flat fill, since
+ * a flat image is sharp at every scale.
  */
 if (FAKE_CDN) {
   const { deflateSync, crc32 } = await import('node:zlib');
@@ -173,10 +163,10 @@ if (FAKE_CDN) {
       chunk('IEND', Buffer.alloc(0)),
     ]);
   };
-    /* One body per rung, at the byte size that rung really costs, because the question this probe
-     now has to answer is a *timing* one: `medium` is warmed instead of `large` precisely because
-     373KB cannot land inside a hover and ~110KB can. A fake CDN that answers every rung instantly
-     and at 7KB cannot tell those apart, and would report the bug as fixed at any rung. */
+  /* One body per rung, at the byte size that rung really costs — the question is a *timing*
+     one: `medium` is warmed instead of `large` precisely because 373KB cannot land inside a
+     hover and ~110KB can. A fake CDN answering every rung instantly at 7KB cannot tell those
+     apart, and would report the bug as fixed at any rung. */
   const RUNGS = [
     { match: /\/thumb[_a-z]*\./, w: 128, bytes: 8 * 1024 },
     { match: /\/small\./, w: 320, bytes: 25 * 1024 },
@@ -186,8 +176,8 @@ if (FAKE_CDN) {
   const bodies = new Map();
   const bodyFor = (rung) => {
     if (bodies.has(rung.w)) return bodies.get(rung.w);
-    /* Padded to the rung's real weight with a tEXt chunk. The checkerboard itself compresses to a
-       few KB, so without the padding every rung would arrive in one packet. */
+    /* Padded to the rung's real weight with a tEXt chunk: the checkerboard itself compresses to
+       a few KB, so without the padding every rung would arrive in one packet. */
     let buf = png(rung.w, Math.round(rung.w / 1.78));
     if (buf.length < rung.bytes) {
       const pad = Buffer.alloc(rung.bytes - buf.length - 16, 0x41);
@@ -236,8 +226,8 @@ if (FAKE_CDN) {
   });
 }
 
-/* Direct line, so the images actually come from derpicdn rather than a proxy this machine may not
-   reach; and the standard motion tier, since headless reports `reduce`. */
+/* Direct line, so the images actually come from derpicdn rather than a proxy this machine may
+   not reach; and the standard motion tier, since headless reports `reduce`. */
 await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
 await new Promise((r) => setTimeout(r, 3000));
 await ev(`localStorage.setItem('picpony_use_proxy','false');
@@ -403,14 +393,12 @@ else {
 
 /* The assertion, and it is on the flyer canvas rather than on any img.
  *
- * The mechanism it guards: warmImageHeroSource rasterises the detail-sized source on the intent
- * ladder, and prepareImageHero hands THAT canvas to the flight instead of one blitted from the
- * card. It was broken for four rounds of debugging in a way no probe could see, because the map
- * fed previewSrc — the img *behind* the canvas — so the measurement moved while the picture on
- * screen did not.
- *
- * Only asserted with PROBE_FAKE_CDN, since a real derpicdn fetch takes ~25s from this machine and
- * no plausible hover covers it. Without the flag this stays a report.
+ * Mechanism guarded: warmImageHeroSource rasterises the detail-sized source on the intent ladder
+ * and prepareImageHero hands THAT canvas to the flight instead of one blitted from the card. It
+ * was broken for four rounds in a way no probe could see, because the map fed previewSrc — the
+ * img *behind* the canvas — so the measurement moved while the picture on screen did not.
+ * Only asserted with PROBE_FAKE_CDN: a real derpicdn fetch takes ~25s here and no plausible
+ * hover covers it. Without the flag this stays a report.
  */
 let failed = false;
 if (!out?.error && FAKE_CDN && !NO_WARM) {

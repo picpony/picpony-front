@@ -1,7 +1,6 @@
-/* Does the lazily-loaded motion actually play?
-   Three things the module split could have broken silently: the tab indicator's glide (now WAAPI),
-   the route cross-fade's clone (now a dynamic import warmed on idle), and `Reveal`'s cascade
-   (now WAAPI). Scratch probe. */
+/* Does the lazily-loaded motion actually play? Three things the module split could have broken
+   silently: the tab indicator's glide (WAAPI), the route cross-fade's clone (dynamic import
+   warmed on idle), and `Reveal`'s cascade (WAAPI). Scratch probe. */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -68,8 +67,7 @@ await send('Runtime.enable');
 await send('Page.enable');
 
 /* Headless Edge reports `prefers-reduced-motion: reduce`; the app resolves that to 减弱 unless a
-   tier is stored, and 减弱 changes the shapes being measured. Pin it. */
-await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
+   tier is stored, and 减弱 changes the shapes being measured. Pin it. */await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
 await new Promise((r) => setTimeout(r, 2500));
 await evalIn(`localStorage.setItem('picpony_motion','standard'); localStorage.setItem('picpony_entrance','true'); 1`);
 await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });

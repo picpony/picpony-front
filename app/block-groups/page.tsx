@@ -32,9 +32,8 @@ import { blockGroups, type BlockGroup } from '@/lib/resources';
 const MAX_GROUPS = 50;
 const MAX_TAGS_PER_GROUP = 100;
 
-/* `BlockGroup` is imported from `lib/resources` rather than re-declared here. It was
-   declared in both places, which is fine until the resource is the thing that produces it —
-   then two structurally-identical types is one type and a copy that can drift. */
+/* `BlockGroup` is imported from `lib/resources` rather than re-declared: two
+   structurally-identical types is one type and a copy that can drift. */
 
 type UserInfo = {
   id: number;
@@ -48,21 +47,20 @@ export default function BlockGroupsPage() {
   const { openAuth } = useAuthModal();
   const [userInfo] = useState<UserInfo | null>(() => readUserInfo() as UserInfo | null);
 
-  /* The list comes from the resource layer rather than a `useState` + effect of its own,
-     which is what makes the sidebar's hover prefetch (`lib/prefetchRoute.ts`) worth
-     anything. It warmed `blockGroups` and this screen then fetched independently, so the
-     hover cost a request nobody read — the exact thing AGENTS.md's speculation rule
-     forbids. `SKIP` while signed out, because there is no token to key on. */
+  /* The list comes from the resource layer rather than its own `useState` + effect — that
+     is what makes the sidebar's hover prefetch (`lib/prefetchRoute.ts`) worth anything:
+     it warmed `blockGroups` and this screen then fetched independently, so the hover cost
+     a request nobody read. `SKIP` while signed out — no token to key on. */
   const read = useResource(blockGroups, userInfo?.token ? { token: userInfo.token } : SKIP);
   const groups = useMemo(() => read.data?.groups ?? [], [read.data]);
-  /* The placeholder branches on having nothing at all, never on `isLoading` — a revalidation
-     under a warm screen has both, and dimming that to a skeleton is what makes a cache not
-     worth having. */
+  /* The placeholder branches on having nothing at all, never on `isLoading` — a
+     revalidation under a warm screen has both, and dimming that to a skeleton is what
+     makes a cache not worth having. */
   const loading = read.data === undefined && read.error === undefined;
 
-  /* Local edits go through the resource's own store so a refresh cannot resurrect a value the
-     user just changed. `write` is the optimistic path: it leaves `fetchedAt` where it was, so
-     the next read still confirms against the server. */
+  /* Local edits go through the resource's own store so a refresh cannot resurrect a value
+     the user just changed. `write` is the optimistic path: `fetchedAt` stays put, so the
+     next read still confirms against the server. */
   const setGroups = useCallback(
     (update: (previous: BlockGroup[]) => BlockGroup[]) => {
       const token = userInfo?.token;
@@ -88,8 +86,8 @@ export default function BlockGroupsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<{ name: string; images: number }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  /* Anchors the suggestion popover. `Popover` measures this to place itself
-     and to decide which way to open. */
+  /* Anchors the suggestion popover: `Popover` measures this to place itself and decide
+     which way to open. */
   const searchFieldRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -104,15 +102,15 @@ export default function BlockGroupsPage() {
     }
   }, [userInfo, openAuth]);
 
-  /* `refresh` rather than a hand-rolled reload: the resource owns the request, the dedup and
-     the in-flight state. Mutations below call this to reconcile with the server. */
+  /* `refresh` rather than a hand-rolled reload: the resource owns the request, the dedup
+     and the in-flight state. Mutations below call this to reconcile with the server. */
   const loadGroups = useCallback(() => {
     void read.refresh();
   }, [read]);
 
-  /* The localStorage mirror that `lib/api/client.ts`'s browsing settings read from. It has to
-     follow whatever the list currently is, whether that came from the server or from an
-     optimistic write, so it keys off the rendered value rather than off the fetch. */
+  /* The localStorage mirror that `lib/api/client.ts`'s browsing settings read from. It has
+     to follow whatever the list currently is — server or optimistic write — so it keys off
+     the rendered value rather than off the fetch. */
   useEffect(() => {
     if (read.data?.groups) updateLocalStorageCache(read.data.groups);
   }, [read.data]);

@@ -2,8 +2,7 @@
 /* `'use no memo'` for the same reason `lib/motion.ts` carries it: this component passes a
    hand-tuned `useGSAP` dependency list and deliberately omits `revertOnUpdate`, so it sits on the
    one path where a change in memoised identity changes when the GSAP context is torn down. Lift
-   it with the tab and hero probes as guardrails. */
-'use no memo';
+   it with the tab and hero probes as guardrails. */'use no memo';
 
 import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -44,37 +43,26 @@ const EXIT_MS = SPRING_MS.defaultEffects;
 /**
  * M3 modal bottom sheet.
  *
- * `AGENTS.md` has listed this in the primitives table since the design system
- * was written, and the file did not exist — so every mobile surface that wanted
- * one reached for `Modal` instead. A centred dialog is the wrong shape on a
- * phone: it floats in the middle with a scrim above *and* below it, its content
- * is bounded by `max-w-md` rather than by the screen, and it is nowhere near the
- * thumb. A sheet is docked, full-width, and dismissed by pushing it back down.
- *
  * Three things make it a sheet rather than a dialog wearing different classes:
  *
- * - **Shape.** `rounded-t-2xl` — 28dp on the two corners that are visible, none
- *   on the two that are flush with the screen edge. Same step as `Modal`, since
- *   both are the shape scale's "dialog, sheet, large media container" role.
- * - **Motion.** `default-effects`, the spring `ModalBottomSheet.kt` assigns, in both
- *   directions and on the scrim too. A sheet moving on a position is component motion,
- *   so it belongs to the physics rather than to a bezier pair — and *effects* rather
- *   than spatial because a panel that overshoots on the way out bounces back into
- *   view. GSAP owns the transform for the whole lifetime rather than CSS keyframes,
- *   because the drag below writes the same property — two owners meant a released drag
- *   snapped back to zero before the exit keyframe could take it down.
- * - **The drag.** The panel tracks the finger, so you can change your mind
- *   halfway. It commits past 35% of its height or on a flick at any distance,
- *   which is the same rule and the same shape of code as `useDrawerSwipe`.
+ * - **Shape.** `rounded-t-2xl` (28dp) on the two visible corners, none on the two
+ *   flush with the screen edge — the shape scale's dialog/sheet step.
+ * - **Motion.** `default-effects` (the spring `ModalBottomSheet.kt` assigns) in both
+ *   directions and on the scrim too — a sheet moving on a position is component
+ *   motion, and *effects* rather than spatial because a panel that overshoots on
+ *   the way out bounces back into view. GSAP owns the transform for the whole
+ *   lifetime rather than CSS keyframes, because the drag below writes the same
+ *   property — two owners meant a released drag snapped back to zero before the
+ *   exit keyframe could take it down.
+ * - **The drag.** The panel tracks the finger; commits past 35% of its height or
+ *   on a flick at any distance.
  *
- * The drag deliberately yields to an inner scroller: a downward drag only starts
- * a dismiss when the body is already at `scrollTop === 0`, so a long list inside
- * the sheet scrolls normally and only pulls the sheet once it has nothing left to
- * scroll. Without that check every attempt to scroll a sheet closed it.
+ * The drag yields to an inner scroller: a downward drag only starts a dismiss when
+ * the body is at the top, so a long list scrolls normally and only pulls the sheet
+ * once it has nothing left to scroll.
  *
- * Focus, Esc and the refcounted scroll lock come from `lib/overlay.ts`, shared
- * with `Modal` — a sheet that let the gallery scroll behind it would be the
- * exact bug that module was extracted to prevent.
+ * Focus, Escape and the refcounted scroll lock come from `lib/overlay.ts`, shared
+ * with `Modal`.
  */
 export default function Sheet({
   isOpen,
@@ -101,30 +89,22 @@ export default function Sheet({
 
   const handleClose = useCallback(() => onClose(), [onClose]);
   /* Read through a ref inside the Observer, for the reason `useDrawerSwipe`
-     documents at length: a dependency that flips on every toggle leaves a second
-     Observer alive holding a stale closure, because `useGSAP` defers cleanup to
-     unmount unless `revertOnUpdate` is set.
-     Written in an effect rather than in the render body — a render may be
-     discarded, and a ref mutated during one that never commits is a write the
-     committed tree does not know about. */
+     documents: a dependency that flips on every toggle leaves a second Observer
+     alive holding a stale closure, because `useGSAP` defers cleanup to unmount
+     unless `revertOnUpdate` is set. Written in an effect rather than in the
+     render body — a render may be discarded, and a ref mutated during one that
+     never commits is a write the committed tree does not know about. */
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   });
 
-  /* Enter and exit, on `default-effects` both ways.
+  /* Enter and exit, on `default-effects` both ways — the spring
+   * `ModalBottomSheet.kt` assigns.
    *
-   * `ModalBottomSheet.kt` assigns the sheet that spring, and it was the one entry in
-   * AGENTS.md's springs table with no implementation: this ran `decelerate` at 400ms
-   * in and `accelerate` at 200 out, and the docstring below stated the bezier pair as
-   * if it were the contract. A sheet is component motion on a position, so it belongs
-   * to the physics — and *effects* rather than spatial specifically because a panel
-   * that overshoots on the way out bounces back into view, which is the same reason
-   * the drawer closes on `fast-effects`.
-   *
-   * `overwrite: true` rather than `revertOnUpdate`: reverting would restore the panel
-   * to its unanimated position — which for the enter tween is off-screen — in the
-   * same frame the exit is trying to start from rest. */
+   * `overwrite: true` rather than `revertOnUpdate`: reverting would restore the
+   * panel to its unanimated position — which for the enter tween is off-screen —
+   * in the same frame the exit is trying to start from rest. */
   useGSAP(
     () => {
       const panel = panelRef.current;
@@ -137,22 +117,19 @@ export default function Sheet({
         return;
       }
 
-      /* The reduced tier rises like the standard one. It briefly faded in place instead,
-         and that was the wrong substitution twice over: `defaultEffects` is critically
-         damped, so there was no overshoot to remove, and a panel that appears in the middle
-         of the screen without arriving from anywhere reads as a dialog rather than as a
-         sheet — the travel *is* what says which edge it belongs to. One composited
-         `translate` is also the cheapest thing this component does. */
+      /* The reduced tier rises like the standard one. `defaultEffects` is
+         critically damped (no overshoot to remove), and a panel that appears in
+         the middle of the screen without arriving from anywhere reads as a
+         dialog — the travel *is* what says which edge it belongs to. */
       if (isOpen) {
         gsap.fromTo(panel, { y: '100%' }, { y: 0, ...spring('defaultEffects'), overwrite: true });
         if (scrim)
           gsap.fromTo(
             scrim,
             { opacity: 0 },
-            /* The panel's clock, not a shorter one of its own. It read
-               `DURATION.medium` (300) against the panel's 400: the scrim is the other
-               half of the sheet arriving, so finishing first left the sheet still
-               rising over an already-settled dim. Same fix as `--animate-modal-overlay`. */
+            /* The panel's clock, not a shorter one of its own: the scrim is the
+               other half of the sheet arriving, so finishing first left the sheet
+               still rising over an already-settled dim. */
             { opacity: 1, ...spring('defaultEffects'), overwrite: true },
           );
       } else {
@@ -168,14 +145,12 @@ export default function Sheet({
      real teardown — an Observer on the panel — and therefore genuinely needs
      `revertOnUpdate` to avoid stacking one per toggle.
 
-     **It is not gated on the motion preference, and that is the fix.** It used to
-     return before the Observer was even created, so `prefers-reduced-motion`
-     silently removed drag-to-dismiss from every sheet on every phone — and a
-     direct manipulation is not an animation. The preference asks for less
-     *self-propelled* motion; the panel following a finger is the finger's motion.
-     What the preference does own is the *settle* after release, so that is where
-     it branches now: `settle()` jumps to the target instead of tweening to it.
-     `useDrawerSwipe` has the same shape for the same reason. */
+     **Not gated on the motion preference, and that is the fix**: gating it
+     removed drag-to-dismiss from every sheet on every phone, and a direct
+     manipulation is not an animation — the panel following a finger is the
+     finger's motion. What the preference owns is the *settle* after release, so
+     that is where it branches: `settle()` jumps to the target instead of
+     tweening to it. `useDrawerSwipe` has the same shape for the same reason. */
   useGSAP(
     (_context, contextSafe) => {
       const panel = panelRef.current;
@@ -200,12 +175,10 @@ export default function Sheet({
         const scrim = scrimRef.current;
 
         /* Off keeps the gesture and drops the flight: land on the target in one
-           frame. `gsap.set` rather than a 1ms tween so there is no frame in which a
-           competing tween could be created.
-           Only `off`. A drag release under `reduced` still springs, because the finger has
-           already carried the panel most of the way and cutting the remainder reads as the
-           gesture being dropped rather than as less motion — the same line `useDrawerSwipe`
-           and `lib/hero/pull.ts` draw. */
+           frame, `gsap.set` rather than a 1ms tween so no competing tween can be
+           created. Only `off` — under `reduced` a drag release still springs,
+           because the finger has already carried the panel most of the way and
+           cutting the remainder reads as the gesture being dropped. */
         if (motionTier() === 'off') {
           gsap.set(panel, { y: target });
           if (scrim) gsap.set(scrim, { opacity: dismiss ? 0 : 1 });
@@ -213,15 +186,12 @@ export default function Sheet({
           return;
         }
 
-        /* One spring per direction, and **no distance-scaled duration**.
-           It read `clamp(DURATION.short, DURATION.long, |target − from| / 1400)`,
-           which is a duration scaled by distance — `useDrawerSwipe` removed exactly
-           that and recorded why: a spring already covers a shorter remaining distance
-           in less time, because that is what a mass on a spring does, so scaling its
-           clock as well double-counts.
-           `default-effects` on a dismiss (a panel that overshoots on the way out
-           bounces back into view) and `default-spatial` on a settle-back, which is the
-           split `NavigationDrawer.kt` makes for a drag release. */
+        /* One spring per direction, and **no distance-scaled duration** — a spring
+           already covers a shorter remaining distance in less time, so scaling
+           its clock as well double-counts. `default-effects` on a dismiss (a
+           panel that overshoots on the way out bounces back into view) and
+           `default-spatial` on a settle-back, the split `NavigationDrawer.kt`
+           makes for a drag release. */
         const release = spring(dismiss ? 'defaultEffects' : 'defaultSpatial');
 
         if (scrim)
@@ -321,10 +291,9 @@ export default function Sheet({
         tabIndex={-1}
         className={cn(
           'relative flex w-full flex-col overflow-hidden outline-none',
-          /* `shadow-e1`, not `e3`. M3 puts the modal bottom sheet at elevation
-             level 1 and the app's own elevation table says so — the code was at
-             level 3, which is the dialog/FAB/search step, so a sheet cast a
-             heavier shadow than the thing it is a quieter alternative to. */
+          /* `shadow-e1`, not `e3`: M3 puts the modal bottom sheet at elevation
+             level 1. Level 3 is the dialog/FAB/search step — a heavier shadow
+             than the thing a sheet is a quieter alternative to. */
           'bg-surface-container-low text-on-surface rounded-t-2xl shadow-e1',
           // A sheet on a tablet or a desktop window should not run the whole
           // width of a 1600px screen; it stays a phone-width dock, centred.
@@ -335,15 +304,9 @@ export default function Sheet({
       >
         {!hideHandle && (
           /* M3's drag handle: a 32×4dp bar in `on-surface-variant`, inside a 48dp
-             touch strip.
-             Two things were off. The colour carried a `/40`, which AGENTS.md listed
-             among the "legitimate M3 alphas" — it is not one:
-             `SheetBottomTokens.DockedDragHandleColor` is `OnSurfaceVariant` and
-             `SheetDefaults` passes it unmodified, so the one affordance telling a
-             phone user this panel can be pushed back down was drawn at 40% of its
-             specified strength. And the strip was `h-6` (24dp) against
-             `DragHandleVerticalPadding = 22dp` either side of a 4dp bar, i.e. 48dp
-             — the app's own touch-target floor, at half of it. */
+             touch strip — the spec's unmodified `OnSurfaceVariant` (no alpha) at
+             the touch-target floor, so the one affordance telling a phone user
+             this panel can be pushed back down is at full strength. */
           <div className="flex h-12 shrink-0 items-center justify-center" aria-hidden="true">
             <span className="bg-on-surface-variant h-1 w-8 rounded-full" />
           </div>
@@ -355,11 +318,9 @@ export default function Sheet({
         )}
         <div
           ref={bodyRef}
-          /* `data-app-scroll-container` for the same reason `Modal`'s body carries it: this is
-             the box that scrolls, so anything inside that wants to scroll to an element —
-             `Pagination`, `scrollAppToElement` — has to find this rather than the page behind
-             the sheet. Nothing in the app pages inside a `Sheet` today; the marker is what
-             keeps the first one that does from moving the wrong surface. */
+          /* `data-app-scroll-container`, like `Modal`'s body: this is the box that
+             scrolls, so anything inside that wants to scroll to an element has to
+             find this rather than the page behind the sheet. */
           data-app-scroll-container
           className={cn('popover-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'px-6')}
         >

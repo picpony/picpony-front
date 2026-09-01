@@ -185,11 +185,10 @@ export class HeroRouteRegistry {
     route.interaction = null;
     route.interactionOwner = null;
     route.overlay.dataset.imageHeroRouteState = 'active';
-    // `visibility` only, matching `leaseHeroRouteSealed`. Clearing an inline
-    // `opacity` here is what used to make the back affordance blink: that property
-    // is transitioned by `IconButton`, so the reveal was a 200ms fade rather than a
-    // frame. Nothing sets it now, and clearing a property the seal no longer writes
-    // would be the kind of stale defence that hides the next such bug.
+    // `visibility` only, matching `leaseHeroRouteSealed`: clearing an inline
+    // `opacity` here is what made the back affordance fade over 200ms instead of
+    // revealing in a frame, because that property is transitioned by `IconButton`.
+    // Nothing sets it now.
     route.overlay.style.visibility = '';
     route.overlay.style.pointerEvents = '';
     if (route.floatingBack) {

@@ -31,9 +31,7 @@ import { api, Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import { ICON } from '@/lib/icons';
 import type { PicLightboxSlide } from '@/components/PicLightbox';
-/* The whole lightbox — core *and* its five plugins — behind one boundary. It used to be the
-   core alone, with the plugins as static imports, so the module the split was meant to defer
-   arrived anyway. See `PicLightbox`. */
+/* The whole lightbox — core *and* its five plugins — behind one boundary. See `PicLightbox`. */
 const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false });
 import { showToast } from '@/components/Toast';
 import Spinner from '@/components/Spinner';
@@ -94,12 +92,9 @@ function getServerDetail() {
 }
 
 /**
- * The gallery's press order, as this screen's prev/next stack.
- *
- * A module-level read so the first render can use it: the failure state's only action is
- * gated on it, and learning it from an effect meant the block re-laid-out one paint later.
- * Returns an empty list on the server and on anything unparseable, so every caller can
- * treat it as a plain array.
+ * The gallery's press order, as this screen's prev/next stack — read at first render so
+ * the failure state's one action is gated on it without a late re-layout. Empty on the
+ * server or when unparseable, so callers treat it as a plain array.
  */
 const NAV_HISTORY_KEY = 'picpony_nav_history';
 
@@ -116,9 +111,8 @@ function readNavHistory(): number[] {
 
 const INITIAL_TAG_LIMIT = 80;
 
-/* One entry today. It is a `Menu` rather than a lone button because "分享"
-   already promised a menu — the trigger has carried `aria-haspopup="menu"` all
-   along — and because the next entry (复制图片直链, 举报) has an obvious home. */
+/* A `Menu`, not a lone button: "分享" promises a menu (`aria-haspopup="menu"`) and
+   future entries have an obvious home. */
 const SHARE_ITEMS: MenuAction[] = [{ value: 'copy-link', label: '复制链接' }];
 
 const INITIAL_RELATION_TAG_LIMIT = 32;
@@ -158,11 +152,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     () => `hero-route:${imageId}:${routeInstanceId}`,
     [imageId, routeInstanceId],
   );
-  // Latch the seed for this route id. A live read on every render would flip
-  // to null when the module snapshot expires and remount the media mid-view.
+  // Latch the seed for this route id: a live read would flip to null when the module
+  // snapshot expires and remount the media mid-view. Re-read on a new runtime session,
+  // when a fresh controller-owned snapshot may exist for this otherwise stable route id.
   const heroSeed = useMemo(() => {
-    // Runtime session changes are the signal that a fresh controller-owned
-    // snapshot may now exist for this otherwise stable route id.
     void heroRuntime.sessionId;
     return getImageHeroOrigin(imageId);
   }, [imageId, heroRuntime.sessionId]);
@@ -174,13 +167,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const prefetchedDetail = useSyncExternalStore(subscribeDetail, readDetail, getServerDetail);
   const image = prefetchedDetail?.image ?? heroSeed?.image ?? null;
   /**
-   * The media box is latched per route id.
-   *
-   * It was `heroSeed?.image.width || image.width` — the listing record while a seed
-   * existed, the detail record otherwise. `heroSeed` is memoised on
-   * `heroRuntime.sessionId`, which changes when a flight ends, so the released snapshot
-   * came back null and the width source switched from one record to the other at exactly
-   * that moment. Where the two records disagree, the box resized a beat after landing.
+   * The media box is latched per route id, seeded once per image, so the width source
+   * (hero seed record vs detail record) never switches under it and the box cannot
+   * resize a beat after landing.
    *
    * Set during render rather than in an effect, so a new route id never paints a frame at
    * the previous image's aspect ratio.
@@ -210,16 +199,16 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     regular: INITIAL_TAG_LIMIT,
   });
   const [detailError, setDetailError] = useState<{ id: number; error: Error } | null>(null);
-  /* Both keyed by image id for the same reason `finalReadyId` is: the route is reused
-     across detail↔detail navigations, so a per-image answer must not outlive its image. */
+  /* Both keyed by image id, like `finalReadyId`: the route is reused across
+     detail↔detail navigations, so a per-image answer must not outlive its image. */
   const [previewFailedId, setPreviewFailedId] = useState<number | null>(null);
   const [mediaUnavailableId, setMediaUnavailableId] = useState<number | null>(null);
   const previewFailed = previewFailedId === imageId;
   const mediaUnavailable = mediaUnavailableId === imageId;
-  /* `!previewFailed` is the third term, and it is what turns a dead preview into a
-     visible final rather than a stalled handoff: the preview layer is `z-10` and opaque
-     while `heroActive`, so dropping the flag is the CSS swap — the same one
-     `revealedHeroSeedAt` performs on a normal open. */
+  /* `!previewFailed` is what turns a dead preview into a visible final rather than a
+     stalled handoff: the preview layer is `z-10` and opaque while `heroActive`, so
+     dropping the flag is the CSS swap — the same one `revealedHeroSeedAt` performs on a
+     normal open. A seeded image with dead media is not a page that failed. */
   const isHeroPreview = Boolean(
     heroSeed?.image.id === imageId && heroSeed.createdAt !== revealedHeroSeedAt && !previewFailed,
   );
@@ -257,32 +246,21 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   // --- Image navigation state ---
   /**
-   * Read during the first render, not from an effect, because the failure state's one
-   * action is gated on it.
+   * Nav history is read during the first render, not from an effect: the failure state's
+   * one action (上一张) is gated on it, and an effect-learned answer mounts at least one
+   * paint after the block — adding a 24px margin plus a 40dp button to a centred column
+   * lifts the block 32px ("appears lower, then jumps up").
    *
-   * It used to be a `useEffect` gated on `deferredBodyReady` that then deferred its own
-   * `setState` through a `queueMicrotask`, so `上一张` mounted at least one paint after the
-   * block did — and adding a 24px margin plus a 40dp button to a `justify-center` column
-   * lifts the whole block **32px**. That is the "it appears lower, then jumps up" report,
-   * and after a hero open it could arrive much later still, because `deferredBodyReady`
-   * waits for `publishWhenHeroSettled`.
-   *
-   * `sessionStorage` is not available while this renders on the server, hence the guard
-   * rather than a bare read; the lazy initialiser then runs exactly once per mount on the
-   * client, before the first paint.
+   * `sessionStorage` is unavailable while rendering on the server, hence the guard; the
+   * lazy initialiser runs once per mount on the client, before first paint.
    */
   const [navHistory, setNavHistory] = useState<number[]>(() => readNavHistory());
   const currentNavIndex = useMemo(() => navHistory.indexOf(Number(id)), [navHistory, id]);
   /**
-   * Whether this screen can offer 上一张, decided **once, at mount**.
-   *
-   * Deliberately not derived from `currentNavIndex`, which moves: the effect below appends
-   * the current id to the press order as soon as the image record lands, so an image reached
-   * directly goes from "not in history" to "last in history" a paint or two after the first
-   * one. In the failure state that is the only action on screen, and adding a 24px margin
-   * plus a 40dp button to a `justify-center` column lifts the whole block **32px** — the
-   * "it appears lower, then jumps up" report. What the button needs to know is whether there
-   * *is* a previous picture, and that is already true at mount either way.
+   * Whether this screen can offer 上一张, decided **once, at mount** — deliberately not
+   * derived from `currentNavIndex`, which moves as the press order grows. The button only
+   * needs to know whether a previous picture *is* reachable, and that is settled at mount;
+   * a later change would re-lay-out the failure state's block (see above).
    */
   const [hasNavPrevious] = useState(() => {
     const ids = readNavHistory();
@@ -345,12 +323,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     [surfaceId],
   );
 
-  /* Both are overlay-only in practice, and that is a property of `surfaceId` rather than of
-     these guards: it is passed down only in the overlay presentation, and the media components
-     will not report a failure without one. That is the right scope — the failure they answer is a
-     flight stranded waiting for a paintable layer, and a cold `/pic/x` has no flight and no hero
-     seed, so its preview layer is never the visual authority. The id comparison is what keeps a
-     stale surface's report from landing on the live one. */
+  /* Both are overlay-only in practice, and that is a property of `surfaceId`: it is passed
+     down only in the overlay presentation, and the media components will not report a
+     failure without one — the failure they answer is a flight stranded waiting for a
+     paintable layer. The id comparison keeps a stale surface's report off the live one. */
   const handlePreviewFailed = useCallback(
     (ownerSurfaceId: string) => {
       if (ownerSurfaceId !== surfaceId) return;
@@ -389,24 +365,15 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   }, [imageId, presentation, surfaceId]);
 
   /**
-   * Tell the controller when there will never be anything to hand off to.
-   *
-   * The handoff waits for a route with a paintable preview *and* a target, and only
-   * `DetailImage`/`DetailVideo` provide either — so a failed load left the flight waiting
-   * out `HERO_DETAIL_ROUTE_TIMEOUT_MS` with this page sealed behind it, i.e. 30 seconds of
-   * blank. Saying so explicitly lets the container transform finish and the error surface in
-   * its place, which is what every other resolution does.
+   * Tell the controller there will never be anything to hand off to, so the container
+   * transform can finish and the error surface in its place — otherwise a failed load
+   * leaves the flight waiting out a 30s timeout with this page sealed behind it.
    */
-  /* Two terms, because they answer for different failures and neither implies the other.
-     `error` is the detail *record* failing, and it can only be set when there is no hero
-     seed (see the fetch below) — so during a flight, which is the one time the flag is
-     load-bearing, it is unreachable by construction and this used to be the whole
-     condition. `mediaUnavailable` is both media layers reporting that they will never
-     paint, which is the failure that actually strands a flight.
-     So the flag and the failure branch no longer share one expression: a record can
-     resolve with no paintable media, and the branch below renders the picture's box
-     rather than the error state for that case. That is deliberate — a seeded image with
-     dead media is not a page that failed to load. */
+  /* Two terms for two failures: `error` is the detail *record* failing (unreachable during
+     a flight — it can only be set when there is no hero seed), while `mediaUnavailable` is
+     both media layers reporting they will never paint. A record can resolve with no
+     paintable media; deliberate — the branch below renders the picture's box, not the
+     error state, for that case. */
   const resolvedWithoutMedia = presentation === 'overlay' && (Boolean(error) || mediaUnavailable);
   useEffect(() => {
     if (!resolvedWithoutMedia) return;
@@ -420,9 +387,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     tokenRef.current = readToken();
   }, []);
 
-  // 记录浏览历史：登录用户打开图片详情时同步到云端（与完整版前端
-  // openModal 里的 add_browsing_history 一致），fire-and-forget。
-  // 依赖 image?.id：同一张图只在 id 变化时记录一次，prefetch 详情不算浏览。
+  // 浏览历史：登录用户打开详情时同步到云端（与旧前端 add_browsing_history 一致），
+  // fire-and-forget；依赖 image?.id，同一张图只记一次，prefetch 不算浏览。
   useEffect(() => {
     const token = tokenRef.current;
     if (!token || !image) return;
@@ -472,8 +438,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       ...groups.ocs.slice(0, visibleTagLimits.ocs),
       ...groups.regularTags.slice(0, visibleTagLimits.regular),
     ];
-    /* 翻译 key 由 lib/tagTranslations 内部统一剥前缀转小写，这里只关心
-       画面上还没见过的标签。 */
+    /* 翻译 key 由 lib/tagTranslations 内部剥前缀转小写；这里只取画面上没见过的标签。 */
     const missingTags = visibleTags.filter(
       (tag) => tagTranslations[tag.toLowerCase()] === undefined,
     );
@@ -506,9 +471,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     const missingTags = uniqueTags.filter((tag) => tagCounts[tag] === undefined);
     if (missingTags.length === 0) return;
     let cancelled = false;
-    /* Batched and cached in `lib/tagCounts`, and reported per batch — the
-       cached ones land in the same tick, so a tag list you have seen before
-       paints its numbers without a request. */
+    /* Batched and cached in `lib/tagCounts`; cached ones land in the same tick, so a
+       tag list seen before paints its numbers without a request. */
     void loadTagCounts(missingTags, (counts) => {
       if (cancelled) return;
       setTagCounts((current) => ({ ...current, ...counts }));
@@ -531,13 +495,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     };
   }, [deferredBodyReady]);
 
-  /* The IntersectionObserver that used to live here is gone with what it gated.
-     It existed to mount the comment editor once the composer came within 500px of the
-     viewport — a 774KB raw / 176KB brotli wangEditor + Uppy chunk, downloaded for anyone who
-     scrolled past the comments on any picture. `CommentComposer` now renders a placeholder
-     button and mounts the editor when it is pressed, which is both a far better predictor of
-     intent and one fewer observer on this screen. `commentEditorMountRef` survives because
-     the reply flow still scrolls to it. */
+  /* The comment-editor IntersectionObserver that used to live here is gone with what it
+     gated: `CommentComposer` renders a placeholder button and mounts the editor on press,
+     so the 774KB raw / 176KB brotli editor chunk is paid for by intent. The ref survives
+     because the reply flow still scrolls to it. */
 
   useEffect(() => {
     if (!deferredBodyReady) return;
@@ -569,10 +530,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           if (ids.length > 200) ids = ids.slice(-200);
           sessionStorage.setItem(NAV_HISTORY_KEY, JSON.stringify(ids));
         }
-        /* Still deferred, and now that is only about the lint rule against a synchronous
-           `setState` in an effect: nothing on screen waits for this any more, because the
-           press order was read during the first render and the failure state's action is
-           decided from that read. */
+        /* Still deferred only to satisfy the lint rule against a synchronous `setState`
+           in an effect: nothing on screen waits for this any more. */
         queueMicrotask(() => {
           if (cancelled) return;
           setNavHistory(ids);
@@ -639,9 +598,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         if (isMounted && !heroSeed) setDetailError({ id: imageId, error: err });
       });
 
-      // Fetching and final-media decode start immediately. Only the sizeable
-      // body subtree waits for resolved detail plus an idle slice, so its mount
-      // cannot steal the first event of a newly started wheel/touch stream.
+      // Fetch and final-media decode start immediately. Only the sizeable body subtree
+      // waits for resolved detail plus an idle slice, so its mount cannot steal the first
+      // event of a newly started wheel/touch stream.
       if (!heroSeed || prefetchedDetail) {
         cancelBody = publishWhenHeroSettled(
           () => {
@@ -651,12 +610,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           {
             canPublish: () => {
               if (!isImageHeroDetailDataPublishable(imageId)) return false;
-              /* The whole `opening.` family, not just `opening.flight`.
-                 `isImageHeroDetailDataPublishable` stays true across `landed` and `handoff`, so
-                 the body's mount could land in the handoff frame — the one frame that has to be
-                 pixel-identical on both sides and that writes `scroller.scrollTop` inside a
-                 batched read/write pass. A React commit of this size arriving there is the
-                 worst possible moment for it. */
+              /* The whole `opening.` family, not just `opening.flight`: publication stays
+                 true across `landed` and `handoff`, so the body's mount could land in the
+                 handoff frame — the frame that must be pixel-identical on both sides and
+                 writes scroll position in a batched read/write pass. A React commit of
+                 this size there is the worst possible moment for it. */
               return !getImageHeroRuntime().phase.startsWith('opening.');
             },
           },
@@ -694,12 +652,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Lightbox handlers ---
   const handleOpenLightbox = useCallback(() => {
     if (!isImageHeroPublicationQuiet()) return;
-    /* Record where the detail image is, so the viewer grows out of the picture
-       you just tapped rather than out of the middle of the screen. This is a
-       simplified M3 container transform — the real shared-element morph belongs
-       to `lib/hero`, and borrowing that machinery for a same-route overlay
-       would mean handing it a second surface to own. Origin is enough to make
-       the connection read. */
+    /* Record where the detail image is, so the viewer grows out of the picture you
+       tapped rather than the middle of the screen. A simplified M3 container transform —
+       the full shared-element morph is `lib/hero`'s, and a same-route overlay must not
+       hand it a second surface to own. Origin alone makes the connection read. */
     const media = document.querySelector<HTMLElement>('[data-image-hero-role="detail"]');
     const root = document.documentElement;
     if (media) {
@@ -741,11 +697,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Navigation handlers ---
   const handleNavigate = useCallback(
     (direction: number) => {
-      /* An id that is not in the press order sits *after* its end, not before its start.
-         That is the failure state's case: the effect that appends the current id needs the
-         image record, which a failed load never produces, so `currentNavIndex` stays −1 for
-         as long as the error is on screen — and `-1 + -1` used to fall through to
-         「已是第一张」, i.e. the one button that state offers did nothing. */
+      /* An id not in the press order sits *after* its end, not before its start: the
+         appending effect needs the image record, which a failed load never produces, so
+         the index stays −1 while the error is on screen — and −1 + −1 used to fall
+         through to 「已是第一张」, the one button that state offers doing nothing. */
       const from = currentNavIndex === -1 ? navHistory.length : currentNavIndex;
       const newIndex = from + direction;
       if (newIndex >= 0 && newIndex < navHistory.length) {
@@ -786,7 +741,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   }, [heroNavigation, imageId, presentation, router]);
 
   // Stable dismiss bind: rebinding on isLoading/modal state disposed the gesture
-  // mid-pull (data arrival) and made pull-to-dismiss feel random.
+  // mid-pull and made pull-to-dismiss feel random.
   const dismissCanStartRef = useRef<() => boolean>(() => true);
 
   useLayoutEffect(() => {
@@ -803,9 +758,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     );
   }, [heroNavigation, presentation, surfaceId]);
 
-  /* Escape leaves the screen — unless something is layered over it, in which
-     case that thing owns the key and closes itself first (see the handler at
-     the top of the file, which is what clears `isShareOpen` and `replyTo`). */
+  /* Escape leaves the screen — unless something is layered over it, in which case that
+     thing owns the key and closes itself first (the keydown handler near the top clears
+     `isShareOpen` and `replyTo`). */
   useEscapeBack(
     handleBackToGallery,
     !isLightboxOpen && !tagInfoModal.open && !isReportModalOpen && !isShareOpen && !replyTo,
@@ -840,13 +795,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Comment reply ---
   const handleReply = (comment: Comment) => {
     setReplyTo({ id: comment.id, username: comment.username, body: comment.body });
-    /* The overlay presentation scrolls its own container, not the app scroller,
-       which is why this used to be a bare `scrollIntoView({ behavior: 'smooth' })`
-       — there was no way to say *which* scroller. That handed the jump to the
-       browser's own curve, so the same action glided differently depending on
-       whether the picture had been opened from the gallery or reached directly.
-       `scrollAppToElement` already lands the target's top edge at the top, which
-       is what `block: 'start'` was asking for. */
+    /* The overlay presentation scrolls its own container, not the app scroller — which
+       is why a bare `scrollIntoView` could not say *which* scroller and handed the jump
+       to the browser's own curve. `scrollAppToElement` takes the scroller and lands the
+       target's top edge at the top. */
     scrollAppToElement(commentEditorMountRef.current, {
       scroller: presentation === 'page' ? undefined : overlayScrollerRef.current,
     });
@@ -859,8 +811,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // --- Fave toggle ---
   const handleShareSelect = useCallback((value: string) => {
     if (value !== 'copy-link') return;
-    /* `copyText`, not `navigator.clipboard.writeText` — the latter has no
-       fallback on a non-secure origin and the toast then lied about it. */
+    /* `copyText`, not a raw clipboard write — that has no fallback on a non-secure
+       origin and the toast then lied about it. */
     void copyText(window.location.href).then((ok) =>
       showToast(ok ? '链接已复制' : '复制失败，请手动复制地址栏链接', ok ? 'success' : 'error'),
     );
@@ -995,40 +947,30 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           ]
       : [];
 
-  /* The shell's own inset, and only where there is not one already: in the `page`
-     presentation `[data-page-content]` is already `p-4 sm:p-6`, so carrying a second
-     one here stacked them to 24/40px and made this screen's column narrower than
-     every other route's for no stated reason. The overlay is portalled outside that
-     wrapper and does need its own.
-     **Horizontal only, and that is a geometry contract rather than a preference.**
-     `HeroStage` renders the landing target inside `image-detail-page mx-auto
-     max-w-5xl px-2 sm:px-4` — no vertical padding — and `geometry.ts` states that the
-     stage and this must produce pixel-identical boxes or the handoff visibly shifts.
-     A `py-*` here moves the media well down by 16/24px relative to the box the flyer
-     was aimed at, so the picture lands and then hops. If this gains vertical padding,
-     the stage gains the same padding in the same commit. */
+  /* The overlay's own horizontal inset, and only where there is not one already: in the
+     `page` presentation `[data-page-content]` already insets, and a second one stacked
+     to 24/40px. The overlay is portalled outside that wrapper and does need its own.
+     Horizontal only — a geometry contract, not a preference: `HeroStage` renders the
+     landing target inside `image-detail-page mx-auto max-w-5xl px-2 sm:px-4` with no
+     vertical padding, and the stage and this must produce pixel-identical boxes or the
+     handoff visibly shifts. Vertical padding here drops the media well 16/24px below
+     the box the flyer was aimed at, so the picture lands and then hops. If this gains
+     vertical padding, the stage gains the same padding in the same commit. */
   const overlayGutter = presentation === 'overlay' ? 'px-2 sm:px-4' : '';
 
   /**
-   * `centred` is the `StatusView fill` chain, and it has to be threaded through here
-   * because `fill` is `flex-1` rather than a percentage height — every box between the
-   * block and the scroller has to be a flex column or the `1` has nothing to divide.
-   * The scroller is `absolute inset-0`, so its height is definite; `min-h-full` on the
-   * content wrapper resolves against it; and from there down it is flex distribution.
-   * `min-height: 100%` on the block itself was tried and computes to `auto`, because a
-   * height that comes from flex distribution is indefinite in Chrome — that is the
-   * failure this replaces, and it centred nothing.
+   * `centred` threads the `StatusView fill` chain: `fill` is `flex-1`, so every box
+   * between the block and the scroller must be a flex column or the `1` has nothing to
+   * divide. The scroller is `absolute inset-0` (definite height); `min-h-full` on the
+   * content wrapper resolves against it; from there down it is flex distribution.
+   * `min-height: 100%` on the block itself computes to `auto` — a height from flex
+   * distribution is indefinite in Chrome — and centred nothing.
    */
   const renderDetailShell = (content: React.ReactNode, centred = false) => {
     if (presentation === 'page') {
-      /* Opening a link to /pic/123 directly used to drop you on bare content
-         with no way back except the browser button, while arriving from the
-         gallery gave you a pinned 返回图库. Same screen, two different chromes.
-
-         The placement now comes from `PageBack`, which is the same construct
-         four screens share — see its comment for why it is a zero-height
-         sticky strip. `data-image-detail-back-button` is not carried across:
-         nothing reads it, here or anywhere. */
+      /* A direct link to /pic/123 gets the same pinned 返回图库 as a gallery arrival —
+         the placement is `PageBack`'s (shared by four screens; see its comment for why
+         it is a zero-height sticky strip). */
       return (
         <div className={cn('relative', centred && 'flex flex-1 flex-col')}>
           <PageBack onClick={handleBackToGallery} title="返回图库 (Esc)" label="返回图片列表" />
@@ -1048,12 +990,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           aria-label="图片详情"
           className="image-detail-route absolute inset-0 z-detail-overlay overflow-hidden"
         >
-          {/* The container transform's window and counter-scale. Structurally identical to
-              `HeroStage`'s pair — the handoff depends on that — and inert until
-              `buildContainerAnimations` drives them. Both are `absolute inset-0`, so the
+          {/* The container transform's window and counter-scale, structurally identical
+              to `HeroStage`'s pair (the handoff depends on that), inert until
+              `buildContainerAnimations` drives them. Both `absolute inset-0`, so the
               `StatusView fill` chain below is unaffected: `flex-1` starts at
-              `.image-detail-overlay-content`, whose parent is the absolutely positioned
-              scroller, so it never took part in an ancestor's flex layout. */}
+              `.image-detail-overlay-content`, under the absolutely positioned scroller. */}
           <div data-image-detail-clip className="image-detail-clip absolute inset-0">
             <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
           <div
@@ -1085,10 +1026,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           </div>
         </section>
         {/* No `data-image-detail-reveal`: this renders as a *sibling* of the overlay, and
-            the reveal cascade is `overlay.querySelectorAll(HERO_REVEAL_SELECTOR)`, so the
-            `chrome` role it used to carry never matched anything. Its entrance is the
-            `floatingBack` branch of `buildOverlayAnimations`, and the pull gesture reaches
-            it through a compound selector rather than a descendant one. */}
+            the reveal cascade queries inside the overlay only. Its entrance is the
+            `floatingBack` branch of `buildOverlayAnimations`; the pull gesture reaches it
+            through a compound selector rather than a descendant one. */}
         <DetailBack
           ref={overlayBackRef}
           data-image-detail-back-button
@@ -1108,12 +1048,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
          mount — so it is free to carry the vertical padding the real render must not. */
       <div className={cn('image-detail-page max-w-5xl mx-auto py-4 sm:py-6', overlayGutter)}>
         <div className="flex flex-col rounded-md bg-transparent">
-          {/* The header's own shape, which is three centred metadata cells and no
-              visible title — `DetailHeader` renders its `<h1>` `sr-only`. This drew a
-              half-width title bar above a left-aligned row, so the placeholder stood
-              in for something the header deliberately does not paint and the row
-              jumped from left to centre when the data landed. A skeleton that does
-              not match is the one thing a skeleton exists to prevent. */}
+          {/* Matches `DetailHeader`'s real shape: three centred metadata cells, no
+              visible title (the `<h1>` is `sr-only`). A mismatched skeleton re-spaces
+              the row when the data lands. */}
           <div className="image-detail-header-route p-4 sm:p-6">
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
               <Skeleton className="h-5 w-28" delay={60} />
@@ -1122,10 +1059,9 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             </div>
           </div>
           <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
-            {/* `inset-4` alone. With `w-full h-full` beside it the width and height
-                won — they are not shorthands for the insets, they *replace* what the
-                right and bottom insets computed — so the placeholder was 32px wider
-                than its own box and overflowed the media well on both axes. */}
+            {/* Inset only — a width/height beside it would *replace* the computed
+                right/bottom insets, making the placeholder 32px wider than its box and
+                overflowing the media well on both axes. */}
             <Skeleton className="absolute inset-4 rounded-md" delay={90} />
           </div>
           <div
@@ -1149,19 +1085,11 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   // --- Error state ---
   if (error || !image) {
-    /* `ErrorRetry`, not `StatusView` directly. AGENTS.md names the image detail's
-       failure among the screens that must go through the presets, and this had
-       re-typed the preset's glyph and its default title by hand because
-       `ErrorRetry` took only `onRetry` — it has an `action` slot now.
-       The 返回上一页 button is gone because this overlay already draws
-       `DetailBack` in its top-left corner, so the screen was offering the same
-       exit twice in two places; what is left is the one action specific to being
-       mid-gallery.
-       `fill`, because this block *is* the whole screen in both presentations —
-       the fourth such case after the 404, the route boundary and the Derpibooru
-       profile. Without it the block took `page`'s half-viewport floor and centred
-       itself in the top half of a full-height scroller, i.e. sat in the upper
-       third with nothing under it. */
+    /* `ErrorRetry`, not `StatusView` directly — this screen is one of the AGENTS.md
+       presets. `fill`, because this block *is* the whole screen in both presentations;
+       `page`'s half-viewport floor would centre it in the upper third of a full-height
+       scroller. The only action offered is 上一张: the overlay already draws its own
+       back affordance top-left. */
     return renderDetailShell(
       <ErrorRetry
         fill
@@ -1206,9 +1134,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   return renderDetailShell(
     <div className={cn('image-detail-page max-w-5xl mx-auto', overlayGutter)}>
       <div className="bg-transparent flex flex-col rounded-md">
-        {/* === Title & Meta ===
-            No back button here: `renderDetailShell` pins one for both
-            presentations now, so an inline copy would be a second one. */}
+        {/* === Title & Meta === (back affordance is `renderDetailShell`'s, both
+            presentations — an inline copy would be a second one) */}
         <DetailHeader
           key={image.id}
           image={image}
@@ -1269,20 +1196,16 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
         >
           
           <div className="max-w-5xl mx-auto w-full space-y-6">
-            {/* Votes.
-                `mb-6` removed from both branches: the column is already
-                `space-y-6`, so this block carried the gap twice and sat 24px
-                further from the actions than any other pair on the page. */}
+            {/* Votes — no extra bottom margin: the column is already spaced at 24px
+                between siblings, and this block carried it twice. */}
             {!prefetchedDetail ? (
               <div aria-hidden="true" data-image-detail-score-loading>
                 <div className="mb-1.5 flex justify-between">
                   <Skeleton className="h-4 w-14" />
                   <Skeleton className="h-4 w-14" delay={60} />
                 </div>
-                {/* `h-1`, matching the real track below. It was `h-2.5`, standing
-                    in for a 4dp bar, so the row shifted 6px the moment the votes
-                    landed — which is the one thing a placeholder exists to
-                    prevent. */}
+                {/* Matches the real track below: the skeleton must not shift the row
+                    when the votes land. */}
                 <Skeleton className="h-1 w-full rounded-full" delay={120} />
               </div>
             ) : (
@@ -1300,42 +1223,23 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                     </span>
                   </div>
                   <div className="relative w-full h-1 bg-secondary-container rounded-full overflow-hidden">
-                    {/* With no votes the track shows through on its own — that branch
-                        used to paint `-highest` over a `-high` track, i.e. two surface
-                        steps for one object, neither of them the progress-track token
-                        (`ProgressIndicatorTokens.TrackColor` = `secondary-container`,
-                        4dp; this was 2.5dp). */}
+                    {/* With no votes the bare track shows through — the track colour is
+                        the M3 progress-track token (`secondary-container`, 4dp tall). */}
                     {image.upvotes === 0 && image.downvotes === 0 ? null : (
                       <>
-                        {/* Not a `ProgressBar`, and that is deliberate: this is a
-                            100%-stacked two-segment *ratio* with a both-zero state,
-                            which `value`/`max` cannot express.
-                            `scaleX` on two full-width absolute bars, not animated
-                            `width` on two flex items. Animating `width` reflows the
-                            row every frame, and this runs live while paging between
-                            images inside the overlay — exactly when the hero flight
-                            is finishing and least able to afford layout work.
-
-                            Absolute rather than flex because a scaled flex item
-                            still occupies its unscaled basis: two items at
-                            `width: 100%` would shrink to 50/50 and the scale would
-                            be applied to the wrong box. Anchored at opposite edges
-                            they tile exactly — the up bar covers [0, r] and the
-                            down bar, scaled from its right edge, covers [r, 1].
-
-                            `spring-slow-effects`, the same spring `ProgressBar`
-                            takes: `ProgressIndicatorDefaults.ProgressAnimationSpec`
-                            is critically damped, and an overshoot here would push one
-                            segment over the other. It ran a 200ms clock with
-                            `--ease-symmetric`, which is the *loop* curve, under a
-                            comment claiming the 300ms `standard` row — neither of
-                            which was what the code did.
-                            The per-element motion guard is gone with them: the off
-                            tier's rule re-declares `transition-property` with
-                            `!important`, so an un-important transition-none utility
-                            never won anyway. The reduced tier leaves it alone, which
-                            is right — a meter travelling to its value is the plainest
-                            kind of motion there is. */}
+                        {/* Deliberately not a `ProgressBar`: a 100%-stacked two-segment
+                            *ratio* with a both-zero state, which `value`/`max` cannot
+                            express. `scaleX` on two full-width absolute bars, not
+                            animated width on two flex items — animating width reflows
+                            the row every frame while this runs live during overlay
+                            paging, exactly when layout work is least affordable.
+                            Absolute, because a scaled flex item still occupies its
+                            unscaled basis: two 100%-wide flex items would shrink to
+                            50/50 and the scale would apply to the wrong box; anchored
+                            at opposite edges they tile exactly ([0, r] and [r, 1]).
+                            `spring-slow-effects`, the same spring `ProgressBar` takes:
+                            critically damped, and an overshoot would push one segment
+                            over the other. */}
                         <div
                           className="bg-success-fill spring-slow-effects absolute inset-y-0 left-0 w-full origin-left transition-transform"
                           style={{
@@ -1356,19 +1260,12 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
             )}
             {deferredBodyReady && (
               <>
-                {/* Secondary actions.
-                    One primitive for all five, which took three dialects out of
-                    a single flex row: two of these were `hover:bg-surface-
-                    container-high` (the alpha-tint hack `state-layer` replaces),
-                    two were `state-layer` already but with different hover
-                    colours, and every one of them wrote `p-2.5 rounded-full` by
-                    hand — a 40dp box only because a 20px glyph happened to be
-                    inside it. `IconButton` sizes the box, not the glyph. */}
-                {/* `flex-wrap`: six `shrink-0` controls plus the divider come to
-                    ~249px, against a 240px content box on a 320px viewport in the
-                    page presentation — so the row overflowed rather than wrapping.
-                    The divider is decorative and goes first on a phone, where the
-                    wrap already separates the groups. */}
+                {/* Secondary actions: one primitive for all five, so the box is sized
+                    by `IconButton`, not by hand around a 20px glyph. */}
+                {/* Wrap: the controls plus the divider total ~249px against a 240px
+                    content box on a 320px viewport, so the row overflows rather than
+                    wrapping. The divider is decorative and goes first on a phone,
+                    where the wrap already separates the groups. */}
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   {navHistory.length > 0 && (
                     <>

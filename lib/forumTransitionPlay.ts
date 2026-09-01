@@ -7,15 +7,11 @@ import type { ForumOrigin } from '@/lib/forumTransition';
 /**
  * Grows `card` from `origin` to wherever it has just been laid out.
  *
- * A FLIP: the card is already in its final position, so the tween only has to
- * put it back at the origin and release it. The scale is non-uniform, which
- * would smear the text — hence `content`, which is held out and faded in over
- * the back half. That is the spec's own answer, and it is why a container
- * transform reads as one surface changing shape rather than as a page being
- * zoomed.
+ * A FLIP: the card is already in its final position, so the tween only puts it back at the origin
+ * and releases it. The scale is non-uniform, which would smear the text — hence `content`, held
+ * out and faded in over the back half, so it reads as one surface changing shape, not a page zoom.
  *
- * Returns a cleanup that reverts everything, for a navigation that unmounts
- * mid-flight.
+ * Returns a cleanup that reverts everything, for a navigation that unmounts mid-flight.
  */
 export function playForumContainerTransform(
   card: HTMLElement,
@@ -25,10 +21,9 @@ export function playForumContainerTransform(
   const to = card.getBoundingClientRect();
   if (to.width === 0 || to.height === 0) return () => {};
 
-  /* Reduced: the card fades up in place. A container transform is travel *and* a
-     non-uniform scale — the two things the tier's rule removes — so what is left of the
-     gesture is "the post you pressed is now the surface in front of you", which a fade
-     says. Held to one clock so it cannot read as two events. */
+  /* Reduced: the card fades up in place. Travel and non-uniform scale are the two things the
+     tier removes, and a fade is what "the post you pressed is now in front of you" becomes. One
+     clock so it cannot read as two events. */
   if (motionTier() === 'reduced') {
     const fade = gsap.fromTo(
       [card, content].filter((el): el is HTMLElement => Boolean(el)),
@@ -57,17 +52,11 @@ export function playForumContainerTransform(
       y: 0,
       scaleX: 1,
       scaleY: 1,
-      /* `emphasized` at 500ms, which is the pairing for a large container
-         transform — and this file's own header calls this a container transform.
-         It read a literal `0.4` on `decelerate`: the wrong row of the table (that
-         pairing is for something *entering* the screen) and a hand-typed number
-         where `DURATION` was already imported. The shared axis was raised to 500
-         for the same reason. */
+      /* The pairing for a large container transform: `emphasized` at 500ms. */
       duration: DURATION.emphasized,
       ease: 'emphasized',
-      /* Nothing may keep a transform: this card is an ancestor of the post's
-           images, and a residual one would make it a containing block for any
-           fixed descendant. */
+      /* Nothing may keep a transform: this card is an ancestor of the post's images, and a
+         residual one would make it a containing block for any fixed descendant. */
       clearProps: 'transform,transformOrigin,willChange',
     },
     0,
@@ -77,11 +66,8 @@ export function playForumContainerTransform(
     timeline.fromTo(
       content,
       { autoAlpha: 0 },
-      /* `defaultEffects`, the critically-damped spring — a fade is an *effects*
-         change, and `ease: 'none'` was a linear fade, which this file's own rules
-         allow only for a spinner's rotation or a pre-sampled track. The 150ms offset
-         stays: the container morphs first, its contents arrive behind it, which is
-         the same split `Popover` uses. */
+      /* `defaultEffects` — a fade is an *effects* change, so the critically damped spring. The
+         150ms offset stays: the container morphs first, its contents arrive behind it. */
       { autoAlpha: 1, ...spring('defaultEffects'), clearProps: 'opacity,visibility' },
       0.15,
     );

@@ -1,119 +1,39 @@
 // Regenerates the tonal roles in `app/globals.css`. Run: `node scripts/palette.mjs`
 //
-// Why this exists as a file. The recipe used to be prose at the top of globals.css —
-// "generated from the brand seed by holding its hue and varying lightness across the
-// M3 tone scale" — which is true, and which nobody can re-run. The cost showed up
-// exactly where prose costs you: the neutral palette's chroma drifted to about a
-// third of what the recipe called for, and no check could have caught it.
-//
-// **The recipe itself is not here.** It is `lib/paletteRule.ts`, because three consumers
-// need it and only one of them is a script: this file writes the ten built-in themes,
-// `app/layout.tsx` derives the user's custom theme at SSR, and `lib/paletteLazy.ts`
-// derives it again in the browser when they pick a new colour. A copy in each is how the
-// three would drift. That module carries the whole argument for the rule — `primary` is a
-// hex an artist drew, and the ramp, the harmony and the two inks are derived from it — and
-// this file carries the eighteen hexes, the assertions, the report and the writes.
+// The recipe is `lib/paletteRule.ts`, not here: three consumers need it (this script,
+// `app/layout.tsx` at SSR, `lib/paletteLazy.ts` in the browser) and a copy in each is how they
+// would drift. This file carries the eighteen hexes, the assertions, the report and the writes.
 //
 // Two things it is deliberately NOT:
 //
-//   - It does not write the *default* theme's CSS. `globals.css` interleaves ~40
-//     paragraphs of reasoning with those values, and a generator that owned the block
-//     would either destroy them or have to parse them. It prints; you paste — or
-//     `--write` substitutes the declarations one at a time, matched on token *and*
-//     current value. The nine character themes have no prose to protect and *are*
-//     written, wholesale, to `app/theme-palettes.css`.
-//     The values stay plain hex for the reason stated in globals.css — the browser's own
-//     gamut mapping drifts the out-of-gamut ends between engines.
-//   - It does not touch anything off the tonal ramps: the four `*-fill` tones (tuned
-//     against white ink), `accent-*` (a categorical OKLCH hue sweep owned by
-//     lib/tagCategories.ts), the `media-*` roles, `scrim`, and `glass-body` / `glass-sheen`
-//     (the /about plate's own two colours and its specular, which are properties of that
-//     material rather than of the theme — its *ink* follows `primary`, in `lib/flutedGlass.ts`).
-//     Those are all argued for where they live. The semantic ramps — `error`, `success`,
-//     `warning` — carry their own hues and are shared by all eleven themes verbatim,
-//     because a severity that changes colour with the user's theme is not a severity.
-//     `link` used to be on this list and is not: it is the brand hue at a text tone now,
-//     so it rotates with the theme.
+//   - It does not write the *default* theme's CSS. `globals.css` interleaves ~40 paragraphs of
+//     reasoning with those values; `--write` substitutes the declarations one at a time, matched
+//     on token *and* current value. The nine character themes have no prose to protect and are
+//     written wholesale to `app/theme-palettes.css`. Values stay plain hex so the browser's own
+//     gamut mapping cannot drift the out-of-gamut ends between engines.
+//   - It does not touch anything off the tonal ramps: the four `*-fill` tones, `accent-*`
+//     (a categorical OKLCH hue sweep owned by lib/tagCategories.ts), the `media-*` roles,
+//     `scrim`, and `glass-body` / `glass-sheen` (the /about plate's own material; its ink follows
+//     `primary` in `lib/flutedGlass.ts`). The semantic ramps — `error`, `success`, `warning` —
+//     carry their own hues and are shared by all eleven themes verbatim: a severity that changes
+//     colour with the theme is not a severity.
 //
-// `accent-*` stays in OKLCH and that is not an inconsistency: an even hue sweep at
-// fixed lightness and chroma is the whole point of that scale, and OKLCH is where
-// that relationship is expressible.
+// The palette axis: ten built-in themes plus the user's own. Each built-in theme is **two literal
+// hexes from the MLP-VectorClub colour guide** — the coat Fill for light, the same surface's
+// Shadow Fill for dark. Nothing computes or rounds them. Everything else is the shared rule in
+// `lib/paletteRule.ts` (harmony, role→tone map, semantic ramps, and `on-primary` + the two inks
+// solved from the two fills). The Shadow Fill is why the dark scheme needs no rule: shading is
+// the artist answering "one step deeper", which is exactly what `primary` is here.
 //
-// ---------------------------------------------------------------------------
-// The palette axis
-//
-// Ten built-in themes plus the user's own. Each built-in one is **two literal hexes from the
-// MLP-VectorClub colour guide** — the character's coat Fill for the light scheme and the *same
-// surface's Shadow Fill* for the dark one. Nothing computes them, nothing rounds them, and the
-// report below emits them byte for byte. Everything else is a rule the eleven share, and that
-// rule is `lib/paletteRule.ts`: the harmony, the role→tone map, the semantic ramps, and the
-// three things still solved from those two fills (`on-primary` and the two inks).
-//
-// **This is the third answer and the first that survived looking at.** Both failures were
-// reached by reasoning rather than by looking, which is why they are recorded:
-//
-//   - **The seed's own tone.** A seed's lightness is a property of the *artwork* — a pony is
-//     drawn pale so a black outline reads against it — so taking it as the app bar's lightness
-//     scattered the ten across tones 37–90 with no rule behind the scatter.
-//   - **A rule: hue from the seed, tone from Material's own 500 row, chroma held to the
-//     brand's.** Defensible, checkable, and it produced a series of ugly yellows: at every tone
-//     that rule would visit, a yellow is either mud (desaturated at mid tone) or a shout
-//     (saturated at high tone). In its first form it also pinned six of ten themes to the sRGB
-//     gamut edge, which is neon beside a brand sitting at 67% of its own gamut.
-//
-// The colour that finally looked right was `#FAF5AB` — Fluttershy's actual coat, which an
-// artist chose. So the rule stopped trying to *decide* the brand fill and started reading it.
-//
-// **The Shadow Fill is why the dark scheme needs no rule either.** Shading is the artist already
-// answering "this same material, one step deeper", so the pair is guaranteed to read as one
-// surface in two lights — which is what `primary` is specified to be here, since it does not
-// invert between schemes. A computed tone shift is a second opinion about a question already
-// answered, and measurably a worse one: the guide's own shadow values sit within 0.9–7.5° of
-// hue for six of the nine, and where they drift (Rarity 22.9°, Applejack 14.7°, Chrysalis 12.0°)
-// the drift *is* the artwork.
-//
-// ---------------------------------------------------------------------------
-// Where a seed comes from
-//
-// The MLP-VectorClub colour guide, which extracts them from the show's own artwork. It is
-// machine-readable — https://mlpvector.club/dist/mlpvc-colorguide.json, then
-// `Appearances[id].ColorGroups[…].Colors[…]` — and **every one of the eighteen hexes below is
-// one of its values, unaltered**. Verified against the live file; the `from` note on each entry
-// names the group and the row.
-//
-// One detail of the guide is easy to miss and is why the `from` notes are as specific as they
-// are: a coat is not a colour, it is *several labelled values* — Outline, Fill, Shadow Outline,
-// Shadow Fill, and for some characters a fifth — where the Outline is the dark line drawn
-// around the shape rather than the colour the character reads as. (Six of the nine carry four;
-// Fluttershy, Lyra and Rarity have no Shadow Outline, and Applejack and Chrysalis add a
-// Freckles / Blemishes value. Do not read the four as a parser contract.)
-//
-// Six characters take the coat, and three cannot. ASSERTION 4 is what picks those three:
-//
-//   - **Rarity's coat has no hue.** Fill `#EAEEF0` measures chroma 5.3 and its Outline
-//     `#BDC1C2` measures 4.9 — a white pony, so there is nothing for a hue to be read from.
-//     She takes her **mane**: Fill `#5E50A0` at chroma 46.2, with `#4A1767` for the dark. That
-//     pair is the guide's own "Outline/Gradient Dark Fill" row rather than a Shadow Fill, which
-//     is why its hue drifts 22.9° — the largest of the nine, and the artwork's answer.
-//   - **Chrysalis's coat is black.** Fill `#2A2A2A` at chroma 1.0. She takes the **carapace**'s
-//     upper gradient — `#1E837F` middle, `#00454A` front — the shell being the changeling
-//     anatomy that is not black. Her mane `#1E5972` was the other candidate and sits 6.9° from
-//     Rainbow Dash's coat; the carapace leaves 18.6° against Lyra and 32.0° against Rainbow.
-//   - **Pinkie's coat is the brand.** Fill `#F5B7D0` is hue 353.2 against the brand's 355.7 —
-//     the same colour, two degrees apart. She takes her **mane** `#EB458B` / `#BB1C76`, whose
-//     chroma of 79.4 against the brand's 56.8 is what distinguishes the two themes; ASSERTION 5
-//     names that pair as an exemption from the 15° bar for exactly this reason.
-//
-// **Luna takes her coat and not her mane, and that is a judgement rather than a derivation.**
-// Coat Fill `#363E7A` is hue 280.3, which sits 13.8° from Rarity's mane and therefore needs
-// ASSERTION 5's second exemption; her mane Fill `#1C4CC2` is 273.6 and would clear the bar
-// outright at 20.5°. The coat was chosen anyway — she is a night-sky character and the two
-// purples are separated by *tone* (28.5 against 39.0) where the brand and Pinkie are separated
-// by chroma.
-//
-// Sorted by hue, the tightest gap that is not one of those two exemptions is **Lyra against
-// Chrysalis at 18.6°**, comfortably over the bar. ASSERTION 5 checks all of it.
-// ---------------------------------------------------------------------------
+// Where a seed comes from: the MLP-VectorClub colour guide
+// (https://mlpvector.club/dist/mlpvc-colorguide.json, `Appearances[id].ColorGroups[…].Colors[…]`);
+// every hex below is one of its values, unaltered. A coat is several labelled values — Outline,
+// Fill, Shadow Outline, Shadow Fill — where the Outline is the dark line around a shape, not the
+// colour the character reads as; cite the Fill row. Three characters have no usable coat and take
+// the next feature the guide gives them (ASSERTION 4 picks them): Rarity her mane, Chrysalis her
+// carapace, Pinkie her mane (her coat Fill is hue 353.2 against the brand's 355.7 — the same
+// colour). Luna takes her coat over her mane deliberately: a night-sky character, and the two
+// purples are separated by tone rather than hue (ASSERTION 5's second exemption).
 
 import {
   DislikeAnalyzer,
@@ -154,14 +74,10 @@ const SEED = BRAND_SEED;
 const seed = hctOf(SEED);
 
 /**
- * The ten built-in themes. `id` is the `data-palette` value; `seed` is the one input.
- *
- * `default` is first and its entry must never change: it is what proves a run still
- * reproduces globals.css. The rest are ordered by hue so the picker reads as a wheel.
- *
- * There is no third field, and that is the point — no per-theme tone, chroma or hue
- * override exists, and no seed is hand-mixed: every hex below is a value the colour guide
- * lists for that character. Which of its values, and why, is the table in the header.
+ * The ten built-in themes. `id` is the `data-palette` value; `seed` is the one input. `default`
+ * is first and must never change — it is what proves a run still reproduces globals.css; the
+ * rest are ordered by hue so the picker reads as a wheel. There is no third field on purpose: no
+ * per-theme override exists, and every hex is a value the colour guide lists for that character.
  */
 const THEMES = [
   { id: 'default', label: '默认', light: SEED, dark: BRAND_SEED_DARK, from: '品牌，无出处可取' },
@@ -190,31 +106,22 @@ for (const m of css.matchAll(/--md-sys-color-([a-z-]+):\s*(#[0-9a-fA-F]{6})\s*;/
 }
 
 /* ---------------------------------------------------------------------------
- * Contrast, so a run can prove it moved nothing it was not asked to move
- *
- * `contrast` itself lives in `lib/paletteRule.ts`, which derives the brand tones from it
- * rather than only checking them.
+ * Contrast — so a run can prove it moved nothing it was not asked to move.
  * ------------------------------------------------------------------------ */
 
-/** The pairs that are written down somewhere — globals.css, AGENTS.md, or both.
+/**
+ * The pairs written down somewhere (globals.css, AGENTS.md, or both).
  *
- * The third column is the WCAG floor that applies to *that* pair: 4.5:1 for normal-size
- * text (1.4.3), 3:1 for a non-text graphic or an indicator (1.4.11 / 2.4.11). It is here
- * so the ten-theme check can say "every theme clears whatever the default clears"
- * without hard-coding which pairs those are — three of them are known not to clear it and
- * are argued for in globals.css, and the check must not start failing on those. A pair
- * whose two schemes answer to different numbers writes `{ light, dark }`.
+ * Third column: the WCAG floor for *that* pair (4.5:1 text / 1.4.3, 3:1 non-text / 1.4.11,
+ * 2.4.11), so the ten-theme check can say "every theme clears whatever the default clears"
+ * without hard-coding which pairs those are — three are known not to clear it and are argued in
+ * globals.css. A pair whose two schemes answer to different numbers writes `{ light, dark }`.
  *
- * The fourth column says how the ten are held to it, and the split is the whole of what
- * "consistent across themes" means now that the brand tone follows the hue:
- *
- *   spread   the tone map is identical for both members, so the pair varies only with hue.
- *            Held to ±SPREAD of the default. This is where the uniformity lives.
- *   floor    a brand member, so the value is a design consequence rather than a constant.
- *            Held to its own bar, per theme, with no spread.
- *   report   printed for review, asserted nowhere. Either the default already fails it
- *            (and says why in globals.css), or it measures a brand fill against a surface,
- *            which is exactly the quantity a hue-dependent brand tone is allowed to move.
+ * Fourth column, how the ten are held to it:
+ *   spread — shared tone map, held to ±SPREAD of the default (where uniformity lives)
+ *   floor  — a brand member; held to its own bar per theme, no spread
+ *   report — printed for review, asserted nowhere (default already fails it, or it measures a
+ *            hue-dependent brand fill against a surface)
  */
 const PAIRS = [
   ['primary', 'surface', 4.5, 'report'],
@@ -236,9 +143,8 @@ const PAIRS = [
   ['on-error-container', 'error-container', 4.5, 'spread'],
   ['on-success-container', 'success-container', 4.5, 'spread'],
   ['on-warning-container', 'warning-container', 4.5, 'spread'],
-  /* Non-text pairs, 3:1 under WCAG 1.4.11 / 2.4.11. The first is the progress
-     indicator against its own track and the slider's fill against the same; the
-     second is the focused text field's 2px outline and the tab indicator. */
+  /* Non-text pairs, 3:1: progress indicator vs its own track (and the slider's fill), and the
+     focused field's 2px outline (and the tab indicator). */
   ['primary', 'secondary-container', 3, 'report'],
   ['primary', 'surface-container-low', 3, 'report'],
 ];
@@ -252,14 +158,11 @@ const failures = [];
 /** themeId -> the whole DerivedTheme: `{ meta, light, dark }`. */
 const generated = new Map(THEMES.map((t) => [t.id, deriveTheme(t.light, t.dark)]));
 
-/* ASSERTION 1 — the emitted colour is actually at the tone asked for.
+/* ASSERTION 1 — every emitted colour is actually at the tone asked for (skipping the five roles
+ * that are literal hexes or contrast solutions rather than ramp positions).
  *
- * HCT maps out-of-gamut values by holding tone and dropping chroma, so this should hold
- * even at the saturated ends; if it ever does not, the ramp is lying about its own
- * lightness and every contrast figure derived from it is unsafe. That matters more than it
- * looks: the brand derivation *reads* three tones per theme by measuring contrast on this
- * palette, so a ramp that misses its own tone would quietly move the brand itself rather
- * than only a reported figure. */
+ * The brand derivation reads three tones per theme by measuring contrast on this palette, so a
+ * ramp that misses its own tone would quietly move the brand itself, not just a reported figure. */
 for (const theme of THEMES) {
   const g = generated.get(theme.id);
   for (const [token, , lightTone, darkTone] of ROLES) {
@@ -267,8 +170,7 @@ for (const theme of THEMES) {
       ['light', lightTone],
       ['dark', darkTone],
     ]) {
-      /* Five roles are named rather than toned — `primary`, `on-primary` and the two inks
-         are literal hexes or contrast solutions, so there is no tone they were asked for. */
+      /* Five roles are named rather than toned (literal hexes or contrast solutions). */
       if (typeof raw !== 'number') continue;
       const got = hctOf(g[scheme][token]).tone;
       if (Math.abs(got - raw) > 0.5) {
@@ -283,22 +185,13 @@ const next = generated.get('default');
 
 /* ASSERTION 2 — the neutral-variant palette is at the chroma the recipe asked for.
  *
- * `outline` and the supporting-text role are the two most repeated non-brand colours in the
- * app, so a palette that quietly drifts off its target re-skins the whole product. What is
- * asserted is the *chroma*, not the hex: every value in globals.css was originally generated
- * in OKLCH, so re-deriving it in HCT moves each channel by a step or two even when hue and
- * chroma are held. The tolerance is a full point rather than a tenth because an OKLCH ramp
- * at fixed chroma is *not* an HCT ramp at fixed chroma — the two disagree slightly with
- * lightness, so pinning one end necessarily nudges the other.
- *
- * It used to have a second form: the default theme's three tokens compared against
- * *globals.css's current values*, to catch a hand-edit. That form is gone, and its removal
- * is the point rather than a loss. It froze whatever chroma the file happened to hold — so
- * when `HARMONY` moved to M3's spec values (6.7 -> 8.0, a deliberate correction), the check
- * fired and, because failures are flushed before `--write` runs, **blocked the very write
- * that would have legitimised the change**. A guard that cannot be satisfied by the
- * sanctioned procedure is a guard that gets bypassed. The hand-edit case is already covered, and better:
- * the CHANGED/idempotence check on globals.css tests *every* token rather than three. */
+ * `outline` and the supporting-text role are the two most repeated non-brand colours in the app.
+ * The chroma is asserted, not the hex: the values were generated in OKLCH and re-derived in HCT,
+ * and an OKLCH ramp at fixed chroma is not an HCT ramp at fixed chroma — hence a full-point
+ * tolerance. There is deliberately no second form comparing against globals.css's current values:
+ * it froze whatever the file happened to hold and once **blocked the very `--write` that would
+ * have legitimised a sanctioned harmony change**. Hand-edits are covered by the
+ * CHANGED/idempotence check on every token instead. */
 const NV_TOKENS = ['on-surface-variant', 'outline', 'outline-variant'];
 for (const theme of THEMES) {
   for (const scheme of ['light', 'dark']) {
@@ -362,8 +255,7 @@ for (const theme of THEMES) {
   );
 }
 
-/* The hue wheel, because the closest pair is the thing a new theme is most likely to
-   break and no other line of this report would show it. */
+/* The hue wheel — the closest pair is what a new theme is most likely to break. */
 const wheel = THEMES.map((t) => ({ id: t.id, hue: generated.get(t.id).meta.hue })).sort(
   (a, b) => a.hue - b.hue,
 );
@@ -407,17 +299,11 @@ for (const scheme of ['light', 'dark']) {
 
 /* ASSERTION 3 — the ten are consistent where consistency is constructible.
  *
- * This used to be one rule for every pair: no theme more than a quarter of a point from
- * the default. That was checkable only while the brand tone was shared, so the three kinds
- * are declared per pair in PAIRS above. `spread` is the same ±SPREAD test and still covers
- * everything whose tone map the ten share, which is every surface step, both neutral-variant
- * roles, the whole secondary/tertiary harmony, the semantic containers and the two link
- * roles — measured, the worst is 0.10. `floor` covers the two pairs a hue-dependent brand
- * tone is allowed to move: white-or-dark ink on the brand, and the brand's ink on the page.
- * `report` is printed and not asserted.
- *
- * Both asserted kinds also keep the original "no theme loses a bar the default clears",
- * which is what stops this from failing on the divergences globals.css argues for. */
+ * Three kinds declared per pair in PAIRS: `spread` (±SPREAD of the default — every surface step,
+ * both neutral-variant roles, the secondary/tertiary harmony, the semantic containers, the link
+ * roles; measured worst 0.10), `floor` (the two pairs a hue-dependent brand tone may move), and
+ * `report` (printed, not asserted). Both asserted kinds also keep "no theme loses a bar the
+ * default clears", so the divergences globals.css argues for do not fail the run. */
 const SPREAD = 0.25;
 console.log(`\nCONTRAST MATRIX — every theme against the default, tolerance ±${SPREAD}`);
 for (const scheme of ['light', 'dark']) {
@@ -455,29 +341,18 @@ for (const scheme of ['light', 'dark']) {
   }
 }
 
-/* ASSERTION 4 — a built-in fill defines a hue.
+/* ASSERTION 4 — a built-in fill defines a hue (chroma ≥ MIN_SEED_CHROMA).
  *
- * This used to bound the seed's *tone* to 30–92, because the brand tone was the seed's own
- * and a near-white or near-black seed produced a theme whose largest surfaces could not be
- * told from the page. `primary` is a literal hex now, so that check is meaningless — and what
- * it was really catching all along was the other failure, which is still live: a
- * near-achromatic fill has no hue to rotate the palette by.
+ * The check that picks a character's row for them: Rarity's coat is chroma 5.3 and Chrysalis's
+ * 1.0, which is why those two take a mane and a carapace. Hard bar for the ten built-ins;
+ * deliberately not applied to the user's colour — a person who wants a grey theme is not making a
+ * mistake. `rampChroma` tapers its chroma floor to zero as a fill runs out of hue (inert above
+ * this constant), so a grey lands on a near-monochrome scheme rather than a grey bar over a
+ * randomly-hued ramp.
  *
- * It is the check that picks a character's row for them: Rarity's coat is #BDC1C2 at chroma
- * 4.7 and Chrysalis's is #2A2A2A at chroma 1.0, which is why those two take a mane and a
- * carapace.
- *
- * **It is a hard bar here and deliberately not one for the user's colour.** Ten themes chosen
- * from a colour guide can afford to insist on a hue; a person who wants a grey theme is not
- * making a mistake. `rampChroma` tapers its chroma floor to zero as a fill runs out of hue,
- * so a grey lands on a near-monochrome scheme rather than a grey bar over a randomly-hued
- * ramp — the taper is inert above this constant, so every theme below is unaffected by it.
- *
- * There is no assertion here that `on-primary` does not invert between schemes, and there
- * was one until it was noticed that it could not fail: the `on-primary` row in ROLES hands
- * the *same* `b.onPrimary` to both scheme columns, so the two are one lookup and are equal
- * by construction. What can actually go wrong is the choice being unjustified in one
- * scheme, and that is the `on-primary`/`primary` `floor` row in PAIRS. */
+ * No assertion here that `on-primary` does not invert between schemes — it cannot fail, since
+ * both scheme columns get the same lookup. The `on-primary`/`primary` `floor` row in PAIRS is
+ * what guards the choice. */
 for (const theme of THEMES) {
   const { fillChroma } = generated.get(theme.id).meta;
   if (fillChroma < MIN_SEED_CHROMA) {
@@ -488,21 +363,14 @@ for (const theme of THEMES) {
   }
 }
 
-/* ASSERTION 5 — the hue wheel has no coincident pair, and the two exemptions.
+/* ASSERTION 5 — the hue wheel has no coincident pair (15° bar), with two exemptions.
  *
- * Two themes at the same hue are two themes that look the same in the picker however
- * different their tones are, and the picker is a radiogroup of coloured circles with a
- * caption — the caption is not what anyone reads. The bar is 15°.
- *
- * Both exemptions are pairs that a *second* axis separates, which is why they are named
- * rather than the bar being lowered — a future theme still has to clear 15° on hue alone.
- *
- *   default / pinkie   4.2° apart, separated by **chroma**: 56.8 against 79.4, a dusty
- *                      rose beside a hot pink. Visible at equal hue where 4° is not.
- *   luna / rarity     13.8° apart, separated by **tone**: 露娜's coat Fill is tone 28 and
- *                      瑞瑞's mane Fill is 39, a near-navy beside an indigo. This one is a
- *                      deliberate trade — 露娜's *mane* would leave 20.5° and clear the bar
- *                      outright, and her coat was chosen over it anyway. */
+ * Two themes at the same hue look the same in the picker however different their tones. Both
+ * exemptions are pairs a *second* axis separates, so the bar itself is never lowered — a future
+ * theme still has to clear 15° on hue alone:
+ *   default / pinkie  4.2°, separated by chroma (56.8 vs 79.4)
+ *   luna / rarity     13.8°, separated by tone (28 vs 39) — a deliberate trade
+ */
 const HUE_BAR = 15;
 const HUE_EXEMPT = [
   ['default', 'pinkie'],
@@ -521,17 +389,13 @@ for (let i = 0; i < wheel.length; i += 1) {
   }
 }
 
-/* ASSERTION 6 — the inks are one family even though the fills are not.
+/* ASSERTION 6 — every `primary-ink` is chroma ≥ 35.
  *
- * This is the design claim of the natural-lightness rule, in checkable form. The fills
- * deliberately span a wide tone range so that each hue sits where it looks best; the
- * *inks* must not, because `primary-ink` is what a section heading's glyph, a checkbox's
- * box, a tab indicator, a slider's fill and a focused field's outline all take, and those
- * have to read as the same weight of mark in every theme. Measured, all ten land in 56–61.
- *
- * The band is asserted rather than the contrast, because contrast against the page is
- * already a `floor` row in PAIRS — what this adds is that the ten agree with *each other*,
- * which a per-theme floor cannot say. */
+ * The checkable form of the `CHROMA_REFERENCE_TONE` argument: the ramp's chroma is measured at
+ * tone 61, not the fill's own tone, so a pale fill cannot produce a greyed ink — the glyph,
+ * checkbox, tab indicator and focused-outline colour must stay one family of marks across all
+ * ten. Contrast against the page is already a `floor` row in PAIRS; what this adds is that the
+ * ten agree with each other. */
 const INK_CHROMA_FLOOR = 35;
 for (const theme of THEMES) {
   const { inkLight } = generated.get(theme.id).meta;
@@ -546,13 +410,10 @@ for (const theme of THEMES) {
 
 /* ASSERTION 7 — no theme's brand fill is a colour people reliably dislike.
  *
- * `DislikeAnalyzer` is MCU's own, and it encodes a published finding rather than a taste:
- * Palmer and Schloss (2010) measure a universal distaste for dark yellow-greens, which the
- * library defines as hue 90–111 at chroma > 16 and tone < 65. It is exactly the hole the
- * *previous* rule fell into — with `primary` pinned near tone 61, Fluttershy's hue can only be
- * `#a59401`, a dark olive — so this is the assertion that would have caught that revision's
- * worst output. Reading the fill off the artwork satisfies it by construction: her coat is
- * `#faf5ab` at tone 95. Kept as a guard on the next seed somebody adds. */
+ * `DislikeAnalyzer` (MCU's own) encodes Palmer & Schloss 2010: a universal distaste for dark
+ * yellow-greens — hue 90–111, chroma > 16, tone < 65. The exact hole an earlier seed rule fell
+ * into (pinned near tone 61, Fluttershy's hue could only be a dark olive). Reading fills off the
+ * artwork satisfies it by construction; kept as a guard on the next seed somebody adds. */
 for (const theme of THEMES) {
   const hex = generated.get(theme.id).light.primary;
   if (DislikeAnalyzer.isDisliked(hctOf(hex))) {
@@ -565,19 +426,13 @@ for (const theme of THEMES) {
 
 /* ASSERTION 8 — the harmony is the library's `SchemeTonalSpot`, not our transcription of it.
  *
- * `HARMONY` and `NEUTRAL_CHROMA` in `lib/paletteRule.ts` spell out four numbers that M3 owns
- * (secondary 16, tertiary +60° at 24, neutral 6, neutralVariant 8), and until this existed
- * nothing checked them against the library at all: ASSERTION 2 compares emitted chroma against
- * *our own* constant, so it is self-referential and cannot see the two drifting apart. A
- * dependency bump that retuned TonalSpot would have passed every check in this file.
- *
- * So: build a real `SchemeTonalSpot` from each theme's fill and compare all four palettes at
- * every tone the role map uses. `primary` is deliberately excluded — the library pins it at a
- * flat chroma 36 and this app's is `rampChroma`, which is the documented divergence.
- *
- * It also covers the one mechanism difference: `paletteSet` writes `hue + 60` where the library
- * sanitises first, and three of the ten themes wrap past 360°. If that ever stopped being inert
- * this is what would say so. */
+ * ASSERTION 2 compares emitted chroma against *our own* constant, so it is self-referential; a
+ * dependency bump that retuned TonalSpot would have passed every other check in this file. This
+ * builds a real `SchemeTonalSpot` per theme and compares all four palettes at every tone the
+ * role map uses. `primary` is excluded — the library pins it at chroma 36 and this app's is
+ * `rampChroma` (the documented divergence). Also covers the one mechanism difference:
+ * `paletteSet` writes `hue + 60` where the library sanitises first, and three themes wrap past
+ * 360°. */
 const TONES_USED = [...new Set(ROLES.map(([, , l]) => l).concat(ROLES.map(([, , , d]) => d)))]
   .filter((t) => typeof t === 'number')
   .sort((a, b) => a - b);
@@ -603,10 +458,9 @@ for (const theme of THEMES) {
 /* ---------------------------------------------------------------------------
  * The two generated files
  *
- * Neither has prose to protect, so both are owned outright: built here, compared on a
- * plain run, overwritten by `--write`. Comparing rather than only writing is what makes
- * `npm run colors` a verifier — a stale generated file is a failure, not a silent
- * disagreement between the CSS and the recipe.
+ * Neither has prose to protect, so both are owned outright: built here, compared on a plain run,
+ * overwritten by `--write`. Comparing is what makes `npm run colors` a verifier — a stale
+ * generated file is a failure, not a silent disagreement between the CSS and the recipe.
  * ------------------------------------------------------------------------ */
 
 const CHARACTER_THEMES = THEMES.filter((t) => t.id !== 'default');
@@ -676,21 +530,13 @@ const themeColorsTs = (() => {
 // Two hexes per theme per scheme, for the two places a \`var()\` cannot reach.
 //
 // \`primary\` is the \`<meta name="theme-color">\` value: the browser reads that tag to
-// paint its own chrome before any stylesheet exists, so it has to be a literal. It used
-// to be two literals hand-copied into \`viewport.themeColor\` in \`app/layout.tsx\`, with a
-// comment calling them the app's only unavoidable ones; there are twenty now, which is
-// past what a human keeps in step, so they are generated and the layout inlines them.
-//
-// Both are also the swatch's, for the picker in /settings: a swatch has to show a theme
-// that is *not* the active one, so it cannot read the tokens — those are always the active
-// theme's. \`onPrimary\` is there because the selected swatch carries a tick, and which ink that
-// tick takes is a per-theme answer: five themes are white on their brand and five are dark.
-//
-// Four fields have been removed over time and every removal was the same rule: \`primary-container\`
-// went, then \`surface\` when the swatch stopped drawing a ring behind the colour, then
-// \`secondary\` and \`tertiary\` when the chip went back to one flat colour. A payload no consumer
-// touches is a payload that goes stale silently, so it goes — and one a consumer needs is
-// generated rather than hand-copied, which is the same rule read the other way.
+// paint its own chrome before any stylesheet exists, so it has to be a literal, generated
+// rather than hand-copied. Both are also the swatch's, for the picker in /settings: a swatch has
+// to show a theme that is *not* the active one, so it cannot read the tokens — those are always
+// the active theme's. \`onPrimary\` is there because the selected swatch carries a tick, and which
+// ink that tick takes is a per-theme answer: five themes are white on their brand and five are
+// dark. Fields no consumer touches go; fields a consumer needs are generated — the same rule read
+// both ways.
 //
 // The eleventh palette is **not** in this array and must not be: its colours come from the
 // user's own seed, so there is nothing to generate. It is here only as an id, because

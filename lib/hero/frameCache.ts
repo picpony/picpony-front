@@ -177,14 +177,11 @@ export function captureHeroFrame(media: VisualMedia | null): FrameAsset | null {
   frame.height = capture.height;
   const context = frame.getContext('2d');
   if (!context) return null;
-  /* Quality follows the scale rather than being `high` unconditionally.
-   *
-   * This `drawImage` is the biggest single item in the press handler, and Skia's `high`
-   * is a multi-pass filter armed for a downscale. A gallery thumbnail's natural size is
-   * usually at or under the cap, i.e. `scale === 1` — a 1:1 blit, where a resampling
-   * filter has nothing to resample and the cost is pure. `medium` covers the genuine
-   * downscales: this is a bitmap that exists for 250ms behind a growing mask, not the
-   * picture the user is going to look at. */
+  /* Quality follows the scale rather than being `high` unconditionally: this `drawImage`
+     is the biggest single item in the press handler. At `scale === 1` it is a 1:1 blit —
+     a resampling filter has nothing to resample and `high`'s multi-pass filter is pure
+     cost — and `medium` covers the genuine downscales: a bitmap that exists for one leg
+     behind a growing mask, not the picture the user is going to look at. */
   context.imageSmoothingEnabled = capture.scale < 1;
   context.imageSmoothingQuality = 'medium';
   try {
@@ -205,18 +202,14 @@ export function captureHeroFrame(media: VisualMedia | null): FrameAsset | null {
  * Captures a source's pixels into the cache before they are needed.
  *
  * `immediate` is for the press path, and it changes *when* rather than *what*. The idle
- * path below refuses to run while input is active and schedules through
- * `requestIdleCallback`, neither of which can fire during a tap: a touch screen has no
- * hover, so `pointerenter` never happens, and an idle callback does not run while a
- * gesture is in flight. The result was that the one capture that mattered — the card the
- * finger is on — always landed synchronously inside `handleClick`, at full size, which is
- * exactly the intermittent press-time spike. With `immediate` the capture is posted as a
- * macrotask from `pointerdown`, and pointerdown-to-click is ≥100ms on touch, so
- * `prepareImageHero` finds it in the LRU and the click costs nothing.
- *
- * A press that turns into a scroll therefore pays one `drawImage` it did not need. That
- * is bounded by the viewport check in `captureFrame` and by the LRU, and it is one
- * capture against the alternative of paying the same one at the worst possible moment.
+ * path refuses to run while input is active and schedules through `requestIdleCallback`,
+ * neither of which can fire during a tap (no hover on touch, no idle callback during a
+ * gesture) — so the one capture that mattered always landed synchronously in the click
+ * handler, which is exactly the intermittent press-time spike. With `immediate` the
+ * capture is posted as a macrotask from `pointerdown`, and pointerdown-to-click is ≥100ms
+ * on touch, so the click finds it in the LRU and costs nothing. A press that turns into a
+ * scroll therefore pays one `drawImage` it did not need — bounded by the viewport check
+ * and the LRU, and one capture against the alternative of paying it at the worst moment.
  */
 export function warmImageHeroFrame(
   source: HTMLElement | null,

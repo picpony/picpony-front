@@ -118,12 +118,13 @@ export default function HeroStage() {
         aria-hidden="true"
         className="pointer-events-auto absolute inset-0 z-hero-stage overflow-hidden"
       >
-        {/* The container transform's window, and the counter-scale that makes the content's
-            accumulated transform uniform. Inert until `buildContainerAnimations` drives them —
-            see the block above `getHeroContainerPose` for the algebra, and note that neither may
-            ever hold a resting transform: a transform is a containing block for fixed-position
-            descendants. Both boxes are `absolute inset-0`, so inserting them changes no
-            geometry; the route's shell must stay structurally identical to this. */}
+        {/* The container transform's window, and the counter-scale that makes
+            the content's accumulated transform uniform. Inert until
+            `buildContainerAnimations` drives them — and neither may ever hold a
+            resting transform: a transform is a containing block for
+            fixed-position descendants. Both boxes are `absolute inset-0`, so
+            inserting them changes no geometry; the route's shell must stay
+            structurally identical to this. */}
         <div data-image-detail-clip className="image-detail-clip absolute inset-0">
           <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
         <div
@@ -150,12 +151,11 @@ export default function HeroStage() {
               <div className="flex flex-col rounded-md bg-transparent">
                 <DetailHeader key={image.id} image={image} layout="stage" metadataReady={false} />
                 <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
-                  {/* The landing target is an ordinary in-flow flex item, because the routed
-                      `DetailImage` is one too and the two must measure identically. It used
-                      to be a second box inside `absolute inset-x-4`, so its
-                      `width: min(100%, …)` resolved against a containing block 16px narrower
-                      per side than the well's content box — the flyer landed 16px wider than
-                      the picture it handed off to and snapped in on arrival. */}
+                  {/* The landing target is an ordinary in-flow flex item, because
+                      the routed `DetailImage` is one too and the two must measure
+                      identically — a second box inside an absolutely-positioned
+                      wrapper resolved its width against a containing block 16px
+                      narrower per side, and the flyer landed wide and snapped in. */}
                   <div
                     ref={targetRef}
                     data-image-hero-stage-target
@@ -175,9 +175,8 @@ export default function HeroStage() {
                         <Skeleton className="h-4 w-14" />
                         <Skeleton className="h-4 w-14" delay={60} />
                       </div>
-                      {/* 4dp, matching the routed vote track. The Stage and the route
-                          must measure identically or the handoff shifts, and this was
-                          `h-2.5` against a `h-1` bar. */}
+                      {/* 4dp, matching the routed vote track — the Stage and the
+                          route must measure identically or the handoff shifts. */}
                       <Skeleton className="h-1 w-full" delay={120} />
                     </div>
                   </div>
@@ -196,15 +195,14 @@ export default function HeroStage() {
           </div>
         </div>
       </section>
-      {/* `passive`, which is what the prop was added for and what no call site had ever
-          passed: while the Stage's copy rides along, the routed one is mounted too, so
-          without it the app had two focusable 返回图片列表 buttons in the tab order and
-          two in the accessibility tree.
-          No `data-image-detail-reveal` here. Both back buttons carried `chrome`, and it
-          was dead on both: the cascade is `overlay.querySelectorAll(...)` and these render
-          as *siblings* of the overlay. The entrance comes from the `floatingBack` branch
-          in `buildOverlayAnimations`, and the pull gesture reaches it through a compound
-          selector on the element itself rather than a descendant one. */}
+      {/* `passive`: while the Stage's copy rides along, the routed one is mounted
+          too, so without it the app has two focusable 返回图片列表 buttons in the
+          tab order and two in the accessibility tree.
+          No `data-image-detail-reveal` here — both back buttons render as
+          *siblings* of the overlay, so the cascade never reached them. Their
+          entrance is the `floatingBack` branch in `buildOverlayAnimations`, and
+          the pull gesture reaches them through a compound selector on the
+          element itself. */}
       <DetailBack
         ref={backRef}
         passive

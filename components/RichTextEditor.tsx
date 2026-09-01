@@ -238,30 +238,21 @@ export default function RichTextEditor({
   }, [disabled]);
 
   return (
-    /* `outline`, not `outline-variant`. This is the boundary of a control you type
-       into — the same object as a text field's border, and the app's own rule is
-       that a text-field border takes `outline` while `outline-variant` is for
-       dividers and decorative rules. The shell wore the divider role, so the
-       largest typed-into container on the site had the lightest possible edge.
-       (The `--w-e-*` variables below keep `outline-variant` where they genuinely
-       are dividers: the seam between toolbar and body, and the table gridlines.)
+    /* outline, not outline-variant: this is the boundary of a control you
+       type into — the same object as a text field's border, which the app's
+       rule gives outline while outline-variant is for dividers. (The w-e
+       custom properties below keep outline-variant where they genuinely
+       are dividers.)
 
-       **One focus indicator, and 4dp not 8.** It thickened its boundary to
-       `primary` *and* drew a ring 2px outside that boundary — two nested boxes,
-       the one defect `CodeInput` records removing, on the largest control in the
-       app. A control whose identity is a 1px outline cannot wear a ring around
-       that outline; the thickened border *is* the indicator, which is what
-       `.m3-field[data-labelled]:focus-within > fieldset` does. And a text field is
-       `CornerExtraSmall`, so `rounded-sm` (the chip's 8dp step) was one step too
-       round. */
+       **One focus indicator, and 4dp not 8**: the outline thickening to
+       primary *is* the indicator — no ring beside it (two nested boxes is the
+       defect CodeInput records removing) — and the corner is the text field's
+       4dp step, not the chip's 8dp. */
     <div className="w-full overflow-hidden rounded-xs border border-outline transition-ui focus-within:border-2 focus-within:border-primary-ink">
       <style>{`
-        /* wangEditor is themed entirely through its own \`--w-e-*\` variables.
-           These used to be set only under \`.dark\`, and to a cold slate palette:
-           light mode fell through to the library's stock greys, and dark mode
-           got a blue-grey that fought the warm rose neutral everywhere else.
-           Pointing them at the design tokens instead means the editor follows
-           the scheme on its own and neither branch can drift. */
+        /* wangEditor is themed entirely through its own w-e custom properties.
+           Pointing them at the design tokens means the editor follows the
+           scheme on its own, and neither branch can drift. */
         .w-e-bar,
         .w-e-text-container,
         .w-e-modal,
@@ -330,18 +321,11 @@ export default function RichTextEditor({
         }
 
         /* ---- Toolbar -------------------------------------------------
-           wangEditor ships a 32px-tall row of bare 14px glyphs with a square
-           grey hover — none of which is M3, and none of which is usable with a
-           thumb. It also lays the row out as a single unwrapped flex line, so
-           in simple mode (~15 items, roughly 600px) it spilled straight through
-           the rounded border on a phone and pushed horizontal overflow onto the
-           whole detail page.
-
            Rebuilt here as a row of M3 icon buttons: 40dp round targets, a
            state-layer hover, secondary-container for the active state, and the
-           row wraps instead of overflowing. Wrapping rather than a horizontal
-           scroller because a scroller here would compete with pull-to-dismiss,
-           which force-writes touch-action on the surrounding scroller.
+           row wraps instead of overflowing (a horizontal scroller here would
+           compete with pull-to-dismiss, which force-writes touch-action on the
+           surrounding scroller).
            (No backticks in this block: it lives inside a JS template literal.) */
         .w-e-bar {
           padding: 6px;
@@ -374,10 +358,8 @@ export default function RichTextEditor({
         }
 
         /* The three state weights read the tokens rather than repeating numbers.
-           They were hand-typed 8 and 12 with no focus weight at all: 12 is the
-           stale Material Web figure the rest of the app corrected to .10, and a
-           toolbar button that tints on hover and press but not on focus is the one
-           state a keyboard user actually needs to see. */
+           The old hand-typed weights had no focus weight at all — the one state
+           a keyboard user actually needs to see. */
         .w-e-bar-item button:hover {
           background-color: color-mix(
             in oklab,
@@ -387,13 +369,10 @@ export default function RichTextEditor({
           color: var(--md-sys-color-on-surface);
         }
 
-        /* Focus gets the state layer *and* the app's own ring. It used to draw
-           outline: 2px solid primary with outline-offset: -2px — the only control
-           in the app drawing its own indicator, in the wrong role (the focus token
-           is secondary now, per MenuTokens.FocusIndicatorColor) and inset, which
-           ate 2px of a target that is already small. A ring sits outside.
-           No backticks anywhere in this block: it lives inside a template literal,
-           and one would end the string. */
+        /* Focus gets the state layer *and* the app's own ring — a ring sits
+           outside the target, unlike the inset outline this used to draw.
+           No backticks anywhere in this block: it lives inside a template
+           literal, and one would end the string. */
         .w-e-bar-item button:focus-visible {
           background-color: color-mix(
             in oklab,

@@ -21,9 +21,9 @@ import { inlineRoutePolicyScript, readRoutePolicy } from '@/lib/route.server';
 /** The three the cookie may legitimately hold; anything else is treated as absent. */
 const IMAGE_LINES: readonly ImageLine[] = ['direct', 'cdn', 'picpony'];
 
-/* Validation lists for the cookie reads below. Spelled out rather than imported from
-   `lib/appearance` because that module is client-only — it holds hooks — and this is a
-   server component. The types live there; these three strings are the whole overlap. */
+/* Validation lists for the cookie reads below. Spelled out, not imported from
+   `lib/appearance` — that module is client-only (it holds hooks), this is a server
+   component. The types live there; these three strings are the whole overlap. */
 const MOTION_TIERS: readonly string[] = ['off', 'reduced', 'standard'];
 const MOTION_SPEEDS: readonly string[] = ['fast', 'default', 'slow'];
 
@@ -37,12 +37,11 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-// The site is Chinese but only shipped a Latin face, so every CJK glyph fell
-// back to whatever the OS had. `subsets` is deliberately omitted: Google slices
-// this family by unicode-range rather than by named subset, so there is nothing
-// valid to request — and with no subset there is nothing to preload either,
-// hence `preload: false`. Weights are pinned instead of using the variable
-// axis, which for CJK carries every glyph at every weight.
+// Chinese site, but the family only shipped a Latin face — without this every CJK
+// glyph fell back to the OS. `subsets` is deliberately omitted: Google slices this
+// family by unicode-range, so there is nothing valid to request and, with no subset,
+// nothing to preload — hence `preload: false`. Weights pinned rather than the
+// variable axis, which for CJK carries every glyph at every weight.
 const notoSansSC = Noto_Sans_SC({
   weight: ['400', '500', '700'],
   variable: '--font-noto-sc',
@@ -59,20 +58,15 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // `themeColor` is deliberately absent, and its absence is the fix rather than an
-  // omission. It used to carry the app bar's two `primary` literals — the app's only
-  // unavoidable ones, because Next serialises them into a `<meta name="theme-color">`
-  // tag that the browser reads to paint its own chrome *before* any stylesheet exists,
-  // where a `var()` resolves to nothing.
-  //
-  // A static array cannot express eleven palettes — one of them the user's own — and mutating
-  // Next's own tag does not survive a client navigation (the App Router re-renders metadata).
-  // So the tag is rendered by hand below, from the cookie, out of the values
-  // `scripts/palette.mjs` generates — which also retires the hand-copy step that used to
-  // follow a re-seed.
+  // `themeColor` deliberately absent — its absence is the fix. It used to carry two
+  // `primary` literals (the app's only unavoidable ones): Next serialises them into a
+  // `<meta name="theme-color">` the browser reads before any stylesheet exists, where
+  // `var()` resolves to nothing. A static array cannot express eleven palettes, and
+  // mutating Next's own tag does not survive a client navigation — so the tag is
+  // rendered by hand below, from the cookie, using values `scripts/palette.mjs` generates.
   colorScheme: 'light dark',
-  // Lets the shell paint under the notch/home indicator; the layout then pays
-  // it back with env(safe-area-inset-*) padding at the edges that need it.
+  // Paints the shell under the notch/home indicator; the layout pays it back with
+  // env(safe-area-inset-*) padding at the edges that need it.
   viewportFit: 'cover',
 };
 
@@ -82,16 +76,14 @@ const BUILT_IN_BAR_COLORS = Object.fromEntries(
 );
 
 /**
- * The eleventh palette, resolved from the seed in the cookie.
+ * The eleventh palette, resolved from the seed in the cookie: the two
+ * `html[data-palette='custom']` blocks land in the first byte, so a user on a
+ * custom colour never sees a frame of the default brand. No client-side equivalent
+ * exists — the pre-paint script runs before stylesheets and cannot carry HCT, and
+ * by the time `lib/paletteLazy.ts` loads the page has painted several times over.
  *
- * Returns the two `html[data-palette='custom']` blocks, so they are in the first byte and a
- * user on a custom colour never sees a frame of the default brand. There is no client-side
- * equivalent that could do this: the pre-paint script runs before any stylesheet resolves
- * and cannot carry HCT, and by the time `lib/paletteLazy.ts` has its chunk the page has
- * painted several times over.
- *
- * A malformed cookie yields null, and the pre-paint script's own lookup then falls the stored
- * palette back to `default` — the two agree because both key off the same `BAR_COLORS` object.
+ * A malformed cookie yields null; the pre-paint script's lookup then falls the
+ * stored palette back to `default` (both key off the same `BAR_COLORS` object).
  */
 function customPalette(seedCookie: string | undefined) {
   const seed = normalizeCustomSeed(seedCookie);
@@ -100,41 +92,37 @@ function customPalette(seedCookie: string | undefined) {
   return {
     seed,
     css: paletteBlocksCss(CUSTOM_PALETTE, derived),
-    /* `[lightPrimary, darkPrimary]`, the shape the pre-paint script indexes with `k?1:0`. */
+    /* `[lightPrimary, darkPrimary]` — the shape the pre-paint script indexes with `k?1:0`. */
     bar: [derived.light.primary, derived.dark.primary] as const,
-    /* Four hexes for `<html>`: the fill and its ink, per scheme. The picker's eleventh chip
-       needs the user's colour *while another theme is in force*, which is exactly what a token
-       read cannot give it. The order is `unpackCustomTones`'s in `lib/appearance.ts`. */
+    /* Four hexes for `<html>`: fill and ink, per scheme. The picker's eleventh chip needs
+       the user's colour while another theme is in force, which a token read cannot give.
+       Order is `unpackCustomTones`'s in `lib/appearance.ts`. */
     tones: (['light', 'dark'] as const)
       .flatMap((scheme) => [derived[scheme].primary, derived[scheme]['on-primary']])
       .join(' '),
   };
 }
 
-/* The pre-paint script: the only code that runs before the first paint, and therefore
-   the only place a preference can be corrected without a flash of the wrong one.
-   The server already applied all five from cookies; this re-applies them from
-   localStorage, which is the authority — a user who cleared cookies but not storage, or
-   whose cookie is stale, gets the right theme without a repaint.
+/* The pre-paint script: the only code before first paint, so the only place a
+   preference can be corrected without a flash of the wrong one. The server applied
+   all five from cookies; this re-applies from localStorage (the authority) — a user
+   who cleared cookies but not storage, or with a stale cookie, gets the right theme.
 
-   **`get()` wraps each read on its own, and that is the whole shape of this script.** It
-   used to be one `try` around everything, `s=localStorage` included — and in a browser
-   configured to block site data, *touching* `window.localStorage` throws `SecurityError`.
-   `catch(e){}` swallowed it and then none of the five attributes were written, nor the
-   `theme-color` update: such a user got the light default and `data-motion="standard"`
-   whatever the OS said, with no cookie to fall back on either, because cookies are only
-   written on an explicit commit. So the OS-derived answers are computed first and each
-   stored value is an optional refinement of one. `lib/appearance.ts` wraps its reads
-   individually for exactly this reason.
+   **`get()` wraps each read on its own.** One `try` around everything used to include
+   `s=localStorage` — and in a browser blocking site data, *touching* localStorage
+   throws `SecurityError`, which the catch swallowed, so none of the five attributes
+   nor the theme-color update were written: such a user got the light default with no
+   cookie fallback either. So OS-derived answers are computed first and each stored
+   value is an optional refinement of one. `lib/appearance.ts` wraps its reads the
+   same way for the same reason.
 
-   `C` doubles as the validation list, which is what makes the custom palette safe here
-   without any derivation: it gains a `custom` key **only** when this request's cookie
-   carried a usable seed, so a stored `custom` with nothing rendered for it falls back to
+   `C` doubles as the validation list, which makes the custom palette safe here with
+   no derivation: it gains a `custom` key only when this request's cookie carried a
+   usable seed, so a stored `custom` with nothing rendered for it falls back to
    `default` rather than selecting a palette no stylesheet answers to.
 
-   The keys are spelled out because this is a string, not a module: it cannot import
-   `LS_KEYS`. They must stay in step with `lib/constants.ts`, which is why each one is
-   named in a comment there. */
+   Keys are spelled out because this is a string, not a module — it cannot import
+   `LS_KEYS`; they must stay in step with `lib/constants.ts`. */
 const prePaint = (barColors: Record<string, readonly string[]>) => `(function(){
 var d=document.documentElement,C=${JSON.stringify(barColors)};
 var get=function(k){try{return localStorage.getItem(k)}catch(e){return null}};
@@ -159,17 +147,17 @@ export default async function RootLayout({
   children: React.ReactNode;
   imageDetail: React.ReactNode;
 }>) {
-  /* Both awaited together. The policy read is bounded by its own timeout and cached across
-     visitors, and `cookies()` is already what makes this route dynamic, so overlapping them costs
-     nothing and serialising them would put the two latencies end to end. */
+  /* Both awaited together: the policy read is timeout-bounded and cached across
+     visitors, and `cookies()` already makes this route dynamic, so overlapping costs
+     nothing while serialising puts the two latencies end to end. */
   const [cookieStore, routePolicy] = await Promise.all([cookies(), readRoutePolicy()]);
   const sidebarCollapsed = cookieStore.get(COOKIE_KEYS.sidebarCollapsed)?.value === 'true';
   const darkMode = cookieStore.get(COOKIE_KEYS.darkMode)?.value === 'true';
 
-  /* The three enumerated preferences, validated rather than trusted: a cookie is
-     user-editable, and an unknown value in `data-motion` would match no rule and
-     silently mean "standard" — which is the one outcome a user who asked for no
-     animation must not get by accident. */
+  /* Enumerated preferences validated rather than trusted: a cookie is user-editable,
+     and an unknown value in `data-motion` would match no rule and silently mean
+     "standard" — the one outcome a user who asked for no animation must not get by
+     accident. */
   const paletteCookie = cookieStore.get(COOKIE_KEYS.palette)?.value;
   /* The user's own palette, derived here rather than shipped: `lib/paletteRule.ts` is a
      plain module, so the server can run it and put all sixty declarations in `<head>`. */
@@ -181,15 +169,15 @@ export default async function RootLayout({
     ? { ...BUILT_IN_BAR_COLORS, [CUSTOM_PALETTE]: custom.bar }
     : BUILT_IN_BAR_COLORS;
   const motionCookie = cookieStore.get(COOKIE_KEYS.motion)?.value;
-  /* Which image line this device is on, so the fifty `<img>` tags this document renders carry the
-     same URLs the client is about to want. Without it every card mismatched at hydration for
-     anyone who had changed the setting, and React leaves a mismatched attribute alone — so their
-     preference was ignored for the whole first screen. `null` on a first visit, which is correct:
-     with nothing stored, both sides compute the defaults. See `components/ImageLineProvider.tsx`. */
-  /* The spoiler tags, so the gallery's covers are in the server's own HTML rather than appearing
-     after hydration. Bounded and split here rather than trusted: it is a cookie, it reaches a
-     per-card comparison on fifty cards, and a hostile one is free. 64 tags and 64 characters
-     each is far above anything the UI produces. */
+  /* The image line this device is on, so the fifty `<img>` tags render the URLs the client
+     wants: without it every card mismatched at hydration for anyone who had changed the
+     setting, and React leaves a mismatched attribute alone, so the preference was ignored
+     for the whole first screen. `null` on a first visit — with nothing stored, both sides
+     compute the defaults. See `components/ImageLineProvider.tsx`. */
+  /* The spoiler tags, so the gallery's covers are in the server's own HTML, not appearing
+     after hydration. Bounded and split rather than trusted: it is a cookie reaching a
+     per-card comparison on fifty cards, and a hostile one is free. 64 tags × 64 chars
+     is far above anything the UI produces. */
   const spoilerCookie = cookieStore.get(COOKIE_KEYS.spoilerTags)?.value ?? '';
   const spoilerTags =
     spoilerCookie.length > 4096
@@ -224,72 +212,60 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* The eleventh palette's rules, in the same shape `app/theme-palettes.css` carries
-            the other nine — same `paletteBlocksCss`, so the two cannot diverge. It is a
-            `<style>` rather than inline properties on `<html>` because an inline style beats
-            every selector including `html.dark[data-palette='custom']`, which would leave the
-            dark scheme painting the light values. The id is what `applyCustomPalette` finds
-            and replaces when the user picks a different colour. */}
+        {/* The eleventh palette's rules, same shape as `app/theme-palettes.css` and the same
+            `paletteBlocksCss`, so the two cannot diverge. A `<style>`, not inline properties on
+            `<html>`: an inline style beats every selector including
+            `html.dark[data-palette='custom']`, which would leave the dark scheme painting the
+            light values. The id is what `applyCustomPalette` finds and replaces. */}
         {custom && <style id="palette-custom">{custom.css}</style>}
-        {/* No `media`: this reports the scheme the *app* is in, which can differ from the
-            OS's. The two media-keyed tags Next used to generate meant that forcing dark
-            mode on a light desktop left the browser chrome painted the light colour. */}
+        {/* No `media`: this reports the scheme the *app* is in, which can differ from the OS's.
+            Next's media-keyed tags meant that forcing dark mode on a light desktop left the
+            browser chrome painted the light colour. */}
         <meta
           name="theme-color"
           content={
             onCustom ? onCustom.bar[darkMode ? 1 : 0] : builtIn[darkMode ? 'dark' : 'light'].primary
           }
         />
-        {/* The four hosts the first screen cannot be drawn without, warmed while the HTML is
-            still parsing. The app had none of these — not one `preconnect` or `dns-prefetch`
-            anywhere — so a cold load spent a DNS lookup plus a TLS handshake on each of them
-            *after* the layout pass discovered the first `<img>`.
+        {/* The four hosts the first screen cannot draw without, warmed while the HTML parses.
+            The app had none of these, so a cold load paid DNS + TLS on each only *after* the
+            layout discovered the first `<img>`.
 
-            The three image hosts are the tiers of `lib/imageLoader.ts`'s ladder, in the order
-            it tries them: the PicPony worker, the CDN, then Derpibooru direct. All three are
-            worth warming rather than only the current line, because the ladder can move
-            between them mid-page and the second one is reached exactly when the first is
-            already failing — the worst moment to also be paying for a handshake.
+            The three image hosts are `lib/imageLoader.ts`'s ladder in order — PicPony worker,
+            CDN, Derpibooru direct. All three warmed, not just the current line: the ladder can
+            move between them mid-page, and the second is reached exactly when the first is
+            already failing — the worst moment to also pay for a handshake.
 
-            `crossOrigin` is required on every one of them: these are fetched as CORS
-            requests by `next/image`'s optimizer origin and as anonymous requests by the
-            font loader, and a preconnect whose CORS mode does not match the request it is
-            meant to serve opens a second connection instead of being reused — which is
-            worse than not having it, since it costs a socket and warms nothing.
+            `crossOrigin` on all of them: `next/image`'s optimizer and the font loader fetch
+            as CORS/anonymous, and a preconnect whose CORS mode mismatches the request opens a
+            second connection instead of being reused.
 
-            No font host is listed, and that is worth stating because it is the obvious fourth
-            entry: `next/font/google` downloads the faces at build time and serves them from
-            this origin (the built CSS resolves them to `../media/*.woff2`), so neither
-            `fonts.googleapis.com` nor `fonts.gstatic.com` is ever contacted. A preconnect to
-            either would open a socket to a host this app does not use. */}
+            No font host — `next/font/google` downloads faces at build time and serves them
+            from this origin, so neither `fonts.googleapis.com` nor `fonts.gstatic.com` is
+            ever contacted; a preconnect to either would open a socket to an unused host. */}
         <link rel="preconnect" href="https://147052.xyz" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://wsrv.nl" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://derpicdn.net" crossOrigin="anonymous" />
-        {/* The no-JS floor for the motion preference. With scripting off nothing can read
-            the stored tier, so the OS query is all there is.
-            It keys on `data-motion='standard'` rather than on the attribute's *absence*: the
-            layout renders it unconditionally from the cookie, defaulting to `standard`, so a
-            `:not([data-motion])` rule — which is what this was — could never match anything.
-            Matching the standard tier means "the OS asks for less and nothing has asked for
-            even less than that". One blunt rule rather than a copy of the tier block: without
-            JS there is no hero flight, no shared axis and no theme wipe to degrade, so what is
-            left to stop is the CSS. */}
+        {/* The no-JS floor for the motion preference: with scripting off the OS query is all
+            there is. Keys on `data-motion='standard'` (not the attribute's absence) — the
+            layout renders the attribute unconditionally, defaulting to `standard`, so a
+            `:not([data-motion])` rule could never match. "The OS asks for less and nothing
+            asks for even less than that." One blunt rule rather than a copy of the tier
+            block: without JS there is no hero flight, shared axis or theme wipe to degrade,
+            so what is left to stop is the CSS. */}
         <noscript>
           <style>{`@media (prefers-reduced-motion: reduce){html[data-motion='standard'] *,html[data-motion='standard'] *::before,html[data-motion='standard'] *::after{animation-duration:1ms!important;animation-delay:0ms!important;transition-duration:1ms!important;transition-delay:0ms!important}}`}</style>
         </noscript>
-        {/* `type` is spelled out on both of these, and it is the fix for a hydration warning
-            rather than decoration. Something in the document — Next's own SSR stream or, more
-            likely, a script-management extension — hands the server HTML a
-            `type="text/javascript"` that the client render does not produce, and React reports the
-            attribute mismatch on every load. Declaring the spec default makes both sides agree and
-            changes nothing about how either script executes. */}
+        {/* `type` spelled out on both: something in the document (Next's SSR stream or, more
+            likely, a script-management extension) hands the server HTML a
+            `type="text/javascript"` the client render does not produce, and React reports the
+            mismatch on every load. Declaring the spec default makes both sides agree. */}
         <script type="text/javascript" dangerouslySetInnerHTML={{ __html: prePaint(barColors) }} />
-        {/* The request-line policy, if the server managed to read one. A plain inline script
-            rather than a prop into a client component, because it has to be in force before the
-            first *effect* in the tree runs and effect order across a tree is not something a
-            layout can promise; a script in `<head>` runs before hydration. Absent when the read
-            timed out or failed, and `ensureRoutePolicy` then fetches it itself — see
-            `lib/route.server.ts`. */}
+        {/* The request-line policy, if the server read one. A plain inline script, not a prop
+            into a client component: it must be in force before the first *effect* in the tree
+            runs, and effect order across a tree is not something a layout can promise — a
+            script in `<head>` runs before hydration. Absent on read failure; `ensureRoutePolicy`
+            then fetches it itself (see `lib/route.server.ts`). */}
         {routePolicy && (
           <script
             type="text/javascript"
@@ -304,25 +280,22 @@ export default async function RootLayout({
       <body className="h-full flex flex-col overflow-hidden">
         <LoadingOverlay />
         <NextTopLoader
-          /* `on-primary`, not a literal white. The bar sits along the bottom edge
-             of the brand-coloured app bar, so the role it wants is the ink that
-             goes on `primary` — which is white today and follows the brand through
-             a re-seed *and* through a palette change. It was `#ffffff`.
-             The two literals this note used to point at, in `viewport.themeColor`,
-             are gone: they are generated now and rendered as a `<meta>` above. */
+          /* `on-primary`, not a literal white: the bar rides the bottom edge of the
+             brand-coloured app bar, so it takes the ink that goes on `primary` — white
+             today, following the brand through a re-seed and a palette change. It was
+             `#ffffff`. */
           color="var(--md-sys-color-on-primary)"
           initialPosition={0.08}
           crawlSpeed={200}
-          /* 4dp, M3's linear progress indicator height. It was 3. */
+          /* 4dp — M3's linear progress indicator height. It was 3. */
           height={4}
           crawl={true}
           showSpinner={false}
-          /* `--ease-standard` spelled out. `easing` is handed to a Web Animations
-             `easing:` string by the library, where a failed `var()` silently falls
-             back to `ease` rather than erroring — the same reason the hero flight
-             and `Popover` spell theirs out. The value IS the token's; keep them in
-             step. (`color` above can take a `var()` because it lands in a style
-             declaration, not in an animation string.) */
+          /* `--ease-standard` spelled out: `easing` lands in a Web Animations easing
+             string, where a failed `var()` silently falls back to `ease` rather than
+             erroring — same reason the hero flight and `Popover` spell theirs out. The
+             value IS the token's; keep them in step. (`color` can take a `var()`
+             because it lands in a style declaration, not an animation string.) */
           easing="cubic-bezier(0.2, 0, 0, 1)"
           speed={200}
         />
@@ -338,9 +311,9 @@ export default async function RootLayout({
         <ToastContainer />
         <RippleLayer />
         <OfflineBanner />
-        {/* Both render nothing. The worker is registered on an idle callback and controls the
-            *next* load, never this one; the banner is inert unless `experimental.useOffline` is
-            on. `buildId` is what versions the worker's caches — a file in `public/` cannot read a
+        {/* Both render nothing. The worker registers on an idle callback and controls the
+            *next* load, never this one; the banner is inert unless `experimental.useOffline`
+            is on. `buildId` versions the worker's caches — a file in `public/` cannot read a
             build-time variable, so it arrives in the registration URL. */}
         <ServiceWorker version={process.env.NEXT_PUBLIC_BUILD_ID ?? 'dev'} />
       </body>

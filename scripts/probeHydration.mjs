@@ -1,5 +1,5 @@
-/* Cold-load probe: is the content in the first byte, and does React accept the markup?
-   Not a checked-in command — a scratch probe alongside `npm run net:audit`, same fixtures. */
+/* Cold-load probe: is the content in the first byte, and does React accept the markup? Not a
+   checked-in command — a scratch probe alongside `npm run net:audit`, same fixtures. */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -84,8 +84,8 @@ const PATTERNS = {
 };
 
 /* Reproduce the reported case: a visitor whose stored image line is *not* the default. Without
-   the cookie the server renders the default (proxy) and the client wants direct, which is a
-   mismatch on every server-rendered <img>. */
+   the cookie the server renders the default (proxy) and the client wants direct — a mismatch on
+   every server-rendered <img>. */
 const forceLine = process.env.PROBE_IMAGE_LINE;
 if (forceLine) {
   await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
@@ -111,8 +111,7 @@ for (const target of process.argv.slice(2)) {
   await send('Page.navigate', { url });
   await new Promise((r) => setTimeout(r, 5000));
   /* Only hydration. Resource 4xx are the documented local constraint (remote `next/image` URLs
-     resolve into 198.18/15 and Next's SSRF guard rejects them), and they drown the signal. */
-  const bad = logs.filter((l) => /hydrat|did not match|server rendered HTML/i.test(l));
+     resolve into 198.18/15 and Next's SSRF guard rejects them), and they drown the signal. */  const bad = logs.filter((l) => /hydrat|did not match|server rendered HTML/i.test(l));
   console.log(`\n${target}`);
   console.log(`  html bytes             ${html.length}`);
   for (const [label, re] of Object.entries(PATTERNS)) {

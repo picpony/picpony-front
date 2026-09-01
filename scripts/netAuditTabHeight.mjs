@@ -1,15 +1,11 @@
 /**
  * Where does a tab switch leave the page?
  *
- * Two things, and the second is the one that bit. The panel is a grid with both home panes in one
- * cell — which is what lets both be on screen for the shared-axis slide — and the inactive one has
- * to fall out of layout at settle so the panel measures the *visible* pane. That part was already
- * right.
- *
- * What was wrong is the offset. A tab with no remembered scroll position used to keep the outgoing
- * tab's, and the browser then clamped it to the shorter pane's maximum: leaving the gallery at
- * 1500 for a 1708px-tall forum landed at 1160, which *is* that forum's maximum — so the forum
- * opened on its last row. `applyTabScroll`'s fallback is the fix and this is the check.
+ * The panel is a grid with both home panes in one cell, and the inactive one has to fall out of
+ * layout at settle so the panel measures the *visible* pane. The reported bug was the offset: a
+ * tab with no remembered scroll position used to keep the outgoing tab's, and the browser clamped
+ * it to the shorter pane's maximum — leaving the gallery at 1500 for a 1708px-tall forum landed at
+ * 1160, that forum's maximum, i.e. on its last row. `applyTabScroll`'s fallback is the fix.
  *
  * `node scripts/netAuditTabHeight.mjs`
  */
@@ -209,8 +205,8 @@ await sleep(3000);
 const after = await evaluate(probe);
 show('settled (forum)', after);
 
-/* And back, which must restore the gallery's own remembered offset — the fallback above must not
-   have cost the memory that makes leaving a list and returning land on the same row. */
+/* And back, which must restore the gallery's remembered offset — the fallback must not cost the
+   memory that makes leaving a list and returning land on the same row. */
 await evaluate(
   `(() => {
      const tab = [...document.querySelectorAll('[role="tab"]')].find((t) => t.textContent.includes('图库'));
@@ -238,9 +234,8 @@ if (forum && Math.abs(after.panelH - forum.h) > 2) {
   );
   failed = true;
 }
-/* The offset, which is the reported bug. A tab nobody has opened before starts at its own top, so
-   anything above a few pixels means the outgoing tab's position carried over — and landing exactly
-   on the destination's maximum is the specific shape it took. */
+/* The offset, which is the reported bug: a tab nobody has opened starts at its own top, so
+   anything above a few pixels means the outgoing position carried over. */
 if (after.scrollTop > 4) {
   console.error(
     `

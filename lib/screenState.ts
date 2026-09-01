@@ -3,27 +3,10 @@
 /**
  * What a screen was *showing*, for the length of the session.
  *
- * ## The half of `pageCache` that is not a cache
- *
- * `lib/pageCache.ts` existed because navigating away unmounts a page — `[data-page-content]` is
- * keyed on the pathname — so coming back re-ran every effect and the screen arrived empty. It
- * solved that by storing the component's whole render in one object, and its docstring is explicit
- * about why it was not a request cache: *"including the page number, which a plain request cache
- * would lose."*
- *
- * That is exactly right, and it is two problems wearing one coat. **What the server said** is
- * shared, keyed by the arguments of the read, and belongs to `lib/resource.ts`. **Which arguments
- * this screen was last using** is private to the screen, is not a cache of anything, and belongs
- * here. Conflating them is why `pageCache` could only be adopted by a component willing to lift
- * its entire state into one snapshot object — which is why, in the end, only three did.
- *
- * Split apart, both get easier. A remount reads its page number from here and its data from the
- * resource cache, and paints in the first frame with neither a skeleton nor a request.
- *
- * ## Session-scoped, and deliberately so
- *
- * A `Map` in module scope. A reload genuinely reloads — `pageCache`'s rule, kept — and signing out
- * empties it, because a page number is harmless but a selected contact id is not.
+ * The half of pageCache that is not a cache: what the server said is shared and keyed
+ * by the arguments of the read (lib/resource.ts); which arguments this screen was last
+ * using is private to the screen and lives here. Session-scoped on purpose — a reload
+ * genuinely reloads, and signing out empties the store.
  */
 
 import { useCallback, useState } from 'react';
@@ -31,16 +14,10 @@ import { useCallback, useState } from 'react';
 const store = new Map<string, unknown>();
 
 /**
- * Remembered state, restored on remount.
- *
- * Reads exactly like `useState` and differs in one way: the initial value is whatever this key was
- * last set to in this session. So a screen writes `useScreenState('history:page', 1)` and gets 1
- * the first time and 4 when it comes back from page 4.
- *
- * The key is a string the caller picks and it has to be **unique across the app**, because the
- * store is flat. Prefix it with the screen: `'history:page'`, `'search:query'`. It must *not*
- * include anything that identifies a record if two records share a screen — see
- * `useScreenStateFor`.
+ * Remembered state, restored on remount: like `useState`, but the initial value is
+ * whatever this key was last set to in this session. The key must be unique across the
+ * app (prefix it with the screen) and must not identify a record when records share a
+ * screen — use `useScreenStateFor` for that.
  */
 export function useScreenState<T>(key: string, initial: T): [T, (value: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => (store.has(key) ? (store.get(key) as T) : initial));
@@ -49,8 +26,8 @@ export function useScreenState<T>(key: string, initial: T): [T, (value: T | ((pr
     (next: T | ((prev: T) => T)) => {
       setValue((prev) => {
         const resolved = typeof next === 'function' ? (next as (p: T) => T)(prev) : next;
-        /* Written during the updater rather than from an effect, so a navigation that unmounts in
-           the same commit as the last `set` still records it. An effect would not have run. */
+        // Written in the updater, not an effect: a navigation unmounting in the same
+        // commit as the last `set` would otherwise lose it.
         store.set(key, resolved);
         return resolved;
       });
@@ -62,13 +39,9 @@ export function useScreenState<T>(key: string, initial: T): [T, (value: T | ((pr
 }
 
 /**
- * The same thing, scoped to a record.
- *
- * Two profiles are two screens that happen to share a component, and a flat key would carry page 4
- * of one into the other. That is not hypothetical — AGENTS.md records the identical bug in the
- * per-tab scroll memory, where `posts`/`uploads`/`faves`/`comments` offsets leaked from one profile
- * to the next because the map was keyed on the tab name and tab names are unique app-wide. Unique
- * is not the same as sufficient.
+ * The same thing, scoped to a record — keyed per record because unique is not the same
+ * as sufficient: a flat key would carry page 4 of one profile into another (the same
+ * leak the per-tab scroll memory had).
  */
 export function useScreenStateFor<T>(
   key: string,
@@ -79,10 +52,9 @@ export function useScreenStateFor<T>(
 }
 
 /**
- * Empties the store.
- *
- * Signing out, alongside `clearAllResources()`. A page number surviving a sign-out is harmless; a
- * selected contact, a search query or an open thread id is the previous account's business.
+ * Empties the store, on sign-out (alongside `clearAllResources()`): a page number
+ * surviving is harmless, but a selected contact or open thread id is the previous
+ * account's business.
  */
 export function clearScreenState() {
   store.clear();

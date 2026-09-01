@@ -15,10 +15,6 @@ function withImageLine(data: ApiResponse): ApiResponse {
   return Array.isArray(data?.images) ? { ...data, images: data.images.map(applyImageLine) } : data;
 }
 
-// ---------------------------------------------------------------------------
-// 图片详情
-// ---------------------------------------------------------------------------
-
 export async function getImage(id: string, signal?: AbortSignal): Promise<{ image: PonyImage }> {
   const res = await proxyFetch(`${DERPIBOORU_API_BASE}/images/${id}`, {
     cache: 'no-store',
@@ -28,9 +24,8 @@ export async function getImage(id: string, signal?: AbortSignal): Promise<{ imag
 
   if (!res.ok) await handleDerpiError(res);
   /* Every image-bearing response is put on the current image line here rather than at the
-     screens: the featured banner, the opened picture and both profile grids render their URLs
-     directly, so a policy applied only in the two gallery `map`s never reached them.
-     `applyImageLine` is idempotent, so the screens that still map are no-ops. */
+     screens, whose featured banner, opened picture and profile grids render URLs directly.
+     `applyImageLine` is idempotent, so screens that still map are no-ops. */
   const data: { image: PonyImage } = await readJson(res);
   return data?.image ? { ...data, image: applyImageLine(data.image) } : data;
 }
@@ -80,10 +75,6 @@ export async function getFeatured(key?: string): Promise<FeaturedImage | null> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 搜索 Derpibooru 图片
-// ---------------------------------------------------------------------------
-
 export async function searchDerpiImages(
   query: string,
   page: number = 1,
@@ -121,10 +112,6 @@ export async function searchImagesByIds(
   return withImageLine(await readJson(res));
 }
 
-// ---------------------------------------------------------------------------
-// Derpibooru 标签搜索
-// ---------------------------------------------------------------------------
-
 export async function searchDerpiTags(query: string) {
   const safeName = query.replace(/"/g, '').split(/\s+/).join('* *');
   const url = `${DERPIBOORU_API_BASE}/search/tags?q=name:*${encodeURIComponent(safeName)}*&per_page=30`;
@@ -145,36 +132,24 @@ export async function getDerpiPopularTags(page: number = 1) {
 }
 
 /**
- * 一次请求最多能带多少个标签名。
- *
- * Philomena 把 `per_page` 钳在 1..50，所以 50 既是每批的上限，也必须原样写进
- * `per_page`——老前端漏掉了这个参数，于是每批 50 个名字只拿回默认的 25 条，
- * 后一半永远落进"查不到"的兜底分支里显示 0。
+ * 标签名单次请求的上限。Philomena 把 `per_page` 钳在 1..50，漏写该参数每批只会
+ * 拿回默认 25 条，后一半永远落进"查不到"的兜底分支。
  */
 export const TAG_COUNT_BATCH = 50;
 
 /**
- * 把标签名转义成 Philomena 查询里的一个字面量。
- *
- * 与老前端的 `escapePhilomenaQuery` 同一套字符集：这些字符在查询语法里有意义
- * （`oc:littlepip` 的冒号、`3/4 view` 的斜杠、含空格的多词标签），不转义就会被
- * 当成语法而不是名字的一部分。
+ * 把标签名转义成 Philomena 查询里的一个字面量（与老前端同一套字符集）：
+ * 这些字符在查询语法里有意义，不转义会被当成语法而不是名字的一部分。
  */
 function escapePhilomenaTerm(tag: string): string {
   return tag.replace(/([+\-=&|><!(){}[\]^"~*?:\\/\s])/g, '\\$1');
 }
 
 /**
- * 一次拿回一批标签的收录量，键为小写标签名。
+ * 一次拿回一批标签的收录量，键为小写标签名；没查到的标签不在返回的 map 里。
  *
- * `name:a OR name:b OR …` 是老前端算标签计数用的写法，也是本文件里
- * `searchImagesByIds` 已经在用的同一个批量惯用法。没查到的标签不会出现在返回的
- * map 里——调用方需要自己区分"查到了"和"没查到"。
- *
- * 走常规 `proxyFetch`（先加速服务器、再直连），这一点与老前端不同：老前端给这个
- * 查询显式加了 `directOnly`，把这类装饰性请求挡在共享代理之外。但直连 trixiebooru
- * 本来就未必通——加速服务器默认开着正是为此——直连专用意味着连不上的用户永远看不到
- * 计数。本文件其余 Derpibooru 请求也都走 `proxyFetch`，保持一致。
+ * 走常规 `proxyFetch`，与老前端不同：老前端对该查询显式 `directOnly`，但直连
+ * 未必通——加速服务器默认开着正是为此，直连专用意味着连不上的用户永远看不到计数。
  */
 export async function getDerpiTagCounts(tags: string[]): Promise<Record<string, number>> {
   if (tags.length === 0) return {};
@@ -196,10 +171,6 @@ export async function getDerpiTagCounts(tags: string[]): Promise<Record<string, 
   return counts;
 }
 
-// ---------------------------------------------------------------------------
-// Derpibooru 用户资料
-// ---------------------------------------------------------------------------
-
 export async function getDerpiProfile(
   userId: string | number,
 ): Promise<DerpiProfileResponse | null> {
@@ -214,10 +185,6 @@ export async function getDerpiProfile(
   }
 }
 
-// ---------------------------------------------------------------------------
-// 上传图片到 Derpibooru
-// ---------------------------------------------------------------------------
-
 export async function uploadImageToDerpi(
   file: File,
   tags: string,
@@ -230,9 +197,9 @@ export async function uploadImageToDerpi(
   formData.append('image[tag_input]', tags);
   if (source) formData.append('image[source_url]', source);
   if (description) formData.append('image[description]', description);
-  /* Through `proxyFetch` for the policy await and the write-path line, not for the
-     retry ladder — a POST takes neither the accel worker nor the relay, so the only
-     line that can apply is a third-party origin speaking the whole Philomena API. */
+  /* Through `proxyFetch` for the policy await and the write-path line, not the retry
+     ladder — a POST takes neither the accel worker nor the relay, so the only line
+     that can apply is a third-party origin speaking the whole Philomena API. */
   return proxyFetch(`${DERPIBOORU_API_BASE}/images?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     body: formData,

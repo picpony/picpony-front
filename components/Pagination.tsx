@@ -37,30 +37,16 @@ interface PaginationProps {
 /**
  * The one pager.
  *
- * There were three: this component, an inline copy inside `ForumPostList`, and
- * another inside the profile page repeated four times, each with different
- * button sizes and a different idea of how many numbers to show.
+ * It owns the scroll reset (the scroll container is not the window, so a hand-rolled
+ * `window.scrollTo` silently does nothing). The target is the nearest
+ * `[data-pagination-anchor]` **ancestor** — `closest()` walks up; a marker with the
+ * pager as its *sibling* is invisible to it and the failure is silent. Several
+ * pagers may share one enclosing anchor, and a pager passed into a list component
+ * as `children` is inside its anchor by construction.
  *
- * It also owns the scroll reset. Every call site used to do
- * `window.scrollTo({ top: 0 })` by hand, which silently did nothing because the
- * scroll container is not the window (see `scrollAppToTop`). Putting it here
- * means a new call site cannot forget it or get it wrong.
- *
- * The target is the nearest `[data-pagination-anchor]` **ancestor** — i.e. the top of the
- * list this pager belongs to — rather than the top of the document, so turning a page lands
- * on the first new row instead of replaying the featured banner.
- *
- * **Ancestor is the whole contract, and it is the thing that gets got wrong.** `closest()`
- * walks up; a marker on the list with the pager as its *sibling* is a marker this cannot see,
- * and the failure is silent — the page turn just falls back as if there were no anchor at all.
- * Seven of the app's thirteen pagers shipped that way for one commit. A screen with several
- * pagers can share one enclosing anchor (a profile's four tabs do, on the box that holds the
- * tab row and the panes), and a pager passed into a list component as `children` is inside it
- * by construction (`/messages`).
- *
- * With no anchor it falls back to the top of the scroll container — unless the container is a
- * dialog's, where it does nothing at all rather than scrolling a surface the user is not
- * looking at.
+ * With no anchor it falls back to the top of the scroll container — unless the
+ * container is a dialog's, where it does nothing rather than scrolling a surface
+ * the user is not looking at.
  */
 /** Matches a caller-supplied top margin (`mt-*`, `my-*`, or a breakpoint form). */
 const HAS_TOP_MARGIN = /(?:^|\s|:)(?:mt|my)-/;
@@ -82,20 +68,15 @@ export default function Pagination({
   const canNext = known ? currentPage < totalPages : Boolean(hasMore);
 
   /**
-   * Whichever page the pointer or the keyboard is resting on, through the same intent ladder every
-   * link in the app uses — 70ms for a hover, 120ms for focus, immediate on press.
+   * Whichever page the pointer or the keyboard is resting on, through the same
+   * intent ladder every link in the app uses — 70ms for a hover, 120ms for focus,
+   * immediate on press.
    *
-   * **On intent only, never on idle**, and that is a decision rather than an omission. Warming the
-   * next page as soon as the current one settles is the obvious move and it was written first: page
-   * turns are the most predictable thing anyone does to a list, so the guess is usually right. But
-   * it is a request for a page that may never be looked at, on every paged screen in the app, and
-   * the rule this whole exercise is held to is that speculation may move a request *earlier* and
-   * may never add one. `npm run net:audit` asserts exactly that, so the idle version failed its own
-   * check.
-   *
-   * What it gives up is small. A hover buys the round trip 70ms before the click, and on a touch
-   * screen — where there is no hover — `onPointerDown` still fires typically 100ms or more before
-   * the click does. The head start survives; the unasked-for request does not.
+   * **On intent only, never on idle**, and that is a decision: warming the next
+   * page on settle is a request for a page that may never be looked at, and the
+   * rule is that speculation may move a request *earlier*, never add one (asserted
+   * by `npm run net:audit`). The head start survives on hover and (on touch,
+   * 100ms+ before click) on `onPointerDown`; the unasked-for request does not.
    */
   const warmRef = useRef<((page: number) => void) | undefined>(undefined);
   useEffect(() => {
@@ -127,30 +108,21 @@ export default function Pagination({
     if (page === currentPage) return;
     onPageChange(page);
     if (!scrollToTop) return;
-    /* Which *container* to scroll, before deciding where in it. A pager inside a `<Modal>`
-       was scrolling the page behind the dialog to the top and leaving the list it belongs to
-       exactly where it was — the app scroller is not the only thing that scrolls, which is
-       the reason `scrollAppToElement` takes an override at all. With a nearer scroll
-       container, the fallback also changes: `scrollAppToTop()` would be the wrong element
-       entirely, so an anchorless pager in a modal simply does nothing rather than moving a
+    /* Which *container* to scroll, before deciding where in it. A pager inside a
+       modal was scrolling the page behind the dialog while its own list stayed
+       put — the app scroller is not the only thing that scrolls. With a nearer
+       scroll container, an anchorless pager does nothing rather than moving a
        surface the user is not looking at. */
     const scroller =
       rootRef.current?.closest<HTMLElement>('[data-app-scroll-container]') ?? undefined;
-    /* The distance law, which is `scrollAppToElement`'s default — no `duration` override here.
-
-       This went round three times and the third answer is the first one. The law scales the
-       length with the square root of the travel, so the *rate* is non-linear in the distance:
-       a short hop is brisk and a long one takes its time instead of whipping past. A fixed
-       length does the opposite — the speed then rises with however far you happened to be
-       scrolled, so a page turn from the bottom of a long gallery is a whip-pan and the same
-       turn from near the top is a crawl.
-
-       What made the long glide look wrong the first time was not its length. The cards it
-       travelled past were *blank* — `FadeInImage` was treating a failed or swapped image as
-       loaded and dropping its shimmer, so a 750ms glide ran through nothing at all. With that
-       fixed the same glide passes over skeletons in the row geometry, which is what a list
-       loading is supposed to look like, and `npm run perf:pageturn` asserts no in-view card is
-       ever bare. Fixing the placeholder is what made the honest duration affordable. */
+    /* The distance law, `scrollAppToElement`'s default — no duration override.
+       The law scales the length with the square root of the travel, so the *rate*
+       is non-linear in the distance: a short hop is brisk, a long one takes its
+       time. A fixed length makes the speed rise with however far you happen to be
+       scrolled — a whip-pan from the bottom of a long gallery, a crawl from near
+       the top. When the glide looked wrong, the fault was blank cards underneath
+       it, not the duration; with the placeholder fixed, the honest glide passes
+       over skeletons in the row's own geometry. */
     const anchor = rootRef.current?.closest('[data-pagination-anchor]');
     if (anchor) scrollAppToElement(anchor, { scroller });
     else if (!scroller) scrollAppToTop();
@@ -164,20 +136,11 @@ export default function Pagination({
   const pages = Array.from({ length: count }, (_, i) => start + i);
 
   const navBtn = cn(
-    /* **40dp, with `touch-size` for the floor.** The 40 is the button step; the floor
-       is `--touch-floor`, which is 48 under a coarse pointer and 24 under a fine one.
+    /* **40dp, with `touch-size` for the floor.** The 40 is the button step; the
+       floor is `--touch-floor` (48 under a coarse pointer, 24 under a fine one).
        `touch-size` rather than `touch-target` because `data-ripple` sets
-       `overflow: hidden` to clip the wave and would clip a pseudo-element out of
-       hit-testing with it, so this control's floor has to be a real box.
-
-       It was 56 below `sm` and 40 above, keyed on the viewport — which had the right
-       idea and the wrong axis. A viewport width is not a pointer: a 1024px tablet is a
-       finger and a 600px desktop window is not, so the phone branch was reaching a
-       mouse and the desktop branch was reaching a thumb. (The four classes that
-       expressed it are described rather than named: the extractor lifts a class out of
-       a comment, and two of them have no other call site.)
-       The height itself has been 44 (Apple's figure), then 48, then 56, all three
-       chosen to *be* the floor rather than to be a step with a floor under it. */
+       `overflow: hidden` and would clip a hit-area pseudo-element out of
+       hit-testing with it — this control's floor has to be a real box. */
     'inline-flex h-10 min-w-10 touch-size cursor-pointer items-center justify-center rounded-full px-2',
     'text-on-surface-variant state-layer outline-none',
     'transition-ui',
@@ -193,12 +156,9 @@ export default function Pagination({
          outside a tab pane, which is the only place that attribute is read. */
       data-tab-row
       className={cn(
-        /* The default gap stands down when the call site names its own, the same
-           guard `Skeleton` uses for its radius and for the same reason: `cn` is a
-           plain join, so `mt-12` plus a caller's `mt-8` emitted both and let the
-           stylesheet's order pick the winner — which is `mt-12`, so every
-           override silently lost. `ForumPostList` asks for `mt-8` and
-           `GlossaryTab` for `mt-0`; both were being ignored. */
+        /* The default top margin stands down when the call site names its own,
+           same guard as `Skeleton`'s radius: `cn` is a plain join, so both would
+           be emitted and the stylesheet's order — not the caller — would pick. */
         !HAS_TOP_MARGIN.test(className) && 'mt-12',
         'flex items-center justify-center gap-1',
         className,
@@ -241,22 +201,17 @@ export default function Pagination({
               aria-current={active ? 'page' : undefined}
               data-ripple
               className={cn(
-                /* 40dp with `touch-size`, for the reason spelled out on `navBtn`
-                   above: this is the most-tapped chrome in the app, `data-ripple`
-                   rules out `touch-target`'s pseudo-element, and the floor belongs on
-                   the pointer rather than on the viewport width. */
+                /* 40dp with `touch-size`, for the reason on `navBtn` above:
+                   most-tapped chrome in the app, and `data-ripple` rules out a
+                   hit-area pseudo-element. */
                 'inline-flex h-10 w-10 touch-size cursor-pointer items-center justify-center rounded-full outline-none',
                 'transition-ui',
                 'focus-visible:ring-2 focus-ring',
                 'disabled:pointer-events-none disabled:disabled-content',
-                /* One type role per branch — the active page used to add a bare
-                   medium-weight utility over `text-label-l`, which is already
-                   500, so the current page was distinguished by colour alone.
-                   `state-layer` on both branches: the current page is still a
-                   button, and it was the one control in this row with no hover
-                   feedback. No elevation either — M3 gives a pagination item
-                   level 0, and this was the app's only shadow on something that
-                   does not float. */
+                /* One type role per branch, so the active page gets weight
+                   contrast and not colour alone. `state-layer` on both branches —
+                   the current page is still a button. No elevation: M3 gives a
+                   pagination item level 0. */
                 active
                   ? 'bg-primary text-on-primary text-label-l-emphasized state-layer'
                   : 'text-label-l text-on-surface-variant state-layer',
@@ -307,13 +262,8 @@ interface LoadMoreButtonProps {
 /**
  * The "load more" affordance under a cursor-paged list.
  *
- * `Button`, not a hand-rolled one. This was the last button in the app still
- * spelling out its own container, its own state layer, its own focus ring and
- * its own geometry — `rounded-full px-8 py-3` on the secondary-container pair,
- * which is `variant="tonal"` at a size that was on no scale (about 44dp tall
- * with 32dp of padding). It is `lg` now, the M3 medium step, which is the size
- * this button's job actually asks for: it is the only control on its row and the
- * one thing you are meant to press.
+ * `Button`, not a hand-rolled one — `variant="tonal" size="lg"` (the M3 medium
+ * step), the size this button's job asks for: it is the only control on its row.
  *
  * The three bouncing dots stay. They are not a `Spinner` and should not be one —
  * `loading` on `Button` swaps in the circular indicator, which is right for a

@@ -19,31 +19,18 @@ interface EmptyStateProps {
 }
 
 /**
- * "There is nothing here yet."
+ * "There is nothing here yet." One preset over `StatusView` (its sibling is
+ * `ErrorRetry`), so empty and failed share one silhouette, type scale and
+ * entrance.
  *
- * This existed as a local `function EmptyState` inside `app/favorites/page.tsx`,
- * which is the whole problem: it was the best of the fourteen and the only one
- * no other screen could reach. The other thirteen were written inline, and
- * because each was written next to the list it belonged to, they inherited that
- * list's type roles rather than a shared one — so /user announced 暂无上传记录 in
- * `title-m` over a `body-m` line while /history used `title-m` alone and the
- * messages tabs used bare `text-on-surface-variant` with no glyph.
+ * The glyph defaults to a tray so a call site that forgets still shows an
+ * absence rather than a rendering failure; override it where the screen has
+ * something more specific to say.
  *
- * The glyph defaults to a tray rather than being required. A missing icon is
- * what made three of the inline versions read as a rendering failure, and asking
- * every call site to choose one is how you get three screens with no icon.
- * Override it where the screen has something more specific to say — a bookmark
- * for a collection, a chat bubble for a thread.
- *
- * **`inline` gets no glyph unless one is asked for.** It had a 36px tray, which with its
- * gap was taller than the wells this size exists for — /block-groups' tag boxes cap at
- * 120px, so the empty state was what made them scroll. At this size the sentence *is* the
- * empty state: a table's blank row and a tag well's "暂无标签" both read better as one line
- * of `body-m` than as a small illustration of an absence. A call site with something to
- * show can still pass `icon`.
- *
- * Geometry, type scale and entrance all come from `StatusView`, which
- * `ErrorRetry` also renders. Empty and failed are the same shape on purpose.
+ * **`inline` deliberately shows no glyph.** It had a default 36px tray which,
+ * with its gap, stood taller than the 120px wells this size exists for — the
+ * empty state itself made them scroll. At this size the sentence *is* the empty
+ * state; a call site with something better can still pass `icon`.
  */
 export default function EmptyState({
   title,

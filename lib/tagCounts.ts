@@ -3,64 +3,43 @@
 import { getDerpiTagCounts, TAG_COUNT_BATCH } from '@/lib/api/derpi';
 
 /**
- * Image counts for the detail page's tag list, batched and cached.
- *
- * The counts used to be fetched one tag at a time — `get_dictionary` with
- * `keyword: <tag>, limit: 1`, once per tag, fired as one big `Promise.allSettled`.
- * Eighty visible tags meant eighty requests to our own PHP backend every time an
- * image was opened, for a 12px grey number beside each chip; the browser's
- * six-per-host cap turned that into thirteen sequential rounds, and nothing was
- * remembered, so closing the image and opening it again paid the whole cost over.
- *
- * This is the old front-end's `TagManager` approach instead, which is built out
- * of three things:
+ * Image counts for the detail page's tag list, batched and cached — built out of
+ * three things:
  *
  *   - **One request per fifty tags.** `name:a OR name:b OR …` against
  *     Derpibooru's tag search — the same idiom `searchImagesByIds` already uses
- *     for images. Eighty tags become two requests. The response is fatter per
- *     tag (Philomena has no field selection, so every description and implied-by
- *     list comes along: measured at ~59 KB gzipped for a full batch of 50), but
- *     two round trips beat eighty by far more than the bytes cost.
+ *     for images. The response is fatter per tag (Philomena has no field
+ *     selection), but the round trips beat per-tag requests by far more.
  *   - **A persistent cache.** Tag counts barely move, and tags repeat heavily
- *     across images — `safe`, `pony`, `solo`, `female` are on a large fraction of
- *     the site. After the first few images most of a tag list is already known
- *     and costs nothing.
+ *     across images, so after the first few images most of a tag list is already
+ *     known and costs nothing.
  *   - **In-flight coalescing.** The overlay and the page under it can both be
  *     mounted, and "show more tags" re-asks for everything already on screen. A
  *     tag that is mid-request joins that request rather than starting another.
  *
- * The count comes from Derpibooru rather than our dictionary because that is
- * where the number is authoritative, and it is what the old front-end read
- * (`exactTag.images`). It also means counts no longer require a login token —
- * the old code returned nothing at all to a signed-out reader who had the
- * setting on.
+ * Counts come from Derpibooru rather than our dictionary because that is where
+ * the number is authoritative; it also means counts need no login token.
  */
 
 /** Bumped if the stored shape ever changes; an old key is simply ignored. */
 const CACHE_KEY = 'picpony_tag_counts_v1';
 
-/** Same ceiling the old front-end used, and the same crude FIFO eviction. */
+/** Same ceiling as the previous front-end, with the same crude FIFO eviction. */
 const CACHE_LIMIT = 2000;
 const CACHE_EVICT = 500;
 
 /**
- * Counts drift slowly — a tag gains a few images a week against a base in the
- * hundreds of thousands — but "slowly" is not "never", and the old cache had no
- * expiry at all, so a number could be years stale. A week is short enough that
- * nobody sees a wrong figure for long and long enough that the cache still does
- * its job across a session's worth of browsing.
+ * A week: counts drift slowly but "slowly" is not "never", so a number can be
+ * wrong for at most a week while the cache still does its job across a session.
  */
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * Minimum spacing between two count requests, as in the old front-end.
- *
- * Not decoration: firing the batches back to back earns a Cloudflare `error
- * code: 1015` from Derpibooru within a handful of requests, and the penalty
- * outlasts the page view — measured while testing this, two unpaced 80-tag runs
- * were enough, and a paced run a minute later still hit it. These are background
- * requests for a grey number; a burst of them is the fastest way to spend a rate
- * limit that the images themselves need.
+ * Minimum spacing between two count requests. Not decoration: firing the batches
+ * back to back earns a Cloudflare `error code: 1015` rate-limit penalty from
+ * Derpibooru within a handful of requests, and it outlasts the page view — these
+ * are background requests for a grey number, and a burst of them spends a rate
+ * limit the images themselves need.
  */
 const MIN_REQUEST_GAP_MS = 1000;
 
@@ -95,9 +74,8 @@ function store(): Map<string, CacheEntry> {
 
 function persist() {
   const entries = store();
-  /* Insertion order is oldest-first, so dropping from the front is the same
-     FIFO the old front-end used. Deleting during iteration is well-defined for
-     a Map. */
+  /* Insertion order is oldest-first, so dropping from the front is FIFO.
+     Deleting during iteration is well-defined for a Map. */
   if (entries.size > CACHE_LIMIT) {
     let toDrop = entries.size - CACHE_LIMIT + CACHE_EVICT;
     for (const key of entries.keys()) {
@@ -132,14 +110,10 @@ function runBatch(tags: string[]): Promise<Record<string, number>> {
 }
 
 /**
- * Counts for `tags`, keyed by the exact strings passed in.
- *
- * `onPartial` is called as each group of answers arrives — the cached ones on
- * the next microtask, before any request has gone out, then one call per batch.
- * Waiting for the whole set instead would hold a tag list that is entirely in
- * cache hostage to the request pacing, and would leave the first fifty counts
- * sitting in memory for a second while the second batch is spaced out. It is
- * the same thing the old front-end's `updateDOM`-per-batch did.
+ * Counts for `tags`, keyed by the exact strings passed in. `onPartial` is called
+ * as each group of answers arrives — the cached ones on the next microtask, before
+ * any request has gone out, then one call per batch — so waiting for the whole set
+ * never holds an already-cached tag list hostage to the request pacing.
  *
  * A tag resolves to `null` when the lookup failed or the name came back with no
  * match. Neither is cached: a tag that is *on* an image always has a count of at

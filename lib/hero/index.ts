@@ -1,10 +1,8 @@
 'use client';
 
 /**
- * Public surface of the Hero transition system.
- *
- * Components should import from here rather than reaching into `lib/hero/*`, so
- * the internal module layout stays free to change.
+ * Public surface of the Hero transition system. Components import from here
+ * rather than reaching into `lib/hero/*`, so the internal layout stays free to change.
  */
 
 import { imageHeroController } from './controller';

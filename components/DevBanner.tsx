@@ -7,17 +7,9 @@ import { iconButtonClasses } from './IconButton';
 import { ICON } from '@/lib/icons';
 
 /**
- * The "site is in development" notice.
- *
- * Was a permanent amber strip pinned above the app bar. It cost vertical space on
- * every screen — 44px now, its 32px dismiss button plus `py-1.5` either side — and
- * on a phone that is a meaningful slice of the viewport, and it said the same thing
- * on the thousandth visit as on the first. Styled as an M3 banner now, and
- * dismissible.
- *
- * Rendered only after mount: reading localStorage during render would either
- * mismatch hydration or force the whole shell to be client-only, and a banner
- * that appears a frame late is preferable to either.
+ * The dismissible "site is in development" notice. Dismissal persists; render
+ * waits for mount, since reading localStorage during render would break
+ * hydration.
  */
 export default function DevBanner() {
   const [visible, setVisible] = useState(false);
@@ -52,19 +44,12 @@ export default function DevBanner() {
       <p className="text-body-s-emphasized min-w-0 flex-1 text-center">
         网站处于开发阶段，不代表最终品质
       </p>
-      {/* `iconButtonClasses`, not the `IconButton` component, and the ripple is
-          deliberately absent.
-          This control has to keep the touch floor inside a 44px-tall banner, and
-          `touch-target` is the utility for exactly that — it grows the hit area
-          without changing layout, to `--touch-floor`: 48px under a finger, 24 under
-          a pointer, so on a desktop the region stops overhanging the banner's own
-          padding. It cannot be combined with `data-ripple`, whose `overflow: hidden`
-          clips the pseudo-element out of hit-testing, and the component always sets
-          that attribute. Elsewhere the app answers this by growing the box
-          (`Pagination` takes `touch-size`); here the box cannot grow without pushing
-          the banner down the page on the one viewport where vertical space is
-          scarcest. So it takes the shared look and opts out of the press wave — the
-          state layer still carries the press. */}
+      {/* Shared icon-button classes, not the component — and the ripple is
+          deliberately absent: this control needs the touch floor inside a 44px
+          banner, and the hit-area utility cannot combine with `data-ripple`
+          (its clipping removes the pseudo-element from hit-testing), which the
+          component always sets. Growing the box instead would push the banner
+          down the page. The state layer still carries the press. */}
       <button
         type="button"
         onClick={dismiss}

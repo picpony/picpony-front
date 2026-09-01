@@ -3,20 +3,11 @@
 /**
  * When the app first painted something real.
  *
- * The splash (`components/LoadingOverlay.tsx`) used to dismiss on a *timer* — the length of
- * the wordmark's draw-on, plus the budget for the Lottie chunk that draws it, plus a hold.
- * That is ~1.8s of opaque `bg-surface` over content that was, on a warm load, ready in a
- * fraction of it. The overlay was the slowest thing on a cold start and it was covering an
- * app that had nothing left to wait for.
- *
- * So the dismissal is driven by the app instead of by the animation. One module-scope flag
- * and a listener set, deliberately not a React context: the producer is the shell's first
- * committed frame and the consumer is a sibling of the whole tree, so a context would put a
- * provider above both and re-render everything to deliver a boolean that flips once.
- *
- * The flag is monotonic — it never goes back to false — which is what lets a late subscriber
- * read it synchronously and skip the overlay entirely rather than fading one in to fade it
- * back out.
+ * Dismissal is driven by the app, not by the splash animation's length: one module-scope
+ * flag and a listener set, deliberately not a React context — the producer is the shell's
+ * first committed frame and the consumer is a sibling of the whole tree, so a context would
+ * re-render everything to deliver a boolean that flips once. The flag is monotonic (never
+ * false again), which lets a late subscriber skip the overlay entirely.
  */
 
 let painted = false;

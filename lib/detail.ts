@@ -97,9 +97,8 @@ function ensureNotificationVisibilityListener() {
     if (document.visibilityState !== 'visible') notificationVisibleFrames = 2;
     if (pendingNotifications.size > 0) scheduleDetailNotifications();
   });
-  // Publication is a controller milestone rather than a DOM/data-attribute
-  // convention. The active opening route can receive its data while input is
-  // still moving; unrelated responses remain queued until their owner is safe.
+  // Publication is a controller milestone (isDetailDataPublishable), not a DOM/data-attribute
+  // convention: the opening route may get data mid-gesture; unrelated responses wait for their owner.
   imageHeroController.subscribeRuntime(() => {
     if (pendingNotifications.size > 0) scheduleDetailNotifications();
   });
@@ -108,9 +107,8 @@ function ensureNotificationVisibilityListener() {
 function scheduleDetailNotifications() {
   ensureNotificationVisibilityListener();
   if (notificationFrame || typeof window === 'undefined' || pendingNotifications.size === 0) return;
-  // A single paint-bound dispatch keeps cache updates out of the flight's
-  // geometry frame. Hidden documents are resumed by visibilitychange, not a
-  // polling timeout that can wake a background tab.
+  // One paint-bound dispatch keeps cache updates out of the flight's geometry frame; hidden
+  // documents resume on visibilitychange, never a polling timeout that wakes a background tab.
   notificationFrame = window.requestAnimationFrame(flushDetailNotifications);
 }
 
@@ -135,8 +133,7 @@ function removeQueuedId(queue: number[], imageId: number) {
 function enqueueImmediate(imageId: number) {
   removeQueuedId(immediateQueue, imageId);
   removeQueuedId(backgroundQueue, imageId);
-  // A real activation should own the next available slot, ahead of stale
-  // focus or hover intent that may already be queued.
+  // A real activation takes the next slot ahead of stale hover/focus intent already queued.
   immediateQueue.unshift(imageId);
 }
 
@@ -341,7 +338,6 @@ export function peekImageDetail(id: number | string) {
   const imageId = normalizeId(id);
   const cached = detailCache.get(imageId);
   if (!cached) return null;
-  // useSyncExternalStore snapshots must be pure. TTL eviction happens on
-  // request/trim paths, never during render.
+  // useSyncExternalStore snapshots must be pure; TTL eviction happens on request/trim paths, never in render.
   return cached.publishedValue ?? null;
 }

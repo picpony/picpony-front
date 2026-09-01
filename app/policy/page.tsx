@@ -371,15 +371,12 @@ export default function PolicyPage() {
         className="mb-6"
       />
 
-      {/* `lean`: these four panes are static prose that never refetches, which is
-          the precondition for sampling the wave over a pane's own blocks — see
-          `TabPanes`. The card is *inside* each pane, not around all of them.
-          It reads like an inversion and it is the only arrangement that works:
-          the shared axis translates the panes a full window sideways, and a pane
-          nested inside a card would slide out of a surface that stayed put —
-          the border and background sitting still while their own contents left
-          the box. Every other screen slides content blocks *including* their
-          surfaces, so the card travels with the text it belongs to. */}
+      {/* `lean`: these four panes are static prose that never refetches, which is the
+          precondition for sampling the wave over a pane's own blocks — see `TabPanes`.
+          The card is *inside* each pane, not around all of them: the shared axis
+          translates the panes a full window sideways, and a pane nested inside a card
+          would slide out of a surface that stayed put. Every other screen slides content
+          blocks *including* their surfaces. */}
       <TabPanes value={active} lean>
         <TabPane value="cookie">
           <Card variant="filled" padding="lg">

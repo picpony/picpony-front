@@ -1,14 +1,15 @@
 /**
- * The hero flight path's two standing checks, as a command.
+ * `npm run hero:path` — the hero flight's standing checks, over a matrix of realistic box pairs
+ * in both directions, exiting non-zero. Asserts: per-decile monotonicity of every rendered edge,
+ * exact landing, crop retrace inside its budget, the flight curve leaving from rest, table
+ * fidelity at the shipped sample count, and the container transform — accumulated content scale
+ * isotropic and equal to the cover fit, clip ∘ compensator ∘ counter == identity parsed from the
+ * emitted strings, the reconstructed box == the arc rect, corner containment under the browser's
+ * radius clamp, exact unproject, and containment of the picture by the window at the window's own
+ * bow. Prints everything else.
  *
- * `AGENTS.md` has recorded both of them as prose for a long time — per-decile monotonicity of
- * every rendered edge, and a crop that does not pump — and prose is why the second one was
- * failing in shipped code without anybody noticing. This runs them over a matrix of realistic
- * box pairs and exits non-zero.
- *
- * It imports the app's own modules rather than a copy of the maths, through the resolve
- * hook in `scripts/tsResolve.mjs`. `lib/hero/motion.ts` is deliberately out of reach — it
- * pulls `@/lib/motion`, which wants `matchMedia`.
+ * Imports the app's own modules through `scripts/tsResolve.mjs`. `lib/hero/motion.ts` stays out
+ * of reach: it pulls `@/lib/motion`, which wants `matchMedia`.
  */
 import { requireTypeStripping } from './tsResolve.mjs';
 
@@ -32,46 +33,19 @@ const { intervalProgress } = await import('../lib/hero/progress.ts');
 const { interpolate } = await import('../lib/hero/spring.ts');
 
 /**
- * The matrix.
- *
- * Destination *sizes* come from the app's own `getHeroMediaRenderedWidth`, so the one place
- * that decides how wide the picture paints is the one place this measures against. Destination
- * *origins* are hard-coded from a measured layout, because deriving them would mean
- * reimplementing the overlay's padding chain here — the numbers are the media well's content
- * box at each viewport, i.e. `max-w-5xl` centred in the scroller plus `px-2 sm:px-4` plus the
- * well's own `px-4 sm:px-6`.
- *
- * Sources are real card boxes. The featured banner is in twice — once in view and once at a
- * negative `top`, which is the case that found the inset-clamp bug — and there is a
- * pure-horizontal pair, because a same-row move is the geometry a corner arc handles least
- * well and it is easy to leave out.
- */
-/**
- * The matrix, and **every box in it is measured rather than derived.**
- *
- * It used to place its media wells at hard-coded origins that were not inside the hosts it compared
- * them against — the destination at 1440 sat at x 104 while the overlay starts at 300 — so the
- * containment check was solving a problem the app does not have, and passed while the shipped app was
- * flattening the picture on real geometry. Card rects and host boxes now come out of a browser on the
- * fixture gallery at three viewports; the well is derived from the host the way the layout derives it
- * (centred, less the scrollbar gutter, below the measured chrome).
- *
- * `chrome` is the distance from the overlay's top to the media's, which is two metadata lines below
- * `sm` and one above it — the same measurement `HERO_MEDIA_VIEWPORT_CHROME_PX` records.
+ * The matrix — every box measured, not derived: card rects and host boxes come out of a browser
+ * on the fixture gallery at three viewports, and the well is derived from the host the way the
+ * layout derives it (centred, less the scrollbar gutter, below the measured chrome). Destination
+ * widths come from the app's own `getHeroMediaRenderedWidth`. 1920 is in the matrix because it is
+ * the one geometry where an outer-column flight is a long, mostly horizontal move into a box that
+ * straddles the card vertically — where the two corner arcs bow in opposite screen directions.
+ * `chrome` is the overlay-top-to-media-top distance, matching `HERO_MEDIA_VIEWPORT_CHROME_PX`.
  */
 const DESKTOP = {
   label: '1440', width: 1440, height: 900,
   host: { left: 300, top: 120, width: 1128, height: 768 },
   chrome: 101, gutter: 8,
 };
-/**
- * The wide desktop, in the matrix because it is where the two standing checks stopped describing the
- * app. Four 308px columns at x 459 / 783 / 1107 / 1431 against a well capped at 944 and centred — so
- * a flight from an *outer* column is a long, mostly horizontal move into a box that straddles the card
- * vertically, and that is the geometry where the two corner arcs bow in opposite screen directions and
- * the box's centre travels almost straight. Nothing at 1440 or 390 has that shape, which is why "the
- * two columns near the edges have too weak a parabola" was invisible here.
- */
 const WIDE = {
   label: '1920', width: 1920, height: 1080,
   host: { left: 300, top: 120, width: 1608, height: 948 },
@@ -101,11 +75,9 @@ const TALL = { width: 800, height: 2000 };
 const PORTRAIT = { width: 900, height: 1600 };
 const SQUARE = { width: 1400, height: 1400 };
 
-/**
- * Sources are real card boxes at the viewport named on the row. The featured banner is the one
- * synthetic pair — in twice, once in view and once at a negative `top`, because that is the case that
- * found the inset-clamp bug and the fixture gallery has no banner to measure.
- */
+/** Sources are real card boxes at the row's viewport. The featured banner is the one synthetic
+ *  pair — in view and at a negative `top`, the case that found the inset-clamp bug; the fixture
+ *  gallery has no banner to measure. */
 const CASES = [
   ['masonry mid-column', { left: 324, top: 144, width: 256, height: 144 }, LANDSCAPE, DESKTOP],
   ['masonry below fold', { left: 324, top: 490, width: 256, height: 141 }, WIDESCREEN, DESKTOP],
@@ -144,10 +116,9 @@ function fail(check, message) {
   failures.push(`${check}: ${message}`);
 }
 
-/* The crop metric is `geometry.ts`'s, not a copy: one exported function decides what a pump
-   is, and the budget beside it decides how much of one is allowed. This audits at 401 points
-   against the solver's own 65, which is why the assertion carries `HERO_ARC_CROP_TOLERANCE` —
-   the solver's coarser view can miss the peak by up to a third of a point. */
+/* The crop metric is `geometry.ts`'s, not a copy. This audits at 401 points against the solver's
+   own 65, hence `HERO_ARC_CROP_TOLERANCE` on the assertion: the coarser solver view can miss the
+   peak by up to a third of a point. */
 const AUDIT_SAMPLES = 401;
 
 function auditPath(from, to, baseAspect, arc, samples = AUDIT_SAMPLES) {
@@ -289,9 +260,8 @@ for (const [label, model] of MODELS) {
       `${launch.toFixed(4).padStart(8)}  ${(at24.worst * 100).toFixed(3)}%    ${(at32.worst * 100).toFixed(3)}%`,
   );
   if (zero !== 0 || one !== 1) fail('d/model', `${label} does not span [0, 1] exactly`);
-  /* A leg launched with a *negative* velocity is expected to dip below 0 before recovering —
-     that dip is what reads as the flyer being caught rather than restarted, and the pull
-     release has always had it. Monotonicity is only required of the from-rest models. */
+  /* A negative-velocity leg is expected to dip below 0 before recovering — that dip is the
+     catch, not a bug. Monotonicity is required of the from-rest models only. */
   const launchesBackwards = model.kind === 'spring' && model.response.velocity < 0;
   if (!monotone && !launchesBackwards) fail('d/model', `${label} is not monotone on [0, 1]`);
   const shipped = tableError(model, HERO_PROGRESS_SAMPLES);
@@ -305,11 +275,8 @@ for (const [label, model] of MODELS) {
 }
 
 // ---------------------------------------------------------------------------
-// (e) The container transform
-//
-// None of this was covered before: the harness knew the flyer's path and nothing about the
-// window that clips it. Every assertion here is aimed at a specific way of getting the new
-// construction wrong that would still compile, still run, and still look plausible for 296ms.
+// (e) The container transform — every assertion aims at a plausible way of getting
+// the construction wrong that still compiles, runs, and looks fine for 296ms.
 // ---------------------------------------------------------------------------
 
 /** `translate3d(x, y, 0) scale(a, b)` -> {x, y, a, b}. Parsed, not recomputed: see (e/compose). */
@@ -323,9 +290,9 @@ function parseTranslateScale(css) {
 
 /** `scaleY(k)` -> k. */
 /**
- * The compensator, as the two components it emits. One is exactly 1 and the other carries the lift,
- * and which is which is the fit's own choice — see `heroContainerFitScale`. Parsed as a pair so the
- * isotropy, compose and anisotropy checks are written once for either axis.
+ * The compensator, as the two emitted components. One is exactly 1 and the other carries the lift
+ * (which is which is the fit's own choice). Parsed as a pair so the isotropy, compose and
+ * anisotropy checks are written once for either axis.
  */
 function parseCompensator(css) {
   const m = css.match(/^scale\(([-\d.e]+), ([-\d.e]+)\)$/);
@@ -342,15 +309,11 @@ function parseScaleTranslate(css) {
 
 const CONTAINER_SAMPLES = 97;
 /**
- * Anisotropy the WAAPI lerp is allowed to introduce between two keyframes, as a fraction.
- *
- * 0.6%, and it read 0.2% against a measured 0.108% for a long time — a figure that was low because
- * the measurement was wrong twice over: it walked 97 *uniform progress* steps rather than the
- * animation's own `HERO_PROGRESS_SAMPLES` offsets of eased progress, so it sampled finer than the
- * compositor ever does; and the geometry matrix it ran on placed its media wells outside the hosts it
- * compared them against. Both are fixed, and the honest number is **0.441%** — 4.2px of squash on a
- * 948px content box, present for less than one 4ms segment. Raising `HERO_PROGRESS_SAMPLES` from 32
- * to 48 is what brought it down from 0.99%.
+ * Anisotropy the WAAPI lerp may introduce between two keyframes, as a fraction: 0.6%, against a
+ * measured 0.441% (4.2px of squash on a 948px box). The honest figure requires sampling between
+ * the *real* keyframes — `HERO_PROGRESS_SAMPLES` offsets of eased progress, not uniform progress
+ * steps, which sample finer than the compositor and under-report the error. Raising
+ * `HERO_PROGRESS_SAMPLES` from 32 to 48 is what brought it down from 0.99%.
  */
 const ANISOTROPY_TOLERANCE = 0.006;
 
@@ -389,23 +352,22 @@ for (const [label, card, image, viewport] of CASES) {
       const comp = parseCompensator(formatHeroContainerCompensator(pose));
       const counter = parseScaleTranslate(formatHeroContainerCounter(pose));
 
-      /* (e/isotropy) The accumulated content scale must be the same on both axes. Catches an
-         inverted compensator, a compensator on the wrong node, and a compensator that lifts the
-         wrong axis — all of which render a plausible but squashed page, i.e. the failure nobody
-         spots inside 194ms. */
+      /* (e/isotropy) The accumulated content scale must be the same on both axes — catches an
+         inverted compensator, one on the wrong node, or one lifting the wrong axis: a plausible
+         but squashed page, i.e. the failure nobody spots inside 194ms. */
       const fitX = clip.a * comp.x;
       const fitY = clip.b * comp.y;
       isotropy = Math.max(isotropy, Math.abs(fitY - fitX) / Math.max(1, fitX));
 
       /* (e/fit) The fit must be `max(sx, sy)` — cover. Fitting to the smaller scale leaves a band
-         of the window with nothing painted in it, which is a measured artefact: 138px of an 866px
-         window at 1920x1080 on a portrait picture, with the flyer hanging 111px past the paint. */
+         of the window unpainted: measured 138px of an 866px window at 1920x1080 on a portrait
+         picture, with the flyer hanging 111px past the paint. */
       fitError = Math.max(fitError, Math.abs(fitX - Math.max(clip.a, clip.b)));
 
       /* (e/compose) clip . compensator . counter must be the identity, parsed from the emitted
-         strings rather than re-multiplied from the numbers, because the mistake worth catching is
-         at the string level: swap the counter's two functions and this fails, where the app would
-         merely put the opening flyer ~100px out on a device you are not holding. */
+         strings rather than re-multiplied: the mistake worth catching is at the string level —
+         swap the counter's two functions and only this fails, where the app would merely put the
+         opening flyer ~100px out on a device you are not holding. */
       const accX = fitX * counter.k;
       const accY = fitY * counter.k;
       const accDX = clip.x + fitX * counter.k * counter.a;
@@ -449,9 +411,8 @@ for (const [label, card, image, viewport] of CASES) {
         worstCornerRatio = Math.max(worstCornerRatio, Math.max(rx, ry) / Math.min(rx, ry));
       }
 
-      /* (e/unproject) The inverse has to be exact, on both axes. Projected at the *fit* scale,
-         which is what the compensator establishes — `box.width / host.width` is only the fit when
-         the leg happens to fit to width. */
+      /* (e/unproject) The inverse must be exact, on both axes — projected at the *fit* scale,
+         which is what the compensator establishes. */
       const probe = { left: 137, top: 241, width: 313, height: 97 };
       const scale = geometry.heroContainerFitScale(pose);
       const screen = {
@@ -473,12 +434,10 @@ for (const [label, card, image, viewport] of CASES) {
     }
 
     /* (e/anisotropy) WAAPI lerps `scale(sx, sy)` and the compensator's single axis independently,
-       so between two samples the product is not the isotropic value. Real, unavoidable, and pinned
-       to a number so that a change to `HERO_PROGRESS_SAMPLES` or to the decomposition cannot
-       quietly make it visible. Measured on the fit axis the leg actually takes. */
-    /* Between the *real* keyframes, which is `HERO_PROGRESS_SAMPLES` offsets of eased progress —
-       not the 97 uniform progress steps the checks above walk. Sampling finer than the animation
-       under-reports the very error this pins, which it did. */
+       so between two samples the product is not isotropic — real, unavoidable, and pinned to a
+       number so a change to `HERO_PROGRESS_SAMPLES` or the decomposition cannot quietly make it
+       visible. Sampled between the real keyframes (eased offsets, not the uniform steps above),
+       which is the only honest figure. */
     const keyPoses = sampleProgress(HERO_FLIGHT_PROGRESS[direction], HERO_PROGRESS_SAMPLES).map(
       ({ progress }) => getHeroContainerPose(lerpHeroRectArc(arc, progress), host),
     );
@@ -554,8 +513,8 @@ if (worstAnisotropy > ANISOTROPY_TOLERANCE) {
   );
 }
 
-/* The property the whole shape argument rests on: the flight leaves from rest. Asserted rather
-   than commented, because the constants read `velocity: 0.9` for a long time while claiming it. */
+/* The flight leaves from rest — asserted rather than commented, because the constants read
+   `velocity: 0.9` for a long time while claiming it. */
 if (velocityAt(HERO_FLIGHT_PROGRESS.forward, 0) !== 0) {
   fail('d/model', 'HERO_FLIGHT_CURVE does not leave from rest');
 }
@@ -563,17 +522,9 @@ if (velocityAt(HERO_FLIGHT_PROGRESS.forward, 0) !== 0) {
 // ---------------------------------------------------------------------------
 // (f) containment — the picture never leaves the window, and keeps its arc
 //
-// This is the check the reported bug needed. `[data-image-detail-clip]` is `overflow: clip`, so
-// anything the flyer does outside the window is a visible crop of the picture; the report was
-// "part of the bottom is cut off when some images open". It was a print-only diagnostic while the
-// two arcs shared one bow, because `flyer ⊆ window` was then unprovable — the arcs pick their
-// tangent axis from whichever endpoint owns the larger delta, so two pairs can leave along
-// different axes. `solveHeroArcContainBows` makes it an invariant, so it is an assertion now.
-//
-// The second column is the point of the exercise. The window gives way instead of the picture, so
-// `bow(pic)` is the crop budget's answer alone and stays at Flutter's full arc wherever the crop
-// allows — it used to collapse to 0.02 on a portrait destination, which is the "parabola is very
-// weak, and only on some image sizes" report.
+// `[data-image-detail-clip]` is `overflow: clip`, so anything the flyer does outside the window
+// is a visible crop. Asserted via `solveHeroArcContainBows`; the window gives way instead of the
+// picture, so `bow(pic)` stays at the crop budget's answer wherever the crop allows.
 // ---------------------------------------------------------------------------
 
 /** The overlay's own box, measured — see the viewport constants. */
@@ -595,9 +546,8 @@ function centreBow(arc) {
   return { px: worst, pct: chord > 0 ? (worst / chord) * 100 : 0 };
 }
 
-/* The solver as it shipped before: one scalar for both arcs, bisected from a feasible 0. Kept here
-   rather than in `geometry.ts` so the last column of the table below is a real comparison and not a
-   remembered one. */
+/* The old solver: one scalar for both arcs, bisected from a feasible 0. Kept here so the last
+   table column is a real comparison, not a remembered one. */
 function sharedContainBow(card, media, host, cropBow) {
   const holds = (bow) => {
     const inner = createHeroRectArc(card, media, bow);
@@ -624,9 +574,8 @@ function sharedContainBow(card, media, host, cropBow) {
   return Math.min(cropBow, low);
 }
 
-/* The solver samples at `HERO_ARC_SOLVE_SAMPLES` and this audits at `AUDIT_SAMPLES`, so a residual
-   is expected for the same reason `HERO_ARC_CROP_TOLERANCE` exists. Measured worst case on this
-   matrix is printed below; the ceiling is that, rounded up to the pixel. */
+/* Audited at `AUDIT_SAMPLES` against a solver at `HERO_ARC_SOLVE_SAMPLES`, so a residual is
+   expected — the ceiling is the measured worst case, rounded up to the pixel. */
 const ESCAPE_CEILING = constants.HERO_ARC_CONTAIN_SLACK + 1;
 let worstEscape = 0;
 let worstRawEscape = 0;
@@ -646,10 +595,9 @@ for (const [name, card, image, viewport] of CASES) {
   );
   const picArc = createHeroRectArc(card, media, bows.inner);
   const winArc = createHeroRectArc(card, host, bows.outer);
-  /* The visible loss is `(picture n host) \ window`: the overlay and its host are both
+  /* The visible loss is `(picture ∩ host) \ window`: the overlay and its host are both
      `overflow: hidden` on one box, so a picture edge outside *that* is clipped whether the window
-     holds it or not. Audited on the clipped rect for the same reason the solver solves on it, with
-     the raw figure printed beside it so the two never get confused. */
+     holds it or not. Audited on the clipped rect, with the raw figure printed beside it. */
   const clipToHost = (rect) => {
     const left = Math.max(rect.left, host.left);
     const top = Math.max(rect.top, host.top);
@@ -676,8 +624,7 @@ for (const [name, card, image, viewport] of CASES) {
   const pic = centreBow(picArc);
   const win = centreBow(winArc);
   /* What one shared scalar gave the picture, for the record: the same containment criterion with
-     both arcs on one bow, which is what shipped before and what read as "the parabola is very
-     weak, and only on some image sizes". */
+     both arcs on one bow. */
   const shared = sharedContainBow(card, media, host, cropBow);
   const was = centreBow(createHeroRectArc(card, media, shared));
   console.log(
@@ -691,11 +638,9 @@ for (const [name, card, image, viewport] of CASES) {
       `${name} leaves the window by ${escape.toFixed(1)}px, over the ${ESCAPE_CEILING}px ceiling`,
     );
   }
-  /* The picture giving way is the solver's last resort, and it is printed rather than failed: two
-     pairs on the shipped matrix genuinely reach it — a card whose box extends hundreds of pixels
-     below the fold, flying to a box of nearly its own size, is a geometry where the window has to
-     outgrow the picture in every direction and the picture cannot bow without leaving it. Compare the
-     last column instead: that is what one shared scalar gave, and every row has to beat it. */
+  /* The picture giving way is the solver's last resort, and it is printed rather than failed:
+     two pairs on this matrix genuinely reach it. Compare the last column instead — every row has
+     to beat what one shared scalar gave. */
   if (bows.inner < cropBow - 1e-9) gaveWay.push(name);
 }
 console.log(

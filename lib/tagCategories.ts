@@ -1,21 +1,14 @@
 /**
- * The one map from a tag category to the colour that represents it.
+ * The one map from a tag category to the colour that represents it — this file is
+ * the only thing allowed to pick an accent hue for a category (the accent scale is
+ * categorical, not semantic), so a category means one colour on every screen. Two
+ * vocabularies feed in, Derpibooru's tag API (`character`, `species`, `origin`,
+ * `content-official`, …) and the autocomplete endpoint's own names (`artist`, `oc`,
+ * `content_official`, …), both keyed here and normalised through `tagCategory()`.
  *
- * There were three of these before, and they disagreed: the glossary admin tab
- * painted 分级 blue, the search autocomplete painted it pink, and the tag list
- * on an image gave artists blue — the same hue the glossary was using for a
- * different thing. Nothing linked them, so every category was a different
- * colour depending on which screen you were looking at, which is the one job
- * a categorical colour has to get right.
- *
- * Two vocabularies feed in: Derpibooru's tag API (`character`, `species`,
- * `origin`, `content-official`, …) and the autocomplete endpoint's own names
- * (`artist`, `oc`, `content_official`, …). Both are keyed here, normalised
- * through `tagCategory()`, so a category means one colour everywhere.
- *
- * `general` is deliberately uncoloured. It is the default category and by far
- * the largest, so colouring it would tint most of every tag cloud and leave the
- * genuinely distinct categories with nothing to stand out against.
+ * `general` is deliberately uncoloured: it is the default category and by far the
+ * largest, so colouring it would tint most of every tag cloud and leave the genuinely
+ * distinct categories with nothing to stand out against.
  */
 export type AccentHue =
   'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple';
@@ -48,9 +41,9 @@ export function tagCategory(name: string | undefined | null): TagCategory {
 }
 
 /**
- * Chip classes for a category: the accent container plus its ink, or the
- * neutral surface pair. Both halves come from the same token so a call site
- * cannot pair a fill with the wrong text colour.
+ * Chip classes for a category: the accent container plus its ink, or the neutral
+ * surface pair. Both halves come from the same token so a call site cannot pair
+ * a fill with the wrong text colour.
  */
 export function tagCategoryChip(name: string | undefined | null): string {
   const { hue } = tagCategory(name);
@@ -71,7 +64,6 @@ export function tagCategoryDot(name: string | undefined | null): string {
 
 /*
  * The two helpers above build their class names by interpolating a hue, which
- * Tailwind's source scanner cannot follow. The generated utilities are kept
- * alive by `@source inline(...)` at the top of app/globals.css, next to the
- * token definitions themselves.
+ * Tailwind's source scanner cannot follow; `@source inline(...)` at the top of
+ * app/globals.css keeps the generated utilities alive.
  */

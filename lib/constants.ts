@@ -2,15 +2,10 @@
 export const PICPONY_API_BASE = '/api.php';
 
 /**
- * The same endpoint, absolute, for code that runs on the server.
- *
- * `PICPONY_API_BASE` is relative because the browser needs it to go through
- * `app/api.php/[[...path]]/route.ts` (which rewrites the backend's `Secure`
- * session cookie). Node's `fetch` rejects a relative URL outright, so a server
- * component reaching for the relative form throws `Failed to parse URL` — which
- * is what left `app/user/[id]/layout.tsx`'s `generateMetadata` returning its
- * fallback title on every request since it was written. Must stay in step with
- * `UPSTREAM_ORIGIN` in that route handler.
+ * The same endpoint, absolute, for server code: Node's `fetch` rejects a relative
+ * URL outright (the relative form is for the browser, which goes through the route
+ * handler that rewrites the backend's `Secure` session cookie). Must stay in step
+ * with `UPSTREAM_ORIGIN` in that route handler.
  */
 export const PICPONY_API_ORIGIN = 'https://picpony.top';
 
@@ -18,34 +13,29 @@ export const PICPONY_API_ORIGIN = 'https://picpony.top';
 export const DERPIBOORU_API_BASE = 'https://trixiebooru.org/api/v1/json';
 
 /**
- * The `api_accel` line: a Cloudflare Worker that fetches a Derpibooru URL for you.
- *
- * One of the four API lines in `lib/route.ts` — not "the proxy". It answers
- * `GET`/`HEAD`/`OPTIONS` only, so a POST to Derpibooru can never be wrapped in it.
- * Note the host is `picponyapi.147052.xyz` while the *image* worker at
- * `lib/imageLoader.ts` is the bare `147052.xyz`: two hostnames, two pipelines.
+ * The `api_accel` line: a Cloudflare Worker that fetches a Derpibooru URL for you —
+ * one of the four API lines in `lib/route.ts`. It answers `GET`/`HEAD`/`OPTIONS`
+ * only, so a POST to Derpibooru can never be wrapped in it. Note the host is
+ * `picponyapi.147052.xyz` while the *image* worker at `lib/imageLoader.ts` is the
+ * bare `147052.xyz`: two hostnames, two pipelines.
  */
 export const PROXY_API_BASE = 'https://picponyapi.147052.xyz/?url=';
 
 /**
- * The `picpony_api` line, and the path our own handler answers on.
- *
- * The upstream enforces an `Origin` allowlist of `picpony.top` / `www.picpony.top`
- * and 403s everything else, so the browser cannot reach it from this app's origin
- * at all. `app/relay/route.ts` calls it server-side with `PICPONY_API_ORIGIN` as the
- * `Origin`, which is why the client-facing value here is a path rather than a host.
+ * The `picpony_api` line, and the path our own handler answers on. The upstream
+ * enforces an `Origin` allowlist of `picpony.top` / `www.picpony.top` and 403s
+ * everything else, so the browser cannot reach it at all — `app/relay/route.ts`
+ * calls it server-side with `PICPONY_API_ORIGIN` as the `Origin`, which is why the
+ * client-facing value here is a path rather than a host.
  */
 export const PICPONY_RELAY_UPSTREAM = 'https://cdn.picpony.top/relay';
 export const PICPONY_RELAY_PATH = '/relay';
 
 /**
- * The two non-direct image lines.
- *
- * They were private to `lib/imageLoader.ts`, which is where the retry ladder lives;
- * they moved here when `lib/route.ts` became the one module that decides *which*
- * line is in force, because both modules now need to name them. Note the worker is
- * the bare `147052.xyz` while the API line's worker is `picponyapi.147052.xyz` —
- * `getRawImageUrl` is the one place that has to know about both.
+ * The two non-direct image lines, shared by `lib/route.ts` (which decides which
+ * line is in force) and `lib/imageLoader.ts` (where the retry ladder lives).
+ * The worker is the bare `147052.xyz` while the API line's worker is
+ * `picponyapi.147052.xyz` — `getRawImageUrl` is the one place that knows both.
  */
 export const IMAGE_WORKER_BASE = 'https://147052.xyz/?url=';
 export const IMAGE_CDN_BASE = 'https://wsrv.nl/?url=';
@@ -59,10 +49,8 @@ export const SEARCH_IMAGE_API = '/search-api/api/upload-search';
 /**
  * 浏览器 localStorage 中使用的键
  *
- * Complete, and it has to stay that way: it covered 9 of the 27 keys the app
- * actually writes, so 32 call sites restated a literal that *was* in here — 25 of
- * them in `app/settings/page.tsx`, the one module whose entire job is settings
- * persistence and the one that did not import the table.
+ * Complete, and it has to stay that way: no call site may restate a key
+ * literal — new keys go in this table.
  */
 export const LS_KEYS = {
   userInfo: 'user_info',
@@ -70,16 +58,15 @@ export const LS_KEYS = {
   banAnthro: 'trixie_ban_anthro',
   banDiscomfort: 'trixie_ban_discomfort',
   onlyPony: 'trixie_only_pony',
-  /* The four line preferences, and they sit on *two* axes — `lib/route.ts` owns the
-     split. `useCdn` and `usePicponyProxy` steer images; `useApiAccel` and
-     `useHongKongRelay` steer the Derpibooru API. `usePicponyProxy` used to gate the
-     API proxy as well, which is how one toggle came to gate both pipelines. */
+  /* The four line preferences sit on *two* axes — `lib/route.ts` owns the split:
+     `useCdn`/`usePicponyProxy` steer images; `useApiAccel`/`useHongKongRelay`
+     steer the Derpibooru API. */
   useCdn: 'trixie_use_cdn',
   usePicponyProxy: 'picpony_use_proxy',
   useApiAccel: 'picpony_api_accel',
   useHongKongRelay: 'picpony_hk_relay',
   homeSort: 'picpony_default_home_sort',
-  /** The tag list whose pictures wear a cover. Was a bare literal at its one call site. */
+  /** The tag list whose pictures wear a cover. */
   spoilerTags: 'trixie_active_spoilered_tags',
   searchSort: 'picpony_default_search_sort',
   devBannerDismissed: 'picpony_dev_banner_dismissed',
@@ -102,12 +89,10 @@ export const LS_KEYS = {
   activeSpoileredTags: 'trixie_active_spoilered_tags',
   palette: 'picpony_palette',
   /**
-   * The seed hex behind the eleventh palette, when `palette` is `custom`.
-   *
-   * A seed rather than the sixty resolved declarations, because the recipe is shared
-   * (`lib/paletteRule.ts`) and a stored *output* would go stale the moment the rule moves —
-   * which is exactly what happened to the ten built-in themes the last time the tone rule
-   * changed. Seven characters against ~430, and re-deriving costs one HCT run.
+   * The seed hex behind the custom palette, when `palette` is `custom`. A seed
+   * rather than the sixty resolved declarations: the recipe is shared
+   * (`lib/paletteRule.ts`) and a stored *output* would go stale the moment the
+   * rule moves. Seven characters against ~430, and re-deriving costs one HCT run.
    */
   paletteCustom: 'picpony_palette_custom',
   motion: 'picpony_motion',
@@ -116,84 +101,61 @@ export const LS_KEYS = {
 } as const;
 
 /**
- * Cookie names, for the preferences the server has to know before first paint.
- *
- * All five appearance preferences are mirrored into a cookie so `app/layout.tsx`
- * can put them on `<html>` at SSR: without that, the first paint is the default
- * theme and the pre-paint script corrects it, which is a visible flash of the
- * wrong brand on every cold load. The sixth is the sidebar's collapsed state, for
- * the same reason. The names deliberately do *not* all match their `LS_KEYS`
- * counterparts — `darkMode` does and `sidebarCollapsed` does not — which is the
- * reason this table exists rather than the cookie name being derived from the
- * storage key.
+ * Cookie names, for the preferences the server has to know before first paint:
+ * they are mirrored into a cookie so `app/layout.tsx` can put them on `<html>` at
+ * SSR — without that, the first paint is the wrong theme, a visible flash of the
+ * wrong brand on every cold load (plus the sidebar's collapsed state, for the
+ * same reason). This is a table rather than a derivation from `LS_KEYS` because
+ * the cookie name and the storage key do not always match.
  */
 export const COOKIE_KEYS = {
   darkMode: 'darkMode',
   /**
-   * The active spoiler tags, so the server can draw the cover.
-   *
-   * `ImageCard` computed `isSpoilered` in an effect from `localStorage`, which was invisible
-   * while `/` rendered a skeleton and fetched after hydration. Now the server emits fifty
-   * `<img>` tags and the browser paints them *before* that effect runs — so a user who had
-   * spoilered a tag saw those pictures uncovered for the whole hydration window on every cold
-   * load, which is the one thing the feature exists to prevent. The `q=` filter does not help:
-   * a spoiler is a per-tag cover, not a query exclusion.
-   *
-   * Same shape as `browsing` and `imageLine`: the device mirrors its own preference into a
-   * cookie, the layout reads it, and the first render asks the same question the effect will.
+   * The active spoiler tags, so the server can draw the cover. A spoiler is a
+   * per-tag cover, not a query exclusion, so the server must know it before it
+   * renders the `<img>` tags. Same shape as `browsing`/`imageLine`: the device
+   * mirrors its preference into a cookie and the first render asks the same
+   * question the client-side effect will.
    */
   spoilerTags: 'spoilerTags',
   sidebarCollapsed: 'sidebarCollapsed',
   palette: 'palette',
   /**
-   * The custom palette's seed, so the server can derive its sixty declarations and put
-   * them in `<head>` before the first paint. Without it a user on a custom colour gets a
-   * flash of the default brand on every cold load, which is the whole reason this table
-   * exists.
+   * The custom palette's seed, so the server can derive its sixty declarations and
+   * put them in `<head>` before the first paint instead of flashing the default
+   * brand on every cold load.
    */
   paletteCustom: 'paletteCustom',
   motion: 'motion',
   motionSpeed: 'motionSpeed',
   entranceMotion: 'entranceMotion',
   /**
-   * The browsing fingerprint, for the server to compute the same feed key the client will.
-   *
-   * The seventh entry and the first that is not about first paint. It holds
-   * `browsingFingerprint()`'s output — the content filter, the three toggles and the sorted
-   * blocked-tag list, already joined — rather than the five inputs, so the derivation stays in
-   * `lib/resources.ts` and there is no second copy of it to drift.
-   *
-   * The sort is *not* in it. `homeSort` and `searchSort` are separate settings that change
-   * independently of the filter, and folding them in would make every sort change look like a
-   * filter change to the cache.
+   * The browsing fingerprint, for the server to compute the same feed key the client
+   * will. It holds `browsingFingerprint()`'s output — the content filter, the three
+   * toggles and the sorted blocked-tag list, already joined — rather than the five
+   * inputs, so the derivation stays in `lib/resources.ts` and there is no second
+   * copy of it to drift. The sort is *not* in it: `homeSort` and `searchSort` change
+   * independently of the filter, and folding them in would make every sort change
+   * look like a filter change to the cache.
    */
   browsing: 'browsing',
   homeSort: 'homeSort',
   /**
-   * Which image line this device is on: `picpony` / `cdn` / `direct`.
-   *
-   * The eighth entry, and it exists because the home page now server-renders fifty `<img>` tags.
-   * The line is chosen by `resolveImageLine()`, which reads `localStorage` and the fetched route
-   * policy — neither of which the server can see — so it fell back to the *defaults* and emitted
-   * the proxy line for everybody. A visitor who had turned the image proxy off got a hydration
-   * mismatch on every card, and React does not patch attributes: their browser kept the server's
-   * URL and their preference was ignored for the whole first screen.
-   *
-   * Mirrored rather than derived, for the same reason `browsing` holds the joined fingerprint:
-   * the decision has one owner (`lib/route.ts`) and the cookie is its output, so there is no
-   * second copy of the ladder to drift.
+   * Which image line this device is on: `picpony` / `cdn` / `direct`. The line is
+   * chosen by `resolveImageLine()` from `localStorage` and the fetched route policy,
+   * neither of which the server can see — without the cookie the server falls back
+   * to the defaults and a visitor's preference is ignored, as a hydration mismatch
+   * React does not patch (it keeps the server's attributes). Mirrored rather than
+   * derived, like `browsing`: the decision has one owner (`lib/route.ts`) and the
+   * cookie is its output, so there is no second copy of the ladder to drift.
    */
   imageLine: 'imageLine',
 } as const;
 
 /**
- * Breakpoints, in px, matching Tailwind's defaults.
- *
- * These were previously restated in five places that did not agree with one
- * another: `useDisplay` split at 640/1024, `useMasonryColumns` at 768/1024,
- * `lib/hero/constants.ts` at 640, `ImageCard`'s `sizes` attribute at 767/1023,
- * and the CSS at Tailwind's own values. Anything that has to branch on width in
- * JS reads from here so it stays in step with the `sm:`/`md:`/`lg:` classes.
+ * Breakpoints, in px, matching Tailwind's default scale (Tailwind's, not M3's
+ * window classes). Anything that branches on width in JS reads from here so JS
+ * breakpoints cannot drift from Tailwind's responsive utilities.
  */
 export const BREAKPOINTS = {
   sm: 640,
@@ -208,20 +170,13 @@ export const MEDIA = {
   md: `(min-width: ${BREAKPOINTS.md}px)`,
   lg: `(min-width: ${BREAKPOINTS.lg}px)`,
   xl: `(min-width: ${BREAKPOINTS.xl}px)`,
-  /* The density axis. Not derived from a width: a 1024px tablet is a finger and a
-     600px desktop window is not, which is the mistake `Pagination` made when it
-     keyed its two sizes on `sm:`. The CSS side is `--touch-floor` plus the
-     `pointer-coarse:`/`pointer-fine:` variants in globals.css; these two exist so
-     anything branching in JS cannot drift from them, exactly as the four above
-     keep JS in step with `sm:`/`md:`. */
+  /* The density axis, not derived from a width: a 1024px tablet is coarse and a
+     600px desktop window is not. Mirrors the pointer variants and the touch floor
+     in globals.css so anything branching in JS cannot drift from the CSS. */
   pointerCoarse: '(pointer: coarse)',
   pointerFine: '(pointer: fine)',
-  /* The two user-preference queries. Neither was in here, so
-     `(prefers-color-scheme: dark)` was hand-typed at three sites in `AppLayout`
-     and `(prefers-reduced-motion: reduce)` at two in `lib/motion` plus two more
-     that bypass it (`lib/hero/media.ts`, `components/LoadingOverlay.tsx`) — seven
-     copies of two strings, in the two places where a typo fails silently by
-     never matching. */
+  /* The two user-preference queries. These matchMedia strings fail silently when
+     hand-typed — a typo never matches — so every copy lives here. */
   dark: '(prefers-color-scheme: dark)',
   reducedMotion: '(prefers-reduced-motion: reduce)',
 } as const;

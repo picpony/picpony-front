@@ -19,15 +19,12 @@ interface StatusViewProps {
   /**
    * This status view **is** the whole route, so fill the scroller and centre in it.
    *
-   * `page`'s own floor is half the viewport, which is right for an empty list sitting
-   * under a page header — the block lands near the optical centre of what is left. It
-   * is wrong for a screen whose only content is this block, because then "half the
-   * viewport" puts the sentence in the upper third with nothing under it. Four screens
-   * are that case and nothing else is: the 404, the route error boundary,
-   * `/derpi/user/[id]`'s failure (whose `PageBack` portals out to a slot beside the
-   * scroller, so it takes no space here), and the image detail's failure in both of its
-   * presentations. A list's empty state must **not** set this, or the page grows past the
-   * viewport and the scroller gains a bar with nothing to scroll to.
+   * `page`'s own floor is half the viewport, right for an empty list under a page
+   * header and wrong for a screen whose only content is this block — four screens
+   * are that case: the 404, the route error boundary, `/derpi/user/[id]`'s
+   * failure, and the image detail's failure in both presentations. A list's empty
+   * state must **not** set this, or the scroller gains a bar with nothing to
+   * scroll to.
    *
    * It also *replaces* the size's floor rather than adding to it — see `FILL_BOX`.
    */
@@ -37,44 +34,24 @@ interface StatusViewProps {
 }
 
 /**
- * The one layout for "there is nothing here", whatever the reason.
+ * The one layout for "there is nothing here", whatever the reason. Owns the
+ * geometry and the entrance; `EmptyState` / `ErrorRetry` are the two presets
+ * over it — the user does not care whether a list is empty because it has
+ * nothing or because the request failed.
  *
- * Empty and failed were two separate families with two separate silhouettes.
- * `ErrorRetry` centred a 48px glyph over `title-l` at half the viewport and faded
- * in through `Reveal`; the fourteen empty states did not agree with it or with
- * each other — `text-title-m` on /history and /user, `text-body-m` in the
- * messages contact list, bare `text-on-surface-variant` in a forum thread, and
- * six different minimum heights (32/40/48/50/60vh plus `py-20`). Two of them had
- * no glyph at all, so the page simply looked like it had failed to render.
+ * Sizes, because the same block has to work in three enclosures: `page` (half
+ * the viewport, near the optical centre), `pane` (a tab pane or card with
+ * chrome above it), `inline` (a small box — no minimum at all).
  *
- * They are the same component. The user does not care whether the list is empty
- * because they have collected nothing or because the request failed — both are a
- * screen with a sentence in the middle of it, and the only thing that should
- * differ is the sentence and the glyph. So this owns the geometry and the
- * entrance, and `EmptyState` / `ErrorRetry` are the two presets over it.
- *
- * Sizes, because the same block has to work in three enclosures:
- *
- *   page    a whole route with nothing on it. Half the viewport, so the
- *           sentence lands near the optical centre rather than under the header.
- *   pane    inside a tab pane or a card that already has chrome above it.
- *           A `page`-sized block here pushes the tab bar off a phone screen.
- *   inline  inside a small box — a contact list, a tag well. No minimum at all;
- *           anything else makes a 120px well scroll.
- *
- * The entrance is `Reveal`, i.e. the same staggered rise every other
- * arriving-on-mount block in the app uses. It is deliberately not scroll-driven:
- * an empty state is on screen at commit by definition, so a trigger line it never
- * crosses would mean it never animates at all.
+ * The entrance is `Reveal`, the same staggered rise as every other
+ * arriving-on-mount block. Deliberately not scroll-driven: an empty state is on
+ * screen at commit by definition.
  */
 const SIZES: Record<StatusViewSize, string> = {
   page: 'min-h-[50dvh] px-4 py-8',
   pane: 'min-h-[32dvh] px-4 py-8',
-  /* No minimum and barely any padding. It read 40px of block padding, which with the
-     default 36px glyph and its 24px gap came to ~155px of content inside wells that cap at
-     120px — so the empty state was itself what made the well scroll. An inline status view
-     is one sentence; 8px keeps it clear of a 40dp row's ink without pretending to be a
-     block, and neither preset draws a glyph at this size unless a call site passes one. */
+  /* No minimum and barely any padding: an inline status view is one sentence,
+     and a heavier box is itself what makes a 120px well scroll. */
   inline: 'px-4 py-2',
 };
 
@@ -105,21 +82,13 @@ export default function StatusView({
      well, which is a sentence, not a section. The role follows the enclosure. */
   const inline = size === 'inline';
 
-  /* The entrance stands down inside a tab pane, and this is the fix for a rule the
-     app documents and then broke everywhere.
-     `Reveal` is a mount-time cascade. A pane transition (`playSharedAxis`, 500ms
-     `emphasized`) is already animating these very nodes' `autoAlpha` and `y`, so an
-     empty state inside a swapping pane ran both at once — two clocks on one subtree,
-     which is exactly the case AGENTS.md names as forbidden ("inside any tab pane
-     whose content swaps — /user/[id], /messages, /favorites, the home route"). Those
-     four screens reach `Reveal` through *this* component, unconditionally, which is
-     why the rule was violated on every one of them while no call site looked wrong.
-     Detected rather than passed as a prop: a status view does not know, and should
-     not have to know, what it was rendered into. `[data-tab-pane]` is the marker
-     `TabPanes` puts on every pane, so "is this inside a pane" is answerable
-     from the DOM. `useLayoutEffect` so the answer is known before the first paint —
-     `Reveal` sets its own start state on mount, and learning this a frame later
-     would mean the cascade had already begun. */
+  /* The entrance stands down inside a tab pane: a pane transition is already
+     animating these very nodes' `autoAlpha` and `y`, and two clocks on one
+     subtree is the case the motion rules name as forbidden. Detected rather
+     than passed as a prop — a status view does not know, and should not have to
+     know, what it was rendered into. `[data-tab-pane]` is the marker `TabPanes`
+     puts on every pane. `useLayoutEffect` so the answer is known before the
+     first paint (`Reveal` sets its own start state on mount). */
   const hostRef = useRef<HTMLDivElement>(null);
   const [inPane, setInPane] = useState(false);
   useLayoutEffect(() => {
@@ -131,12 +100,10 @@ export default function StatusView({
       {/* Each of these is a direct child of `Reveal`, which staggers its own
           children — nesting them in a wrapper would collapse the cascade into
           one block, which is the thing the stagger exists to avoid. */}
-      {/* 24px, not 48. It read 48px, which under a 48px glyph put **96px** above the
-          title and made the block so top-heavy that its optical centre sat well below its
-          geometric one — a geometrically centred block then reads as sitting high, which is
-          most of why these screens looked mis-centred even where the arithmetic was right.
-          M3 specifies nothing here; 24 is the grid step that keeps the glyph reading as part
-          of the same object as the sentence. */}
+      {/* 24px, not 48: under a 48px glyph, 48px above the title makes the block
+          so top-heavy that its optical centre sits well below its geometric one —
+          a geometrically centred block then reads as sitting high. 24 is the grid
+          step that keeps the glyph reading as part of the same object. */}
       {icon && <span className="text-outline mb-6 [&>svg]:block">{icon}</span>}
       {inline ? (
         <p className="text-body-m text-on-surface-variant">{title}</p>
@@ -159,26 +126,24 @@ export default function StatusView({
   );
 
   /* The probe's node is the outer wrapper in both branches, so the two cannot
-     disagree about where they are. `Reveal` staggers its *direct children*, which is
-     why the body is a fragment rather than a wrapper: nesting it in a div would
-     collapse the cascade into one block.
-     `fill` is `flex-1` on both nodes, not a percentage height, and that is the whole
-     trick: the shell is `Reveal`'s own div, and `min-height: 100%` there resolved
-     against a parent whose height comes from flex distribution — indefinite, so it
-     computed to `auto` and centred nothing. `flex-1` needs no definite parent. It does
-     need the page-content wrapper to be a flex column, which is why that is one.
+     disagree about where they are. `Reveal` staggers its *direct children*,
+     which is why the body is a fragment rather than a wrapper: nesting it in a
+     div would collapse the cascade into one block.
+     `fill` is `flex-1` on both nodes, not a percentage height — that is the
+     whole trick: `min-height: 100%` on the shell resolved against a parent
+     whose height comes from flex distribution (indefinite in Chrome) and
+     computed to `auto`. `flex-1` needs no definite parent; it does need the
+     page-content wrapper to be a flex column.
 
-     **`w-full` on the wrapper**, which is not decoration. In a block enclosure it changes
-     nothing, and in a *flex* one it is the difference between a centred block and a
-     shrink-to-fit item pinned at the start of the row: `items-center justify-center
-     text-center` inside can only centre within the width it is given. /block-groups' two
-     tag wells are `flex flex-wrap`, so "暂无标签" sat hard against their left edge, and the
-     obvious call-site fix — passing `w-full` — cannot work, because `className` lands on
-     the inner shell whose 100% resolves against the already-collapsed wrapper. Note the
-     `inPane` branch is the exception that proves it: there the shell *is* this element, so
-     the two /messages call sites passing `flex-1` were landing on the right box all along
-     and were never affected. Do not read this note as licence to hoist `className` up
-     unconditionally — the non-pane branch is what the well fix depends on. */
+     **`w-full` on the wrapper** is not decoration. In a block enclosure it
+     changes nothing; in a *flex* one it is the difference between a centred
+     block and a shrink-to-fit item pinned at the start of the row. /block-groups'
+     two tag wells are flex rows, so the empty message sat hard against their
+     left edge — and the obvious call-site fix cannot work, because `className`
+     lands on the inner shell whose 100% resolves against the already-collapsed
+     wrapper. The `inPane` branch is the exception: there the shell *is* this
+     element, so call sites passing `flex-1` land on the right box. Do not read
+     this as licence to hoist `className` up unconditionally. */
   return (
     <div ref={hostRef} className={cn('w-full', fill && 'flex flex-1 flex-col', inPane && shell)}>
       {inPane ? body : <Reveal className={cn(shell, fill && 'flex-1')}>{body}</Reveal>}

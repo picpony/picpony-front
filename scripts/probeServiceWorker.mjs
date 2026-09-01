@@ -1,8 +1,7 @@
-/* Does the service worker do what it claims?
-   Registers `sw.js` by hand (the app's own registration opts out under `navigator.webdriver`,
-   which is exactly what CDP sets), then checks four things: static chunks served from the worker
-   on a reload, `/api.php` and `/relay` never cached, an offline hard-navigation landing on
-   `/offline`, and the cache key set. Scratch probe. */
+/* Does the service worker do what it claims? Registers `sw.js` by hand (the app's own
+   registration opts out under `navigator.webdriver`, which is exactly what CDP sets), then checks
+   four things: static chunks served from the worker on a reload, `/api.php` and `/relay` never
+   cached, an offline hard-navigation landing on `/offline`, and the cache key set. Scratch probe. */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -75,8 +74,8 @@ await new Promise((r) => setTimeout(r, 3500));
 console.log('\n1. register + activate');
 /* The app registers it itself: `navigator.webdriver` is false in a plain headless Edge driven
    over CDP, so `ServiceWorker.tsx`'s opt-out does not fire and what is tested is what ships. A
-   second `register()` here with a different `?v=` would install a rival worker and the counts
-   below would be measuring the probe. */
+   second `register()` here would install a rival worker and the counts below would measure the
+   probe. */
 const reg = await evalIn(`(async () => {
   const r = await navigator.serviceWorker.ready;
   return { scope: r.scope, active: Boolean(r.active), waiting: Boolean(r.waiting) };
@@ -120,8 +119,8 @@ console.log('  ', JSON.stringify(cached));
 /* **The server is stopped rather than the network emulated.** `Network.emulateNetworkConditions`
    is scoped to the page target and does not reach the service worker's own thread, so the
    worker's `fetch()` kept succeeding and the first version of this probe reported the app
-   rendering normally "offline". Killing the origin is the only thing that fails a fetch made from
-   inside the worker. */
+   rendering normally "offline". Killing the origin is the only thing that fails a fetch made
+   from inside the worker. */
 console.log('\n4. origin gone: chunks still load, navigation lands on the offline file');
 server.kill();
 await new Promise((r) => setTimeout(r, 1500));

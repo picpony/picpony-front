@@ -3,50 +3,21 @@
 /**
  * One keyed, deduplicated, revalidating read — for every screen in the app.
  *
- * ## Why this exists
+ * Shared answer to "have we already asked for this": per-field fetch state duplicated across the
+ * screens caused double requests on cold load, re-reads on remount, and serial reads that could
+ * have been parallel.
  *
- * Every screen used to write its own fetch: a `useState` per field, an `isMounted` flag, a
- * `retryCount`, a `served` ref, and — in three places out of fourteen — a render snapshot from
- * `lib/pageCache.ts`. Twenty-odd copies of one recipe, and the copies disagreed in ways that only
- * a request ledger could see. Measured with `npm run net:audit` before any of this changed:
- *
- * - **The shell asked twice.** `AppLayout`'s session effect depends on the pathname and calls
- *   `setUserInfo` twice per run, and its unread-count effect depends on `userInfo` — so a cold load
- *   sent `get_user` twice and `get_unread_counts` two to four times, and *every navigation after
- *   that* sent them again. That is the same dependency-identity cascade `useAuth`'s docstring
- *   records `/favorites` hitting a rate limit on, grown back in a second place.
- * - **Screens re-read what they had just read.** A second visit to a profile cost all six of its
- *   requests again, because the page is keyed on the pathname and a remount starts from nothing.
- * - **Screens read in series when they could read in parallel.** A profile took four rounds:
- *   policy, then the profile, then the shared faves *and* the uploads, then the fave images.
- * - **Screens read things nobody asked for.** A profile fetched two pages of favourites on mount
- *   whether or not that tab was ever opened.
- *
- * None of those is a bug in a screen. They are what happens when there is no shared answer to
- * "have we already asked for this".
- *
- * ## What it is
- *
- * `lib/detail.ts` already had the answer for exactly one resource — the opened picture — with a
- * TTL, an LRU, a priority queue, a concurrency cap, real cancellation and a paint-bound
- * notification tuned so a response can never land inside a hero flight's geometry frame. It is
- * the best-tuned data code in the repo and it served one endpoint. This is that machinery with the
+ * `lib/detail.ts` had the machinery for exactly one resource — TTL, LRU, priority queue,
+ * concurrency cap, cancellation, paint-bound publication — and this is that machinery with the
  * endpoint made a parameter.
  *
- * ## What it deliberately is not
- *
- * - **Not a router cache.** It holds what the *server said*, keyed by the arguments of the read.
- *   What a screen was *showing* — its page number, its selected tab — is a different question and
- *   belongs to `useScreenState` in `lib/screenState.ts`. `lib/pageCache.ts` conflated the two,
- *   which is why it could only ever be used by a component willing to store its whole render in
- *   one object.
- * - **Not persistent.** The store is a `Map` and a reload genuinely reloads, which is
- *   `pageCache`'s own rule and the right one. The two localStorage caches in the app
- *   (`lib/tagCounts.ts`, `lib/tagTranslations.ts`) hold data that barely moves on a week-long TTL;
- *   that is a different problem from "do not re-read this list I am looking at" and keeping it
- *   separate is what stops this from growing a quota policy.
- * - **Not a mutation library.** A write goes through `lib/api/*` as it always did. What this adds
- *   is `write()`, so the answer can be corrected in place instead of by re-reading it.
+ * What it deliberately is not:
+ * - **Not a router cache.** It holds what the server said, keyed by the read's arguments; what a
+ *   screen is *showing* (page, tab) belongs to `useScreenState` in `lib/screenState.ts`.
+ * - **Not persistent.** A reload genuinely reloads. The long-TTL localStorage caches
+ *   (`lib/tagCounts.ts`, `lib/tagTranslations.ts`) solve a different problem.
+ * - **Not a mutation library.** Writes still go through `lib/api/*`; `write()` only corrects the
+ *   cached answer in place.
  */
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
@@ -60,10 +31,8 @@ export type Priority = 'immediate' | 'background';
 /**
  * How much of the network the app may occupy, and how much of that a *guess* may occupy.
  *
- * Both numbers are `lib/detail.ts`'s, which arrived at them for the gallery's hover-prefetch and
- * had them in production. The second one is the whole reason prefetching is safe to add anywhere:
- * a background read can never take the last slot, so no amount of speculative work can put the
- * request a user is actually waiting for behind it.
+ * The background cap is what makes prefetching safe: a background read can never take the last
+ * slot, so speculation can never delay a request a user is actually waiting for.
  */
 const MAX_CONCURRENT = 4;
 const MAX_CONCURRENT_BACKGROUND = 2;
@@ -101,9 +70,8 @@ function pump() {
 
 function enqueue(job: Job) {
   if (job.priority === 'immediate') {
-    /* A real activation owns the next slot, ahead of hover or focus intent that may already be
-       waiting — and it jumps any *other* immediate work too, because the most recent activation is
-       the one the user is looking at. */
+    /* A real activation owns the next slot, ahead of waiting intent — and jumps other immediate
+       work too: the most recent activation is the one the user is looking at. */
     immediateQueue.unshift(job);
   } else {
     if (backgroundQueue.length >= MAX_BACKGROUND_QUEUE) backgroundQueue.shift()?.cancel();
@@ -115,18 +83,13 @@ function enqueue(job: Job) {
 /**
  * Whether the device is willing to pay for a guess.
  *
- * The concurrency cap makes a prefetch safe for *latency* — a guess can never take the last slot
- * from a request somebody is waiting for. It says nothing about **bytes**, and on a metered or slow
- * connection those are the cost that matters: a page of fifty images speculatively fetched because
- * a finger brushed a link is a real charge on somebody's plan.
+ * The concurrency cap protects *latency*; this protects **bytes** — on a metered or slow
+ * connection, a speculative fetch is a real charge. `saveData` and the two slowest effective
+ * types switch speculation off entirely; only `prefetch` is gated, reads a screen asked for are
+ * untouched.
  *
- * So `saveData` and the two slowest effective types switch speculation off entirely. Reads that a
- * screen actually asked for are untouched — this gates `prefetch` and nothing else, so the app
- * still works exactly as before, just without the head start.
- *
- * Read per call rather than cached: `effectiveType` changes as the connection does, and this is
- * cheap. The API is Chromium-only, so `undefined` means "no information", which is treated as
- * willing — the same default every browser without it has always had.
+ * Read per call, not cached: `effectiveType` changes as the connection does. Chromium-only API —
+ * `undefined` (no information) is treated as willing, the default every other browser has.
  */
 function speculationAllowed(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -157,16 +120,13 @@ function dropQueued(key: string) {
 // ---------------------------------------------------------------------------
 
 /**
- * Responses are handed to React on a paint boundary, and a resource may refuse to be handed over
- * at all until its owner says it is safe.
+ * Responses reach React on a paint boundary, and a resource may hold its answer back until its
+ * owner says it is safe.
  *
- * Both halves are `lib/detail.ts`'s and both are load-bearing there: a `setState` that lands in the
- * frame the hero flight is reading `getBoundingClientRect` in is a frame of visible jank in the
- * app's most expensive gesture. A background tab is held off for two frames after it becomes
- * visible for the same reason — the first frames after a resume are the busiest.
- *
- * Generalising it means every screen gets that property, not only the opened picture, which matters
- * because prefetching is about to make responses arrive at moments nobody chose.
+ * A `setState` landing in the frame the hero flight reads geometry in is visible jank, so
+ * publication is rAF-bound; a background tab is held off two frames after becoming visible —
+ * the first frames after a resume are the busiest. Prefetching makes responses arrive at moments
+ * nobody chose, so every screen gets this property.
  */
 const pendingPublish = new Set<() => void>();
 let publishFrame = 0;
@@ -191,8 +151,8 @@ function flushPublish() {
     return;
   }
   for (const publish of Array.from(pendingPublish)) publish();
-  /* Anything a gate held back is still in the set, so keep a frame booked for it. Without this a
-     gated commit waits for some unrelated publish to schedule the next flush — which on a screen
+  /* Anything a gate held back is still in the set, so keep a frame booked for it — otherwise a
+     gated commit waits for some unrelated publish to schedule the next flush, which on a screen
      with one resource is never. */
   if (pendingPublish.size > 0) schedulePublish();
 }
@@ -217,13 +177,12 @@ export function notifyResourceGates() {
 /**
  * What a component sees.
  *
- * A single frozen object rather than four values, and rebuilt only when something actually changed,
- * because `useSyncExternalStore` compares snapshots by identity — a fresh object per read is an
- * infinite render loop, not a subtle inefficiency.
+ * One frozen object, rebuilt only when something actually changed: `useSyncExternalStore`
+ * compares snapshots by identity — a fresh object per read is an infinite render loop.
  *
- * `data` and `isLoading` are independent on purpose. A stale value being refreshed underneath has
- * `data` *and* `isLoading`, and the whole point of this layer is that such a screen shows the data
- * and not a skeleton. Only `data === undefined && isLoading` is a screen with nothing to draw.
+ * `data` and `isLoading` are independent on purpose: a stale value being refreshed underneath has
+ * *both*, and the screen must show the data, not a skeleton. Only `data === undefined &&
+ * isLoading` is a screen with nothing to draw — the placeholder branches on `data === undefined`.
  */
 export interface ResourceSnapshot<T> {
   data: T | undefined;
@@ -243,26 +202,20 @@ const EMPTY: ResourceSnapshot<never> = Object.freeze({
 type Entry<T> = {
   key: string;
   /**
-   * The arguments this entry was read with.
+   * The arguments this entry was read with, kept so a refresh can start *itself*.
    *
-   * Kept because a refresh has to be able to start *itself*. `expire()` marks an entry stale, and
-   * the first version of this stopped there — on the theory that the mounted component would notice
-   * and re-read. It cannot: `useResource`'s effect is keyed on the resource and the key, and
-   * neither changes when a value goes stale, so returning to a tab left open for an hour marked
-   * everything and fetched nothing. Holding the args lets `expire` kick the revalidation itself.
+   * `expire()` must kick the revalidation, not only mark stale: nothing re-renders when a value
+   * goes stale (the read effect is keyed on resource and key, neither changes), so a tab left open
+   * for an hour would be marked stale and fetch nothing without these.
    */
   args?: unknown;
   status: 'queued' | 'loading' | 'resolved' | 'error';
   /**
    * A slot holding listeners for a key nothing has read yet — not a request.
    *
-   * `useSyncExternalStore` subscribes *before* the effect that reads, so every mounted component
-   * creates one of these a tick before its own request exists. It has to be told apart from a real
-   * queued entry, and the first version of this file did not: `read` found the placeholder, saw
-   * `status: 'queued'`, and returned its promise — which is already resolved and carries no value.
-   * Every migrated screen went silent at once, and the ledger showed it as a triumph, one request
-   * for the whole home page and no gallery at all. A cache that answers "already handled" to a
-   * question nobody asked is worse than no cache.
+   * `useSyncExternalStore` subscribes *before* the effect that reads, so this is created a tick
+   * before the real entry. `read` must not mistake it for a queued request: it would return the
+   * placeholder's already-resolved, value-less promise and every screen would go silent.
    */
   placeholder?: boolean;
   /** The latest answer, which may not yet have been published. */
@@ -293,8 +246,8 @@ export interface ResourceOptions<Args, T> {
   /**
    * Return false to hold a landed answer back from React.
    *
-   * The image detail's gate is the reason this exists: an answer that arrives mid-flight must wait
-   * for the flight, or the `setState` lands in the frame the geometry is being read in.
+   * The image detail's gate is why this exists: an answer arriving mid-flight must wait for the
+   * flight, or the `setState` lands in the frame the geometry is being read in.
    */
   publishGate?: (key: string) => boolean;
 }
@@ -310,14 +263,10 @@ export interface Resource<Args, T> {
   peek: (args: Args) => ResourceSnapshot<T>;
   subscribe: (args: Args, listener: () => void) => () => void;
   /**
-   * The same two, by key.
-   *
-   * `useResource` uses these rather than the `args` forms, and the reason is a lint rule with a
-   * real argument behind it: `useSyncExternalStore` calls `getSnapshot` and `subscribe` *during
-   * render*, so a hook that needed the caller's `args` object there had to stash it in a ref and
-   * write that ref during render — which `react-hooks/refs` rejects, because a render React
-   * discards would still have mutated it. A key is a string computed during render from the
-   * arguments, so there is nothing to stash. Same key, same answer, by construction.
+   * `useResource` uses these rather than the `args` forms: `useSyncExternalStore` calls
+   * `getSnapshot`/`subscribe` *during render*, and a hook needing the caller's `args` object
+   * there would have to stash it in a ref and write it during render — which `react-hooks/refs`
+   * rejects. A key is a string computed during render, so there is nothing to stash.
    */
   peekKey: (key: string) => ResourceSnapshot<T>;
   subscribeKey: (key: string, listener: () => void) => () => void;
@@ -328,24 +277,19 @@ export interface Resource<Args, T> {
   /** Correct the answer in place — an optimistic write, or a response to a mutation. */
   write: (args: Args, update: T | ((previous: T | undefined) => T)) => void;
   /**
-   * Install a server-rendered answer as if it had been fetched at `fetchedAt`.
+   * Install a server-rendered answer as if it had been fetched at `fetchedAt` — the SSR seam.
    *
-   * The seam for SSR: a Server Component reads the first page, hands it to the client island as
-   * a prop, and the island installs it here before its first `read` — so the effect finds a
-   * fresh entry, takes the cached-and-not-stale branch, and sends nothing.
+   * A Server Component hands the first page to the client island as a prop; seeding it before the
+   * first `read` means the effect finds a fresh entry and sends nothing.
    *
-   * **Not `write`, and the difference is not cosmetic.** `write`'s cold-key branch calls
-   * `create()`, which ends in `enqueue()` → `pump()` → `job.run()` *synchronously* — so it
-   * fires the very request the seed exists to prevent. Worse, the `dropQueued` immediately
-   * after it may cancel that job, and `cancel` does `store.delete(key)`, leaving `write` to
-   * populate and publish an entry that is no longer in the store; `peekKey` then returns
-   * `EMPTY` for it forever. Neither is reachable from `write`'s only current caller, and both
-   * are exactly why seeding needed its own primitive.
+   * **Not `write`.** `write`'s cold-key branch runs `create` → `enqueue` → `pump` → `job.run()`
+   * synchronously — firing the very request the seed exists to prevent — and the `dropQueued`
+   * after it may cancel an entry, leaving `write` to populate an entry no longer in the store
+   * (`peekKey` then returns EMPTY for that key forever).
    *
-   * **Browser only.** `lib/resource.ts` carries `'use client'`, but a client module is still
-   * *evaluated in the Node process* for the SSR pass, so `store` is shared across concurrent
-   * requests on the server. Seeding during SSR would hand request A's feed to request B's
-   * render. Call sites must guard on `typeof window`.
+   * **Browser only.** This is a `'use client'` module still evaluated in Node during SSR, where
+   * the module-scope `store` is shared across concurrent requests: seeding server-side would leak
+   * one visitor's data into another's render. Call sites must guard on `typeof window`.
    */
   seed: (args: Args, value: T, fetchedAt: number) => void;
   /** Abort a *background* read for these args. An immediate one is somebody's screen. */
@@ -355,13 +299,10 @@ export interface Resource<Args, T> {
 const registry = new Set<{ clear: () => void; expireAll: () => void }>();
 
 /**
- * Forget everything.
+ * Forget everything — signing out is the case this exists for.
  *
- * Signing out is the case this exists for, and it is not hygiene: the store is a module-level `Map`
- * and signing out does not reload the document, so without this the previous account's private
- * messages, contacts and unread counts sit in memory and are handed to whoever signs in next. That
- * is `pageCache.clearSnapshots`'s reason and it applies with more force here, because this holds
- * more.
+ * The store is a module-level `Map` and signing out does not reload the document; without this,
+ * the previous account's data sits in memory and is handed to whoever signs in next.
  */
 export function clearAllResources() {
   for (const entry of registry) entry.clear();
@@ -370,9 +311,8 @@ export function clearAllResources() {
 /**
  * Mark everything stale without dropping it.
  *
- * What a tab regaining focus wants: every mounted screen re-reads underneath what it is already
- * showing, and nothing anywhere shows a loading state. Dropping instead would empty every screen
- * in the app in one frame.
+ * What a tab regaining focus wants: every mounted screen re-reads underneath what it is showing
+ * and nothing shows a loading state. Dropping instead would empty every screen in one frame.
  */
 export function expireAllResources() {
   for (const entry of registry) entry.expireAll();
@@ -397,10 +337,9 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
   /**
    * Queue the entry's next snapshot for the coming paint, subject to the gate.
    *
-   * **One queued commit per entry, not one per call.** The closure rebuilds the snapshot from the
-   * entry when it runs rather than capturing a value, so a second publish in the same frame has
-   * nothing to add — without the guard, an entry that resolved and was written to in one tick
-   * notified its listeners twice for one state.
+   * One queued commit per entry, not one per call: the closure rebuilds the snapshot from the
+   * entry when it runs, so a second publish in the same frame has nothing to add. Without the
+   * guard, an entry resolved and written to in one tick notified its listeners twice.
    */
   function publish(entry: Entry<T>) {
     if (entry.pendingCommit) {
@@ -408,13 +347,13 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       return;
     }
     const commit = () => {
-      /* A gated commit stays queued rather than being dropped — the flush re-schedules while
-         anything is still waiting, and `notifyResourceGates` wakes it when a gate opens. */
+      /* A gated commit stays queued rather than dropped — the flush re-schedules while anything
+         is still waiting, and `notifyResourceGates` wakes it when a gate opens. */
       if (publishGate && !publishGate(entry.key)) return;
       pendingPublish.delete(commit);
       entry.pendingCommit = undefined;
-      /* Rebuilt here rather than at the call site: the point of a paint-bound publish is that
-         `isLoading` and `data` change together, in one render, at a moment nothing else owns. */
+      /* Rebuilt here rather than at the call site: a paint-bound publish changes `isLoading` and
+         `data` together, in one render, at a moment nothing else owns. */
       entry.snapshot = buildSnapshot(entry);
       for (const listener of entry.listeners) listener();
     };
@@ -432,8 +371,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     if (store.size <= maxEntries) return;
     for (const [key, entry] of store) {
       if (store.size <= maxEntries) break;
-      /* Never evict what a mounted component is reading, and never evict an entry that has no
-         answer yet — dropping an in-flight one would restart it on the next render. */
+      /* Never evict a key a mounted component is reading, nor an entry with no answer yet —
+         dropping an in-flight one would restart it on the next render. */
       if (key === preserve || entry.listeners.size > 0 || entry.value === undefined) continue;
       entry.controller?.abort();
       store.delete(key);
@@ -447,8 +386,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       resolve = res;
       reject = rej;
     });
-    /* The rejection is always consumed — `read` hands the promise to a caller that may ignore it,
-       and an unhandled rejection from a prefetch would reach the console as an app error. */
+    /* The rejection is always consumed: a caller (a prefetch) may ignore the promise, and an
+       unhandled rejection would reach the console as an app error. */
     promise.catch(() => {});
 
     const entry: Entry<T> = {
@@ -497,9 +436,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
           if (store.get(key) === entry) {
             entry.status = 'error';
             entry.error = error;
-            /* The last good value is kept. A failed refresh of something already on screen must
-               not empty the screen — the caller decides whether to show the error beside stale
-               content or in place of nothing. */
+            /* The last good value is kept: a failed refresh of something already on screen must
+               not empty the screen — the caller decides how to show the error. */
             publish(entry);
           }
           entry.settle.reject(error);
@@ -516,13 +454,12 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     const key = keyOf(args);
     const stored = store.get(key);
     /* A placeholder is not an answer and not a request — see `Entry.placeholder`. It is replaced
-       below and its listeners carried over, exactly as a `force` would. */
+       below, its listeners carried over, exactly as a `force` would. */
     const existing = stored && !stored.placeholder ? stored : undefined;
 
     if (existing && !force) {
-      /* A guess that turns into a real activation is promoted rather than re-sent: if it has not
-         left yet it moves to the front of the queue, and if it is already in flight there is
-         nothing to do but wait for it. */
+      /* A guess that turns into a real activation is promoted, not re-sent: if queued it moves to
+         the front, if already in flight there is nothing to do but wait. */
       if (priority === 'immediate' && existing.priority === 'background' && existing.status === 'queued') {
         existing.priority = 'immediate';
         if (dropQueued(`${name}:${key}`)) {
@@ -535,13 +472,12 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       }
       touch(key, existing);
       if (existing.status === 'resolved' && isStale(existing)) {
-        /* Stale-while-revalidate. The current value stays on screen and stays returned; the refresh
-           runs underneath with no loading state, which is the difference between this layer and a
-           plain cache. */
+        /* Stale-while-revalidate: the current value stays on screen and stays returned; the
+           refresh runs underneath with no loading state — this layer's point over a plain cache. */
         void revalidate(args, key, existing);
       }
       if (existing.status !== 'error') return existing.promise;
-      /* A previous failure is not a cached answer. Retry, but keep any value it had. */
+      /* A previous failure is not a cached answer. Retry, keeping any value it had. */
       const previous = existing.value;
       store.delete(key);
       const retried = create(key, args, priority);
@@ -557,7 +493,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     }
     const entry = create(key, args, priority);
     /* Carried over from whatever was there, placeholder or not. Losing them is how a component
-       that has already subscribed never hears that its own request landed. */
+       that already subscribed never hears that its own request landed. */
     if (stored) entry.listeners = stored.listeners;
     return entry.promise;
   }
@@ -565,8 +501,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
   /** A refresh that never shows a loading state and never replaces a good value with an error. */
   function revalidate(args: Args, key: string, stale: Entry<T>) {
     if (stale.status !== 'resolved') return;
-    /* Marked resolved-but-refreshing by moving `fetchedAt` forward, so a second render in the same
-       second does not start a second refresh. */
+    /* Marked resolved-but-refreshing by moving `fetchedAt` forward, so a second render in the
+       same second does not start a second refresh. */
     stale.fetchedAt = Date.now();
     const controller = new AbortController();
     enqueue({
@@ -583,8 +519,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
           current.fetchedAt = Date.now();
           publish(current);
         } catch {
-          /* A failed background refresh leaves what is on screen alone. It is not the user's
-             error — they did not ask for it. */
+          /* A failed background refresh leaves the screen alone — the user did not ask for it. */
         }
       },
     });
@@ -603,9 +538,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     },
     peekKey(key) {
       const entry = store.get(key);
-      /* Pure: no TTL eviction, no `touch`, no scheduling. `useSyncExternalStore` calls this during
-         render and React may call it more than once — the one rule is that it cannot have effects.
-         `lib/detail.ts` carries the same warning above `peekImageDetail`. */
+      /* Pure: no eviction, no `touch`, no scheduling. `useSyncExternalStore` calls this during
+         render, possibly more than once — it must not have effects. */
       return entry ? entry.snapshot : (EMPTY as ResourceSnapshot<T>);
     },
     subscribe(args, listener) {
@@ -614,8 +548,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     subscribeKey(key, listener) {
       let entry = store.get(key);
       if (!entry) {
-        /* A subscriber before any read: a slot to hold the listener, so the read that follows a
-           tick later can hand its answer back. Not enqueued and not an answer — `placeholder` is
+        /* A subscriber before any read: a slot to hold the listener so the read that follows a
+           tick later can hand its answer back. Not enqueued, not an answer — `placeholder` is
            what stops `read` from mistaking it for one. */
         entry = {
           key,
@@ -642,8 +576,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
         entry.controller?.abort();
         dropQueued(`${name}:${key}`);
         store.delete(key);
-        /* A commit already queued for this entry would otherwise run on the next paint and hand the
-           dropped value straight back to the listeners that are still attached to it. */
+        /* A queued commit would run on the next paint and hand the dropped value straight back
+           to the listeners still attached. */
         if (entry.pendingCommit) {
           pendingPublish.delete(entry.pendingCommit);
           entry.pendingCommit = undefined;
@@ -663,12 +597,11 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       const mark = (entry: Entry<T>) => {
         if (entry.status !== 'resolved') return;
         /* Two different things, depending on whether anyone is looking.
-           **On screen** — re-read it now, underneath, with no loading state. `revalidate` moves
-           `fetchedAt` forward itself, which is also what stops a second call a moment later from
-           starting a second request; marking it stale first would only make the snapshot claim
-           something the refresh is already fixing.
-           **Not on screen** — mark it and stop. It costs nothing until a screen mounts against it,
-           and then that mount gets the cached value immediately with a refresh behind it. */
+           **On screen** — re-read now, underneath, with no loading state. `revalidate` moves
+           `fetchedAt` forward itself, which also stops a second call a moment later from starting
+           a second request.
+           **Not on screen** — mark it and stop; it costs nothing until a screen mounts against
+           it, and then that mount gets the cached value immediately with a refresh behind it. */
         if (entry.listeners.size > 0 && entry.args !== undefined) {
           revalidate(entry.args as Args, entry.key, entry);
           return;
@@ -691,9 +624,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       const key = keyOf(args);
       const stored = store.get(key);
 
-      /* Never clobber something the client already has that is at least as fresh. This is what
-         makes a remount from the router cache — navigate away, come back — harmless, and what
-         stops a stale RSC payload overwriting a value the user has since refreshed. */
+      /* Never clobber a client value that is at least as fresh: makes a remount from the router
+         cache harmless, and stops a stale RSC payload overwriting a refreshed value. */
       if (
         stored &&
         !stored.placeholder &&
@@ -714,54 +646,50 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
 
       const entry: Entry<T> = {
         key,
-        /* `args` matters: `expire()` and `bindResourceRefresh` start their own revalidation from
-           it, so a seeded entry without it is invisible to the tab-return refresh. */
+        /* `args` matters: `expire()` and `bindResourceRefresh` start their revalidation from it,
+           so a seeded entry without it is invisible to the tab-return refresh. */
         args,
         status: 'resolved',
         value,
-        /* Clamped forward, never back. The RSC payload can be minutes old — Next's client router
-           cache, or a `revalidate` hit — and an entry marked fresh-now would pin stale HTML for a
-           full TTL. A server clock *ahead* of the browser clamps to now, which is safe; a server
-           clock *behind* makes the entry immediately stale, which costs one background
-           revalidation with no loading state. It can never fail in the "fresh forever" direction. */
+        /* Clamped to never be in the future: Math.min(generatedAt, Date.now()). An RSC payload can
+           be minutes old, and a fresh-now stamp would pin stale HTML for a full TTL. A server
+           clock ahead clamps to now (safe); a clock behind makes the entry immediately stale — one
+           silent background revalidation. It can only ever err toward stale. */
         fetchedAt: Math.min(fetchedAt, Date.now()),
         priority: 'immediate',
         promise,
         settle: { resolve, reject },
         snapshot: EMPTY as ResourceSnapshot<T>,
-        /* Carried over for the same reason `read` and `write` do it: `subscribeKey` runs during
-           render and may already have created a placeholder holding this key's listeners. */
+        /* Carried over as `read`/`write` do: `subscribeKey` runs during render and may already
+           have created a placeholder holding this key's listeners. */
         listeners: stored?.listeners ?? new Set(),
       };
       entry.settle.resolve(value);
 
-      /* Written synchronously, *not* through `publish()`. `publish` is rAF-bound, and the
-         hydration render happens before the next frame — so a published seed would arrive one
-         frame after React had already rendered `EMPTY`, which is precisely the skeleton flash
-         this exists to remove. */
+      /* Written synchronously, *not* through `publish()`: publish is rAF-bound and the hydration
+         render happens before the next frame, so a published seed would arrive one frame after
+         React already rendered EMPTY — the skeleton flash this exists to remove. */
       entry.snapshot = buildSnapshot(entry);
 
-      /* `touch` is delete-then-set, i.e. it also inserts — so this is the LRU-correct
-         way to place a new entry at the most-recent end. `trim` preserves this key, because a
-         seed is the one entry we know a component is about to read. */
+      /* `touch` is delete-then-set, so it also inserts — the LRU-correct way to place a new entry
+         at the most-recent end. `trim` preserves this key: a seed is the one entry we know a
+         component is about to read. */
       touch(key, entry);
       trim(key);
     },
     write(args, update) {
       const key = keyOf(args);
       const stored = store.get(key);
-      /* A placeholder holds listeners and nothing else, so there is no previous value to update
-         from — and the flag has to come off, or the next `read` would throw the written value away
-         along with it. */
+      /* A placeholder holds listeners and nothing else — no previous value to update from; the
+         flag must come off or the next `read` would discard the written value. */
       const entry = stored && !stored.placeholder ? stored : undefined;
       const next =
         typeof update === 'function'
           ? (update as (previous: T | undefined) => T)(entry?.value)
           : update;
       if (!entry) {
-        /* Writing to something never read is legitimate — a mutation's response is an answer, and
-           holding it means the screen that mounts next does not have to ask. It is marked fresh,
-           so it is not immediately re-read. */
+        /* Writing to something never read is legitimate — a mutation's response is an answer, so
+           the next screen does not have to ask. Marked fresh so it is not immediately re-read. */
         if (stored) store.delete(key);
         const seeded = create(key, args, 'background');
         if (stored) seeded.listeners = stored.listeners;
@@ -778,9 +706,9 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       entry.value = next;
       entry.error = undefined;
       entry.status = 'resolved';
-      /* `fetchedAt` is *not* moved forward. An optimistic value is the caller's guess at what the
-         server will say, so it stays as stale as the answer it replaced and gets confirmed by the
-         next revalidation rather than trusted for a full TTL. */
+      /* `fetchedAt` is *not* moved forward: an optimistic value is the caller's guess at what the
+         server will say, so it stays as stale as what it replaced and is confirmed by the next
+         revalidation rather than trusted for a full TTL. */
       publish(entry);
     },
     cancelBackground(args) {

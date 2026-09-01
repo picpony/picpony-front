@@ -226,14 +226,10 @@ export class HeroController {
     initializeHeroInput();
     this.observedHref = normalizeHeroHref(window.location.href);
     this.releaseHistory = imageHeroHistory.initialize(this.handleHistoryNavigation);
-    /* `this.events.notify()` and nothing else. This used to fold
-       `interactionQuiet: isHeroInteractionQuiet()` into the published runtime, and no
-       consumer anywhere in the app read it — so every quiet↔active transition of the
-       input state minted a new runtime object and re-rendered all three
-       `useSyncExternalStore` subscribers (`AppLayout`, `PicDetail`, `HeroStage`) for a
-       field nobody looked at. On touch, `touchstart` fires before `click`, so one of
-       those re-renders landed in the task immediately preceding a press.
-       The internal waiters still need the signal, which is what `events` carries. */
+    /* `this.events.notify()` and nothing else. The published runtime must not fold in
+       `interactionQuiet` — no consumer reads it, and every quiet↔active transition would
+       re-render all three `useSyncExternalStore` subscribers, one of which lands in the task
+       immediately preceding a press. Internal waiters get the signal via `events`. */
     this.releaseInteraction = subscribeHeroInteraction(() => {
       this.events.notify();
     });
@@ -429,12 +425,10 @@ export class HeroController {
       const opening = this.foreground;
       if (opening?.kind === 'opening') {
         // One physical tap can arrive twice: the dismiss bridge synthesizes a
-        // click from a pointerup whose hit test still pointed at the dead route,
-        // and the browser then dispatches its own click once hit testing
-        // refreshes onto the card. Re-activating the image that is already
-        // flying must therefore be idempotent — treating the duplicate as
-        // "open something else" reverses the very flight it just started, and
-        // the unwind drops the queued intent, so the tap does nothing at all.
+        // click from a pointerup whose hit test still pointed at the dead route.
+        // Re-activating the image already flying must be idempotent — treating
+        // the duplicate as "open something else" reverses the flight it just
+        // started, and the unwind drops the queued intent, so the tap does nothing.
         if (opening.snapshot.image.id === intent.snapshot.image.id && !opening.reversing) {
           return true;
         }
@@ -562,10 +556,9 @@ export class HeroController {
       )
       .then(async () => {
         if (this.pendingOpen !== intent) return;
-        /* The gate opening is not the same as the gallery being ready. A route
-           commit can land a frame before the unwind finishes releasing the
-           foreground, and a queued tap discarded there is a tap that did
-           nothing — so wait the rest of the way out rather than testing once. */
+        /* The gate opening is not the same as the gallery being ready: a route commit can
+           land a frame before the unwind finishes releasing the foreground, and a queued tap
+           discarded there is a tap that did nothing. Wait the rest of the way out. */
         if (this.runtime.phase !== 'gallery-idle' || this.foreground) {
           if (!(await this.waitForGalleryIdle())) {
             if (this.pendingOpen === intent) this.pendingOpen = null;
@@ -933,10 +926,10 @@ export class HeroController {
     this.setPhase('opening.handoff', session, session.intent.background!);
 
     if (session.pullSeized) {
-      /* Bounded, and on expiry the drag is reset rather than the handoff abandoned. The
-         recognizer does terminate reliably, so this is a backstop — but it was the one
-         wait in the handoff with no ceiling at all, and everything downstream of here
-         (the route reveal, the pointer shield, publication) is gated on reaching it. */
+      /* Bounded; on expiry the drag is reset rather than the handoff abandoned. A backstop —
+         the recognizer does terminate reliably — but the one wait in the handoff that must
+         have a ceiling, since everything downstream (route reveal, pointer shield,
+         publication) is gated on reaching it. */
       const settled = await waitForSignal(this.events, {
         signal: session.abort.signal,
         timeout: HERO_ROUTE_TIMEOUT_MS,
@@ -1217,18 +1210,9 @@ export class HeroController {
     const pending = this.pendingOpen;
     this.pendingOpen = null;
     if (!pending) return;
-    /* Wait for the gallery to be idle rather than testing for it once.
-     *
-     * The queued tap used to be dropped on any of three single-shot conditions:
-     * `onBackground` false, the router commit not confirming inside its window,
-     * or `gallery-idle` not happening to hold at that instant. Tapping a second
-     * image while the first was flying home therefore did nothing at all about
-     * a third of the time — the flight unwound, the queue was cleared, and the
-     * tap vanished. Which is why it read as "it plays a little of the animation
-     * and then just goes back".
-     *
-     * `queuePendingOpen` already owns the "start it once the gate opens" shape,
-     * so this hands the intent straight to it instead of arbitrating again. */
+    /* Wait for the gallery to be idle rather than testing once: the queued tap
+       used to be dropped whenever a single-shot condition happened not to hold
+       (background not reached, commit window missed, idle not current). */
     if (!onBackground) {
       this.queuePendingOpen(pending, this.waitForGalleryIdle());
       return;
@@ -2207,18 +2191,16 @@ export class HeroController {
    * scroller, then confirm across a frame. A wheel stream stays latched to its
    * original receiver, so releasing early makes the rest of that stream vanish.
    *
-   * Bounded by `HERO_INPUT_TRANSFER_MAX_MS`, and on expiry it proceeds rather than
-   * failing. The quiet window is 320ms while a wheel event refreshes `wheelActive`
-   * every 160ms, so an inertial trackpad stream can hold this loop open indefinitely —
-   * and every caller treats `false` as "abandon the handoff", which parks the session in
-   * `opening.handoff` and withholds the detail body for as long as the stream lasts. A
-   * lost 160ms of momentum is the cheaper failure.
+   * Bounded by `HERO_INPUT_TRANSFER_MAX_MS`, proceeding on expiry: the quiet window
+   * (320ms) is longer than a wheel event's refresh (160ms), so an inertial trackpad stream
+   * can hold this loop open indefinitely, and every caller treats `false` as "abandon the
+   * handoff", which parks the session and withholds the detail body. A lost 160ms of
+   * momentum is the cheaper failure.
    *
-   * **The budget has to go *into* the quiet wait, not around it.** Checking a deadline at
-   * the top of this loop cannot fire while the `await` below is the thing that never
-   * returns, which is precisely the case being bounded — so `waitForHeroInteractionQuiet`
-   * takes the remaining budget and resolves `false` on expiry, and the `!quiet` branch
-   * tells expiry from abort by looking at the deadline.
+   * **The budget must go *into* the quiet wait, not around it.** A deadline checked at the
+   * top of the loop cannot fire while the `await` below is what never returns — precisely
+   * the case being bounded — so the quiet wait takes the remaining budget and the `!quiet`
+   * branch tells expiry from abort via the deadline.
    */
   private async waitForInputTransfer(session: HeroSession, sync?: () => void) {
     const deadline = performance.now() + HERO_INPUT_TRANSFER_MAX_MS;

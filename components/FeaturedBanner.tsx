@@ -39,17 +39,16 @@ export function FeaturedBannerSkeleton() {
 
 export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }) {
   const heroElementRef = useRef<HTMLDivElement>(null);
-  /* The banner is the first thing on the page, so its skeleton is the one you cannot miss. It gets
-     the cached picture in the first frame and is refreshed underneath — which is what the whole
-     `served` / `hasContent` / `snapshot.stale` apparatus here used to hand-roll, and what
-     `lib/resource.ts` now does for every screen. */
+  /* The banner is the first thing on the page, so its skeleton is the one you
+     cannot miss — it gets the cached picture in the first frame and is
+     refreshed underneath (`lib/resource.ts` owns the served/stale apparatus). */
   const apiKey = (readUserInfo()?.api_key as string) || undefined;
   const read = useResource(featuredImage, { apiKey });
   const featured = read.data ?? null;
   const loading = read.data === undefined && read.error === undefined;
-  /* A refresh that fails leaves the picture on screen rather than replacing something correct with
-     an error — the resource keeps the last good value beside the error, so this is just "we have
-     nothing *and* it went wrong". */
+  /* A refresh that fails leaves the picture on screen rather than replacing
+     something correct with an error — the resource keeps the last good value
+     beside the error. */
   const error = Boolean(read.error) && read.data === undefined;
 
   /* The home feed's 重试 reloads the banner alongside the 信息流. It skips the TTL, because the
@@ -100,17 +99,14 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
   const isWideAspect = aspectRatio > 1.5;
   const paddingBottom = isWideAspect ? 'min(45vh, 420px)' : 'min(55vh, 500px)';
   return (
-    /* 16dp, the gallery tile's step, on all six of this component's layers.
-       They were 12dp — the *card* step — so the largest picture on the home page
-       took a corner one step smaller than the smaller tiles directly under it. It
-       is a grid entry rather than a dialog, which is why 16 and not the shape
-       table's 28dp "large media" row (that row means the detail surface).
-       It also matters to the flight: this is an `image-hero-card-link`, the flyer
-       reads the source's computed radius and morphs it to `HERO_TARGET_RADIUS_PX`
-       (16), so at 16 the corner morph is a no-op and the handoff is continuous.
-       All six layers are coincident (`inset-0` / `w-full`), so `inner = outer − 0`
-       requires them to move together — including the skeleton's two, or the
-       placeholder stops matching what it replaces. */
+    /* 16dp, the gallery tile's step, on all six of this component's layers —
+       they were the 12dp card step, one smaller than the tiles under it. It is
+       a grid entry, not the shape table's 28dp "large media" row (that row
+       means the detail surface). It also matters to the flight: the flyer reads
+       the source's computed radius and morphs it to the target 16, so at 16 the
+       corner morph is a no-op and the handoff is continuous. All six layers are
+       coincident, so they must move together — including the skeleton's two,
+       or the placeholder stops matching what it replaces. */
     <Link
       {...heroLinkProps}
       data-tab-row
@@ -141,16 +137,11 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
               src={displayImageUrl}
               alt={featured.name || `近日推荐 #${featured.id}`}
               eager
-              /* This is the LCP element on the front page, and `eager` alone does not say
-                 so. `eager` only removes the lazy-loading gate — the request still waits
-                 for the layout pass that discovers this node. `preload` emits a
-                 `<link rel="preload">` in the document head, so the fetch starts while the
-                 HTML is still being parsed.
-
-                 `preload`, not `priority`: Next 16 deprecated `priority` in favour of it
-                 (image.md's v16.0.0 changelog). They do the same thing; only the name that
-                 is not going away is used here. `FadeInImage` spreads `{...props}` straight
-                 into `next/image`, so no prop needs adding to the wrapper. */
+              /* This is the LCP element on the front page, and `eager` alone
+                 does not say so: `preload` emits a `<link rel="preload">` in
+                 the document head, so the fetch starts while the HTML is still
+                 being parsed. `preload`, not `priority` (Next 16 deprecated the
+                 latter; they do the same thing). */
               preload
               width={featured.width || 0}
               height={featured.height || 0}
@@ -178,15 +169,11 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
           }}
         />
         <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8">
-          {/* `Badge`, not a hand-rolled pill. It was `rounded-full px-3 py-1.5`
-              with its own container/ink pair written out — the exact silhouette
-              the primitive exists to stop from drifting, and the reason this
-              banner's mark was a capsule while every other mark in the app is a
-              rounded rectangle.
-              The fill stays `primary`/`on-primary` rather than a media role:
-              those two are documented as not inverting between schemes, so the
-              banner's own mark reads as one constant material over any
-              photograph — which is what a media role would otherwise buy. */}
+          {/* `Badge`, not a hand-rolled pill: one shape, one owner for the
+              colour pair. The fill stays `primary`/`on-primary` rather than a
+              media role — those two are documented as not inverting between
+              schemes, so the banner's own mark reads as one constant material
+              over any photograph. */}
           <Badge
             size="md"
             colors="bg-primary text-on-primary"
@@ -216,8 +203,8 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
             <div className="mb-2 flex max-w-2xl flex-wrap gap-1.5 sm:mb-3">
               {featured.tags.slice(0, 6).map((tag) => (
                 /* `tone="media"` — the plate/ink pair, which is what this wrote
-                   out by hand. `max-w-36` caps a long tag as the old `[140px]`
-                   did, on the spacing scale rather than as an arbitrary value. */
+                   out by hand. `max-w-36` caps a long tag on the spacing scale
+                   rather than as an arbitrary value. */
                 <Badge key={tag} tone="media" className="max-w-36">
                   {tag}
                 </Badge>

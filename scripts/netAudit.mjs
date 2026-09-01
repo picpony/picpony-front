@@ -1,37 +1,22 @@
 /**
  * The request ledger, as a command.
  *
- * Every claim in the data-request work needs one of two numbers behind it: how many requests a
- * screen costs, and how many *rounds* those requests take. Prose cannot hold either — the
- * profile page's three-hop waterfall and the two favourite-list requests that fire for a tab
- * nobody opened were both in shipped code, invisible in review, and obvious the first time
- * anything counted them.
+ * Drives a real browser (Edge over CDP) through a fixed set of journeys and counts requests per
+ * step. Asserts **counts and the round of each step's own content request**; wall-clock timings
+ * are printed and asserted nowhere — a count is a property of the code, a millisecond is a
+ * property of the machine.
  *
- * So this drives a real browser through a fixed set of journeys and counts. It asserts on
- * **counts and rounds** and merely *reports* wall-clock timings, which is the same split
- * `palette.mjs` draws between a `floor` pair and a `report` pair: a count is a property of the
- * code, a millisecond is a property of the machine and the day.
+ * `--write` records the baseline; a plain run compares against it and exits non-zero if any
+ * journey got more expensive. Direction is the point: prefetch may move a request *earlier* and
+ * may never add one.
  *
- * `--write` records the current numbers as the baseline; a plain run compares against it and
- * exits non-zero if any journey got more expensive. That direction is the whole point. Prefetch
- * is allowed to move a request *earlier* and is never allowed to add one, and without a
- * committed baseline "no extra requests" is an intention rather than a check.
- *
- * How it drives the browser is per the project's existing harness note: Edge with
- * `--remote-debugging-port`, the target list from **`/json/list`** rather than `/json/version`
- * (the browser endpoint carries neither `Page` nor `Network`, so enabling them there succeeds
- * and then delivers zero events — a probe that reports "no requests" for a page that loaded
- * fine), and Node's global `WebSocket` so there is no new dependency.
- *
- * Two things it deliberately does not measure:
- *
- * - **Frame rate.** A full-viewport composited transform tops out around 46fps in both headless
- *   and headed Chromium on this machine, so a presented-frame control never reaches 60 and any
- *   figure taken from it would be the machine's rather than the code's.
- * - **Whether the pictures arrived.** Every remote `next/image` 400s in a production build here,
- *   because the hostnames resolve into a fake-IP range and Next 16's `fetchExternalImage` rejects
- *   private IPs. Media requests are counted so a prefetch change cannot quietly multiply them,
- *   and nothing asserts on their status.
+ * Harness notes. Take the target list from **`/json/list`**, not `/json/version` — the browser
+ * endpoint carries neither `Page` nor `Network`, so enabling them there succeeds and then delivers
+ * zero events (reads as "no requests" for a page that loaded fine). Node's global `WebSocket`, so
+ * no new dependency. Two things deliberately not measured: frame rate (presented frames cap at
+ * ~46fps here, headless or headed — any figure from it is the machine's), and whether remote
+ * pictures arrived (every remote `next/image` 400s here — the hostnames resolve into a fake-IP
+ * range and Next rejects private IPs; media requests are counted, their statuses are not).
  */
 
 import { spawn } from 'node:child_process';
@@ -47,13 +32,10 @@ const BASELINE_PATH = path.join(import.meta.dirname, 'netAudit.baseline.json');
 const WRITE = process.argv.includes('--write');
 const KEEP = process.argv.includes('--keep');
 /**
- * Talk to the real upstream instead of the fixtures.
- *
- * Off by default, and the reason is not that the upstream is down — it answers. It is that a real
- * run is not *comparable* to another real run: `proxyFetch`'s retry ladder turns one logical read
- * into one or three requests depending on which line happens to be reachable, so the count this
- * command asserts on stops being a property of the code. Use it to sanity-check a payload shape or
- * to watch the failover ladder work; never to record a baseline.
+ * `--live`: talk to the real upstream instead of the fixtures. Off by default — a real run is
+ * not *comparable* to another real run (`proxyFetch`'s retry ladder turns one logical read into
+ * one or three depending on which line is reachable), so the asserted count stops being a
+ * property of the code. Use for a payload-shape check; never to record a baseline.
  */
 const LIVE = process.argv.includes('--live');
 const ONLY = (() => {
@@ -67,15 +49,10 @@ const EDGE_CANDIDATES = [
 ];
 
 /**
- * Quiescence: no *new* counted request for this long **and** nothing still in flight.
- *
- * Both halves are load-bearing, and the second one was learned the hard way. With only the idle
- * timer, the first run of this harness reported the home page as three requests and no gallery
- * fetch at all — because `/api.php` through the route handler to the upstream takes longer than
- * the idle window on this machine, so the ledger closed while the policy request was still open
- * and every request that waits on it had not been sent yet. A ledger that stops before the
- * responses arrive measures the *first* round and calls it the whole screen, which is precisely
- * the shape of failure it exists to find.
+ * Quiescence: no *new* counted request for this long **and** nothing still in flight. The second
+ * half is load-bearing: with only the idle timer, `/api.php` through the route handler outlasted
+ * the window, so the ledger closed while the policy request was still open and every request
+ * waiting on it had not been sent — the first round was measured and called the whole screen.
  */
 const IDLE_MS = 900;
 /** A journey may not take longer than this, however busy it looks. */
@@ -88,12 +65,10 @@ const VIEWPORT = { width: 1440, height: 900 };
 // ---------------------------------------------------------------------------
 
 /**
- * The app's data surfaces, and nothing else.
- *
- * A document, a chunk, a font and a stylesheet are all cached by the browser and paid once per
- * session, so counting them would drown the signal this exists to find. The list is the four API
- * lines from `lib/route.ts` plus PicPony's own two endpoints — anything the app can send a *read*
- * to. `/relay` and `/search-api` are ours; the rest are upstream.
+ * The app's data surfaces, and nothing else. Documents, chunks, fonts and stylesheets are cached
+ * by the browser and paid once per session; counting them drowns the signal. The list is the four
+ * API lines from `lib/route.ts` plus PicPony's own two endpoints — anything the app can send a
+ * *read* to.
  */
 const API_PATTERNS = [
   { label: 'picpony', test: (u) => u.pathname === '/api.php' || u.pathname.startsWith('/api.php/') },
@@ -147,12 +122,9 @@ function requestName(entry) {
 // ---------------------------------------------------------------------------
 
 /**
- * `content` names the request the screen exists to make, and every step that sends any should
- * declare one — it is the only quantity here whose *round* is deterministic, so it is what the
- * baseline holds. It is also the Phase 1 metric: the home feed's own request was gated behind a
- * policy fetch, so this number moves without any count changing.
- *
- * A step that should send **nothing** declares none, and its `api: 0` is the whole assertion.
+ * `content` names the request the screen exists to make — the only quantity whose *round* is
+ * deterministic, so it is what the baseline holds. A step that should send nothing declares none,
+ * and its `api: 0` is the whole assertion.
  */
 const GALLERY = /\/search\/images/;
 
@@ -186,15 +158,10 @@ const JOURNEYS = [
   },
   {
     /**
-     * A second visit to the same profile, and the step that matters is the third.
-     *
-     * It goes back through history rather than through a synthesised link, and that is not a
-     * stylistic choice — it is the harness's own bug, fixed. The first version built an
-     * `<a>` with `document.createElement` and clicked it, which Next does not intercept: only a
-     * real `<Link>`'s React handler turns a click into a client navigation. So every "return to
-     * the screen" step was a **full document load**, the module-scope caches were thrown away
-     * with the page, and the ledger showed a re-entry costing exactly as much as a cold load —
-     * which is precisely the claim it was there to test.
+     * The re-entry step must go **back through history**, not through a synthesised link: a
+     * clicked `createElement('a')` is not intercepted by Next — only a real `<Link>`'s handler
+     * navigates — so the synthetic form was a full document load that threw away every
+     * module-scope cache, making a re-entry cost exactly what a cold load costs.
      */
     name: 'profile → back → profile',
     why: 'a second visit to the same profile must cost nothing',
@@ -228,7 +195,7 @@ const JOURNEYS = [
       { label: 'GET /favorites', navigate: '/favorites', content: GALLERY },
       { label: '→ /', click: 'a[href="/"]', content: GALLERY },
       /* Forward again through the sidebar's real `<Link>`, so the intent ladder on it runs exactly
-         as a press would — and then back, which is the cheapest path of all. */
+         as a press would — then back, the cheapest path of all. */
       { label: '→ /favorites', click: 'a[href="/favorites"]', content: GALLERY },
       { label: '← back', back: true },
     ],
@@ -305,10 +272,6 @@ class Cdp {
       }
       for (const handler of this.handlers) handler(message);
     });
-    /* A closed socket rejects everything still waiting. Without this a browser that dies
-       mid-journey leaves `await cdp.send('Page.navigate', …)` pending for ever: `STEP_CAP_MS`
-       bounds only the idle loop *after* navigate resolves, so the run never reaches its exit
-       code at all — and a guard that hangs is indistinguishable from a slow one. */
     socket.addEventListener('close', () => {
       const waiting = [...this.pending.values()];
       this.pending.clear();
@@ -330,9 +293,8 @@ class Cdp {
   send(method, params = {}) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      /* Bounded as well as close-aware: a command the browser simply never answers is the
-         other way this used to hang. Generous, because a cold `Page.navigate` on a slow
-         machine is legitimately seconds. */
+      /* Bounded as well as close-aware: a command the browser never answers is the other way
+         this used to hang. Generous — a cold `Page.navigate` on a slow machine is seconds. */
       const timer = setTimeout(() => {
         if (!this.pending.delete(id)) return;
         reject(new Error(`${method}: no CDP response in ${CDP_SEND_TIMEOUT_MS}ms`));
@@ -379,42 +341,24 @@ class Cdp {
 // ---------------------------------------------------------------------------
 
 /**
- * Chrome reads, excluded from the rounds chain.
- *
- * These three fire on every screen in the app and are nobody's causal ancestor — the shell asks for
- * them the moment it mounts, in parallel with whatever the screen is doing. Leaving them in made
- * `contentRound` race: on a client-side navigation to `/`, whether `get_user` happened to *finish*
- * before the gallery pane mounted decided whether the feed read round 1 or round 3, for identical
- * code. Two runs of the same baseline disagreed on exactly that step.
- *
- * `get_maintenance_status` is deliberately **not** in here. `proxyFetch` awaits it before it will
- * send anything, so it is a real ancestor of every Derpibooru read in the app — which is the
- * dependency this whole exercise exists to remove, and therefore the one the number has to show.
+ * Chrome reads, excluded from the rounds chain: they fire on every screen in parallel with
+ * whatever it is doing, so leaving them in made `contentRound` race (the same code read 1, 2 or
+ * 3 across runs). `get_maintenance_status` is deliberately NOT here — `proxyFetch` awaits it
+ * before sending anything, so it is a real ancestor of every Derpibooru read and the number has
+ * to show that dependency.
  */
 const CHROME_READS = new Set(['get_user', 'get_unread_counts', 'get_announcement']);
 
 /**
- * The critical path, in rounds.
+ * The critical path, in rounds: a request is in round `n + 1` if any request in round `n` had
+ * *finished* when it started. A heuristic (merely sequential reads count as rounds) but the
+ * number that matters — it is what catches a screen that cannot start its second request until
+ * its first came back.
  *
- * A request is in round `n + 1` if any request in round `n` had already *finished* when it
- * started. That is a heuristic and worth saying so: two requests that merely happen to be
- * sequential count as two rounds even if nothing forced the order. It is still the number that
- * matters, because the failure it catches — a screen that cannot start its second request until
- * its first came back — looks exactly like that from the outside, and a parallelised screen
- * provably reads 1.
- *
- * **The maximum over a step is reported and never asserted on**, and the reason took two baseline
- * runs to see. A gap threshold was tried first, to stop an idle-scheduled request from inheriting
- * depth it does not owe — the home route mounts its forum pane on an idle callback, so
- * `get_forum_posts` read round 2 in one run and round 3 in the next. The threshold made things
- * worse rather than better: the gap between a policy fetch landing and the effects it unblocks is
- * dominated by *hydration*, not by the response, so a real dependency sat right on the boundary
- * and the same code read 1, 2 or 3 across runs.
- *
- * What is deterministic is the *ordering*, so what gets asserted is the round of one named
- * request per journey — the one the screen exists to make. `contentRound` cannot move without a
- * causal change, and a screen whose own read climbs from round 2 to round 3 has grown a waterfall
- * whatever the scheduler was doing that second.
+ * The maximum over a step is reported and never asserted: an idle-scheduled request inherits
+ * depth it does not owe, and a gap threshold made that worse, because the gap between a policy
+ * fetch landing and the effects it unblocks is dominated by hydration. What is deterministic is
+ * the ordering, so what gets asserted is the round of the step's own `content` request.
  */
 function computeRounds(entries) {
   const chain = entries.filter((e) => !CHROME_READS.has(e.name));
@@ -422,8 +366,7 @@ function computeRounds(entries) {
   let worst = 0;
   for (const entry of entries) {
     if (CHROME_READS.has(entry.name)) {
-      /* Marked rather than skipped, so the ledger still prints a round for every line. `c` reads
-         as "chrome" and cannot be confused with a depth. */
+      /* Marked rather than skipped, so every ledger line prints a round. `c` = chrome. */
       entry.round = 'c';
       continue;
     }
@@ -514,27 +457,20 @@ async function runStep(cdp, step, origin, serverReads) {
   const api = entries.filter((e) => e.kind === 'api');
   const media = entries.filter((e) => e.kind === 'media');
   const rounds = computeRounds(api);
-  /* Matched on the *name* as well as the href, because a request on the relay or the accel line
-     carries its target percent-encoded inside `?url=` — so a pattern like `/search/images` appears
-     nowhere in the href, and the content column silently read `—` for the one journey it exists
-     to measure. `requestName` has already unwrapped the line. */
+  /* Matched on the *name* as well as the href: a request on the relay or accel line carries its
+     target percent-encoded inside `?url=`, so the pattern appears nowhere in the href. */
   const contentEntry = step.content
     ? api.find((e) => step.content.test(e.name) || step.content.test(e.url.href))
     : undefined;
 
-  /* Reads the *server* made during this step — the caller empties the tally before each one, so
-     this is not the run's running total. `r0` — "the content was in the first byte" — is an
-     honest value and the one that keeps the floor meaningful: the read moved from the browser to
-     the server, it did not disappear. */
+  /* Reads the *server* made during this step — the caller empties the tally before each one.
+     `r0` ("content was in the first byte") is what keeps the floor meaningful: the read moved
+     from the browser to the server, it did not disappear. */
   const serverApi = serverReads ? serverReads.slice() : [];
-  /* `r0` is only offered to a step that **navigated**, and only when the browser sent nothing
-     matching. Without the navigation test any server read landing in the window could satisfy
-     the content regex — and a tab tap already proves a server feed read can appear on a step
-     that did not navigate — so a screen that had stopped fetching could be scored as an
-     improvement, which is the one thing the floor exists to catch.
-
-     A route change is `navigate`, `click` or `back`; what it excludes is a step that stays put,
-     which today is the tab tap. */
+  /* `r0` is only offered to a step that **navigated** (navigate/click/back), and only when the
+     browser sent nothing matching. Without the navigation test any server read landing in the
+     window could satisfy the content regex, and a screen that had stopped fetching could be
+     scored as an improvement — the one thing the floor exists to catch. */
   const changesRoute = Boolean(step.navigate || step.click || step.back);
   const serverContent =
     step.content && changesRoute && !contentEntry
@@ -572,11 +508,9 @@ async function runStep(cdp, step, origin, serverReads) {
 
 /**
  * Every data request answered from `netAuditFixtures.mjs`; everything else passed through.
- *
- * `STUB_LATENCY_MS` is deliberately non-zero. With instant answers a genuinely parallel pair and a
- * genuinely sequential pair can land in the same millisecond, and the rounds heuristic — which asks
- * whether a request started after another had *finished* — then reads a waterfall as one round. A
- * small uniform delay keeps the causal order legible while leaving a whole journey under a second.
+ * `STUB_LATENCY_MS` is deliberately non-zero: with instant answers a genuinely parallel pair and
+ * a genuinely sequential pair can land in the same millisecond, and the rounds heuristic then
+ * reads a waterfall as one round.
  */
 const STUB_LATENCY_MS = 30;
 
@@ -598,8 +532,7 @@ async function installStubs(cdp) {
           { name: 'content-type', value: stub.contentType },
           /* The app's reads are `no-store`, but a stub with no cache header at all lets the browser
              heuristically cache one — which would silently remove the second request of a
-             re-entry journey and report a fix nobody made. */
-          { name: 'cache-control', value: 'no-store' },
+             re-entry journey and report a fix nobody made. */          { name: 'cache-control', value: 'no-store' },
           { name: 'access-control-allow-origin', value: '*' },
         ],
         body: stub.binary ? stub.body : Buffer.from(stub.body, 'utf8').toString('base64'),
@@ -616,22 +549,18 @@ async function installStubs(cdp) {
 // ---------------------------------------------------------------------------
 
 /**
- * Reset the device between journeys.
- *
- * The motion tier is pinned because headless Edge reports `prefers-reduced-motion: reduce`, and
- * the tier is resolved once before first paint — so without this every journey runs the reduced
- * branch, which is not the one most users are on and which takes the hero flight (and therefore
- * the whole press-path warming ladder) out of the picture.
+ * Reset the device between journeys. Motion is pinned because headless Edge reports
+ * `prefers-reduced-motion: reduce`, and the tier is resolved before first paint — without this
+ * every journey runs the reduced branch, which is not the one most users are on.
  */
 async function resetSession(cdp, origin, { auth = false } = {}) {
   await cdp.send('Network.clearBrowserCookies');
   await cdp.send('Page.navigate', { url: `${origin}/policy` });
   await sleep(600);
-  /* The token is a fixture, and that is the point: what an auth'd journey measures is which
-     requests a signed-in screen decides to send, not whether a real session would be accepted.
-     The stubbed `get_user` answers success, so the shell stays signed in for the whole journey —
-     against the live upstream it would 401 and `AppLayout` would clear the session after one
-     round, which is why these journeys are stub-only. */
+  /* The token is a fixture on purpose: what an auth'd journey measures is which requests a
+     signed-in screen decides to send, not whether a real session would be accepted. The stubbed
+     `get_user` answers success, so the shell stays signed in — against the live upstream it
+     would 401 and clear the session, which is why these journeys are stub-only. */
   const session = JSON.stringify({
     token: 'netaudit-fixture-token',
     id: 1,
@@ -670,9 +599,8 @@ if (!edge) {
   process.exit(1);
 }
 
-/* Not 3100. That port is normally already taken by something of the user's, so `next start` would
-   die with EADDRINUSE *and* every probe would hit the other process — which reads as this code
-   returning 500. */
+/* Free port, not 3100: a taken port would kill `next start` with EADDRINUSE *and* send every
+   probe to the other process, which reads as this code returning 500. */
 const appPort = await freePort();
 const debugPort = await freePort();
 const upstreamPort = await freePort();
@@ -682,35 +610,20 @@ const origin = `http://127.0.0.1:${appPort}`;
 /**
  * A fixture backend for the requests that leave from **Node**, not from the browser.
  *
- * CDP's `Fetch` domain intercepts the page's requests and reaches nothing the server does, so
- * without this the one thing `app/layout.tsx` does on the data path — reading the route policy
- * during SSR so the client never has to — could not be measured at all. The audit would sit
- * permanently on the fallback path and report no improvement from the change that removed a request
- * and a round from every screen.
+ * CDP's `Fetch` domain intercepts the page's requests and reaches nothing the server does, so the
+ * SSR route-policy read in `app/layout.tsx` is invisible to it — without this the audit would sit
+ * permanently on the fallback path. `next start` is pointed here with `PICPONY_UPSTREAM_ORIGIN`,
+ * and the same fixture table answers both halves so they cannot disagree.
  *
- * `next start` is pointed at it with `PICPONY_UPSTREAM_ORIGIN`. It answers from the same fixture
- * table the browser side uses, so the two halves cannot disagree about what the backend said.
- */
-/**
- * What the Next server has asked this fixture for, since the tally was last reset.
- *
- * The audit's assertions have always had a **floor** as well as a ceiling — "a step that read
- * something before must still read something" — and that floor exists because a one-line bug once
- * silenced every screen in the app while the report called it a triumph. Moving a read to the
- * server trips it, correctly: from CDP's point of view the request vanished.
- *
- * It did not vanish, it changed layer. So the tally below is what lets the floor keep meaning what
- * it says: `serverApi` counts the same reads on the other side of the boundary, and a step whose
- * content now arrives in the first byte reports `r0` rather than `null`.
+ * `serverReads` is the tally the `srv` column reads: the assertions have a **floor** as well as a
+ * ceiling, and a read moved to the server vanishes from CDP's view — the tally is what keeps the
+ * floor meaning "a step that read something must still read something, anywhere".
  */
 const serverReads = [];
 const upstream = createHttpServer((req, res) => {
-  /* Two kinds of server-side read reach this one fixture. PicPony's own actions arrive as
-     `/api.php?action=…` and `stubFor` matches those on the path. A Derpibooru read — the SSR'd
-     home feed — arrives as `/api/v1/json/…` because `PICPONY_DERPI_ORIGIN` points here, and
-     `stubFor` matches those on the *hostname*, so it is re-addressed to the real one first. One
-     fixture table answering both halves is what stops the browser side and the server side
-     disagreeing about what the backend said. */
+  /* Two kinds of server-side read reach this one fixture: PicPony's own actions as
+     `/api.php?action=…` (matched on the path) and a Derpibooru read as `/api/v1/json/…`
+     (`PICPONY_DERPI_ORIGIN` points here; matched on hostname, so re-addressed to the real one). */
   const asUpstream = req.url?.startsWith('/api/v1/json')
     ? `https://trixiebooru.org${req.url}`
     : `http://127.0.0.1:${upstreamPort}${req.url}`;
@@ -719,25 +632,20 @@ const upstream = createHttpServer((req, res) => {
     res.writeHead(404).end();
     return;
   }
-  /* Recorded before the response, so a read that is in flight when a step ends is still counted.
-     The `action` is what the browser-side matcher keys on too, so the two columns name the same
-     things. */
+  /* Recorded before the response, so a read still in flight when a step ends is still counted. */
   const action = /[?&]action=([^&]+)/.exec(req.url ?? '')?.[1] ?? req.url ?? '';
-  /* `get_maintenance_status` is excluded for the same reason `CHROME_READS` excludes
-     `get_user` on the browser side: it is shell overhead the server does on *every* route,
-     including ones that read nothing, so counting it would make `serverApi` a function of how
-     many navigations a journey happens to contain rather than of what moved to the server.
-     What is left is content — which is exactly the quantity the floor needs to see. */
+  /* `get_maintenance_status` excluded for the same reason `CHROME_READS` excludes `get_user`:
+     the server does it on every route, so counting it would make `serverApi` a function of how
+     many navigations a journey contains rather than of what moved to the server. */
   if (action !== 'get_maintenance_status') serverReads.push(action);
   res.writeHead(200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 if (!LIVE) await new Promise((resolve) => upstream.listen(upstreamPort, '127.0.0.1', resolve));
 
-/* Node's own binary on Next's CLI entry, not `npx`. On Windows `npx` is a `.cmd`, which Node 24
-   refuses to spawn without `shell: true` (EINVAL) — and the shell form concatenates its arguments
-   rather than escaping them, which Node deprecates in the same breath (DEP0190). Naming the JS
-   file avoids both and needs no shell on any platform. */
+/* Node's own binary on Next's CLI entry, not `npx`: on Windows `npx` is a `.cmd`, which Node 24
+   refuses to spawn without `shell: true` (EINVAL), and the shell form concatenates its arguments
+   (DEP0190). Naming the JS file avoids both. */
 const NEXT_BIN = path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next');
 const server = spawn(process.execPath, [NEXT_BIN, 'start', '-p', String(appPort)], {
   cwd: ROOT,
@@ -748,10 +656,9 @@ const server = spawn(process.execPath, [NEXT_BIN, 'start', '-p', String(appPort)
         ...process.env,
         PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${upstreamPort}`,
         PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${upstreamPort}/api/v1/json`,
-        /* Every server-side memo cold, so the ledger measures the path that costs something.
-           Warm, the second journey to open a screen reads nothing on either layer — a cache hit
-           that is indistinguishable from the bug the floor exists to catch, since from outside
-           both are "this step made no requests". See `lib/serverMemo.ts`. */
+        /* Every server-side memo cold, so the ledger measures the path that costs something. Warm,
+           the second journey to open a screen reads nothing on either layer — indistinguishable
+           from a screen that stopped loading. Reaches both caches (`lib/serverMemo.ts`). */
         PICPONY_SERVER_MEMO_TTL_MS: '0',
       },
 });
@@ -802,11 +709,9 @@ try {
     return res.status < 500;
   });
 
-  /* The SSR half of the route policy, checked directly rather than only inferred from the ledger.
-     A missing inline document is a *silent* regression: the client falls back to fetching the
-     policy itself and everything still works, one request and one round more expensive on every
-     screen. That is precisely the kind of quiet loss the ledger would show as a number nobody
-     looked at, so it gets its own assertion. */
+  /* The SSR half of the route policy, checked directly: a missing inline document is a *silent*
+     regression — the client falls back to fetching the policy and everything still works, one
+     request and one round more expensive on every screen. */
   if (!LIVE) {
     const html = await (await fetch(`${origin}/policy`)).text();
     if (!html.includes('__picponyRoutePolicy')) {
@@ -816,8 +721,6 @@ try {
   const target = await waitFor('Edge', async () => {
     const res = await fetch(`http://127.0.0.1:${debugPort}/json/list`);
     const list = await res.json();
-    /* `/json/list`, and the first `page` target. `/json/version` hands back the *browser*
-       endpoint, which carries neither `Page` nor `Network`. */
     return list.find((t) => t.type === 'page')?.webSocketDebuggerUrl ?? null;
   });
 
@@ -850,14 +753,12 @@ try {
     console.log('  step                 api  srv  media  rounds   content     first');
     const steps = [];
     for (const step of journey.steps) {
-      /* Emptied per step, so the column is what *this* step cost rather than what the run has
-         cost so far. It was cumulative, and that is not merely a confusing table: `serverContent`
-         below tests this list to decide whether a step's content arrived in the first byte, so a
-         read one screen made would classify a later screen's content as `r0` — the floor passing
-         on a step that had in fact stopped fetching, which is the exact failure the floor exists
-         to catch. Reads still in flight from the previous step land here and are counted against
-         this one; that is the same jitter `rounds` has, and the reason `serverApi` is reported
-         rather than asserted. */
+      /* Emptied per step, so the column is what *this* step cost. It was cumulative — which is
+         not merely confusing: `serverContent` tests this list to classify a step's content as
+         `r0`, so a read one screen made would mark a later screen's content as "already in the
+         first byte", the floor passing on a step that had stopped fetching. Reads still in flight
+         from the previous step land here; that jitter is why `serverApi` is reported rather than
+         asserted. */
       serverReads.length = 0;
       const result = await runStep(cdp, step, origin, LIVE ? null : serverReads);
       steps.push(result);
@@ -917,20 +818,13 @@ try {
           console.log(`  ${name} / ${step.label}: shape changed, re-record the baseline`);
           continue;
         }
-        /* **Both layers are asserted, and getting there took removing two sources of noise.**
-           This block used to say `serverApi` could not be held to a number, on a measurement of
-           10 hits across 20 steps — and that measurement was of the harness, not of the app. Two
-           causes, both since fixed: the tally was never emptied, so every step reported the run's
-           running total; and Next's Data Cache persists to `.next/cache/fetch-cache` on disk, so
-           a count was partly a function of what previous runs had left behind. With the tally
-           per-step and `PICPONY_SERVER_MEMO_TTL_MS=0` reaching both caches, two consecutive runs
-           are byte-identical.
-
-           So the ceiling is applied twice — to browser requests, which is what a user waits on,
-           and to the total, because "speculation may move a request earlier, never add one" is a
-           rule about requests, not about which process sends them. And the floor is applied to
-           the total, because it exists to catch a screen that stopped loading, and moving a read
-           to the server looks identical to that from CDP alone. */
+        /* Both layers asserted. The ceiling is applied twice — to browser requests (what a user
+           waits on) and to the total, because "move a request earlier, never add one" is a rule
+           about requests, not about which process sends them. The floor is applied to the total,
+           because a read moved to the server looks identical to a stopped screen from CDP alone.
+           Two consecutive runs are byte-identical now that the tally is per-step and
+           `PICPONY_SERVER_MEMO_TTL_MS=0` reaches both caches (Next's Data Cache persists to
+           `.next/cache/fetch-cache`). */
         const dApi = step.api - was.api;
         const wasTotal = was.api + (was.serverApi ?? 0);
         const stepTotal = step.api + (step.serverApi ?? 0);
@@ -963,23 +857,14 @@ try {
         if (dRound > 0) {
           fail(name, `${step.label}'s own read fell ${dRound} round(s) deeper than the baseline`);
         }
-        /* And a floor, which this command learned the hard way. A one-line bug in the resource
-           store made every migrated screen stop fetching entirely, and the report above called it
-           a triumph — the home page "improved" from five requests to one, the gallery empty behind
-           it. An upper bound alone cannot tell an optimisation from a breakage. So: a step that
-           read something before must still read something, and a step whose own content request
-           was identified before must still identify it. */
-        /* “This step used to fetch something — does it still fetch anything, on either layer?”
-
-           `srv` is deliberately **not** allowed to satisfy this on its own. A step's server
-           tally picks up reads no part of that screen asked for: Next prefetches the sidebar's
-           account link, whose `/user/[id]` layout runs `generateMetadata`, so `GET /tasks` and
-           `GET /favorites` both carry a `get_user_profile` they have nothing to do with. With
-           the floor keyed on `api + srv` those steps could stop fetching entirely and still
-           pass — measured: breaking the resource layer printed `api 4+1 → 0+1` with an
-           improvement mark and exit 0. So the browser layer has to carry the floor by itself
-           unless the step genuinely had no browser reads to begin with, in which case there is
-           nothing for it to lose and `contentRound` is the check that still bites. */
+        /* And a floor: a step that read something before must still read something, and a step
+           whose own content request was identified before must still identify it. An upper bound
+           alone cannot tell an optimisation from a breakage.
+           `srv` deliberately cannot satisfy the floor on its own: a step's server tally picks up
+           reads no part of that screen asked for (Next prefetches the sidebar's account link, so
+           unrelated screens carry a `get_user_profile`). Keyed on `api + srv` those steps could
+           stop fetching entirely and still pass — measured. So the browser layer carries the floor
+           unless the step genuinely had no browser reads to begin with. */
         if (was.api > 0 && step.api === 0) {
           fail(name, `${step.label} now sends no browser requests at all — the screen is not loading`);
         } else if (wasTotal > 0 && stepTotal === 0) {
@@ -1003,6 +888,5 @@ if (failures.length) {
 console.log('\nall checks passed');
 /* Explicit, because falling off the end does not end this process: the CDP socket is open and two
    children are alive, so the event loop never drains and the command hangs after printing its
-   result — which reads exactly like a probe that is still working. The `exit` handler above does
-   the cleanup. The two UI probes already exit this way. */
+   result. The `exit` handler above does the cleanup. */
 process.exit(0);

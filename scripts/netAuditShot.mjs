@@ -1,12 +1,11 @@
 /**
  * A screenshot of one route against the audit's fixtures.
  *
- * `net:audit` counts requests and says nothing about whether anything rendered. That gap is real:
- * the resource layer's first version made every migrated screen stop fetching, and the ledger
- * reported it as an improvement. Counts got a floor after that, but a floor only proves a request
- * left — not that the answer reached the screen.
+ * `net:audit` counts requests and says nothing about whether anything rendered — its first
+ * version made every screen stop fetching and reported it as an improvement, and a floor only
+ * proves a request left, not that the answer reached the screen.
  *
- * So this shares the audit's server, fixtures and browser setup and does one thing with them:
+ * Shares the audit's server, fixtures and browser setup:
  * `node scripts/netAuditShot.mjs /user/1 out.png`.
  */
 
@@ -114,8 +113,8 @@ const pending = new Map();
 socket.addEventListener('message', (e) => {
   const m = JSON.parse(e.data);
   if (m.id && pending.has(m.id)) {
-    /* Errors surfaced, not swallowed. Resolving a failed command with `undefined` is how this
-       script spent three runs reporting a navigation that CDP had rejected outright. */
+    /* Errors surfaced, not swallowed: resolving a failed command with `undefined` is how this
+       script spent three runs reporting a navigation CDP had rejected outright. */
     if (m.error) console.error(`CDP ${pending.get(m.id).method}: ${m.error.message}`);
     pending.get(m.id).resolve(m.result);
     pending.delete(m.id);
@@ -129,10 +128,8 @@ const send = (method, params = {}) =>
   });
 
 await send('Page.enable');
-/* The browser's own requests, stubbed the way `net:audit` stubs them. Without this the shot is
-   taken against the live upstream — 9s per request on this machine, and a screenshot of whatever
-   happened to arrive in time, which is how the first run of this produced a picture of the page it
-   had navigated *away* from. */
+/* Browser requests stubbed the way `net:audit` stubs them. Without this the shot is taken
+   against the live upstream (9s per request here) — a screenshot of whatever arrived in time. */
 socket.addEventListener('message', async (e) => {
   const m = JSON.parse(e.data);
   if (m.method !== 'Fetch.requestPaused') return;
@@ -157,11 +154,10 @@ await send('Emulation.setDeviceMetricsOverride', {
   deviceScaleFactor: 1,
   mobile: false,
 });
-/* One navigation, and the preferences seeded through `Page.addScriptToEvaluateOnNewDocument`
-   rather than by loading a throwaway page first and writing them there. The two-step form is what
-   `net:audit` does — it has a reset between journeys to hang them on — and reproducing it here
-   quietly failed: the second `Page.navigate` returned no error and never committed, so this
-   reported success while photographing the warm-up page. One navigation cannot do that. */
+/* One navigation, and preferences seeded via `Page.addScriptToEvaluateOnNewDocument`. The
+   two-step form `net:audit` uses (load a throwaway page, write prefs, navigate) quietly fails
+   here: the second `Page.navigate` returned no error and never committed, so the shot was of the
+   warm-up page. One navigation cannot do that. */
 await send('Page.addScriptToEvaluateOnNewDocument', {
   source: `try{localStorage.setItem('picpony_motion','standard');${
     authed
@@ -174,8 +170,7 @@ await send('Page.addScriptToEvaluateOnNewDocument', {
 const nav = await send('Page.navigate', { url: `${origin}${route}` });
 if (nav?.errorText) console.error(`navigate failed: ${nav.errorText}`);
 await sleep(5000);
-/* Printed rather than assumed, for the reason above. */
-const where = await send('Runtime.evaluate', {
+/* Printed rather than assumed, for the reason above. */const where = await send('Runtime.evaluate', {
   expression: 'location.pathname + " | " + document.title',
   returnByValue: true,
 });

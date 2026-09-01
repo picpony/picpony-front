@@ -1,26 +1,20 @@
 /**
  * Renders the /about plate to a PNG, in software, from the app's own `lib/flutedGlass.ts`.
  *
- * This exists because the effect cannot be judged from its numbers and the browser harness
- * on this machine cannot start. Every parameter that is not taken from the reference scene
- * was picked by rendering a sheet and looking at it.
- *
- * It is a CPU transcription of the same formulas the fragment shaders run, so it is a design
- * instrument rather than a test of them — the two can drift, and only the browser can say
- * what actually ships. It follows the shipped structure, though, including the two passes:
- * the field is rasterised once into a buffer and the glass samples that buffer bilinearly,
- * because sampling a rasterised image is part of why the refraction reads as glass.
+ * The effect cannot be judged from its numbers, so every parameter not taken from the reference
+ * scene was picked by rendering a sheet and looking at it. A CPU transcription of the shaders'
+ * formulas — a design instrument, not a test of them: it never compiles the GLSL, and only the
+ * browser can say what actually ships. Follows the shipped two-pass structure: the field is
+ * rasterised once into a buffer and the glass samples that buffer bilinearly.
  *
  *   node scripts/probeFlutedGlass.mjs [width] [height] [--scheme=light|dark]
  *                                     [--time=s] [--out=path] [--stroke] [--<param>=n]
  *
- * Every numeric field of all four config objects is sweepable by its own bare name, with
- * one exception: two of them are called `speed`, so the reeds' creep is `--fluteSpeed` and
- * the flow's clock is `--swirlSpeed`. Colours take `--colorA= --colorB= --sheen= --hue=`.
- *
- * `--stroke` walks a synthetic cursor through all four directions before the frame is taken,
- * so the whole ink ramp can be seen standing still: the four stops are a *lighting* model,
- * so a single arc only ever shows two of them.
+ * Every numeric field of all four config objects is sweepable by its bare name; two of them are
+ * called `speed`, so the reeds' creep is `--fluteSpeed` and the flow's clock is `--swirlSpeed`.
+ * Colours take `--colorA= --colorB= --sheen= --hue=`. `--stroke` walks a synthetic cursor through
+ * all four directions before the frame is taken, so the whole ink ramp can be seen standing
+ * still (a single arc only ever shows two of its four lighting stops).
  *
  * Module resolution is `scripts/heroPath.mjs`'s hook, for the reasons documented there.
  */
@@ -89,15 +83,11 @@ const TIME = num('time', 7);
 const SCHEME = flag('scheme', 'light') === 'dark' ? 'dark' : 'light';
 const OUT = flag('out', path.join(ROOT, `flutedglass-${SCHEME}.png`));
 
-/* `speed` is the one field name two of the four config objects share, and this flat merge
-   cannot hold both: `FluteConfig.speed` is .15, the flutes per second the reeds creep
-   sideways, and `SwirlConfig.speed` is 1, the flow's own clock. Spread order silently
-   decided which one `--speed=` reached (the swirl), and pass 2 then read
-   `FLUTE_DEFAULTS.speed` directly past `cfg` — so the creep was unsweepable twice over, on
-   the one parameter whose whole job is to be looked at in motion. The name is *dropped*
-   rather than resolved to one of them, so a later `cfg.speed` is `undefined` and renders an
-   obviously broken plate instead of a quietly wrong one. Every other field of all four
-   objects still answers to its own bare name; this is the only qualified pair. */
+/* `speed` is the one field name two config objects share, so it is *dropped* from the flat merge
+   and the two qualified flags (`--fluteSpeed`, `--swirlSpeed`) exist instead. Spreading it
+   through silently picked one (the swirl) and left the reeds' creep unsweepable. A later
+   `cfg.speed` is therefore `undefined` and renders an obviously broken plate rather than a
+   quietly wrong one; every other field still answers to its bare name. */
 const cfg = { ...FLUTE_DEFAULTS, ...SWIRL_DEFAULTS, ...GRAIN_DEFAULTS };
 delete cfg.speed;
 for (const key of Object.keys(cfg)) {
@@ -106,16 +96,14 @@ for (const key of Object.keys(cfg)) {
   if (override !== null) cfg[key] = Number(override);
 }
 /* `TRAIL_DEFAULTS` is read live by the sim rather than copied, so overriding it means
-   assigning into it. Every field of all four config objects is therefore sweepable by name,
-   which is what this tool is for — with the single documented exception of `speed`, which
-   two of them declare (see the note above `cfg`). */
+   assigning into it. */
 for (const key of Object.keys(TRAIL_DEFAULTS)) {
   const override = flag(key, null);
   if (override !== null) TRAIL_DEFAULTS[key] = Number(override);
 }
 
-/* Hex to linear-light 0..1, through the app's own transfer curve. The whole render below is
-   linear except the intermediate buffer, exactly as the shaders are. */
+/* Hex to linear-light 0..1, through the app's own transfer curve. Everything below is linear
+   except the intermediate buffer, exactly as the shaders are. */
 const hex = (s) => {
   const v = s.replace('#', '');
   return [
@@ -125,9 +113,8 @@ const hex = (s) => {
   ];
 };
 
-/* The three glass tokens. They live in globals.css, so they are spelled here rather than
-   imported — a mismatch shows up as a plate the wrong colour, which is what this tool is
-   for looking at. */
+/* The three glass tokens. They live in globals.css and are spelled here rather than imported —
+   a mismatch shows up as a plate the wrong colour, which is what this tool is for looking at. */
 const BODY = {
   light: { a: '#ffffff', b: '#f0e8ea', sheen: '#ffffff', hue: '#e06c9f' },
   dark: { a: '#312a2d', b: '#4c4447', sheen: '#ffe3ee', hue: '#cb5b8d' },
@@ -140,8 +127,8 @@ const colorB = hex(flag('colorB', body.b));
 const sheen = hex(flag('sheen', body.sheen));
 const ink = inkStops(colorA, hex(flag('hue', body.hue)), SCHEME);
 
-/* Run the same sim the component runs. `--stroke` walks the cursor through all four
-   directions, since the ink ramp is a lighting model and one arc only shows two of it. */
+/* Run the same sim the component runs; `--stroke` walks the cursor through all four
+   directions, since one arc only shows two of the ink ramp's four lighting stops. */
 const trail = new FlutedGlassTrail();
 trail.setAspect(W / H);
 const STEPS = Math.max(1, Math.round(TIME / 0.016));
@@ -349,8 +336,8 @@ for (let py = 0; py < H; py += 1) {
     const spec = Math.pow(incidence, specExponent) * cfg.highlight;
     for (let c = 0; c < 3; c += 1) col[c] = col[c] * flank + sheen[c] * spec;
 
-    /* `fract`, not `%`: the remainder operator keeps the sign, so half the samples came
-       back negative and the field read as a diagonal weave rather than as noise. */
+    /* `fract`, not `%`: the remainder operator keeps the sign, so half the samples came back
+       negative and the field read as a diagonal weave rather than as noise. */
     const hash = Math.sin(px * 12.9898 + py * 78.233) * 43758.5453;
     const noise = (hash - Math.floor(hash)) * 2 - 1;
     const lum = Math.max(
@@ -369,17 +356,13 @@ for (let py = 0; py < H; py += 1) {
 writeFileSync(OUT, encodePng(W, H, out));
 
 /**
- * What the rendered plate actually measures, in the two quantities the reference was
- * measured in — so the two are comparable without opening either image.
- *
- * Sampled off `out`, i.e. after every term including the grain, which is the only place
- * these can be read: the field's span (printed below) is an *input*, and the flank, the
+ * What the rendered plate actually measures, in the two quantities the reference was measured
+ * in — so the two are comparable without opening either image. Sampled off `out`, after every
+ * term including the grain: the field's span (printed below) is an *input*, and the flank, the
  * specular and the ramp all move what comes out of it.
  *
  * The reference, sampled the same way off its own canvas at 1440x760: **luma span 12.3**
- * (242.7..255), **mean chroma 3.8**, max chroma 13. That is the whole of why it reads as
- * white silk rather than as coloured glass — it has almost no colour and very little
- * contrast, and every bit of what it does have is shaped into reeds and flow.
+ * (242.7..255), **mean chroma 3.8**, max chroma 13 — white silk, not coloured glass.
  */
 {
   let lmin = 255;
@@ -406,8 +389,8 @@ writeFileSync(OUT, encodePng(W, H, out));
   );
 }
 
-/* The ink ramp in code values, because that is the unit `INK_STOPS` is stated in and the
-   one thing worth checking by eye against the picture. */
+/* The ink ramp in code values — the unit `INK_STOPS` is stated in, and the one thing worth
+   checking by eye against the picture. */
 const plateCode = srgbEncode(linearLuminance(colorA)) * 255;
 const toHex = (c) =>
   '#' +
@@ -426,8 +409,8 @@ console.log(
     `  detail ${cfg.detail}  stretch ${cfg.stretch}  ramp ${cfg.ramp}  hl ${cfg.highlight}/${cfg.highlightSoftness} ` +
     `(exp ${specExponent.toFixed(0)})  flank ${cfg.flank}  grain ${cfg.strength}  ` +
     `speed ${fluteSpeed}/${swirlSpeed} (flute/swirl)  trail ${STEPS} steps${stroke ? ' + stroke' : ''}\n` +
-    /* The field's span is what every one of the glass's terms acts on, so it is the first
-       number to look at when the plate reads flat. */
+    /* The field's span is what every one of the glass's terms acts on — the first number to
+       look at when the plate reads flat. */
     `  plate ${plateCode.toFixed(0)} → ${(srgbEncode(linearLuminance(colorB)) * 255).toFixed(0)} ` +
     `(field ${Math.abs(srgbEncode(linearLuminance(colorB)) * 255 - plateCode).toFixed(0)} codes)  ` +
     `ink ${ramp}  ` +

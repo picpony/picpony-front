@@ -1,5 +1,5 @@
 /* Route JS weight: sum the bytes of every <script src> a document pulls, raw and brotli.
-   Scratch probe; `npm run net:audit` measures requests, this measures bytes. */
+   `npm run net:audit` measures requests; this measures bytes. */
 import { spawn } from 'node:child_process';
 import { statSync, readFileSync } from 'node:fs';
 import { brotliCompressSync } from 'node:zlib';

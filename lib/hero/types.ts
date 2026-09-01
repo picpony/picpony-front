@@ -46,8 +46,9 @@ export type ImageHeroRuntimeState = {
   phase: HeroControllerPhase;
   sessionId: number | null;
   imageId: number | null;
-  /* No `interactionQuiet` here. It was published and never read — see the
-     `subscribeHeroInteraction` call in the controller for what that cost. */
+  /* No `interactionQuiet` here: it was published and never read, and every quiet↔active
+     transition would re-render the runtime's subscribers — see `subscribeHeroInteraction`
+     in the controller. */
   stage: ImageHeroStageState;
   background: ImageHeroBackgroundLocation | null;
 };
@@ -70,13 +71,10 @@ export type HeroRouteRegistration = HeroSurfaceNodes & {
   /** The route can paint the same pixels the flyer is showing. */
   previewPaintable: boolean;
   /**
-   * The route has finished resolving and has **no** hero media — the failure state.
-   *
-   * Without it the handoff can never be satisfied: it requires a paintable preview and a
-   * target, and both are set only by `DetailImage`/`DetailVideo`, which the failure branch
-   * does not render. The wait then ran to `HERO_DETAIL_ROUTE_TIMEOUT_MS`, so an image that
-   * turned out not to exist left the error page sealed and the screen blank for **30
-   * seconds** before `reconcileIdleLocation` surfaced it.
+   * The route has finished resolving and has **no** hero media — the failure state. The
+   * handoff requires a paintable preview and a target, and only `DetailImage`/`DetailVideo`
+   * set either, so without this flag the wait ran to `HERO_DETAIL_ROUTE_TIMEOUT_MS` and a
+   * missing image left the error page sealed and the screen blank for 30 seconds.
    */
   resolvedWithoutMedia: boolean;
 };
@@ -106,10 +104,9 @@ export type HeroOpenIntent = {
  * Which of the two exit choreographies a close runs.
  *
  * `container` shrinks the whole detail surface back into the thumbnail — Material's container
- * transform read backwards, with the return thresholds. `dismiss` does not: a swipe-down is a
- * gesture the hand is already driving, so the surface keeps the translate and veil the finger
- * left it at and only continues them. M3 draws the same line for a drawer, settling a drag
- * release on a different spring from a close.
+ * transform read backwards. `dismiss` does not: a swipe-down is a gesture the hand is already
+ * driving, so the surface keeps the translate and veil the finger left it at and only
+ * continues them. M3 draws the same line for a drawer.
  */
 export type HeroChoreography = 'container' | 'dismiss';
 

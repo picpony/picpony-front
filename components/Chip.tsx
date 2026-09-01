@@ -62,37 +62,25 @@ const TONE_TEXT: Record<ChipTone, string> = {
 
 /* Split into the *box* and the *inside*, and that split is the whole point.
  *
- * The height, the type role and the border belong to the outer `<span>`; the
- * padding and the gap belong to the inner `<button>`. All of it used to sit on
- * the span, which left the button — the click target, and the element
- * `data-ripple` paints into — shrink-wrapped to the icon and the label. So a
- * chip's own padding was dead space: pressing 8px inside its left edge did
- * nothing, and the ripple was a puddle in the middle of the text rather than a
- * wave across the control. Moving the padding inward makes the button fill the
- * box, which is what a filter chip has to be to read as pressable at all.
+ * Height, type role and border on the outer `<span>`; padding and gap on the
+ * inner `<button>` (the click target, the element `data-ripple` paints into).
+ * With all of it on the span, the button shrink-wrapped to its content: a chip's
+ * own padding was dead space and the ripple was a puddle in the middle of the
+ * text. Padding inward makes the button fill the box.
  *
- * Every horizontal step is spelled out per branch rather than composed from a
- * base plus an override, because `cn` is a plain join: `px-3` next to `pr-2`
- * emits both and lets Tailwind's output order decide the trailing edge.
+ * Every horizontal step is spelled per branch rather than composed from a base
+ * plus an override: `cn` is a plain join and would let Tailwind's output order
+ * decide the trailing edge.
  *
- * **The padding depends on whether there is a glyph beside the label, not on the
- * size.** M3 gives a chip 16dp of leading space with nothing in front of the
- * label and 8dp when an icon or a check is there, because the glyph's own visual
- * mass replaces the air. Both sizes therefore share one set of horizontal steps
- * and differ only in height. They used to be 10dp and 12dp regardless, which is
- * neither of the spec's values and made a chip with a check read as more tightly
- * packed than the same chip without one.
+ * **Padding depends on whether there is a glyph beside the label, not on the
+ * size** — M3 gives 16dp of leading space bare and 8dp with a glyph there, the
+ * glyph's visual mass replacing the air. Both sizes share one horizontal set and
+ * differ only in height.
  *
- * **One height: 32dp.** `AssistChipTokens.ContainerHeight` and
- * `FilterChipTokens.ContainerHeight` are both 32, and the token set gives a chip no
- * other height — so there is nothing for a `size` prop to choose between. It had
- * two (36 then 40 for `md`), and the 40 came from this file: it moved there to land on
- * the 32/40/48/56 control scale, which was the right instinct applied to the wrong
- * kind of object. A chip is not a control step, it is a chip.
- *
- * 32dp is under the 48dp touch minimum, and that is what `touch-target` on the
- * inner button is for — M3 states it directly: "the touch target may extend beyond
- * the component bounds". */
+ * **One height: 32dp** (`AssistChipTokens.ContainerHeight` =
+ * `FilterChipTokens.ContainerHeight`; the token set offers no other). Deliberately
+ * under the 48dp touch minimum — `touch-target` on the inner button is what the
+ * spec's "touch target may extend beyond the component bounds" is for. */
 const CHIP_HEIGHT = 'h-8';
 
 /** 16dp with nothing before the label, 8dp with a glyph there. M3's own pair. */
@@ -136,17 +124,13 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
         // The only padding the span keeps: the gap between the dismiss cross and
         // the trailing edge, which the button below cannot supply.
         onRemove && 'pr-2',
-        /* Unselected is a *tone step*, not an outline.
-         *
-         * M3 draws an unselected filter chip with a 1dp outline, and that is
-         * what this was — but a row of them next to a filled `Button` reads as a
-         * row of buttons someone forgot to fill in, and the two admin filters
-         * (只看未翻译, 查重模式) sit exactly there. A container step says the
-         * same thing without a second kind of edge: the chip is separated from
-         * the surface by being lighter than it in the light scheme and darker in
-         * the dark one, which is the mechanism the rest of this app already uses
-         * for depth. Selected still takes the tone's container pair, so the two
-         * states differ by hue rather than by whether an edge exists. */
+        /* Unselected is a *tone step*, not an outline — deliberate, do not restore
+         * the keyline. M3 draws an unselected filter chip with a 1dp outline, but
+         * a row of them beside a filled button reads as buttons someone forgot to
+         * fill in. A container step says the same thing with the mechanism the
+         * rest of this app uses for depth; selected still takes the tone's
+         * container pair, so the states differ by hue, not by whether an edge
+         * exists. */
         colors
           ? colors
           : isFilled
@@ -171,13 +155,10 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
           hasGlyph ? LEAD.withGlyph : LEAD.bare,
           onRemove ? TRAIL.toCross : TRAIL.bare,
           isInteractive ? 'cursor-pointer' : 'cursor-default',
-          /* The state layer, which this did not have. A filter chip is a control
-             and it was the only one in the app with no hover feedback at all —
-             the ripple answered a press and nothing answered a pointer arriving,
-             so a row of filters read as labels until you clicked one. Only when
-             it is genuinely interactive: a chip used as a tag is a mark, and
-             lighting up under the pointer would promise a press that does
-             nothing. */
+          /* The state layer. A filter chip is a control and it was the only one
+             in the app with no hover feedback at all. Only when genuinely
+             interactive: a chip used as a tag is a mark, and lighting up under
+             the pointer would promise a press that does nothing. */
           isInteractive && 'state-layer',
           // Its own radius, matching the box: the ripple is clipped by this
           // element, so a square one would paint into the chip's rounded corner.
@@ -206,13 +187,11 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
           onClick={onRemove}
           aria-label={removeLabel}
           disabled={disabled}
-          /* `transition-ui`, which is the app's 200ms. This was the one control
-             carrying a hand-written 300ms, so a chip's cross settled a third
-             slower than the chip it sits in. */
+          /* `transition-ui`, the app's 200ms — the standard clock, so the cross
+             settles with the chip it sits in. */
           className="touch-target state-layer focus-ring text-on-surface-variant transition-ui inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5 outline-none focus-visible:ring-2"
         >
-          {/* 18dp, matching the leading check. It was 13 and 15 — sizes that
-              exist nowhere else in the app. */}
+          {/* 18dp, matching the leading check — M3's chip icon size. */}
           <MdClose size={ICON.dense} />
         </button>
       )}

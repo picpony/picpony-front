@@ -28,19 +28,13 @@ export type HeroScrollPlane = {
 /**
  * @param host An element whose border box is the plane's origin, defaulting to the scroller.
  *   It exists because the scroller may sit **inside the container transform's window**, and a
- *   mid-flight `rebuild` re-creates the plane (`controller.handleViewportInvalidation`) — at
- *   which point `scroller.getBoundingClientRect()` is the *scaled* box and every later
- *   `screenRectToPlane` is wrong by the whole transform. The Stage passes its overlay, which is
- *   the one node in that chain never carrying a transform; because the scroller is
- *   `absolute inset-0` of a node that is `absolute inset-0` of the overlay, and none of them has
- *   a border or padding, the overlay's box *is* the scroller's untransformed box — exact, one
- *   rect read, no matrix. `getHeroRectWithoutAncestorTransform` was the alternative and is
- *   worse here: it unwinds only one ancestor, costs a `getComputedStyle` plus a matrix inverse,
- *   and returns the transformed rect silently under rotation or skew.
+ *   mid-flight `rebuild` re-creates the plane — at which point the scroller's rect is the
+ *   *scaled* box and every later `screenRectToPlane` is wrong by the whole transform. The
+ *   Stage passes its overlay, the one node in that chain never carrying a transform; its box
+ *   *is* the scroller's untransformed box — exact, one rect read, no matrix.
  *
- *   Only `top`/`left` are read from it. `clientWidth`/`clientHeight`/`scrollWidth`/`scrollHeight`
- *   and the scroll offsets are layout values and unaffected by any ancestor transform, and
- *   `plane.host.width`/`height` have no readers.
+ *   Only `top`/`left` are read from it. The client/scroll sizes and offsets are layout
+ *   values, unaffected by any ancestor transform.
  */
 function createPlane(
   anchor: HTMLElement,

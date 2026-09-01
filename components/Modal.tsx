@@ -51,10 +51,9 @@ const CLOSE_ANIM_DURATION = 200;
  * The centred dialog.
  *
  * Focus trapping, the refcounted scroll lock, Esc handling and the exit-animation
- * hold now live in `lib/overlay.ts`, because `Sheet` needs all four and had no
- * way to reach them from here. What is left in this file is what makes a dialog a
- * dialog rather than a sheet: it is centred, it is `rounded-2xl` on all four
- * corners, and it grows from 93% scale rather than rising from the bottom edge.
+ * hold live in `lib/overlay.ts` (shared with `Sheet`). What is left here is what
+ * makes a dialog a dialog rather than a sheet: centred, `rounded-2xl` on all four
+ * corners, growing from 93% scale rather than rising from the bottom edge.
  */
 /* Spelled per key rather than interpolated, because Tailwind scans source text and
    a template literal would compile to nothing. */
@@ -105,15 +104,12 @@ export default function Modal({
         isOpen ? 'animate-modal-overlay' : 'animate-modal-overlay-out',
       )}
       onClick={closeOnOverlayClick ? handleClose : undefined}
-      /* `inert` while leaving, not `pointer-events: none`.
-       *
-       * The dialog is held in the tree for `CLOSE_ANIM_DURATION` so its exit has
-       * something to play on, and for those 200ms it was still a focusable
-       * subtree in the accessibility tree — the focus trap has already released
-       * by then, so Tab could walk into a dialog that was visibly scaling away.
-       * `pointer-events` only stops the pointer; `inert` (React 19) removes the
-       * subtree from the tab order and the accessibility tree together, which is
-       * the rule AGENTS.md states for an overlay that outlives its own `open`. */
+      /* `inert` while leaving, not `pointer-events: none`. The dialog is held in
+       * the tree so its exit has something to play on, and for those 200ms it
+       * was still a focusable subtree — the focus trap has already released, so
+       * Tab could walk into a dialog that was visibly scaling away. `inert`
+       * (React 19) removes the subtree from the tab order and the accessibility
+       * tree together. */
       inert={!isOpen}
     >
       <div
@@ -124,12 +120,8 @@ export default function Modal({
         tabIndex={-1}
         className={cn(
           'flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden outline-none',
-          /* `surface-container-high`, which is M3's dialog container. It was
-             `-lowest` — the flattest step on the scale — so the one surface in
-             the app that is meant to read as lifted off everything else was
-             painted lighter than the page behind it and relied entirely on its
-             shadow to separate. Tone first, shadow second, is the whole M3
-             depth recipe; this had it backwards. */
+          /* `surface-container-high` is M3's dialog container — tone first,
+             shadow second is the whole M3 depth recipe. */
           'bg-surface-container-high text-on-surface rounded-2xl shadow-e3',
           MAX_WIDTHS[maxWidth],
           isOpen ? 'animate-modal-content' : 'animate-modal-content-out',
@@ -157,26 +149,21 @@ export default function Modal({
         )}
         {/* `bodyClassName` 完整接管 padding：cn 只拼接不解决 Tailwind
             冲突，所以默认 p-6 不能留在 base 里，否则会盖掉传入的 p-0。
-            `data-app-scroll-container` marks this as the nearest real scroller for anything
-            inside it that needs one — a `Pagination` in a dialog was turning a page and
-            scrolling the *page behind the dialog* to the top. */}
+            `data-app-scroll-container` marks this as the nearest real scroller —
+            a `Pagination` in a dialog was turning a page and scrolling the *page
+            behind the dialog* to the top. */}
         <div
           data-app-scroll-container
           className={cn('main-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'p-6')}
         >
           {children}
         </div>
-        {/* The action row, and the only place a dialog's actions belong — `AGENTS.md` says
-            why, and /block-groups is the worked example of getting it wrong.
-            A member that wants the leading edge takes `mr-auto`: an auto margin in a
-            `justify-end` row absorbs the free space to its right, which is one class instead
-            of a nested flex wrapper (/settings' 重新发送 beside 取消 and 验证邮箱).
-            `flex-wrap` is a guard rather than a fix for anything on screen today: measured in
-            the browser, that three-member row still fits a 280px panel and only wraps below
-            it, so no real phone reaches it. What it buys is the *shape* of the failure — a
-            fourth action or a longer label wraps to a second line instead of being clipped by
-            the panel, which is exactly how the /block-groups row failed. It changes nothing
-            for a row that fits, which is the other eighteen call sites. */}
+        {/* The action row, and the only place a dialog's actions belong (AGENTS.md
+            says why). `flex-wrap justify-end gap-3`; a leading member takes
+            `mr-auto` — an auto margin in a justify-end row absorbs the free
+            space to its right, no nested wrapper needed. `flex-wrap` is a guard:
+            a fourth action or a longer label wraps to a second line instead of
+            being clipped, and changes nothing for a row that fits. */}
         {footer && (
           <div className="flex shrink-0 flex-wrap justify-end gap-3 px-6 pb-6">{footer}</div>
         )}

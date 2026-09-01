@@ -3,20 +3,14 @@ import Skeleton, { SkeletonText } from '@/components/Skeleton';
 /**
  * Route-level fallback for the App Router.
  *
- * A centred spinner was the wrong shape for this slot. It shares no geometry
- * with any page, so a slow segment read as "the content vanished and a dot
- * appeared" — and once the route cross-fade landed it got worse, because you
- * now watch a full page dissolve *into* that dot. A silhouette at roughly the
- * right size makes the same wait read as content being replaced.
+ * A centred spinner shares no geometry with any page — once the route cross-fade
+ * landed, you watched a full page dissolve *into* a dot. A silhouette at roughly the
+ * right size makes the same wait read as content being replaced. Deliberately generic:
+ * most pages render their own, better-fitting skeleton once mounted.
  *
- * Deliberately generic: most pages render their own, better-fitting skeleton
- * once mounted, and this only covers the gap before that component exists.
- *
- * `max-w-7xl`, the widest of the five page columns. It read `max-w-4xl`, which is
- * right for the ten list routes and 384px too narrow for the three grids — so on the
- * gallery this was the "the column is just narrower" failure the layout section warns
- * about, in the one file whose docstring claims genericness. A placeholder that is too
- * wide only leaves air; one that is too narrow moves the content sideways on arrival.
+ * `max-w-7xl`, the widest of the five page columns: `max-w-4xl` is right for the list
+ * routes but 384px too narrow for the three grids — a placeholder that is too narrow
+ * moves the content sideways on arrival.
  */
 export default function Loading() {
   return (
@@ -28,9 +22,8 @@ export default function Loading() {
       <span className="sr-only">加载中…</span>
       {/* Page title */}
       <Skeleton className="mb-6 h-8 w-48" />
-      {/* Two content blocks and a short tail — the shape most routes settle
-          into, and enough height that the scroller does not jump when the real
-          page arrives. */}
+      {/* Two content blocks and a short tail — the shape most routes settle into, and
+          enough height that the scroller does not jump when the real page arrives. */}
       <div className="flex flex-col gap-4" aria-hidden="true">
         <Skeleton className="h-32 w-full rounded-md" delay={90} />
         <Skeleton className="h-48 w-full rounded-md" delay={180} />

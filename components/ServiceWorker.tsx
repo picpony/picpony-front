@@ -6,21 +6,17 @@ import { runWhenIdle } from '@/lib/utils';
 /**
  * Registers `public/sw.js`. Renders nothing.
  *
- * Three details, each of which is the difference between this working and quietly not:
+ * - `?v=<buildId>`: a file in `public/` cannot see a build-time variable, and a
+ *   changing script URL is what makes the browser byte-compare and find a new
+ *   worker at all.
+ * - `updateViaCache: 'none'`: without it the browser may satisfy its own update
+ *   check from the HTTP cache and never see one (the response header on that
+ *   path covers the other half of that failure).
+ * - `runWhenIdle`: registration competes with hydration for the main thread and
+ *   buys nothing on this load — it is for the *next* visit.
  *
- * - **`?v=<buildId>`.** A file in `public/` cannot see a build-time variable, so the worker reads
- *   its own version out of its registration URL. A changing URL is also the thing that makes the
- *   browser byte-compare and notice a new worker at all.
- * - **`updateViaCache: 'none'`.** Without it the browser may satisfy its own check for a new
- *   `sw.js` from the HTTP cache and never see one. `next.config.ts` also sends
- *   `Cache-Control: no-cache, no-store, must-revalidate` for that path — belt and braces, since
- *   the two failures look identical from outside.
- * - **`runWhenIdle`.** Registration competes with hydration for the main thread and buys nothing
- *   on this load — the worker does not control the page that registers it. It is for the *next*
- *   visit.
- *
- * Skipped under automation: `npm run net:audit` counts requests, and a worker that serves one
- * from a cache makes the count a function of run order rather than of the code.
+ * Skipped under automation, so `npm run net:audit` measures the code rather
+ * than a cache.
  */
 export default function ServiceWorker({ version }: { version: string }) {
   useEffect(() => {
@@ -34,8 +30,8 @@ export default function ServiceWorker({ version }: { version: string }) {
           updateViaCache: 'none',
         })
         .catch(() => {
-          /* An unsupported browser, a private window, a blocked origin. Everything the worker does
-             is an optimisation, so there is nothing to report and nothing to retry. */
+          /* Unsupported browser, private window, blocked origin — everything
+             the worker does is an optimisation; nothing to report or retry. */
         });
     });
   }, [version]);

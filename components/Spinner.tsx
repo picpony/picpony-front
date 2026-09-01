@@ -7,25 +7,19 @@ interface SpinnerProps {
   label?: string;
   className?: string;
   /**
-   * Which ink the arc takes.
+   * Which ink the arc takes: `primary` on a surface, `on-primary` inside a
+   * filled or brand-coloured control, `inherit` where the surrounding `color`
+   * is the only correct answer (the lightbox sits on media-stage and needs
+   * `on-media`, which neither of the other two names).
    *
-   * `primary` on a surface, `on-primary` inside a filled or brand-coloured control,
-   * and `inherit` where the surrounding `color` is the only correct answer — the
-   * lightbox sits on `media-stage` and needs `on-media`, which is neither of the
-   * other two.
-   *
-   * `primary` resolves to **`primary-ink`**, not `primary`, and the distinction is the
-   * whole reason that role exists: this arc is a mark drawn on a surface with a
-   * `secondary-container` track behind it, not a container with a label inside it. On the
-   * five palettes whose fill is a pale coat it measures **1.07–2.13:1** against its own
-   * `surface` where the ink measures 2.91–2.92 — i.e. the busy indicator on every
-   * non-filled `Button` would have been all but invisible. `ProgressBar` records deleting
-   * its own `primary` fill for the same measurement against the same track.
-   *
-   * One axis, not two booleans. It was `white?: boolean` plus `inheritColor?: boolean` — a
-   * raw colour name as a prop in a system that forbids raw colours, and an illegal fourth
-   * state (`white` *and* `inheritColor`) that nothing stopped a call site reaching. `Button`
-   * also derived `white` from its own variant, which is a mapping the primitive should own.
+   * `primary` resolves to **`primary-ink`**, not `primary`, and that is the
+   * whole reason the ink role exists: the arc is a mark drawn on a surface with
+   * a secondary-container track behind it, not a container with a label inside
+   * it. On the five palettes whose fill is a pale coat, the brand fill measures
+   * 1.07–2.13:1 against its own surface where the ink measures 2.91–2.92 — the
+   * busy indicator on every non-filled button would otherwise be all but
+   * invisible. One axis, deliberately, rather than two booleans that admit an
+   * illegal fourth state.
    */
   tone?: 'primary' | 'on-primary' | 'inherit';
   /** 0–100. Omit for the indeterminate sweep. */
@@ -43,18 +37,11 @@ const sizeConfig = {
 };
 
 /**
- * Material 3 circular progress indicator.
- *
- * The previous implementation was a conic-gradient ring spun by Tailwind's spin
- * utility:
- * a wheel turning at a constant rate. The Material indicator composes two
- * motions — a steady rotation of the whole ring plus an arc that grows and
- * shrinks — so the head runs ahead and the tail catches up. That second motion
- * is what makes it read as progress. Both live in globals.css
- * (`.m3-progress-spin` / `.m3-progress-arc`).
- *
- * Pass `value` for a determinate arc; the animations drop out and the arc is
- * drawn to length instead.
+ * Material 3 circular progress indicator — a steady rotation composed with an
+ * arc that grows and shrinks (both keyframes live in globals.css), which is
+ * what makes it read as progress rather than as a wheel turning. Pass `value`
+ * for a determinate arc; the animations drop out and the arc is drawn to
+ * length.
  */
 export default function Spinner({
   size = 'md',
@@ -76,13 +63,11 @@ export default function Spinner({
       : tone === 'on-primary'
         ? 'var(--md-sys-color-on-primary)'
         : 'var(--md-sys-color-primary-ink)';
-  /* The track is a *role*, not an alpha of the active indicator. It was
-     `strokeOpacity={0.16}` — an alpha on a token, which the colour rules call a
-     bug precisely because it has to be eyeballed once per scheme and drifts.
-     M3 gives the circular indicator a `secondary-container` track; over a
-     photograph or a brand fill no surface role applies, so it takes
-     `media-outline`, which is this app's documented role for a rule or a track
-     on media and is already the value the cropper's guides use. */
+  /* The track is a *role*, not an alpha of the active indicator (which would
+     have to be eyeballed per scheme and drifts). M3 gives the circular
+     indicator a secondary-container track; over a photograph or a brand fill no
+     surface role applies, so it takes media-outline — this app's role for a
+     rule or track on media. */
   const trackColor =
     tone === 'primary'
       ? 'var(--md-sys-color-secondary-container)'
@@ -147,7 +132,5 @@ export default function Spinner({
   return <span className={className}>{circle}</span>;
 }
 
-/* The linear progress indicator moved to `components/ProgressBar.tsx`.
-   It lived here as `LinearProgress` with zero call sites while six hand-rolled
-   bars shipped across four files, so it grew a tone axis, `StopSize`, the spring
-   the spec assigns and a home of its own. A bar is not a spinner. */
+/* The linear progress indicator lives in `components/ProgressBar.tsx` — a bar
+   is not a spinner. */

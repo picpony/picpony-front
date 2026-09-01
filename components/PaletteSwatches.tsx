@@ -25,17 +25,15 @@ import { cn } from '@/lib/utils';
 /**
  * The two dialogs, each behind its own `dynamic()`.
  *
- * Neither is anything /settings needs until a button is pressed: between them they carry a
- * gamut-aware 32-cell grid, a hue rail, a live preview and Monet's quantiser. **`loading` is
- * not optional here**, and its absence was a visible bug: `dynamic()` without it renders a
- * component that suspends, and the nearest boundary is the *route's* — so the first press of
- * 选择颜色 replaced the whole of /settings with its loading skeleton for as long as the chunk
- * took, then put it back. That is the "设置页面会突然没一下" report. With a `loading` of `null`
- * the boundary is the dialog's own, the page never re-suspends, and the dialog's own skeleton
- * covers the gap.
+ * Neither is anything /settings needs until a button is pressed: between them they
+ * carry a gamut-aware grid, a hue rail, a live preview and Monet's quantiser.
+ * **`loading` is not optional here**: `dynamic()` without it renders a component
+ * that suspends, and the nearest boundary is the *route's* — the first press of
+ * 选择颜色 then replaced the whole page with its skeleton until the chunk landed.
+ * With a `loading` of `null` the boundary is the dialog's own.
  *
- * Neither takes `ssr: false` — they render nothing until `isOpen`, and the latches below keep
- * the chunks from being fetched at mount.
+ * Neither takes `ssr: false` — they render nothing until `isOpen`, and the latches
+ * below keep the chunks from being fetched at mount.
  */
 const ColorPicker = dynamic(() => import('@/components/ColorPicker'), { loading: () => null });
 const ImagePalettePicker = dynamic(() => import('@/components/ImagePalettePicker'), {
@@ -51,91 +49,63 @@ type PickerId = 'hex' | 'image';
 /**
  * The theme colour picker: ten built-in palettes and the user's own.
  *
- * A screen-level component, not a design primitive — it has one call site and it exists
- * because none of the primitives can hold it. `Select` would have been the consistent
- * choice for a /settings row and is the wrong control for a colour: `SelectOption` carries
- * `{value, label, hint}` with nowhere to put a swatch, and a colour you choose from a list
- * of names is a colour you cannot see until you have picked it.
+ * A screen-level component, not a design primitive — one call site, and no
+ * primitive can hold it: `SelectOption` has nowhere to put a swatch, and a colour
+ * you choose from a list of names is a colour you cannot see until you have
+ * picked it.
  *
- * **The swatches cannot read the tokens.** Every `--md-sys-color-*` is the *active*
- * theme's, and ten of the eleven chips have to show a theme that is not active — so the
- * hexes come from `lib/generated/themeColors.ts`, which `scripts/palette.mjs` writes from
- * the same run that writes the CSS. That is the whole reason those two values per scheme
- * are generated rather than picked: a hand-copied swatch is a swatch that goes stale the
- * first time a fill moves. The eleventh has nothing to generate, so it reads the four hexes
- * `applyCustomPalette` parks on `<html>` — the same rule, not an exception to it: its first
- * draft read the tokens and turned 露娜's blue the moment you selected 露娜.
+ * **The swatches cannot read the tokens.** Every colour token is the *active*
+ * theme's, and ten of the eleven chips have to show a theme that is not active —
+ * so the hexes come from `lib/generated/themeColors.ts`, which `scripts/palette.mjs`
+ * writes from the same run that writes the CSS. The eleventh reads the four hexes
+ * `applyCustomPalette` parks on `<html>` — the same rule, not an exception to it.
  *
- * **The chip is the colour and nothing else**, which is AOSP's own theme picker and took a
- * rewrite to arrive at, and then a second one to come back to. It was a 48dp `surface` ground
- * with a 28dp `primary` circle inside it, an `outline-variant` keyline around that, and a
- * second `on-surface` outline when selected — four concentric rings for a control whose entire
- * job is to show one colour. Then it was AOSP's four quadrants, the fill over
- * `secondary`/`tertiary`, which is a chip that says what a theme *is* rather than what its
- * loudest colour is — and which is worth nothing here, because this system derives the whole
- * harmony from the fill by one rule, so the two extra quarters showed no information the fill
- * did not already carry. Now: a 40dp disc filled with the theme's `primary`, `data-ripple` and
- * `state-layer` for the press and the hover, `focus-ring` for the keyboard, and a tick in that
- * theme's own `on-primary` when it is the one in force. The tick is the selected state — three
- * signals for it was two too many. See `components/PaletteChipFace.tsx`.
+ * **The chip is the colour and nothing else** (AOSP's own theme picker): a 40dp
+ * disc filled with the theme's `primary`, `data-ripple` + `state-layer` for press
+ * and hover, `focus-ring` for the keyboard, and a tick in that theme's own
+ * `on-primary` when selected. See `components/PaletteChipFace.tsx`.
  *
- * The row wraps, and that is why the chips are the colour rather than a colour in a box: at
- * eleven themes, eleven 72px columns and ten 12px gaps come to 912px, which takes two lines
- * of the `4xl` settings column. A `Select` of names would have fitted on one line and shown
- * nothing.
- *
- * `role="radiogroup"` with a roving tab stop, because that is what a single choice among
- * eleven is. A row of eleven buttons would announce itself as eleven unrelated controls and
- * put eleven stops in the tab order.
+ * `role="radiogroup"` with a roving tab stop, because that is what a single
+ * choice among eleven is.
  *
  * ---------------------------------------------------------------------------
  * The eleventh chip, and the two controls under it
  *
- * The chip and the controls are **separate objects with separate jobs**, and that arrangement
- * took three tries. The chip answers *"use my colour"* — a radio like the other ten, carrying
- * the tick, inside the group. The row below answers *"what is my colour"*, and it asks that in
- * two ways, because they are two different questions: 选择颜色 opens
- * `components/ColorPicker.tsx`, where a colour is named; 从图片取色 opens
- * `components/ImagePalettePicker.tsx`, where one is found. **Two triggers, two dialogs.** For a
- * pass they were two triggers into *one* dialog, the second opening it scrolled to an image
- * section at the bottom — which made that dialog carry two models at once and its confirm
- * button ambiguous about which it was sending.
+ * The chip and the controls are **separate objects with separate jobs**. The chip
+ * answers *"use my colour"* — a radio like the other ten. The row answers *"what
+ * is my colour"*, in two ways because they are two different questions: 选择颜色
+ * opens `ColorPicker` (name a colour), 从图片取色 opens `ImagePalettePicker` (find
+ * one). **Two triggers, two dialogs.** Two triggers into one dialog made it carry
+ * two models at once and left its confirm button ambiguous. All routes lead to the
+ * app's own dialogs rather than the OS picker, which carries none of this app's
+ * tokens, speaks RGB/HSV where the system speaks HCT, and shows a colour where a
+ * *theme* is being chosen.
  *
- * What the naming dialog replaced, in order: a chip that opened the OS dialog on its *second*
- * tap with the input visually hidden inside it; then that plus a hex field for testing; then a
- * visible `ColorSwatch`. All three ended at the browser's own colour dialog, which carries none
- * of this app's tokens, speaks RGB or HSV where the whole system speaks HCT, and shows a colour
- * where the thing being chosen is a *theme*. Both dialogs are the app's own now — their headers
- * carry the argument.
- *
- * **The chip is disabled until a colour exists**, because until then there is no eleventh
- * palette to select. Disabled rather than hidden, which is /settings' own rule — a control
- * that vanishes is a control the user has to go looking for. The arrow keys skip it in that
- * state, so the roving cursor never lands on a stop that does nothing.
+ * **The chip is disabled until a colour exists** — until then there is no
+ * eleventh palette to select. Disabled rather than hidden (a control that
+ * vanishes is a control the user has to go looking for); the arrow keys skip it,
+ * so the roving cursor never lands on a stop that does nothing.
  */
 export default function PaletteSwatches({ className }: { className?: string }) {
   const active = usePalette();
   const scheme = useScheme();
   const customSeed = useCustomSeed();
-  /* The eleventh chip's own colour, which cannot come from the tokens: those are always the
-     *active* theme's, so reading `--md-sys-color-primary` here painted the chip 露娜's blue
-     the moment you switched to 露娜. `applyCustomPalette` parks the four hexes on `<html>`
-     and leaves them there when you switch away, which is what makes the chip keep showing
-     your colour. Same trap `lib/generated/themeColors.ts` keeps the other ten out of. */
+  /* The eleventh chip's own colour, which cannot come from the tokens: those are
+     always the *active* theme's. `applyCustomPalette` parks the four hexes on
+     `<html>` and leaves them there when you switch away — same trap the generated
+     file keeps the other ten out of. */
   const customTone = unpackCustomTones(useCustomTonesRaw())?.[scheme] ?? null;
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const trigger = useRef<HTMLButtonElement>(null);
-  /* One counter per dialog, doing two jobs at once. Non-zero is the **latch**: `dynamic()`
-     alone would fetch the chunk at mount, because each dialog is rendered with
-     `isOpen={false}` rather than conditionally, so it is mounted only once it has ever been
-     opened — which keeps the exit animation that conditional rendering on `isOpen` would take
-     away, and keeps a user who only ever names a colour from paying for the quantiser. And the
-     value is handed down as `key`, so each open **remounts** that dialog's body: remounting
-     *is* the reset, where the alternative is an effect writing several pieces of state
-     synchronously, which is a cascading render and what the React Compiler's lint rejects.
-
-     Per dialog rather than one shared counter, or opening either one would remount the other
-     and cut short its exit. */
+  /* One counter per dialog, two jobs. Non-zero is the **latch**: each dialog is
+     rendered with `isOpen={false}` rather than conditionally, so `dynamic()` alone
+     would fetch the chunk at mount — the latch mounts it only once it has ever
+     been opened, keeping the exit animation and sparing a user who only names
+     colours the quantiser. The value is also handed down as `key`, so each open
+     **remounts** the dialog: remounting *is* the reset, where the alternative is
+     an effect writing several pieces of state synchronously (a cascading render,
+     which the React Compiler's lint rejects). Per dialog, or opening either would
+     remount the other and cut short its exit. */
   const [picker, setPicker] = useState<{ open: PickerId | null; opens: Record<PickerId, number> }>({
     open: null,
     opens: { hex: 0, image: 0 },
@@ -145,16 +115,15 @@ export default function PaletteSwatches({ className }: { className?: string }) {
   const closePicker = () => setPicker((p) => ({ ...p, open: null }));
 
   const count = PALETTES.length + 1;
-  /* A radiogroup with every stop at −1 is a radiogroup the tab key cannot reach, which is
-     what `selected ? 0 : -1` alone produces when nothing matches. `currentPalette()`
-     normalises through `isPaletteId`, so today it always matches; this is what keeps the
-     roving stop from depending on that. */
+  /* A radiogroup with every stop at −1 is one the tab key cannot reach, which is
+     what the per-chip tabIndex alone produces when nothing matches; this keeps
+     the roving stop from depending on the id normalisation. */
   const activeExists = active === CUSTOM_PALETTE || PALETTES.some((p) => p.id === active);
   const customActive = active === CUSTOM_PALETTE;
 
-  /* The recipe is ~7 KB of HCT behind a dynamic import. Warming it on mount rather than on
-     the gesture is what keeps `resolveCustomPalette`'s `await` off the interaction's path —
-     /settings is the only screen that can reach it, so nothing else pays for this. */
+  /* The recipe is ~7 KB of HCT behind a dynamic import. Warming it on mount keeps
+     the resolve's `await` off the interaction's path — /settings is the only
+     screen that can reach it. */
   useEffect(warmPalette, []);
 
   const originOf = (element: HTMLElement | null) => {
@@ -163,12 +132,9 @@ export default function PaletteSwatches({ className }: { className?: string }) {
   };
 
   /**
-   * Install a hex as the custom palette. Both dialogs end here — one rule, two doors.
-   *
-   * `resolveCustomPalette` returns null only for a string that is not a six-digit hex, which
-   * neither dialog can produce: one emits `hexFromHct` output and the other `hexFromArgb`.
-   * The branch is here because the function's contract allows it, not because a user can
-   * reach it.
+   * Install a hex as the custom palette. Both dialogs end here — one rule, two
+   * doors. `resolveCustomPalette` returns null only for a non-hex string, which
+   * neither dialog can produce; the branch honours the function's contract.
    */
   const applyCustom = async (hex: string) => {
     const install = await resolveCustomPalette(hex);
@@ -212,11 +178,10 @@ export default function PaletteSwatches({ className }: { className?: string }) {
           const selected = palette.id === active;
           const tone = palette[scheme];
           return (
-            /* The caption is a sibling of the control rather than a child of it, so the
-               control is exactly the disc: `data-ripple` clips the wave to its own box, and
-               a wave that filled a 72px column with a word in it would not be this chip's
-               press. The name reaches the accessibility tree through `aria-label` instead,
-               which is why the visible copy is `aria-hidden`. */
+            /* The caption is a sibling of the control rather than a child, so the
+               control is exactly the disc (`data-ripple` clips the wave to its own
+               box). The name reaches the accessibility tree through `aria-label`,
+               which is why the visible copy is hidden to AT. */
             <div key={palette.id} className="flex w-18 flex-col items-center gap-1.5">
               <button
                 ref={(node) => {
@@ -233,9 +198,9 @@ export default function PaletteSwatches({ className }: { className?: string }) {
                 onKeyDown={(event) => onKeyDown(event, index)}
                 data-ripple
                 /* `touch-size` rather than `touch-target`: `data-ripple` sets
-                   `overflow: hidden` to clip the wave, which would clip a hit-area
-                   pseudo-element out of hit-testing with it. So the floor is the box — 40dp
-                   under a pointer, 48 under a finger. */
+                   `overflow: hidden`, which would clip a hit-area pseudo-element
+                   out of hit-testing with it. So the floor is the box — 40dp under
+                   a pointer, 48 under a finger. */
                 className={chipClass}
                 /* The ink is the theme's own, so `state-layer` (which paints from
                    `currentColor`) tints with that theme's ink rather than the active one's. */
@@ -272,9 +237,9 @@ export default function PaletteSwatches({ className }: { className?: string }) {
             data-ripple
             className={cn(
               chipClass,
-              /* With no colour chosen there is nothing to show, so the chip takes the tone
-                 step every unselected filter control in the app takes rather than inventing
-                 a placeholder colour. */
+              /* With no colour chosen there is nothing to show, so the chip takes
+                 the tone step every unselected filter control in the app takes
+                 rather than inventing a placeholder colour. */
               !customTone && 'bg-surface-container-high text-on-surface-variant',
             )}
             style={
@@ -303,16 +268,17 @@ export default function PaletteSwatches({ className }: { className?: string }) {
         </div>
       </div>
 
-      {/* The control, as a row: name at the leading edge, control at the trailing edge. The
-          rule above it is structural — it separates the ten colours that are given from the
-          one you set — so it is drawn in every state rather than appearing with a value. */}
+      {/* The control, as a row: name at the leading edge, control at the trailing
+          edge. The rule above it is structural — it separates the ten colours that
+          are given from the one you set — so it is drawn in every state. */}
       <div className="flex items-center justify-between gap-4 border-t border-outline-variant pt-4">
         <div className="min-w-0">
           <p className="text-label-l text-on-surface mb-0.5">自定义颜色</p>
           <p className="text-body-m-emphasized text-on-surface">{customSeed ?? '未设置'}</p>
         </div>
-        {/* Two ways in, side by side, because they are two different questions: name a colour,
-            or find one in a picture. Each opens its own dialog; both end at `applyCustom`. */}
+        {/* Two ways in, side by side, because they are two different questions:
+            name a colour, or find one in a picture. Each opens its own dialog;
+            both end at `applyCustom`. */}
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <Button
             variant="text"

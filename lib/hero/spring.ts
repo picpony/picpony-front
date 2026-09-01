@@ -6,36 +6,24 @@ import { clamp01 } from '@/lib/utils';
  * Analytic spring, damped or critically damped.
  *
  * One normalized response `p(t)` on `t ∈ [0, 1]` with `p(0) = 0` and `p(1) = 1`, so a leg's
- * *shape* is independent of how long it lasts and the duration is a separate decision. The
- * sampling, the table cache and the choice between this and a curve all live in
- * `progress.ts`; this file is the closed form and nothing else.
- *
- * The model is a unit-mass spring released from 0 toward 1 with an initial speed:
+ * *shape* is independent of how long it lasts. The model is a unit-mass spring released from
+ * 0 toward 1 with an initial speed:
  *
  *     under-damped (ζ < 1)   raw(t) = 1 - e^(-ζω t) · [cos(ω_d t) + ((ζω - v)/ω_d) · sin(ω_d t)]
  *     critically damped (ζ=1) raw(t) = 1 - (1 + (ω - v) t) · e^(-ω t)
  *     p(t) = raw(t) / raw(1)
  *
- * where `ω_d = ω√(1 - ζ²)`. `rate` is ω in *normalized* time — i.e. the physical ω times the
- * leg's duration — so setting it to a token spring's `√k × settle` makes the leg reproduce
- * that spring's curve over its own window. `velocity` is the normalized launch speed and
- * `damping` is ζ, defaulting to 1.
+ * where `ω_d = ω√(1 - ζ²)`. `rate` is ω in *normalized* time, so setting it to a token
+ * spring's `√k × settle` reproduces that spring's curve over the leg's own window. Both
+ * forms are differentiable, which is what makes velocity-continuous interruption and
+ * DOM-read-free pose measurement possible. Sampling and the model choice live in
+ * `progress.ts`; this file is the closed form.
  *
- * **What it is for, now that a from-rest leg flies `HERO_FLIGHT_CURVE` instead.** A spring is
- * the only one of the two models that can be *solved* for a launch slope — a cubic Bézier's
- * is `y1/x1`, fixed by its shape — so every leg that has to leave at a speed something is
- * already travelling at is a spring: a reversal, a mid-flight rebuild, a drag release. ζ0.9
- * remains the right ratio for those, and the argument is in `HERO_FLIGHT_RESPONSE`.
- *
- * ζ < 1 was the addition that made it possible to reference the `MotionScheme` springs the
- * rest of the app runs on: every spatial token in `StandardMotionTokens` is ζ0.9, and ζ was
- * exactly the parameter that was missing. The two forms agree in the limit, and both are
- * differentiable, which is what makes velocity-continuous interruption and DOM-read-free pose
- * measurement possible.
- *
- * Note ζ0.9 overshoots by `e^(-ζπ/√(1-ζ²))` ≈ 0.15%, which on a 600px flight is under a
- * pixel: enough to be a settle rather than a stop, not enough to read as the picture missing
- * its landing box. That is the whole reason the spatial tier is ζ0.9 and not ζ0.8.
+ * **Why a spring at all, given a from-rest leg flies a curve:** a spring is the only model
+ * that can be *solved* for a launch slope, so every leg leaving at a speed something is
+ * already travelling at (reversal, mid-flight rebuild, drag release) is one. ζ0.9 overshoots
+ * ≈ 0.15% — on a 600px flight, under a pixel: a settle rather than a stop, not a miss. That
+ * is the whole reason the spatial tier is ζ0.9 and not ζ0.8.
  */
 
 export type SpringResponse = {

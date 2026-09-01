@@ -8,24 +8,18 @@ export function escapeHTML(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
-/* `escapeHTML` is not enough on its own for a value that lands in an `href` or a
- * `style`, and both converters in this repo interpolate BBCode attributes into
- * exactly those two places. It escapes `& < > " '` — none of which appear in
- * `javascript:alert(document.cookie)`, and neither `;` nor `:` is touched, so
- * `[color=red;position:fixed;inset:0;background:#000]` was a full-viewport
- * overlay authored from a post body.
- *
- * These two live here, next to `escapeHTML`, because the display converter
- * (`BBCodeRenderer`) and the editor converter (`bbcodeToHtml` below) both need
- * them and have already drifted apart on four other tags. A validator that is
- * defined once cannot be fixed in one copy and forgotten in the other. */
+/* `escapeHTML` alone is not enough for a value landing in an `href` or a `style`:
+ * it leaves `;` and `:` untouched, so `[color=red;position:fixed]` is an injection.
+ * Both converters interpolate BBCode attributes into exactly those two places, so
+ * these validators sit next to it — defined once, so it cannot be fixed in one
+ * copy and forgotten in the other. */
 
 /** Allowlists the URL schemes that are safe in an `href`. Returns null to drop. */
 export function safeUrl(raw: string): string | null {
   /* Browsers ignore tabs and newlines *inside* a URL before resolving the
-     scheme, so `java&#9;script:` executes. The attribute patterns use `.`, which
-     excludes \n but matches \t — strip anything ignorable before testing, and
-     return the stripped form, or the browser would still see the original. */
+     scheme, so `java&#9;script:` executes: strip anything ignorable before
+     testing, and return the stripped form, or the browser would still see
+     the original. */
   const url = raw.trim().replace(/[\s\x00-\x1F\x7F]/g, '');
   if (!url) return null;
   // Root-relative (`/foo`) and protocol-relative (`//host/foo`) carry no scheme.
@@ -36,10 +30,9 @@ export function safeUrl(raw: string): string | null {
 }
 
 /** Allowlists a CSS colour: a hex literal, a bare named colour, or a numeric
- *  `rgb()`/`rgba()`. The last one is required because `htmlToBBCode` below can
- *  itself emit `[color=rgb(1,2,3)]` from an editor round-trip, so rejecting it
- *  would silently drop colours the app authored. The argument list is restricted
- *  to digits and separators, which is what keeps `url(...)` out. */
+ *  `rgb()`/`rgba()`. The last is required because `htmlToBBCode` can itself emit
+ *  `[color=rgb(1,2,3)]` from an editor round-trip; the argument list restricted
+ *  to digits and separators is what keeps `url(...)` out. */
 export function safeColor(raw: string): string | null {
   const color = raw.trim();
   const ok =
@@ -110,10 +103,8 @@ export function htmlToBBCode(html: string | null | undefined): string {
       case 'ol':
         return `[list=1]\n${content}[/list]\n`;
       case 'blockquote': {
-        /* Preserve the attribution. `[quote="username"]` is what the forum's
-           reply composer writes and what `BBCodeRenderer` renders as a
-           `<cite>`, so dropping it here silently rewrote every quoted reply to
-           an anonymous one the first time its author edited the post. */
+        /* Preserve the attribution: `[quote="username"]` is what the forum's reply
+           composer writes and what `BBCodeRenderer` renders as a `<cite>`. */
         const cite = el.querySelector(':scope > cite');
         if (cite) {
           const who = (cite.textContent || '').trim();
@@ -143,12 +134,9 @@ export function bbcodeToHtml(bbcode: string | null | undefined): string {
 
   html = html.replace(/\[img\](.*?)\[\/img\]/gi, (_m, url: string) => {
     const src = safeUrl(url);
-    /* `alt=""`, not a missing attribute. A BBCode `[img]` carries no
-       description, and an `<img>` with no `alt` at all is read out by its URL —
-       a screen reader announcing 60 characters of CDN path in the middle of a
-       post. Empty marks it decorative and lets the surrounding text carry the
-       meaning, which is what every other remote image in this app does.
-       `loading="lazy"` because a forum post can hold a dozen of these. */
+    /* `alt=""`, not a missing attribute: an `<img>` with no `alt` at all is read
+       out by its URL, while empty marks it decorative (a BBCode image carries no
+       description). `loading="lazy"` because a forum post can hold a dozen. */
     return src ? `<img src="${src}" alt="" loading="lazy" style="max-width:100%;" />` : '';
   });
   html = html.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
@@ -168,9 +156,8 @@ export function bbcodeToHtml(bbcode: string | null | undefined): string {
     /\[center\]([\s\S]*?)\[\/center\]/gi,
     '<div style="text-align:center;">$1</div>',
   );
-  /* `safeUrl` blocks `javascript:`, and `rel` matches `BBCodeRenderer` — this
-     copy omitted it, so the same link was tabnabbing-safe in a thread and not in
-     the editor's preview. */
+  /* `safeUrl` blocks `javascript:`, and `rel` must match `BBCodeRenderer` so a
+     link is tabnabbing-safe in a thread and in the editor's preview alike. */
   html = html.replace(/\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi, (_m, href: string, text: string) => {
     const url = safeUrl(href);
     return url
@@ -178,10 +165,9 @@ export function bbcodeToHtml(bbcode: string | null | undefined): string {
       : text;
   });
   /* Named quotes first, or the bare-quote pattern below matches the same span
-     and leaves `="username"` stranded as literal text in the editor. The
-     attribute is already `&quot;`-escaped by `escapeHTML` above, same as in
-     `BBCodeRenderer` — the two converters have to agree on the tag set or a
-     post renders one way in a thread and another way when you open it to edit. */
+     and leaves `="username"` stranded as literal text. The attribute is already
+     `&quot;`-escaped by `escapeHTML` above, and the two converters have to agree
+     on the tag set or a post renders one way in a thread and another in the editor. */
   html = html.replace(
     /\[quote=&quot;(.*?)&quot;\]([\s\S]*?)\[\/quote\]/gi,
     (_m, who: string, text: string) =>

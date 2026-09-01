@@ -6,16 +6,9 @@ type Props = {
 };
 
 /**
- * The title, from the same read the page itself is seeded with.
- *
- * This used to make its own `fetch` and use one field of the answer. That was already the right
- * shape in one respect — the absolute origin rather than `api.getUserProfile`, whose relative
- * `PICPONY_API_BASE` makes Node's `fetch` throw `Failed to parse URL`, which the old `catch`
- * swallowed so this route served the fallback title on every request for as long as it existed.
- *
- * What it got wrong was doing it alone: the page then fetched the same record from the browser to
- * draw the same name. `readUserProfile` is memoised, so the two callers cost one upstream read
- * between them, and the second caller hands the record to the client as a seed.
+ * The title, from the same memoised read the page itself is seeded with — the two
+ * callers cost one upstream read between them. (It must use the absolute origin rather
+ * than `api.getUserProfile`, whose relative base makes Node's `fetch` throw.)
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;

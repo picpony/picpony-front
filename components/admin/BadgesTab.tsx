@@ -346,13 +346,8 @@ export default function BadgesTab({ token }: { token: string }) {
         title="徽章管理"
         onRefresh={loadData}
       />
-      {/* The app's fifth tab row, and the last one that was not the shared
-          primitive. It
-          was a pair of `rounded-full` pills with a `secondary-container`
-          selected fill — close enough to the real thing to look deliberate, but
-          with no sliding indicator, and its panes were gated on
-          `{activeSubTab === 'x' && …}`, which unmounts the outgoing pane so
-          there is nothing left for the transition to animate out. */}
+      {/* Shared `Tabs` primitive — the panes must stay mounted, or there is
+          nothing for the transition to animate out. */}
       <Tabs
         className="mb-4"
         value={activeSubTab}
@@ -434,13 +429,11 @@ export default function BadgesTab({ token }: { token: string }) {
               </div>
             </div>
             <div>
-              {/* `fieldset`/`legend`, because this caption names a *group* of
-                  radios rather than one control. A bare `<label>` with no
-                  `htmlFor` labels nothing at all — it is inert styled text — so
-                  a screen reader announced "永久徽章, radio, 1 of 2" with no
-                  indication of what the choice was about. The UA's border,
-                  padding and margin are reset; `min-w-0` because a fieldset's
-                  default `min-width: min-content` stops flex children shrinking. */}
+              {/* `fieldset`/`legend`: this caption names a *group* of radios, and
+                  a bare `<label>` with no `htmlFor` labels nothing — a screen
+                  reader announced the radios with no indication of what the
+                  choice was about. The zeroed `min-width` is because a
+                  fieldset's default stops flex children shrinking. */}
               <fieldset className="m-0 min-w-0 border-0 p-0">
                 <legend className="mb-1 text-label-l text-on-surface-variant">有效期</legend>
                 <div className="flex items-center gap-4">
@@ -478,11 +471,7 @@ export default function BadgesTab({ token }: { token: string }) {
               {granting ? '授予中…' : '立即授予徽章'}
             </Button>
           </Card>
-          {/* Badges list */}
           <Card variant="transparent">
-            {/* `SectionHeading`, not a hand-written `<h3 class="text-label-l">`:
-                a heading above a block is the one thing that primitive is for, and
-                `label-l` is a control's role rather than a heading's. */}
             <SectionHeading as="h3" className="mb-4">
               已有徽章列表
             </SectionHeading>

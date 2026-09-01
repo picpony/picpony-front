@@ -16,30 +16,20 @@ import { imageOptions, usePaletteTools, type ImageOption } from '@/lib/paletteLa
 /**
  * A theme out of a picture: Monet's extraction, offered as the colours it found.
  *
- * **Its own dialog, not a section of `ColorPicker`.** It was one for a pass, reached by a
- * second trigger that opened that dialog already scrolled to the bottom — and the two are
- * different questions. 选择颜色 asks *what colour*, and answers it with a hue rail and a
- * gamut-aware grid; this asks *which of these*, and answers it with a short list nothing can
- * be typed into. One dialog holding both made the confirm button ambiguous about which of the
- * two it was sending, which is why that version had to track a `picked` option *and* a hex and
- * clear each on any touch of the other. Two dialogs, one `resolveCustomPalette`.
+ * **Its own dialog, not a section of `ColorPicker`** — 选择颜色 asks *what
+ * colour*; this asks *which of these*, and answers it with a short list nothing
+ * can be typed into. One dialog holding both made the confirm button ambiguous
+ * about which of the two it was sending.
  *
- * **The extraction is Monet's ranking.** `QuantizerCelebi` then `Score`: Wu plus weighted
- * k-means reduces the pixels to a palette with populations, then the ranking weights proportion
- * at 0.7 against distance from `TARGET_CHROMA` 48 and sweeps a hue-difference bar from 90° down
- * to 15°, taking the first bar that yields four candidates. So **fewer than four is a correct
- * answer** — a picture of one colour offers one option rather than four samples of it, and this
- * row renders what it gets. The full arithmetic, including the two cutoffs and the Google-Blue
- * fallback this app has to guard against, is on `sourceColorsFromPixels`.
+ * **The extraction is Monet's ranking.** `QuantizerCelebi` then `Score`; fewer
+ * than four candidates is a correct answer, and this row renders what it gets.
+ * The full arithmetic is on `sourceColorsFromPixels`.
  *
- * **A seed is installed verbatim, and that is the fix for "取的色很奇怪".** Each option used
- * to be a `(seed, style)` pair — AOSP's own unit, where `styleList` crosses the ranked seeds
- * with TONAL_SPOT / SPRITZ / VIBRANT / EXPRESSIVE plus MONOCHROMATIC. Correct for Android and
- * wrong here: a style puts `primary` at M3's P40 light / P80 dark, and three of the five do
- * not keep the seed's hue at all, so a sunset orange `#e8762c` offered a brown, a grey-brown,
- * a rust, a **purple** and a grey — five options at tone 40, none of them the colour in the
- * photograph. AOSP gets away with it because its app bar is `surface`; this app's bar is
- * `primary`, so the fill is the largest thing on screen. See the header of
+ * **A seed is installed verbatim, and that is the fix for "取的色很奇怪".** A
+ * style puts `primary` at M3's P40/P80 and three of the five do not keep the
+ * seed's hue at all, so a sunset orange offered a purple and a grey — five
+ * options at tone 40, none of them the colour in the photograph. This app's bar
+ * is `primary`, so the fill is the largest thing on screen. See
  * `lib/paletteRule.ts` for the full measurement.
  */
 export default function ImagePalettePicker({
@@ -116,13 +106,11 @@ export default function ImagePalettePicker({
           (options.length > 0 ? (
             <div className="flex flex-col gap-2">
               <p className="text-label-m text-on-surface-variant">这张图里的颜色</p>
-              {/* `role="radiogroup"` with a roving tab stop, because a single choice among four
-                  is what this is — the same argument `PaletteSwatches` makes about the eleven.
-                  A row of plain buttons would announce itself as four unrelated controls.
-
-                  The tick is the whole selected state, and there is deliberately no ring on top
-                  of it: these chips are drawn by the same face as the ten, whose docstring
-                  records that three signals for "this one" was two too many. */}
+              {/* `role="radiogroup"` with a roving tab stop, because a single
+                  choice among four is what this is — the same argument
+                  `PaletteSwatches` makes about the eleven. The tick is the whole
+                  selected state, and deliberately no ring on top of it: three
+                  signals for "this one" was two too many. */}
               <div role="radiogroup" aria-label="图片中的颜色" className="flex flex-wrap gap-2">
                 {options.map((option, index) => {
                   const on = picked?.seed === option.seed;

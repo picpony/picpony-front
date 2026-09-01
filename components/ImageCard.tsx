@@ -33,10 +33,9 @@ function getActiveSpoilerTags() {
             .map((value) => value.trim().toLowerCase())
         : [],
     );
-    /* Mirrored for the *next* document, so the server can draw the cover before hydration.
-       Written here rather than in /settings because this is the one place that already parses
-       the list, and it runs on the first card of the first render — so a device that has never
-       opened /settings since this shipped still heals itself in one load. */
+     /* Mirrored to a cookie for the *next* document, so the server can draw the
+        cover before hydration. Written here because this is the one place that
+        already parses the list. */
     try {
       const joined = [...spoilerTags].join(',');
       document.cookie = `${COOKIE_KEYS.spoilerTags}=${encodeURIComponent(joined)};path=/;max-age=${
@@ -78,14 +77,11 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
   const isWebm = format === 'WEBM' || format === 'MP4';
 
   /* **Covered from the very first render when the server knew to cover it.**
-
-     This was `useState(false)` with the real answer arriving in the effect below, which was
-     invisible while `/` rendered a skeleton and fetched after hydration. Now the server emits
-     fifty `<img>` tags and the browser paints them before any effect runs, so a user who had
-     spoilered a tag saw exactly the pictures they had asked to hide, on every cold load, for
-     the whole hydration window. `COOKIE_KEYS.spoilerTags` carries the list so this render can
-     ask the same question the effect will; the effect still runs and still wins, so a stale or
-     absent cookie costs one frame rather than a wrong answer. */
+     The server emits `<img>` tags the browser paints before any effect runs, so
+     a user who spoilered a tag saw exactly the pictures they asked to hide on
+     every cold load. The cookie carries the list so this render can ask the
+     same question the effect will; the effect still runs and still wins, so a
+     stale or absent cookie costs one frame rather than a wrong answer. */
   const ssrSpoilerTags = useSsrSpoilerTags();
   const [isSpoilered, setIsSpoilered] = useState(() =>
     ssrSpoilerTags.length === 0
@@ -167,18 +163,14 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           aria-hidden="true"
         >
           <div className="media-hover-scrim absolute inset-0 rounded-lg" />
-          {/* `Badge tone="media"`, which owns the plate, the `on-media` ink, the blur,
-              the 4dp corner and — since this pass — the glyph size. These three marks
-              wrote all of that out by hand and dropped the blur, so a score over a pale
-              photograph lost its plate; `Badge`'s own docstring names "a score pill over
-              a gallery thumbnail" as the thing it replaced.
+          {/* `Badge tone="media"`, which owns the plate, the `on-media` ink,
+              the blur, the 4dp corner and the glyph size — these three marks
+              wrote all of that out by hand and dropped the blur, so a score
+              over a pale photograph lost its plate.
 
-              The one corner that cannot come from the primitive is the one hugging the
-              card's, because concentric means `outer - gap`: the card is 16dp and the
-              inset is 8px, so that corner is **8dp** — which is `rounded-*-sm`, a step
-              on the scale. It was written as `calc(--radius-lg - --spacing*2)`, which is
-              the same arithmetic spelled as an arbitrary value; naming the step it
-              resolves to is both shorter and checkable against the shape table. */}
+              The one corner that cannot come from the primitive is the one
+              hugging the card's: concentric means `outer - gap`, so at a 16dp
+              card corner with an 8px inset that corner is 8dp. */}
           <Badge tone="media" className="absolute top-2 right-2 rounded-tr-sm">
             {format}
           </Badge>
@@ -202,28 +194,19 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
         </div>
       </Link>
 
-      {/* The spoiler cover is a sibling of the link, not a child of it.
-          Interactive content nested inside an `<a>` is invalid HTML, and it
-          behaved exactly as invalid HTML does: the cover was a `<div onClick>`,
-          so the only focusable thing on the card was the link — Tab landed on
-          it, Enter navigated straight to the picture the cover exists to hide,
-          and the reveal could not be reached from a keyboard at all. As a
-          sibling it is a real `<button>` in its own right, in front of the link
-          in both paint order and tab order.
+      {/* The spoiler cover is a sibling of the link, not a child of it:
+          interactive content nested inside an `<a>` is invalid HTML, and it
+          behaved as such — the cover was a `<div onClick>`, so Tab landed on
+          the link and Enter navigated straight to the picture the cover exists
+          to hide. As a sibling it is a real `<button>` in its own right, in
+          front of the link in both paint order and tab order.
 
-          Kept mounted through the reveal so the cover can dissolve; it used to
-          unmount on click, swapping a fully-opaque plate for the image in one
-          frame — the one moment on this card where a transition carries
-          information. `inert` (React 19) takes the faded remains out of the tab
-          order and the accessibility tree together, which `aria-hidden` alone
-          would not: that leaves a focusable element inside a hidden subtree.
+          Kept mounted through the reveal so the cover can dissolve; unmounting
+          on click swapped a fully-opaque plate for the image in one frame.
+          `inert` (React 19) takes the faded remains out of the tab order and
+          the accessibility tree together.
 
-          No per-element motion guard, and it is not an omission — one was here and
-          it did nothing. The off tier's block re-declares `transition-property`
-          with `!important`, which outranks a Tailwind transition-none utility
-          (emitted without one), so the guard lost every time. It was
-          also arguing against the paragraph above it: the dissolve is the one
-          transition on this card that carries information, and the global rule
+          No per-element motion guard, deliberately: the off tier's global rule
           already does the right thing here — it keeps `opacity` and drops
           `backdrop-filter`, so the cover fades without the blur animating. */}
       {isSpoilered && (

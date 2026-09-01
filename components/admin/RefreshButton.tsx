@@ -16,18 +16,15 @@ export default function RefreshButton({
 }: RefreshButtonProps) {
   return (
     /* `loading`, not `disabled` plus a hand-spun glyph: the primitive already
-       swaps the icon for a real `Spinner` and blocks interaction, which is what
-       every other busy button in the console does. Doing it by hand here meant the
-       spinner was a rotating `MdRefresh` in one place and a `Spinner` everywhere
-       else, for the same state.
+       swaps the icon for a real `Spinner` and blocks interaction, which is
+       what every other busy button in the console does.
 
-       `no-motion:` on the hover *end state* only. The named
-       `transition-transform` is in the off tier's block in globals.css, which
-       re-declares `transition-property` with `!important` — so a transition-none
-       utility beside it never won and was dropped. What the global rule cannot reach
-       is the rotation the hover leaves behind, which is what
-       `no-motion:group-hover:rotate-0` is for. `IconButton dismiss` and
-       `Pagination` carry the same one-attribute form. */
+       `no-motion:` guards the hover *end state* only: the off tier's globals
+       block re-declares the transition property with `!important`, so a
+       transition-suppressing utility beside it never won; what that rule
+       cannot reach is the rotation the hover leaves behind. The
+       one-attribute form is shared with the dismiss icon button and
+       `Pagination`. */
     <Button
       variant="accent"
       className="group"
@@ -35,9 +32,9 @@ export default function RefreshButton({
       loading={loading}
       icon={
         <MdRefresh
-          /* No `size`: `Button` sizes its own icon slot now (20dp at this step,
-             `ButtonSmallTokens.IconSize`). It passed `ICON.dense` (18), which is the
-             chip/metadata size — one glyph, two opinions. */
+          /* No `size`: `Button` sizes its own icon slot (20dp at this step).
+             Passing the 18dp chip/metadata size here was one glyph, two
+             opinions. */
           className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
         />
       }

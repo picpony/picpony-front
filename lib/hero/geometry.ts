@@ -70,11 +70,9 @@ export function getHeroMediaRenderedWidth(
     viewport.width < HERO_MEDIA_BREAKPOINT_PX
       ? HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX
       : HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX;
-  /* Both terms of the height cap, which is what `MEDIA_MAX_HEIGHT` puts in the stylesheet — this
-     read `HERO_MAX_HEIGHT_DVH` alone, so for a tall picture it returned a width the element never
-     paints. At 1920x1080 with an 800x2000 image that was 346px against a painted 326: `sizes`
-     promised a candidate 6% too wide, and anything measuring against this instead of against the DOM
-     (the path harness, for one) placed the landing box 20px off. */
+  // Both terms of the height cap — the same expression the stylesheet's cap uses. Omitting
+  // the chrome term makes this return a width the element never paints, and anything
+  // measuring against this instead of the DOM places the landing box off.
   const heightCap = Math.min(
     viewport.height * (HERO_MAX_HEIGHT_DVH / 100),
     viewport.height - HERO_MEDIA_VIEWPORT_CHROME_PX,
@@ -95,10 +93,9 @@ export function getHeroMediaStyle(image: HeroMediaDimensions): CSSProperties {
   const { width, height, aspectRatio } = getHeroMediaDimensions(image);
   return {
     aspectRatio: `${width} / ${height}`,
-    /* The cap is the *smaller* of `HERO_MAX_HEIGHT_DVH` and what is left of the viewport once the
-       chrome around the media is taken off — see `HERO_MEDIA_VIEWPORT_CHROME_PX`. Without the
-       second term a portrait picture lands in a box whose bottom is below the overlay's, and the
-       flight flies it there and gets clipped. */
+    // The cap is the *smaller* of 80dvh and the viewport minus the chrome around the media
+    // (see `HERO_MEDIA_VIEWPORT_CHROME_PX`); without the second term a portrait picture
+    // lands in a box whose bottom is below the overlay's, and the flight clips it.
     width: `min(100%, ${width}px, calc(${MEDIA_MAX_HEIGHT} * ${aspectRatio}))`,
     maxWidth: '100%',
     maxHeight: MEDIA_MAX_HEIGHT,
@@ -117,9 +114,8 @@ export function getHeroMediaStyle(image: HeroMediaDimensions): CSSProperties {
 export function getHeroBoxTransform(
   base: HeroRect,
   display: HeroRect,
-  /* `HeroRect` rather than `HeroHost`, and only `left`/`top` are read: the container transform
-     expresses its own window as the pose of a host-sized box, so it needs this function with a
-     plain rect. `HeroHost extends HeroRect`, so every existing caller is unaffected. */
+  // Takes a plain rect, not a host: the container transform expresses its own
+  // window as the pose of a host-sized box and reuses this function.
   host: HeroRect,
 ): HeroBoxTransform {
   return {
@@ -174,59 +170,33 @@ export function formatHeroClipRadius(
 // ---------------------------------------------------------------------------
 // Container transform
 //
-// One growing, clipping, rounded box with the destination content laid out at its
-// final size and scaled to the box's current width. `MaterialContainerTransform`
-// computes `currentEndBounds` from a `fitModeEvaluator` and masks it to the
-// container; `open_container.dart` writes the same thing as
-// `FittedBox(fit: BoxFit.fitWidth, alignment: Alignment.topLeft)` inside a `SizedBox`
-// of the animated rect.
+// One growing, clipping, rounded box with the destination content laid out at
+// its final size and scaled to the box's current width — `MaterialContainerTransform`
+// masked to the container; `open_container.dart` writes it as a fitWidth
+// `FittedBox` inside a `SizedBox` of the animated rect.
 //
-// **In DOM terms that is a composited `transform` on a clipping wrapper, and it used to
-// be an animated `clip-path` on the overlay.** The swap is not a tuning change, and the
-// reason is in Chromium's source rather than in a benchmark:
+// **In DOM terms that is a composited `transform` on a clipping wrapper, and it must not
+// be an animated `clip-path`.** Chromium composites `clip-path` only through a Finch-gated
+// paint-worklet path — without it the property falls to the main thread, and the
+// property-tree manager forces a render surface on *any* clip node carrying a `clip-path`,
+// animated or not. A circular radius instead yields a fast rounded-corner mask with no
+// render surface. Two corollaries: the clip must be `overflow: clip` on **both** axes
+// (a single-axis clip silently squares the corner), and the corner must be **one circular
+// value** (an elliptical radius costs a mask layer).
 //
-//   - `core/animation/compositor_animations.cc:79-84` lists the compositable properties.
-//     `clip-path` is in that list only as a *native paint worklet* property, and the branch
-//     at `:354-368` needs `RuntimeEnabledFeatures::CompositeClipPathAnimationEnabled()` and
-//     a generator or it falls to `DefaultToUnsupportedProperty`. That feature is Finch-gated,
-//     which is what made two recent Chromiums on one device disagree: one dropped most of the
-//     transition, the other ran it on the main thread and froze while React rendered the route.
-//   - `platform/graphics/compositing/property_tree_manager.cc:984-1035` — `ShaderBasedRRect`
-//     returns `nullopt` for **any** clip node carrying a `clip-path`, animated or not, and
-//     `:1183-1187` turns that into `RenderSurfaceReason::kClipPath`. Returning an rrect instead
-//     gives `mask_filter_info` with `is_fast_rounded_corner` and no render surface at all.
+// The content pair:
 //
-// So the window is `overflow: clip` plus a circular `border-radius` on a host-sized node, and
-// the pose below is what moves it. The content pair is:
+//     clip:        translate3d(dx, dy, 0) scale(sx, sy)   // the window
+//     compensator: scale(f/sx, f/sy), f = max(sx, sy)     // back to isotropic
 //
-//     clip:        translate3d(dx, dy, 0) scale(sx, sy)      // the window
-//     compensator: scaleY(sx / sy)  or  scaleX(sy / sx)      // back to isotropic, at max(sx, sy)
+// A point in host-sized space lands at `d + f*p` — **the accumulated content transform is a
+// uniform `scale(f)` with a top-left translate, i.e. the pair *is* the fit**, with the axis
+// chosen per leg (`FIT_MODE_AUTO`). There is no separate fit track.
 //
-// A point `p` in the host-sized space lands at `d + f*p` where `f = max(sx, sy)`, i.e. **the
-// accumulated content transform is a uniform `scale(f)` with a top-left translate** — a `FittedBox`,
-// with the *axis chosen per leg* the way `MaterialContainerTransform`'s `FIT_MODE_AUTO` chooses it.
-// Fitting always to width leaves an unpainted band across the window whenever `sx < sy`, which is a
-// measured artefact and not a theoretical one; `heroContainerFitScale` has the numbers. Either way
-// the pair *is* the fit, which is why there is no separate fit track any more.
-// `formatHeroContentTransform` and its `[data-image-detail-scale]` target are gone; the node
-// survives as the content cross-fade's, under a name that says so.
-//
-// Two tombstones, because both were real and neither can recur:
-//
-//   - **The insets were clamped**, `Math.max(0, ...)` on all four sides, so a box partly outside
-//     the host could not be expressed — and because `right`/`bottom` derived from the clamped
-//     `left`/`top` the error compounded into a *translation*: the box kept its size and slid to
-//     the host's edge. Reproduced by scrolling the gallery 260px and opening the featured
-//     banner, whose rect is then `top: -116`: the closing mask ended at `inset(0 34 273 24)`
-//     rather than `inset(-236 34 509 24)`, so its bottom edge stopped 236px below the thumbnail
-//     and that band of detail surface stayed on screen. A transform has no inset to clamp, so
-//     the bug is now unrepresentable rather than fixed. `npm run hero:path` keeps the case.
-//   - **The corner was taken out once for a frame rate that did not materialise.** Measured in
-//     isolation with a CDP screencast, best of three, a full-viewport `inset()`: no round 56fps,
-//     fixed round 46, varying round 38. Removing it end to end moved the flight by *nothing*
-//     (32-37fps either way). It is back, and on the new construction it is not even the same
-//     trade: a circular `border-radius` is a `MaskFilterInfo`, so a change costs a paint-property
-//     update on one node rather than a raster of the clipped subtree.
+// Invariant: the window's insets must not be clamped to 0 — a box partly outside the host
+// is expressible only with negative insets, and clamping them compounded into a translation
+// that left a band of detail surface stranded on screen. A transform has no inset to clamp,
+// so the bug is unrepresentable here; `npm run hero:path` keeps the case.
 // ---------------------------------------------------------------------------
 
 /** Scales are divided by; a degenerate box must not produce a non-finite transform. */
@@ -240,9 +210,8 @@ function safeScale(value: number) {
  * The window, as the pose of a host-sized box.
  *
  * Deliberately the flyer's own function: the container's outer transform *is*
- * `getHeroBoxTransform` with the host standing in for the base, so the two halves of the
- * flight share one piece of arithmetic rather than paraphrasing each other. Emit it with
- * `formatHeroTransform`.
+ * `getHeroBoxTransform` with the host standing in for the base, so both halves of the
+ * flight share one piece of arithmetic. Emit with `formatHeroTransform`.
  */
 export function getHeroContainerPose(box: HeroRect, host: HeroRect): HeroBoxTransform {
   const pose = getHeroBoxTransform(host, box, host);
@@ -257,29 +226,16 @@ export function getHeroContainerPose(box: HeroRect, host: HeroRect): HeroBoxTran
 /**
  * The isotropic scale the content is fitted at: **`max(sx, sy)`, i.e. cover.**
  *
- * `MaterialContainerTransform` has this as `FIT_MODE_AUTO` and picks the axis per transition rather
- * than fixing it, and the reason is a defect you can watch. The window's aspect mid-leg runs between
- * the card's and the host's, while the content inside it is uniformly scaled and therefore always
- * has the host's — so fitting to width whenever `sx < sy` leaves a horizontal band of the window with
- * nothing painted in it. Measured in a browser at 1920x1080 on a 800x2000 picture, at p 0.4: window
- * 1234x866, content 1234x**728**, so **138px** of the window's bottom was transparent and you saw the
- * gallery through it — and because the flyer is contained by the *window* rather than by the paint, it
- * hung **111px** past the bottom of the white surface, over the grid. That is the "part of the bottom
- * is cut off, only on a wide desktop" report: the picture was not being cropped, the surface behind it
- * was ending early. It is wide-desktop-only because the band is `host.height * (sy - sx)` and a
- * portrait card against a landscape host is where the two scales separate — a phone's overlay is
- * nearly the picture's own shape, and a landscape card on a wide desktop matches the host's aspect to
- * within a few percent.
+ * Fitting to width instead leaves an unpainted horizontal band across the window whenever
+ * `sx < sy` — the window's aspect mid-leg runs between the card's and the host's while the
+ * uniformly-scaled content always has the host's — and because the flyer is contained by the
+ * window rather than by the paint, it hangs past the surface over the grid. Wide-desktop
+ * only: that is where a portrait card meets a landscape host. Cover clips the content on the
+ * other axis instead — what the empty outer margin of the column is for.
  *
- * Cover is the fix rather than painting the band, because the band is not the only thing wrong with it:
- * the content also has to *reach* the window's edge or the container is visibly not the thing that
- * grew. Fitting to the larger scale means the content is clipped on the other axis instead, which is
- * what `overflow: clip` is for and what Material means by masking the content to the container. What
- * gets clipped is the centred `max-w-5xl` column's outer margin, which is empty.
- *
- * `max` cannot flip mid-leg in practice: both scales rise to exactly 1 at p=1 from the same side of
- * each other, so the axis is decided by the card's aspect against the host's and then holds. At the
- * crossing point the two agree, so the compensator is continuous there even if it did.
+ * `max` cannot flip mid-leg in practice: both scales rise to exactly 1 at p=1 from the same
+ * side of each other, so the axis is decided by the card's aspect against the host's and
+ * holds; at the crossing the two agree, so the compensator stays continuous.
  */
 export function heroContainerFitScale({ scaleX, scaleY }: HeroBoxTransform) {
   return Math.max(scaleX, scaleY);
@@ -288,13 +244,11 @@ export function heroContainerFitScale({ scaleX, scaleY }: HeroBoxTransform) {
 /**
  * The counter-scale that makes the accumulated content transform isotropic.
  *
- * One node, the window's child, with `transform-origin: 0 0`. Written as `scale(f/sx, f/sy)` so that
- * **the emitted function is the same shape whichever axis the fit takes** — one component is exactly
- * 1 and the other carries the lift. That is not cosmetic. A `scaleY(k)` keyframe next to a
- * `scaleX(k')` one is a transform-list mismatch, which drops WAAPI onto matrix interpolation for that
- * segment; and the window's aspect *does* excurse past the host's mid-leg (24-59% on the shipped
- * matrix), so the fit axis can genuinely change hands inside one leg. Emitting both components keeps
- * the interpolation componentwise and continuous through the crossing, where both are 1.
+ * Written as a two-component `scale(f/sx, f/sy)` with one component exactly 1 — load-bearing,
+ * not cosmetic: a single-axis `scaleY` keyframe beside a `scaleX` one is a transform-list
+ * mismatch that drops WAAPI onto matrix interpolation, and the fit axis *can* change hands
+ * inside one leg. Componentwise emission keeps the interpolation continuous through the
+ * crossing, where both components are 1.
  */
 export function formatHeroContainerCompensator(pose: HeroBoxTransform) {
   const fit = heroContainerFitScale(pose);
@@ -303,25 +257,20 @@ export function formatHeroContainerCompensator(pose: HeroBoxTransform) {
 
 /**
  * The exact inverse of the accumulated window transform, for a descendant that must stay in
- * screen space — which is the flight layer, and only on an opening leg.
+ * screen space — the flight layer, on an opening leg only.
  *
- * The plane's anchor cannot leave the scroller: `sizePlaneLayer` puts the layer at the scroll
- * offset captured at take-off, inside a node that scrolls with the content, and that is the whole
- * of why the flyer follows ordinary and inertial scrolling at zero per-frame cost. So the layer
- * gets the inverse instead. Solving `d + f*T(p) = p` gives `T(p) = (p - d)/f`, and CSS's
- * `scale(k) translate(a, b)` maps `p` to `k*(p + (a, b))`, so `k = 1/f` and `(a, b) = -d`, where
- * `f` is the accumulated content scale — `heroContainerFitScale`, not `scaleX`, since the fit axis
- * is chosen per leg.
+ * The plane's anchor cannot leave the scroller (`sizePlaneLayer` puts it at the take-off
+ * scroll offset inside a node that scrolls with the content — that is why the flyer follows
+ * scrolling at zero per-frame cost), so the layer carries the inverse instead. Solving
+ * `d + f*T(p) = p` with CSS's `scale(k) translate(a, b)` = `k*(p + (a, b))` gives
+ * `k = 1/f, (a, b) = -d`, `f` being the fit scale, not `scaleX`.
  *
- * **Order matters and getting it backwards compiles.** `translate` before `scale` is a different
- * map and leaves the opening flyer up to `(1 - f)*|d|` out of place — about 100px on a phone.
- * `npm run hero:path` asserts the composition at the string level for that reason.
+ * **Order matters and getting it backwards compiles** — `translate` before `scale` is a
+ * different map, ~100px out of place on a phone; `npm run hero:path` asserts the composition
+ * at the string level.
  *
- * There is deliberately no scroll term. With one, the flyer would hold still in screen space
- * while the landing target — which is inside the scaled subtree — moved by `f*delta`. Without
- * it, both move by `f*delta`, so the flyer tracks the visually scaled target for the whole leg
- * and 1:1 on arrival. Today's behaviour is the former: they separate mid-flight and only
- * reconverge at landing.
+ * Deliberately no scroll term: the landing target is inside the scaled subtree, so both it
+ * and the flyer move by `f·Δ` and track each other for the whole leg.
  */
 export function formatHeroContainerCounter(pose: HeroBoxTransform) {
   const fit = heroContainerFitScale(pose);
@@ -329,32 +278,15 @@ export function formatHeroContainerCounter(pose: HeroBoxTransform) {
 }
 
 /**
- * The window's own corner, in its local space: **one circular value, rounded up, capped.**
+ * The window's own corner, in its local space: **one circular value, divided by
+ * `min(sx, sy)`, rounded up, capped.**
  *
- * Circular is not a preference. `ui/gfx/geometry/rounded_corners_f.h` is four scalars, and
- * `ShaderBasedRRect` (`:998-1006`) rejects any corner whose radii differ per axis — so the
- * elliptical `Rx / Ry` form that would be exactly circular on screen costs a mask layer, giving
- * back the render surface this whole construction exists to avoid.
- *
- * Dividing by `min(sx, sy)` rather than by `sx` is what keeps the surface out of the picture's
- * corners. Both screen radii are then at least `R`, and for `a >= R` and `x >= 0`,
- * `(a - x)/a >= (R - x)/R`, so the window's corner cut provably contains the flyer's
- * circular-`R` cut: at progress 0 the window *is* the card and the opaque flyer covers it, so
- * the excess is invisible. Dividing by `sx` under-cuts vertically instead and leaves slivers of
- * `bg-surface` outside the picture's corner — at take-off, where the eye is.
- *
- * Rounding **up** is what makes the 4px quantisation safe: rounding to nearest can land the
- * screen radius up to half a step under `R`, which is the same sliver. The step stays at 4
- * because coarsening it is visibly wrong late in a leg — at 12, `R = 16` would be lifted to 24
- * while `sx` is near 1 — and because the payoff changed: with `is_fast_rounded_corner` a radius
- * change is a paint-property update on one node, so quantising buys frame reuse rather than
- * rescuing a subtree raster.
- *
- * The cap is the browser's. CSS scales *all* radii by one factor when adjacent radii exceed a
- * side, so an uncapped value would silently shrink and take the containment argument with it.
- * Capping here makes our arithmetic match what is painted, and `npm run hero:path` asserts the
- * cap never binds on the shipped matrix — so a card aspect extreme enough to need it surfaces as
- * a failing check rather than as a hairline nobody reports.
+ * Dividing by the smaller scale keeps both screen radii ≥ `R`, so the window's cut provably
+ * contains the flyer's circular-`R` cut; dividing by `sx` alone under-cuts and leaves
+ * surface slivers outside the picture's corner at take-off. Rounding **up** keeps the 4px
+ * quantisation from landing half a step under `R` — same sliver. The cap is the browser's:
+ * CSS rescales all radii when adjacent radii exceed a side, so capping here keeps our
+ * arithmetic equal to what is painted; `npm run hero:path` asserts the cap never binds.
  */
 export function formatHeroContainerRadius(
   pose: HeroBoxTransform,
@@ -369,12 +301,10 @@ export function formatHeroContainerRadius(
 }
 
 /**
- * Screen rect to the un-transformed host-sized space, i.e. the inverse of the accumulated pair.
- *
- * `screen = boxOrigin + (local - hostOrigin)*f`, so `local = hostOrigin + (screen - boxOrigin)/f`.
- * Both axes divide by the same `f` because the accumulated map is isotropic — that is the property
- * the compensator exists to establish, and this function is where it pays for itself. `f` is
- * `heroContainerFitScale`, so this follows the fit axis rather than assuming width.
+ * Screen rect to the un-transformed host-sized space, i.e. the inverse of the accumulated
+ * pair: `local = hostOrigin + (screen - boxOrigin)/f`. Both axes divide by the same `f`
+ * because the accumulated map is isotropic — the property the compensator exists to
+ * establish; `f` is the fit scale, so this follows the fit axis rather than assuming width.
  */
 export function unprojectHeroContainerRect(
   rect: HeroRect,
@@ -391,30 +321,21 @@ export function unprojectHeroContainerRect(
 }
 
 /**
- * The gallery's depth cue: **a scale, and nothing else.**
+ * The gallery's depth cue: **a scale, and nothing else** — a recede, not a displacement. A
+ * translate slid the grid down the screen and pushed the top row out of the fold.
  *
- * It was a translate, and a translate is the wrong verb. "下沉" is a recede, not a displacement —
- * asked for plainly, *it should not shift up or down, it should just sink* — and a translate is
- * exactly a shift: the grid slid 24px down the screen and the top row's cards left the fold. The app
- * already had the right gesture in one place, `AuthModal` shrinking its panel to `scale-95` when the
- * captcha dialog opens over it, so this is that gesture rather than a new one.
+ * Its origin must be the *viewport's* centre, not the element's: this node's box is the whole
+ * scrollable content, several viewports tall, and an element-centred origin would fling the
+ * visible rows. `buildBackgroundAnimation` writes `transform-origin` from the scroller's live
+ * scroll offset once per leg — fixed for the length of a flight, since the gallery scroller
+ * is hidden while the detail is open.
  *
- * Its origin has to be the *viewport's* centre, not the element's: this node is
- * `[data-image-detail-background-visual]`, whose box is the whole scrollable content and can be
- * several viewports tall, so scaling about its own centre would fling the visible rows. See
- * `buildBackgroundAnimation`, which writes `transform-origin` from the scroller's live scroll offset
- * once per leg — a scroll position is fixed for the length of a flight, because the gallery scroller
- * takes `data-scroll-hidden` while the detail is open.
+ * Scaling *down* does not re-raster: the raster scale is taken from the maximum the animation
+ * reaches, which is 1 here, so the shrink is a GPU downscale. Still wants a check on a phone
+ * before being treated as free.
  *
- * A translate was chosen originally to keep the layer off the raster path, and the note said a scale
- * "makes Chromium re-raster it". That is true of scaling *up*: `cc` picks the raster scale from the
- * maximum the animation reaches, and this animation's maximum is 1 — the identity it starts from — so
- * the existing raster stands and the shrink is a GPU downscale. What is left is a slight softening of
- * the grid while it is receding, which is what receding looks like. It still wants a check on a phone
- * before this is treated as free.
- *
- * `getHeroRectWithoutAncestorTransform` inverts whatever is here — full axis-aligned matrix, origin
- * read from the computed style — so the flight still reads honest card rects on press.
+ * `getHeroRectWithoutAncestorTransform` inverts whatever is here, so the flight still reads
+ * honest card rects on press.
  */
 export function getHeroBackgroundSinkTransform(amount: number) {
   if (amount <= 0.001) return 'none';
@@ -456,16 +377,12 @@ const HERO_ON_AXIS_DELTA_PX = 2;
  * `MaterialPointArcTween`, transcribed.
  *
  * The circle's centre sits on an axis-aligned line through *one* of the endpoints, so the
- * arc is tangent to that axis there: the corner leaves along one axis and arrives along
- * the other. Which endpoint owns the tangent depends on which delta is larger, so the arc
- * always bows away from the shorter side rather than through it.
+ * corner leaves along one axis and arrives along the other; which endpoint owns the tangent
+ * depends on which delta is larger, so the arc bows away from the shorter side.
  *
- * The radius comes out of the chord and the shorter delta — `r = |AB|² / (2·Δshort)` — and
- * that is what bounds the sweep. In the `Δx < Δy` branch `|AB| > √2·Δx`, so
- * `r > |AB|/√2`, so `sweep = 2·asin(|AB| / 2r) < π/2`: **every corner arc turns through
- * less than a quarter circle, which is why it is monotone in both axes.** That is the
- * property the two earlier attempts at a curved path did not have, and it is a property of
- * the construction rather than of a particular pair of boxes.
+ * `r = |AB|² / (2·Δshort)` bounds every sweep under 90°, so each edge is one coordinate of
+ * one monotone arc for any pair of boxes — a property of the construction, not of a
+ * particular pair.
  */
 function createHeroPointArc(from: HeroPoint, to: HeroPoint): HeroPointArc {
   const deltaX = Math.abs(to.x - from.x);
@@ -526,14 +443,10 @@ export type HeroRectArc = {
   /**
    * How much of each corner's own bow survives. 1 is Flutter's arc, 0 the chord.
    *
-   * A convex combination of two functions that are monotone in the same direction, so every
-   * rendered edge stays monotone and lands on exactly its endpoint for **any** value — the
-   * endpoints are returned literally at `t ≤ 0` and `t ≥ 1`, and an on-axis corner has no
-   * centre so bow is a no-op there without a special case. Blending the two corners
-   * componentwise is the same thing as blending `left`/`top`/`width`/`height`, as long as the
-   * corners do not cross, which `lerpHeroRectArc`'s normalisation covers anyway.
-   *
-   * `solveHeroArcBow` is what fills it in, and why it is not simply 1 is in that function.
+   * A convex combination of two same-direction monotone functions is monotone, so every
+   * rendered edge stays monotone and lands exactly on its endpoint for **any** value —
+   * endpoints are returned literally, and an on-axis corner has no centre so bow is a no-op
+   * there without a special case. `solveHeroArcBow` fills it in.
    */
   bow: number;
 };
@@ -559,25 +472,16 @@ function heroCorner(rect: HeroRect, id: (typeof HERO_DIAGONALS)[number][number])
 }
 
 /**
- * `MaterialRectArcTween` — **Flutter's Hero path, and the default one.** `MaterialApp`
- * installs `createRectTween: (a, b) => MaterialRectArcTween(a, b)`, so every Material
- * Flutter app's shared element flies this way unless a call site opts out.
+ * `MaterialRectArcTween` — **Flutter's Hero path, and the default one**: `MaterialApp`
+ * installs it as `createRectTween` for every Material shared element.
  *
- * It is not a curve applied to a rect lerp. It picks the *diagonal* whose direction best
- * matches the travel — the dot product of the centre vector with each of the four ordered
- * corner-to-corner directions — and sends **those two opposite corners along two circular
- * arcs**, rebuilding the rect from them each frame. So the box's leading and trailing
- * corners each bow, together, in the same direction.
- *
- * That structure is what the two earlier attempts here got wrong, in both possible ways.
- * Arcing the *centre* while the size ran on the plain progress drove the left edge 38px
- * past its landing column and back, because the size term fought the position term.
- * Pairing each axis's whole extent onto its own quadratic fixed the edges and put the
- * aspect ratio on the leading axis instead — measured mid-flight at 2.95 against endpoints
- * of 2.0 and 1.78, a hard crop through a shape more extreme than either end. Two corners
- * on two arcs has neither failure: each edge is one coordinate of one monotone arc, and
- * the aspect is whatever the two corners jointly describe, which is close to the lerp
- * because both arcs bow the same way by construction.
+ * Not a curve applied to a rect lerp: it picks the diagonal best matching the travel and
+ * sends **two opposite corners along two circular arcs**, rebuilding the rect from them each
+ * frame. That structure is what keeps the two measured failure modes of the alternatives out:
+ * arcing the centre while the size runs on plain progress sends an edge past its landing
+ * column and back; pairing each axis onto its own quadratic puts the aspect ratio on the
+ * leading axis — mid-flight shapes far more extreme than either endpoint. Two corners on two
+ * arcs: each edge is one coordinate of one monotone arc.
  */
 export function createHeroRectArc(from: HeroRect, to: HeroRect, bow: number): HeroRectArc {
   const centers: HeroPoint = {
@@ -614,8 +518,8 @@ export function lerpHeroRectArc(arc: HeroRectArc, progress: number): HeroRect {
 }
 
 /**
- * Convenience for the call sites that need one sample rather than a whole track. The arc is
- * a property of the pair, so a loop should build it once with `createHeroRectArc` instead.
+ * Convenience for call sites needing one sample rather than a whole track. The arc is a
+ * property of the pair — build it once with `createHeroRectArc` in a loop.
  */
 export function lerpHeroRect(
   from: HeroRect,
@@ -627,13 +531,9 @@ export function lerpHeroRect(
 }
 
 /**
- * The fraction of the flyer's frame that is on screen: `min(a / aBase, aBase / a)`.
- *
- * Falls straight out of `getHeroCoverTransform`. The canvas is object-cover inside the box, so
- * `cover = max(w / bw, h / bh)` and the visible area is `(w · h) / (bw · cover · bh · cover)`,
- * which reduces to the expression above — **a function of the box's aspect alone**, and of
- * nothing else. Which is why the crop is the thing to measure rather than the aspect: it says
- * what the viewer actually sees.
+ * The fraction of the flyer's frame that is on screen: `min(a / aBase, aBase / a)`. Falls out
+ * of `getHeroCoverTransform` — the canvas is object-cover, so it reduces to a function of the
+ * box's aspect alone. This is what to measure: it is what the viewer actually sees.
  */
 export function heroArcCoverFraction(rect: HeroRect, baseAspect: number) {
   if (!(rect.height > 0) || !(baseAspect > 0)) return 1;
@@ -645,16 +545,11 @@ export function heroArcCoverFraction(rect: HeroRect, baseAspect: number) {
 /**
  * Largest backward step of the cover fraction, in fraction points.
  *
- * **The direction comes from the endpoints**, which is what lets one definition read both legs:
- * an opening leg un-crops, so a defect is the fraction falling back from its running maximum,
- * and a closing leg crops monotonically all the way down to whatever the card's aspect allows,
- * so its defect is a *rise* from the running minimum. Measured against a running maximum in
- * both directions, every closing leg reports its entire legitimate travel as a fault.
- *
- * **Invariant under the progress function.** The value sequence is the same set traversed in
- * the same order under any monotone reparameterisation, so the largest backward step does not
- * depend on whether the leg runs the curve or a spring — which is what keeps this file
- * independent of `progress.ts` and makes the solver's answer good for either.
+ * The direction comes from the endpoints, which lets one definition read both legs: opening
+ * un-crops (defect = falling back from the running max), closing crops monotonically (defect
+ * = rising from the running min). Invariant under the progress function: the value sequence
+ * is the same under any monotone reparameterisation, so this file stays independent of
+ * `progress.ts` and the solver's answer is good for either clock.
  */
 export function heroArcCropRetrace(
   arc: HeroRectArc,
@@ -677,22 +572,18 @@ export function heroArcCropRetrace(
 /**
  * How much of Flutter's arc this pair can afford.
  *
- * **The two standing checks are in tension, and this is where the tension is resolved.** Two
- * corner arcs keep every edge inside its own interval but change the box's aspect, because the
- * lead and trail arcs have different radii and sweeps and the difference between their bows
- * *is* a size change. Putting the aspect back on the lerp — Flutter's own
- * `MaterialRectCenterArcTween`, i.e. arcing the centre and lerping the size — fixes the crop
- * and drives an edge past its landing column instead: measured at 49px on a tile travelling
- * leftward across the grid, which is the 38px artefact this file's history already records.
- * There is no construction that has neither, so the bow is the free parameter and the crop
- * budget is what sets it.
+ * **The two standing checks are in tension and this is where it is resolved.** Two corner
+ * arcs keep every edge monotone but change the box's aspect (the two arcs have different
+ * radii, and the difference between their bows *is* a size change); arcing the centre and
+ * lerping the size fixes the crop but drives an edge past its landing column. No construction
+ * has neither, so the bow is the free parameter and the crop budget sets it.
  *
- * Bisection is exact rather than heuristic here: retrace at bow 0 is 0 by construction (the
- * chord's aspect is a Möbius function of progress, hence monotone), and retrace is monotone
- * non-decreasing in bow, so a feasible point always exists and the interval always brackets.
+ * Bisection is exact, not heuristic: retrace at bow 0 is 0 by construction (the chord's aspect
+ * is a Möbius function of progress, hence monotone), and retrace is monotone non-decreasing
+ * in bow, so a feasible point always exists and the interval always brackets.
  *
- * Runs **once per leg**, not per frame — `buildFlightKeyframes` and `buildContainerAnimations`
- * take `leg.bow`. 10 steps over 33 samples measured at ~0.08ms, and the early-out at ~0.025ms.
+ * Runs **once per leg** — `buildFlightKeyframes` and `buildContainerAnimations` take
+ * `leg.bow` — not per frame.
  */
 export function solveHeroArcBow(
   from: HeroRect,
@@ -730,67 +621,35 @@ export function heroRectEscape(inner: HeroRect, outer: HeroRect) {
 }
 
 /**
- * The two bows at which the flyer stays inside the container's window: **the window gives way,
- * not the picture.**
+ * The two bows at which the flyer stays inside the container's window: **the window gives
+ * way, not the picture.** The window is the arc at fault — its aspect excursion mid-leg runs
+ * 24–59% past its own endpoints, so it is too flat and short to hold the picture, while the
+ * picture's excursion is already capped by `solveHeroArcBow`. Allocating each criterion to
+ * the arc it is about also puts the crop budget (a property of the picture) on the picture
+ * and containment (a property of the frame) on the window.
  *
- * The defect is real and was measured in a browser. The window interpolates card → host and the
- * flyer card → media well, and `createHeroPointArc` puts each circle's centre on an axis through
- * whichever endpoint owns the larger delta — so the two bow differently, and for a portrait-ish
- * destination the flyer swings *outside* the window and the window clips it. Sampled on a 1440x900
- * viewport with a 1000x1300 image: the flyer's bottom edge was 4px past the window's at 110ms and
- * **28px past at 200ms**, which is the "part of the bottom is cut off when some images open"
- * report. Landscape destinations measure zero, which is why it was only *some* images.
+ * **The search scans and then refines; a bisection is wrong, not coarse.** Escape is not
+ * monotone in the window's bow: flattening it past the feasible band makes the escape worse
+ * again, because a flat window stops tracking the picture's aspect. On some pairs the
+ * feasible band is an interior interval, which a bisection anchored at 0 would reject
+ * wholesale, flattening the picture instead. So the window's bow is scanned downward from 1
+ * and refined upward inside the bracketing cell (`HERO_ARC_CONTAIN_SCAN` gives a step fine
+ * enough not to step over the narrowest band).
  *
- * **Which arc pays was the whole question, and the first answer was the wrong one.** One shared
- * scalar looked like the principled choice — both arcs keep the same fraction of their own bow, so
- * they still bow together — and it turned the reported crop into a reported *flatness*: on the
- * three destination shapes where containment binds, the shared bow solved to **0.020 / 0.079 /
- * 0.233**, i.e. the picture flew a straight line. Measured as the flyer centre's peak deviation
- * from its own chord, those pairs ran 0.3% / 1.6% / 2.9% of the chord against 12–21% at full bow.
- * That is "the parabola is very weak, and only on some image sizes".
- *
- * Solving the *window* instead, with the picture at its own bow, gives 0.271 / 0.440 / 0.765 —
- * every pair on the shipped matrix keeps the full Flutter arc on the picture, and no pair gets a
- * flatter window than the shared scalar was already giving it. The reason it works is that the
- * window is the arc at fault: from a 240x240 card to a 1312x780 host its aspect excursion at full
- * bow is 24–59% past its own endpoints — mid-flight it is a far wider, flatter box than either end
- * — so it is too short to hold the picture. The flyer's excursion is capped at
- * `HERO_ARC_CROP_BUDGET` by `solveHeroArcBow`; the window never had such a bound, and this is it.
- *
- * The allocation also puts each criterion on the arc it is about. The crop budget is a property of
- * the *picture* (`heroArcCoverFraction` reads the canvas's box), and containment is a property of
- * the *frame*. Flattening the subject to fit a frame that is the one misbehaving is backwards.
- *
- * **The search scans rather than bisects, and that is not a refinement — a bisection finds nothing
- * on two of the thirteen shipped pairs.** Escape as a function of the *window's* bow is not
- * monotone. Measured, with the picture at its own bow, in px per tenth of window bow:
- *
- *     masonry below fold   13.0  3.3  0.0  0.0  0.0  4.3  12.5  21.9  31.7  41.8  52.1
- *     tile far right low   53.3 43.3 33.3 23.4 13.8  5.0   0.0   0.0   0.0   2.0  12.2
- *
- * The feasible band is an *interior interval* — flattening the window past it makes the escape
- * worse again, because a flat window is a plain corner-chord interpolation whose own aspect no
- * longer tracks the picture's. A bisection anchored at 0 therefore rejects the whole interval and
- * falls through to flattening the picture, which is the defect this function exists to remove: it
- * cost `tile far right low` its bow, 0.84 down to 0.20. So the window's bow is scanned downward
- * from 1 for the largest feasible grid point and then refined upward inside the one cell that is
- * known to bracket the boundary. The narrowest band on the matrix is 0.2 wide, against a grid step
- * of `1 / HERO_ARC_CONTAIN_SCAN`.
- *
- * **The picture only gives way if no window holds it at all**, and then against a flat window,
- * where feasibility is provable: both arcs collapse to chords, every edge is an affine
- * interpolation between the card's edge and its own destination's, and the well is inside the host
- * — so `lerp(card.b, well.b, p)` cannot exceed `lerp(card.b, host.b, p)`. That branch does not fire
- * anywhere on the shipped matrix and `npm run hero:path` fails if it starts to.
+ * **The picture only gives way if no window holds it at all**, and then against the
+ * *friendliest* window rather than a flat one — the escape can be smaller at full bow than at
+ * bow 0, so reducing against the flat window throws away arc for nothing. Pick the
+ * minimum-escape window, keep bow 0 as the backstop (the only case where feasibility is
+ * provable), then re-scan the window against the reduced picture. `npm run hero:path` fails
+ * if that branch starts to fire.
  */
 export function solveHeroArcContainBows(
   inner: { from: HeroRect; to: HeroRect; bow: number },
   outer: { from: HeroRect; to: HeroRect },
   /**
-   * The visible region, i.e. the overlay's own box. An escape outside it is not a crop anybody can
-   * see — the overlay and `[data-image-detail-host]` are both `overflow: hidden` on the same box, so
-   * the window and the picture are clipped together there — and refusing to notice that is worth
-   * real bow: a card 488px below the fold spends almost its whole early flight outside this box.
+   * The visible region (the overlay's own box). An escape outside it is not a crop anybody
+   * can see — window and picture are clipped together there — and noticing that is worth real
+   * bow: a card far below the fold spends almost its whole early flight outside this box.
    */
   visible?: HeroRect,
   samples = HERO_ARC_SOLVE_SAMPLES,
@@ -843,13 +702,8 @@ export function solveHeroArcContainBows(
   const found = scanOuter(inner.bow);
   if (found !== null) return { inner: inner.bow, outer: found };
 
-  /* The picture has to give, and *which window it gives against* is worth getting right: the escape
-     is not monotone in the window's bow, so the friendliest window is sometimes the full arc and
-     sometimes a middle value. Measured on a 1920x1080 grid with a 1080x2560 picture opened from the
-     bottom row — the case that found this branch — the escape runs 74.6px at window bow 0 down to
-     63.1px at bow 1, so reducing the picture against a *flat* window (the only one where feasibility
-     is provable) throws away most of its arc for nothing. Pick the minimum, keep bow 0 as the
-     backstop, then re-scan the window against the reduced picture. */
+  // No window holds the picture: find the friendliest window, then reduce the picture
+  // against it, with bow 0 as the provable backstop.
   let outerBow = 0;
   let least = Infinity;
   for (let index = 0; index <= HERO_ARC_CONTAIN_SCAN; index += 1) {

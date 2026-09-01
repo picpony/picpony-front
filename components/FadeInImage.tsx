@@ -39,27 +39,13 @@ interface FadeInImageProps extends ImageProps {
 /**
  * The one image reveal.
  *
- * Three things were wrong before:
+ * The shimmer continues *under* the real card until its own image is ready, so the
+ * placeholder never stops mid-sentence. The `complete` check runs in
+ * `useLayoutEffect` (before paint), so a cached image is simply there instead of
+ * fading in over a frame it already had. The fade is the utility standard, 200ms.
  *
- * 1. Two loading languages ran back to back. `ImageGridSkeleton` shimmered,
- *    then the real grid swapped in and showed a flat `surface-container-high`
- *    while each thumb decoded, then each thumb faded. The flat grey in the
- *    middle was exactly the "unstyled colour" the shimmer existed to prevent.
- *    The shimmer now continues *under* the real card until its own image is
- *    ready, so the placeholder never stops mid-sentence.
- *
- * 2. Cached images flickered. The `complete` check ran in `useEffect`, which
- *    fires after paint — so returning to the gallery painted at least one frame
- *    at `opacity: 0` and then faded in over 150ms, on an image the browser
- *    already had. `useLayoutEffect` runs before paint, so a warm image is
- *    simply there.
- *
- * 3. The fade used Tailwind's default outward easing at 150ms, matching nothing
- *    It is
- *    a utility fade now: `standard`, 200ms.
- *
- * The card-level entrance cascade (`useStaggerGrid`) animates the tile, not the
- * picture — the two used to fade independently and their opacities multiplied.
+ * The card-level entrance cascade animates the tile, not the picture — the two
+ * fading independently would multiply their opacities.
  *
  * 分层加载（resilient）时，外层用 src 作 key 强制重挂载内层，让内层用
  * lazy initializer 一次性初始化分层状态，避免在 effect 中同步 setState。
@@ -102,11 +88,11 @@ function FadeInImageInner({
   const imgRef = useRef<HTMLImageElement>(null);
   const src = typeof props.src === 'string' ? props.src : '';
   // 挂载时一次性初始化分层尝试（key 变化会重挂载）
-  /* The line the *server* used, when there is one. Without it this component resolves the line
-     itself on both sides of hydration — from `localStorage` in the browser and from the defaults
-     in Node — so every server-rendered `<img>` mismatched for anyone who had changed the setting,
-     and React leaves a mismatched attribute alone: the preference was ignored for the whole first
-     screen. See `components/ImageLineProvider.tsx`. */
+   /* The line the *server* used, when there is one. Without it this component resolves
+      the line itself on both sides of hydration and every server-rendered `<img>`
+      mismatches for anyone who changed the setting — and React leaves a mismatched
+      attribute alone, so the preference was ignored for the whole first screen.
+      See `components/ImageLineProvider.tsx`. */
   const ssrLine = useSsrImageLine();
   const [attempt, setAttempt] = useState<LoadAttempt | null>(() =>
     useLayers ? createInitialAttempt(getRawImageUrl(src), proxyThumb, ssrLine) : null,
@@ -140,27 +126,21 @@ function FadeInImageInner({
   }, [isLoaded]);
 
   useLayoutEffect(() => {
-    /* Synchronous, before paint, so a decoded image never shows a transparent frame — no rAF,
-       which during a fling is jank.
+    /* Synchronous, before paint, so a decoded image never shows a transparent frame.
 
-       Two things it has to get right, and it got both wrong.
+       **`complete` alone is not "loaded"** — it is also true for an image that has
+       *failed*, which removed the shimmer and left a blank, opaque card.
+       `naturalWidth > 0` distinguishes a decoded image from a dead one.
 
-       **`complete` alone is not "loaded".** It is also true for an image that has *failed*, so a
-       404 or a proxy line that is down set `isLoaded`, which removed the shimmer and left the
-       `<img>` fully opaque with nothing in it — a card that is blank with no placeholder at all.
-       `naturalWidth > 0` is the part that distinguishes a decoded image from a dead one.
-
-       **And it must reset.** `displaySrc` changes every time the layered loader steps down to the
-       next line, and this only ever set `true`, so once a card had loaded anything it never
-       shimmered again: on the way back to a page whose images had already failed once, the cards
-       came back bare. Measured going next-then-previous on the gallery — cards with neither a
-       shimmer nor an image climbed 0 → 1 → 3 → 4 → 5 → 6 across two seconds. Assigning the
-       predicate rather than only raising it is the whole fix. */
+       **And it must reset.** `displaySrc` changes every time the layered loader
+       steps down to the next line, and this only ever set `true` — so a card that
+       had loaded anything never shimmered again. Assigning the predicate rather
+       than only raising it is the whole fix. */
     const img = imgRef.current;
     const loaded = Boolean(img?.complete && img.naturalWidth > 0);
     setIsLoaded(loaded);
-    /* The placeholder's own latch resets here rather than in an effect of its own: it is the same
-       fact as `isLoaded`, and a second effect writing it would be a sync setState in an effect. */
+    /* The placeholder's own latch resets here rather than in an effect of its own:
+       it is the same fact as `isLoaded`. */
     if (!loaded) setPlaceholderGone(false);
   }, [displaySrc]);
 
@@ -194,16 +174,14 @@ function FadeInImageInner({
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden contain-paint">
       {shimmer && !placeholderGone && (
-        /* `Skeleton`, not a hand-built `.skeleton` span: same tone and sweep,
-           but one owner for the app's loading language. `rounded-none` because
-           the media container already clips this to its own corner.
+        /* `Skeleton`, not a hand-built span: one owner for the app's loading
+           language. `rounded-none` because the media container already clips
+           this to its own corner.
 
-           It **cross-fades with the image rather than unmounting on `isLoaded`**, and that is
-           not a flourish. Unmounting it in the same commit that flips the image to
-           `opacity-100` left the fade to start from 0 with nothing behind it, so the first
-           frames of every arriving image were a blank card. Measured on a gallery page turn:
-           2 of 16 cards in view, for one sample, showing neither a placeholder nor a picture —
-           a smaller instance of exactly the defect `isLoaded`'s own note above records. */
+           It **cross-fades with the image rather than unmounting on
+           `isLoaded`** — unmounting it in the same commit that flips the image
+           to full opacity left the fade starting from 0 with nothing behind it,
+           so the first frames of an arriving image were a blank card. */
         <Skeleton
           className={`absolute inset-0 block rounded-none transition-opacity duration-standard ease-[var(--ease-standard)] ${
             isLoaded ? 'opacity-0' : 'opacity-100'

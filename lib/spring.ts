@@ -1,15 +1,10 @@
 /**
  * Material 3 Expressive motion springs.
  *
- * M3 runs two motion systems and the spec is explicit about which is which.
- * *Transitions* — something entering, leaving or crossing the screen — are
- * easing plus duration, and those live in `lib/motion.ts` (`eases`, `DURATION`)
- * and in globals.css. *Component* motion has been spring physics since the May
- * 2025 Expressive update: a damping ratio and a stiffness, per `MotionScheme`.
- *
- * This module is that second system, as one source of truth for both renderers.
- * The nine responses are M3's own values, from the generated token sets
- * `StandardMotionTokens` and `ExpressiveMotionTokens`:
+ * *Transitions* — something entering, leaving or crossing the screen — are easing plus duration
+ * (`lib/motion.ts`, globals.css). *Component* motion is spring physics since the 2025 Expressive
+ * update: a damping ratio and a stiffness, per MotionScheme. This module is that second system,
+ * one source of truth for both renderers; the nine responses are M3's own values.
  *
  *                        damping  stiffness          damping  stiffness
  *   standard spatial fast   0.9      1400   expressive fast     0.6      800
@@ -19,32 +14,26 @@
  *                    def    1.0      1600
  *                    slow   1.0       800
  *
- * **spatial** for anything that moves or changes size: damping below 1, so it
- * may overshoot, and that overshoot is what reads as mass. **effects** for
- * anything that only fades or recolours: damping exactly 1, critically damped,
- * so it cannot overshoot — an overshooting colour is a flash and an
- * overshooting opacity is clipped, so it is just a stall.
+ * **spatial** for anything that moves or changes size: damping below 1, so it may overshoot,
+ * and that overshoot reads as mass. **effects** for anything that only fades or recolours:
+ * damping exactly 1 — an overshooting colour is a flash and an overshooting opacity is CLIPPED
+ * (a linear() value above 1 caps, so the fade reaches full early and stalls).
  *
- * There are nine springs and only **four shapes**. That is arithmetic, not a
- * shortcut: normalise the timeline by the settle time and the curve depends only
- * on the damping ratio, with stiffness deciding duration alone. Verified across
- * every stiffness sharing a damping ratio at 1e-4 tolerance. globals.css
- * therefore ships four `linear()` tables and nine durations; here the closed
- * form is registered with GSAP directly, so no sampling error at all.
+ * There are nine springs and only **four shapes** — arithmetic, not a shortcut: normalise the
+ * timeline by the settle time and the curve depends only on the damping ratio, with stiffness
+ * deciding duration alone. Verified across every stiffness sharing a damping ratio at 1e-4
+ * tolerance. Both renderers derive from one closed form: CSS gets 32-point `linear()` samples
+ * (globals.css ships four tables and nine durations), GSAP gets the function itself registered
+ * as an ease, so no sampling error there. Shape and duration must never be split at a call site.
  *
- * Relationship to `lib/hero/spring.ts`: that one is a *critically damped*
- * response parameterised by launch velocity, for interruptible gestures — its
- * job is to be caught mid-air at whatever speed the finger was travelling, so
- * it trades the damping axis for a velocity axis and exposes an analytic
- * derivative. This one trades the other way. They are the same physics solved
- * for different unknowns; neither subsumes the other.
+ * `lib/hero/spring.ts` is the same physics solved for a different unknown: a critically damped
+ * response parameterised by launch velocity, so it trades the damping axis for a velocity axis.
+ * Neither subsumes the other.
  */
 
 /**
- * Where a spring is considered arrived: within 1% of its target. Compose's own
- * displacement threshold for a normalised float. Everything past it is
- * sub-pixel, and treating it as still running only delays whatever is chained
- * to the completion.
+ * Where a spring is considered arrived: within 1% of its target, Compose's own
+ * displacement threshold for a normalised float. Everything past it is sub-pixel.
  */
 const SETTLE_THRESHOLD = 0.01;
 
@@ -56,11 +45,9 @@ export interface SpringSpec {
 }
 
 /**
- * The nine M3 motion-scheme springs, by the names the spec uses.
- *
- * `effects` is deliberately not duplicated per scheme — M3's expressive effects
- * springs are the same three values as standard's, because the argument for a
- * flourish applies to movement and not to a fade.
+ * The nine M3 motion-scheme springs, by the names the spec uses. `effects` is deliberately not
+ * duplicated per scheme — M3's expressive effects springs are the same three values as
+ * standard's, because the argument for a flourish applies to movement, not to a fade.
  */
 export const SPRINGS = {
   fastSpatial: { damping: 0.9, stiffness: 1400 },
@@ -98,20 +85,11 @@ function displacement({ damping, stiffness }: SpringSpec): (seconds: number) => 
 }
 
 /**
- * An upper bound on the settle time, from the analytic envelope.
- *
- * Only used to bound the sweep below. For `ζ < 1` the oscillation is contained by
- * `e^(−ζωt) / √(1 − ζ²)`, so the moment that envelope reaches the threshold is a
- * guaranteed-late answer. For `ζ = 1` the displacement is `(1 + ωt)·e^(−ωt)`,
- * which has no closed-form inverse, so the fixed point of
- * `x = ln((1 + x) / threshold)` is iterated — it converges in a handful of steps.
- *
- * This exists for cost, not correctness: sweeping a flat 4s at frame-finer
- * resolution cost 186ms of blocking work at module load (nine specs × three
- * consumers, and `lib/motion` is imported by nearly every route). The bound cuts
- * that to a few milliseconds without moving any of the nine durations, because it
- * only removes iterations that were provably past the answer. The 1.25 margin is
- * there so a rounding difference can never truncate a real crossing.
+ * An upper bound on the settle time, from the analytic envelope — used only to bound the sweep
+ * below. For ζ < 1 the oscillation is contained by `e^(−ζωt) / √(1 − ζ²)`; for ζ = 1 the fixed
+ * point of `x = ln((1 + x) / threshold)` is iterated. It exists for cost, not correctness: it
+ * only removes iterations provably past the answer, and the 1.25 margin keeps a rounding
+ * difference from truncating a real crossing.
  */
 function settleBoundSeconds({ damping, stiffness }: SpringSpec): number {
   const omega = Math.sqrt(stiffness);
@@ -128,12 +106,10 @@ function settleBoundSeconds({ damping, stiffness }: SpringSpec): number {
  * Settle time in seconds: the last moment the spring is still further than
  * `SETTLE_THRESHOLD` from its target.
  *
- * Swept rather than solved because the underdamped case crosses the threshold
- * several times on the way in — the analytic envelope gives an upper bound, not
- * the answer, and the difference between the two is up to 40% of the duration.
- * The resolution is finer than a frame; the sweep is bounded by that same envelope
- * (see above) and memoised per spec, so the whole table costs a few milliseconds
- * once rather than 186ms.
+ * Swept rather than solved because the underdamped case crosses the threshold several times on
+ * the way in — the envelope gives an upper bound, not the answer, and the difference is up to
+ * 40% of the duration. Resolution is finer than a frame; bounded by the envelope (see above)
+ * and memoised per spec, so the table costs a few milliseconds once.
  */
 const settleCache = new WeakMap<SpringSpec, number>();
 
@@ -153,14 +129,12 @@ function settleSeconds(spec: SpringSpec): number {
 }
 
 /**
- * The spring as an easing function on `t ∈ [0, 1]`, which is what both GSAP and
- * CSS want: progress against a duration rather than against real time.
+ * The spring as an easing function on `t ∈ [0, 1]`, which is what both GSAP and CSS want:
+ * progress against a duration rather than against real time.
  *
- * Normalised by its own value at the settle time so the last frame is exactly 1.
- * Without that, truncating at the 1% threshold leaves a 1% step at the end —
- * invisible on a 20px handle and three visible pixels on a 300px slide. The
- * normalisation is a uniform scale, so it preserves the shape and scales the
- * overshoot with it.
+ * Normalised by its own value at the settle time so the last frame is exactly 1 — without it,
+ * truncating at the 1% threshold leaves a 1% step at the end. A uniform scale, so it preserves
+ * the shape and scales the overshoot with it.
  */
 export function springEase(spec: SpringSpec): (progress: number) => number {
   const settle = settleSeconds(spec);
@@ -184,8 +158,8 @@ export function springDuration(spec: SpringSpec): number {
 }
 
 /**
- * Milliseconds for each named spring, matching the `--duration-spring-*` tokens
- * in globals.css exactly (both derive from the same closed form).
+ * Milliseconds for each named spring, matching the --duration-spring-* tokens in globals.css
+ * exactly (both derive from the same closed form).
  *
  *   fastSpatial 137 · defaultSpatial 194 · slowSpatial 296
  *   fastEffects 108 · defaultEffects 166 · slowEffects 235
@@ -201,10 +175,9 @@ export const SPRING_DURATION = Object.fromEntries(
 ) as Record<SpringName, number>;
 
 /**
- * A `linear()` easing string, for the one place CSS needs a value this module
- * did not already put in globals.css: an inline style or a Web Animations
- * `easing:`, where a `var()` that failed to resolve would silently fall back to
- * `ease`. Prefer the token or the `spring-*` utility everywhere else.
+ * A linear() easing string, for the one place CSS needs a value this module did not already
+ * put in globals.css — an inline style or a WAAPI easing, where a failed var() would silently
+ * fall back to `ease`. Prefer the token or the spring utility everywhere else.
  */
 export function springToLinear(spec: SpringSpec, samples = 32): string {
   const ease = springEase(spec);

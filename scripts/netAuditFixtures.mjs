@@ -1,21 +1,13 @@
 /**
  * Canned upstream answers for `net:audit`.
  *
- * The audit measures how many requests the app *decides* to send and in how many rounds. Both are
- * properties of the code; neither is a property of whether picpony.top is reachable today. On this
- * machine it is reachable and slow — 9s through curl, intermittent `ECONNRESET` from Node's TLS,
- * and `cdn.picpony.top` refusing outright — which makes the real upstream unusable as a baseline
- * for a different reason than being down: `proxyFetch`'s retry ladder turns one logical read into
- * one *or three* requests depending on the day, so the count itself stops being deterministic.
- *
- * So every data request is fulfilled from here, and only documents, chunks and fonts reach the
- * local `next start`. What that gives up is real: a stub cannot catch a change that makes the app
- * mishandle a real payload shape, and it cannot see the retry ladder at all. Run with
- * `--live` when that is the question — the ledger prints either way, and only the
- * baseline comparison depends on the stubs.
- *
- * Every envelope below is the *success* shape, because the audit is about the happy path's cost.
- * A screen's failure path is a different measurement and would want its own fixture set.
+ * The audit counts how many requests the app *decides* to send and in how many rounds — both
+ * properties of the code. The real upstream (reachable but slow, with `proxyFetch`'s retry ladder
+ * turning one logical read into one *or three* depending on the day) makes the count itself
+ * non-deterministic, so every data request is fulfilled here and only documents, chunks and fonts
+ * reach the local `next start`. Cost given up: a stub cannot catch a payload-shape regression or
+ * see the retry ladder — run `--live` for that. Every envelope below is the *success* shape;
+ * failure paths would want their own fixture set.
  */
 
 const ORIGIN = 'https://derpicdn.net/img/2024/1/1';
@@ -108,15 +100,12 @@ const user = (id) => ({
 });
 
 /**
- * `action` → envelope, for PicPony's single endpoint.
- *
- * A missing action falls through to `{ success: false }` rather than a 404: the app branches on
- * `success` everywhere, so that is the shape an unknown read should take, and it keeps a new
- * screen's request visible in the ledger instead of turning it into an error path.
+ * `action` → envelope, for PicPony's single endpoint. A missing action falls through to
+ * `{ success: false }` rather than a 404: the app branches on `success` everywhere, and a
+ * non-error shape keeps a new screen's request visible in the ledger.
  */
 const PICPONY = {
-  /* `auto` on both axes, which is what an administrator who has not pinned anything leaves. A
-     forced policy is a different journey and would want its own fixture. */
+  /* `auto` on both axes — what an administrator who has pinned nothing leaves. */
   get_maintenance_status: () => ({
     success: true,
     maintenance_mode: false,
@@ -167,9 +156,8 @@ const PICPONY = {
     })),
     total_pages: 2,
   }),
-  /* Two real rows rather than an empty list. The roster is server-rendered now, so an empty
-     fixture would make the one journey that proves it indistinguishable from a broken one — the
-     HTML would contain no names either way. */
+  /* Two real rows rather than an empty list: the roster is server-rendered, and an empty fixture
+     would make the one journey that proves it indistinguishable from a broken one. */
   get_team_members: () => ({
     success: true,
     members: [
@@ -202,9 +190,8 @@ const PICPONY = {
 
 /** Derpibooru path → envelope. Matched on the path with the `/api/v1/json` prefix removed. */
 const DERPI = [
-  /* Seeded on the page number, so page 2's ids differ from page 1's. Without that every page is
-     byte-identical and a probe cannot tell a cache hit from a re-fetch — nor a page turn that
-     rendered nothing from one that rendered the same thing again. */
+  /* Seeded on the page number, so page 2's ids differ from page 1's — otherwise every page is
+     byte-identical and a probe cannot tell a cache hit from a re-fetch. */
   [
     /^\/search\/images$/,
     (params) =>
@@ -221,11 +208,9 @@ export const PIXEL_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/58BAwAI/AL+4d0hFQAAAABJRU5ErkJggg==';
 
 /**
- * The inner URL of a line wrapper, or the URL itself.
- *
- * The accel worker and the relay both carry their target in `?url=`, so a stub that dispatched on
- * the outer URL would answer every Derpibooru read with one envelope. Unwrapping is also what
- * keeps the fixtures independent of which line the app happened to pick.
+ * The inner URL of a line wrapper, or the URL itself. The accel worker and the relay both carry
+ * their target in `?url=`, so dispatching on the outer URL would answer every Derpibooru read
+ * with one envelope — and unwrapping keeps the fixtures independent of the chosen line.
  */
 export function unwrapLine(url) {
   const inner = url.searchParams.get('url');
@@ -238,10 +223,8 @@ export function unwrapLine(url) {
 }
 
 /**
- * A stub for one request, or `null` to let it through to the local server.
- *
- * Returns `{ body, contentType }`, never a status: every fixture here is a 200, because a screen's
- * failure path is a separate measurement with its own cost and its own fixture set.
+ * A stub for one request, or `null` to let it through to the local server. Returns
+ * `{ body, contentType }`, never a status: every fixture here is a 200.
  */
 export function stubFor(rawUrl) {
   let url;

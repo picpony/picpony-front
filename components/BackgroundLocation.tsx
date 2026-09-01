@@ -5,6 +5,10 @@ import { useSearchParams } from 'next/navigation';
 
 const FrozenSearchParamsContext = createContext<string | null>(null);
 
+/** Serves the search params captured before a background navigation, if any, so
+ *  background UI does not react to the foreground route's URL changes. `null`
+ *  means "not frozen" and reads the live params. */
+
 export function BackgroundLocationProvider({
   frozenSearch,
   children,

@@ -1,27 +1,14 @@
 /**
- * One date layer.
+ * One date layer: four fixed shapes, `zh-CN` throughout, no option objects at call sites —
+ * the shapes differ by what the column has room for:
  *
- * `lib/utils.ts` exported a `formatDate` with **zero importers** while the app
- * formatted dates sixteen other ways: four local helpers (`formatCommentTime`,
- * `formatLastOnline`, `formatHistoryTime`, and `DetailHeader`'s responsive pair)
- * and twelve inline `toLocaleString` calls carrying five different option
- * objects — plus one `toLocaleDateString()` with **no locale at all**, so the
- * forum list's dates followed the reader's OS while every other date on the site
- * was `zh-CN`.
+ *   formatDateTime       2026/08/20 00:55   the default; a row with room
+ *   formatShortDateTime  08/20 00:55        a narrow column (drops the year — usually the current one)
+ *   formatDate           2026/08/20         a date with no clock
+ *   formatMonthDay       08/20              the tightest form
  *
- * Four shapes cover every call site, and they differ by what the column has room
- * for rather than by taste:
- *
- *   `formatDateTime`      2026/08/20 00:55   the default; a row with room
- *   `formatShortDateTime` 08/20 00:55        a narrow column — drops the year,
- *                                            which is almost always the current one
- *   `formatDate`          2026/08/20         a date with no clock
- *   `formatMonthDay`      08/20              the tightest form, below `sm`
- *
- * All four are 2-digit and `zh-CN`, so a column of them is aligned by
- * construction and `tabular-nums` does the rest. The locale is fixed rather than
- * a parameter: this is a Chinese-language UI, and the one call site that left it
- * to the platform is the bug this module exists to end.
+ * All 2-digit, so a column of them is aligned by construction. The locale is fixed, not a
+ * parameter — a Chinese-language UI, pinned so server and client output stay identical.
  */
 
 const ZH = 'zh-CN';
@@ -67,11 +54,8 @@ export function formatMonthDay(value: string | Date): string {
 }
 
 /**
- * "在线" / "刚刚" / "12分钟前" / … / a bare date past a month.
- *
- * Lived in `app/user/[id]/page.tsx`. The `replace(/-/g, '/')` is load-bearing:
- * `new Date('2026-08-20 00:55')` — a space rather than a `T` — is invalid in
- * Safari, and that is the shape this backend returns.
+ * "在线" / "刚刚" / "12分钟前" / … / a bare date past a month. `replace(/-/g, '/')` is load-bearing:
+ * `new Date('2026-08-20 00:55')` (space, not `T`) is invalid in Safari, and that is this backend's shape.
  */
 export function formatLastOnline(lastOnline: string): string {
   const lastTime = new Date(lastOnline.replace(/-/g, '/')).getTime();

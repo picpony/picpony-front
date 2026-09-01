@@ -135,10 +135,9 @@ export default function BlockTagsTab({ token }: { token: string }) {
         关系）。
       </Card>
       {loading ? (
-        /* The destination's own shape — three section cards each with a heading
-           row and a run of tag chips — not a spinner. A centred dot said
-           "something is happening somewhere" and then reflowed three cards' worth
-           of layout in when the list landed. */
+        /* The destination's own shape — section cards with heading rows and tag
+           chips — not a spinner, which reflowed three cards' worth of layout in
+           when the list landed. */
         <div className="space-y-6">
           {filterKeys.map((key, i) => (
             <Card key={key} variant="filled">
@@ -197,12 +196,9 @@ export default function BlockTagsTab({ token }: { token: string }) {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {tags.map((tag: BlockTag) => (
-                      /* `Chip` with `onRemove`, not a hand-rolled `rounded-full`
-                         pill with a literal `×` in it. The pill was the exact
-                         shape the shape table warns about — a chip is 8dp, not a
-                         pill — and its dismiss was an unlabelled `<button>`
-                         containing a multiplication sign, which a screen reader
-                         reads out as "times". */
+                      /* `Chip` with `onRemove`, not a hand-rolled pill with a
+                         literal `×` in it: a chip is 8dp, not a pill, and the
+                         unlabelled button was read out as "times". */
                       <Chip
                         key={tag.id}
                         onRemove={() => handleRemoveTag(key, tag.id)}

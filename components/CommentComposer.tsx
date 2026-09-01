@@ -37,18 +37,16 @@ export default function CommentComposer({
   const { openAuth } = useAuthModal();
   const [comment, setComment] = useState('');
   const [editorRevision, setEditorRevision] = useState(0);
-  /* Whether the visitor has asked to write. See the placeholder below for why the editor is
-     not mounted until they have.
-     Derived rather than synced: pressing 回复 on a comment *is* asking to write, and an effect
-     mirroring `replyTo` into this would be a setState in an effect — which the linter rejects
-     here for the right reason, since the value is a pure function of props and state. */
+  /* Whether the visitor has asked to write. See the placeholder below for why the
+     editor is not mounted until they have. Derived (`editorOpen`) rather than
+     synced — pressing 回复 *is* asking to write, and an effect mirroring `replyTo`
+     into this would be a setState in an effect. */
   const [pressedWrite, setPressedWrite] = useState(false);
   const editorOpen = pressedWrite || replyTo !== null;
 
-  /* Warm the chunk on intent rather than on press, so the editor is already in the module
-     cache by the time the click lands. Same ladder as `useIntentPrefetch`, minus the timers:
-     a pointer resting on a 354px box is a much stronger signal than one crossing a link, and
-     `import()` is idempotent — the second call gets the first one's promise. */
+  /* Warm the chunk on intent rather than on press, so the editor is already in
+     the module cache by the time the click lands. Same ladder as
+     `useIntentPrefetch`, minus the timers; `import()` is idempotent. */
   const warmEditor = () => {
     void import('@/components/RichTextEditor');
   };
@@ -108,11 +106,9 @@ export default function CommentComposer({
           <span>
             回复 <strong className="text-primary-ink">{replyTo.username}</strong>：
           </span>
-          {/* Quieter by *size*, not by a dimmed copy of the same role. An
-              eyeballed opacity is the same bug as an alpha on a token — nothing
-              makes the next reply bar pick the same number, and the forum
-              thread's copy duly picked its own. `body-s` against the bar's
-              `body-m` says "supporting" through the type scale instead. */}
+          {/* Quieter by *size*, not by a dimmed copy of the same role: `body-s`
+              against the bar's `body-m` says "supporting" through the type
+              scale instead. */}
           <span className="flex-1 truncate text-body-s">
             {replyTo.body.slice(0, 80)}
             {replyTo.body.length > 80 ? '…' : ''}
@@ -173,10 +169,8 @@ export default function CommentComposer({
           onFocus={warmEditor}
           className="min-h-[354px] w-full cursor-text rounded-sm border border-outline-variant bg-surface-container-low p-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:ring-2 focus-visible:focus-ring"
         >
-          {/* Always the plain prompt: `editorOpen` is true whenever `replyTo` is set, so this
-              branch only ever renders with no reply target. TypeScript narrows `replyTo` to
-              `never` here, which is how the reply-flavoured label that used to be on this line
-              was found to be unreachable. */}
+          {/* Always the plain prompt: `editorOpen` is true whenever `replyTo` is
+              set, so this branch only ever renders with no reply target. */}
           写下你的评论…
         </button>
       )}

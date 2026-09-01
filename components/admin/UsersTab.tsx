@@ -461,9 +461,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       header: '角色',
       render: (u) => (
         /* `showUser`: a table column has to say something in every row, which
-           is the one place the neutral "普通用户" pill belongs. A 4dp corner
-           here against `rounded-sm` on the profile was the third shape for the
-           same mark. */
+           is the one place the neutral "普通用户" pill belongs. */
         <RoleBadge role={u.role} showUser size="md" />
       ),
     },
@@ -485,13 +483,10 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       actions: true,
       render: (u) => (
         <>
-          {/* `IconButton`, not an icon-only `<Button>` forcing a square box.
-              All three carried `className="w-9 px-0"` — **36px**, a figure the
-              control-height scale explicitly retired — on a 32dp `xs` button, so the
-              box was 36×32. `size="sm"` is the 32dp step, square by the token set,
-              and it supplies the state layer, the ripple and the glyph size that
-              `w-9 px-0` was reconstructing. It also renders its own tooltip from
-              `aria-label`, so the native `title` each of these carried is gone. */}
+          {/* `IconButton`, not an icon-only button stretched to a 36×32 box: the
+              32dp step is square by the token set, and it supplies the state
+              layer, the ripple and the glyph size — plus its own tooltip from
+              `aria-label`. */}
           <IconButton
             type="button"
             size="sm"

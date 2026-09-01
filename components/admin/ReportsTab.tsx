@@ -114,9 +114,9 @@ export default function ReportsTab({ token }: { token: string }) {
       key: 'status',
       header: '状态',
       render: (r) => (
-        /* A `Badge`, not a `Chip`: no click handler and no dismiss cross, so it is
-           a mark. As a `Chip` it also rendered at `h-9` (36px), which is what made
-           this table's rows taller than every sibling tab's. */
+        /* A `Badge`, not a `Chip`: no click handler and no dismiss cross, so it
+           is a mark — and a chip's taller box made these rows taller than every
+           sibling tab's. */
         <Badge tone={STATUS[r.status].tone} size="md">
           {STATUS[r.status].label}
         </Badge>

@@ -50,9 +50,9 @@ export default function ImageCardVideo({ src }: ImageCardVideoProps) {
   return (
     <>
       {!posterReady && (
-        /* `Skeleton`, not a hand-built `.skeleton` span: same tone and sweep,
-           but one owner for the app's loading language. `rounded-none` because
-           the media container already clips this to its own corner. */
+        /* `Skeleton`, not a hand-built shimmer span: one owner for the app's
+           loading language. Square-cornered — the media container already
+           clips this to its own corner. */
         <Skeleton className="absolute inset-0 block rounded-none" />
       )}
       <video

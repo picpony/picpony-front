@@ -25,8 +25,8 @@ import { readToken, readUserInfo } from '@/lib/hooks';
 export default function HistoryPage() {
   const { openAuth } = useAuthModal();
   const token = readToken();
-  /* The page number survives a remount, so leaving page 3 for a picture and coming back lands on
-     page 3 — see `lib/screenState.ts`. */
+  /* The page number survives a remount: leaving page 3 for a picture and coming back
+     lands on page 3 — see `lib/screenState.ts`. */
   const [page, setPage] = useScreenState('history:page', 1);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
@@ -53,9 +53,9 @@ export default function HistoryPage() {
       const data = await res.json();
       if (data.success) {
         showToast('浏览历史已清空', 'success');
-        /* Every page of it, not just the one on screen: clearing empties the list, so any other
-           page still in the cache is now a lie. `invalidate` with no argument drops them all, and
-           the next read of page 1 is a real request. */
+        /* Every page of it, not just the one on screen: clearing empties the list, so any
+           other page still cached is now a lie. `invalidate` with no argument drops them
+           all; the next read of page 1 is a real request. */
         browsingHistory.invalidate();
         setPage(1);
       } else {
@@ -80,10 +80,10 @@ export default function HistoryPage() {
       const res = await api.deleteBrowsingHistoryItem(user.token, imageId);
       const data = await res.json();
       if (data.success) {
-        /* Written through rather than re-read. The row is gone from the server and the screen
-           should say so in the same frame; a refetch would blank the list and bring back an
-           identical one a round trip later. The write leaves the entry's age alone, so the next
-           revalidation still confirms it — see `resource.write`. */
+        /* Written through rather than re-read: the row is gone from the server and the
+           screen should say so in the same frame — a refetch would blank the list and
+           bring back an identical one a round trip later. The write leaves the entry's
+           age alone, so the next revalidation still confirms it (see `resource.write`). */
         browsingHistory.write({ token: user.token, page }, (previous) => ({
           history: (previous?.history ?? []).filter((item) => item.id !== imageId),
           totalPages: previous?.totalPages ?? 1,
@@ -103,10 +103,9 @@ export default function HistoryPage() {
         {' '}
         <PageHeader title="浏览历史" />
         {/* No `space-y-3`: `.m3-row` already puts 2px seams between rows
-            (`ListTokens.SegmentedGap`), so this added 12px more and the list
-            re-spaced by that much per row the moment the data landed. And
-            `items-center`, because the real row centres its text column against
-            the 64px thumbnail. */}
+            (`ListTokens.SegmentedGap`), so this added 12px more and the list re-spaced
+            per row when data landed. `items-center` matches the real row, which centres
+            its text column against the 64px thumbnail. */}
         <div>
           {' '}
           {[1, 2, 3, 4, 5].map((i) => (
@@ -153,9 +152,9 @@ export default function HistoryPage() {
             description="看过的图片会出现在这里。"
           />
         ) : (
-          /* The anchor wraps the list *and* its pager, because `Pagination` finds it with
-             `closest()` — on the list alone it is an anchor the pager cannot see. Its top
-             edge is still the first row rather than the page header, which is the point. */
+          /* The anchor wraps the list *and* its pager: `Pagination` finds it with
+             `closest()`, so on the list alone no pager can see it. Its top edge is still
+             the first row rather than the page header, which is the point. */
           <div data-pagination-anchor>
             <div>
               {' '}
@@ -174,9 +173,9 @@ export default function HistoryPage() {
                           src={item.preview_url}
                           alt=""
                           fill
-                          /* The box is `size-14`. Without this, `fill` resolves to `100vw`,
-                             so every row of this list was downloading a full-viewport-width
-                             variant to paint a 56px thumbnail. */
+                          /* The box is 56px (`size-14`). Without this, `fill` resolves to
+                             `100vw` — every row downloaded a full-viewport-width variant to
+                             paint a 56px thumbnail. */
                           sizes="56px"
                           className="object-cover"
                         />
@@ -207,22 +206,20 @@ export default function HistoryPage() {
                       </p>
                     </div>
                   </Link>
-                  {/* `IconButton`, not a hand-rolled padded box around a glyph.
-                      Three faults compounded: a 40% opacity until `group-hover`
-                      meant that on a touch device — where there is no hover —
-                      the only way to remove a record sat permanently at 40%,
-                      compositing `outline` down to roughly 1.5:1, under even the
-                      3:1 bar for a non-text control; the 34px box was under the
-                      44px touch rule; and it had no focus ring. Visible by
-                      default, hover-revealed from `sm` up, which is the rule the
-                      gallery tiles and the detail zoom already follow. */}
+                  {/* `IconButton`, not a hand-rolled padded box around a glyph. Three
+                      faults compounded: a 40% opacity until `group-hover` meant that on a
+                      touch device the only way to remove a record sat permanently at 40%
+                      (`outline` composites to roughly 1.5:1 there, under the 3:1 bar for a
+                      non-text control); the 34px box was under the 44px touch rule; and it
+                      had no focus ring. Visible by default, hover-revealed from `sm` up —
+                      the rule the gallery tiles and detail zoom already follow. */}
                   <IconButton
                     onClick={() => handleDeleteItem(item.id)}
                     icon={<MdDelete size={ICON.dense} />}
                     size="sm"
-                    /* Named per row, not once for the list. Every button here read
-                       `删除浏览记录`, so arrowing down a page of them announced the
-                       same string with nothing to tell them apart. */
+                    /* Named per row, not once for the list: every button here read
+                       `删除浏览记录`, so arrowing down a page announced the same string
+                       with nothing to tell them apart. */
                     aria-label={`删除浏览记录 #${item.id}`}
                     className="text-on-surface-variant hover:text-error opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                   />

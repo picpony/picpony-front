@@ -26,17 +26,9 @@ import { ICON } from '@/lib/icons';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { readUserInfo } from '@/lib/hooks';
 
-/* One loading shape for all fourteen lazy tabs. Without it, the first switch to
-   a tab rendered nothing at all until its chunk arrived — an empty well the height
-   of the panel, then a jump. This is the panel's own geometry: a section heading,
-   a header row and a run of grouped rows, which is what every tab resolves to.
-
-   It used to call `SkeletonRows`, which emits bare `<tr>`/`<td>` — markup left
-   over from when `DataTable` was a real `<table>`. React does not drop those the
-   way an HTML parser would; it creates them and the UA stylesheet wraps them in
-   an anonymous table box, so the fallback rendered a five-column grid of stubs
-   in front of a list that is `.m3-row` blocks. The comment above claimed it was
-   the panel's own geometry and it was a different geometry entirely. */
+/* One loading shape for all fourteen lazy tabs — without it, the first switch to a tab
+   rendered an empty well the height of the panel until its chunk arrived. This is the
+   panel's own geometry: a section heading, a header row, a run of grouped rows. */
 function AdminTabFallback() {
   return (
     <div className="space-y-6">
@@ -161,23 +153,20 @@ const TABS: TabConfig[] = [
   { id: 'other', label: '其他功能', icon: <MdBuild size={ICON.control} />, adminOnly: true },
 ];
 
-/** The tab `/admin` with no `?tab=` lands on, and the one that is spelled by
- *  its absence — same rule the home tabs use for 图库. */
+/** The tab bare `/admin` lands on — the one spelled by `?tab=`'s absence, same rule
+ *  the home tabs use for 图库. */
 const DEFAULT_TAB: TabId = 'welcome';
 
 /**
- * Long enough to sit past the pane's own fade — `animate-fade-in`, 400ms, which is
- * what this panel uses (it was `animate-page-transition` when this note was written,
- * and that is the route animation) — for the same reason the home tab bar defers:
- * an RSC navigation lands as a commit, and in the middle of the swap that is a
- * dropped frame. Nothing here is waiting for the URL — `pendingTab` owns what
- * is on screen — so the only cost of deferring is how soon the address bar
- * agrees. It also swallows a run down the sidebar into a single push rather
- * than one history entry per tab passed through.
+ * Long enough to sit past the pane's own 400ms fade (`animate-fade-in`), for the same
+ * reason the home tab bar defers: an RSC navigation lands as a commit, and mid-swap
+ * that is a dropped frame. Nothing waits for the URL — `pendingTab` owns what is on
+ * screen — so the only cost of deferring is how soon the address bar agrees. Also
+ * swallows a run down the sidebar into a single push rather than one history entry
+ * per tab passed through.
  *
- * Scaled by the *slowest* speed, not held at 400: the fade's clock goes through
- * `--motion-scale`, so at 缓慢 it runs 560ms and the unscaled figure would push inside it.
- * The maximum is the only value that is right at every speed.
+ * Scaled by the *slowest* speed: the fade's clock goes through `--motion-scale`, so at
+ * 缓慢 it runs 560ms and an unscaled figure would push inside it.
  */
 const TAB_PUSH_COALESCE_MS = Math.round(400 * MOTION_SPEED_SCALE.slow);
 
@@ -202,24 +191,24 @@ function AdminPanel() {
     return true;
   });
 
-  /* The tab the URL is asking for. An unknown name, or one this role cannot
-     see, falls back rather than erroring — a bookmarked `?tab=wealth` kept by
-     someone who has since lost super-admin should still open the panel. */
+  /* The tab the URL asks for. An unknown name, or one this role cannot see, falls back
+     rather than erroring — a bookmarked `?tab=wealth` kept by someone who has since
+     lost super-admin should still open the panel. */
   const tabParam = searchParams.get('tab');
   const urlTab: TabId =
     visibleTabs.find((tab) => tab.id === tabParam)?.id ?? visibleTabs[0]?.id ?? DEFAULT_TAB;
 
-  /* Optimistic tab, so a click paints immediately. `router.push` only changes
-     the search params, but that is still an RSC navigation, and waiting for it
-     would leave the sidebar highlighting the tab you just left for as long as
-     the round trip takes — made worse by the coalescing window below. */
+  /* Optimistic tab, so a click paints immediately. `router.push` only changes the search
+     params, but that is still an RSC navigation, and waiting for it would leave the
+     sidebar highlighting the tab you just left for as long as the round trip takes —
+     made worse by the coalescing window below. */
   const [pendingTab, setPendingTab] = useState<TabId | null>(null);
   const [isNavigating, startNavigation] = useTransition();
   const activeTab = pendingTab ?? urlTab;
 
-  /* Adjust-during-render: hand control back to the URL once it has *finished*
-     catching up. `isNavigating` is what distinguishes that from the URL merely
-     passing through this tab on its way to a later one in the same burst. */
+  /* Adjust-during-render: hand control back to the URL once it has *finished* catching
+     up. `isNavigating` distinguishes that from the URL merely passing through this tab
+     on its way to a later one in the same burst. */
   if (pendingTab && pendingTab === urlTab && !isNavigating) setPendingTab(null);
 
   const pushTimer = useRef<number | null>(null);
@@ -242,18 +231,18 @@ function AdminPanel() {
 
     if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
     pushTimer.current = null;
-    /* A burst that comes back to the tab the URL already names needs no push —
-       and has to cancel the one it queued on the way out, or that lands as a
-       second history entry for the page we never left. Only while nothing is in
-       flight, though: a push that has already started will move the URL off
-       this tab, and then it is exactly the push that has to put it back. */
+    /* A burst that comes back to the tab the URL already names needs no push — and has to
+       cancel the one it queued on the way out, or that lands as a second history entry
+       for the page we never left. Only while nothing is in flight: a push that has
+       already started moves the URL off this tab, and then it is exactly the push that
+       has to put it back. */
     if (tabId === urlTab && !isNavigating) return;
 
     pushTimer.current = window.setTimeout(() => {
       pushTimer.current = null;
-      /* `scroll: false`: the panel is one screen with a sidebar beside it, so
-         there is no new segment to scroll to — only the reading position of
-         whatever list you were in to lose. */
+      /* `scroll: false`: the panel is one screen with a sidebar beside it, so there is
+         no new segment to scroll to — only the reading position of whatever list you
+         were in to lose. */
       startNavigation(() => router.push(href, { scroll: false }));
     }, TAB_PUSH_COALESCE_MS);
   };
@@ -269,26 +258,19 @@ function AdminPanel() {
   return (
     <div className="max-w-6xl mx-auto">
       {' '}
-      {/* `surface-container-low`, not `surface`. The app scroller behind this is
-          itself `bg-surface`, so a panel painted the same tone was a card the
-          exact colour of the page it sits on — the `rounded-md overflow-hidden`
-          reaching for a raised block and clipping nothing anyone could see. It
-          is the same fault the layout note in AGENTS.md records for /settings'
+      {/* `surface-container-low`, not `surface`: the app scroller behind this is itself
+          `bg-surface`, so a panel painted the same tone was a card the exact colour of
+          the page it sits on. Same fault AGENTS.md's layout note records for /settings'
           six invisible section wrappers. */}
       <div className="bg-surface-container-low rounded-md overflow-hidden flex flex-col md:flex-row">
         
         <div className="md:w-48 shrink-0 border-b md:border-b-0 border-outline-variant">
-          {/* `Tabs variant="rail"`, not a hand-rolled pill list. This was one of
-              the app's four tab implementations and, like two of the others, it
-              declared no ARIA roles at all — fourteen destinations that a screen
-              reader read as a run of buttons, with no arrow-key navigation and no
-              statement of which was current beyond `aria-current` on a control
-              that is not a link.
-
-              The icon's `scale-110` when active is gone with it. It was one of
-              three different hover/active scale amounts in the app (110, 105 and
-              1.02), it is not something M3 does to a navigation item, and the row
-              already says "current" with a container pair. */}
+          {/* `Tabs variant="rail"`, not a hand-rolled pill list: this was one of the app's
+              four tab implementations and declared no ARIA roles — fourteen destinations a
+              screen reader read as a run of buttons, no arrow keys, no current-tab
+              statement beyond `aria-current` on a control that is not a link. The icon's
+              active `scale-110` is gone with it: not something M3 does to a navigation
+              item, and the row already says "current" with a container pair. */}
           <Tabs
             variant="rail"
             label="管理面板分区"
@@ -303,27 +285,21 @@ function AdminPanel() {
           />
         </div>
         <div className="flex-1 p-4 sm:p-6 min-h-96 md:min-h-150 relative">
-          {/* A fade, and deliberately *not* the tab shared axis.
-              `TabPanes` needs both panes alive to slide one out as the other comes
-              in, and these fourteen are `dynamic(..., { ssr: false })` — keeping
-              them mounted would mount fourteen admin tabs at once, each with its
-              own fetch. So the outgoing pane genuinely cannot survive here, and a
-              cross-fade is the honest transition for a swap where it can't.
+          {/* A fade, deliberately not the tab shared axis: `TabPanes` needs both panes
+              alive to slide, and these fourteen are `dynamic(..., { ssr: false })` — keeping
+              them mounted would mount fourteen admin tabs, each with its own fetch. The
+              outgoing pane genuinely cannot survive here.
 
-              What was here was `animate-page-transition`, which is the *route*
-              animation: `pageIn`, a 12px rise with an 80ms backwards-filled delay,
-              designed for a page arriving from another page. On a lateral move
-              between siblings it read as the panel dropping in from above.
-              `animate-fade-in` is the same 400ms `decelerate` without the travel.
+              What was here was `animate-page-transition` — the *route* animation, a 12px
+              rise with an 80ms backwards-filled delay — which on a lateral move between
+              siblings read as the panel dropping in from above. `animate-fade-in` is the
+              same 400ms `decelerate` without the travel. The `key` stays: it restarts the
+              animation on each switch, and with `{cond && ...}` mounting there is nothing
+              for it to destroy that was not destroyed anyway.
 
-              The `key` stays: it is what restarts the animation on each switch,
-              and with `{cond && ...}` mounting there is nothing for it to destroy
-              that was not being destroyed anyway.
-
-              It carries the panel half of `role="tab"`'s contract itself, since
-              there is no `TabPane` here to do it: one panel, re-identified as the
-              active tab changes, so the selected tab's `aria-controls` always
-              resolves. `TabPanes` reaches the same place with one panel per pane. */}
+              It carries the panel half of `role="tab"`'s contract itself — one panel,
+              re-identified as the active tab changes, so the selected tab's
+              `aria-controls` always resolves. */}
           <div
             key={activeTab}
             id={tabPanelId(activeTab)}
@@ -355,18 +331,14 @@ function AdminPanel() {
 
 export default function AdminPage() {
   return (
-    /* `useSearchParams` needs a boundary above it; the fallback is the panel's
-       own loading state so the shell does not jump. */
+    /* `useSearchParams` needs a boundary above it; the fallback is the panel's own
+       loading state so the shell does not jump. */
     <Suspense
       fallback={
-        /* `AdminTabFallback`, not a centred dot. It is the panel's own
-           silhouette and it already exists two functions up — a spinner here
-           reflows the whole console when the real panel lands, which is the one
-           thing a fallback is for avoiding.
-           No padding of its own: `[data-page-content]` is already `p-4 sm:p-6`
-           and the real console (`max-w-6xl mx-auto`, below) takes none, so this
-           was insetting the fallback 32/48px and the console then shifted 16px
-           per side and 16px down on arrival — exactly the reflow above. */
+        /* `AdminTabFallback`, not a centred dot — it is the panel's own silhouette and
+           already exists two functions up. No padding of its own: `[data-page-content]`
+           is already `p-4 sm:p-6` and the real console takes none, so padding here
+           insetting the fallback 32/48px made the console shift on arrival. */
         <div className="mx-auto max-w-6xl">
           <AdminTabFallback />
         </div>

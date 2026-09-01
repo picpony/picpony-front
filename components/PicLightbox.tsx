@@ -61,11 +61,9 @@ export default function PicLightbox({
       carousel={{
         finite: true,
       }}
-      /* The lightbox ships its own loading ring — a plain CSS spin at a constant rate — which
-         is the one place in the app that was not the M3 indicator. `render.iconLoading` is the
-         sanctioned override, so it becomes `Spinner` like everything else. `tone="inherit"`
-         because this sits on `media-stage`, whose ink is `on-media`, not either of the two
-         roles the `white` flag can pick between. */
+      /* Replace the library's own loading ring with `Spinner` like everything
+         else; `tone="inherit"` because this sits on media-stage whose ink is
+         `on-media`, which neither other tone names. */
       render={{
         iconLoading: () => (
           <span className="text-on-media">

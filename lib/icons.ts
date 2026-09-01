@@ -1,33 +1,15 @@
 /**
- * The icon size scale.
+ * Icon-size scale (18 / 20 / 24 / 36 / 48). Use `size={ICON.standard}`, never a number:
+ * a named size keeps the scale greppable and a new size impossible to add silently.
  *
- * There were **fourteen** sizes in use — 12, 14, 16, 18, 20, 22, 24, 32, 36, 40,
- * 44, 48, 56, 64 — across 285 call sites, and the reason is simply that nothing
- * wrote a scale down. Every glyph was sized against the one next to it, so a
- * gallery card's score used 12, a chip's check used 14, a button's leading icon
- * used 16 and the sidebar used 22, none of which is a size Material defines.
+ *   dense     18  a glyph inside a chip, or beside a line of metadata — M3's smallest
+ *                 defined size; below it a Material Symbol's strokes stop resolving.
+ *   control   20  inside a button or a dense icon button.
+ *   standard  24  the default: a list/nav row, an app-bar action, a field adornment.
+ *   large     36  a large FAB's glyph, or one prominent affordance.
+ *   display   48  an illustration: the glyph over an empty state or an error.
  *
- * These five are M3's own icon sizes, and each one has a job:
- *
- *   dense     18  a glyph inside a chip, or beside a line of metadata. M3's
- *                 smallest defined icon size; below it a Material Symbol's
- *                 strokes stop resolving and it reads as a smudge rather than a
- *                 shape, which is exactly what the 12s and 14s were doing.
- *   control   20  inside a button or a dense icon button. `ButtonSmallTokens`
- *                 and `ButtonMediumTokens` give 20 and 24 respectively.
- *   standard  24  the default, and the one to reach for when unsure: a list
- *                 item, a navigation row, an app-bar action, a text field's
- *                 adornment. Every one of those is 24 in the token set.
- *   large     36  a large FAB's glyph, or a prominent single affordance —
- *                 `FabLargeTokens.IconSize`.
- *   display   48  an illustration rather than a control: the glyph above an
- *                 empty state or an error.
- *
- * Import and use `size={ICON.standard}` rather than a number, so the scale is
- * greppable and a new size cannot be introduced without deleting a name.
- *
- * This is *not* the scale for `Avatar` or `SkeletonCircle`, which take a box size
- * rather than a glyph size and have their own steps.
+ * Not for `Avatar` / `SkeletonCircle` — those take a box size, not a glyph size.
  */
 export const ICON = {
   dense: 18,

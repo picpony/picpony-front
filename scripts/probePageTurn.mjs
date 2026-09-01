@@ -1,6 +1,5 @@
 /* What is actually on screen during a gallery page turn: scroll offset, how many cards exist,
-   and how many of them have a decoded image inside the viewport. Scratch probe. */
-import { spawn } from 'node:child_process';
+   and how many of them have a decoded image inside the viewport. Scratch probe. */import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -67,22 +66,16 @@ const evalIn = async (expr) => {
 await send('Runtime.enable');
 await send('Page.enable');
 
-/* Stub the BROWSER's reads too, not only the server's.
- *
- * This probe set `PICPONY_UPSTREAM_ORIGIN`/`PICPONY_DERPI_ORIGIN`, which redirect what the Next
- * server fetches — and page 2 is read by the *browser*, through `proxyFetch` and whichever request
- * line is in force. Those went to the real derpibooru, which this machine cannot reach quickly, so
- * the read never landed, `keepPrevious` held page 1 on screen, and the probe measured a page turn
- * that never happened: the URL, the first card and the row set were identical before and after.
- * It still reported "none was blank", because nothing had changed at all.
- *
- * Same shape as `npm run net:audit`, whose fixtures these are. */
+/* Stub the BROWSER's reads too, not only the server's. The env vars redirect what the Next
+   server fetches — but page 2 is read by the *browser*, through `proxyFetch`, and those went to
+   the real derpibooru: the read never landed, `keepPrevious` held page 1, and the probe measured
+   a page turn that never happened while still reporting "none was blank". Same shape as
+   `npm run net:audit`, whose fixtures these are. */
 onEvent.push(async (msg) => {
   if (msg.method !== 'Fetch.requestPaused') return;
   const { requestId, request } = msg.params;
   /* A relay or proxy line carries the real target in `?url=`; `stubFor` wants that, not the
-     wrapper. */
-  let target = request.url;
+     wrapper. */  let target = request.url;
   try {
     const inner = new URL(request.url).searchParams.get('url');
     if (inner) target = inner;
@@ -115,20 +108,19 @@ await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
 await new Promise((r) => setTimeout(r, 3000));
 await evalIn(`localStorage.setItem('picpony_motion','standard'); 1`);
 await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
-/* Short, because the entrance cascade is sampled at the top of the evaluated block and a long
-   wait here would let it finish unobserved. The block does its own settling before clicking. */
+/* Short wait: the entrance cascade is sampled at the top of the evaluated block, and a long wait
+   would let it finish unobserved. The block does its own settling before clicking. */
 await new Promise((r) => setTimeout(r, 900));
 
 const out = await evalIn(`(async () => {
   const sc = document.querySelector('[data-image-hero-gallery-scroll]');
   if (!sc) return 'no scroller';
 
-  /* Was any card hidden after this load had painted? A guard for the ordering bug that removed it:
-     the hook lives in a component that must be a sibling *after* the ref'd grid, because React
-     attaches a parent's ref only after its children's layout effects run. Rendered inside the
-     grid it read a null ref, skipped, and never re-ran — so the gallery had no entrance at all
-     and the first pass that found a root was a page turn, which is what put a blank screen under
-     the glide. Both symptoms, one cause, and nothing failed. */
+  /* Was any card hidden after this load had painted? A guard for the ordering bug that removed
+     the entrance cascade: the hook's component must be a sibling *after* the ref'd grid, because
+     React attaches a parent's ref only after its children's layout effects run. Rendered inside
+     the grid it read a null ref, skipped, and never re-ran — no entrance on load, and the first
+     pass that found a root was a page turn, which put a blank screen under the glide. */
   const cascadeSeen = await (async () => {
     const start = performance.now();
     while (performance.now() - start < 6000) {
@@ -167,13 +159,11 @@ const out = await evalIn(`(async () => {
       const r = c.getBoundingClientRect();
       if (r.bottom < top || r.top > top + vh) continue;
       inView++;
-      /* The CARD's own visibility, before anything about its contents.
-         The entrance cascade sets GSAP autoAlpha on .image-card, i.e. opacity plus
-         visibility:hidden — so a card parked at the head of the stagger holds a perfectly good
-         shimmer inside a box that paints nothing. Testing the img and taking the shimmer as proof
-         of life is how this probe passed while a page turn showed a blank screen: the same class
-         of mistake as sampling the detail layers instead of the flight canvas. An invisible card
-         is blank whatever is inside it. (No backticks: this is inside a template literal.) */
+      /* The CARD's own visibility, before anything about its contents. The entrance cascade
+         sets GSAP autoAlpha on .image-card (opacity plus visibility:hidden), so a card parked at
+         the head of the stagger holds a perfectly good shimmer inside a box that paints nothing.
+         Testing the img and taking the shimmer as proof of life is how this probe passed while a
+         page turn showed a blank screen. (No backticks: inside a template literal.) */
       const cs = getComputedStyle(c);
       if (cs.visibility === 'hidden' || Number(cs.opacity) <= 0.05) {
         hidden++;
@@ -197,13 +187,13 @@ const out = await evalIn(`(async () => {
       const img = c.querySelector('img');
       /* No <img> at all means FadeInImage took its give-up branch and is painting the "failed"
          plate — a placeholder, not a blank. Locally every remote image 400s (the documented
-         constraint), so that is where every card ends up; it must not be counted as blank. */
+         constraint), so that is where every card ends up. */
       if (!img) { failed++; continue; }
       if (Number(getComputedStyle(img).opacity) > 0.05) visible++;
       else bare++;
     }
-    /* The first card's image id, so a page turn that actually swapped the data can be told from
-       one that re-rendered the same rows. */
+    /* The first card's image id, so a turn that actually swapped the data can be told from one
+       that re-rendered the same rows. */
     const first = cards[0]?.querySelector('a[href^="/pic/"]')?.getAttribute('href') ?? '-';
     return { t: Math.round(performance.now() - t0), scrollTop: Math.round(sc.scrollTop),
              h: sc.scrollHeight, cards: cards.length, inView, shimmering, plate: failed, visible, HIDDEN: hidden, BARE: bare, first };
@@ -229,12 +219,9 @@ const out = await evalIn(`(async () => {
   const fwd = await collect(2000);
 
   /* Back to a page that has already been fetched, and the setup matters as much as the click.
-     This leg used to press 上一页 from wherever the forward glide had left the scroller, which is
-     the TOP of the list — so there was no travel, no glide, and the one configuration that
-     actually shows the bug could not occur. The reported sequence is next, scroll down again,
-     previous: a cached page whose rows are present in the first frame, entered with the viewport
-     at the bottom of the grid. Re-scroll to the bottom and wait for the forward page to be fully
-     settled first, or this measures a turn layered on the previous turn. */
+     This leg used to press 上一页 from wherever the forward glide had left the scroller — the
+     TOP of the list — so there was no travel and the one configuration that shows the bug could
+     not occur. The reported sequence is next, scroll down again, previous. */
   await new Promise((r) => setTimeout(r, 1200));
   trace.url1 = location.search || '(none)';
   trace.first1 = firstHref();
@@ -284,26 +271,19 @@ ${label === 'fwd' ? '下一页' : '上一页 (already fetched)'}`);
   }
 }
 
-/* The one assertion. A card in view must be showing *something* — the shimmer while its image
-   decodes, the plate once every line has failed. Neither is "blank", and blank is the bug: a
-   `complete` but *failed* image used to satisfy the loaded check, which removed the shimmer and
-   left the <img> at opacity 1 with nothing in it. Going next-then-previous on the gallery took
-   this to 6 of 13 cards. */
+/* Two assertions. First: a card in view must show *something* — the shimmer while its image
+   decodes, the plate once every line has failed. Blank is the bug: a `complete` but *failed*
+   image used to satisfy the loaded check, which removed the shimmer and left the <img> at
+   opacity 1 with nothing in it. Second (the cold-load half of the same predicate): `/` renders
+   its first feed page on the server, so on a cold load the cards are painted before the motion
+   chunk arrives — an entrance cascade starting then parks fifty already-visible cards at
+   autoAlpha: 0. So no card may be hidden at all; `StaggerGrid` decides readiness once, at
+   mount. A client navigation cascades as normal and is not what this samples. */
 let worst = 0;
 for (const rows of Object.values(out)) {
   if (!Array.isArray(rows) || typeof rows[0] !== 'object') continue;
   for (const r of rows) worst = Math.max(worst, (r.BARE ?? r.bare ?? 0) + (r.HIDDEN ?? 0));
 }
-/* Two assertions. The second is the cold-load half of the same predicate as the first, and it is
-   asserted in the direction that took three attempts to get right.
-
-   `/` renders its first feed page on the server, so on a cold load the cards are in the HTML
-   and painted before the motion chunk arrives. An entrance cascade that starts *after* that
-   parks fifty already-visible cards at `autoAlpha: 0` and fades them back in — the grid blinks
-   out a few hundred milliseconds after paint. So on this load no card may be hidden at all;
-   `StaggerGrid` decides once, at mount, and simply does not run when the engine is not yet
-   resident. The cascade is still the right thing on a client navigation, where the cards mount
-   unpainted and the layout effect beats the first paint — that case is not what this samples. */
 const hiddenAfterPaint = out && typeof out === 'object' && out.cascadeSeen === true;
 console.log(worst === 0
   ? '\nevery card in view showed a shimmer or a plate; none was blank'

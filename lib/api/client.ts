@@ -13,14 +13,9 @@ import {
   stepApiFailover,
 } from '@/lib/route';
 
-// ---------------------------------------------------------------------------
-// 浏览设置类型
-// ---------------------------------------------------------------------------
-
 /**
- * What the user has asked to *see*. The four line preferences are not in here —
- * `lib/route.ts` owns those, because which host answers is a different question from
- * what the answer should contain.
+ * What the user asked to *see*. The four line preferences are not here — `lib/route.ts`
+ * owns those; which host answers is a different question from what the answer contains.
  */
 export interface BrowsingSettings {
   contentFilter: 'safe' | 'spoilers' | 'developer';
@@ -31,19 +26,12 @@ export interface BrowsingSettings {
   searchSort: string;
 }
 
-// ---------------------------------------------------------------------------
-// 浏览设置（来自 localStorage）
-// ---------------------------------------------------------------------------
-
 /**
- * `localStorage` is guarded, and that is not defensiveness — it is a crash this function caused.
+ * Device browsing settings, with defaults on the server.
  *
- * These are device preferences, so the natural assumption is that only client code reads them. That
- * stopped being true when the resource cache started folding them into its **keys**:
- * `useResource` computes a key during render, Next renders client components on the server too, and
- * an unguarded `localStorage` there is a `ReferenceError` that takes the whole route into client-only
- * rendering. The defaults are the right answer for the server — it has no device to ask — and the
- * first client render reads the real values.
+ * The guarded `localStorage` is a crash fix, not defensiveness: resource-cache keys read this
+ * during render, and Next renders client components on the server too — an unguarded read
+ * there took whole routes into client-only rendering. The server has no device to ask.
  */
 export function getBrowsingSettings(): BrowsingSettings {
   const ls = (k: string, def: string) =>
@@ -58,22 +46,13 @@ export function getBrowsingSettings(): BrowsingSettings {
   };
 }
 
-// ---------------------------------------------------------------------------
-// 图片线路
-// ---------------------------------------------------------------------------
-
 /**
  * Put a whole search result on the current image line.
  *
- * Applied centrally in `lib/api/derpi.ts` so it reaches every consumer of an image, not only
- * the three grids that used to do it themselves — the featured banner, the opened picture and
- * both profile grids render their URLs directly and so ignored the policy entirely. It is
- * idempotent (`toCurrentImageLine` strips before it wraps), which is what makes applying it in
- * both places safe.
- *
- * Three screens had this map written out beside a hand-typed read of the CDN storage key — the
- * key restated at three call sites, guarding a function that checked the same thing itself.
- * Spelled in prose rather than quoted, so a grep for that literal still proves it is gone.
+ * Applied centrally in `lib/api/derpi.ts` so it reaches every image consumer — the featured
+ * banner, the opened picture and the profile grids render URLs directly and would otherwise
+ * miss the policy. Idempotent (`toCurrentImageLine` strips before it wraps), so screens that
+ * also map are no-ops.
  */
 export function applyImageLine<T extends PonyImage>(image: T): T {
   if (resolveImageLine() === 'direct') return image;
@@ -86,17 +65,7 @@ export function applyImageLine<T extends PonyImage>(image: T): T {
   };
 }
 
-// ---------------------------------------------------------------------------
-// 搜索查询构建
-// ---------------------------------------------------------------------------
-
-/**
- * The query, from the settings this device currently has.
- *
- * A wrapper now: the rules live in `lib/searchQuery.ts` as a pure function, because the server
- * has to build the same query for the SSR’d home feed and cannot read `localStorage`. This
- * supplies the inputs; `lib/feed.server.ts` supplies the same ones out of a cookie.
- */
+/** The search query, from this device's current settings (server callers use `lib/feed.server.ts`). */
 export function buildSearchQuery(search?: string): string {
   const s = getBrowsingSettings();
   let hiddenTags: string[] = [];
@@ -128,51 +97,40 @@ function getSortParams(isSearch: boolean): string {
   return `sf=${sort}${dir}`;
 }
 
-// ---------------------------------------------------------------------------
-// 按线路发请求
-// ---------------------------------------------------------------------------
-
-/** In-place retries on one line, and how many times the line itself may change. */
+/** In-place retries per line, and how many times the line itself may change. */
 const MAX_ATTEMPTS = 3;
 const MAX_SWITCHES = 3;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Send a Derpibooru request on whichever line is in force.
+ * Send a Derpibooru request on whichever line is in force, after awaiting the route policy —
+ * resolved, that await costs a microtask; before then it is what keeps the first request of a
+ * cold load off the default host while an administrator has the site pinned elsewhere.
  *
- * The policy is awaited first, every time. That await is the whole reason a line can
- * be trusted: resolved once it costs a microtask, and before then it is what stops the
- * first request of a cold load from going out on the default host while an
- * administrator has the site pinned somewhere else.
- *
- * Failover is asymmetric by design:
- *
- * - **Forced, or on the PicPony relay** — retry in place, never change line. An
- *   administrator's choice is not ours to leave, and the relay exists precisely for
- *   the visitor whose direct connection does not work, so dropping them back to it
- *   would undo the only thing that line is for.
- * - **`auto`, on direct or the accel line** — one plain retry, then hand over to
- *   `stepApiFailover`. Since the relay is the default preference, the cascade that is
- *   actually reachable is direct → accel → direct-with-cooldown.
- *
- * Not ported: the old frontend's request queue, its exponential backoff and its
- * concurrency shrink. Those hang off a rate limiter this app has never had; the short
- * linear delay below is the proportionate stand-in.
+ * Failover is asymmetric by design: under a forced policy or on the PicPony relay, retry in
+ * place and never change line — an admin's choice is not ours to leave, and the relay exists
+ * for the visitor whose direct connection does not work. On `auto` over direct or accel, one
+ * plain retry then `stepApiFailover` (the reachable cascade is direct → accel → direct with
+ * cooldown; the relay step is unreachable because the relay is the default preference).
+ * 429 never fails over: a rate limit is counted against the caller, so moving lines spreads
+ * one visitor's limit onto everyone who shares the next one. Cancellation is not a failure:
+ * retrying would re-fetch an aborted signal and announce two line switches on the `auto`
+ * cascade. A 403 that carried a key is about the key — no other line answers it differently,
+ * so failing over spends six requests and two snackbars on a revoked credential. 404/400 are
+ * answers, not broken lines. `readJson` turns a dead line into `{ success: false }`, so the
+ * decision is made on `res.ok` and the status here.
  */
 export async function proxyFetch(url: string, options?: RequestInit): Promise<Response> {
   await ensureRoutePolicy();
 
   const method = (options?.method ?? 'GET').toUpperCase();
   if (method !== 'GET' && method !== 'HEAD') {
-    /* A body cannot travel through a `?url=` worker, so a write has only two
-       possibilities and `applyApiLineToWrite` picks between them. */
+    /* A body cannot travel through a `?url=` worker; `applyApiLineToWrite` picks between
+       the two possibilities a write has. */
     return fetch(applyApiLineToWrite(url), options);
   }
 
-  /* A 403 on a request that carried a key is about the key, not about the host: no other
-     line will answer it differently, so failing over spends six requests and two snackbars
-     on a revoked credential. */
   const carriesKey = /[?&]key=/.test(url);
 
   let attempts = 0;
@@ -239,10 +197,6 @@ export async function proxyFetch(url: string, options?: RequestInit): Promise<Re
   }
 }
 
-// ---------------------------------------------------------------------------
-// Derpibooru 搜索请求 (用于 getImages / searchImagesByIds)
-// ---------------------------------------------------------------------------
-
 export interface DerpiSearchParams {
   query: string;
   page?: number;
@@ -273,10 +227,6 @@ export async function fetchDerpiImages(
   );
 }
 
-// ---------------------------------------------------------------------------
-// 通用错误处理
-// ---------------------------------------------------------------------------
-
 export async function handleDerpiError(res: Response): Promise<never> {
   let errorText = await res.text().catch(() => 'No error text');
   if (res.status === 429) {
@@ -289,21 +239,13 @@ export async function handleDerpiError(res: Response): Promise<never> {
 }
 
 /**
- * `Response.json()` that survives an empty or non-JSON body.
- *
- * The PicPony endpoints answer `200` with a JSON envelope on the happy path,
- * but a dropped session, a PHP fatal or a proxy hiccup can return an empty body
- * or an HTML error page. `res.json()` then throws `Unexpected end of JSON
- * input` from inside whatever called it — which is how a background unread-count
- * poll ended up throwing on every tick.
- *
- * Callers all branch on `data.success`, so a parse failure is reported the same
- * way the API reports a logical failure rather than as an exception.
+ * `Response.json()` that survives an empty or non-JSON body: a dropped session, PHP fatal or
+ * proxy hiccup answers `200` with an empty body or HTML page, and a bare `res.json()` threw
+ * from inside a background unread-count poll on every tick. Callers branch on `data.success`,
+ * so a parse failure is reported as the API's own logical failure, not an exception.
  */
-/* `T = any` mirrors `Response.json()`'s own signature. Narrowing it to
-   `unknown` would be more correct in isolation but would demand an annotation
-   at all 29 call sites, and the point of this change is to fix a crash without
-   touching their shapes. */
+/* `T = any` mirrors `Response.json()`'s own signature; narrowing to `unknown` would demand
+   an annotation at all 29 call sites. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function readJson<T = any>(res: Response): Promise<T> {
   const text = await res.text();

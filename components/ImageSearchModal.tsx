@@ -105,10 +105,8 @@ export default function ImageSearchModal({
         </>
       }
     >
-      {/* This zone previously handled `dragover` only — enough to stop the
-          browser navigating to the dropped file, but it gave no feedback at all
-          while one was held over it, so the affordance its dashed border promised
-          was invisible. `DropZone` owns the three states. */}
+      {/* `DropZone` owns the three states; the zone previously gave no
+          feedback at all while a file was held over it. */}
       <DropZone
         accept="image/*"
         onFile={handleFileSelect}

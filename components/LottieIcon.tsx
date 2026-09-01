@@ -10,20 +10,14 @@ interface LottieIconProps {
   load: () => Promise<unknown>;
   /**
    * Drawn until the animation is ready, and **instead of it** under reduced
-   * motion. The type is `ReactElement`, not `ReactNode`, and that is the whole
-   * point: `ReactNode` accepts `null`, both call sites passed `null`, and so the
-   * one branch this component exists to serve rendered nothing at all — /search's
-   * empty state had no illustration whatsoever for anyone with the preference on,
-   * and the sign-in dialog had an empty 60% pane. A prop whose documented
-   * contract is "never empty" should not be typed to permit empty.
+   * motion. Typed `ReactElement`, not `ReactNode` — the documented contract is
+   * "never empty", so the type must not permit empty.
    */
   fallback: ReactElement;
   /**
-   * `width / height` of the composition, used to reserve the box before the player
-   * injects its SVG. Required rather than optional because the host is 0px tall
-   * until the chunk resolves and then pushes everything below it down — a layout
-   * shift on every visit, and the component cannot read the ratio without first
-   * fetching the thing it is trying to reserve space for.
+   * `width / height` of the composition, used to reserve the box before the
+   * player injects its SVG. Required: the host is 0px tall until the chunk
+   * resolves, which is a layout shift on every visit.
    */
   aspect: number;
   className?: string;
@@ -38,11 +32,8 @@ let playerPromise: Promise<
 > | null = null;
 
 /**
- * A decorative Lottie, played once on mount.
- *
- * Once, not looped. A loop in an empty state is the same placeholder gesture as
- * the spinner the splash used to have — it says "wait" without saying what for,
- * and it never resolves. This plays, lands, and stays put.
+ * A decorative Lottie, played once on mount — plays, lands, and stays put. A
+ * loop in an empty state says "wait" without saying what for.
  *
  * Under any tier below standard nothing is fetched at all and the static
  * `fallback` is the whole component.
@@ -58,24 +49,19 @@ export default function LottieIcon({
   const [playing, setPlaying] = useState(false);
 
   /* Held in a ref, and the effect runs once. Call sites pass an inline
-     `() => import(...)`, so a dependency on `load` would be a new identity on
-     every parent render — which would tear the player down and replay the
-     animation from frame 0 each time the page's state changed. */
+      `() => import(...)`, so a dependency on `load` would be a new identity on
+      every parent render — which would tear the player down and replay the
+      animation from frame 0. */
   const loadRef = useRef(load);
   useEffect(() => {
     loadRef.current = load;
   }, [load]);
 
   useEffect(() => {
-    /* Standard only, and the `fallback` is what the other two tiers get.
-       This gated on `off` alone, arguing that these are one-shot marks a few kilobytes each
-       drawn in response to something that just happened — a badge earned, a task completed.
-       No call site is that: the two are `AuthModal`'s login illustration (3257×2148, 60% of a
-       640px dialog) and /search's resting empty state (3000×1553), both decorative artwork
-       behind a 60KB player. The reduced tier's rule names Lottie playback among the things it
-       drops, and its audience is a device that cannot afford the hero flight. If a small
-       earned-badge mark ever does arrive, it wants its own component rather than this one's
-       exception. */
+    /* Standard only; the `fallback` is what the other tiers get. Both call
+       sites are large decorative artwork behind a 60KB player, and the reduced
+       tier's rule names Lottie playback among the things it drops. A small
+       earned-badge mark, if one ever arrives, wants its own component. */
     if (motionTier() !== 'standard') return;
     let cancelled = false;
     let animation: { destroy: () => void } | null = null;

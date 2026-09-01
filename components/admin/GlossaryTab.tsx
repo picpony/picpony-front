@@ -45,9 +45,8 @@ import { clamp } from '@/lib/utils';
 import { readUserInfo } from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
 /* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
+   spread and therefore un-tree-shakeable — only the admin tabs import this, and
+   each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
 
 interface Tag {
@@ -370,9 +369,7 @@ export default function GlossaryTab() {
     };
   }, [searchKeyword, sortMode, categoryFilter, showUntranslatedOnly, loadTags, isDuplicateMode]);
 
-  /* Outside-click dismissal is `Popover`'s. The listener that used to sit here
-     only tested the panel, never the field, so typing in the input that owns the
-     suggestions dismissed them on the first click. */
+  /* Outside-click dismissal is `Popover`'s. */
 
   const loadDuplicates = async () => {
     if (!token || !isAdmin) return;
@@ -1186,9 +1183,8 @@ export default function GlossaryTab() {
       primary: true,
       render: (tag) =>
         tag.cn === '未翻译' ? (
-          /* `Badge`, not an inline span with a container pair. Seven of these
-             lived in this one file, in one shape but three type roles, and each
-             one had to name both halves of its colour pair by hand. */
+          /* `Badge`, not an inline span with a container pair — one shape, one
+             owner for the colour pair. */
           <Badge tone="error" icon={<MdOutlineWarning />} className="whitespace-nowrap">
             未翻译
           </Badge>
@@ -1436,16 +1432,12 @@ export default function GlossaryTab() {
           rowKey={(tag) => tag.id}
           expandedRow={renderInlineEditor}
           loading={isLoading}
-          /* The resolved page size, so the placeholder is the right *length*. A
-             watcher that has to correct by whole rows is a visible correction, and
-             this list's page size is user-settable — the default six placeholders
-             against a hundred rows was the worst case of it. */
+          /* The resolved page size, so the placeholder is the right *length*. */
           skeletonRows={Math.min(itemsPerPage, 20)}
           empty={
             isDuplicateMode ? (
               /* `EmptyState`, not a bespoke centred stack — same silhouette as
-                 every other "nothing here" in the app, and the only thing that
-                 differs is the glyph, which is the point of the `icon` slot. */
+                 every other "nothing here" in the app. */
               <EmptyState
                 size="inline"
                 icon={<MdCheckCircle size={ICON.large} className="text-success" />}
@@ -1813,9 +1805,8 @@ export default function GlossaryTab() {
           className="popover-scrollbar max-h-[60vh] overflow-y-auto"
         >
           {isLoadingFeedback ? (
-            /* Feedback rows, in the shape they arrive in. A centred spinner
-               collapsed the 60vh box to nothing and then snapped three cards
-               back into it. */
+            /* Feedback rows, in the shape they arrive in: a centred spinner
+               collapsed the box to nothing and then snapped the cards back. */
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (
                 <Card key={i} variant="filled" className="space-y-2">
@@ -1884,8 +1875,8 @@ export default function GlossaryTab() {
                             size="xs"
                             onClick={() => {
                               /* The app's own dialog, not the browser's
-                                 `prompt()` — a system box in the OS font,
-                                 outside our scrim, type scale and focus trap. */
+                                 `prompt()` — a system box outside our scrim,
+                                 type scale and focus trap. */
                               void prompt({
                                 title: '忽略反馈',
                                 label: '忽略原因',
@@ -1939,8 +1930,8 @@ export default function GlossaryTab() {
             {isHistoryLoading ? (
               /* `m3-row` bars, the geometry the records land in — the rows are
                  siblings in a cut block, so the skeletons must be siblings too
-                 or the header above them takes the "last row" corner radius
-                 while the list is loading. */
+                 or the header above them takes the corner radius while the list
+                 is loading. */
               <>
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="m3-row flex flex-col gap-2 bg-surface-container-low p-4">

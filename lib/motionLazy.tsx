@@ -14,21 +14,18 @@ import { applyInstantTabScroll, rememberTabScroll } from '@/lib/tabScroll';
 import type { DrawerSwipeOptions } from '@/lib/motion';
 
 /**
- * The four things the app shell asks of `lib/motion`, behind a dynamic import.
+ * The four things the app shell asks of `lib/motion`, behind a dynamic import — `lib/motion.ts`
+ * registers GSAP and five plugins at module scope and none of the four can run before the user
+ * has done something, yet together they pulled the engine into the first document.
  *
- * `components/AppLayout.tsx` wraps every route, and `lib/motion.ts` registers GSAP and five
- * plugins at module scope — so a theme toggle, a tab tap, a one-line setter and a phone-only swipe
- * gesture were, between them, putting 43 KB (brotli) of animation engine into the first document
- * of a page of text. None of the four can run before the user has done something.
+ * **GSAP boundary:** the sanctioned lazy entry to the engine; nothing here may be statically
+ * imported by a route — zero routes reach `lib/motion` in a first document.
  *
- * **Nothing here awaits inside an event handler**, which is the rule this file exists to keep. An
- * `await` before `preventDefault()` loses the gesture, and an `await` before a state write puts a
- * frame of nothing on screen. Every entry point instead does the thing the **关闭 tier** already
- * does — a real, shipped, documented code path — and starts the load in the background. So a user
- * who beats the chunk gets one interaction without its animation, not a dropped one.
- *
- * `warmMotion()` is called from the shell on an idle callback after first paint, so in practice
- * the chunk is resident long before any of this is reached.
+ * **Nothing here awaits inside an event handler** — the rule this file exists to keep. An `await`
+ * before `preventDefault()` loses the gesture; an `await` before a state write puts a frame of
+ * nothing on screen. Every entry point instead does what the **关闭 tier** already does and
+ * starts the load in the background: a user who beats the chunk loses one interaction's
+ * animation, never the interaction. `warmMotion()` is called from the shell in runWhenIdle.
  */
 
 type Motion = typeof import('@/lib/motion');
@@ -50,13 +47,8 @@ export function warmMotion(): void {
   void load();
 }
 
-/**
- * A colour-scheme change, as a circular wipe.
- *
- * Without the engine the preference is still written and the scheme still flips — `commitScheme`
- * is `lib/appearance`'s and needs nothing — it simply arrives as a cut. That is what the 关闭 tier
- * does with this control today.
- */
+/** A colour-scheme change as a circular wipe; without the engine the preference is still
+ *  written and the scheme flips — it arrives as a cut, what the 关闭 tier does today. */
 export function changeScheme(setting: SchemeSetting, origin?: { x: number; y: number }): void {
   if (motion) {
     motion.changeScheme(setting, origin);
@@ -66,14 +58,9 @@ export function changeScheme(setting: SchemeSetting, origin?: { x: number; y: nu
   void load();
 }
 
-/**
- * A palette change, as a circular wipe.
- *
- * Same shape as `changeScheme`: without the engine the palette still changes, it just does not
- * wipe. `/settings` is the only screen with this control, and it is also one of the two places the
- * app's own preference for less motion can be turned on — so a first click that lands before the
- * chunk is precisely the case where a cut is the acceptable answer.
- */
+/** A palette change as a circular wipe, same shape as `changeScheme`: without the engine the
+ *  palette still changes, it just does not wipe. On `/settings` — the only screen with this
+ *  control — a first click before the chunk is exactly where a cut is acceptable. */
 export function changePalette(id: PaletteId, origin?: { x: number; y: number }): void {
   if (motion) {
     motion.changePalette(id, origin);
@@ -83,14 +70,9 @@ export function changePalette(id: PaletteId, origin?: { x: number; y: number }):
   void load();
 }
 
-/**
- * The eleventh palette, as a wipe. Same contract as `changePalette` above: without the
- * engine the colour still changes, it just arrives as a cut.
- *
- * The install is resolved by the caller through `lib/paletteLazy.ts`, so this function
- * stays synchronous and the two chunks stay independent — a user who has the palette
- * recipe but not GSAP gets their colour without a wipe, which is the right way round.
- */
+/** The eleventh palette, as a wipe — same contract as `changePalette`. The install is resolved
+ *  by the caller through `lib/paletteLazy.ts`, so this stays synchronous and the two chunks stay
+ *  independent. */
 export function changeCustomPalette(
   install: CustomPaletteInstall,
   origin?: { x: number; y: number },
@@ -103,22 +85,13 @@ export function changeCustomPalette(
   void load();
 }
 
-/**
- * The optimistic tab, while the URL catches up.
- *
- * No fallback needed and no engine involved: this moved to `lib/tabIntent.ts`. Re-exported here
- * so the shell's motion imports stay one import.
- */
+/** The optimistic tab, while the URL catches up. No engine involved — it lives in
+ *  `lib/tabIntent.ts`; re-exported so the shell's motion imports stay one import. */
 export { setTabIntent } from '@/lib/tabIntent';
 
-/**
- * Starts a tab switch on the tap, ahead of the route push.
- *
- * The fallback is `startTabTransition`'s own 关闭 branch, line for line: record the outgoing
- * offset against the panel and return. The switch then happens in `useTabPanes`'s layout effect
- * when the URL commits, which positions the scroller and swaps the panes without animating —
- * exactly what a user who has asked for no motion gets.
- */
+/** Starts a tab switch on the tap, ahead of the route push. Without the engine the fallback is
+ *  the 关闭 branch, line for line: record the outgoing offset against the panel and return; the
+ *  switch then happens in `useTabPanes`'s layout effect when the URL commits, without animating. */
 export function startTabTransition(
   from: string,
   to: string,
@@ -140,15 +113,11 @@ export function startTabTransition(
 /**
  * The drawer's edge-swipe, on a phone.
  *
- * A hook cannot live behind an `import()`, so this is a **component**: it renders nothing, and it
- * is only rendered once the engine has arrived. That is what keeps the hook call unconditional —
- * React's rule is about call order within one component's renders, and `<DrawerSwipeImpl>` calls
- * `useDrawerSwipe` on every render it ever has.
- *
- * The load is gated on `enabled`, which is `!useMediaQuery(MEDIA.md)` at the call site: above
- * 768px the drawer is docked and this gesture does not exist, so a desktop session never fetches
- * the chunk for it. What is lost while it arrives is one swipe; the drawer's button, its scrim and
- * its Escape key are untouched, because none of them is this hook's.
+ * A hook cannot live behind an `import()`, so this is a **component** rendering nothing, rendered
+ * only once the engine has arrived — the hook call stays unconditional for its whole life. The
+ * load is gated on `enabled`: above 768px the drawer is docked, so a desktop never fetches the
+ * chunk. What is lost while it arrives is one swipe; the drawer's button, scrim and Escape key
+ * are untouched, because none of them is this hook's.
  */
 export function DrawerSwipe(options: DrawerSwipeOptions) {
   const [ready, setReady] = useState(motion !== null);
@@ -183,24 +152,15 @@ function DrawerSwipeImpl({
 /* ---------------------------------------------------------------------------
  * The two hooks that gate most of the app's routes
  *
- * `useTabPanes` and `useStaggerGrid` both return a **ref**, which is why neither can simply be
- * wrapped: the ref has to exist in the first render, and the engine does not. So the caller keeps
- * the `useRef` and hands it down, and the hook runs inside a child that is only mounted once the
- * module has arrived — the same arrangement as `DrawerSwipe`, and the only one that keeps the
- * hook's own call order unconditional.
- *
- * `TabPanes` alone is on seven routes and `MasonryGrid` on two more, so between them they are what
- * decides whether GSAP is in the shared chunk every route loads or in one nothing loads until it
- * moves. That is the whole reason both are here rather than left as direct imports.
+ * `useTabPanes`/`useStaggerGrid` return a **ref**, so the caller keeps the `useRef` and hands it
+ * down — the ref must exist in the caller's first render, before the engine does — while the
+ * hook runs inside a child mounted only once the module has arrived (as in `DrawerSwipe`), the
+ * only arrangement that keeps the hook call order unconditional.
  * ------------------------------------------------------------------------ */
 
-/**
- * The shared-axis tab switch, once the engine is resident.
- *
- * Until then `TabPanesFallback` does what the **关闭 tier** does: `data-tab-pane-active` moves in
- * React's own commit, globals.css swaps the panes on it, and the scroller lands on the
- * destination's remembered offset. No pane is left mid-flight, because nothing was flying.
- */
+/** The shared-axis tab switch, once the engine is resident. Until then the fallback applies an
+ *  instant tab scroll — panes swap in React's commit and the scroller lands on the destination's
+ *  remembered offset; no pane is left mid-flight, because nothing was flying. */
 export function TabPanesMotion({
   panelRef,
   active,
@@ -258,13 +218,8 @@ function TabPanesFallback({
   return null;
 }
 
-/**
- * The gallery's entrance cascade, once the engine is resident.
- *
- * There is no fallback and there should not be: this is an *entrance*, so its absent form is the
- * cards simply being there — which is exactly what 入场动画 off already gives, and what a grid
- * re-rendered on a page turn gives today. Nothing is left half-animated.
- */
+/** The gallery's entrance cascade, once the engine is resident. No fallback, deliberately: an
+ *  *entrance*'s absent form is the cards simply being there — nothing is left half-animated. */
 export function StaggerGrid({
   gridRef,
   selector,
@@ -274,21 +229,11 @@ export function StaggerGrid({
   selector: string;
   deps: unknown[];
 }) {
-  /* **Decided once, at mount, and never subscribed to the load.**
-
-     This used to wait for the chunk and then mount the hook, which is wrong for an *entrance*
-     in one specific and very visible way: `/` renders its first feed page on the server, so on
-     a cold load the cards are in the HTML and painted before the engine arrives. The hook then
-     ran `fromTo(..., { autoAlpha: 0, y: 16, scale: 0.985 })` over content the user was already
-     looking at — fifty cards blinked out a few hundred milliseconds after paint and cascaded
-     back in over ~1.3s. An entrance that begins after the content has arrived is worse than no
-     entrance, which is what the paragraph above means by "its absent form is the cards simply
-     being there".
-
-     So: engine resident at mount (a client navigation, a warm second visit) and the cascade
-     plays before the first paint of those cards, which is what it is for. Engine absent and
-     this grid instance never cascades. Nothing else changes — `warmMotion()` still loads the
-     engine on an idle callback for every other consumer. */
+  /* Decided once, at mount, never subscribed to the load. An entrance that begins after its
+     content has arrived is worse than no entrance: `/` server-renders the first feed page, so
+     gating the cascade on the chunk made painted cards blink out and cascade back in. Engine
+     resident at mount → cascade before those cards' first paint; absent → this grid instance
+     never cascades. `warmMotion()` still loads the engine for every other consumer. */
   const [ready] = useState(motion !== null);
 
   if (!ready || !motion) return null;

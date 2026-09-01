@@ -17,10 +17,6 @@ import type { CaptchaGetResponse, CaptchaVerifyResponse } from '@/lib/types/capt
 import { proxyFetch, readJson } from './client';
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 
-// ---------------------------------------------------------------------------
-// 认证
-// ---------------------------------------------------------------------------
-
 export async function login(data: Record<string, unknown>) {
   return fetch(`${PICPONY_API_BASE}?action=login`, {
     method: 'POST',
@@ -36,10 +32,6 @@ export async function register(data: Record<string, unknown>) {
     body: JSON.stringify(data),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 用户
-// ---------------------------------------------------------------------------
 
 export async function getUser(token: string) {
   return fetch(`${PICPONY_API_BASE}?action=get_user`, {
@@ -135,10 +127,6 @@ export async function getSharedFavesByUsername(username: string): Promise<Shared
   return readJson(res);
 }
 
-// ---------------------------------------------------------------------------
-// 评论
-// ---------------------------------------------------------------------------
-
 export async function postComment(token: string, imageId: number, body: string) {
   return fetch(`${PICPONY_API_BASE}?action=post_comment`, {
     method: 'POST',
@@ -230,10 +218,6 @@ export async function getUserPosts(userId: string, page: number = 1): Promise<Us
   return readJson(res);
 }
 
-// ---------------------------------------------------------------------------
-// 论坛
-// ---------------------------------------------------------------------------
-
 export async function getForumPosts(page: number = 1): Promise<ForumPostsResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_forum_posts&page=${page}`, {
     cache: 'no-store',
@@ -307,10 +291,6 @@ export async function uploadForumImage(token: string, file: File) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 消息 & 通知
-// ---------------------------------------------------------------------------
-
 export async function getNotifications(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_notifications`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -359,10 +339,6 @@ export async function sendMessage(token: string, receiverId: number, content: st
   });
 }
 
-// ---------------------------------------------------------------------------
-// 验证码
-// ---------------------------------------------------------------------------
-
 export async function captchaGet(): Promise<CaptchaGetResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=captcha_get`, {
     cache: 'no-store',
@@ -382,10 +358,6 @@ export async function captchaVerify(x: number, track?: string): Promise<CaptchaV
   return readJson(res);
 }
 
-// ---------------------------------------------------------------------------
-// 公告
-// ---------------------------------------------------------------------------
-
 export async function getAnnouncement() {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_announcement`);
   return readJson(res);
@@ -395,10 +367,6 @@ export async function getAnnouncementHistory() {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_announcement_history`);
   return readJson(res);
 }
-
-// ---------------------------------------------------------------------------
-// API Key / Derpibooru 帐号关联
-// ---------------------------------------------------------------------------
 
 export async function saveApikey(
   token: string,
@@ -410,10 +378,6 @@ export async function saveApikey(
     body: JSON.stringify(data),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 设置
-// ---------------------------------------------------------------------------
 
 export async function updateSettings(token: string, data: Record<string, unknown>) {
   return fetch(`${PICPONY_API_BASE}?action=update_settings`, {
@@ -463,10 +427,6 @@ export async function resendVerifyCodeById(userId: number) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 报告
-// ---------------------------------------------------------------------------
-
 export async function reportImage(token: string, imageId: number, reason: string) {
   return fetch(`${PICPONY_API_BASE}?action=report_image`, {
     method: 'POST',
@@ -474,10 +434,6 @@ export async function reportImage(token: string, imageId: number, reason: string
     body: JSON.stringify({ image_id: imageId, reason }),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 密码重置
-// ---------------------------------------------------------------------------
 
 export async function resetPasswordRequest(email: string) {
   return fetch(`${PICPONY_API_BASE}?action=reset_password_request`, {
@@ -495,10 +451,6 @@ export async function resetPassword(data: { email: string; code: string; new_pas
   });
 }
 
-// ---------------------------------------------------------------------------
-// 以图搜图
-// ---------------------------------------------------------------------------
-
 export async function searchImage(imageFile: File, distance: number) {
   const formData = new FormData();
   formData.append('imageFile', imageFile);
@@ -515,10 +467,6 @@ export async function searchImage(imageFile: File, distance: number) {
 
   return readJson(response);
 }
-
-// ---------------------------------------------------------------------------
-// 浏览历史
-// ---------------------------------------------------------------------------
 
 export async function getBrowsingHistory(token: string, page: number = 1) {
   const res = await fetch(
@@ -564,10 +512,6 @@ export async function addBrowsingHistory(
     body: JSON.stringify(params),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 隐私收藏（需要隐私密码）
-// ---------------------------------------------------------------------------
 
 export async function checkHasPrivacyPassword(token: string) {
   const res = await fetch(
@@ -622,10 +566,6 @@ export async function removePrivacyFave(token: string, imageId: number) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 徽章
-// ---------------------------------------------------------------------------
-
 export async function getMyBadges(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_my_badges&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -640,10 +580,6 @@ export async function equipBadge(token: string, badgeName: string | null) {
     body: JSON.stringify({ badge_name: badgeName }),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 任务 / 等级
-// ---------------------------------------------------------------------------
 
 export async function getTasks(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_tasks&_t=${Date.now()}`, {
@@ -669,10 +605,6 @@ export async function getCoinTransactions(token: string, page: number = 1) {
   );
   return readJson(res);
 }
-
-// ---------------------------------------------------------------------------
-// 屏蔽组
-// ---------------------------------------------------------------------------
 
 export async function getBlockGroups(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_block_groups&_t=${Date.now()}`, {
@@ -713,10 +645,6 @@ export async function toggleBlockGroup(token: string, id: number, isActive: numb
     body: JSON.stringify({ id, is_active: isActive }),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 词典 / 标签翻译
-// ---------------------------------------------------------------------------
 
 export async function getGlossaryEntries(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_glossary_entries`, {
@@ -870,10 +798,6 @@ export async function getDictionaryTagHistory(token: string, tagId: number) {
   return readJson(res);
 }
 
-// ---------------------------------------------------------------------------
-// 标签组
-// ---------------------------------------------------------------------------
-
 export async function getTagGroups(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_tag_groups&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -900,13 +824,8 @@ export async function deleteTagGroup(token: string, id: number) {
   });
 }
 
-/**
- * The运营团队 list, which `/about` renders — a public, tokenless read.
- *
- * It lived in `lib/api/admin.ts` next to the team CRUD, so `/about` had to reach the
- * admin surface for it, which is the one thing that kept `getTeamMembers` inside the
- * un-tree-shakeable half of the barrel.
- */
+/** The运营团队 list for /about — a public, tokenless read kept out of the admin module so
+ *  /about need not import the un-tree-shakeable admin surface. */
 export async function getTeamMembers() {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_team_members&_t=${Date.now()}`);
   return readJson(res);

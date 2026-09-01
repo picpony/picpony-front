@@ -34,9 +34,9 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   const puzzleHeight = 155;
   const pieceSize = 50;
   const maxSliderX = puzzleWidth - pieceSize;
-/** `long1` on M3's scale — the shake is a pre-sampled keyframe track, so this is
- *  its whole clock and the curve is `none`. */
-const SHAKE_SECONDS = 0.45;
+  /** `long1` on M3's scale — the shake is a pre-sampled keyframe track, so this
+   *  is its whole clock and the curve is `none`. */
+  const SHAKE_SECONDS = 0.45;
 
   const [bgImage, setBgImage] = useState('');
   const [pieceImage, setPieceImage] = useState('');
@@ -47,8 +47,7 @@ const SHAKE_SECONDS = 0.45;
   const [errorMsg, setErrorMsg] = useState('');
   const [isDragging, setIsDragging] = useState(false);
 
-  const sliderXRef = useRef(0);
-  const sliderBtnRef = useRef<HTMLDivElement>(null);
+  const sliderXRef = useRef(0);  const sliderBtnRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
   const trackRefElement = useRef<HTMLDivElement>(null);
@@ -116,9 +115,9 @@ const SHAKE_SECONDS = 0.45;
     snapTweenRef.current?.kill();
     const from = sliderXRef.current;
     sliderXRef.current = 0;
-    /* Only `off`. The knob returning home is the control reporting that the attempt was
-       rejected — a value snapping back with no travel reads as the input never having been
-       registered — so `reduced` keeps the glide and the tier's own scale shortens it. */
+    /* Only `off`. The knob returning home is the control reporting that the
+       attempt was rejected — a value snapping back with no travel reads as the
+       input never having been registered — so `reduced` keeps the glide. */
     if (from <= 0 || motionTier() === 'off') {
       setSliderX(0);
       return;
@@ -126,9 +125,7 @@ const SHAKE_SECONDS = 0.45;
     const proxy = { x: from };
     snapTweenRef.current = gsap.to(proxy, {
       x: 0,
-      /* `fast-spatial`, the spring `Switch.kt` gives a handle. It ran `expo.out` at
-         0.5s — a GSAP built-in that is not one of the app's eight ease names, on a
-         hand-typed copy of `DURATION.emphasized`. */
+      /* `fast-spatial`, the spring `Switch.kt` gives a handle. */
       ...spring('fastSpatial'),
       onUpdate: () => {
         sliderXRef.current = proxy.x;
@@ -150,8 +147,8 @@ const SHAKE_SECONDS = 0.45;
   // Physical feedback on failure: shake the puzzle while the error overlay
   // fades in.
   useEffect(() => {
-    /* The shake is pure feedback with no state in it, so both non-standard tiers drop it
-       and the error overlay's own fade carries the message. */
+    /* The shake is pure feedback with no state in it, so both non-standard tiers
+        drop it and the error overlay's own fade carries the message. */
     if (!errorMsg || motionTier() !== 'standard') return;
     const el = containerRef.current;
     if (!el) return;
@@ -159,9 +156,9 @@ const SHAKE_SECONDS = 0.45;
       keyframes: { x: [0, -9, 8, -5, 3, 0] },
       duration: SHAKE_SECONDS,
       /* `none`, because the amplitudes are already in the keyframe list: laying a
-         curve over an explicit track re-shapes the whole shake, so the numbers above
-         were not the ones that played. `power2.out` was also outside the app's ease
-         vocabulary. This is the pre-sampled-track case AGENTS.md allows `linear` for. */
+          curve over an explicit track re-shapes the whole shake, so the numbers
+          were not the ones that played. The pre-sampled-track case the motion
+          rules allow `linear` for. */
       ease: 'none',
     });
     return () => {
@@ -394,11 +391,9 @@ const SHAKE_SECONDS = 0.45;
       </div>
       <div ref={containerRef} className="relative w-full max-w-78">
         {loading && !bgImage && (
-          /* A `Skeleton` in the puzzle's own box, not a `Spinner` inside it. The
+          /* A `Skeleton` in the puzzle's own box, not a `Spinner` inside it: the
              box is already reserved at the exact aspect ratio, so there is a
-             destination shape to load into — which is the whole test for which
-             of the two to use. A spinner here said "something is happening"
-             inside a frame that was already telling you where. */
+             destination shape to load into. */
           <Skeleton
             className="w-full rounded-md"
             style={{ aspectRatio: `${puzzleWidth} / ${puzzleHeight}` }}
@@ -473,21 +468,13 @@ const SHAKE_SECONDS = 0.45;
 
           <div
             ref={sliderBtnRef}
-            /* `duration-press` + `standard`, i.e. the motion table's press row.
-               Grabbing the handle is a press, and the 200ms this carried — with
-               no curve at all, so it fell through to the default — left the
-               fill and the scale still catching up after the handle had already
-               moved under the finger. (It was 120ms for a pass; 120 is not a step
-               on the M3 duration scale, 100 is.)
+            /* `duration-press` + `standard`, the motion table's press row:
+               grabbing the handle is a press, and the fill must keep up with the
+               handle under the finger.
 
-               No scale on grab, and no elevation at all. AGENTS.md lists a slider
-               handle among the things that are level 0, and `components/Slider.tsx`
-               — the primitive — gives its handle no shadow either, so a `shadow-e1`
-               here was a second answer for one object. The state layer is what
-               reports the press. Growing the handle 10% *and* lifting it two
-               elevation steps was three simultaneous answers to one gesture — and
-               in M3 Expressive a pressed slider handle narrows rather than grows,
-               so the direction was wrong as well as the amount. */
+               No scale on grab, no elevation at all — a slider handle is level 0
+               (the primitive gives its handle no shadow either), and the state
+               layer is what reports the press. */
             className={`bg-surface-raised text-title-m state-layer absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline transition-[color,background-color,border-color] duration-press ease-[var(--ease-standard)] select-none ${
               isDragging
                 ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill'

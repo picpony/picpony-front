@@ -61,8 +61,7 @@ import type { HeroChoreography, HeroDirection } from './types';
 /* One reader for the app, and it is the attribute rather than the media query:
    `lib/appearance` resolves "follow the system" once and writes the result onto `<html>`,
    so a mid-session change to either the OS setting or the app's own is already reflected
-   here. The private `matchMedia` copies these two files used to carry could not see the
-   second of those at all. */
+   here; a private `matchMedia` cannot see the second of those. */
 import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
 import { clamp01 } from '@/lib/utils';
 
@@ -94,10 +93,10 @@ type HeroContainerLeg = {
   /**
    * The window's own bow, which is **not** the flyer's.
    *
-   * It answers containment — the window has to hold the picture — while `HeroLeg.bow` answers the
-   * crop budget. They were one scalar, and sharing it meant the picture paid for the window's
-   * aspect excursion by flying a straight line. `solveHeroArcContainBows` has the measurement;
-   * `settleBows` is the only place either is set once a leg exists.
+   * It answers containment — the window has to hold the picture — while `HeroLeg.bow` answers
+   * the crop budget. They must not be one scalar: sharing it meant the picture paid for the
+   * window's aspect excursion by flying a straight line. `solveHeroArcContainBows` has the
+   * measurement; `settleBows` is the only place either is set once a leg exists.
    */
   bow: number;
 };
@@ -121,10 +120,8 @@ function createContainerLeg(
 /**
  * Turn around from wherever the box currently is, so a reversal never snaps.
  *
- * The bow it re-reads the box at is the *container's* own (`previous.bow`), not the flyer's. It
- * used to be a parameter and every caller passed `leg.bow`, which was the same number only because
- * the two arcs shared one scalar; reading it off the leg being rebased is what makes that
- * unrepresentable rather than merely fixed.
+ * The bow it re-reads the box at is the *container's* own (`previous.bow`), not the flyer's —
+ * reading it off the leg being rebased is what makes sharing one scalar unrepresentable.
  */
 function reverseContainerLeg(
   previous: HeroContainerLeg,
@@ -215,49 +212,26 @@ function createCompletion(): Completion {
 }
 
 /**
- * The clock every leg is timed against — and it is **`performance.now()`, not
- * `document.timeline.currentTime`**, which is the bug this used to be.
- *
- * A `DocumentTimeline`'s current time is the time of the last *rendering update*, not the time
- * now. Both are the same clock — `now − timeOrigin` — but one is sampled per frame and the other
- * is live, so however long the main thread has been busy since the last frame is exactly how far
- * behind the timeline is. Opening a picture does a lot of synchronous work in the press handler
- * (capture the thumbnail's pixels into a canvas, measure, build the flight layer, push the
- * route), so on a phone that gap is routinely 100ms and can be much more.
- *
- * Every leg then set `animation.startTime` to that stale value, i.e. **declared that it had
- * started in the past**, and a leg is only 296ms long. The reported symptom was precisely what
- * that predicts: on a slower browser the opening transition was simply missing and only its last
- * short segment played, because by the first frame the compositor produced the animation was
- * already two thirds through its own timeline. It is invisible on a desktop, where the gap is at
- * most one frame.
- *
- * `+ 1` at the call sites is unchanged and still means "start on the next frame, not this one".
+ * The clock every leg is timed against: **`performance.now()`, not
+ * `document.timeline.currentTime`** — a `DocumentTimeline`'s current time is the time of the
+ * last rendering update, not the time now. Opening a picture does heavy synchronous work in
+ * the press handler, so that gap is routinely 100ms+ on a phone; anchoring a leg's
+ * `startTime` to the stale value declared it had *started in the past*, and by the first
+ * compositor frame the leg was already partway through — the opening transition appeared to
+ * be missing, on slow devices only. `+ 1` at the call sites still means "next frame".
  */
 function timelineNow() {
   return performance.now();
 }
 
 /**
- * Start an animation **now**, meaning at the next frame the compositor produces — and
- * deliberately *not* at a wall-clock instant this code picks.
- *
- * It used to set `animation.startTime` explicitly, so that every track in a leg shared one
- * origin. They do share one anyway: animations created in the same task are given the same
- * start time when that task's animation frame runs, which is what the WebKit note this replaces
- * was describing. What the explicit assignment added was a *hazard*, and it is the one behind
- * the reported symptom — a leg anchored to an instant that has already passed plays from
- * wherever its clock has got to, so if the first frame after the press lands 200ms later, 200
- * of a leg's 296ms are already spent and only the last fifth is ever seen. Opening a picture
- * does a lot of synchronous work in the press handler (capture the thumbnail into a canvas,
- * measure, build the flight layer, push the route), and how long that takes is a property of
- * the device and the browser rather than of anything here, which is why it showed up on a phone
- * and on one browser more than another.
- *
- * Letting the browser assign the start time makes a leg always play its whole length from the
- * first frame anybody sees. `startedAt` survives as the analytic reference for interruption, and
- * `HeroMotion.startVisual` rebases it from the real animation once it is running so the two
- * cannot drift.
+ * Start an animation **now**, meaning at the next frame the compositor produces — never at a
+ * wall-clock instant this code picks. Explicitly setting `animation.startTime` anchors a leg
+ * to an instant that has already passed (see `timelineNow`): if the first frame after the
+ * press lands 200ms later, 200ms of the leg are already spent and only its tail plays. Let
+ * the browser assign the start time; animations created in one task share it anyway.
+ * `startedAt` survives as the analytic reference for interruption, rebased from the real
+ * animation in `startVisual` so the two cannot drift.
  */
 function animateAt(
   element: HTMLElement,
@@ -304,24 +278,16 @@ function revealRole(element: HTMLElement) {
 }
 
 /**
- * The detail side of a flight: a container transform, not a fade.
+ * The detail side of a flight: a container transform, not a fade — one growing, clipping,
+ * rounded box with the destination content laid out at its final size and scaled to the
+ * box's current width (`MaterialContainerTransform` / `open_container.dart`), grown to the
+ * whole navigator rather than the picture's box. A fade of a rectangle plus a page revealed
+ * behind it is two objects for one gesture.
  *
- * This used to be one property on one node — `opacity` on the surface plane — while the
- * routed page became visible by having its seal lifted. So a full-screen page arrived by
- * fading a rectangle in and then un-hiding a page behind it, with the picture flying past
- * on a separate path: two objects for one gesture.
- *
- * Material's answer, in both of its own implementations, is one growing, clipping, rounded
- * box with the destination content laid out at its final size and scaled to the box's
- * current width. `MaterialContainerTransform` masks `currentEndBounds` to the container;
- * `open_container.dart` writes it as `FittedBox(fit: BoxFit.fitWidth, alignment: topLeft)`
- * inside a `SizedBox` of the animated rect, and grows that rect to the whole navigator
- * (`_rectTween.end = Offset.zero & navSize`) rather than to the picture's box.
- *
- * So: three tracks on one clock — mask, fit, cross-fade — plus the picture, which keeps its
- * own shared-element morph, because a cropped thumbnail becoming a contained photo is worth
- * more here than Material's plain cross-fade between the two. Both start at the card's width
- * and end at their own, so they stay coherent without being coupled.
+ * Three tracks on one clock — mask, fit, cross-fade — plus the picture, which keeps its own
+ * shared-element morph (a cropped thumbnail becoming a contained photo is worth more than a
+ * plain cross-fade). Both start at the card's width and end at their own, so they stay
+ * coherent without being coupled.
  */
 type OverlayContext = {
   overlay: HTMLElement;
@@ -339,11 +305,10 @@ type OverlayContext = {
  * box, so when the host resizes the same numbers land somewhere else. See
  * `HeroMotion.rebuildContainer`.
  *
- * **The corner is its own `animate()` call and that is load-bearing.**
- * `compositor_animations.cc:79-84` checks the property set for the animation as a whole, so a
- * keyframe list mixing `transform` with `borderRadius` falls to `DefaultToUnsupportedProperty`
- * and the *transform* loses the compositor with it — which would forfeit the entire point of
- * this construction. Two animations on one element, one composited and one not, is the intended
+ * **The corner is its own `animate()` call, and that is load-bearing.** The compositor checks
+ * the property set for the animation as a whole, so a keyframe list mixing `transform` with
+ * `borderRadius` would cost the *transform* its compositor too — forfeiting the whole
+ * construction. Two animations on one element, one composited and one not, is the intended
  * arrangement: position rides the compositor and the corner is a paint-property update on a
  * single node.
  */
@@ -360,12 +325,10 @@ function buildContainerAnimations(
   const { direction, duration } = leg;
   const shape = HERO_CONTAINER_SHAPE[direction];
   const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES);
-  /* One arc, from the container's own endpoint pair — the window grows to the whole overlay, not
-     to the flyer's destination — and at the container's **own** bow. It used to take `leg.bow`, on
-     the argument that one scalar is the only reading under which the two still bow together. That
-     argument cost the picture its arc: the window's aspect excursion is what breaks containment,
-     so a shared scalar flattened the *picture* to fit a frame that was the one misbehaving, down to
-     0.02 of its bow on a portrait destination. `solveHeroArcContainBows` has the numbers. */
+  /* One arc, from the container's own endpoint pair — the window grows to the whole overlay,
+     not to the flyer's destination — and at the container's **own** bow: the window's aspect
+     excursion is what breaks containment, so a shared scalar flattened the *picture* to fit
+     a frame that was the one misbehaving. `solveHeroArcContainBows` has the numbers. */
   const clipArc = createHeroRectArc(container.clipFrom, container.clipTo, container.bow);
   const clip: Keyframe[] = new Array(frames.length);
   const corner: Keyframe[] = new Array(frames.length);
@@ -403,18 +366,10 @@ function buildContainerAnimations(
 }
 
 /**
- * An opacity threshold on the leg's **travel**, not on its wall clock.
- *
+ * An opacity threshold on the leg's **travel**, not on its wall clock —
  * `MaterialContainerTransform` applies `ProgressThresholds` to the animator's interpolated
- * fraction, so "0.60" there means "when the box is 60% home". This file used to build the
- * fades from four keyframes at raw time offsets while the mask's corner already used the eased
- * progress — one gesture measured two ways, which is the whole of what needed fixing.
- *
- * The forward leg barely moves: 0 → 0.25 ended at 74ms on the clock and ends at 75.6ms on
- * travel, because `HERO_FLIGHT_CURVE` happens to be near its own diagonal there. The back leg
- * is where it shows — the surface's 0.60 → 0.90 was 178 → 266ms and is now 116 → 187ms, so the
- * plane hands over to the thumbnail when the box has actually got most of the way home rather
- * than when a stopwatch says so.
+ * fraction, so "0.60" means "when the box is 60% home". Every fade window must be sampled
+ * this way or one gesture is measured on two clocks.
  */
 function fadeTrack(
   frames: readonly ProgressFrame[],
@@ -471,24 +426,18 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
      where the plane's begins. */
   const contentFade = HERO_CONTENT_FADE[direction];
   const [fadeFrom, fadeTo] = direction === 'forward' ? [0, 1] : [1, 0];
-  /* **The plane does not fade in, and that was a real defect on a phone.** A cross-fade exists
-     to keep the destination's *layout* from popping into a container too small to hold it, which
-     is a statement about content; a flat `surface` rectangle has nothing to hide. And fading it
-     hid the first quarter of the mask's growth, which is breakpoint-dependent in the worst way:
-     the enter threshold is a fraction of *travel*, but how much of the screen the card already
-     covers is not. Measured, card width over overlay width — 264/1152 = 0.23 on a 1440 desktop
-     against 175/390 = 0.45 on a 390 phone — so at the instant the plane reached full opacity it
-     was 42% of the way across the screen on the desktop and 59% on the phone. The reported
-     symptom was exactly that: on mobile the blank page appeared already most of the way open
-     instead of growing out of the thumbnail.
+  /* **The plane does not fade in, and that was a real defect on a phone.** A cross-fade keeps
+     the destination's *layout* from popping into a container too small to hold it — a statement
+     about content, which a flat surface rectangle has none of — and fading it hid the first
+     quarter of the mask's growth, by a fraction that is breakpoint-dependent: the enter
+     threshold is a fraction of travel, but how much screen the card already covers is not
+     (0.23 of the width on a 1440 desktop against 0.45 on a 390 phone), so on mobile the blank
+     page appeared already most of the way open.
 
-     `open_container.dart` is unambiguous here and we had it wrong: the container's own
-     `Material(color: openColor)` carries **no opacity at all**, and only the closed and open
-     *children* cross-fade (`_fadeOutTween`, `_fadeInTween`). The mask is the reveal.
-
-     The back leg keeps `HERO_CONTAINER_FADE.back`'s 0.60 → 0.90, which is doing real work: it is
-     what hands the plane over to the thumbnail late instead of blinking it out and letting the
-     picture travel alone. */
+     `open_container.dart` is unambiguous: the container's own `Material` carries **no opacity**;
+     only the closed and open *children* cross-fade. The mask is the reveal. The back leg keeps
+     `HERO_CONTAINER_FADE.back`'s 0.60 → 0.90, which hands the plane over to the thumbnail late
+     instead of blinking it out and letting the picture travel alone. */
   if (surface && direction === 'back') {
     owners.push(animateAt(surface, fadeTrack(frames, fade, fadeFrom, fadeTo), timing));
   }
@@ -507,15 +456,12 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   }
 
   /* The floating back button renders *outside* the overlay, so the mask never reaches it and
-     the container's parameter has no claim on it: it is a control appearing beside the surface
-     rather than a block inside the box, and it keeps the motion table's "small thing entering"
-     row. Do not "finish the job" by moving it onto the leg's progress. */
+     the container's parameter has no claim on it: it keeps the motion table's "small thing
+     entering" row. Do not "finish the job" by moving it onto the leg's progress. */
   if (floatingBack) {
-    /* Unconditional, where this used to be `reduced ? 0 : …`. The constant *is* 8, which is
-       the same weak form `Reveal`, the grid, `Toast`, the route clone and the detail's own
-       arrive keyframe all keep for the reduced tier — zeroing it made this the one control
-       in the app that fades in with no travel at all on that tier. Under `off` the clock is
-       0 and the distance never renders. */
+    /* Unconditional, not zeroed on the reduced tier: 8px *is* the weak form every other
+       control keeps, and zeroing it made this the only control that faded in with no travel
+       at all on that tier. Under `off` the clock is 0 and the distance never renders. */
     const distance = REVEAL_DISTANCE_PX.chrome;
     const pose = `translate3d(0, ${distance}px, 0)`;
     owners.push(
@@ -573,9 +519,9 @@ function buildDismissAnimations(
           { opacity: numericOpacity(element), transform: 'none' },
           { opacity: 0, transform: `translate3d(0, ${distance}px, 0)` },
         ],
-        // The leg's own duration, not `HERO_DURATIONS.back`: an interrupted reverse runs
-        // as short as `HERO_REVERSE_MIN_DURATION_MS`, and a fade outliving its own flight
-        // is what left the surface visibly settling after the flyer had landed.
+        // The leg's own duration, not the closing constant: an interrupted reverse runs
+        // short, and a fade outliving its own flight left the surface visibly settling
+        // after the flyer had landed.
         { duration: leg.duration, easing: HIDE_EASING },
       ),
     );
@@ -649,18 +595,13 @@ export class HeroMotion {
 
     const to = screenRectToPlane(options.to, this.flight.plane);
     const radii = getFlightRadii(this.flight, direction);
-    /* The animation speed reaches the flight here rather than in `constants.ts`, and it has
-       to: `scripts/heroPath.mjs` imports that file directly and cannot resolve
-       `lib/appearance` (it needs `matchMedia`), so a dependency there would take
-       `npm run hero:path` down with it. `HERO_DURATIONS` therefore stays a plain number and
-       the scale is applied at the moment the leg is built.
-
-       It has to be applied at all because the gallery card's chrome fade is
-       `--transition-duration-standard` and globals.css asserts that clock stays inside the
-       flight's — at 缓慢 an unscaled flight would be 250ms against a 280ms fade.
-       `HERO_PROGRESS_SAMPLES` is safe across the range: 48 samples of 350ms is 7.3ms a
-       segment, still inside a frame at 120Hz. `HERO_REVERSE_MIN_DURATION_MS`'s 90ms floor,
-       which has never bound, starts binding at 快速 — which is what a floor is for. */
+    /* The animation speed reaches the flight here rather than in `constants.ts`, and it must:
+       `scripts/heroPath.mjs` imports that file directly and cannot resolve `lib/appearance`
+       (it needs `matchMedia`). The scale also has to be applied at all, because the gallery
+       card's chrome fade is asserted to stay inside the flight's clock — an unscaled flight
+       at 缓慢 would be 250ms against a 280ms fade. Sample count stays safe across the range
+       (48 × 350ms = 7.3ms a segment), and the reverse floor starts binding at 快速, which is
+       what a floor is for. */
     const duration = Math.round(HERO_DURATIONS[direction] * motionScale());
     this.leg = createHeroLeg({
       from,
@@ -701,22 +642,17 @@ export class HeroMotion {
   /**
    * Settle the two bows against each other: the picture keeps its arc, the window gives way.
    *
-   * The flight leg arrives from `createHeroLeg` holding only the crop criterion's answer, and the
-   * container leg holds a placeholder — so this is the one place either is decided once both exist,
-   * and it runs before `startVisual` at every call site because the flyer's keyframes read
-   * `leg.bow`.
+   * The one place either bow is decided once both legs exist — the flight leg arrives holding
+   * only the crop answer, the container leg a placeholder — and it runs before `startVisual`
+   * at every call site because the flyer's keyframes read `leg.bow`. The two arcs live in
+   * different spaces, so the window's pair goes through the same `screenRectToPlane` the
+   * flyer's did; at capture time the scroll terms cancel and the comparison is exact.
    *
-   * The two arcs live in different spaces — the flyer's in the plane, the window's in the viewport
-   * — so the window's pair goes through the same `screenRectToPlane` the flyer's endpoints did. At
-   * capture time the scroll terms cancel, so this is the plain host offset and the comparison is
-   * exact.
-   *
-   * **Where the window does not clip the picture there is nothing to solve, and then the two
-   * share.** A dismiss builds no window, and a closing leg's flyer is planted in the gallery plane,
-   * outside both overlays — so on the way home neither arc constrains the other and both are fully
-   * on screen, which is the one case where a shared scalar is the right answer: the shrinking
-   * surface and the picture have to read as one object. The gate is `containedFlightLayer`, the same
-   * DOM question the counter track asks, for the same reason a direction test goes stale.
+   * **Where the window does not clip the picture there is nothing to solve, and the two
+   * share.** A dismiss builds no window, and a closing leg's flyer is planted in the gallery
+   * plane, outside both overlays — neither arc constrains the other, and the shrinking surface
+   * and the picture have to read as one object. The gate is `containedFlightLayer`, the same
+   * DOM question the counter track asks (a direction test goes stale).
    */
   private settleBows() {
     const container = this.containerLeg;
@@ -774,10 +710,9 @@ export class HeroMotion {
     this.cancelShared(false, false);
 
     const previous = this.leg;
-    // The drag offset lives on the compensator, outside the flight keyframes.
-    // Fold it into the starting box and clear the compensator so the reverse
-    // begins exactly where the flyer visually is, and no later frame — including
-    // the thumbnail landing — stays shifted down by a stale gesture.
+      // The drag offset lives on the compensator, outside the flight keyframes: fold it
+      // into the starting box and clear the compensator so the reverse begins exactly
+      // where the flyer visually is, and no later frame stays shifted by a stale gesture.
     const posed: HeroRect = pose.pullOffset
       ? { ...pose.rect, top: pose.rect.top + pose.pullOffset }
       : pose.rect;
@@ -799,10 +734,9 @@ export class HeroMotion {
     const returnTravel = heroRectCenterDistance(from, to);
     const ratio = fullTravel > 0.5 ? clamp01(returnTravel / fullTravel) : 1;
     const duration = Math.max(
-      /* Scaled with the product it floors. Left absolute, this stopped being a floor on the
-         *proportion* of the leg and became a wall-clock minimum: at 快速 the shortest reverse
-         is 0.7 × 250 × 0.35 = 61ms, so an unscaled 90 would have made a fast reversal
-         *longer* than the same reversal at the default speed. */
+      /* Scaled with the product it floors. Absolute, it stopped flooring the *proportion* of
+         the leg and became a wall-clock minimum: at 快速 the shortest reverse is 61ms, so an
+         unscaled 90 would make a fast reversal *longer* than the same one at default speed. */
       scaledMs(HERO_REVERSE_MIN_DURATION_MS),
       Math.round(
         HERO_DURATIONS[direction] *
@@ -874,13 +808,11 @@ export class HeroMotion {
       previous.duration > 0 ? pose.elapsed / previous.duration : 1,
     );
 
-    /* Preserve the current speed so a resize mid-flight is not a visible restart — which also
-       means an uninterrupted leg converts from the curve to a spring here. That is forced
-       rather than chosen: only a spring can be solved for a launch slope.
-
-       The floor is scaled with everything else: it exists so a resize in the last few frames
-       does not produce a leg too short to sample, and "too short" is a fraction of the
-       flight's own clock rather than a wall-clock figure. */
+    /* Preserve the current speed so a resize mid-flight is not a visible restart — which
+       also converts an uninterrupted leg from the curve to a spring here, forced rather
+       than chosen: only a spring can be solved for a launch slope. The floor is scaled
+       like everything else: "too short to sample" is a fraction of the flight's own clock,
+       not a wall-clock figure. */
     const duration = Math.max(scaledMs(FLIGHT_REBUILD_MIN_MS), previous.duration - pose.elapsed);
     this.leg = createHeroLeg({
       from,
@@ -893,9 +825,9 @@ export class HeroMotion {
       baseAspect: this.baseAspect,
       speed: pose.speed,
     });
-    /* Before `startVisual`, because the window is rebased and both bows are settled in there and
-       the flyer's keyframes read `leg.bow`. It costs one forced layout ahead of the first frame
-       rather than after it, in the same task, so nothing is painted in between. */
+    /* Before `startVisual`: the window is rebased and both bows settled in there, and the
+       flyer's keyframes read `leg.bow`. One forced layout ahead of the first frame, in the
+       same task, so nothing is painted in between. */
     this.rebuildContainer(destination, containerProgress);
     this.startVisual();
   }
@@ -903,19 +835,15 @@ export class HeroMotion {
   /**
    * Re-aim the window at a freshly measured host, from wherever it is now.
    *
-   * **This is what `rebuild` used to skip, and skipping it was visible.** The window is
-   * expressed as a pose *relative to the host's box*, so when the host resizes the same numbers
-   * land somewhere else — and the keyframes were built against the old box and aimed at the old
-   * box. Measured on a 400px-wide viewport with the flight 90ms in and the height changed by
-   * 60px (which is a phone's address bar collapsing, the one thing that fires this path on
-   * mobile): the flyer moved 19px in that frame and **the mask jumped 682 → 784**, then
-   * converged on the pre-resize host and finished 8px short of the new one. A one-frame jump of
-   * a full-screen window is exactly the artefact that reads worse the lower the refresh rate,
+   * **A viewport change mid-flight has to re-aim the container, not just the flyer.** The
+   * window is a pose *relative to the host's box*, so when the host resizes the same numbers
+   * land somewhere else and keyframes built against the old box finish short of the new one
+   * (measured: the mask jumping ~100px in one frame on an address-bar collapse). A one-frame
+   * jump of a full-screen window is the artefact that reads worse the lower the refresh rate,
    * because it *is* the difference between two adjacent frames.
    *
-   * Re-reading the host is safe for the same reason the constructor's read was: the overlay is
-   * the one node in this chain that never carries a transform. It also costs one forced layout
-   * now rather than two — the content's natural box is not part of the leg any more.
+   * Re-reading the host is safe because the overlay is the one node in this chain that never
+   * carries a transform.
    */
   private rebuildContainer(destination: HeroRect, progress: number) {
     const previous = this.containerLeg;
@@ -939,9 +867,8 @@ export class HeroMotion {
       ),
       host,
     };
-    /* The window's endpoints just moved, so its bow is a stale answer to a question about a box
-       that no longer exists — and so is the picture's, since the two are solved against each
-       other. */
+    /* The window's endpoints just moved, so its bow is a stale answer to a question about a
+       box that no longer exists — and so is the picture's, since the two are solved together. */
     this.settleBows();
     try {
       this.containerTracks = buildContainerAnimations(
@@ -957,14 +884,12 @@ export class HeroMotion {
   /**
    * The flight layer, iff the window is one of its ancestors.
    *
-   * **Containment, not direction, and that is deliberate.** An opening leg builds its plane from
-   * the Stage's scroller (`getElementScrollPlane`), whose anchor is inside the window; a closing
-   * leg builds it from the gallery (`getGalleryScrollPlane`), which is outside both overlays. A
-   * direction test would encode that indirectly and go stale the moment a plane moves. Asking
-   * the DOM is self-correcting for both legs, for every `moveFlightToPlane`, and for the reduced
-   * and dismiss paths — where no container track exists at all, so the layer correctly gets no
-   * transform. Both `reverse` and `rebuild` re-plant the layer *before* rebuilding these tracks,
-   * so this always sees the final parent.
+   * **Containment, not direction, and that is deliberate.** A direction test would encode the
+   * planes' arrangement indirectly and go stale the moment a plane moves; asking the DOM is
+   * self-correcting for both legs, for every `moveFlightToPlane`, and for the reduced and
+   * dismiss paths — where no container track exists, so the layer correctly gets no transform.
+   * Both `reverse` and `rebuild` re-plant the layer *before* rebuilding these tracks, so this
+   * always sees the final parent.
    */
   private containedFlightLayer(): HTMLElement | null {
     const layer = this.flight.layer;
@@ -972,17 +897,14 @@ export class HeroMotion {
   }
 
   /**
-   * Undo the accumulated window transform for a caller measuring a node inside it.
+   * Undo the accumulated window transform for a caller measuring a node inside it — the
+   * viewport-invalidation path re-reads the Stage's landing target, which lives under the
+   * window, so a mid-flight read is the scaled box. The transform is our own animation, so
+   * its origin and scale are known exactly (`unprojectHeroContainerRect`).
    *
-   * The viewport-invalidation path re-reads the Stage's landing target to re-aim the flyer, and
-   * that target lives under the window, so a mid-flight read is the scaled box. The transform is
-   * our own animation, so its origin and scale are known exactly — see
-   * `unprojectHeroContainerRect`.
-   *
-   * The `containerTracks` guard fixes a **pre-existing** defect rather than guarding a new one:
-   * the flight is built for tiers that cannot fly (`skipFlight` is only `!source`), but below
-   * the standard tier these tracks are never created, so this used to divide by a transform
-   * that was not on screen.
+   * The `containerTracks` guard matters below the standard tier: the flight is built for
+   * tiers that cannot fly, but these tracks are never created there, so without it this
+   * would divide by a transform that is not on screen.
    */
   unprojectRect(rect: HeroRect): HeroRect {
     const container = this.containerLeg;
@@ -1012,11 +934,9 @@ export class HeroMotion {
   }
 
   /**
-   * Fade out a superseded flyer.
-   *
-   * 200ms is the motion table's "leaves the screen" row; it read 160, which is not a step on
-   * M3's duration scale. Deliberately not pushed into `visual`/`shared` — it has to outlive
-   * both tracks — and safe uncancelled because `dispose()` detaches the layer it paints.
+   * Fade out a superseded flyer: the motion table's "leaves the screen" row, on M3's
+   * duration scale. Deliberately not pushed into `visual`/`shared` — it has to outlive both
+   * tracks — and safe uncancelled because `dispose()` detaches the layer it paints.
    */
   fadeRetiring(duration = scaledMs(FLIGHT_RETIRE_MS)) {
 
@@ -1077,15 +997,11 @@ export class HeroMotion {
     }
     this.visual = owners;
     const revision = ++this.visualRevision;
-    /* Rebase the analytic clock onto the real one.
-     *
-     * `startedAt` is what `evaluateLeg` measures elapsed time against, and nothing sets an
-     * animation's start time by hand any more — the browser assigns it when the leg's first
-     * frame runs, which may be well after this task on a device that was busy. Reading it back
-     * is what keeps a pose measured for an interruption agreeing with what is on screen; before
-     * this the two could disagree by however long that gap was, and a reversal would then be
-     * launched from a box the flyer had not reached. `ready` is the only point at which
-     * `startTime` is guaranteed non-null. */
+    /* Rebase the analytic clock onto the real one. `startedAt` is what `evaluateLeg` measures
+       elapsed time against, and nothing sets an animation's start time by hand — the browser
+       assigns it when the leg's first frame runs, which may be well after this task on a busy
+       device. Reading it back is what keeps a pose measured for an interruption agreeing with
+       what is on screen, and `ready` is the only point at which `startTime` is non-null. */
     const flyer = owners[0]?.animation;
     void flyer?.ready.then(() => {
       if (revision !== this.visualRevision) return;
@@ -1100,10 +1016,9 @@ export class HeroMotion {
 
   private startShared(continueBackground: boolean) {
     const owners: AnimationOwner[] = [];
-    /* Idempotent: every caller reaches here through `cancelShared`, but the container
-       tracks live in their own array and only get *assigned* inside the branch below, so a
-       run that produces none (reduced motion switched on mid-session) would otherwise leave
-       the previous pair in the array to be settled twice. */
+    /* Idempotent: every caller reaches here through `cancelShared`, but the container tracks
+       live in their own array and are only *assigned* inside the branch below, so a run that
+       produces none would otherwise leave the previous pair in the array to be settled twice. */
     settle(this.containerTracks, false);
     this.containerTracks = [];
     try {
@@ -1167,20 +1082,18 @@ export class HeroMotion {
         ? 0
         : 1;
     const to = direction === 'forward' ? 1 : 0;
-    /* The origin is the *viewport's* centre inside the scroller, not the element's: this node's box
-       is the whole scrollable content and can be several viewports tall, so `center center` would
-       fling the visible rows. Read once — the gallery scroller carries `data-scroll-hidden` while
-       the detail is open, so the offset cannot move under the leg. */
+    /* The origin is the *viewport's* centre inside the scroller, not the element's: this
+       node's box is the whole scrollable content, several viewports tall, and an
+       element-centred origin would fling the visible rows. Read once — the gallery scroller
+       is hidden while the detail is open, so the offset cannot move under the leg. */
     const scroller = element.parentElement;
     const centre = scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0;
     element.style.transformOrigin = `center ${centre}px`;
     element.style.willChange = 'transform';
-    /* The sink shares the leg's own table, so depth and travel stay locked. It used to build
-       its own with a literal sample count, which would have forked off the mask's the moment
-       either number moved.
-
-       It no longer shares the leg's whole *interval*, though: the window grows over the gallery as
-       the leg runs, so a cue that peaked at p=1 peaked behind an opaque surface. See
+    /* The sink shares the leg's own table, so depth and travel stay locked — a literal
+       sample count here would have forked off the mask's the moment either number moved.
+       It does not share the leg's whole *interval*: the window grows over the gallery as the
+       leg runs, so a cue that peaked at p=1 peaked behind an opaque surface. See
        `HERO_BACKGROUND_SINK_WINDOW`. */
     const window = HERO_BACKGROUND_SINK_WINDOW[direction];
     const keyframes = sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES).map(

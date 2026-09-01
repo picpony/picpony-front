@@ -140,13 +140,10 @@ export default function CreateForumPostPage() {
           <p className="block text-label-l text-on-surface mb-2"> 分类 </p>
           <div className="flex gap-3">
             
-            {/* Single-select over a small set: M3 filter chips, which is what
-                `Chip variant="filter"` is for — it brings the leading check on
-                selection, the container/on-container tone pair and the ripple.
-                Hand-rolled, the unselected state was `bg-surface-container-high`
-                with a hover to `-highest` and the selected state was a full
-                `bg-primary` fill, so "which category am I in" was carried by a
-                brand-pink block that outweighed the field label above it. */}
+            {/* Single-select over a small set: M3 filter chips (`Chip variant="filter"`),
+                which bring the leading check on selection, the container/on-container tone
+                pair and the ripple. Hand-rolled, "which category am I in" was carried by a
+                full `bg-primary` fill that outweighed the field label above it. */}
             {categories.map((cat) => (
               <Chip
                 key={cat.value}
@@ -183,10 +180,10 @@ export default function CreateForumPostPage() {
                 height={128}
                 className="object-cover rounded-md border border-outline-variant"
               />
-              {/* `IconButton` gives the 32dp box, the state layer and the focus
-                  ring; `touch-target` was standing in for a box the primitive
-                  already provides, and it cannot be combined with `data-ripple`
-                  anyway because that clips the pseudo-element out of hit-testing. */}
+              {/* `IconButton` gives the 32dp box, the state layer and the focus ring;
+                  `touch-target` was standing in for a box the primitive already provides,
+                  and cannot be combined with `data-ripple` anyway — that clips the
+                  pseudo-element out of hit-testing. */}
               <IconButton
                 size="sm"
                 variant="filled"
@@ -198,9 +195,8 @@ export default function CreateForumPostPage() {
               />
             </div>
           ) : (
-            /* A real dropzone now, not a click-only button wearing a dashed
-               border. It also stops emitting two radii: the automated pass that
-               moved this onto `Button` left `rounded-md` beside the recipe's own
+            /* A real dropzone now, not a click-only button wearing a dashed border —
+               and it stops emitting two radii: `rounded-md` sat beside the recipe's own
                `rounded-full`, and `px-4 py-3` beside its `h-10 px-5`. */
             <DropZone
               size="sm"
@@ -224,12 +220,10 @@ export default function CreateForumPostPage() {
           </div>
         )}
         <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant">
-          {/* A `<Link>`, so it takes the recipe rather than the component — a
-              `<button>` may not be nested in an `<a>`, which is the case
-              `buttonClasses` exists for. It sits directly beside a
-              `<Button variant="filled">`, and hand-writing the padding meant the
-              cancel link and the submit button were 44px and 40px tall in the
-              same footer row. */}
+          {/* A `<Link>` wearing the recipe, not the component: a `<button>` may not be
+              nested in an `<a>`, which is the case `buttonClasses` exists for. Hand-writing
+              the padding made the cancel link and the submit button 44px and 40px tall in
+              the same footer row. */}
           <Link scroll={false} href="/forum" className={buttonClasses({ variant: 'text' })}>
             取消
           </Link>

@@ -45,25 +45,18 @@ const INITIAL: View = { zoom: 1, x: 0, y: 0, rotation: 0 };
 /**
  * Avatar / banner cropper.
  *
- * Uploading a profile image used to be: hidden `<input type=file>` → OS picker
- * → straight to the server. No preview, no framing, no size control — the crop
- * was whatever `object-fit: cover` happened to do afterwards, so a portrait
- * photo became a picture of somebody's chin.
- *
  * Geometry model, in CSS pixels relative to the centre of the crop window:
  *
  *     screen = translate(x, y) · rotate(rotation) · scale(S) · imagePoint
  *
- * with `S = base · zoom`, and `base` the scale at which the (possibly rotated)
- * image exactly covers the window. `zoom >= 1` therefore guarantees the window
- * is always full, and the pan clamp below is just "don't drag an edge inside
- * the window". Export replays the same matrix onto a canvas, so what is drawn
- * is what is saved — there is no second, subtly different code path.
+ * with `S = base · zoom`, `base` the scale at which the (possibly rotated) image
+ * exactly covers the window. `zoom >= 1` therefore guarantees the window is
+ * always full, and the pan clamp is just "don't drag an edge inside the window".
+ * Export replays the same matrix onto a canvas — what is drawn is what is saved.
  *
  * Pointer handling is hand-rolled rather than GSAP Draggable: the bounds are a
  * function of zoom and rotation and change on every wheel tick, and pinch needs
- * two-pointer tracking that Draggable does not model. The clamp is four lines;
- * keeping it explicit is smaller than reconfiguring a plugin around it.
+ * two-pointer tracking.
  */
 export default function ImageCropper({
   file,
@@ -82,9 +75,8 @@ export default function ImageCropper({
 
   // Callback ref, not `useRef`: the stage is rendered through Modal's portal,
   // which mounts a tick after `file` is set. A plain ref meant the measuring
-  // effect below ran before the node existed, returned early, and never re-ran
-  // — cropBox stayed at 0, `ready` stayed false, and the spinner never left.
-  // Holding the node in state re-runs both effects the moment it attaches.
+  // effect ran before the node existed and never re-ran. Holding the node in
+  // state re-runs both effects the moment it attaches.
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [cropBox, setCropBox] = useState({ w: 0, h: 0 });
@@ -361,21 +353,16 @@ export default function ImageCropper({
 
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
-          {/* `IconButton`, not a hand-rolled `state-layer rounded-full p-2`.
-              These two were the last icon buttons in the app spelling out their
-              own box — and a `p-2` box is only 36dp because a 20px glyph happens
-              to be inside it, so changing the glyph would have changed the
-              control's size. */}
+          {/* `IconButton`, not a hand-rolled box: a padding-sized box changes
+              the control's size whenever the glyph changes. */}
           <IconButton
             onClick={() => nudgeZoom(-ZOOM_STEP)}
             disabled={!ready || v.zoom <= 1}
             aria-label="缩小"
             icon={<MdZoomOut size={ICON.control} />}
           />
-          {/* `Slider`, the primitive. This and the image-search dialog's were the
-              app's two range inputs and they shared a global class rather than a
-              component, so the class had to be remembered at each call site and
-              neither one got a focus ring. */}
+          {/* `Slider`, the primitive — not a global class remembered at each
+              call site, which left the two range inputs without a focus ring. */}
           <Slider
             min={1}
             max={MAX_ZOOM}

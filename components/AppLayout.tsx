@@ -52,12 +52,9 @@ import RouteScrollMemory from '@/lib/scrollMemory';
 import Button from '@/components/Button';
 import Tabs from '@/components/Tabs';
 import IconButton, { iconButtonClasses } from '@/components/IconButton';
-/* Through the lazy facade, not `lib/motion` directly. This component wraps every route and that
-   module registers GSAP and five plugins at module scope, so a theme toggle, a tab tap and a
-   phone-only swipe were putting the whole engine in the first document of every screen — including
-   the ones that are a page of text. Each entry point falls back to the 关闭 tier's own behaviour
-   until the chunk lands, and `warmMotion()` below fetches it on an idle callback after first
-   paint. See `lib/motionLazy.tsx`. */
+/* Through the lazy facade, not `lib/motion` directly: that module registers GSAP and
+   five plugins at module scope, and this component wraps every route. Each entry point
+   falls back to the 关闭 tier's own behaviour until the chunk lands. See `lib/motionLazy.tsx`. */
 import {
   changeScheme,
   DrawerSwipe,
@@ -88,10 +85,9 @@ function SearchBar() {
 
   return (
     <form onSubmit={handleSearch} className="flex shrink-0">
-      {/* `type="submit"` is the whole reason this is an `IconButton` rather
-          than a `Link`: the form is what owns the navigation.
-          `md` + `touch-size`, matching the other four controls in the bar — and the
-          Suspense fallback that reserves this box has to match it exactly. */}
+      {/* `type="submit"` is why this is an `IconButton` rather than a `Link`: the form
+          owns the navigation. `md` + `touch-size` matches the other bar controls, and
+          the Suspense fallback must reserve exactly this box. */}
       <IconButton
         type="submit"
         variant="on-primary"
@@ -117,26 +113,12 @@ interface UserInfo {
 /**
  * How long to wait before committing the tab to the URL.
  *
- * Long enough to sit past the end of the slide, which is the point — and 520
- * rather than 480, because the slide is `DURATION.emphasized` (500ms) plus up to
- * `span * AXIS_LAG` of stagger on the lowest block, so 480 fired ~20–36ms *inside*
- * the frames this exists to protect. The push
- * costs a React commit and an RSC navigation, and at 160ms that landed square
- * in the middle of the transition: measured on the home switch, two frames of
- * 41ms and 38ms against a 16.6ms median, right where the panes are moving
- * fastest. Nothing is waiting for it — the transition owns the pane flags and
- * `pendingTab` owns the pill — so the only thing deferring costs is how soon
- * the URL agrees, and no one is looking at the URL mid-slide.
- *
- * It also swallows a burst of taps into one push, which is what it was
- * originally for.
- *
- * Scaled by the *slowest* speed rather than held at 520, for the reason
- * `useExitAnimation` gives about the same class of timer: the slide's own clock now goes
- * through `--motion-scale`, so at 缓慢 it settles at about 722ms and a 520ms push would land
- * ~200ms inside the travel — the dropped frame this constant exists to avoid. The maximum is
- * the only value that is right at every speed, and pushing the URL later costs nothing
- * because nothing on screen is waiting for it.
+ * Sits past the end of the slide (`DURATION.emphasized` is 500ms, plus stagger), so the
+ * push — a React commit and an RSC navigation, two ~40ms frames measured mid-slide —
+ * never lands inside the travel. It also swallows a burst of taps into one push.
+ * Scaled by the *slowest* speed rather than held at 520: the slide's clock goes through
+ * `--motion-scale`, so at 缓慢 it settles at ~722ms and a fixed 520ms push would land
+ * ~200ms inside the travel. Pushing later costs nothing; nothing on screen waits for it.
  */
 const TAB_PUSH_COALESCE_MS = Math.round(520 * MOTION_SPEED_SCALE.slow);
 
@@ -152,29 +134,17 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
      run inside this transition purely so React will tell us — it is the only
      signal that distinguishes "the URL agrees with the user" from "the URL is
      briefly agreeing on its way somewhere else". */
-  /* **The URL is written on the tap, synchronously, and a burst replaces rather than accumulates.**
-     There is no queue and no timer, which is the whole point.
-
-     It used to defer a `router.push` by `TAB_PUSH_COALESCE_MS` so that a run down the tab bar cost
-     one history entry instead of one per tab passed through. Two things were wrong with that. A
-     tab change is a query parameter on the route you are already on, so `router.push` treated it
-     as a navigation — an RSC request and a transition — and a *deferred* one at that, which meant
-     it could land after some other navigation the user had started in the meantime and overwrite
-     it. Measured: tapping 论坛 and opening a thread 200ms later gave three different answers over
-     five runs — the thread opened once, the queued tab update clobbered it twice, and twice both
-     were lost, leaving the gallery on screen under a tab bar still reading 论坛. That is the
-     "returning from a thread lands on the gallery with the wrong control" report. Clicking 搜索
-     instead left the URL reading `/?tab=forum` while `/search` was the route being rendered.
-
-     Cancelling the queue on unmount does not fix it: the timer fires while the other navigation is
-     still committing, so it wins the race anyway. Removing the queue does.
-
-     `window.history.pushState`/`replaceState` are integrated into Next's router and sync
-     `usePathname` and `useSearchParams` (`linking-and-navigating.md`), so the panes and the pill
-     still see the change — but nothing is started, so there is nothing to race, and a tab switch
-     stops costing an RSC round trip. The coalescing window survives as the *push-vs-replace*
-     decision, which is all it was ever buying: the first change in a burst adds an entry and the
-     rest rewrite it. */
+  /* **The URL is written on the tap, synchronously, and a burst replaces rather than
+     accumulates.** No queue, no timer. The former deferred `router.push` made a tab
+     change an RSC navigation that could land *after* some other navigation the user had
+     started and overwrite it (measured: tapping 论坛 then opening a thread 200ms later
+     gave three different answers over five runs); cancelling the queue on unmount did
+     not fix it — the timer still fired inside the other navigation's commit.
+     `history.pushState`/`replaceState` are integrated into Next's router and sync
+     `useSearchParams`, so the panes and pill still see the change, nothing is started,
+     nothing can race, and a tab switch stops costing an RSC round trip. The coalescing
+     window survives as the push-vs-replace decision: the first change in a burst adds a
+     history entry, the rest rewrite it. */
   const lastTabWrite = useRef(0);
 
   /* The panes see only the URL. It no longer *lags* — `switchTab` writes it synchronously — but
@@ -188,26 +158,15 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
   }, [pendingTab]);
 
   /* **The optimistic tab must not outlive the URL catching up, in either direction.**
-
-     `pendingTab` exists only to cover the commits between the synchronous `history.pushState`
-     and `useSearchParams` propagating. Removing the deferred `router.push` also removed the
-     reset that used to sit in render, and nothing replaced it — so it was cleared on unmount
-     and at no other time.
-
-     What that costs is the report this whole change was meant to fix, arriving from the other
-     end. Tap 论坛, then press Back: the URL returns to `/`, but `pendingTab` is still `forum`,
-     so `setTabIntent` keeps reporting `forum`, and `useTabPanesOn` bails at
-     `tabIntent() !== active` *before* `clearPaneFlags` — leaving the gallery pane
-     `display: none` on a stale `-done` and the forum pane on screen on a stale `-entering`,
-     under a URL that says gallery. The pill stays on 论坛 too, and `switchTab`'s
-     `tab === activeTab` early return makes tapping 论坛 a no-op, so the only way out is to tap
-     图库.
-
-     Keyed on `currentTab` alone, so it fires whether the URL *caught up with* the tap or moved
-     somewhere else entirely (Back, a sidebar link, the `/forum` redirect). Either way the
-     optimistic value has done its job. `queueMicrotask` because
-     `react-hooks/set-state-in-effect` rejects a synchronous setState here; on mount the write
-     is `null` over `null`, which React bails out of without a re-render. */
+     `pendingTab` only covers the commits between the synchronous `history.pushState` and
+     `useSearchParams` propagating. Left stale it is worse than useless: tap 论坛 then
+     press Back — the URL returns to `/` but `setTabIntent` keeps reporting forum, so
+     `useTabPanesOn` bails before `clearPaneFlags`, leaving the gallery pane hidden on a
+     stale flag, the forum pane on screen, the pill on 论坛, and tapping 论坛 a no-op.
+     Keyed on `currentTab` alone, so it fires whether the URL caught up with the tap or
+     moved somewhere else; either way the optimistic value has done its job.
+     `queueMicrotask` satisfies `react-hooks/set-state-in-effect`; on mount it writes
+     null over null, which React bails out of. */
   useEffect(() => {
     queueMicrotask(() => setPendingTab(null));
   }, [currentTab]);
@@ -216,16 +175,14 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
   const switchTab = (tab: string) => {
     if (tab === activeTab) return;
     setPendingTab(tab);
-    /* Both panes are already mounted, so the transition does not need the
-       route — it only needs the attribute that gives the incoming pane a box,
-       and it sets that itself. Gallery sits left of forum, so moving right
-       sends the outgoing pane left. */
-    /* `lean` on, and this is the one bar in the app that gets it. The wave is sampled
-       over the blocks *inside* each pane, which needs those blocks to survive the run —
-       true here because the forum pane is mounted ahead of the tap on an idle callback,
-       so by the time you press it is already holding its rows rather than a skeleton it
-       is about to replace. `/messages` is the counter-example and must stay without it:
-       its panes fetch when their tab is selected. */
+    /* Both panes are already mounted, so the transition does not need the route — only
+       the attribute that gives the incoming pane a box, which it sets itself. Gallery
+       sits left of forum, so moving right sends the outgoing pane left. */
+    /* `lean` on — the one bar in the app that gets it. The wave is sampled over the
+       blocks *inside* each pane, which needs those blocks to survive the run: true here
+       because the forum pane is mounted ahead of the tap on an idle callback. The
+       counter-example is `/messages`, whose panes fetch on selection — it must stay
+       without it. */
     startTabTransition(activeTab, tab, tab === 'forum' ? 1 : -1, true);
 
     const params = new URLSearchParams(searchParams.toString());
@@ -244,20 +201,12 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
 
   return (
     /* Kept mounted while an image-detail overlay is open rather than unmounted:
-       the sliding indicator measures its target on mount, so tearing it down
-       and rebuilding it makes the pill jump back to x=0 on the way out. It fades
-       instead, on the same 200ms the hero flight uses for card chrome, so the
-       two leave together — and *only* the leave is on `accelerate`. One curve for
-       both directions was fine for a symmetric bezier and is not for a one-sided
-       one: `emphasized-accelerate` spends 82% of its travel in the last two tenths,
-       which read backwards is a pill that hangs and then snaps. The return takes the
-       arrival row.
-       `data-image-detail-chrome` was previously set here and consumed nowhere —
-       the pill just sat on the app-bar layer on top of the overlay.
-       `z-page-chrome` keeps it under the drawer scrim: the host `<section>` is
-       positioned but not a stacking context, so the pill's z competes directly
-       with the shell's. On the app-bar layer it floated over the open drawer.
-       See the stacking-order block in globals.css. */
+       the sliding indicator measures its target on mount, and unmounting it makes the
+       pill jump back to x=0 mid-flight. The fade mirrors the hero flight's 200ms
+       card-chrome fade — leave on `accelerate`, return on the arrival row (a one-sided
+       curve needs one per direction). `z-page-chrome` keeps it under the drawer scrim:
+       the host `<section>` is positioned but not a stacking context, so the pill's z
+       competes directly with the shell's. See the stacking-order block in globals.css. */
     <div
       data-image-detail-chrome
       data-chrome-hidden={hidden || undefined}
@@ -269,13 +218,10 @@ function TabNavBar({ hidden }: { hidden: boolean }) {
           : 'translate-y-0 opacity-100 duration-enter ease-[var(--ease-decelerate)]'
       }`}
     >
-      {/* `Tabs variant="pill"`, not a hand-rolled segmented control. This was one
-          of four tab implementations and the only one with no ARIA roles at all —
-          the app's primary navigation announced itself to a screen reader as two
-          unlabelled buttons, and no arrow key did anything. The primitive owns the
-          roles, the keyboard contract, the sliding indicator and the elevation;
-          what stays here is the part that is genuinely this screen's — the
-          optimistic tab, the coalesced push and the hide-while-flying wrapper. */}
+      {/* `Tabs variant="pill"`, not a hand-rolled segmented control — the primitive owns
+          the ARIA roles, the keyboard contract, the sliding indicator and the elevation.
+          What stays here is what is genuinely this screen's: the optimistic tab, the
+          coalesced push and the hide-while-flying wrapper. */}
       <Tabs
         className="pointer-events-auto"
         label="首页分区"
@@ -324,11 +270,9 @@ export default function AppLayout({
   const imageDetailSegment = useSelectedLayoutSegment('imageDetail');
   const imageDetailId = pathname.match(/^\/pic\/([^/]+)$/)?.[1];
   const isImageDetailOpen = Boolean(imageDetailId && imageDetailSegment === imageDetailId);
-  /* Any `/pic/:id` screen, intercepted overlay or direct navigation.
-     `isImageDetailOpen` only covers the overlay, so opening an image link
-     directly left the drawer's edge-swipe armed underneath the detail view —
-     and since that screen is one you pan and swipe on, the sidebar kept
-     flashing out from the left mid-gesture. */
+  /* Any `/pic/:id` screen, intercepted overlay or direct navigation —
+     `isImageDetailOpen` only covers the overlay, and a direct visit left the drawer's
+     edge-swipe armed underneath a screen you pan and swipe on. */
   const isImageDetailRoute = Boolean(imageDetailId);
   const imageHeroRuntime = useSyncExternalStore(
     subscribeImageHeroRuntime,
@@ -362,29 +306,14 @@ export default function AppLayout({
   const imageHeroBackground =
     imageHeroRuntime.background ?? (bridgeRouteCommit ? retainedHeroBackground : null);
   const backgroundPathname = imageHeroBackground?.pathname ?? (isImageDetailOpen ? '/' : pathname);
-  /* The hero owns the same pixels during a flight — it transforms the
-     background, freezes this very pathname, and paints a flyer over the lot —
-     so the route cross-fade stands down entirely while one is in progress.
-     That is what the first two conditions say, and they say all of it.
-
-     The third used to be `!isImageDetailRoute`, which is much broader: it stood
-     the cross-fade down for the whole time you were *on* an image detail, not
-     just while one was flying. So leaving a picture for /search was the one
-     navigation in the app with no transition at all — a hard cut, from the
-     screen a user is most likely to leave sideways.
-
-     `!isImageDetailOpen` is the narrow version, and the distinction is load
-     bearing. `isImageDetailOpen` means the intercepted **overlay** is mounted,
-     and in that case `backgroundPathname` is `/` and the snapshot source
-     (`[data-page-content]`) is the *gallery underneath the overlay* — so a fade
-     there would dissolve a page the user cannot even see. A direct visit to
-     `/pic/123` has no overlay: the detail page *is* `[data-page-content]`, the
-     existing machinery clones the right thing, and the fade is simply correct.
-
-     The overlay case therefore stays a cut on purpose. Fixing it needs the clone
-     to carry the overlay's own `scrollTop` — the overlay scrolls an inner
-     element, so unlike a page inside the app scroller its offset is not encoded
-     in `getBoundingClientRect`, and a clone starts at zero. */
+  /* The hero owns the same pixels during a flight, so the first two conditions stand the
+     route cross-fade down while one is in progress. `!isImageDetailOpen` is the narrow
+     third term, and the distinction is load-bearing: with the intercepted overlay
+     mounted, the snapshot source is the gallery *underneath* it, and fading that
+     dissolves a page the user cannot see. A direct `/pic/123` visit has no overlay —
+     the detail page *is* the content, and the fade is correct. The overlay case stays a
+     cut on purpose: fixing it needs the clone to carry the overlay's inner scroll
+     offset, which `getBoundingClientRect` does not encode and a clone starts at zero. */
   const crossFadeEnabled =
     imageHeroRuntime.phase === 'gallery-idle' &&
     !imageHeroRuntime.background &&
@@ -399,11 +328,9 @@ export default function AppLayout({
   }, [router]);
 
   const getRevealOrigin = useCallback(() => {
-    // The icon, not the button's box: every entry point into a theme change grows
-    // the wipe out of the glyph itself. They share a centre while the button is a
-    // bare square, but the button is free to gain padding or a label — and it now
-    // carries `touch-size`, so on a touch device its box is larger than its paint.
-    // The fallback below used to be the top edge of the viewport.
+    // The icon, not the button's box: the wipe grows out of the glyph, and the button
+    // may gain padding or a label — its box is also larger than its paint under
+    // `touch-size` on a touch device.
     const element = themeIconRef.current ?? themeButtonRef.current;
     if (!element) return undefined;
     const rect = element.getBoundingClientRect();
@@ -414,21 +341,17 @@ export default function AppLayout({
     };
   }, []);
 
-  /* Restore the docked drawer's remembered state after mount.
-   *
-   * This effect used to apply the colour scheme too, and no longer needs to: the layout
-   * puts all four appearance preferences on `<html>` from cookies and the pre-paint
-   * script corrects them from localStorage before the first paint, so by the time this
-   * runs the scheme is already right and re-applying it here could only introduce a
-   * second write. What is left is genuinely post-mount, because it depends on the
-   * viewport. queueMicrotask keeps setState out of the effect's synchronous body
-   * (react-hooks/set-state-in-effect) while still running before the next paint. */
+  /* Restore the docked drawer's remembered state after mount. (The layout already puts
+     the appearance preferences on `<html>` from cookies, so the scheme needs no second
+     write here.) Genuinely post-mount, because it depends on the viewport;
+     queueMicrotask keeps setState out of the effect's synchronous body while still
+     running before the next paint. */
   useEffect(() => {
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
-      // Width is handled during render above; this only restores the docked
-      // drawer's remembered state, and must not fight it on a phone.
+      // Render handles the width; this only restores the docked drawer's remembered
+      // state, and must not fight it on a phone.
       if (window.matchMedia(MEDIA.md).matches) {
         const savedSidebar = localStorage.getItem(LS_KEYS.sidebarCollapsed);
         if (savedSidebar !== null) setIsCollapsed(savedSidebar === 'true');
@@ -439,12 +362,9 @@ export default function AppLayout({
     };
   }, []);
 
-  /* While following the system, an OS-level scheme flip re-runs the wipe.
-   *
-   * This is the one theme change reachable with no user input at all, which is why
-   * `circularReveal` consults `heroOwnsScreen()` before it freezes rendering to snapshot
-   * a frame. `changeScheme` is a no-op when the resolved scheme already matches, so the
-   * old `e.matches === darkMode` guard is gone rather than duplicated. */
+  /* While following the system, an OS-level scheme flip re-runs the wipe — the one theme
+     change reachable with no user input, which is why `circularReveal` consults
+     `heroOwnsScreen()` before freezing rendering. */
   useEffect(() => {
     if (schemeSetting !== 'system') return;
     const mediaQuery = window.matchMedia(MEDIA.dark);
@@ -453,26 +373,20 @@ export default function AppLayout({
     return () => mediaQuery.removeEventListener('change', handler);
   }, [schemeSetting, getRevealOrigin]);
 
-  /* And the same for the motion tier, which is the other `system`-resolved preference.
-   *
-   * Without this, choosing 跟随系统 and then turning on the OS's reduce-motion setting
-   * changed nothing until a reload: the store's own listener bumps a version, but the
-   * *attribute* — which is what the CSS is keyed on and what `motionTier()` reads — was
-   * never rewritten. The two watchers are separate because only the scheme's is a visible
-   * change worth a wipe; a tier change has nothing to animate by definition. */
+  /* The same for the motion tier, the other `system`-resolved preference: without it,
+     turning on the OS's reduce-motion setting changed nothing until a reload (the store
+     listener bumps a version, but the *attribute* the CSS keys on was never rewritten).
+     A separate watcher because a tier change has nothing to animate by definition. */
   useEffect(() => {
     const mediaQuery = window.matchMedia(MEDIA.reducedMotion);
     mediaQuery.addEventListener('change', refreshSystemMotion);
     return () => mediaQuery.removeEventListener('change', refreshSystemMotion);
   }, []);
 
-  /* The request line's two shell-level chores.
-   *
-   * `setLineNotifier` is a seam for the same reason `setMotionScaleListener` is one:
-   * `lib/route.ts` is on every request path and must not reach into `components/`, but a
-   * line that switches under you has to say so. And `ensureRoutePolicy` is kicked here
-   * only to overlap the fetch with the first render — `proxyFetch` awaits it regardless,
-   * so a route that never mounts this shell is still covered. */
+  /* The request line's two shell-level chores: `setLineNotifier` is a seam (a line that
+     switches under you has to say so, but `lib/route.ts` must not reach into
+     `components/`), and `ensureRoutePolicy` is kicked here only to overlap the fetch
+     with the first render. */
   useEffect(() => {
     setLineNotifier((message, tone) => showToast(message, tone));
     void ensureRoutePolicy();
@@ -484,16 +398,12 @@ export default function AppLayout({
 
   /* Tell the splash the app is on screen, so it can leave.
    *
-   * A double `requestAnimationFrame`, which is the standard way to land *after* a commit has
-   * actually been presented rather than merely committed: the first callback runs before the
-   * paint that this effect's own commit produces, the second runs after it. A single frame
-   * would report "painted" on the frame that is still being composited, and the overlay would
-   * begin fading over a blank page.
-   *
-   * This is the shell rather than any one route on purpose. The shell is what every route
-   * renders inside, so it is the one place that can say "something is on screen" without
-   * needing to know what that something is — and it is above `[data-page-content]`, so it does
-   * not re-fire on navigation. See `lib/splash.ts`. */
+   * A double `requestAnimationFrame` lands *after* the commit has actually been
+   * presented, not merely committed — a single frame can report "painted" on a frame
+   * still being composited, and the overlay would fade over a blank page. This is the
+   * shell rather than any one route on purpose: every route renders inside it, and it
+   * sits above `[data-page-content]`, so it does not re-fire on navigation.
+   * See `lib/splash.ts`. */
   useEffect(() => {
     let inner = 0;
     const outer = requestAnimationFrame(() => {
@@ -505,12 +415,10 @@ export default function AppLayout({
     };
   }, []);
 
-  /* The animation engine, after the page is on screen.
-   *
-   * Both of these are needed at the *first interaction* — a navigation, a theme toggle, a tab tap
-   * — which is at minimum a user gesture away, so neither belongs in the document. `runWhenIdle`
-   * rather than a bare call, because the whole point is not to compete with hydration; each has a
-   * documented no-animation fallback for the case where somebody beats it. */
+  /* The animation engine, after the page is on screen: both are needed at the *first
+   * interaction*, which is at minimum a user gesture away, so neither belongs in the
+   * document. `runWhenIdle` avoids competing with hydration; each has a documented
+   * no-animation fallback if somebody beats it. */
   useEffect(() => runWhenIdle(() => {
     warmMotion();
     warmRouteCrossFade();
@@ -523,13 +431,10 @@ export default function AppLayout({
   };
 
 
-  /* The stored session, which is the *only* thing that decides whether the shell renders as signed
-     in. It changes when the device's storage changes — a sign-in, a sign-out, /settings saving a
-     field — and those all announce themselves with `user_info_updated`.
-     It starts `null` and is filled after mount, which is not an oversight: `localStorage` does not
-     exist on the server, so seeding it during render would make the first client render disagree
-     with the SSR markup for every signed-in visitor. That is the rule the state block above states
-     for the whole component. */
+  /* The stored session is the *only* thing that decides whether the shell renders as
+     signed in. It changes on sign-in/out and /settings saves, which announce themselves
+     with `user_info_updated`. Starts `null` and fills after mount — `localStorage` does
+     not exist on the server, and seeding during render would break SSR hydration. */
   const [storedSession, setStoredSession] = useState<UserInfo | null>(null);
   useEffect(() => {
     const reread = () => setStoredSession(readUserInfo() as unknown as UserInfo | null);
@@ -540,16 +445,10 @@ export default function AppLayout({
 
   const token = storedSession?.token ?? null;
 
-  /* Two shell reads, both through `lib/resource.ts`, and the point is what they are *not* keyed on.
-     They used to be a pair of effects: one keyed on the pathname, which re-read the session on
-     every navigation, and one keyed on the `userInfo` **object**, which re-ran whenever the first
-     one called `setUserInfo` — twice per run. Measured with `npm run net:audit`, a signed-in cold
-     load sent `get_user` twice and `get_unread_counts` two to four times, and every navigation
-     after it sent them again. That is the dependency-identity cascade `useAuth`'s docstring records
-     `/favorites` hitting a rate limit on, grown back in the one component every screen mounts
-     inside.
-     Keyed on the token string, deduplicated by the resource, and refreshed on their own TTLs: five
-     minutes for a session only its owner can change, one minute for a badge somebody else can. */
+  /* Two shell reads through `lib/resource.ts`, keyed on the token string, deduplicated by
+     the resource, refreshed on their own TTLs (5min session / 1min badge). Never key these
+     on an object identity: the earlier pathname/object-keyed pair re-read the session on
+     every navigation and twice per run. */
   const session = useResource(sessionUser, token ? { token } : SKIP);
   const unread = useResource(unreadCounts, token ? { token } : SKIP);
 
@@ -557,36 +456,33 @@ export default function AppLayout({
      force-reads the same resource entry, and this component is subscribed to it. */
   const totalUnread = token ? (unread.data?.total ?? 0) : 0;
 
-  /* Fold the server's answer back into storage.
-   *
-   * Separate from the read because it is a *write*: the merge keeps the four fields the server does
-   * not return (the token and the three Derpibooru identifiers) and hands the rest over. Guarded on
-   * the serialised result so a cache hit on a navigation does not set state with an identical
-   * object — which would re-render the whole shell on every navigation for nothing. */
+  /* Fold the server's answer back into storage. Separate from the read because it is a
+     *write*: the merge keeps the four fields the server does not return (token + three
+     Derpibooru identifiers) and hands the rest over. Guarded on the serialised result so
+     a cache hit does not set an identical object and re-render the whole shell. */
   const mergedRef = useRef<string | null>(null);
   useEffect(() => {
     const result = session.data;
     if (!result) return;
-    /* Storage read here rather than taken from `storedSession`, so this effect does not depend on
-       the state it sets. With `storedSession` in the dependency list the guard below is the only
-       thing standing between this and a loop; without it there is nothing to loop through. */
+    /* Storage read rather than `storedSession`, so this effect does not depend on the
+       state it sets — with it in the dependency list the guard below is all that
+       stands between this and a loop. */
     const stored = readUserInfo();
     if (!stored) return;
 
     if (result.kind === 'unauthorized') {
       localStorage.removeItem(LS_KEYS.userInfo);
       mergedRef.current = null;
-      /* Out of the effect's synchronous body, per `react-hooks/set-state-in-effect`, and the same
-         `queueMicrotask` the drawer's own restore uses a few effects above. Still before paint. */
+      /* Out of the effect's synchronous body, per `react-hooks/set-state-in-effect`;
+         still before paint. */
       queueMicrotask(() => setStoredSession(null));
       return;
     }
-    /* `unreadable` means a 200 with an empty body — a dropped PHP session or a proxy hiccup. The
-       stored user is left exactly as it is, which is what this branch has always done. */
+    /* `unreadable` = a 200 with an empty body (dropped PHP session, proxy hiccup);
+       the stored user is left exactly as it is. */
     if (result.kind !== 'ok') return;
 
-    /* The four fields the server does not return, kept from storage. */
-    const merged = {
+    /* The four fields the server does not return, kept from storage. */    const merged = {
       ...stored,
       ...result.user,
       token: stored.token,
@@ -607,15 +503,11 @@ export default function AppLayout({
   // the swipe gesture and auto-collapse-on-navigate both switch off.
   const isOverlayDrawer = !useMediaQuery(MEDIA.md, true);
 
-  /* Entering overlay territory collapses the drawer, so it never sits open
-     across a phone-width viewport.
-
-     Adjusted during render rather than from an effect, and this is the whole
-     point: SSR cannot know the viewport, so the first paint assumes the docked
-     desktop drawer. On a phone the media query flips to "overlay" at hydration
-     — and if the persisted preference said "expanded", the drawer painted open
-     over the content for a frame or two before any effect could close it. That
-     is the sidebar appearing out of nowhere on the home and settings screens.
+  /* Entering overlay territory collapses the drawer, so it never sits open across a
+     phone-width viewport. Adjusted during render rather than from an effect, and that
+     is the point: SSR cannot know the viewport, so the first paint assumes the docked
+     desktop drawer — and on a phone with a persisted "expanded" preference the drawer
+     painted open over the content for a frame or two before any effect could close it.
      Reacting during render closes it before the browser ever paints it. */
   const [wasOverlayDrawer, setWasOverlayDrawer] = useState(isOverlayDrawer);
   if (isOverlayDrawer !== wasOverlayDrawer) {
@@ -647,11 +539,9 @@ export default function AppLayout({
 
   const handleLogoutConfirm = () => {
     localStorage.removeItem(LS_KEYS.userInfo);
-    /* Signing out does not reload the document, so every in-memory store has to be dropped by hand
-       or the next account inherits this one's inbox. Three of them, because they hold three
-       different things: what the server said, which page each screen was on, and — until
-       `/messages` is migrated — that screen's whole render. Dropping `clearSnapshots` when the
-       other two arrived is exactly the privacy hole this call was added to close. */
+    /* Signing out does not reload the document, so every in-memory store must be
+       dropped by hand or the next account inherits this one's inbox: what the server
+       said, which page each screen was on, and that screen's whole render. */
     clearAllResources();
     clearScreenState();
     clearSnapshots();
@@ -669,31 +559,16 @@ export default function AppLayout({
     <BackgroundLocationProvider frozenSearch={frozenBackgroundSearch}>
       <div className="h-full flex flex-col overflow-hidden">
         <DevBanner />
-        {/* **64dp, `AppBarSmallTokens.ContainerHeight`, at every density.** It was
-            briefly 56 under a pointer on the density argument, and that was the wrong
-            object to apply it to: the bar is not repeated chrome you scroll past
-            thirteen of, it is the one fixed band at the top of the screen, and the
-            thing that made it feel oversized was the five 56dp controls in it rather
-            than the band. Those are 40dp now (see below); the band stays the spec's.
-
-            The horizontal inset is `px-4 sm:px-26` — 16px on a phone, 104px from `sm`
-            up. The wide desktop inset is deliberate breathing room around the brand
-            rather than a derivation: pulling it to the drawer's 28dp icon column was
-            tried and read as the wordmark being shoved into the corner. If it ever
-            needs a reason beyond "it looks right there", the one available is that the
-            bar spans both the drawer and the content area and belongs to neither, so
-            aligning it to either one's grid is a false precision.
-
+        {/* **64dp app bar at every density** (`AppBarSmallTokens.ContainerHeight`) — the
+            bar is the one fixed band, not repeated chrome, so the density step does not
+            apply; the 56dp-feel came from the controls in it, which are 40dp now.
+            Horizontal inset 16px on a phone, 104px from `sm`: deliberate breathing room
+            around the brand — the bar spans drawer and content and belongs to neither,
+            so aligning it to either grid is false precision.
             **`--touch-floor: 48px` locally, so the bar opts out of the pointer axis.**
-            Everywhere else the floor drops to 24 under a mouse, because a hit area
-            wider than the paint makes a control light up while the cursor is outside
-            it. These five are the exception and it is not a hit-testing argument: they
-            are the app's most-used controls, they sit alone on a 64dp coloured band,
-            and at 40dp with 104px of air either side they read as five small glyphs
-            rather than as the bar's chrome. 48 is M3's own touch target taken as a
-            box — which is what they were before this pass — so nothing here is a new
-            number, and `touch-size` reads the override without any call site changing.
-            One declaration on the band rather than five on the controls. */}
+            These five are the app's most-used controls, alone on a 64dp coloured band;
+            at 40dp with 104px of air either side they read as small glyphs rather than
+            chrome. One declaration on the band rather than five on the controls. */}
         <header className="h-16 [--touch-floor:48px] bg-primary text-on-primary flex items-center px-4 sm:px-26 shrink-0 relative z-app-bar">
           {/* `IconButton variant="on-primary"`. The app bar's four controls
               were each a hand-rolled 48px box repeating the same eight classes,
@@ -732,10 +607,8 @@ export default function AppLayout({
                `shrink-0` keeps the mark intact if anything else ever grows. */
             className="relative mr-2 flex shrink-0 touch-size items-center"
           >
-            {/* The header used to carry its own copy of the wordmark and its own
-                copy of the hover — same idea as `Logo.tsx`, drifted to a
-                different width and a keyline the other never had. One component
-                now; `keyline` is the part that was genuinely header-specific. */}
+            {/* One wordmark component for header and drawer; `keyline` is the part
+                that was genuinely header-specific. */}
             <Logo className="h-auto w-20 sm:w-25" keyline />
           </Link>
           <IconButton
@@ -752,10 +625,8 @@ export default function AppLayout({
               key={followSystem ? 'system' : String(darkMode)}
               className="block animate-icon-swap"
             >
-              {/* The glyph shows the mode you are *in*, not the one you would
-                switch to — which is what the tooltip beside it already says.
-                It used to show the opposite (a sun while in dark mode), so the
-                icon and its own tooltip disagreed. */}
+              {/* The glyph shows the mode you are *in*, not the one you would switch
+                  to — matching the tooltip beside it. */}
               {followSystem ? (
                 <MdBrightnessAuto size={ICON.standard} />
               ) : darkMode ? (
@@ -767,25 +638,18 @@ export default function AppLayout({
             }
           />
           <div className="flex-1" />
-          {/* The fallback reserves the control's own box, so the row does not shift
-              when `SearchBar` hydrates. It has to move with the control — including
-              through `touch-size`, or the bar would jump by 8px on mount on a touch
-              device. It read `h-14 w-14` against a 56dp button; before that it read 44
-              against 48, and the app bar jumped by 4px on mount. */}
+          {/* The fallback reserves the control's own box, moving with it — including
+              through `touch-size` — so the bar does not jump by 8px on mount on a
+              touch device. */}
           <Suspense fallback={<div className="h-10 w-10 touch-size" aria-hidden="true" />}>
             <SearchBar />
           </Suspense>
-          {/* A `<Link>`, so it cannot be an `IconButton` — but it wears the
-              same recipe from `iconButtonClasses` rather than a fifth copy of
-              it. Same reason `buttonClasses` exists beside `Button`.
-              The badge is a **sibling** of the anchor rather than a child of it, and
-              that is not a preference: `data-ripple` sets `overflow: hidden` to clip
-              the ripple, and a corner badge on a `rounded-full` box cannot survive a
-              circular clip at any offset — the distance from the box's centre to the
-              badge's centre plus the badge's own radius always exceeds the clip
-              radius. It was inside, losing a slice of its outer arc whenever the
-              count was non-zero. The anchor's `aria-label` already carries the
-              count, so the badge is decorative and can sit outside. */}
+          {/* A `<Link>` wearing the same recipe from `iconButtonClasses` rather than a
+              fifth copy of it (same reason `buttonClasses` exists beside `Button`).
+              The badge is a **sibling** of the anchor, not a child: `data-ripple` sets
+              `overflow: hidden`, and a corner badge on a circular clip always loses its
+              outer arc (centre distance + badge radius > clip radius). The anchor's
+              `aria-label` already carries the count, so the badge is decorative. */}
           <span className="relative ml-1 flex shrink-0">
             <Link
               scroll={false}
@@ -824,92 +688,42 @@ export default function AppLayout({
                are not reachable by Tab from behind the scrim. */
             aria-hidden={isCollapsed ? 'true' : undefined}
             inert={isCollapsed ? true : undefined}
-            /* 288dp, and that is a **deliberate divergence** — M3's navigation
-               drawer is 360dp. This one is *docked* from `md` up, so its width is
-               taken out of the content area rather than laid over it, and on an
-               image gallery those 72px are a column of thumbnails. 360 is right
-               for a drawer you dismiss; for one that stays open beside the content
-               it costs more than it gives. The number lives here only, and
-               `-mr-72` below has to match it.
+            /* 288dp, a **deliberate divergence** from M3's 360dp navigation drawer,
+               and not to be "fixed": this drawer is *docked* from `md` up, so its width
+               comes out of the content area — on an image gallery those 72px are a
+               column of thumbnails. The number lives here only; the negative right
+               margin below must match it.
 
-               **The panel slides; it is not clipped.** This animated `width`
-               from 288 to 0 with the contents pinned at `w-72` inside
-               `overflow-hidden`, and that is the defect two different easing
-               curves were blamed for. Measured over the collapse: the nav's own
-               left edge went `0 -> 0` — the labels, avatar and rows never moved
-               at all — while the main content's left edge travelled the full
-               `300 -> 12`. So two things moved on screen at once, one of them at
-               the curve's rate and one of them at zero, and a guillotine swept in
-               from the right across the frozen half. No timing function can fix
-               that, which is why replacing the beziers with a spring did not.
+               **The panel slides; it is not clipped.** Animating width with the contents
+               pinned was the defect two easing curves were blamed for: the nav's own
+               left edge never moved while the main content's travelled the full run, so
+               two things moved at once, one at the curve's rate and one at zero — a
+               guillotine no timing function can fix. Now the whole aside translates and
+               a negative margin closes the layout behind it: the content travels because
+               it is *inside* the thing that moves, the panel's box never resizes so its
+               subtree never re-lays-out, and `translate` is composited.
 
-               Now the whole aside translates and a negative margin closes the
-               layout behind it. The content travels with the panel because it is
-               *inside* the thing that moves, the panel's own box never resizes so
-               its subtree never re-lays-out, and `translate` is composited. The
-               parent is `overflow-hidden`, so the panel is clipped at the window
-               edge rather than needing a width of its own to hide it.
-
-               **A spring, and a different one per direction — because that is
-               what M3 does.** `NavigationDrawer.kt` reads:
-
-                 val openMotion  = MotionSchemeKeyTokens.DefaultSpatial.value()
-                 val closeMotion = MotionSchemeKeyTokens.FastEffects.value()
-
-               So opening is ζ0.9 k700 (194ms) and closing is ζ1.0 k3800 (108ms) —
-               critically damped, which is the point: a panel leaving must not
-               overshoot back into view. This is also the one place the file's own
-               "effects springs are for fades" rule has to bend, and AOSP bends it
-               the same way: `effects` means ζ=1, and ζ=1 is exactly what a
-               *position* wants when overshoot would be wrong.
-
-               Getting here took three wrong answers, all of them instructive:
-
-               - `slow-spatial` (ζ0.9 k300, 296ms). Right family, wrong stiffness:
-                 measured, the first quarter of the travel took 54ms, so behind the
-                 press latency the panel looked stuck before it moved.
-                 `default-spatial` reaches the same quarter at 35ms.
-               - `standard` and `emphasized-decelerate`. Percentage of the 288px
-                 covered in each tenth of the duration:
-
-                   emphasized-decelerate  62 16  8  5  3  2  1  1  0  0
-                   standard               16 34 19 11  8  5  3  2  1  0
-                   ζ0.9 spring            10 19 20 17 13  9  6  4  2  1
-
-                 Every M3 *curve* is one-sided, which is right for the two verbs it
-                 models — the front-loaded half of an arrival happens while the
-                 object is mostly off-screen. A docked panel is neither verb, so on
-                 `standard` its fastest tenth carried 97x its last: "very fast then
-                 very slow", which was the complaint verbatim. A spring is not
-                 one-sided; it leaves and arrives at zero velocity by construction.
-               - `--ease-symmetric`, a bezier invented for this. It measured well (7.6:1
-                 peak-to-final) and it is still the right answer for a *loop*, which
-                 has no arrival — but inventing a curve to stand in for spring
-                 physics is what this codebase already did once with
-                 `cubic-bezier(0.18, 1.36, 0.5, 1)`, and the springs exist so that it
-                 does not have to happen again.
-
-               Vuetify was the reference for the *arrangement* and still is: one
-               gesture, one clock, the scrim sharing it
-               (`$navigation-drawer-transition-duration: 0.2s`, timing function
-               shared with the panel). What it cannot supply is the physics — its own
-               curve is Material 2's `cubic-bezier(0.4, 0, 0.2, 1)`, which does ease
-               in but still tails off at 43:1. The arrangement is borrowed; the
-               numbers come from the token set.
-
-               The springs are applied per branch rather than once on the element,
-               because a transition is governed by the *after-change* style: the
-               class the element is gaining is the one whose timing runs. */
+               **A spring, and a different one per direction — because that is what M3
+               does.** `NavigationDrawer.kt`: open = `DefaultSpatial` (ζ0.9, 194ms),
+               close = `FastEffects` (ζ1.0, 108ms) — critically damped, because a panel
+               leaving must not overshoot back into view. (`effects` means ζ=1, and ζ=1
+               is exactly what a *position* wants when overshoot would be wrong.) A
+               docked panel travelling in place is neither of M3's one-sided curve verbs
+               — on `standard` its fastest tenth carries 97x its last, i.e. a jump then a
+               stall — so a spring, which leaves and arrives at zero velocity by
+               construction, is the right physics. Vuetify is still the reference for the
+               *arrangement*: one gesture, one clock, the scrim sharing both. The springs
+               are applied per branch because a transition is governed by the
+               *after-change* style — the class the element is gaining is the one whose
+               timing runs. */
             className={`bg-surface-container-low flex w-72 flex-col shrink-0 transition-[margin-right,translate] overflow-hidden absolute md:relative h-full z-app-bar md:z-auto rounded-r-lg md:rounded-none ${
               isCollapsed
                 ? 'spring-fast-effects -translate-x-full md:-mr-72'
                 : 'spring-default-spatial translate-x-0'
             }`}
           >
-            {/* `w-full`, not a second `w-72`. The width used to be written here as
-                well, because the aside was resizing under it and its contents had
-                to be held still; the aside no longer resizes, so a second copy of
-                the number is just two places to change it. */}
+            {/* `w-full`, not a second width declaration: the aside no longer resizes, so
+                a second copy of the number is just two places to change it. */}
             <div className="main-scrollbar flex w-full flex-1 flex-col overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div className="p-3 pb-0">
                 {userInfo ? (
@@ -918,51 +732,26 @@ export default function AppLayout({
                     href={`/user/${userInfo.id}`}
                     onClick={handleMobileNavigation}
                     data-ripple
-                    /* A two-line list item, which is what this block is: an avatar, a
-                       name, and a supporting line. So the geometry comes from
-                       `ListTokens` rather than from the drawer's item — a 16dp corner
-                       (`ItemSelectedContainerShape = CornerLarge`), 16dp leading
-                       (`ItemLeadingSpace`), a 40dp avatar (`ItemLeadingAvatarSize`)
-                       and 12dp between (`ItemBetweenSpace`).
-
-                       It was a 56dp pill, borrowed from `SidebarNav`'s row on the
-                       reasoning that the account block is a row in the nav. It is not:
-                       a drawer item is a single line of `label-large` behind a
-                       selection pill, and forcing two lines and an avatar into that
-                       box is what made this block read *smaller* than the links under
-                       it despite being the same height. A pill also says "selectable
-                       destination" — the shape the rows below use to mean "you are
-                       here" — where this is the drawer's header. The avatar still
-                       starts on the same 28dp leading column as every nav icon
-                       (12dp of nav inset + 16dp of item inset), which is the part that
-                       has to agree.
-
-                       **64dp, with `ListTokens`' own 40dp avatar.** 72 is
-                       `ItemTwoLineContainerHeight` and it is the geometry of a *list
-                       row* — a thing you scan a column of. This is the drawer's header:
-                       one of them, above thirteen 48dp links. 64 is one step down with
-                       the spec's avatar intact, which leaves 12px above and below the
-                       text stack — exactly M3's own item padding. 56/32 was tried and
-                       the avatar was simply too small: 32 is the *dense* step, for a
-                       chat turn, and it made the one portrait in the shell the smallest
-                       one in the app.
-                       `/messages`' contact row keeps 72 with the same 40dp portrait:
-                       that one *is* a list row, and the rail's collapsed width is
-                       derived from its height. */
+                    /* A two-line list item (avatar, name, supporting line), so the
+                       geometry comes from `ListTokens` rather than the drawer's item —
+                       16dp corner, 16dp leading, 40dp avatar, 12dp between. It is the
+                       drawer's *header*, not a nav row: a pill is the shape the rows
+                       below use to mean "you are here". The avatar still starts on the
+                       same 28dp leading column as every nav icon (12dp nav inset + 16dp
+                       item inset), which is the part that has to agree.
+                       **64dp, with `ListTokens`' own 40dp avatar.** 72 is a *list row*'s
+                       height; 64 is one step down, leaving 12px above and below the text
+                       stack — exactly M3's own item padding. `/messages`' contact row
+                       keeps 72 with the same portrait: that one *is* a list row, and the
+                       rail's collapsed width is derived from its height. */
                     className="state-layer flex h-16 w-full items-center gap-3 rounded-lg px-4 outline-none focus-visible:ring-2 focus-ring"
                   >
                     <Avatar src={userInfo.avatar} name={userInfo.username} size={40} />
                     <div className="min-w-0 flex-1">
-                      {/* `title-s` — 14px at weight 500, the same size as the
-                          `label-l` on every link below it, so the drawer reads as one
-                          column rather than as a 16px heading stacked on 14px rows.
-                          This has been `title-s-emphasized` (14/700, too heavy),
-                          `body-l` (16/400 with a 28px line box, the prose role on a
-                          name) and `title-m` (16/500, which is what read as odd: the
-                          only 16px in the drawer, one step above everything under it).
-                          `ListTokens.ItemLabelTextFont` is `body-large`; this is a
-                          stated divergence, and the reason is that the row it labels is
-                          not in a list. */}
+                      {/* `title-s` (14px, weight 500), the same size as the links below
+                          it, so the drawer reads as one column. `ListTokens`
+                          names `body-large`; a stated divergence, because the row it
+                          labels is not in a list. */}
                       <p className="text-title-s text-on-surface truncate">{userInfo.username}</p>
                       <div className="mt-0.5 flex items-center gap-1.5">
                         <Badge tone="primary" size="sm">
@@ -999,31 +788,17 @@ export default function AppLayout({
                   </button>
                 )}
               </div>
-              {/* Always drawn, signed in or out. It was briefly conditional on
-                  the grounds that a rule under a 未登录 prompt bounds nothing —
-                  but the division it marks is structural, not conditional: above
-                  it is who you are, below it is where you can go. Present in one
-                  state and absent in the other, it also became a line that
-                  appears the moment you log in, which is a change in the shell's
-                  shape reported as a change in your account. */}
-              {/* `shrink-0`, and that is the whole of the bug where this line
-                  "disappeared after logging in". It is a flex item in a column, so it
-                  carries `flex-shrink: 1` by default — and signed in the drawer gains
-                  the 我的 group and the logout row, which pushes the column past the
-                  viewport. The nav below is `flex-1` (basis 0) and so contributes
-                  nothing to the shrink pool, which left this 1px item and the header
-                  above it absorbing the entire overflow: 1px shrinks to 0 and the rule
-                  vanishes while its margins stay, so the gap remains and the
-                  line does not. Signed out the column fits and it was visible, which
-                  is why it looked like a state change.
-                  `mx-4` rather than `mx-5`, matching `SidebarNav`'s own rule and
-                  `ListTokens.DividerLeadingSpace` (16dp) — there were three insets for
-                  one kind of line.
-                  `my-2` rather than `my-3`, matching the rule inside `SidebarNav`
-                  (`:272`). Both separate two regions of the same column and they ran
-                  at 25px and 17px of occupied height, i.e. one kind of line at two
-                  rhythms — which is only visible if you happen to see both at once,
-                  and they are 200px apart. */}
+              {/* Always drawn, signed in or out: the division it marks is structural,
+                  not conditional — above it is who you are, below it is where you can
+                  go. A rule that blinks on login reports a change in the shell's shape
+                  as a change in your account. */}
+              {/* `shrink-0` is the whole of the "disappeared after logging in" bug: a
+                  flex item in a column carries flex-shrink 1 by default, and signed in
+                  the column overflows — the nav below is `flex-1` (basis 0) and
+                  contributes nothing to the shrink pool, so this 1px line absorbed the
+                  entire overflow and shrank to 0. Inset matches `SidebarNav`'s own rule
+                  and its vertical rhythm matches the rule inside it — one kind of line,
+                  one geometry. */}
               <div className="bg-outline-variant mx-4 my-2 h-px shrink-0" />
               <SidebarNav
                 user={userInfo}
@@ -1060,55 +835,37 @@ export default function AppLayout({
                   >
                     
                     {/* A flex column, and `[&>*]:w-full` is not optional with it.
-                        The column is there so `StatusView`'s `fill` can be `flex-1`: a
-                        percentage `min-height` resolves only against a *definite* parent
+                        The column exists so `StatusView`'s `fill` can be `flex-1` — a
+                        percentage min-height resolves only against a *definite* parent
                         height, and this element's comes from flex distribution, which
-                        Chrome treats as indefinite — so `min-h-full` on a child computed
-                        to `auto` and the 404 stayed in the upper third.
-
-                        The `w-full` is the part that cost a round trip. A block child of
-                        a block fills the width and `max-w-* mx-auto` caps and centres
-                        it. A flex item in a *column* is stretched on the cross axis by
-                        `align-items: stretch` — **unless it has an auto margin there**,
-                        because an auto cross-axis margin absorbs the free space and
-                        disables the stretch. Every page root in this app is
-                        `mx-auto max-w-*`, so all of them fell back to shrink-to-fit:
-                        /messages measured 755px on one tab and 240px on the next, and
-                        the forum list narrowed the same way. Setting the width
-                        explicitly makes the cross size definite again, `max-width` caps
-                        it and `mx-auto` centres the capped box — i.e. block behaviour,
-                        restored.
-
-                        Measured safe: every one of the app's fourteen routes puts
-                        exactly one element in here, so there is no second flex item to
-                        stack and no pair of adjacent margins to stop collapsing. */}
+                        Chrome treats as indefinite.
+                        The `w-full` is load-bearing: a flex item in a column is
+                        stretched on the cross axis by `align-items: stretch` **unless
+                        it has an auto margin there**, because an auto cross-axis margin
+                        absorbs the free space and disables the stretch. Every page root
+                        here is `mx-auto max-w-*`, so without it they all fall back to
+                        shrink-to-fit (measured 755px on one tab, 240px on the next).
+                        Setting the width makes the cross size definite; `max-width` caps
+                        it and `mx-auto` centres it — block behaviour restored.
+                        Safe because every route puts exactly one element in here. */}
                     <div className="flex flex-1 flex-col [&>*]:w-full">{children}</div>
-                    {/* Inside the page, not beside it.
-                        As a sibling of `[data-page-content]` the mark was the
-                        one thing a page transition could not move: on a short
-                        page — /search is where you cannot miss it — it sat
-                        perfectly still while the page it belongs to slid out
-                        from under it, and the next page's mark was simply
-                        already there. It used to be given a fade of its own to
-                        cover that, which is why it appeared for an instant,
-                        vanished, and floated back. Inside the page it is
-                        cloned, slid and landed with everything else and needs
-                        no choreography at all. `page-chrome` is left on for the
-                        one move it still cannot join — a tab switch, where the
-                        panes that slide are above it inside the same page. */}
+                    {/* Inside the page, not beside it: as a sibling of the content the
+                        mark was the one thing a page transition could not move — it sat
+                        still while its page slid out from under it. Inside, it is
+                        cloned, slid and landed with everything else. `page-chrome` is
+                        left on for the one move it still cannot join — a tab switch,
+                        where the panes that slide are above it inside the same page. */}
                     <footer className="page-chrome mt-auto pt-10 text-label-l text-on-surface-variant sm:pt-12">
                       {' '}
                       <div className="mx-auto flex max-w-screen-xl flex-col items-center justify-between gap-4 md:flex-row">
                         
                         <div className="flex w-full flex-col items-center gap-4 md:w-auto md:items-start">
                           
-                          {/* `text-outline`, not a dimmed copy of the footer's
-                              own ink. `Logo` paints through a mask from
-                              `currentColor`, so it takes whatever text role it
-                              is given — and `outline` is the documented role for
-                              a *graphic* that should read quieter than the prose
-                              beside it (4.3:1 clears the 3:1 non-text bar). An
-                              opacity here was a number nothing else shared. */}
+                          {/* `text-outline`, not a dimmed copy of the footer's own ink:
+                              `Logo` paints through a mask from `currentColor`, and
+                              `outline` is the documented role for a *graphic* that
+                              should read quieter than the prose beside it (clears the
+                              3:1 non-text bar). */}
                           <Logo className="h-8 w-auto text-outline" />
                           <nav aria-label="站内导航" className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             
@@ -1136,14 +893,14 @@ export default function AppLayout({
                   className="image-hero-gallery-anchor"
                 />
               </main>
-              {/* The sibling immediately above `RouteCrossFade`, so the ordering between the two
-                  is stated rather than incidental: within one commit phase React runs siblings in
-                  render order, and the clone's own `getSnapshotBeforeUpdate` runs before either.
-                  See `lib/scrollMemory.ts`. */}
+              {/* The sibling immediately above `RouteCrossFade`, so the ordering is
+                  stated rather than incidental: within one commit phase React runs
+                  siblings in render order. See `lib/scrollMemory.ts`. */}
               <RouteScrollMemory />
               <RouteCrossFade pathname={backgroundPathname} enabled={crossFadeEnabled} />
-              {/* Renders nothing; it exists so the swipe's hook can be mounted only once the
-                  engine has arrived. Above 768px the drawer is docked and this never loads. */}
+              {/* Renders nothing; it exists so the swipe's hook can be mounted only
+                  once the engine has arrived. Above 768px the drawer is docked and
+                  this never loads. */}
               <DrawerSwipe
                 drawerRef={sidebarRef}
                 scrimRef={scrimRef}
@@ -1151,22 +908,15 @@ export default function AppLayout({
                 onOpenChange={setDrawerOpen}
                 enabled={isOverlayDrawer && !isImageDetailRoute && !imageHeroRuntime.background}
               />
-              {/* Where `PageBack` lands.
-                  The back affordance is chrome, not content. Rendered inside
-                  `[data-page-content]` it was cloned by the route snapshot and
-                  translated by the shared axis along with everything else — so
-                  going /search -> /messages, which is an X-axis slide, carried
-                  the button a whole window out and a whole window back to the
-                  same pixel it started on. Four screens have one at the same
-                  coordinate; it should simply stay there.
-                  A portal keeps the page as the owner of the handler and the
-                  label while the node lives out here, so no page had to change.
-                  `z-page-chrome` is load-bearing in both directions: above the
-                  cross-fade layer, because the clone no longer contains a button
-                  and the live one has to be visible over it; below the
-                  image-detail overlay and the Stage, because those bring their
-                  own and a background page's must not float on top of them.
-                  See the stacking-order block in globals.css. */}
+              {/* Where `PageBack` lands: the back affordance is chrome, not content.
+                  Rendered inside the page it was cloned by the route snapshot and
+                  translated by the shared axis — an X-axis slide carried it a whole
+                  window out and back to the pixel it started on. A portal keeps the
+                  page as owner of handler and label while the node lives out here.
+                  `z-page-chrome` is load-bearing both ways: above the cross-fade layer
+                  (the live button must show over the clone), below the image-detail
+                  overlay and Stage (they bring their own). See the stacking-order
+                  block in globals.css. */}
               <div
                 data-page-back-slot
                 /* No `aria-hidden` here, despite this being a positioning shim:
@@ -1181,11 +931,10 @@ export default function AppLayout({
             </div>
             {backgroundPathname === '/' && (
               <Suspense fallback={null}>
-                {/* `isImageDetailOpen` alone is not enough: the overlay is torn
-                    down before the hero flies home, so keying off it would pop
-                    the pill back in behind the still-moving image. The hero
-                    runtime reports the flight itself, so the pill returns only
-                    once the gallery is really back. */}
+                {/* `isImageDetailOpen` alone is not enough: the overlay is torn down
+                    before the hero flies home, so keying off it would pop the pill
+                    back in behind the still-moving image. The hero runtime reports
+                    the flight itself. */}
                 <TabNavBar hidden={isImageDetailOpen || Boolean(imageHeroRuntime.background)} />
               </Suspense>
             )}

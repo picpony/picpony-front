@@ -95,13 +95,13 @@ function SearchPageContent() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>((dirParam as 'asc' | 'desc') || 'desc');
 
   /* `SKIP` covers the two states with nothing to ask for: an empty query, and a 以图搜图
-     result already on screen (which comes from a different endpoint entirely and is held in
+     result already on screen (from a different endpoint entirely, held in
      `customResults`). Skipping rather than guarding inside a fetch is the mechanism that
      stops a screen paying for content nobody asked for.
 
-     `keepPrevious` for the same reason the home feed uses it: the page number is in the key,
-     so without it a page turn unmounts the grid for a round trip and the browser clamps the
-     scroll position to the collapsed height. */
+     `keepPrevious`, same as the home feed: the page number is in the key, so without it
+     a page turn unmounts the grid for a round trip and the browser clamps the scroll
+     position to the collapsed height. */
   const read = useResource(
     searchFeed,
     q && !customResults
@@ -113,7 +113,8 @@ function SearchPageContent() {
   const hasMore = images.length === 50;
   const error = (read.error as Error | null) ?? null;
   /* Nothing yet, rather than `isLoading` — which is also true while a warm result
-     revalidates underneath, and swapping that for a skeleton undoes the point of the cache. */
+     revalidates underneath, and swapping that for a skeleton undoes the point of the
+     cache. */
   const isLoading = Boolean(q) && !customResults && read.data === undefined && !read.error;
 
   // Advanced search panel state
@@ -177,12 +178,11 @@ function SearchPageContent() {
   const [suggestions, setSuggestions] = useState<DictionaryEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [acCursor, setAcCursor] = useState(0);
-  /* The combobox contract needs stable ids: one for the listbox so the field can
-     point `aria-controls` at it, and one per row so `aria-activedescendant` can
-     name the cursor. Without them the field declared no relationship to the list
-     at all — the rows carried `role="option"` and `aria-selected`, which describes
-     a *selection* inside a listbox nobody had been told about, and the keyboard
-     cursor was announced to nothing. */
+  /* The combobox contract needs stable ids: one for the listbox so the field can point
+     `aria-controls` at it, one per row so `aria-activedescendant` can name the cursor.
+     Without them the field declared no relationship to the list at all — rows carried
+     `role="option"` and `aria-selected` inside a listbox nobody had been told about,
+     and the keyboard cursor was announced to nothing. */
   const acId = useId();
   const acListboxId = `${acId}-listbox`;
   const acOptionId = (i: number) => `${acId}-option-${i}`;
@@ -272,18 +272,13 @@ function SearchPageContent() {
     };
   }, []);
 
-  /* Back leaves for the gallery, not for whatever page happened to be before
-     this one.
-     `history.back()` was the old answer and it contradicts the space the
-     transitions describe: /search sits directly above / on the app's notional
-     plane (see `ROUTE_CELL`), so leaving it is a move *down* to the gallery,
-     wherever the user came in from. Reaching it from a forum post and stepping
-     back onto that post played the down-move onto a screen that is not below it.
-     Layered, though — a search result is state the user put there, and throwing
-     it away and the screen with it in one keystroke is two undos in one. The
-     first press clears the query and lands on the empty search; the second
-     leaves. Which is also the shape the messages page already had for its
-     conversation list. */
+  /* Back leaves for the gallery, not for whatever page happened to be before this one.
+     `history.back()` contradicts the space the transitions describe: /search sits
+     directly above / on the app's notional plane (see `ROUTE_CELL`), so leaving it is a
+     move *down* to the gallery wherever the user came in from.
+     Layered, though — a search result is state the user put there, and throwing it away
+     and the screen with it in one keystroke is two undos in one. The first press clears
+     the query and lands on the empty search; the second leaves. */
   const handleBack = useCallback(() => {
     if (customResults) {
       setCustomResults(null);
@@ -298,24 +293,24 @@ function SearchPageContent() {
     router.push('/', { scroll: false });
   }, [customResults, inputValue, q, router]);
 
-  /* Escape leaves the page — but only once nothing nearer owns the key. The
-     suggestion list closes on Escape first (below), and the image-search dialog
-     handles its own, so both stand this down while they are open. */
+  /* Escape leaves the page — but only once nothing nearer owns the key. The suggestion
+     list closes on Escape first (below), and the image-search dialog handles its own,
+     so both stand this down while they are open. */
   useEscapeBack(handleBack, !showSuggestions && !isImageSearchOpen);
 
-  /* One expression for "the popup is showing", because three things have to agree
-     about it: the `Popover`'s own `open`, `aria-expanded`, and whether
-     `aria-controls`/`aria-activedescendant` should be present at all. Spelling the
-     condition out at each of them is how they drift. */
+  /* One expression for "the popup is showing", because three things have to agree: the
+     `Popover`'s own `open`, `aria-expanded`, and whether `aria-controls` /
+     `aria-activedescendant` should be present at all. Spelling the condition out at
+     each of them is how they drift. */
   const acOpen = showSuggestions && suggestions.length > 0;
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (!showSuggestions || suggestions.length === 0) return;
       if (e.key === 'Escape') {
-        /* The list owns Escape while it is open. Moved here from a document
-           listener so the ordering against `useEscapeBack` is structural rather
-           than a matter of which listener happened to be registered first. */
+        /* The list owns Escape while it is open. Moved here from a document listener so
+           the ordering against `useEscapeBack` is structural rather than a matter of
+           which listener registered first. */
         e.preventDefault();
         setShowSuggestions(false);
       } else if (e.key === 'ArrowDown') {
@@ -345,13 +340,10 @@ function SearchPageContent() {
   }, []);
 
   /* The fetch, the `isMounted` flag and the four `setState`s that used to live here are
-     `useResource`’s now — see `read` above. `searchFeed` had sat in the catalogue with zero
-     references since it was written; this is the consumer it was missing, and wiring it is what
-     makes going back to a search cost nothing.
-
-     `applyImageLine` is not re-applied either: `lib/api/derpi.ts` applies it centrally to every
-     image-bearing response (`withImageLine`), so the map that used to be on that line was a
-     second, idempotent pass over 50 images on every render. */
+     `useResource`'s now — see `read` above. Wiring `searchFeed` (previously unreferenced)
+     is what makes going back to a search cost nothing. `applyImageLine` is not re-applied
+     either: `lib/api/derpi.ts` applies it centrally to every image-bearing response, so
+     the map here was a second, idempotent pass over 50 images on every render. */
 
   useEffect(() => {
     const isSingleTag = !!q && !/[ ,:*?]/.test(q) && !q.startsWith('-');
@@ -415,9 +407,8 @@ function SearchPageContent() {
 
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1) {
-      /* Only the page number. The loading and error states used to be cleared by hand here
-         and are the resource's now: changing the page changes the key, which is the signal
-         `useResource` reads. */
+      /* Only the page number: changing it changes the key, which is the signal
+         `useResource` reads — the loading/error clearing is the resource's now. */
       setPage(newPage);
       // <Pagination> scrolls the shell's real scroll container back to the top.
     }
@@ -440,11 +431,10 @@ function SearchPageContent() {
     <>
       <div className="max-w-7xl mx-auto">
         {/* `2xl`, the form column, not a sixth page width. The page itself is `7xl`
-            because what fills it is a grid of pictures; the field and the advanced
-            panel below are a *form* inside that column, and a form column is `2xl`
-            here (see /upload). Both blocks carry the same value so the panel lines up
-            with the field that opens it — they were 3xl and 2xl once, which put the
-            panel 48px narrower per side than its own trigger. */}
+            because what fills it is a grid of pictures; the field and the advanced panel
+            below are a *form* inside that column, and a form column is `2xl` here (see
+            /upload). Both blocks carry the same value so the panel lines up with the
+            field that opens it. */}
         <div className="mb-6 max-w-2xl mx-auto">
           <form onSubmit={handleSearch} className="flex items-center gap-2">
             <div className="flex-1 relative" ref={inputWrapRef}>
@@ -458,13 +448,11 @@ function SearchPageContent() {
                 placeholder="搜索图片…"
                 aria-label="搜索图片"
                 /* The field is the combobox, so the whole contract sits on it:
-                   `aria-controls` names the popup, `aria-expanded` says whether it
-                   is showing, and `aria-activedescendant` names the row the arrow
-                   keys are on. It had none of these — only the rows were marked —
-                   so a screen reader was told there were options but never that
-                   this field owned them, nor which one the cursor was on.
-                   `aria-autocomplete="list"` because typing filters a list rather
-                   than completing the text inline. */
+                   `aria-controls` names the popup, `aria-expanded` whether it is showing,
+                   `aria-activedescendant` the row the arrow keys are on. It had none of
+                   these, so a screen reader was told there were options but never that
+                   this field owned them. `aria-autocomplete="list"` because typing
+                   filters a list rather than completing inline. */
                 role="combobox"
                 aria-autocomplete="list"
                 aria-controls={acOpen ? acListboxId : undefined}
@@ -474,43 +462,28 @@ function SearchPageContent() {
                     ? acOptionId(acCursor)
                     : undefined
                 }
-                /* The two actions live *inside* the box. Outside, a search box,
-                   a submit button and an image-search button were three objects
-                   in a row that the eye had to associate before it could tell
-                   which button belonged to which field — and on a phone the row
-                   was most of the screen wide. Inside, it is one control that
-                   does one job. The slot is in flow, so an icon button and a
-                   button with a word in it need no width reserved for them.
-                   Both stay pills: the field is a pill too, and a centred pill
-                   inside a pill is concentric without anyone doing arithmetic. */
-                /* Two controls that read as a pair. Both are 40dp pills in a 56dp
-                   pill field, which is concentric for free (`28 - 8` is half of 40) —
-                   that part was already right. What was wrong is that only one of them
-                   had a container: a bare glyph beside a solid brand pill, so the
-                   image-search action was easy to miss entirely and the right end of
-                   the field read as two unrelated objects.
-                   `tonal` gives it the secondary container — visible, clearly a
-                   sibling of the submit, and quieter than it, which is the ranking
-                   these two actions actually have. The glyph drops to `control` (20dp)
-                   to match what a 40dp button's own icon slot uses; at 24 it crowded a
-                   container that the bare version had not had to fit inside. */
+                /* The two actions live *inside* the box. Outside, a search box, a submit
+                   button and an image-search button were three objects in a row the eye
+                   had to associate — and on a phone most of the screen wide. Inside, it
+                   is one control that does one job; the slot is in flow, so no width
+                   needs reserving. Both stay pills: a centred pill inside a pill is
+                   concentric without anyone doing arithmetic. */
+                /* Two controls that read as a pair. Both are 40dp pills in a 56dp pill
+                   field, concentric for free — but only one had a container: a bare glyph
+                   beside a solid brand pill, so the image-search action was easy to miss.
+                   `tonal` gives it the secondary container — visible, clearly a sibling of
+                   the submit, and quieter than it, which is the ranking these two actions
+                   have. The glyph drops to 20dp to match a 40dp button's own icon slot. */
                 trailing={
                   <>
-                    {/* `tonal` — a *visible* container, and that is what makes the
-                        spacing round the submit read as equal.
-
-                        Measured, every gap around 搜索 was already exactly 8px: 40dp
-                        control in a 56dp field, so 8 above and below, and 8 to the
-                        field's edge from the slot's `padding-inline-end`. Two
-                        concentric pills (28 and 20 radius, centres coincident) hold
-                        that 8 all the way round the cap too. But the control on its
-                        left was `standard` — no container — so its 40dp box was
-                        invisible and the *perceived* gap on that side was 8 plus the
-                        empty box's own 10px of padding: 18 against 8 on the other
-                        three. The boxes were even and the picture was not.
-                        So the pairing goes the other way instead: both controls carry
-                        a container, and the hierarchy is `tonal` against `filled`
-                        rather than nothing against something. */}
+                    {/* `tonal` — a *visible* container, and that is what makes the spacing
+                        round the submit read as equal. Measured, every gap around 搜索 was
+                        already exactly 8px (40dp control in a 56dp field); but the control
+                        on its left had no container, so its 40dp box was invisible and the
+                        *perceived* gap on that side was 18 against 8 on the other three.
+                        The boxes were even and the picture was not. So both controls carry
+                        a container, and the hierarchy is `tonal` against `filled` rather
+                        than nothing against something. */}
                     <IconButton
                       variant="tonal"
                       onClick={() => setIsImageSearchOpen(true)}
@@ -523,10 +496,9 @@ function SearchPageContent() {
                   </>
                 }
               />
-              {/* `Popover`, so the suggestion list wears the app's one floating
-                  surface (8dp, elevation 2, no outline) instead of a fourth
-                  hand-rolled recipe, and escapes any clipping ancestor by
-                  portalling rather than relying on this wrapper. */}
+              {/* `Popover`, so the suggestion list wears the app's one floating surface
+                  instead of a fourth hand-rolled recipe, and escapes any clipping ancestor
+                  by portalling rather than relying on this wrapper. */}
               <Popover
                 open={acOpen}
                 onClose={() => setShowSuggestions(false)}
@@ -550,13 +522,11 @@ function SearchPageContent() {
                         aria-selected={i === acCursor}
                         className={`flex items-center justify-between w-full px-3 py-2 text-left transition-ui outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
                           i === acCursor
-                            /* The keyboard cursor is the state layer at the focus
-                               weight, not a `primary-container` fill: a container
-                               pair means *selected* everywhere else in this app
-                               (the sidebar's route, a chosen `Select` option, a
-                               selected chip), and nothing here is selected until
-                               it is committed. Same treatment as `Select`'s
-                               listbox, which is the same object. */
+                            /* The keyboard cursor is the state layer at the focus weight,
+                               not a container fill: a container pair means *selected*
+                               everywhere else in this app (sidebar route, chosen `Select`
+                               option, selected chip), and nothing here is selected until
+                               it is committed. Same treatment as `Select`'s listbox. */
                             ? 'state-layer-active'
                             : 'state-layer'
                         }`}
@@ -642,31 +612,24 @@ function SearchPageContent() {
         {customResults ? (
           <CustomImageList images={customResults} onBack={clearCustomResults} />
         ) : !q ? (
-          /* The Lottie rides in `StatusView`'s glyph slot rather than being its
-             own centred column, so the resting search screen has the same
-             geometry and the same staggered entrance as every empty list in the
-             app. Its own class string carried a 16px *and* a 48px bottom margin, i.e. two
-             values for one property with Tailwind's output order deciding. */
+          /* The Lottie rides in `StatusView`'s glyph slot rather than being its own
+             centred column, so the resting search screen has the same geometry and
+             entrance as every empty list in the app. */
           <EmptyState
             icon={
               <LottieIcon
-                /* `max-w-full` cannot constrain this. It resolves against
-                   `StatusView`'s icon slot, which is a shrink-to-fit flex item
-                   whose own width comes from this element — so the percentage
-                   has no reference and the 624px composition ran off the right
-                   of a 390px screen. A viewport unit has a reference by
-                   definition. */
+                /* `max-w-full` cannot constrain this: it resolves against `StatusView`'s
+                   icon slot, a shrink-to-fit flex item whose own width comes from this
+                   element — the percentage has no reference, and the 624px composition
+                   ran off the right of a 390px screen. A viewport unit has a reference. */
                 className="w-[min(39rem,88vw)]"
                 load={() => import('@/lib/lottie/search.json').then((m) => m.default)}
                 /* 3000×1553, the composition's own box. */
                 aspect={3000 / 1553}
-                /* `fallback` used to be `null`, which meant this screen had no
-                   illustration at all under `prefers-reduced-motion` — the state
-                   the component's own reduced-motion branch exists to serve. The
-                   glyph is `display` (48dp), the app's size for an illustration
-                   over an empty state, centred in the box the ratio reserves, and
-                   it inherits `StatusView`'s own icon colour like every other
-                   empty state's glyph. */
+                /* The reduced-motion fallback: a `null` fallback meant no illustration at
+                   all under `prefers-reduced-motion`. The glyph is `display` (48dp), the
+                   app's size for an illustration over an empty state, and it inherits
+                   `StatusView`'s own icon colour like every other empty state's glyph. */
                 fallback={<MdImageSearch size={ICON.display} />}
               />
             }
@@ -704,8 +667,8 @@ function SearchPageContent() {
                 currentPage={page}
                 hasMore={hasMore}
                 onPageChange={handlePageChange}
-                /* Warmed on hover/focus/press of a page control, like the home feed's. This
-                   pager had no warmer because the screen had no resource to warm. */
+                /* Warmed on hover/focus/press of a page control, like the home feed's —
+                   this pager had no warmer because the screen had no resource to warm. */
                 onPrefetchPage={(next) =>
                   q &&
                   searchFeed.prefetch({
@@ -742,32 +705,28 @@ function SearchPageContent() {
                 />
                 {sortBy !== 'random' && (
                   <Button variant="tonal" size="xs" onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))} data-ripple>
-                    {/* A fade, not `animate-icon-swap`. That keyframe is a
-                        quarter-turn spin-in built for a *glyph* — 90° of rotation and a
-                        0.6 scale on the expressive ζ0.6 spring — and this is a two-word
-                        label. Anything larger than a mark wearing that spring reads as
-                        a wobble, and text tumbling into place reads as a rendering
-                        fault. The arrow already carries the meaning, so the swap only
-                        has to be noticed: `fade-in` is 400ms `decelerate` on opacity
-                        alone, restarted by the `key`. */}
+                    {/* A fade, not a glyph spin-in: that keyframe (90° rotation, 0.6
+                        scale on the expressive spring) is built for a *glyph*, and text
+                        tumbling into place reads as a rendering fault. The arrow already
+                        carries the meaning, so the swap only has to be noticed: `fade-in`
+                        is 400ms `decelerate` on opacity alone, restarted by the `key`. */}
                     <span key={sortDir} className="animate-fade-in inline-block">
                       {sortDir === 'desc' ? '↓ 降序' : '↑ 升序'}
                     </span>
                   </Button>
                 )}
-                {/* No `animate-pop-in` on the button below: that token is the
-                    floating-surface growth (a 4px rise plus a 0.95 scale), and this is a
-                    button appearing in a toolbar row. Its two neighbours enter without
-                    one, so a third entrance here had the row arriving in instalments. */}
+                {/* No floating-surface entrance on the button below: its two neighbours
+                    enter without one, so a third entrance here had the row arriving in
+                    instalments. */}
                 {(sortParam || sortBy !== defaultSort || sortDir !== 'desc') && (
                   <Button variant="tonal" size="xs" onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }} data-ripple>
                     重置排序
                   </Button>
                 )}
-                {/* `Chip variant="filter"`, not a third hand-rolled pill: this
-                    control is a filter that is on or off, which is the one thing
-                    a filter chip is for, and it was wearing `rounded-full` while
-                    every tag chip beside it wore the spec's 8dp. */}
+                {/* `Chip variant="filter"`, not a third hand-rolled pill: this control is
+                    a filter that is on or off, which is the one thing a filter chip is
+                    for, and it was fully rounded while every tag chip beside it wore the
+                    spec's 8dp. */}
                 <Chip
                   variant="filter"
                   tone="primary"
@@ -784,17 +743,16 @@ function SearchPageContent() {
             {/* Advanced search panel */}
             {q && (
               <div
-                /* The drawer's springs, per direction — `DefaultSpatial` opening and
-                   `FastEffects` closing, per `NavigationDrawer.kt`. This is the app's
-                   third collapsible panel and the last one still on a one-sided
-                   200/300ms curve: it ran 300ms `standard`, whose fastest tenth carries
-                   97x its last, so the panel dropped and then crept.
+                /* The drawer's springs, per direction — `DefaultSpatial` opening,
+                   `FastEffects` closing, per `NavigationDrawer.kt`. The last of the app's
+                   collapsible panels still on a one-sided 200/300ms curve, which dropped
+                   then crept.
                    `grid-template-rows` stays as the mechanism. It is a layout property,
                    which the guillotine note in AGENTS.md warns about — but the failure
-                   there is a box resizing *past* fixed-width contents, and here the
-                   inner `min-h-0 overflow-hidden` track carries the whole subtree, so
-                   the contents are clipped rather than left behind. A translate would
-                   need a measured height; `0fr → 1fr` does not. */
+                   there is a box resizing *past* fixed-width contents, and here the inner
+                   `min-h-0 overflow-hidden` track carries the whole subtree, so the
+                   contents are clipped rather than left behind. A translate would need a
+                   measured height; `0fr → 1fr` does not. */
                 className={`grid transition-[grid-template-rows,opacity] ${
                   showAdvanced
                     ? 'spring-default-spatial grid-rows-[1fr] opacity-100'

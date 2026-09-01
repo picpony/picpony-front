@@ -60,13 +60,11 @@ const NATIVE_CLICK_SUPPRESSION_MS = 350;
 /**
  * Pull-to-dismiss recognizer.
  *
- * Only reports intent; the visual response belongs to `HeroPullSurface`. Guards
- * a number of real mobile behaviours: touch-action is declared before
- * pointerdown so the compositor decision is not a race, the synthetic click
- * that follows a drag is swallowed, and a release that lands on the
- * just-dismissed (now transparent) route is forwarded to the gallery card
- * underneath, because some compositors keep the old hit-test target for one
- * more touch.
+ * Only reports intent; the visual response belongs to `HeroPullSurface`. Guards real mobile
+ * behaviours: touch-action is declared before pointerdown so the compositor decision is not
+ * a race, the synthetic click a drag leaves behind is swallowed, and a release landing on
+ * the just-dismissed (now transparent) route is forwarded to the gallery card underneath —
+ * some compositors keep the old hit-test target for one more touch.
  */
 export function bindHeroDismissGesture({
   target,
@@ -338,9 +336,7 @@ export function bindHeroDismissGesture({
       if (!card.isConnected) return;
       card.click();
       // Arm only after our own dispatch has been delivered, or the guard would
-      // swallow the very click it exists to substitute for. The browser's
-      // duplicate for this same tap arrives in a later task, once hit testing
-      // has refreshed onto the card, and that one must not activate again.
+      // swallow the very click it exists to substitute for.
       suppressNativeClickUntil = performance.now() + NATIVE_CLICK_SUPPRESSION_MS;
     });
     return true;

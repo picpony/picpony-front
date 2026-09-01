@@ -1,18 +1,18 @@
 /**
  * Lets a plain `.mjs` script import the app's own `.ts` modules, with no build step.
  *
- * Node's synchronous `module.registerHooks` (22.15+) plus unflagged type stripping
- * (22.18+) is enough: the resolve hook rewrites `@/`-prefixed and relative specifiers and
- * names the format, and `'use client'` directives are inert outside a bundler.
+ * Node's synchronous `module.registerHooks` (22.15+) plus unflagged type stripping (22.18+) is
+ * enough: the resolve hook rewrites `@/`-prefixed and relative specifiers and names the format,
+ * and `'use client'` directives are inert outside a bundler.
  *
- * **Bare specifiers must go back to `next()`** or `react` resolves to `lib/react` — that is
- * the one way to get this wrong, and it is also what lets a rewritten module keep reaching
- * real packages (`lib/paletteRule.ts` pulls `@material/material-color-utilities`).
+ * **Bare specifiers must go back to `next()`** or `react` resolves to `lib/react`. This is also
+ * what lets a rewritten module keep reaching real packages
+ * (`lib/paletteRule.ts` pulls `@material/material-color-utilities`).
  *
- * Import this for its side effect *before* any `await import('…​.ts')`; static imports are
- * hoisted and evaluated in order, so the hook is registered by the time a dynamic import
- * runs. Two scripts use it — `heroPath.mjs` and `palette.mjs` — and it lives here rather
- * than in either of them because a second copy is how the two would drift.
+ * Import for its side effect *before* any `await import('….ts')` — static imports are hoisted
+ * and evaluated in order, so the hook is registered by the time a dynamic import runs. Lives
+ * here rather than in either consumer (`heroPath.mjs`, `palette.mjs`) because a second copy is
+ * how the two would drift.
  */
 import { registerHooks } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';

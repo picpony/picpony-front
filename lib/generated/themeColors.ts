@@ -3,21 +3,13 @@
 // Two hexes per theme per scheme, for the two places a `var()` cannot reach.
 //
 // `primary` is the `<meta name="theme-color">` value: the browser reads that tag to
-// paint its own chrome before any stylesheet exists, so it has to be a literal. It used
-// to be two literals hand-copied into `viewport.themeColor` in `app/layout.tsx`, with a
-// comment calling them the app's only unavoidable ones; there are twenty now, which is
-// past what a human keeps in step, so they are generated and the layout inlines them.
-//
-// Both are also the swatch's, for the picker in /settings: a swatch has to show a theme
-// that is *not* the active one, so it cannot read the tokens — those are always the active
-// theme's. `onPrimary` is there because the selected swatch carries a tick, and which ink that
-// tick takes is a per-theme answer: five themes are white on their brand and five are dark.
-//
-// Four fields have been removed over time and every removal was the same rule: `primary-container`
-// went, then `surface` when the swatch stopped drawing a ring behind the colour, then
-// `secondary` and `tertiary` when the chip went back to one flat colour. A payload no consumer
-// touches is a payload that goes stale silently, so it goes — and one a consumer needs is
-// generated rather than hand-copied, which is the same rule read the other way.
+// paint its own chrome before any stylesheet exists, so it has to be a literal, generated
+// rather than hand-copied. Both are also the swatch's, for the picker in /settings: a swatch has
+// to show a theme that is *not* the active one, so it cannot read the tokens — those are always
+// the active theme's. `onPrimary` is there because the selected swatch carries a tick, and which
+// ink that tick takes is a per-theme answer: five themes are white on their brand and five are
+// dark. Fields no consumer touches go; fields a consumer needs are generated — the same rule read
+// both ways.
 //
 // The eleventh palette is **not** in this array and must not be: its colours come from the
 // user's own seed, so there is nothing to generate. It is here only as an id, because

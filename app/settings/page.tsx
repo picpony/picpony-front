@@ -68,13 +68,11 @@ import {
 } from '@/lib/route';
 import { getAssetUrl, processImageFile } from '@/lib/utils';
 
-/* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run
-   of rows as one cut block rather than as separate floating cards.
+/* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run of rows
+   as one cut block rather than separate floating cards.
    Two variants rather than one string plus an override, because `align-items` can only be
-   spelled once: the palette row used to append `items-start` to a base carrying
-   `items-center`, which renders left-aligned only for as long as Tailwind happens to emit
-   `.items-center` first. Change the base to `items-end` some day and the swatch grid
-   silently re-centres, with no diff at that call site to explain it. */
+   spelled once: appending `items-start` to a base carrying `items-center` renders
+   left-aligned only for as long as Tailwind happens to emit `.items-center` first. */
 const rowBase =
   'm3-row flex flex-wrap justify-between gap-x-2 gap-y-3 p-4 sm:gap-x-4 bg-surface-container-low transition-ui state-layer';
 const rowClass = `${rowBase} items-center sm:flex-nowrap`;
@@ -84,10 +82,9 @@ const rowStackedClass = `${rowBase} flex-col items-start`;
    instead of pushing the action out of the card. */
 const rowLabelClass = 'min-w-0 flex-1';
 /* A row's primary label, matching `ToggleSwitch layout="row"`'s own — `label-l` on
-   `on-surface`, with 2px to the supporting line under it, which is `body-s` on
-   `on-surface-variant`. It read `body-m`/`on-surface-variant` at 4px, i.e. the
-   supporting role in the primary slot, so a row holding a `Select` and a row holding
-   a switch announced two different hierarchies inside one card. */
+   `on-surface`, 2px to the supporting line (`body-s` on `on-surface-variant`). It read
+   as the supporting role in the primary slot, so a row holding a `Select` and a row
+   holding a switch announced two different hierarchies inside one card. */
 const labelClass = 'text-label-l text-on-surface mb-0.5';
 const valueClass = 'text-body-m-emphasized text-on-surface';
 
@@ -122,28 +119,22 @@ function lsSet(key: string, val: string | boolean) {
 }
 
 /**
- * 外观 — the five device-local appearance preferences, and the whole of the 个性化 tab.
+ * 外观 — the five device-local appearance preferences, the whole of the 个性化 tab.
  *
- * It renders **outside** the cloud-config gate the rest of this page sits behind, which is
- * also what makes it a tab of its own: that gate exists so a default cannot be written back
- * over a value the server has not returned yet, and none of these five has a server value, so
- * behind it they would be dimmed and inert for the length of a fetch they are not waiting on.
- * The tab split says the same thing in the UI — this side is the device, the other side is the
- * account.
+ * It renders **outside** the cloud-config gate the rest of this page sits behind, which
+ * is what makes it a tab of its own: the gate exists so a default cannot be written back
+ * over a value the server has not returned yet, and none of these five has a server
+ * value — behind it they would be dimmed and inert for a fetch they are not waiting on.
  *
- * `lsGet`/`lsSet` are not used here either. These are owned by `lib/appearance`, which keeps
- * the stored keys, the cookie, the attribute on `<html>` and the subscription in one place —
- * the reason the app bar's glyph and the 主题模式 row below cannot disagree about which mode
- * is on, which two independent `useState`s could not have managed.
+ * `lsGet`/`lsSet` are not used here: these are owned by `lib/appearance`, which keeps the
+ * stored keys, the cookie, the `<html>` attribute and the subscription in one place.
  *
- * **No supporting lines.** Four of these rows carried one, and all four were implementation
- * notes: "七套配色共用同一套色调映射与对比度", "等比缩放全站时长，不改变各段动画之间的节奏".
- * Those are true, they are the sort of thing this repo writes down at length — in `AGENTS.md`,
- * where the audience is whoever changes the code. A settings row needs a name.
+ * **No supporting lines.** The four these rows carried were implementation notes — the
+ * sort of thing this repo writes down at length, in `AGENTS.md`. A settings row needs a
+ * name.
  *
- * 主题模式 is new rather than moved: until now the only way to change the colour scheme was
- * the app bar's three-state cycle button, which is not a discoverable control and does not
- * say what the third state is.
+ * 主题模式 is new rather than moved: the app bar's three-state cycle button is not a
+ * discoverable control and does not say what the third state is.
  */
 function AppearanceSection() {
   const schemeSetting = useSchemeSetting();
@@ -152,12 +143,9 @@ function AppearanceSection() {
   const motionTier = useMotionTier();
   const entrances = useEntranceMotion();
 
-  /* Speed applies to every tier that has a length, which is both of the tiers that animate:
-     the tier decides the form and the speed decides the clock. It used to be standard-only,
-     because `reduced` carried its own 0.5 — that is gone, and with it the one row on this
-     page that was disabled while still describing what it would do.
-     Disabled rather than hidden, because a control that vanishes is a control the user has to
-     rediscover, and `disabled-content` says why it is unavailable. */
+  /* Speed applies to every tier that has a length: the tier decides the form, the speed
+     decides the clock. Disabled rather than hidden when 动画效果 is off — a control that
+     vanishes is a control the user has to rediscover. */
   const speedAvailable = motionTier !== 'off';
 
   return (
@@ -201,13 +189,11 @@ function AppearanceSection() {
             <p className={labelClass}>动画效果</p>
           </div>
         </div>
-        {/* Three options, not four. 跟随系统 was one of them and it is gone: the OS
-            preference still decides what an unset value resolves to — `readMotionSetting`
-            defaults to `system` and `resolveMotionTier` maps `reduce` to 减弱 — but the
-            *control* shows the tier that is in force, so a visitor whose system asks for
-            less motion sees 减弱动画 selected rather than a label that only says where the
-            answer came from. Picking any option fixes it; nothing has to be migrated,
-            because `system` remains the stored value until then. */}
+        {/* Three options, not four. 跟随系统 is gone: the OS preference still decides
+            what an unset value resolves to, but the *control* shows the tier in force —
+            a visitor whose system asks for less motion sees 减弱动画 selected, not a
+            label that only says where the answer came from. Nothing to migrate:
+            `system` remains the stored value until then. */}
         <Select
           size="sm"
           value={motionTier}
@@ -244,8 +230,8 @@ function AppearanceSection() {
         />
       </div>
 
-      {/* `layout="row"` so the label leads and the switch sits at the trailing edge, which
-          is the reading order every other value row on this page has. */}
+      {/* `layout="row"` so the label leads and the switch sits at the trailing edge,
+          the reading order every other value row on this page has. */}
       <div className={rowClass}>
         <ToggleSwitch
           layout="row"
@@ -356,15 +342,12 @@ export default function SettingsPage() {
   const [useHongKongRelay, setUseHongKongRelay] = useState(true);
   const [refreshingLines, setRefreshingLines] = useState(false);
 
-  /* The line in force, which is not only this user's business: an administrator can pin the
-     whole site to one, in which case the four toggles below report that value and stop being
-     editable. Subscribed rather than read once, because a failover can move it while this page
-     is open.
-     `useState` + an effect rather than `useSyncExternalStore`, and that is the same rule the
-     rest of this page follows: the server renders the defaults and localStorage is applied
-     after mount. A store's client snapshot is read during hydration, so it would report the
-     device's real line against server HTML built from the SSR fallback — and those differ on
-     the *default* configuration, since the server always resolves `direct`. */
+  /* The line in force, which is not only this user's business: an administrator can pin
+     the whole site to one, in which case the four toggles below report that value and
+     stop being editable. Subscribed rather than read once, because a failover can move
+     it while this page is open. `useState` + an effect rather than `useSyncExternalStore`
+     — a store's client snapshot is read during hydration, so it would report the device's
+     real line against server HTML built from the SSR fallback, which differ by default. */
   const [lines, setLines] = useState(INITIAL_LINES);
   useEffect(() => {
     const read = () => {
@@ -406,10 +389,8 @@ export default function SettingsPage() {
   const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [bannerLoaded, setBannerLoaded] = useState(false);
 
-  /* `Modal` keeps the panel mounted through its own exit animation, so these
-     just flip the flag — the previous 200ms setTimeout dance existed only to
-     hold the hand-rolled overlay on screen long enough to animate out. The
-     in-flight guards stay: a half-submitted form should not be dismissable. */
+  /* `Modal` keeps the panel mounted through its own exit animation, so these just flip
+     the flag. The in-flight guards stay: a half-submitted form should not be dismissable. */
   const closeModal = () => {
     if (isLoading) return;
     setIsModalOpen(false);
@@ -669,10 +650,8 @@ export default function SettingsPage() {
   const handleAvatarPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    /* `processImageFile`, not the type-and-size check written out. It was inline
-       here, again 48 lines below with one number changed, and twice more elsewhere —
-       four copies of the byte arithmetic the helper's `maxSizeMB` parameter exists
-       for, all emitting `请选择图片文件` where the helper says 请选择有效的图片文件. */
+    /* `processImageFile`, not the type-and-size check written out (four copies of the
+       byte arithmetic existed, all emitting the wrong toast copy). */
     try {
       await processImageFile(file, 5);
     } catch (err) {
@@ -1084,10 +1063,10 @@ export default function SettingsPage() {
     );
   };
 
-  /* All four line writers end with `syncLinePrefs()`. The request layer re-reads these
+  /* All four line writers end with `syncLinePrefs()`: the request layer re-reads these
      keys from localStorage on every call, but *which line it is currently sitting on* is
      separate runtime state — and turning the relay on has to take the accel line out of
-     the running, which is the same coupling the old frontend does in `mt()`. */
+     the running. */
   const handleUseCdnChange = (val: boolean) => {
     setUseCdn(val);
     lsSet(LS_KEYS.useCdn, val);
@@ -1106,11 +1085,11 @@ export default function SettingsPage() {
     syncSettingsToCloud({ usePicponyProxy: val, useCdn: val || useCdn });
   };
 
-  /* No API-key gate, and that is a deliberate divergence from the old frontend. The accel line
-     is a `?url=` worker that needs no credential — `buildApiLineUrl` just wraps whatever URL it
-     is given — so gating the switch on a key created a state nobody could leave: the row read
-     off and was permanently disabled while the stored value stayed on, and `stepApiFailover`
-     went on using the line the UI said was unavailable. */
+  /* No API-key gate, a deliberate divergence from the old frontend: the accel line is a
+     `?url=` worker that needs no credential, so gating the switch on a key created a
+     state nobody could leave — the row read off and was permanently disabled while the
+     stored value stayed on, and `stepApiFailover` went on using the line the UI said
+     was unavailable. */
   const handleUseApiAccelChange = (val: boolean) => {
     setUseApiAccel(val);
     lsSet(LS_KEYS.useApiAccel, val);
@@ -1125,10 +1104,10 @@ export default function SettingsPage() {
     syncSettingsToCloud({ useHongKongRelay: val });
   };
 
-  /* Re-read the site policy and re-measure the image lines. The policy is fetched once
+  /* Re-read the site policy and re-measure the image lines: the policy is fetched once
      per load, so without this the only way to notice an administrator switching lines is
-     to reload. The race reports through the same subscription rather than this promise —
-     it can take up to five seconds and there is no reason to hold the button that long. */
+     to reload. The race reports through the same subscription, not this promise — it can
+     take up to five seconds and there is no reason to hold the button that long. */
   const handleRefreshLines = async () => {
     setRefreshingLines(true);
     raceImageLines();
@@ -1149,19 +1128,17 @@ export default function SettingsPage() {
     <div className="max-w-4xl mx-auto">
       <PageHeader title="设置" />
       {/* Two tabs, and the line between them is not a matter of taste: 设置 is what the
-          account does and 个性化 is what this device remembers. That is also why only one
-          side needs the gate below — see `AppearanceSection`. 设置 leads because it is the
-          page's own name and the reason most visits happen; the pane order matches, because
-          `TabPanes` derives its direction from DOM order.
+          account does, 个性化 what this device remembers — which is also why only one side
+          needs the gate below (see `AppearanceSection`). 设置 leads because it is the
+          page's own name; pane order matches, because `TabPanes` derives direction from
+          DOM order.
 
-          Local state rather than `?tab=`. `/policy` does the same, and `AGENTS.md` says why:
-          a tab whose value lives in `useState` needs nothing but `TabPanes`, because the
-          state update and its layout effect are the same commit. The URL form exists for
-          screens that have to be linkable into a tab, and buys an optimistic-state dance
-          plus a coalesced `router.push` that this page has no use for.
+          Local state rather than `?tab=` (AGENTS.md): a tab whose value lives in
+          `useState` needs nothing but `TabPanes` — the URL form exists for screens that
+          have to be linkable into a tab.
 
-          No `lean`: the 设置 pane replaces most of its subtree the moment the cloud config
-          lands, which is exactly the case `AGENTS.md` names as the counter-example. */}
+          No `lean`: the 设置 pane replaces most of its subtree the moment the cloud
+          config lands, exactly the case AGENTS.md names as the counter-example. */}
       <Tabs
         tabs={[
           { value: 'general', label: '设置' },
@@ -1174,31 +1151,24 @@ export default function SettingsPage() {
       />
       <TabPanes value={tab}>
         <TabPane value="general">
-      {/* The cloud config gate: until the fetch resolves the page is dimmed and
-          inert, so a default value cannot be written back over a setting the server
-          has not returned yet.
-          `disabled-content` (38%), not a third `opacity-50`. The gallery's paging dim
-          is a documented pair — one value, two matched call sites on / and /favorites
-          — and this was quietly a third, for a different purpose: the gallery is
-          *replacing* content the user can still read, while this is a form that
-          cannot be used yet. That is what "disabled" means, and M3 gives it 38%.
-          200ms `standard`, which is what the two gallery sites use and what the
-          comment here already claimed. */}
+      {/* The cloud config gate: until the fetch resolves the page is dimmed and inert,
+          so a default value cannot be written back over a setting the server has not
+          returned yet. `disabled-content` (38%), not the gallery's 50% paging dim — the
+          gallery *replaces* content the user can still read, this is a form that cannot
+          be used yet, which is what "disabled" means (M3 gives it 38%). */}
       <div
         aria-busy={!settingsReady}
-        /* `aria-busy` belongs on the gate, not on the page. It sat on the `max-w-4xl`
-           wrapper, which since the split encloses the tablist *and* the 个性化 pane — so a
-           screen-reader user switching tabs to turn animations off was told the region was
-           still loading, which is the one state the split exists to keep out of that pane. */
+        /* `aria-busy` belongs on the gate, not on the page: the wrapper also encloses
+           the tablist *and* the 个性化 pane, so a screen-reader user switching tabs was
+           told the region was still loading — the one state the split exists to keep out
+           of that pane. */
         className={`transition-[opacity] duration-standard ease-[var(--ease-standard)] ${
           settingsReady ? '' : 'disabled-content pointer-events-none'
         }`}
       >
-      {/* No entrance animation. This is a settings form — rows of switches and
-          values the user came here to change, not content to be revealed. Both
-          the mount-time `<Reveal>` that used to wrap these sections and the
-          scroll reveal that replaced it made a control列 arrive like an article.
-          Entrance cascades are for picture content. */}
+      {/* No entrance animation: this is a settings form — rows of switches and values
+          the user came here to change, not content to be revealed. Entrance cascades
+          are for picture content. */}
       <div>
         <section className="mb-8">
           <div>
@@ -1464,12 +1434,10 @@ export default function SettingsPage() {
                   {contentFilter === 'developer' && '开发者模式，显示所有内容'}
                 </p>
               </div>
-              {/* `size="sm"` — 40dp, not the field's 56. This control sits in an
-                  `.m3-row` whose next three siblings hold a 32dp `ToggleSwitch`, so
-                  at 56 it made this row 88px against their 78 and read as 1.75x the
-                  control below it. A control's step comes from its enclosure: in a
-                  row it matches the row's other controls, which also puts the row's
-                  height back under the control of its *text*. */}
+              {/* `size="sm"` — 40dp, not the field's 56: this control sits in an `.m3-row`
+                  whose next three siblings hold a 32dp `ToggleSwitch`, and at 56 this row
+                  read as 1.75x the control below it. A control's step comes from its
+                  enclosure; in a row it matches the row's other controls. */}
               <Select
                 size="sm"
                 value={contentFilter}
@@ -1612,9 +1580,9 @@ export default function SettingsPage() {
               性能与加速
             </SectionHeading>
 
-            {/* Which line is actually in use, which is not always what the switches below
-                say: an administrator can pin the whole site to one, and a failover can
-                move it mid-session. Read-only — the row reports, the switches ask. */}
+            {/* Which line is actually in use — not always what the switches below say:
+                an administrator can pin the whole site to one, and a failover can move it
+                mid-session. Read-only: the row reports, the switches ask. */}
             <div className={rowClass}>
               <div className="flex items-center gap-2">
                 <MdRoute size={ICON.control} className="text-outline" />
@@ -1676,8 +1644,8 @@ export default function SettingsPage() {
             </div>
 
             {/* Disabled while the relay is on rather than hidden: with the relay preferred
-                this toggle has nothing left to select, and `disabled-content` says so
-                where a vanished row would just have to be rediscovered. */}
+                this toggle has nothing left to select, and a vanished row would just have
+                to be rediscovered. */}
             <div className={rowClass}>
               <ToggleSwitch
                 layout="row"
@@ -1972,14 +1940,12 @@ export default function SettingsPage() {
         isOpen={isEmailModalOpen}
         onClose={closeEmailModal}
         title="邮箱设置"
-        /* One `footer` with two branches rather than an action row inside each half of the
-           body. Both halves used to hand-roll their own, which is the defect the /block-groups
-           dialog is the worked example of: the buttons sat inside the body's scroller, so on a
-           short viewport with the verification step open 验证邮箱 scrolled out of view while
-           every sibling dialog on this screen pinned its own.
-           重新发送 keeps the leading edge through `mr-auto` — an auto margin in `Modal`'s
-           `justify-end` row absorbs the space to its right — where it used to need a nested
-           flex wrapper around the two buttons. */
+        /* One `footer` with two branches rather than an action row inside each half of
+           the body: hand-rolled rows sat inside the body's scroller, so on a short
+           viewport with the verification step open 验证邮箱 scrolled out of view while
+           every sibling dialog pinned its own. 重新发送 keeps the leading edge through
+           `mr-auto` — an auto margin in `Modal`'s `justify-end` row absorbs the space
+           to its right. */
         footer={
           showVerifyInput ? (
             <>
@@ -2018,8 +1984,8 @@ export default function SettingsPage() {
         }
       >
         {!showVerifyInput ? (
-          /* No `space-y-*` wrapper: this half is one field now that its action row has moved
-             to the footer, and the other half keeps one because it holds two blocks. */
+          /* No `space-y-*` wrapper: this half is one field now that its action row has
+             moved to the footer; the other half keeps one because it holds two blocks. */
           <div>
             <label htmlFor="new-email" className="block text-label-l text-on-surface mb-2">
               新邮箱地址

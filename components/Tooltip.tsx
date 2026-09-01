@@ -34,30 +34,21 @@ const EXIT_MS = SPRING_MS.fastEffects;
 /**
  * M3 plain tooltip.
  *
- * The app had none, so every icon-only control fell back to the browser's own
- * `title` bubble: the OS font at the OS size, no token in it, a delay the page
- * cannot set, no way to reach it on a touch screen, and — the part that matters
- * most — nothing a screen reader ties to the control, because `title` is a
- * last-resort accessible *name*, not a description.
- *
  * By its own tokens (`PlainTooltipTokens`): `inverse-surface` container,
- * `inverse-on-surface` text at `body-small`, `corner-extra-small`, and **no
+ * `inverse-on-surface` text at `body-small`, extra-small corner, and **no
  * elevation** — a plain tooltip is a label, not a surface that floats.
  *
  * `inverse-surface` here is not the mistake the snackbar's note warns about. That
- * role flips between schemes, which is wrong for a *severity* — the same message
- * must not arrive as a dark chip in one theme and a light one in the other. A
- * tooltip carries no severity; its whole job is to contrast with whatever surface
- * it is over, and flipping is exactly how it keeps doing that.
+ * role flips between schemes, which is wrong for a *severity*; a tooltip carries
+ * no severity — its whole job is to contrast with whatever surface it is over,
+ * and flipping is exactly how it keeps doing that.
  *
- * It shows on hover after a delay and on **focus immediately**, because a keyboard
- * user has already committed to the control by the time it is focused. It hides on
- * leave, on blur, on Escape and on a press — a bubble still up while its button is
- * being pressed is describing a decision that has already been made.
+ * Shows on hover after a delay and on **focus immediately** (a keyboard user has
+ * already committed to the control). Hides on leave, blur, Escape and press.
  *
- * `aria-describedby`, not `aria-label`: the control already has a name (an
- * icon-only control cannot ship without one), and the tooltip repeats it for the
- * eye. Announcing it as the name as well would read it twice.
+ * `aria-describedby`, not `aria-label`: the control already has a name, and the
+ * tooltip repeats it for the eye — announcing it as the name too would read it
+ * twice.
  */
 export function Tooltip({
   label,
@@ -150,13 +141,9 @@ export function Tooltip({
            shadow: the inverse container is the whole separation. */
         'bg-inverse-surface text-inverse-on-surface text-body-s z-tooltip',
         'pointer-events-none flex min-h-6 items-center rounded-xs px-2 py-1',
-        /* `FastEffects` in **both** directions, which is what `Tooltip.kt` does
-           (`MotionSchemeKeyTokens.FastEffects` alongside `FastSpatial`). The exit
-           used to be a 100ms `standard-accelerate` curve described as "the
-           leaves-the-screen pairing" — it is not: M3 pairs standard-accelerate
-           with 200ms, 100ms is the press row, and a tooltip is component motion
-           rather than a screen transition. One spring both ways also means the
-           bubble cannot arrive and leave on two different clocks.
+        /* `FastEffects` in **both** directions, which is what `Tooltip.kt` does.
+           One spring both ways means the bubble cannot arrive and leave on two
+           different clocks.
 
            Only opacity moves. AOSP's tooltip also scales, which is why it reaches
            for `FastSpatial` too; this one does not, so there is nothing for the

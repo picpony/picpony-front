@@ -14,22 +14,9 @@ interface SectionHeaderProps {
 }
 
 /**
- * The admin console's panel header.
- *
- * It **composes** `SectionHeading` rather than re-implementing it. It used to write
- * out its own `<h2 className="text-title-l …">`, its own icon cell and its own
- * subtitle paragraph — so the app had two heading components that disagreed on the
- * type role (`title-l` here against `title-m-emphasized` there) and on the name of
- * the heading text (`title` against `children`), and two files imported both and
- * rendered two heading scales at one nesting depth.
- *
- * The icon's colour comes from here too. This component's icon cell carried none, so
- * all eleven call sites named `text-primary` themselves — which is exactly what
- * `SectionHeading`'s docstring says a call site should never have to do again. Pass a
- * bare glyph; it is tinted on arrival.
- *
- * What is left specific to the console is the refresh affordance, which is why this
- * still exists as a thin wrapper rather than being deleted.
+ * The admin console's panel header: composes `SectionHeading` (which owns the
+ * type role, the tinted icon cell and the subtitle) plus the console-specific
+ * refresh affordance. Pass a bare glyph — it is tinted on arrival.
  */
 export default function SectionHeader({
   icon,

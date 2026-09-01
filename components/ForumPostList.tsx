@@ -41,10 +41,9 @@ export default memo(function ForumPostList({
 }: ForumPostListProps) {
   if (isLoading) {
     return (
-      /* Three bars and the `mb-8`, matching the row below. It stood at two bars
-         inside no wrapper margin, so the placeholder row was measurably shorter than
-         the row it replaced *and* `Pagination` jumped up when the posts landed. The
-         real row is a title, an author line and a baseline. */
+      /* Three bars and the wrapper margin, matching the row below — the
+         placeholder must not be measurably shorter than the row it replaces,
+         or the pager jumps when the posts land. */
       <div className={className}>
         <div className="mb-8">
           {[1, 2, 3, 4, 5].map((i) => (
@@ -64,19 +63,15 @@ export default memo(function ForumPostList({
 
   if (error) {
     return (
-      /* `pane`, matching the empty branch below. It defaulted to `page`, so one
-         list had two silhouettes — a half-viewport block when it failed and a
-         32dvh one when it was merely empty. */
+      /* `pane`, matching the empty branch below — one list, one silhouette. */
       <ErrorRetry size="pane" title="帖子加载失败" message={error.message} onRetry={onRetry} />
     );
   }
 
   return (
-    /* `data-pagination-anchor` on the list root, so turning a page lands on the first new
-       row. Without it `Pagination` fell back to the top of the page — which on the home
-       route's forum pane meant the two tabs of one screen paged differently, since the
-       gallery pane has an anchor and this did not. It is here rather than on the pager's own
-       wrapper because the anchor is meant to be the top of the *list*. */
+    /* `data-pagination-anchor` on the list root, so turning a page lands on
+       the first new row rather than the top of the page. The anchor is meant
+       to be the top of the *list*. */
     <div data-pagination-anchor className={className}>
       <div className="mb-8">
         {posts.length === 0 ? (
@@ -89,8 +84,8 @@ export default memo(function ForumPostList({
         ) : (
           posts.map((post) => {
             /* No `sm:size-4` on these glyphs. It overrode the `size` prop, so the
-               icon got *smaller* on the wider viewport — 18dp down to 16 — and 16 is
-               off the icon scale entirely (below 18 a Material Symbol's strokes stop
+               icon got *smaller* on the wider viewport — and 16 is off the icon
+               scale entirely (below 18 a Material Symbol's strokes stop
                resolving and it reads as a smudge). `dense` at both sizes. */
             const stats = (
               <>
@@ -109,12 +104,11 @@ export default memo(function ForumPostList({
               </>
             );
             return (
-              /* A `<Link>`, not a `<div onClick>`.
-                 This is the forum's primary navigation and it had no `href`, no
-                 `tabIndex` and no key handler, so it could not be reached by
-                 keyboard at all, middle-clicked, or opened in a new tab. The
-                 handler stays for `rememberForumOrigin`, which hands the pressed
-                 rectangle to the detail page's container transform. */
+              /* A `<Link>`, not a `<div onClick>`: the forum's primary
+                 navigation gets a real href, a tab stop, keyboard activation,
+                 middle-click and new-tab. The handler stays for
+                 `rememberForumOrigin`, which hands the pressed rectangle to
+                 the detail page's container transform. */
               <Link
                 key={post.id}
                 href={`/forum/${post.id}`}
@@ -128,39 +122,26 @@ export default memo(function ForumPostList({
                 data-ripple
                 data-tab-row
                 /* M3 grouped list row, settings-page style: one continuous cut
-                 block of `bg-surface-container-low` rows with 2px seams and
-                 large outer corners.
+                 block of rows with 2px seams and large outer corners.
 
-                 No entrance cascade. The rows used to fade in on a 45ms-per-row
-                 stagger, which lands *on top of* the tab shared axis: switching
-                 to 论坛 played a slide and a per-row fade at once, so the list
-                 arrived twice. The slide already carries the arrival — an
-                 entrance cascade belongs to picture content, where the wait is
-                 real, not to a text list that is already in the DOM.
+                 No entrance cascade: it landed *on top of* the tab shared axis
+                 (a slide plus a per-row fade at once, so the list arrived
+                 twice). The slide already carries the arrival — an entrance
+                 cascade belongs to picture content where the wait is real.
 
-                 `state-layer` alone carries hover. The tone step that used to sit
-                 beside it (`hover:` on the container-high role) was left behind
-                 when the alpha tint was replaced, so the row ran two hover
-                 treatments at once, on 150ms and 200ms. */
+                 `state-layer` alone carries hover; no second hover tone step
+                 beside it. */
                 className="m3-row block bg-surface-container-low p-4 cursor-pointer state-layer transition-ui focus-visible:ring-2 focus-ring"
               >
                 <div className="flex gap-4">
                   <div className="shrink-0">
                     <Avatar src={post.avatar} name={post.username} size={48} />
                   </div>
-                  {/* One shape, cover or no cover.
-                      Three rows: the title, the author under it, and a baseline
-                      carrying the date on the left and the counts on the right.
-                      The middle column stretches to whatever the row is tall,
-                      so `mt-auto` drops that baseline to the bottom edge of the
-                      thumbnail when there is one and changes nothing when there
-                      is not — which is the point. Branching on the cover gave
-                      the two kinds of post visibly different anatomy; here the
-                      picture only decides how tall the row is.
-                      Date and counts share the baseline rather than each owning
-                      a row of their own: it keeps the card to three lines, and
-                      the two ends anchor the bottom the way the avatar and the
-                      thumbnail anchor the top. */}
+                  {/* One shape, cover or no cover. Three rows: title, author,
+                      baseline (date left, counts right). `mt-auto` drops that
+                      baseline to the bottom edge of the thumbnail when there is
+                      one and changes nothing when there is not — the picture
+                      only decides how tall the row is. */}
                   <div className="flex min-w-0 flex-1 flex-col">
                     <div className="flex items-center gap-2">
                       {post.is_pinned === 1 && (
@@ -173,10 +154,8 @@ export default memo(function ForumPostList({
                       </h2>
                     </div>
                     {/* `on-surface-variant`, which is
-                        `ListTokens.ItemSupportingTextColor`. It shared `on-surface` with
-                        the headline above it, so the row's two lines carried the same ink
-                        and stated no hierarchy — the title and the author read as equally
-                        important. */}
+                        `ListTokens.ItemSupportingTextColor` — supporting ink,
+                        so the row's two lines carry a hierarchy. */}
                     <span className="block truncate text-body-s text-on-surface-variant sm:text-body-m">
                       {post.username}
                     </span>
@@ -201,11 +180,9 @@ export default memo(function ForumPostList({
                         alt="帖子封面"
                         width={80}
                         height={80}
-                        /* 56dp and an 8dp corner:
-                           `ListTokens.ItemLeadingImageWidth` / `-Height` are 56 and
-                           `ItemLeadingImageExpressiveShape` is `CornerSmall`. It was
-                           48dp growing to 80 with a 12dp card corner — a leading image
-                           is not a card, and neither figure was on the token. */
+                        /* 56dp and an 8dp corner (`ListTokens.ItemLeadingImageWidth` /
+                           `-Height` and `-ExpressiveShape`). A leading image is not
+                           a card. */
                         className="object-cover rounded-sm size-14"
                       />
                     </div>

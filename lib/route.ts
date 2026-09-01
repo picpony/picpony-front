@@ -1,27 +1,15 @@
 /**
  * Request lines: which host answers a Derpibooru request, and who decides.
  *
- * There are **two independent axes** — the API line and the image line — and the
- * decision on each is made twice over. An administrator can pin the whole site to
- * one line through `api.php?action=get_maintenance_status`; only when that policy
- * says `auto` do the user's own toggles in /settings get a vote. This module owns
- * both halves, plus the runtime health that `auto` resolves against.
- *
- * Three things it deliberately is not:
- *
- * - **Not a preference in `lib/appearance.ts`'s sense.** No cookie, no attribute on
- *   `<html>`, no pre-paint script — those five are the *device's* and are echoed back to
- *   the server in a cookie, where this one is the server's and travels one way. It *is*
- *   inlined into the document, and the reason is not painting: nothing here changes a
- *   pixel. It is that `proxyFetch` awaits the policy before it will send anything, so
- *   fetching it on the client made it round 1 of every screen in the app and pushed every
- *   Derpibooru read into round 2 behind it. See `lib/route.server.ts`.
- * - **Not a swap of the base constants.** `DERPIBOORU_API_BASE` stays canonical and
- *   the line is applied per request, which is what the old frontend does and what
- *   sidesteps a bundler folding an `export const` string into 140 call sites.
- * - **Not about PicPony's own API.** `/api.php`, avatars and banners never change
- *   host. The policy rewrites Derpibooru `/api/` calls and derpicdn images, nothing
- *   else.
+ * Two independent axes: the **API line** rewrites Derpibooru `/api/` calls, the **image line**
+ * rewrites derpicdn images; PicPony's own API base, avatars and banners are not part of it. A
+ * line is a server-pushed policy, not a user preference: only when it says `auto` do the user's
+ * own toggles get a vote — and when it is forced, their toggles report the forced value and go
+ * disabled; that is the feature working, not a bug. The line is applied per request over the
+ * canonical URL (the base constants stay immutable string literals — a bundler folds an `export
+ * const` into every call site, so reassigning the module binding changes nothing), and the
+ * policy is inlined into the document (see `lib/route.server.ts`) so `proxyFetch` never waits
+ * on a client round trip for it.
  */
 
 import {
@@ -36,9 +24,7 @@ import {
 } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
 
-// ---------------------------------------------------------------------------
-// The catalogue
-// ---------------------------------------------------------------------------
+// --- The catalogue ----------------------------------------------------------
 
 export type ApiLine = 'direct' | 'api_accel' | 'picpony_api' | 'third_party';
 export type ImageLine = 'direct' | 'cdn' | 'picpony';
@@ -67,17 +53,12 @@ const IMAGE_LINE_LABELS: Record<ImageLine, string> = {
   picpony: 'PicPony 加速服务器',
 };
 
-// ---------------------------------------------------------------------------
-// The user's own line preferences
-// ---------------------------------------------------------------------------
+// --- The user's own line preferences ----------------------------------------
 
 /**
- * Read straight from `localStorage`, per call, like `getBrowsingSettings` does.
- *
- * These four live here rather than in `BrowsingSettings` because they are the line
- * axis and nothing else reads them. Note which axis each belongs to: `usePicponyProxy`
- * is the *image* worker, and using it to gate the API proxy is the defect this module
- * exists to undo.
+ * Read straight from `localStorage` per call, like `getBrowsingSettings` does. These live here
+ * rather than in `BrowsingSettings` because they are the line axis; `usePicponyProxy` is the
+ * *image* worker, and using it to gate the API proxy is the defect this module exists to undo.
  */
 interface LinePrefs {
   useCdn: boolean;
@@ -104,9 +85,7 @@ function readLinePrefs(): LinePrefs {
   };
 }
 
-// ---------------------------------------------------------------------------
-// State: the server's policy, and the runtime health `auto` resolves against
-// ---------------------------------------------------------------------------
+// --- State: the server's policy, and the health `auto` resolves against -----
 
 const policy = {
   api: 'auto' as ApiPolicy,
@@ -116,14 +95,8 @@ const policy = {
 };
 
 /**
- * Which API line `auto` is currently sitting on, and the cooldown that keeps a
- * failed one out.
- *
- * `hongKong` and `derpi` start from the stored preferences and are then moved by
- * failover alone. The old frontend resolved its HK branch off the *preference*
- * while failover mutated a separate runtime flag, so "已切回直连" was announced
- * while the relay was still in use; reading the runtime flag here is a deliberate
- * divergence that makes the announcement true.
+ * Which API line `auto` is currently on, plus the cooldown that keeps a failed one out. The
+ * runtime flags are moved by failover alone, so resolution and announcement always agree.
  */
 const apiState = {
   hongKong: true,
@@ -139,20 +112,16 @@ const imageState = {
   raceWinner: null as 'cdn' | 'direct' | null,
 };
 
-// ---------------------------------------------------------------------------
-// Subscription, for /settings' picker and status line
-// ---------------------------------------------------------------------------
+// --- Subscription, for /settings' picker and status line --------------------
 
 let version = 0;
 const listeners = new Set<() => void>();
 
 /**
- * Mirror the resolved image line into a cookie so the server can render the same `<img src>` the
- * client is about to want.
- *
- * Written on every change rather than once, because the line moves during a session: the policy
- * lands, a line degrades, the user flips a switch. It is only ever read at SSR, so a value one
- * navigation stale costs a single corrected `src`, not a wrong one.
+ * Mirror the resolved image line into a cookie so SSR renders the same `<img src>` the client is
+ * about to want — identical resolution on both sides, no hydration mismatch. Rewritten on every
+ * change (the line moves during a session) and read only at SSR, so a value one navigation stale
+ * costs a single corrected `src`, not a wrong one.
  */
 function mirrorImageLineCookie() {
   if (typeof document === 'undefined') return;
@@ -190,15 +159,12 @@ export function setLineNotifier(fn: (message: string, tone: LineNotice) => void)
   notifier = fn;
 }
 
-/* One severity per direction. A recovery arriving as a warning misreports itself, and a
-   snackbar's tone *is* its severity. */
+/* One severity per direction — a recovery arriving as a warning misreports itself. */
 function announce(message: string | null, tone: LineNotice = 'warning') {
   if (message) notifier?.(message, tone);
 }
 
-// ---------------------------------------------------------------------------
-// The policy, from the server
-// ---------------------------------------------------------------------------
+// --- The policy, from the server --------------------------------------------
 
 /**
  * A third-party origin is only honoured if it is clean: `https:`, a hostname, and no
@@ -243,14 +209,8 @@ function applyRoutePolicy(status: SiteStatusResponse) {
 
 let ready: Promise<void> | null = null;
 
-/**
- * Where the server left the policy, if it managed to read one.
- *
- * `app/layout.tsx` inlines it as a `<script>` rather than handing it to a client component,
- * because it has to be in force before the *first effect* in the tree runs — and effect order
- * across a tree is not something a layout can promise. A script in `<head>` executes before
- * hydration, so by the time anything can call `proxyFetch` the value is already here.
- */
+/** Where the server left the policy, if the server read one. Inlined by `app/layout.tsx` as a
+ *  head script, so it is in force before the first effect in the tree runs. */
 declare global {
   interface Window {
     __picponyRoutePolicy?: {
@@ -265,34 +225,22 @@ declare global {
 /**
  * Resolve the policy once, before anything is allowed to pick a line.
  *
- * `proxyFetch` awaits this on every call, which is the old frontend's
- * `window._maintenanceReady` gate expressed where it cannot be got wrong: a React
- * boundary would depend on mount order, and a request fired before the policy landed
- * would silently use the wrong host. After the first resolution it is a settled
- * promise, so the cost is one microtask.
+ * `proxyFetch` awaits this on every call — that await is what stops the first cold-load request
+ * going out on the wrong host, and it cannot be left to a boundary whose mount order varies.
+ * The document normally already carries the answer (`lib/route.server.ts` reads it during SSR
+ * and `app/layout.tsx` inlines it), in which case this sends nothing; the client fetch is the
+ * fallback for a server read that timed out or failed.
  *
- * **The document normally already carries the answer**, in which case this sends nothing at all:
- * `lib/route.server.ts` reads it during SSR and `app/layout.tsx` inlines it. That is worth one
- * request and — the part that mattered — one *round*. Measured with `npm run net:audit` before the
- * change, `get_maintenance_status` was round 1 on every screen in the app and every Derpibooru read
- * was round 2 behind it, `/policy` included; against the real upstream on a slow link that gate was
- * over six seconds wide. The client fetch survives as the fallback for a server read that timed out
- * or failed, which is also the whole of what happens in a dev server with no backend.
- *
- * It **never rejects.** A failure of any kind leaves the `auto` defaults in place;
- * rejecting here would lock every Derpibooru request in the app behind a dead fetch.
+ * **It never rejects**: any failure leaves the `auto` defaults in place, because a rejection
+ * would lock every Derpibooru request behind one dead fetch.
  */
 export function ensureRoutePolicy(): Promise<void> {
   ready ??= adoptInlinePolicy() ?? loadRoutePolicy();
   return ready;
 }
 
-/**
- * Take the server's answer, or `null` if there isn't one.
- *
- * Synchronous, so the returned promise is already settled and `await ensureRoutePolicy()` costs a
- * microtask on the very first call rather than only on later ones.
- */
+/** Take the server's answer, or `null` if there is none. Synchronous, so even the very first
+ *  `await ensureRoutePolicy()` settles in a microtask. */
 function adoptInlinePolicy(): Promise<void> | null {
   if (typeof window === 'undefined') return null;
   const inline = window.__picponyRoutePolicy;
@@ -307,13 +255,9 @@ function adoptInlinePolicy(): Promise<void> | null {
   return Promise.resolve();
 }
 
-/**
- * Re-read the policy, for /settings' refresh control.
- *
- * Always a real request: the point of the control is "tell me what the server says *now*", and the
- * inlined document is up to `SERVER_POLICY_REVALIDATE_S` old. The global is dropped so nothing can
- * later adopt the value this call just superseded.
- */
+/** Re-read the policy for /settings' refresh control — always a real request, since the inlined
+ *  document is up to `SERVER_POLICY_REVALIDATE_S` old. The global is dropped so nothing can
+ *  later adopt the value this call just superseded. */
 export function refreshRoutePolicy(): Promise<void> {
   if (typeof window !== 'undefined') delete window.__picponyRoutePolicy;
   ready = loadRoutePolicy();
@@ -323,27 +267,23 @@ export function refreshRoutePolicy(): Promise<void> {
 async function loadRoutePolicy(): Promise<void> {
   if (typeof window === 'undefined') return;
   try {
-    /* No `Authorization` header: the four route fields are served to anyone, and only
-       `is_admin` varies with the session. Sending one would mean reaching into
-       `lib/hooks.ts` — a `'use client'` module — from the request layer. */
+    /* No `Authorization` header: the four route fields are served to anyone, and sending one
+       would mean reaching into `lib/hooks.ts` — a `'use client'` module — from the request layer. */
     const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`, {
       cache: 'no-store',
     });
     const data = JSON.parse(await res.text()) as SiteStatusResponse;
     if (data?.success) applyRoutePolicy(data);
   } catch {
-    /* Offline, an HTML error page, a renamed action — all mean "no policy", which is
-       what the defaults already say. Swallowed rather than logged loudly, because it
-       runs on every cold load. */
+    /* Offline, an HTML error page, a renamed action — all mean "no policy", which is what the
+       defaults already say. Swallowed rather than logged loudly; this runs on every cold load. */
   }
-  /* Unconditionally, so the failure path still brings the runtime line into step with
-     what the device has stored. It emits, which is also what wakes /settings up. */
+  /* Unconditional, so the failure path still brings the runtime line into step with what the
+     device has stored; the emit also wakes /settings. */
   syncLinePrefs();
 }
 
-// ---------------------------------------------------------------------------
-// Resolution
-// ---------------------------------------------------------------------------
+// --- Resolution -------------------------------------------------------------
 
 export const apiPolicy = () => policy.api;
 export const imagePolicy = () => policy.image;
@@ -351,12 +291,9 @@ export const isApiForced = () => policy.api !== 'auto';
 export const isImageForced = () => policy.image !== 'auto';
 
 /**
- * Bring the runtime line back in step with the stored preferences.
- *
- * Called after a policy lands and whenever /settings writes a toggle. Turning the
- * relay on takes the accel line out of the running, which is also why /settings shows
- * 启用 API 加速 disabled while it is on: with the relay preferred, that toggle has
- * nothing to select.
+ * Bring the runtime line back in step with the stored preferences; called after a policy lands
+ * and whenever /settings writes a toggle. Preferring the relay takes the accel line out of the
+ * running — which is also why /settings shows 启用 API 加速 disabled while it is on.
  */
 export function syncLinePrefs() {
   const prefs = readLinePrefs();
@@ -369,9 +306,8 @@ export function syncLinePrefs() {
 }
 
 export function resolveApiLine(): ApiLine {
-  /* The window test comes first, before the policy. The relay line is a browser-relative
-     URL that Node's `fetch` rejects outright, and a *forced* `picpony_api` would otherwise
-     return past this guard. */
+  /* The window test comes first: the relay line is a browser-relative URL that Node's
+     `fetch` rejects outright, and a *forced* `picpony_api` would otherwise slip past it. */
   if (typeof window === 'undefined') return 'direct';
   if (policy.api !== 'auto') return policy.api;
   const prefs = readLinePrefs();
@@ -381,10 +317,9 @@ export function resolveApiLine(): ApiLine {
 }
 
 /**
- * Priority is the old frontend's and the order matters: a forced policy wins, then the
- * worker, then whichever host won the latency race, and only then the plain CDN
- * preference. The race is what makes `cdn` beatable by `direct` on a connection where
- * the CDN is the slower of the two.
+ * Priority: a forced policy, then the worker, then whichever host won the latency race, then the
+ * plain CDN preference. The race is what makes `cdn` beatable by `direct` where the CDN is the
+ * slower of the two.
  */
 export function resolveImageLine(): ImageLine {
   if (policy.image !== 'auto') return policy.image;
@@ -397,11 +332,9 @@ export function resolveImageLine(): ImageLine {
 }
 
 /**
- * Where an image goes when the worker has just failed it.
- *
- * `resolveImageLine` cannot answer this: the worker only leaves the running after three
- * failures inside the window, so for the first two it would keep naming the line that
- * just failed. This is the same ladder minus the worker rung.
+ * Where an image goes when the worker has just failed it — the same ladder minus the worker
+ * rung. The worker only leaves the running after the failure threshold, so until then
+ * `resolveImageLine` would keep naming the line that just failed.
  */
 export function resolveImageFallbackLine(): 'cdn' | 'direct' {
   if (policy.image !== 'auto') return policy.image === 'cdn' ? 'cdn' : 'direct';
@@ -424,9 +357,7 @@ export function currentLineLabels() {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Applying a line to a URL
-// ---------------------------------------------------------------------------
+// --- Applying a line to a URL -----------------------------------------------
 
 /** Read inline rather than through `readUserInfo`, to keep `lib/hooks.ts` out of here. */
 function currentUsername(): string {
@@ -442,11 +373,9 @@ function currentUsername(): string {
 }
 
 /**
- * Rewrite a Derpibooru URL for one line.
- *
- * Every line starts from the `derpibooru.org` spelling: `trixiebooru.org` is the same
- * site under its second name, and the accel worker and the relay both key their caches
- * on the canonical one.
+ * Rewrite a Derpibooru URL for one line. Every line starts from the canonical `derpibooru.org`
+ * spelling: `trixiebooru.org` is the same site, and the accel worker and the relay both key
+ * their caches on the canonical one.
  */
 export function buildApiLineUrl(url: string, line: ApiLine): string {
   const derpiUrl = url.replace('trixiebooru.org', 'derpibooru.org');
@@ -454,9 +383,9 @@ export function buildApiLineUrl(url: string, line: ApiLine): string {
     case 'api_accel':
       return PROXY_API_BASE + encodeURIComponent(derpiUrl);
     case 'picpony_api': {
-      /* Our own path, not `cdn.picpony.top` — see `app/relay/route.ts` for why the
-         browser cannot reach the relay directly. `xp_user` is the relay's per-user
-         accounting and is absent for a signed-out visitor. */
+      /* Our own path, not `cdn.picpony.top` — `app/relay/route.ts` explains why the browser
+         cannot reach the relay directly. `xp_user` is the relay's per-user accounting,
+         absent for a signed-out visitor. */
       let out = `${PICPONY_RELAY_PATH}?url=${encodeURIComponent(derpiUrl)}`;
       const user = currentUsername();
       if (user) out += `&xp_user=${encodeURIComponent(user)}`;
@@ -481,33 +410,25 @@ export function buildApiLineUrl(url: string, line: ApiLine): string {
 }
 
 /**
- * The write path's line, and it is deliberately narrower.
- *
- * A POST cannot travel through a `?url=`-style worker — the accel line answers
- * `GET`/`HEAD`/`OPTIONS` only — so an upload has exactly two possibilities: a
- * third-party origin that speaks the whole Philomena API, or Derpibooru itself. The
- * old frontend reaches the same split from the other side, by excluding POST from its
- * request queue while its global `fetch` patch still rewrites the third-party case.
+ * The write path's line, deliberately narrower: a POST cannot travel through a
+ * `?url=`-style worker — the accel line answers `GET`/`HEAD`/`OPTIONS` only — so an upload has
+ * exactly two possibilities, a third-party origin that speaks the whole Philomena API, or
+ * Derpibooru itself.
  */
 export function applyApiLineToWrite(url: string): string {
   return policy.api === 'third_party' ? buildApiLineUrl(url, 'third_party') : url;
 }
 
-// ---------------------------------------------------------------------------
-// API failover — `auto` only
-// ---------------------------------------------------------------------------
+// --- API failover — `auto` only ---------------------------------------------
 
 /**
  * Statuses that mean "this line is not working", rather than "this request was wrong".
  *
- * The old frontend also lists **429**, and that one is left out deliberately: a rate limit is
- * counted against the caller, so moving to a shared worker does not escape it — it spreads
- * one visitor's limit onto every visitor of that line. It also made `handleDerpiError`'s
- * dedicated 429 message unreachable. A 429 now surfaces as itself.
- *
- * 403 stays, because a proxy legitimately 403s when *it* is the problem — but see
- * `proxyFetch`, which will not fail over on a 403 for a request that carried an API key,
- * since that is a credential answer and no other host will answer it differently.
+ * 429 is deliberately excluded: a rate limit is counted against the caller, so failover does
+ * not escape it — it spreads one visitor's limit onto every visitor of the line, and a 429
+ * surfaces as itself. A 403 stays, because a proxy legitimately 403s when *it* is the problem —
+ * but `proxyFetch` never fails over a 403 on a request that carried a key: that is a credential
+ * answer, and no other host will answer it differently.
  */
 export const API_FAILOVER_STATUSES: readonly number[] = [500, 502, 504, 403, 503, 501];
 
@@ -537,24 +458,20 @@ function scheduleApiRevert() {
 }
 
 /**
- * Move `auto` off the line that just failed, and announce it.
- *
- * Returns whether there was anywhere to go. `false` means the caller should fall back
- * on plain retries — every line the preferences allow has now been tried or is cooling
- * down. Under a **forced** policy this does nothing at all and returns `false`: a line
- * the administrator pinned is not ours to leave, and quietly reverting to direct is
- * what would make 全站强制 meaningless.
+ * Move `auto` off the line that just failed; returns whether there was anywhere to go (`false`
+ * means fall back on plain retries — every allowed line has been tried or is cooling down).
+ * Under a **forced** policy this does nothing: a line the administrator pinned is not ours to
+ * leave, and quietly reverting to direct is what would make 全站强制 meaningless.
  */
 export function stepApiFailover(status?: number): boolean {
   if (policy.api !== 'auto') return false;
   const prefs = readLinePrefs();
   const busy = status === 403 || status === 503;
 
-  /* Restore the invariant before deciding: a runtime flag must never be set for a line the
-     preference forbids. `syncLinePrefs` normally keeps it, but a preference written in
-     another tab reaches `readLinePrefs` without ever reaching this state — and the branches
-     below would then announce leaving a line this session was never on, while resolving to
-     the same host it just failed on. */
+  /* Restore the invariant first: a runtime flag must never be set for a line the preference
+     forbids. `syncLinePrefs` normally keeps it, but a preference written in another tab reaches
+     `readLinePrefs` without reaching this state — the branches below would then announce leaving
+     a line this session was never on, while resolving to the same host it just failed on. */
   if (!prefs.useHongKongRelay) apiState.hongKong = false;
   if (!prefs.useApiAccel) apiState.derpi = false;
 
@@ -574,12 +491,9 @@ export function stepApiFailover(status?: number): boolean {
   }
 
   if (apiState.hongKong) {
-    /* Unreachable, and left as an assertion rather than a branch. `hongKong` implies the
-       preference is on (the invariant above), which implies `resolveApiLine` returned
-       `picpony_api`, which implies `proxyFetch` took its retry-in-place path and never called
-       this function. The old frontend has the same shape and a toast — 「香港服务器中转异常，
-       已切回直连」— that therefore never fires. If the relay is ever allowed to fail over,
-       this is where its step goes. */
+    /* Unreachable: `hongKong` implies the preference is on (the invariant above), which implies
+       `resolveApiLine` returned `picpony_api` and `proxyFetch` took its retry-in-place path. If
+       the relay is ever allowed to fail over, this is where its step goes. */
     return false;
   }
 
@@ -594,11 +508,10 @@ export function stepApiFailover(status?: number): boolean {
   return false;
 }
 
-// ---------------------------------------------------------------------------
-// Image line health: degrade, recover, race
-// ---------------------------------------------------------------------------
+// --- Image line health: degrade, recover, race ------------------------------
 
-/** Three failures on *distinct* URLs inside this window take a host out for everyone. */
+/** Three failures on *distinct* URLs inside this window take a host out for everyone — one
+ *  deleted picture (404 on every line) must not take a line down for the session. */
 const DEGRADE_WINDOW = 10_000;
 const DEGRADE_COUNT = 3;
 const WORKER_RECOVERY_MS = 30_000;
@@ -628,12 +541,9 @@ function announceThrottled(message: string, tone: LineNotice = 'success') {
 }
 
 /**
- * Probe with an `Image()` rather than a `fetch`.
- *
- * These hosts are image proxies, so a decoded bitmap is the only evidence that
- * actually means "this line works". `fetch(HEAD, { mode: 'no-cors' })` — what this
- * repo used before — yields an opaque response that resolves on a 500 as readily as on
- * a 200, so a dead line probed as healthy and the degrade was undone immediately.
+ * Probe with an `Image()` (a decoded bitmap), never a `fetch` — these hosts are image proxies,
+ * and a `no-cors` fetch yields an opaque response that resolves on a 500 as readily as a 200,
+ * so only a decoded bitmap is evidence the line actually works.
  */
 function probeImage(url: string, timeout = PROBE_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -665,11 +575,10 @@ const probeUrl = (base: string) =>
 /**
  * Race the CDN against a direct fetch and keep the winner.
  *
- * Lazy on purpose: it runs when an image has actually failed, and after a worker
- * recovery probe comes back down — never at boot, where it would spend two requests
- * measuring a line the visitor may never need. First success wins; if neither answers
- * inside the deadline the preference decides, so the race can delay a choice but never
- * block one.
+ * Lazy on purpose: it runs when an image has actually failed, and after a worker recovery
+ * probe comes back down — never at boot, where it would spend two requests measuring a line
+ * the visitor may never need. First success wins; if neither answers inside the deadline the
+ * preference decides, so the race can delay a choice but never block one.
  */
 export function raceImageLines() {
   if (health.raceRunning || typeof window === 'undefined') return;
@@ -694,11 +603,9 @@ export function raceImageLines() {
 /**
  * Note one failure on a host, and report whether that host is now out.
  *
- * **Distinct** URLs, because a single broken image retried three times says nothing about the
- * line — the whole point of the counter is to tell "this picture is missing" from "this host
- * is down". Both hosts get the same threshold: the CDN used to be dropped on its first
- * failure, so one deleted picture — which 404s on every line — took the CDN out of the
- * session for every other image in the app.
+ * **Distinct** URLs: one broken image retried three times says nothing about the line — the
+ * counter exists to tell "this picture is missing" from "this host is down". One deleted
+ * picture 404s on every line and must not take a line out of the session.
  */
 function noteFailure(log: FailureLog, rawUrl: string): { log: FailureLog; tripped: boolean } {
   const now = Date.now();

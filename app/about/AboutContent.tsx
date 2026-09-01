@@ -22,19 +22,15 @@ import Avatar from '@/components/Avatar';
 
 /** The Lottie composition's own frame, so the reserved box matches what lands. */
 const TRACE_ASPECT = '3000 / 1053';
-/**
- * One width for the mark, because there are two branches below that both draw it
- * and they were carrying separate copies of the pair — which is how the static
- * fallback and the animated mark come to be different sizes.
- */
+/** One width for the mark: two branches below draw it, and separate copies drifted. */
 const MARK_WIDTH = 'w-48 sm:w-64';
 
 function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const clicksRef = useRef({ count: 0, last: 0 });
-  /* Reactive, not the one-shot read this used to make: with the one-shot the
-     branch below was decided at mount, so turning the preference on mid-session
-     left the animation running until something else re-rendered the page. */
+  /* Reactive, not one-shot: with the one-shot the branch below was decided at mount, so
+     turning the preference on mid-session left the animation running until something
+     else re-rendered the page. */
   const reduced = useMotionTier() !== 'standard';
 
   // 已登录状态下快速连点 10 次（点击间隔超 1.5s 重置）触发开发者向导
@@ -74,31 +70,27 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
     };
   }, [reduced]);
 
-  /* Under the preference this used to render an *empty* box: the effect
-     returned before loading anything and nothing else drew the mark, so the page
-     opened with a labelled 176px hole where the wordmark belongs. The static
-     mark is the honest fallback — reduced motion asks for less movement, not
+  /* Under the preference an *empty* box used to render: the effect returned before
+     loading anything, leaving a labelled 176px hole where the wordmark belongs. The
+     static mark is the honest fallback — reduced motion asks for less movement, not
      less content. */
   if (reduced) {
-    /* The static mark takes the same handler. Without it the developer guide
-       would be unreachable for anyone with the preference on — an easter egg is
-       still a feature, and reduced motion asks for less movement, not fewer
-       affordances. `Logo` renders the mark, not a box, so the handlers go on a
-       wrapper rather than through it.
+    /* The static mark takes the same handler — without it the developer guide would be
+       unreachable for anyone with the preference on. `Logo` renders the mark, not a
+       box, so the handlers go on a wrapper rather than through it.
 
-       The width goes on `Logo` rather than on the wrapper, and that is a fix
-       rather than a preference: `Logo`'s own root is an `inline-block`, so a
-       `w-full` mask inside it resolves against a shrink-to-fit box that the mask
-       is itself supposed to size — circular, and it collapsed the mark to
-       nothing. Only reduced motion took this branch, which is why it went unseen.
+       The width goes on `Logo`, not the wrapper: `Logo`'s root is an inline-block, so a
+       full-width mask inside it resolves against a shrink-to-fit box the mask is itself
+       supposed to size — circular, and it collapsed the mark to nothing. Only the
+       reduced-motion branch took this path, which is why it went unseen.
 
        The keyline sits on the wrapper so the two colours can differ: the halo is
-       `currentColor` of whatever carries the filter, and the mask's fill is
-       `currentColor` of whatever carries the mask. Plate outside, ink inside —
-       a halo in the ink colour would only thicken the mark instead of knocking
-       it out of the texture behind it. `glass-body` rather than a surface step,
-       because the plate is what is actually behind the mark and the two used to
-       disagree by 28 code values, which turned the halo into an outline. */
+       `currentColor` of whatever carries the filter, the mask's fill is `currentColor`
+       of whatever carries the mask — plate outside, ink inside. A halo in the ink colour
+       would only thicken the mark instead of knocking it out of the texture behind it.
+       `glass-body` rather than a surface step, because the plate is what is actually
+       behind the mark; the two used to disagree by 28 code values, turning the halo into
+       an outline. */
     return (
       <span
         className="logo-keyline logo-keyline-plate block text-glass-body select-none"
@@ -110,19 +102,17 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
     );
   }
 
-  /* `aspect-ratio` reserves the box before the player injects its SVG. Without
-     it the host is 0px tall until the chunk resolves and then pushes the whole
-     page down — a layout shift on every visit, on the one element above the
-     fold. The plate behind it does not read this box: the glass has no keep-out, by
-     decision — it is a material rather than an image, so there is nothing
-     behind the mark for the mark to be clear of.
+  /* `aspect-ratio` reserves the box before the player injects its SVG — without it the
+     host is 0px tall until the chunk resolves and then pushes the whole page down, a
+     layout shift on every visit, above the fold. The plate behind it does not read this
+     box: the glass has no keep-out, by decision — it is a material, not an image, so
+     there is nothing behind the mark for the mark to be clear of.
 
-     `logo-keyline` is what keeps that decision from reading as clutter, and it
-     is the same treatment the brand bar's mark gets. The filter draws a 1px
-     halo in `currentColor`, so `currentColor` has to be the *plate's* own body
-     rather than the page's ink: a halo in the glass colour knocks the mark out
-     of the texture behind it, where a halo in `on-surface` would only thicken
-     it. */
+     `logo-keyline` is what keeps that decision from reading as clutter, the same
+     treatment the brand bar's mark gets. The filter draws a 1px halo in `currentColor`,
+     so `currentColor` must be the *plate's* own body, not the page's ink: a halo in the
+     glass colour knocks the mark out of the texture behind it; a halo in `on-surface`
+     would only thicken it. */
   return (
     <div
       ref={hostRef}
@@ -161,11 +151,10 @@ function resolveMemberLink(linkUrl: string | null | undefined): string | null {
 
 /** 运营团队板块：按分类分组展示成员 */
 function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
-  /* `initial` is the roster the server already fetched, handed down as a prop. Two effects, one
-     gate: `getServerSnapshot` returns it so the SSR pass renders the real names instead of a
-     skeleton, and `seed` installs it so this component’s first `read` finds a fresh entry and
-     sends no request at all. `null` — the upstream was slow or unhappy — falls straight back to
-     the client fetch this screen has always done. */
+  /* `initial` is the roster the server already fetched, handed down as a prop: two
+     effects, one gate — `getServerSnapshot` returns it so SSR renders real names, and
+     `seed` installs it so the first `read` finds a fresh entry and sends no request.
+     `null` (upstream slow or unhappy) falls back to the client fetch. */
   const read = useResource(teamMembers, {}, { initial: teamSeed ?? undefined });
   const members = read.data ?? [];
   const loading = read.data === undefined && read.error === undefined;
@@ -183,12 +172,9 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
     <Card variant="filled" padding="lg" className="mt-4">
       <SectionHeading>运营团队</SectionHeading>
 
-      {/* The skeleton is the loaded state's own shape: group headings over
-          wrapped rows of member cards, on the same `space-y-5` and
-          `gap-x-4 gap-y-5` rhythm. It used to be a flat row with a different gap
-          and no headings at all, so the list re-spaced *and* grew two heading
-          rows the moment the data landed — the one thing a skeleton exists to
-          prevent. */}
+      {/* The skeleton is the loaded state's own shape: group headings over wrapped rows
+          of member cards on the same rhythm. A flat row with a different gap and no
+          headings made the list re-space and grow two heading rows when data landed. */}
       {loading && (
         <div className="space-y-5" aria-hidden="true">
           {[0, 1].map((g) => (
@@ -210,9 +196,8 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
         </div>
       )}
 
-      {/* `ErrorRetry`, with a retry that actually retries. This was a bare
-          sentence and no way to recover, so one transient network failure left
-          the section empty until a full page reload. */}
+      {/* `ErrorRetry` with a retry that actually retries — a bare sentence gave no
+          way to recover from one transient network failure. */}
       {!loading && error && (
         <ErrorRetry
           size="inline"
@@ -245,9 +230,9 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
                       key={m.id}
                       href={href}
                       data-ripple
-                      /* Focus ring and ripple, like every other interactive row
-                         in the app. Without them a keyboard user could reach
-                         this link and see no indication they had. */
+                      /* Focus ring and ripple, like every other interactive row in the
+                         app — without them a keyboard user could reach this link and see
+                         no indication they had. */
                       className="flex w-full items-center gap-3 rounded-md p-2 outline-none transition-ui state-layer focus-visible:ring-2 focus-ring sm:w-44"
                     >
                       {inner}
@@ -270,8 +255,8 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
 export default function AboutContent({ teamSeed }: { teamSeed: TeamSeed | null }) {
   const router = useRouter();
   const [guideOpen, setGuideOpen] = useState(false);
-  /* Reachable only from the footer, so it is not a sidebar destination and
-     carries the shared back affordance — see the rule in AGENTS.md. */
+  /* Reachable only from the footer, so not a sidebar destination — it carries the
+     shared back affordance (see AGENTS.md). */
   const handleBack = useCallback(() => router.back(), [router]);
   useEscapeBack(handleBack);
 
@@ -283,41 +268,35 @@ export default function AboutContent({ teamSeed }: { teamSeed: TeamSeed | null }
           <PageHeader title="关于本站" />
         </div>
 
-        {/* The plate bleeds to the content area's edges. A negative inline margin exactly
+        {/* The plate bleeds to the content area's edges: a negative inline margin exactly
             cancels the shell's page padding, so the band's border box lands on the
-            scroller's own edges — not a viewport unit, because the scroller is narrower
-            than the window by the docked drawer and the reserved scrollbar gutter, and
-            anything measured against the viewport overflows sideways.
+            scroller's own edges — not a viewport unit, since the scroller is narrower than
+            the window by the docked drawer and the scrollbar gutter, and anything measured
+            against the viewport overflows sideways.
 
-            It has to sit on a block child rather than on the page root: the shell forces
-            the root to a definite width, and a flex item with a definite cross size does
-            not stretch, so the same margin there would shift the box left instead of
-            widening it.
+            It must sit on a block child, not the page root: the shell forces the root to a
+            definite width, and a flex item with a definite cross size does not stretch, so
+            the same margin there would shift the box left instead of widening it.
 
-            No corner radius, and that is the role rather than a preference — a radius says
-            where a surface ends, and this one runs off both sides of the column. The
-            concentric rule gives the same answer directly, since the gap to the enclosure
-            is zero.
+            No corner radius — that is the role, not a preference: a radius says where a
+            surface ends, and this one runs off both sides of the column (the concentric
+            rule gives the same answer, the gap to the enclosure being zero).
 
-            A floor rather than a fixed height: the glass is a material, not a picture, so
-            it may grow if anything else ever lands on it. 288/384px, up from 256/320 — at
-            the old height a band running the full width of the content area was better than
-            5:1 on a desktop, which reads as a strip of texture rather than as a panel. The
-            reeds are sized off the height (see `FluteConfig.frequency`), so the step also
-            moves their pitch — though `frequency` came down to 5 in the same pass, so the
-            reeds ended up at a 77px pitch rather than 48.
-            Width is not an axis here: the negative margin above already puts the band on the
-            scroller's own edges, and anything wider needs a viewport unit, which overflows.
+            A floor rather than a fixed height — the glass is a material, not a picture, and
+            may grow. 288/384px, up from 256/320: at the old height a full-width band was
+            better than 5:1 on a desktop, reading as a strip of texture rather than a panel.
+            The reeds are sized off the height (`FluteConfig.frequency`), so the step moves
+            their pitch too. Width is not an axis here — the negative margin already puts
+            the band on the scroller's edges, and anything wider needs a viewport unit,
+            which overflows.
 
-            `bg-glass-body` is the plate's own colour rather than a surface step, so what
-            shows if WebGL is unavailable is the material at rest instead of a differently
-            toned rectangle. */}
+            `bg-glass-body` is the plate's own colour, not a surface step: what shows if
+            WebGL is unavailable is the material at rest, not a differently toned rectangle. */}
         <div className="relative -mx-4 mt-2 flex min-h-72 items-center justify-center overflow-hidden bg-glass-body sm:-mx-6 sm:min-h-96">
           <FlutedGlass />
-          {/* `relative` is what keeps the mark above the glass: the two are siblings at the
-              same z-index, so paint order is DOM order and only a *positioned* element
-              takes part in it. Without it the plate would cover the mark and swallow its
-              clicks. */}
+          {/* `relative` keeps the mark above the glass: siblings at the same z-index, so
+              paint order is DOM order and only a *positioned* element takes part in it.
+              Without it the plate covers the mark and swallows its clicks. */}
           <div className="relative">
             <TraceHeader onActivate={() => setGuideOpen(true)} />
           </div>

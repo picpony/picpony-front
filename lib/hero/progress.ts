@@ -9,37 +9,18 @@ import {
 } from './spring';
 
 /**
- * A leg's progress function, in one of two kinds.
+ * A leg's progress function, in one of two kinds — the shape is independent of the leg's
+ * duration, and which kind a leg gets is decided by how it starts:
  *
- * Everything the hero animates is a normalized response `p(t)` on `t ∈ [0, 1]` with
- * `p(0) = 0` and `p(1) = 1`, so a leg's *shape* is independent of how long it lasts. What
- * changed is that there are now two shapes rather than one, and which one a leg gets is
- * decided by how it starts:
- *
- * - **From rest — a curve.** `Curves.fastOutSlowIn`, which is what Flutter's Hero actually
- *   flies: `_HeroFlightManifest.animation` wraps the route's animation in a
- *   `CurvedAnimation(curve: Curves.fastOutSlowIn, reverseCurve: fastOutSlowIn.flipped)`, and
- *   the flipped variant is the same shape read backwards, so a push and a pop present
- *   identically. Per tenth of the leg it travels 2.6 10.8 23.3 24.6 16.2 10.0 6.2 3.7 1.9 0.6
- *   — it hangs back, peaks at 30%, reaches half travel at 35%, and its fastest tenth carries
- *   41x its last.
+ * - **From rest — a curve** (`Curves.fastOutSlowIn`, what Flutter's Hero flies). A spring
+ *   cannot hang back: its peak velocity lands at 15–20% of the leg for every ζ this app
+ *   ships, so "starts almost still, then goes" is not reachable by retuning ζ.
  * - **At a speed something already has — a spring.** A reversal, a mid-flight rebuild and the
- *   drag release all have to leave at the speed the flyer is visibly travelling, and a Bézier
- *   cannot: its launch slope is `y1/x1`, fixed by its own shape. `HERO_FLIGHT_RESPONSE`'s
- *   ζ0.9 spring is solvable for a target slope, which is the whole reason it is still here.
+ *   drag release have to leave at the flyer's visible speed, and a Bézier's launch slope is
+ *   fixed by its own shape.
  *
- * **Why the curve rather than the spring for a from-rest leg**, given the spring is the app's
- * own ladder: a spring cannot hang back. Its peak velocity is at `arccos(ζ)/ω_d`, and swept
- * across every tier this app ships that lands at 15–20% of the leg — ζ1.0 at 15%, ζ0.9 at
- * 20%, and *lower* ζ moves it earlier rather than later, because a longer settle window
- * stretches the tail more than the head. So "starts almost still, then goes" is not reachable
- * by retuning ζ, and it is the one property that reads as a considered motion rather than as
- * a step response.
- *
- * Both kinds are differentiable, which is what keeps velocity-continuous interruption and
- * DOM-read-free pose measurement working across the split: `velocityAt` returns progress per
- * unit of normalized time for either, so `evaluateLeg`'s chord-speed calculation and
- * `springVelocityFromSpeed` did not change.
+ * Both kinds are differentiable in the same units, which is what keeps velocity-continuous
+ * interruption and DOM-read-free pose measurement working across the split.
  */
 
 export type ProgressCurve = {
@@ -165,13 +146,9 @@ export function intervalProgress(progress: number, start: number, end: number) {
 /**
  * The model for a leg that has to leave at a speed the object already has. Always a spring,
  * for the reason in this file's header, and this is the **only** place a launch velocity is
- * solved.
- *
- * That matters beyond tidiness. The three sites this replaces each wrote
- * `{ ...base, velocity }`, and each carried a comment warning that rebuilding the response
- * field by field silently drops ζ back to 1 — which had shipped once, so every interrupted
- * flight ran a critically damped curve while the constants claimed the ζ0.9 spatial one.
- * A spread that must not be forgotten is a hazard; a function that owns the spread is not.
+ * solved — a response field rebuilt field by field at a call site silently drops ζ back to
+ * 1, which had shipped once. A spread that must not be forgotten is a hazard; a function
+ * that owns the spread is not.
  */
 export function relaunch(
   base: SpringResponse,

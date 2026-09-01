@@ -11,27 +11,15 @@ interface SkeletonProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>
 }
 
 /**
- * The single loading placeholder.
+ * The single loading placeholder; `.skeleton` (globals.css) owns the sweep and
+ * reads `animation-delay: inherit`, which is what lets `delay` stagger a group.
  *
- * The app shipped two loading languages side by side: a `.skeleton` shimmer
- * sweep (5 sites) and Tailwind's own pulse utility — an opacity throb — at 18 sites, so
- * two lists loading next to each other pulsed differently. Everything routes
- * through here now.
- *
- * `.skeleton` (app/globals.css) owns the sweep itself and reads
- * `animation-delay: inherit`, which is what lets `delay` stagger a group.
- *
- * The radius is *conditional*, which looks like a trick and is a correctness
- * fix. `cn` is a plain join — it deliberately does not resolve Tailwind
- * conflicts — so a call site passing its own `rounded-full` emitted **both**
- * that and the default `rounded-sm`, and which one applied came down to
- * Tailwind's emission order rather than to what the caller asked for. 47 of the
- * ~60 call sites pass a radius, including every circular avatar and every
- * `aspect-square` tile, so this was not a corner case: the placeholder for a
- * round avatar was one stylesheet reordering away from being a rounded square.
- * Detecting the override and standing down is the one place a guard like this is
- * worth it, because the radius is the only token a placeholder legitimately has
- * to inherit from the thing it stands in for.
+ * **The radius is conditional — a deliberate divergence, do not fix.** `cn` is a
+ * plain join that does not resolve Tailwind conflicts, so a call site passing its
+ * own radius emitted both it and the default, leaving the winner to stylesheet
+ * order. The placeholder's radius is the one token that legitimately inherits
+ * from the thing it stands in for, so detecting the override and standing down
+ * is worth the guard.
  */
 const HAS_RADIUS = /(?:^|\s)(?:rounded|rounded-(?:none|xs|sm|md|lg|xl|2xl|3xl|full))(?:\s|$)/;
 
@@ -91,12 +79,6 @@ export function SkeletonCircle({
   );
 }
 
-/* There were `SkeletonRow` / `SkeletonRows` here, emitting `<tr>` and `<td>`.
-   They date from when `DataTable` was a real `<table>`; it is a `.m3-row`
-   grouped list of divs now, and the only remaining caller — the admin console's
-   lazy-tab fallback — was dropping bare table rows into a plain `<div>`. React
-   does not discard those the way an HTML parser would, so the UA stylesheet
-   wrapped them in an anonymous table box and the fallback showed a five-column
-   grid in front of a list that has no columns. A table-row placeholder now has
-   nothing in the app to stand in for; `DataTable` owns its own loading state and
-   the admin fallback builds the same `.m3-row` shape inline. */
+/* Former `SkeletonRow`/`SkeletonRows` (table-row placeholders) removed: no
+   table remains in the app for them to stand in for — `DataTable` owns its own
+   loading state and the admin fallback builds its row shape inline. */

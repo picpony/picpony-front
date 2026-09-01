@@ -1,14 +1,14 @@
 /**
  * Does turning a page keep the scroll position?
  *
- * `net:audit` counts requests; this watches one number the counts cannot see. A paged list whose
- * rows unmount for the length of a round trip collapses the scroll container, and the browser then
- * clamps `scrollTop` to the new (tiny) maximum — so the page snaps to the very top and the pager's
- * own scroll-to-the-list is undone. It is a data-layer bug that only shows up as a scroll bug,
- * which is exactly the kind this file exists to catch.
+ * `net:audit` counts requests; this watches the one number the counts cannot see. A paged list
+ * whose rows unmount for the length of a round trip collapses the scroll container, and the
+ * browser clamps `scrollTop` to the new maximum — the page snaps to the top and the pager's own
+ * scroll-to-the-list is undone. A data-layer bug that only shows up as a scroll bug.
  *
- * It samples the scroller's height and offset across a page turn and fails if the content ever
- * empties. `node scripts/netAuditScroll.mjs`.
+ * Samples the scroller's height and offset per frame across a page turn and fails if the content
+ * ever empties — one empty frame is the whole bug, and by the time anything settles the evidence
+ * is gone. `node scripts/netAuditScroll.mjs`.
  */
 
 import { spawn } from 'node:child_process';
@@ -152,8 +152,8 @@ await send('Emulation.setDeviceMetricsOverride', {
   deviceScaleFactor: 1,
   mobile: false,
 });
-/* The motion tier is pinned because headless Edge reports `prefers-reduced-motion: reduce`, and the
-   scroll animation this measures is gated on it. */
+/* Motion tier pinned: headless Edge reports `prefers-reduced-motion: reduce`, and the scroll
+   animation this measures is gated on it. */
 await send('Page.addScriptToEvaluateOnNewDocument', {
   source: `try{localStorage.setItem('picpony_motion','standard')}catch(e){}`,
 });
@@ -170,9 +170,7 @@ const before = await evaluate(`(() => {
 })()`);
 console.log(`before  cards ${before.cards}  scrollHeight ${before.height}  scrollTop ${before.top}`);
 
-/* Sampled every frame across the turn. One empty frame is the whole bug: the grid unmounting for a
-   single commit is enough for the browser to clamp the offset, and by the time anything settles the
-   evidence is gone. */
+/* Sampled every frame across the turn — one empty frame is enough to clamp the offset. */
 await evaluate(`(() => {
   window.__samples = [];
   const s = ${scroller};

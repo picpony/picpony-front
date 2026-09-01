@@ -32,22 +32,12 @@ interface CommentSectionProps {
   setComments: (comments: Comment[]) => void;
 }
 
-/** Comment timestamps are secondary information sitting next to a username in
- *  a narrow column, so they lose the year (almost always the current one) and
- *  keep the clock. The full value stays on the element's `title`. */
-/** 40dp leading avatar for a comment row.
- *
- * The same markup existed three times inside the list — linked-with-image,
- * unlinked-with-image, and the initial fallback — so a change to the ring, the
- * size or the border had to be made in three places and had already drifted.
- *
- * The face itself is now `Avatar`, which is the fourth place it existed. This
- * one had its own fallback (a `primary-container` disc with a `primary/20`
- * hairline) that no other avatar in the app wore, and it re-implemented
- * `getAvatarUrl`'s host rule inline as a literal `https://picpony.top/${...}` —
- * the same duplication `Avatar`'s own doc-comment was written about. A derpi
- * avatar is already absolute and `getAvatarUrl` passes those straight through,
- * so the source branch was only ever restating that. */
+/** Comment timestamps are secondary information in a narrow column, so they
+ *  lose the year (almost always the current one) and keep the clock. The full
+ *  value stays on the element's `title`. */
+/** 40dp leading avatar for a comment row: one component for all three former
+ *  copies (linked-with-image, unlinked-with-image, initial fallback), the face
+ *  itself being `Avatar`. */
 function CommentAvatar({ comment }: { comment: Comment }) {
   const face = <Avatar src={comment.avatar} name={comment.username} size={40} />;
 
@@ -104,8 +94,7 @@ export default function CommentSection({
       {/* 评论列表 */}
       {isLoadingComments ? (
         /* Skeleton rather than a centred spinner: the spinner collapsed the
-           section to one line and then snapped the full list in, so the page
-           jumped by however many comments happened to load. */
+           section to one line and then snapped the full list in. */
         <div>
           {Array.from({ length: 3 }, (_, i) => (
             <div key={i} className="m3-row bg-surface-container-low flex gap-4 p-4">
@@ -122,30 +111,18 @@ export default function CommentSection({
           {comments.map((comment) => (
             <article
               key={`${comment.source}-${comment.id}`}
-              /* A grouped list, not a stack of floating cards.
-             `m3-row` (globals.css) is the app's shape for "a run of related
-             rows": outer corners large, every cut edge inside it `rounded-xs`, a
-             2px seam between. `ForumPostList` — the list of *threads* — already
-             uses it, so a thread list read as one block of material while the
-             replies inside a thread read as eight separate islands 16px apart.
-             That comment in globals.css is explicit about why: "the previous 16px
-             margin made each row read as its own floating card and lost the
-             grouping entirely."
-             The tone also drops the `/50`. An alpha on a container token is the
-             hand-picked second tint the colour rules exist to prevent — it has to
-             be eyeballed once per scheme, and every other `m3-row` in the app sits
-             on the plain `surface-container-low` step. */
+              /* A grouped list, not a stack of floating cards: `m3-row`
+             (globals.css) is the app's shape for "a run of related rows" —
+             large outer corners, every cut edge inside it at the small step, a
+             2px seam between. The tone is the plain `surface-container-low`
+             step, no alpha on top of it. */
               className="m3-row bg-surface-container-low flex gap-3 p-3 sm:gap-4 sm:p-4"
             >
               <CommentAvatar comment={comment} />
 
-              {/* The header used to be one `justify-between` row carrying the
-                  name, a source badge, a reply button and a full
-                  `YYYY/MM/DD HH:mm` timestamp. On a 360px screen that is four
-                  competing things in ~250px, and the reply target was a 14px
-                  glyph. Now: identity on top, body in the middle, actions on
-                  their own line — the M3 list-item shape, and every element
-                  gets the width it needs. */}
+              {/* Identity on top, body in the middle, actions on their own
+                  line — the M3 list-item shape, and every element gets the
+                  width it needs. */}
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-label-l-emphasized text-on-surface truncate">

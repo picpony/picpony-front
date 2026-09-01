@@ -1,5 +1,6 @@
-/* Samples a ripple's computed opacity per frame across a press. */
-import { spawn } from 'node:child_process';
+/* Samples a ripple's computed opacity per frame across a press. Peak must be the pressed
+   state-layer token (0.1); a full-strength flash means the fade started from an absolute 1
+   instead of the underlying value. */import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';

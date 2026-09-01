@@ -14,10 +14,8 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import Card from '@/components/Card';
 import { Input, Textarea } from '@/components/Input';
 import { ICON } from '@/lib/icons';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
+/* Namespace import, deliberately: `api` is a runtime spread and
+   un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
 
 interface ShopItem {
@@ -277,11 +275,8 @@ export default function ShopTab({ token }: { token: string }) {
         <div className="flex items-center gap-4 mb-4">
           
           {/* The visible words *are* the accessible name — `Checkbox`'s `label`
-              renders them inside its own `<label>`. This was a `<span>` beside the
-              box with a differently-worded `aria-label` on the box, so a screen
-              reader heard "上架该商品" while the eye read "上架展示", and the
-              `cursor-pointer` on the wrapper promised a click target the text did
-              not have. */}
+              renders them inside its own `<label>`, so what a screen reader
+              hears cannot drift from what the eye reads. */}
           <Checkbox
             checked={form.active}
             onChange={(checked) => setForm({ ...form, active: checked })}

@@ -7,16 +7,13 @@ import { clamp } from '@/lib/utils';
 /**
  * Programmatic scrolling, on rAF rather than GSAP's ScrollToPlugin.
  *
- * `scrollTop` is not a CSS property, so this is the one piece of motion in the app that Web
- * Animations cannot express — it has to be a per-frame write either way, and GSAP's plugin was
- * doing exactly that. What the plugin cost was its host: `components/Pagination.tsx` is on ten
- * screens and imported `lib/motion` for these two functions alone, and that module registers
- * GSAP and five plugins at module scope.
- *
- * The curve is the same one (`0.33, 0, 0, 1`), evaluated below, and so is the square-root
- * duration band. What is *not* kept is GSAP's `lagSmoothing`: a stalled frame here is charged to
- * the scroll rather than delaying it, which for a scroll is the better failure — the offset is a
- * destination, and arriving late at the right place beats arriving on time at the wrong one.
+ * `scrollTop` is not a CSS property, so this is the one motion Web Animations cannot express —
+ * it is a per-frame write either way. The plugin's cost was its host: `components/Pagination.tsx`
+ * is on ten screens and imported `lib/motion` for these two functions alone, pulling GSAP into
+ * every route's first document. Same curve (`0.33, 0, 0, 1`, below) and square-root duration
+ * band; GSAP's `lagSmoothing` is deliberately not kept — a stalled frame is charged to the
+ * scroll rather than delaying it, and arriving late at the right place beats arriving on time
+ * at the wrong one.
  */
 
 /** `cubic-bezier(0.33, 0, 0, 1)` — `eases.scroll` in `lib/motion.ts`. Keep the two in step. */
@@ -26,7 +23,7 @@ const P2X = 0;
 const P2Y = 1;
 
 /* Newton–Raphson on x, then evaluate y. Eight iterations is well past convergence for a curve
-   this shallow, and the derivative can only vanish at the endpoints, which are exact. */
+   this shallow; the derivative only vanishes at the endpoints, which are exact. */
 function bezier(t: number): number {
   const cx = 3 * P1X;
   const bx = 3 * (P2X - P1X) - cx;
@@ -62,21 +59,17 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
 
   const from = scroller.scrollTop;
   const distance = Math.abs(from - to);
-  /* Duration follows the square root of the distance, not the distance itself: perceived travel
-     speed scales sub-linearly, so a linear map makes short hops feel sluggish and long ones feel
-     frantic. The band keeps even a whole-page jump under about a second.
-
-     There is deliberately no fixed-length escape hatch. One existed for a page turn, on the
-     argument that a page turn has no distance of its own — it goes to the top of the list from
-     wherever you were — and it is the wrong shape of answer: a fixed length makes the *speed*
-     scale with the distance instead, so the turn is a whip-pan from the bottom of a long gallery
-     and a crawl from near the top. This law is what keeps the rate sane across both. */
+  /* Duration follows the square root of the distance (distance law): perceived travel speed
+     scales sub-linearly, so a linear map makes short hops sluggish and long ones frantic —
+     a fixed length would instead make the *speed* scale with distance, a whip-pan from the
+     bottom of a long gallery and a crawl from near the top. The band keeps even a whole-page
+     jump under about a second. There is deliberately no fixed-length escape hatch. */
   const duration = scaledMs(clamp(280 * Math.sqrt(distance / 300), 360, 1100));
 
-  /* Scroll anchoring is normally welcome here — it keeps the gallery steady as thumbnails decode
-     above the viewport. During a deliberate programmatic scroll it fights us: the incoming page
-     re-lays out mid-tween, the browser "corrects" scrollTop to preserve the anchored element, and
-     the result is a visible lurch before the glide. Suspended for the length of the tween only. */
+  /* Scroll anchoring normally keeps the gallery steady as thumbnails decode above the
+     viewport; during a deliberate programmatic scroll it fights us — the incoming page
+     re-lays out mid-tween, the browser "corrects" scrollTop, and the result is a visible
+     lurch. Suspended for the length of the tween only. */
   scroller.style.overflowAnchor = 'none';
 
   const start = performance.now();
@@ -96,16 +89,13 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
 /**
  * Scrolls the app's real scroll container back to the top.
  *
- * A tween rather than `scrollTo({ behavior: 'smooth' })`: native smooth scrolling over a long
- * masonry list janks while thumbnails decode, and this way the easing matches the rest of the
- * app's motion.
+ * A tween rather than `scrollTo({ behavior: 'smooth' })`: native smooth scrolling janks over
+ * a long masonry list while thumbnails decode, and this way the easing matches the rest of
+ * the app's motion. Falls back to the window for any surface rendered outside the shell.
  *
- * Falls back to the window for any surface rendered outside the shell.
- *
- * A scroll offset is *state*, not decoration, so every tier still lands on it — only the travel
- * is dropped, and only by the tier that drops all travel. That distinction is the same one
- * `applyInstantTabScroll` makes and it is worth keeping in one sentence: the preference asks for
- * less movement, not for less positioning.
+ * A scroll offset is *state*, not decoration: every tier still lands on it — only the travel
+ * is dropped, and only by the tier that drops all travel. Same distinction as
+ * `applyInstantTabScroll` — the preference asks for less movement, not for less positioning.
  */
 export function scrollAppToTop({ smooth = true }: { smooth?: boolean } = {}) {
   const scroller = getAppScroller();
@@ -123,21 +113,16 @@ export function scrollAppToTop({ smooth = true }: { smooth?: boolean } = {}) {
 /**
  * Scrolls so that `target`'s top edge sits at the top of the viewport.
  *
- * Paginating a gallery should land on the first row of the new page, not back above the featured
- * banner — you already chose to move past that, and replaying it on every page turn just adds a
- * scroll.
+ * Paginating should land on the first row of the new page, not back above the featured banner —
+ * you already chose to move past it.
  *
- * `scroller` overrides which element is moved. It exists because not everything that scrolls is
- * the app scroller: an image-detail overlay brings its own, and the two calls that used to reach
- * for `element.scrollIntoView({ behavior: 'smooth' })` did so precisely because they could not
- * name it. That got them the browser's own smooth curve — symmetric, ~variable duration, and the
- * one scrolling motion in the app that did not match the rest — so a "reply to this comment" jump
- * felt different depending on whether you had opened the picture from the gallery or navigated to
- * it directly.
+ * `scroller` overrides which element is moved: not everything that scrolls is the app scroller
+ * (an image-detail overlay brings its own), and the callers that reach for this could not name
+ * it — `element.scrollIntoView({ behavior: 'smooth' })` got the browser's own curve, the one
+ * scrolling motion that did not match the rest.
  *
- * The glide survives the reduced tier — a scroll is the one motion where the destination only
- * makes sense in terms of where you came from, and it costs nothing but a composited offset. Only
- * `off` teleports.
+ * The glide survives the reduced tier — a scroll's destination only makes sense in terms of
+ * where you came from, and it costs nothing but a composited offset. Only `off` teleports.
  */
 export function scrollAppToElement(
   target: Element | null,

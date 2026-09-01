@@ -10,10 +10,8 @@ import Card from '@/components/Card';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import { ICON } from '@/lib/icons';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
+/* Namespace import, deliberately: `api` is a runtime spread and
+   un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
 
 interface AuditMessage {
@@ -27,9 +25,9 @@ interface AuditMessage {
   created_at: string;
 }
 
-/* The message body leads the phone card — it is the only column an auditor is
-   actually reading; the ids and timestamps around it are context. On desktop it
-   stays an ordinary cell, clamped so one long message can't blow out the grid. */
+/* The message body leads the card — the only column an auditor is actually
+   reading; ids and timestamps around it are context. Clamped so one long
+   message cannot blow out the grid. */
 const AUDIT_COLUMNS: Column<AuditMessage>[] = [
   {
     key: 'content',

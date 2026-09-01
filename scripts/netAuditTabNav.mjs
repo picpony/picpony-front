@@ -1,5 +1,5 @@
-/* Reproduces: open the forum tab, open a thread, press back. What is the URL, which tab is
-   selected, and which pane is showing? Scratch probe. */
+/* `npm run net:tabnav` — tap a tab, open a thread after a configurable gap, press back. Prints
+   the URL, the selected tab, the showing pane, history calls and console output at each step. */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -92,8 +92,7 @@ await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/${CONTROL ? '?tab=f
 await new Promise((r) => setTimeout(r, 4500));
 console.log('A. cold              ', JSON.stringify(await evalIn(STATE)));
 
-/* Hook the history API so a push that is *made* and a push that *lands* can be told apart. */
-await evalIn(`window.__control = ${CONTROL}; 1`);
+/* Hook the history API so a push that is *made* and a push that *lands* can be told apart. */await evalIn(`window.__control = ${CONTROL}; 1`);
 await evalIn(`(() => {
   window.__hist = [];
   for (const k of ['pushState', 'replaceState']) {
@@ -123,9 +122,8 @@ await evalIn(`(() => {
   if (!window.__control) t?.click();
   return 1;
 })()`);
-/* How long to wait between tapping the tab and opening a thread. `TAB_PUSH_COALESCE_MS` is
-   728ms at the slow speed scale, so anything under that opens the thread before the coalesced
-   `router.push('/?tab=forum')` has landed — which is what a real user does. */
+/* Gap between the tab tap and opening a thread. `TAB_PUSH_COALESCE_MS` is 728ms at the slow
+   speed scale, so a shorter gap opens the thread before the coalesced tab push has landed. */
 await new Promise((r) => setTimeout(r, Number(process.argv[4] ?? 2500)));
 console.log('B. tapped 论坛        ', JSON.stringify(await evalIn(STATE)));
 

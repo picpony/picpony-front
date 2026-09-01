@@ -69,9 +69,9 @@ export default function TasksPage() {
   const read = useResource(tasks, token ? { token } : SKIP);
   const data = read.data as TaskData | undefined;
 
-  /* Nothing to draw only while there is genuinely nothing — a cached screen refreshing underneath
-     has `data` and `isLoading` at once, and drawing the skeleton then is the flash this layer
-     exists to remove. */
+  /* Nothing to draw only while there is genuinely nothing — a cached screen refreshing
+     underneath has `data` and `isLoading` at once, and drawing the skeleton then is the
+     flash this layer exists to remove. */
   const loading = Boolean(token) && data === undefined && read.error === undefined;
   const error = !token
     ? '请先登录'
@@ -206,8 +206,8 @@ export default function TasksPage() {
     return [];
   };
 
-  /* One tab's worth of rows. Takes the tab rather than reading `activeTab`, because
-     every pane is rendered now — see the `TabPanes` note at the call site. */
+  /* One tab's worth of rows. Takes the tab rather than reading `activeTab`: every pane
+     is rendered now — see the `TabPanes` note at the call site. */
   const renderTabContent = (forTab: TaskTab) => {
     if (forTab === 'cumulative') {
       return (
@@ -230,12 +230,9 @@ export default function TasksPage() {
           return (
             <div
               key={item.id}
-              /* No per-row entrance. The rows used to fade in on a 50ms cascade of
-                 their own *inside* a 500ms pane transition — two clocks on one
-                 subtree, which is the case AGENTS.md calls out ("over content that
-                 already cascades on mount"). The pane's slide is the entrance; a
-                 second one on top is not extra polish. The 50ms step was also a
-                 third cascade rhythm, against `Reveal`'s 60 and the skeletons' 90. */
+              /* No per-row entrance: a cascade inside a 500ms pane transition is two
+                 clocks on one subtree, the case AGENTS.md calls out. The pane's slide is
+                 the entrance; a second one on top is not extra polish. */
               className="m3-row flex items-center gap-4 p-4 bg-surface-container-low"
             >
               <div className="flex-1 min-w-0">
@@ -246,18 +243,16 @@ export default function TasksPage() {
                     经验+{item.xp}
                     <span className="ml-1 text-warning">金币+{item.coins}</span>
                   </span>
-                  {/* Sits at the bar's right edge; tabular figures stop the
-                      digits shifting as progress ticks up. */}
+                  {/* Sits at the bar's right edge; tabular figures stop the digits
+                      shifting as progress ticks up. */}
                   <span className="ml-auto shrink-0 text-body-s tabular-nums text-on-surface-variant">
                     {Math.min(item.progress, item.target)}/{item.target}
                   </span>
                 </div>
-                {/* `ProgressBar`, the primitive. This was one of six hand-rolled
-                    tracks: an 8dp box (the token is 4), an animated `width`, and
-                    the three state colours as inline `style` so no grep for a
-                    `bg-*` utility could find them. The tone is now an axis, and
-                    the curve is the spring `ProgressIndicatorDefaults` assigns
-                    rather than the loop easing every one of the six was using. */}
+                {/* `ProgressBar`, the primitive — one of six hand-rolled tracks (an 8dp
+                    box, an animated `width`, state colours as inline `style`). The tone is
+                    now an axis and the curve the spring `ProgressIndicatorDefaults`
+                    assigns. */}
                 <ProgressBar
                   value={pct}
                   tone={item.claimed ? 'success' : canClaim ? 'warning' : 'secondary'}
@@ -281,22 +276,16 @@ export default function TasksPage() {
                     onClick={() => handleClaim(item.id)}
                     disabled={!canClaim}
                     loading={claiming === item.id}
-                    /* No colour override on the disabled branch. It used to add
-                       a container background and an `outline` ink, which emitted a
-                       second background and a second ink over the `text`
-                       variant's own — `cn` is a plain join, so which one won came
-                       down to stylesheet order — and `outline` is a boundary
-                       role that measures 4.3:1 on the light surface, under AA
-                       for a button label. `disabled` already applies the
-                       primitive's own `disabled-content`, i.e. the 38% M3
-                       specifies for disabled content. */
-                    /* No `animate-control-pop`. That keyframe is the expressive
-                       ζ0.6 spring — 8.4% overshoot — and AGENTS.md reserves it for
-                       "a small mark arriving in place: an unread count, a favourite
-                       filling in". A 32dp button with a two-character label is not a
-                       mark, and anything large wearing that spring reads as a wobble.
-                       The state change here is the variant flipping from `text` to
-                       `filled`, which the button already transitions. */
+                    /* No colour override on the disabled branch: the added background
+                       and boundary ink fought the `text` variant's own (`cn` is a plain
+                       join, so stylesheet order decided) and measured under AA for a
+                       button label. `disabled` already applies the primitive's
+                       `disabled-content`, the 38% M3 specifies. */
+                    /* No pop-in animation: that expressive spring is reserved for a
+                       small mark arriving in place (an unread count, a favourite filling
+                       in); a button with a two-character label wearing it reads as a
+                       wobble. The state change here is the variant flipping from `text`
+                       to `filled`, which the button already transitions. */
                   >
                     {canClaim ? '领取' : '去完成'}
                   </Button>
@@ -313,14 +302,10 @@ export default function TasksPage() {
       <PageHeader title="等级与任务" />
       {/* User card */}{' '}
       {data && (
-        /* `warning-container` with its own `on-` ink, not a 60% wash carrying
-           `text-warning`. Two faults compounded here: the alpha meant the panel
-           was a different weight in each scheme, and `warning` is the *text*
-           role — dark ochre on light, pale amber on dark — so on a diluted
-           amber card the heading was low-contrast in one scheme and glaring in
-           the other. The progress track underneath was full-strength
-           `warning-container` sitting on the same colour at 60%, i.e. an empty
-           bar you could barely find. */
+        /* `warning-container` with its own `on-` ink, not a 60% wash carrying the
+           warning *text* role: the alpha made the panel a different weight in each
+           scheme, and on a diluted amber card the heading was low-contrast in one and
+           glaring in the other. */
         <div className="bg-warning-container text-on-warning-container mb-6 rounded-md p-4">
           {' '}
           <div className="flex items-center justify-between mb-3">
@@ -350,14 +335,10 @@ export default function TasksPage() {
               <span>当前经验进度</span>
               <span>当前经验：{data.experience % 100} / 100</span>
             </div>
-            {/* The last of the six hand-rolled meters, and the one that had drifted
-                furthest: a 10dp track (the token is 4, and 10 is not on the 4dp
-                grid) in `surface-container-lowest` rather than the track role, with
-                a gradient whose far end was `tertiary` — which inverts between
-                schemes, so the right-hand side of the bar swapped shade with the
-                theme. That is the exact defect the comment above it claimed to have
-                fixed by moving the near end to `warning-fill`. Flat, on the token,
-                and through the primitive. */}
+            {/* Through the primitive: the hand-rolled meter was a 10dp track in a
+                non-track role with a gradient whose far end was `tertiary`, which
+                inverts between schemes — the right-hand side of the bar swapped shade
+                with the theme. Flat, on the token. */}
             <ProgressBar
               value={data.experience % 100}
               tone="warning"
@@ -366,12 +347,10 @@ export default function TasksPage() {
           </div>
         </div>
       )}{' '}
-      {/* The destination's own shape, not a spinner in the middle of nothing.
-          Every other list in the app — history, forum, messages — loads as its
-          own rows, and a task row is a name over a bar with a fixed-width action
-          at the end, so that is what stands in for it. A centred spinner told
-          the user "something is happening somewhere" and then reflowed the whole
-          screen when the rows arrived. */}
+      {/* The destination's own shape, not a spinner: every other list in the app loads
+          as its own rows, and a task row is a name over a bar with a fixed-width action
+          at the end. A centred spinner says "something is happening somewhere" and then
+          reflows the whole screen when the rows arrive. */}
       {loading && (
         <div>
           {[0, 1, 2, 3].map((i) => (
@@ -389,12 +368,10 @@ export default function TasksPage() {
       {!loading && !error && data && (
         <>
           {' '}
-          {/* `Tabs`, not a fourth copy of a tab row. This one had `useSlidingIndicator`
-              wired by hand, no ARIA roles, and — the tell that it was a copy made
-              before the primitive existed — an active tab distinguished by colour
-              alone, with no weight contrast, which is the exact defect the shared
-              component's own comment records having fixed. `tone="warning"` keeps
-              this screen's amber indicator. */}
+          {/* `Tabs`, not a fourth copy of a tab row: this one had a hand-wired sliding
+              indicator, no ARIA roles, and an active tab distinguished by colour alone
+              with no weight contrast. `tone="warning"` keeps this screen's amber
+              indicator. */}
           <Tabs
             className="mb-6"
             label="任务分类"
@@ -404,13 +381,11 @@ export default function TasksPage() {
             deps={[data]}
             tabs={tabs.map((tab) => ({ value: tab.id, label: tab.label }))}
           />
-          {/* `TabPanes`, and the subtitle lives inside each pane.
-              This was `Tabs` plus two `key`-ed wrappers, and the `key` is the exact
-              thing AGENTS.md forbids: it destroys the outgoing subtree in the commit
-              that starts the switch, so the transition had no exit to play and the
-              app's fourth tab surface was the one with no animation at all. Moving
-              the subtitle inside the pane also means it travels with its own content
-              rather than being swapped underneath it. */}
+          {/* `TabPanes`, and the subtitle lives inside each pane. This was `Tabs` plus
+              two `key`-ed wrappers — the `key` is the exact thing AGENTS.md forbids: it
+              destroys the outgoing subtree in the commit that starts the switch, so the
+              transition had no exit to play. The subtitle inside the pane also travels
+              with its own content. */}
           <TabPanes value={activeTab}>
             {tabs.map((tab) => (
               <TabPane key={tab.id} value={tab.id}>

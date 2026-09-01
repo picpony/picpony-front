@@ -97,9 +97,8 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   /* Every page number survives a remount, so coming back to a profile lands on the page you left
-     rather than on page 1. That is the half of `lib/pageCache.ts` that was never a cache — see
-     `lib/screenState.ts`. Scoped per profile id, because two profiles are two screens that happen
-     to share a component. */
+     rather than on page 1. Scoped per profile id: two profiles are two screens that happen to
+     share a component. See `lib/screenState.ts`. */
   const [tabValue, setTabValue] = useScreenStateFor<ProfileTab>('profile:tab', id, 'uploads');
   const [favesPage, setFavesPage] = useScreenStateFor('profile:faves', id, 1);
   const [commentsPage, setCommentsPage] = useScreenStateFor('profile:comments', id, 1);
@@ -114,26 +113,17 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   const token = readToken();
 
   /**
-   * Five reads, and what matters is which of them are *not* gated on each other.
-   *
-   * This screen used to take four rounds and send two requests nobody asked for. The profile came
-   * first, and then **every other read waited for it** — including the uploads, which is the
-   * default tab and needs nothing from the profile but the id that is already in the URL. So the
-   * content of the tab you land on could not begin loading until a round trip for the heading
-   * above it had come back.
-   *
-   * Now only the favourites wait, and they have to: `get_shared_faves` is keyed by *username*, and
-   * the username only arrives with the profile. That is a property of the endpoint rather than of
-   * the screen — so the answer is not to parallelise it but to not send it at all until somebody
-   * opens the tab, which is what `SKIP` does below. It used to run unconditionally on mount, twice
-   * over (the ids, then the images), for a tab most visitors never open.
+   * Five reads. The point is that only the favourites wait on the profile:
+   * `get_shared_faves` is keyed by *username*, which only arrives with the profile — a
+   * property of the endpoint, so the answer is not to parallelise it but to not send it
+   * at all until somebody opens the tab (`SKIP`). It used to run unconditionally on
+   * mount, twice over, for a tab most visitors never open.
    */
-  /* The header is server-rendered: `app/user/[id]/page.tsx` reads the profile and hands it down,
-     and the same read supplies the route’s `<title>`. So the name, avatar and level bar are in the
-     HTML and this read costs nothing when the seed matches — which it does whenever the id does,
-     since `userProfile` is keyed on the id alone and the record is anonymous.
-
-     The tabs underneath are deliberately *not* seeded: `userUploads` is keyed on a token and
+  /* The header is server-rendered: `app/user/[id]/page.tsx` reads the profile and hands
+     it down, and the same read supplies the route's `<title>`, so this read costs
+     nothing when the seed matches — which it does whenever the id does, since
+     `userProfile` is keyed on the id alone and the record is anonymous. The tabs
+     underneath are deliberately *not* seeded: `userUploads` is keyed on a token and
      differs for the owner, so it stays a client read. */
   const profileRead = useResource(
     userProfile,
@@ -181,10 +171,9 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   const faveImages = faveImagesRead.data?.images ?? [];
   const totalFavePages = Math.max(1, Math.ceil(allFaveIds.length / PER_PAGE));
 
-  /* A placeholder is for having nothing to draw, never for "a request is in flight". A cached page
-     re-renders with `isLoading` true while it refreshes underneath, and branching on that would
-     put a skeleton over content that is already correct — which is the whole thing this layer
-     exists to stop. */
+  /* A placeholder is for having nothing to draw, never for "a request is in flight": a
+     cached page re-renders with `isLoading` true while it refreshes underneath, and
+     branching on that would put a skeleton over content that is already correct. */
   const isUploadsLoading = uploadsRead.data === undefined;
   const isPostsLoading = postsRead.data === undefined;
   const isCommentsLoading = commentsRead.data === undefined;
@@ -208,11 +197,10 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
 
   const isOwnProfile = currentUserId !== null && profile && currentUserId === profile.id;
 
-  /* Not a sidebar destination, so it carries the shared back affordance — see
-     the rule in AGENTS.md. Drawn in all three states for the same reason the
-     forum thread draws it in all three: an affordance that disappears when a
-     request fails is worse than one that was never there. No `pt-14`, because
-     what is at the top of this page is the banner, not text. */
+  /* Not a sidebar destination, so it carries the shared back affordance (AGENTS.md).
+     Drawn in all three states: an affordance that disappears when a request fails is
+     worse than one that was never there. No `pt-14` — the top of this page is the
+     banner, not text. */
   const handleBack = useCallback(() => router.back(), [router]);
   useEscapeBack(handleBack);
 
@@ -240,14 +228,13 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   }
 
   if (error || !profile) {
-    /* `ErrorRetry`, so a profile that fails to load looks like every other
-       failure in the app — 48px glyph over `title-l` — instead of announcing
-       itself in `headline-s`, which is the page-title role. */
+    /* `ErrorRetry`, so a profile that fails to load looks like every other failure in
+       the app instead of announcing itself in the page-title role. */
     return (
       <>
         <PageBack onClick={handleBack} title="返回 (Esc)" />
-        {/* `onRetry`, because this was the one `ErrorRetry` in the app with an
-            empty action slot — a failure that offered no way forward at all. */}
+        {/* `onRetry`, because this was the one `ErrorRetry` in the app with an empty
+            action slot — a failure that offered no way forward at all. */}
         <ErrorRetry title="加载失败" message={error || '用户可能不存在'} onRetry={profileRead.refresh} />
       </>
     );
@@ -278,10 +265,9 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   return (
     <>
       <PageBack onClick={handleBack} title="返回 (Esc)" />
-      {/* No entrance animation. The route transition already fades this page in
-          (`playRouteCrossFade`, 400ms `decelerate`); an `animate-fade-in` here was a
-          second 400ms fade nested inside the first, i.e. the arrival happening twice
-          on two clocks. Only two routes in the app did this. */}
+      {/* No entrance animation: the route transition already fades this page in (400ms
+          `decelerate`); an extra fade here was the arrival happening twice on two
+          clocks. */}
       <div>
       <div className="h-48 sm:h-64 md:h-80 relative bg-surface-container-high rounded-2xl sm:rounded-3xl overflow-hidden mt-4 sm:mt-6 mx-auto max-w-full sm:max-w-[98%] px-2 sm:px-0">
         {profile.banner ? (
@@ -289,9 +275,9 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
             src={getAssetUrl(profile.banner)}
             alt={`${profile.username} 的个人横幅`}
             fill
-            /* The hero banner spans the media-led detail column (`max-w-5xl`), inset to
-               98% from `sm` up. Without this it resolved to `100vw`, which on a wide
-               desktop asked for a 1920px variant to fill a 1024px box. */
+            /* The banner spans the detail column (1024px), inset to 98% from `sm` up.
+               Without this, `fill` resolved to `100vw` — a 1920px variant to fill a
+               1024px box. */
             sizes="(min-width: 1024px) 1024px, 100vw"
             className="object-cover"
           />
@@ -301,21 +287,11 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
             <MdPerson size={ICON.display} className="text-outline" />
           </div>
         )}
-        {/* **The level is not on the banner, and that is the third answer to it.**
-            It was a `Badge` at `bottom-3 left-0` beside a full-width bar at
-            `inset-x-4 bottom-2` — two objects that never lined up (343px against
-            359px), with the bar clipped by the banner's `overflow-hidden` and both
-            sitting exactly where the avatar hangs off the corner. Moving them into
-            one bottom-right flex row fixed the alignment and the collision, and left
-            the real problem: a 4dp meter over a photograph has no ground. `on-media`
-            ink needs a plate, the track cannot take `secondary-container` because
-            nothing over a picture can take a surface role, and the indicator sits
-            straight on pixels the app does not choose — so its contrast was whatever
-            the user's banner happened to be.
-
-            Level is identity metadata, so it lives in the identity column with the
-            name, the role and the badges, where the surface roles apply and the meter
-            can carry its own value. The banner is a photograph again. */}
+        {/* **The level is not on the banner.** A meter over a photograph has no ground:
+            nothing over a picture can take a surface role, and the indicator's contrast
+            was whatever the user's banner happened to be. Level is identity metadata, so
+            it lives in the identity column with the name, role and badges, where the
+            surface roles apply and the meter can carry its own value. */}
       </div>
       <div className="max-w-5xl mx-auto relative">
         {' '}
@@ -323,10 +299,8 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
           {' '}
           <div className="absolute -top-12 sm:-top-16 left-0">
             {' '}
-            {/* `Avatar`, not a fourth hand-rolled copy of it. The URL was
-                built inline as `https://picpony.top/${avatar}` rather than
-                through `getAvatarUrl`, which is the rule that module exists to
-                hold. */}
+            {/* `Avatar`, not a fourth hand-rolled copy of it — the URL was built inline
+                rather than through `getAvatarUrl`, the rule that module exists to hold. */}
             <Avatar
               src={profile.avatar}
               name={profile.username}
@@ -340,11 +314,8 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                 <h1 className="text-headline-s sm:text-headline-m text-on-surface break-words">
                   {profile.username}
                 </h1>
-                {/* Three marks used to sit in this row in three shapes: the
-                    role and 已核验 as `rounded-sm px-2 py-1 text-label-m`, and
-                    the earned badges below as round `text-label-s-emphasized`
-                    pills — so the header read square, square, round. `Badge`
-                    owns the silhouette for all three now. */}
+                {/* One `Badge` silhouette for all three marks — the role, 已核验 and the
+                    earned badges used to render in three different shapes. */}
                 <RoleBadge role={profile.role} showUser size="md" />
                 {profile.has_api_key && profile.derpi_username && (
                   <Badge tone="success" size="md" icon={<MdVerified />}>
@@ -352,15 +323,11 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                   </Badge>
                 )}
               </div>
-              {/* The level, as a labelled meter rather than a chip and a stub of
-                  track. This is the shape /tasks already gives the same value — a
-                  label row over a determinate bar — so the two screens report
-                  experience the same way instead of each inventing a layout.
-                  It carries the number, which the banner version could not: 68/100
-                  and 70/100 are the same 64px of pink otherwise.
-                  Capped at 320px because a meter as wide as the column reads as a
-                  divider under the name, which is what the full-width banner bar
-                  read as. */}
+              {/* The level as a labelled meter, the shape /tasks already gives the same
+                  value — the two screens report experience the same way. It carries the
+                  number, which a chip could not (68/100 and 70/100 would be the same bar).
+                  Capped so a meter as wide as the column does not read as a divider under
+                  the name. */}
               {level !== null && (
                 <div className="mt-3 max-w-xs">
                   <div className="flex items-baseline justify-between gap-3">
@@ -437,13 +404,10 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
           </div>{' '}
           {profile.derpi_username ? (
             <div className="mb-8">
-              {/* An anchor, not a click-handled container. The card opens an
-                  external profile, so it is a link and always was: as a plain
-                  div it could not be tabbed to, middle-clicked, copied, or
-                  previewed in the status bar, and the `window.open` behind it is
-                  what a popup blocker stops. The trailing glyph is `MdOpenInNew`
-                  for the same reason — the magnifier promised a search this card
-                  never performed. */}
+              {/* An anchor, not a click-handled container: the card opens an external
+                  profile, so it is a link and always was — a plain div cannot be tabbed
+                  to, middle-clicked, copied, or previewed, and `window.open` is what a
+                  popup blocker stops. The trailing glyph promises the same thing. */}
               <a
                 href={`https://derpibooru.org/profiles/${encodeURIComponent(
                   profile.derpi_user_id ? String(profile.derpi_user_id) : profile.derpi_username,
@@ -467,10 +431,9 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  {/* `Avatar`, not a bare `<img>` whose `onError` set
-                      `style.display = 'none'` — an imperative DOM edit React
-                      does not know about, and one that left a blank circle
-                      rather than a fallback. */}
+                  {/* `Avatar`, not a bare `<img>` whose `onError` hid itself — an
+                      imperative DOM edit React does not know about, leaving a blank
+                      circle rather than a fallback. */}
                   <Avatar
                     src={
                       profile.derpi_user_id
@@ -513,11 +476,11 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
               </a>
             </div>
           )}
-          {/* The anchor encloses the tab row *and* the panes, which is what makes it reach
-              the four pagers inside them: `Pagination` finds it with `closest()`, so an
-              anchor beside a pager is an anchor no pager can see. Landing on the tab row
-              rather than at the top of the page is the point — a page turn inside a tab
-              should not replay the banner, the name and the level bar. */}
+          {/* The anchor encloses the tab row *and* the panes, which is what makes it
+              reach the four pagers inside them: `Pagination` finds it with `closest()`.
+              Landing on the tab row rather than at the top of the page is the point — a
+              page turn inside a tab should not replay the banner, the name and the level
+              bar. */}
           <div data-pagination-anchor>
             <Tabs<ProfileTab>
               tabs={navTabs}
@@ -526,23 +489,18 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
               label="用户资料标签页"
               className="mb-6"
             />
-          {/* `TabPanes`, not the `data-tab-panel` / `data-tab-pane` trio written
-              out by hand — and the difference is not only tidiness. Written out,
-              this was passing `lean` by default, and `lean` requires the blocks
-              inside a pane to survive the run. Every tab here fetches when it is
-              *selected* (`if (tabValue !== 'posts') return`), so within a few
-              frames of a switch starting the incoming pane's subtree has been
-              replaced by a skeleton and GSAP is shearing detached nodes while
-              the visible ones sit still. The primitive defaults it off, which is
-              the correct setting for this screen. */}
+          {/* `TabPanes`, not the tab attributes written out by hand — and not only for
+              tidiness: written out, this was passing `lean` by default, and `lean`
+              requires the blocks inside a pane to survive the run. Every tab here
+              fetches when it is *selected*, so within a few frames of a switch the
+              incoming pane's subtree is replaced by a skeleton and GSAP is shearing
+              detached nodes. The primitive defaults it off, which is correct here. */}
           <TabPanes value={tabValue}>
             <TabPane value="uploads">
               {isUploadsLoading ? (
-                /* `PER_PAGE`, which is the number the request actually asks
-                    for — not the 8 that was here. A full page is 12, so the
-                    placeholder was a row short on every desktop width and the
-                    pane grew by one row the moment the pictures landed, after
-                    the tab switch had visibly finished. */
+                /* `PER_PAGE`, the number the request actually asks for: a full page is
+                   12, so an 8-row placeholder left the pane growing by one row after the
+                   tab switch had visibly finished. */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {Array.from({ length: PER_PAGE }).map((_, i) => (
                     <Skeleton key={i} className="aspect-square rounded-lg" />
@@ -660,12 +618,10 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
             <TabPane value="posts">
               {' '}
               {isPostsLoading ? (
-                /* The card these stand in for is `space-y-3`, opens with an
-                   80px cover thumbnail and puts a two-line title beside it. The
-                   placeholder was `space-y-4` with no thumbnail at all, so the
-                   list re-spaced vertically *and* shifted sideways the moment
-                   the posts landed — which is the one thing a skeleton exists to
-                   prevent. */
+                /* The card these stand in for: 12px rhythm, 56px cover thumbnail,
+                   two-line title. The placeholder must match the real card's geometry or
+                   the list re-spaces the moment the posts land — the one thing a skeleton
+                   exists to prevent. */
                 <div className="space-y-3">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Card key={i} variant="transparent" className="rounded-md bg-surface-container-low p-4">
@@ -689,11 +645,9 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                         scroll={false}
                         key={post.id}
                         href={`/forum/${post.id}`}
-                        /* `Card as="a" interactive`, not the recipe written out.
-                           This exact string appeared twice in this file — once here and
-                           once on the comments tab — because `Card` could render only a
-                           `div` or a `button`, so a card-shaped link had no way in. It
-                           has an `'a'` now. */
+                        /* A card-shaped link: `Card` could render only a `div` or a
+                           `button`, so this recipe appeared twice in this file before the
+                           primitive could render an anchor. */
                         className="state-layer block rounded-md bg-surface-container-low p-4 transition-ui"
                       >
                         {' '}
@@ -706,7 +660,7 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                                 src={getAssetUrl(post.cover_image)}
                                 alt=""
                                 fill
-                                /* `size-14`. See the banner above. */
+                                /* 56px box. Same `sizes` reason as the banner above. */
                                 sizes="56px"
                                 className="object-cover"
                               />
@@ -760,12 +714,10 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
             <TabPane value="comments">
               {' '}
               {isCommentsLoading ? (
-                /* The card these stand in for is `space-y-3`, opens with an
-                   80px cover thumbnail and puts a two-line title beside it. The
-                   placeholder was `space-y-4` with no thumbnail at all, so the
-                   list re-spaced vertically *and* shifted sideways the moment
-                   the posts landed — which is the one thing a skeleton exists to
-                   prevent. */
+                /* The card these stand in for: 12px rhythm, 56px cover thumbnail,
+                   two-line title. The placeholder must match the real card's geometry or
+                   the list re-spaces the moment the posts land — the one thing a skeleton
+                   exists to prevent. */
                 <div className="space-y-3">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Card key={i} variant="filled">
@@ -803,7 +755,7 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                                   src={getAssetUrl(comment.cover_image)}
                                   alt=""
                                   fill
-                                  /* `size-14`. See the banner above. */
+                                  /* 56px box. Same `sizes` reason as the banner above. */
                                   sizes="56px"
                                   className="object-cover"
                                 />

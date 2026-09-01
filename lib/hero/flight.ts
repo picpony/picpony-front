@@ -114,36 +114,20 @@ function planeHost(flight: HeroFlight): HeroHost {
 
 /**
  * The flight path is **Flutter's Hero path** — `MaterialRectArcTween`, two opposite corners
- * on two circular arcs — and it took three attempts to get there.
+ * on two circular arcs. It interpolates **corners rather than a box**, so each edge is one
+ * coordinate of one arc whose sweep is provably under 90°, keeping all four monotone for any
+ * pair of boxes while the aspect stays whatever the two corners jointly describe. The
+ * derivation and the sweep bound are on `createHeroRectArc` in `geometry.ts`.
  *
- * A *ballistic lift* came first: a parabola `4·arc·offset·(1−offset)` subtracted from the top
- * edge, keyed on **linear** time while the position ran on the spring. A ζ0.9 spring has
- * covered most of its travel by the time that parabola is still near its peak, so the last
- * 40% of every flight was an arrived picture sinking the remaining ~38px. Measured, the
- * rendered top ran 390 → 197 → 196 → 202 → 208 → 221: past its landing edge by 26px and back.
- * Then `MaterialArcMotion` — Material Android's opt-in corner Bézier — which is a per-axis
- * reparameterisation, and which either drove an edge 38px past its destination (arcing the
- * centre) or put the aspect ratio on the leading axis (pairing each axis): measured 830 × 281
- * mid-flight against endpoints of 2.0 and 1.78.
- *
- * `MaterialRectArcTween` is a different construction from both, and the difference is that it
- * interpolates **corners rather than a box**: pick the diagonal aligned with the travel, send
- * those two corners along circular arcs, rebuild the rect from them. Each edge is then one
- * coordinate of one arc whose sweep is provably under 90°, so all four are monotone for any
- * pair of boxes, and the aspect is whatever the two corners jointly describe. The derivation
- * and the sweep bound are on `createHeroRectArc` in `geometry.ts`.
- *
- * **Two standing checks, because the first two attempts each passed one and failed the
- * other:** per-decile monotonicity of all four rendered edges, *and* an aspect ratio that
- * stays between the two endpoints' aspects.
+ * **Two standing checks, in tension by construction:** per-decile monotonicity of all four
+ * rendered edges, *and* an aspect ratio that stays between the two endpoints' aspects.
  */
 
 /**
  * Corner radius resolves ahead of position, so the shape settles first — on the same window
- * the container's mask uses, which is `MaterialContainerTransform`'s `shapeMask` threshold for
- * this direction. It used to be `min(1, p · 4/3)` regardless of direction, i.e. always the
- * *enter* row, so a closing flight squared the picture off over 0 → 0.75 while the mask around
- * it ran 0.3 → 0.9.
+ * the container's mask uses, which is `MaterialContainerTransform`'s `shapeMask` threshold
+ * for this direction. Both flyer and mask must read the same row, or a closing flight
+ * squares the picture off on the enter window while the mask runs the return one.
  */
 function radiusProgress(progress: number, direction: HeroDirection) {
   const shape = HERO_CONTAINER_SHAPE[direction];
@@ -161,9 +145,8 @@ export function getFlightRadii(flight: HeroFlight, direction: HeroDirection) {
  *
  * Passing a `speed` is the whole of the decision: a leg that has to leave at a speed the
  * flyer is already travelling at gets a spring solved for that launch slope, and a leg that
- * starts from a press gets `HERO_FLIGHT_CURVE`. Centralised because the three call sites had
- * each written `{ ...base, velocity: springVelocityFromSpeed(...) }` by hand, and two of them
- * carried a comment about the spread that must not be forgotten.
+ * starts from a press gets `HERO_FLIGHT_CURVE`. Centralised so no call site re-writes the
+ * launch-velocity spread by hand and silently drops the spring shape.
  *
  * The duration stays the caller's: an opening leg takes `HERO_DURATIONS`, a reverse scales it
  * by remaining travel, a rebuild takes whatever is left of the leg it replaces. Only the shape

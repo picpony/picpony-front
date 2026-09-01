@@ -1,9 +1,6 @@
-// 图片分层加载：PicPony 加速代理(0) → CDN(1) → 直连(2)，失败自动降级重试
-//
-// This module owns the *ladder* — which tier one `<img>` tries next after it failed —
-// and nothing else. Which line is in force, whether a host is healthy, and the CDN /
-// direct race all belong to `lib/route.ts`, because a forced policy has to beat the
-// ladder and because the same health state decides API lines too.
+// 图片分层加载：PicPony 加速代理(0) → CDN(1) → 直连(2)，失败自动降级重试。
+// 本模块只负责"梯子"——某张图失败后下一层试什么；线路策略/健康状态/CDN-直连
+// 竞速归 lib/route.ts（强制策略必须能压过梯子，且同一健康状态也决定 API 线路）。
 
 import type { ImageLine } from '@/lib/route';
 import { IMAGE_CDN_BASE, IMAGE_WORKER_BASE } from '@/lib/constants';
@@ -62,11 +59,10 @@ export function buildImageUrl(rawUrl: string, tier: ImageTier, bust = false, thu
 const TIER_OF = { picpony: 0, cdn: 1, direct: 2 } as const;
 
 /**
- * Put one already-built URL on the current image line, idempotently.
- *
- * Strips whatever wrapper it is already wearing before applying the current one, so it is safe
- * to call at the data layer *and* have the ladder re-derive a tier from the result — and so a
- * forced `direct` policy unwraps a URL the response arrived pre-wrapped in.
+ * Put one already-built URL on the current image line, idempotently: strips the
+ * wrapper it is already wearing, then re-applies the current line — safe to call
+ * at the data layer and re-derive from, and lets a forced policy unwrap a URL
+ * the response arrived pre-wrapped in.
  */
 export function toCurrentImageLine(url: string, thumb = false): string {
   if (!url) return url;
@@ -86,13 +82,9 @@ function tierAttempt(
 /**
  * 首次尝试：线路策略优先，其次是用户开关与健康状态。
  *
- * `line` overrides that resolution for the **first** attempt only, and exists for one reason:
- * `resolveImageLine()` reads `localStorage` and the fetched policy, so it answers differently in
- * Node than in the browser and every server-rendered `<img>` was a hydration mismatch for anyone
- * whose stored preference was not the default. `app/layout.tsx` passes the line the server
- * assumed (from a cookie) down through `ImageLineProvider`, so the first render on both sides
- * asks the same question. The ladder is untouched — `resolveNextAttempt` still reads the live
- * answer, so a stale cookie costs one corrected attempt rather than the wrong line.
+ * `line` 仅覆盖首次尝试：resolveImageLine() 读 localStorage 与策略，在 Node 与
+ * 浏览器中答案不同，服务端渲染的 img 会因存储偏好产生 hydration 不匹配；传入
+ * 服务端（cookie）假设的线路让首帧两侧一致。梯子不受影响，后续仍读实时答案。
  */
 export function createInitialAttempt(
   rawUrl: string,
@@ -103,14 +95,10 @@ export function createInitialAttempt(
 }
 
 /**
- * 失败后决策下一次尝试：同层重试 1 次 → 降级下一层 → 直连最多 DIRECT_MAX_RETRIES 次
+ * 失败后决策下一次尝试：同层重试 1 次 → 降级下一层 → 直连最多 DIRECT_MAX_RETRIES 次。
  *
- * A forced policy has no ladder — it converges on the line the administrator named. That
- * includes snapping back to it: an `<img>` whose first attempt was built before the policy
- * landed (a grid restored from `lib/pageCache` paints in the first commit) starts on the
- * wrong tier, and retrying that tier in place would never reach the forced one. Which is
- * the case that matters, because a policy forcing `direct` usually means the other lines
- * are the broken ones.
+ * 强制策略没有梯子——收敛到管理员指定的线路，包括从错误层级跳回（pageCache 恢复
+ * 的网格首帧可能就画在策略生效前的层级上，原地重试永远到不了目标线路）。
  */
 export function resolveNextAttempt(
   rawUrl: string,
@@ -137,8 +125,7 @@ export function resolveNextAttempt(
 
   if (attempt.tier === 0) {
     recordWorkerFailure(rawUrl);
-    /* Measure the two remaining lines while the worker is in doubt, so the next image
-       starts on whichever of them is actually answering. */
+    // worker 存疑时顺带测量剩下两条线路，让下一张图直接走真正可用的那条。
     raceImageLines();
     return resolveImageFallbackLine() === 'cdn'
       ? tierAttempt(rawUrl, 1, false, thumb)
@@ -155,16 +142,3 @@ export function resolveNextAttempt(
   return tierAttempt(rawUrl, 2, true, thumb, attempt.retries + 1);
 }
 
-/* `upgradedVariant` was here: a middle rung that asked the optimizer for an in-between variant of
-   the card's bitmap, to bridge the gap between the ~300px thumbnail the flight paints and the
-   detail's own picture. It is gone, because the gap it bridged was self-inflicted — the detail's
-   picture was slow *because* it was going through the optimizer too, and 3–4 seconds of re-encode
-   is what the middle rung was racing. `shouldBypassImageOptimization` (components/DetailImage.tsx)
-   removed the cause; a middle rung built out of the same re-encode could only ever have been
-   slower and softer than the thing it was standing in for.
-
-   Two measurements worth keeping from it. The upscale it was fixing was real — 384px in a 944px
-   box at 1920, 2.46x — and the trap it fell into is general: it multiplied a *constant* 1280 by
-   the device pixel ratio, so on any 2x screen it asked for the 3840 bucket and never landed at
-   all. A fix that measures perfectly at DPR 1 and is inert on every real phone. Measure image work
-   at DPR 2. */

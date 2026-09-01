@@ -11,6 +11,8 @@ interface CaptchaModalProps {
 }
 
 export default function CaptchaModal({ isOpen, onClose, onVerify }: CaptchaModalProps) {
+  /* Renders null on the server and before hydration: the captcha needs browser
+     APIs, and the Modal is client-only anyway. */
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,

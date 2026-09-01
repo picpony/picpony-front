@@ -19,15 +19,9 @@ interface CheckboxProps {
   'aria-labelledby'?: string;
   disabled?: boolean;
   /**
-   * Rendered beside the box, inside the same `<label>` — which is what makes it the
-   * control's accessible name rather than text that happens to sit next to it.
-   *
-   * It exists because two call sites had written the pattern by hand and got it
-   * wrong in the same way: a `<span>` beside the checkbox, an `aria-label` on the
-   * checkbox saying something *different* from that span, and `cursor-pointer` on
-   * the wrapper. So the visible words were not the accessible name, screen readers
-   * announced one thing while the eye read another, and clicking the text — which
-   * the cursor promised would work — did nothing.
+   * Rendered beside the box, inside the same `<label>` — which is what makes it
+   * the control's accessible name rather than text that happens to sit next to
+   * it. Keep the visible words and the accessible name the same thing.
    */
   label?: ReactNode;
 }
@@ -39,20 +33,13 @@ interface CheckboxProps {
  * which is what M3 does and what makes the selection read as an act.
  *
  * **The 40dp state layer is not decoration.** M3 gives every selection control
- * one, and this had none — so hover and focus were reported by a border colour
- * change alone, on an 18px box. That was the smallest hover affordance in the app
- * on one of its most-used controls, and it is why a checkbox felt inert next to a
- * button that lights up under the pointer.
+ * one, and hover/focus on this most-used control had been a border colour change
+ * on an 18px box. It is a real element rather than the `state-layer` utility, as
+ * on `ToggleSwitch`: that utility keys on the element's own `:hover` and paints
+ * the element's own box, while what has to light up here is a circle more than
+ * twice the box's width, driven by a hover anywhere on the label.
  *
- * It is a real element rather than the `state-layer` utility, for the same reason
- * `ToggleSwitch`'s is: that utility keys on the element's own `:hover` and paints
- * an overlay the size of that element, and what has to light up here is a circle
- * more than twice the width of the box, driven by a hover anywhere on the label.
- *
- * The box is 18dp, the spec's; it was 20, which is a round number near the right
- * size. The unselected outline is `on-surface-variant`, also the spec's; it was
- * `outline` — a *boundary* role, built for a rule or a text-field border and
- * specified to the 3:1 a non-text element needs, being asked here to carry state.
+ * The 18dp box and the `on-surface-variant` unselected outline are the spec's.
  */
 export default function Checkbox({
   checked,
@@ -65,11 +52,10 @@ export default function Checkbox({
 }: CheckboxProps) {
   return (
     /* `touch-target` because the label *is* the whole hit area: the input is
-       `sr-only` and everything painted is `pointer-events-none`, so the control
-       was an 18px target — under M3's 48dp, under WCAG 2.5.8's 24px floor, on its
-       most-used form control. The utility expands the hit area without changing
-       the box, which is what keeps the row heights it sits in unchanged. Safe
-       here because there is no `data-ripple` to clip it. */
+       `sr-only` and everything painted is `pointer-events-none`, leaving an 18px
+       target on the app's most-used form control. The utility expands the hit
+       area without changing the box (keeping the row heights it sits in
+       unchanged) — safe here because there is no `data-ripple` to clip it. */
     <label
       className={`group ${label ? 'inline-flex items-center gap-2' : ''} cursor-pointer ${disabled ? 'cursor-not-allowed' : ''} ${className}`}
     >
@@ -99,28 +85,22 @@ export default function Checkbox({
         }`}
       />
 
-      {/* `rounded-xs` (4dp): the shape table gives a 12dp step to cards and
-          section surfaces, and at 12dp on an 18px box this read as a radio button
-          rather than a checkbox. M3 specs the extra-small corner here.
+      {/* `rounded-xs` (4dp), M3's corner for this control — the card step reads
+          as a radio button on an 18px box.
 
           `peer-focus-visible:focus-ring`, not `peer-focus-ring`: a Tailwind
-          variant needs the colon. Without it the string is not a utility at all,
-          emits nothing, and the 2px ring fell back to `currentColor` — taking the
-          colour of whatever text happened to surround the control, which is the
-          exact failure the `focus-ring` utility was added to end. */}
+          variant needs the colon. Without it the string matches no utility,
+          emits nothing, and the 2px ring falls back to `currentColor`. */}
       <span
         aria-hidden="true"
         className={`peer-focus-visible:focus-ring transition-ui pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
           checked
             ? 'bg-primary-ink border-primary-ink animate-control-pop'
-            : /* Transparent, which is `Checkbox.kt`'s `uncheckedBoxColor =
-                 Color.Transparent` — `CheckboxTokens` defines no unselected
-                 container at all, because an unchecked box is an outline and
-                 nothing else. It used to be `bg-surface-raised`, a house token
-                 defined as a raw `#ffffff`, so an unchecked box was an opaque white
-                 plate over whatever surface it landed on: visible as a seam on
-                 every container step darker than the page, and wrong by
-                 construction on a photograph. */
+            : /* Transparent, which is `Checkbox.kt`'s own `uncheckedBoxColor` —
+                 `CheckboxTokens` defines no unselected container at all, because
+                 an unchecked box is an outline and nothing else. An opaque box
+                 colour here shows as a seam on every container step darker than
+                 the page. */
               'border-on-surface-variant bg-transparent'
         }`}
       />
@@ -139,10 +119,9 @@ export default function Checkbox({
         }}
       />
       </span>
-      {/* `label-l`, matching `Radio` and `ToggleSwitch`. The three selection controls
-          had two answers for one object — this one was `body-m` (400) against their
-          `label-l` (500) — so a form holding a checkbox and a switch set the same kind
-          of text two ways. A control's label is a label. */}
+      {/* `label-l`, matching `Radio` and `ToggleSwitch` — one type role for the
+          same object across all three selection controls. A control's label is a
+          label. */}
       {label && <span className="text-label-l text-on-surface">{label}</span>}
     </label>
   );

@@ -12,17 +12,9 @@ export default function AnnouncementModal() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
-  /* On idle, not on mount.
-   *
-   * This request used to leave with the first burst of every cold load, in front of the feed the
-   * visitor actually came for — measured as one of four shell requests racing the gallery's own,
-   * on every screen in the app including the ones that read nothing. What it decides is whether to
-   * open a dialog over content that has not arrived yet, which is the definition of work that can
-   * wait: an announcement is no less announced 400ms later, and a modal that appears *after* the
-   * page has painted is the better of the two orderings anyway.
-   *
-   * Not gated on the stored version, because the version to compare against is what this request
-   * returns. */
+  /* On idle, not on mount: this request must not race the feed the visitor came for,
+   * and it cannot be gated on the stored version — the version to compare against is
+   * what this request returns. */
   useEffect(
     () =>
       runWhenIdle(() => {
@@ -65,9 +57,6 @@ export default function AnnouncementModal() {
     >
       {announcement && (
         <>
-          {/* `SectionHeading`, not an `<h3 class="text-title-m-emphasized">` written
-              out — that role, that ink and that object are exactly what the primitive
-              is. */}
           <SectionHeading as="h3" className="mb-2">
             {announcement.title}
           </SectionHeading>

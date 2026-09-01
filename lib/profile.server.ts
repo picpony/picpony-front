@@ -3,24 +3,17 @@ import type { ProfileUser } from '@/lib/resources';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 
 /**
- * A user's public profile, read on the server.
+ * A user's public profile, read on the server; the island takes it as `initial` and seeds it into
+ * `userProfile` via `resource.seed()`. One read serves two callers per request — the layout's
+ * `<title>` metadata and the page's profile header.
  *
- * Two callers, and folding them together is half the point. `app/user/[id]/layout.tsx` already
- * fetched this — for the `<title>` alone, discarding the rest — and `app/user/[id]/page.tsx` then
- * fetched it again from the browser to render the same name, avatar and level bar. One read now
- * serves both: the metadata takes the username and the page takes the whole record as a seed, so
- * the profile header arrives in the HTML and the browser's copy of that request disappears.
+ * Anonymous: `get_user_profile` takes a `user_id` and no token and returns what any visitor sees,
+ * so it is shareable and the cache needs no partitioning beyond the id. Only the *header* moves —
+ * the tabs underneath are keyed on a token and differ for the owner (see `userUploads`).
  *
- * Anonymous, like the home feed: `get_user_profile` takes a `user_id` and no token, and returns
- * what any visitor would see. So it is shareable across visitors and there is nothing to
- * partition the cache on beyond the id itself. The tabs underneath are a different matter —
- * `userUploads` is keyed on a token and differs for the owner — which is why only the *header*
- * moves to the server.
- *
- * The rules from `lib/route.server.ts` apply verbatim: bounded by a timeout, `null` on any
- * failure (the island falls back to the client read it has always done), and direct to the
- * origin rather than through `proxyFetch`, whose retry ladder and `ensureRoutePolicy()` await
- * are written for the browser.
+ * Rules from `lib/route.server.ts` apply verbatim: bounded by a timeout, `null` on any failure
+ * (the island falls back to the client read), and direct to the origin rather than through
+ * `proxyFetch`, whose retry ladder and `ensureRoutePolicy()` await are written for the browser.
  */
 
 const TIMEOUT_MS = 2500;
@@ -28,12 +21,9 @@ const TIMEOUT_MS = 2500;
 const REVALIDATE_S = 300;
 
 /**
- * `PICPONY_UPSTREAM_ORIGIN` rather than the constant alone.
- *
- * `app/user/[id]/layout.tsx` hardcoded `PICPONY_API_ORIGIN` here, which is why this read was
- * invisible to `npm run net:audit`: the harness stubs the upstream by pointing that variable at a
- * fixture server, and a hardcoded origin reaches past it to the real backend. A server read the
- * ledger cannot see is one that cannot be held to a number.
+ * The upstream origin, overridable: the harness stubs the backend by pointing
+ * `PICPONY_UPSTREAM_ORIGIN` at a fixture server, and a hardcoded origin would reach past it — a
+ * server read the net audit cannot see is one it cannot hold to a number.
  */
 const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
 
@@ -44,15 +34,10 @@ export interface ProfileSeed {
 }
 
 /**
- * A process-local memo, and this is the read that needed the *promise* form of it.
- *
- * There are two callers per request — `generateMetadata` and the page — and Next renders them
- * concurrently, so a memo that only records a resolved value has both of them miss and both of
- * them fetch. `npm run net:audit` measured exactly that: the profile's server reads went from one
- * to two the moment the page started reading this as well. `createServerMemo` coalesces them, and
- * carries the rest of the reasoning (`lib/serverMemo.ts`).
- *
- * Capped, because unlike the team roster there is one of these per user.
+ * A process-local memo, and this is the read that needed the *promise* form: `generateMetadata`
+ * and the page render concurrently, so a memo that only records a resolved value lets both miss
+ * and both fetch. `createServerMemo` coalesces them (see `lib/serverMemo.ts`). Capped, because
+ * unlike the team roster there is one of these per user.
  */
 export const readUserProfile = createServerMemo({
   ttlMs: REVALIDATE_S * 1000,
@@ -68,10 +53,10 @@ export const readUserProfile = createServerMemo({
       const data = (await res.json()) as { success?: boolean; user?: ProfileUser };
       if (!data?.success || !data.user) return null;
 
-      /* The key is `userProfile.keyOf({ id })`, which is the bare id. Spelled rather than
-         imported, because importing `lib/resources` would pull the whole client catalogue into
-         the server bundle for one expression — and if that key ever changes, this stops matching
-         and the page falls back to a client read, which is the right direction to fail in. */
+      /* The key is `userProfile.keyOf({ id })`, the bare id, spelled rather than imported:
+         importing `lib/resources` would pull the whole client catalogue into the server bundle
+         for one expression. If the key ever changes, this stops matching and the page falls back
+         to a client read — the right direction to fail in. */
       return { key: id, data: data.user, generatedAt: Date.now() };
     } catch {
       return null;

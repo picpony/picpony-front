@@ -40,19 +40,11 @@ function PageShell({ children }: { children: React.ReactNode }) {
 /**
  * One tab's worth of favourites, with its own fetch state.
  *
- * It used to be a single component holding one `images` array and an `activeTab`
- * that decided which endpoint filled it. That made the shared-axis tab
- * transition impossible rather than merely absent: the slide needs the outgoing
- * pane to still be showing what it was showing, and with one shared list the
- * moment you switched tabs the old content was already gone — replaced by the
- * new tab's skeleton. There was nothing left to slide out.
- *
- * Parameterising by `source` and mounting it twice is the whole fix. Every piece
- * of the fetch machinery below — the generation counter, the abort controller,
- * the dedupe in `commit` — is unchanged; it simply now guards one tab's requests
- * instead of arbitrating between two tabs'. Each pane keeps its own images, page
- * number and error, which also means switching back no longer refetches a list
- * you already have, and no longer re-reads `/user` to get the API key.
+ * Parameterising by `source` and mounting it twice is what makes the shared-axis tab
+ * transition possible: with one shared `images` array, switching tabs replaced the old
+ * content before the slide could show it leaving. Each pane keeps its own images, page
+ * number and error — so switching back no longer refetches, and no longer re-reads
+ * `/user` for the API key.
  */
 function FavoritesPane({ source }: { source: FaveSource }) {
   const [images, setImages] = useState<PonyImage[]>([]);
@@ -68,11 +60,11 @@ function FavoritesPane({ source }: { source: FaveSource }) {
   const { getUserInfo } = useAuth();
   const { openAuth } = useAuthModal();
 
-  /* Every request carries the generation it was issued in. A tab switch, a
-     retry or an unmount bumps it, so a slow response from the previous
-     generation is discarded rather than racing the current one on `setImages`.
-     Both loaders used to write unconditionally, so switching tabs twice quickly
-     could leave Derpibooru results under the PicPony tab. */
+  /* Every request carries the generation it was issued in. A tab switch, a retry or an
+     unmount bumps it, so a slow response from a previous generation is discarded rather
+     than racing the current one on `setImages` — both loaders used to write
+     unconditionally, so switching tabs twice quickly could leave Derpibooru results
+     under the PicPony tab. */
   const generation = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -90,8 +82,8 @@ function FavoritesPane({ source }: { source: FaveSource }) {
         params.set('sd', 'desc');
         params.set('key', key);
       }
-      /* Through `proxyFetch` so a forced API line reaches this list too — it is the one
-         Derpibooru read on a page of its own, and it was the last one still going direct. */
+      /* Through `proxyFetch` so a forced API line reaches this list too — the one
+         Derpibooru read on a page of its own, and the last one still going direct. */
       const res = await proxyFetch(`${DERPI_SEARCH}?${params}`, { cache: 'no-store', signal });
       if (!res.ok) {
         const err = new Error(
@@ -148,10 +140,9 @@ function FavoritesPane({ source }: { source: FaveSource }) {
           return;
         }
 
-        /* Through the shared resource rather than a bare search, so a second visit to this screen
-           costs nothing — measured, this was the one request left on a return, and it is the same
-           `id:X OR id:Y` query `searchImagesByIds` already builds. The favourite order is restored
-           below because the API answers in its own. */
+        /* Through the shared resource rather than a bare search, so a second visit to this
+           screen costs nothing — the same `id:X OR id:Y` query `searchImagesByIds` builds.
+           The favourite order is restored below because the API answers in its own. */
         const data = await imagesByIds.read({ ids: idsForPage, page: 1, perPage: PAGE_SIZE });
         if (isStale(run)) return;
 
@@ -191,17 +182,17 @@ function FavoritesPane({ source }: { source: FaveSource }) {
       try {
         const userInfo = getUserInfo();
         if (!userInfo) {
-          // Without this the flag stayed true and the page sat on a skeleton
-          // for as long as the redirect took — or forever, if it was blocked.
+          // Without this the flag stayed true and the page sat on a skeleton for as
+          // long as the redirect took — or forever, if it was blocked.
           setIsLoading(false);
           openAuth('login');
           return;
         }
 
-        /* The shared session, not a second `get_user`. The shell already reads it and holds it for
-           five minutes, so this is a cache hit and the Derpibooru key arrives without a request —
-           measured, this screen was sending `get_user` twice on every cold load, and the second one
-           was a whole round in front of the list. */
+        /* The shared session, not a second `get_user`: the shell already reads it and
+           holds it for five minutes, so this is a cache hit and the Derpibooru key
+           arrives without a request (this screen used to send `get_user` twice on every
+           cold load, the second a whole round in front of the list). */
         const sessionResult = await sessionUser.read({ token: userInfo.token });
         if (isStale(run)) return;
         const currentApiKey =
@@ -211,8 +202,8 @@ function FavoritesPane({ source }: { source: FaveSource }) {
         setApiKey(currentApiKey);
 
         if (source === 'picpony') {
-          /* Shared with the profile page's favourites tab, so opening one after the other costs
-             one read rather than two. */
+          /* Shared with the profile page's favourites tab, so opening one after the
+             other costs one read rather than two. */
           const ids = await faveIdsResource.read({ token: userInfo.token });
           if (isStale(run)) return;
           setFaveIds(ids);
@@ -267,12 +258,10 @@ function FavoritesPane({ source }: { source: FaveSource }) {
   // it cannot appear for a single frame.
   const showSkeleton = useDeferredLoading(isLoading);
 
-  /* Every branch below returns pane content only — no `PageShell`, no tab bar.
-     Those are the parent's, and they have to be, because both panes are mounted
-     at once: rendering the shell per branch would have put two page headings and
-     two tab bars on screen for the length of a switch.
-     `size="pane"` on the two status blocks for the same reason — a `page`-sized
-     block sits under a heading and a tab row here, not on a bare route. */
+  /* Every branch below returns pane content only — no `PageShell`, no tab bar. Those are
+     the parent's, and they have to be: both panes are mounted at once, so rendering the
+     shell per branch would put two page headings and two tab bars on screen for the
+     length of a switch. `size="pane"` on the two status blocks for the same reason. */
   if (error && !hasContent) {
     return (
       <ErrorRetry
@@ -284,9 +273,9 @@ function FavoritesPane({ source }: { source: FaveSource }) {
     );
   }
 
-  // Only a first load swaps in the placeholder. Once there is content it stays
-  // mounted and dims, so the grid never unmounts mid-session — unmounting it
-  // collapses the scroll container and the browser clamps scrollTop.
+  // Only a first load swaps in the placeholder. Once there is content it stays mounted
+  // and dims, so the grid never unmounts mid-session — unmounting it collapses the
+  // scroll container and the browser clamps scrollTop.
   if (!hasContent && isLoading) {
     return showSkeleton ? <ImageGridSkeleton /> : null;
   }
@@ -333,11 +322,10 @@ function FavoritesPane({ source }: { source: FaveSource }) {
 
 function FavoritesTabs() {
   const [activeTab, setActiveTab] = useState<FaveSource>('picpony');
-  /* The Derpibooru pane is mounted on first use rather than up front, so a page
-     load costs one list request instead of two — and then stays mounted, which
-     is what keeps its results and scroll position across later switches. Its
-     place in the sequence is fixed either way: `useTabPanes` derives the slide's
-     direction from pane order in the DOM. */
+  /* The Derpibooru pane is mounted on first use rather than up front, so a page load
+     costs one list request instead of two — and then stays mounted, which keeps its
+     results and scroll position across later switches. Its place in the sequence is
+     fixed either way: `useTabPanes` derives the slide's direction from DOM order. */
   const [derpiMounted, setDerpiMounted] = useState(false);
 
   return (

@@ -41,20 +41,15 @@ function MetaValue({
 /**
  * The strip above the image: its measurements, uploader and date.
  *
- * There is no visible title. A Derpibooru image has no name of its own — the
- * field is either absent or the original filename — so `image.name || "Image
- * #123"` printed the id back at you in the largest type on the page, above the
- * one thing the page exists to show. It also carried real machinery: the title
- * was clamped to one line, measured against its own unclamped `scrollHeight` on
- * every resize and after `document.fonts.ready` to decide whether it needed an
- * expand toggle, and that whole path is gone with it.
+ * There is no visible title — a Derpibooru image has no name of its own, and
+ * printing the id in the largest type on the page was not worth the machinery it
+ * carried (a one-line clamp, a measured expand toggle). The name survives as the
+ * document's `<h1>` for assistive tech and as the tab title's counterpart; it is
+ * simply not something to look at.
  *
- * The name survives as the document's heading for assistive tech and as the tab
- * title's counterpart; it is simply not something to look at.
- *
- * The row is centred rather than left-aligned because it is now the only thing
- * in the strip: six short items ranged left under nothing at all read as a
- * caption that lost its picture.
+ * The row is centred rather than left-aligned because it is the only thing in
+ * the strip: six short items ranged left under nothing at all read as a caption
+ * that lost its picture.
  */
 export default function DetailHeader({
   image,
@@ -63,11 +58,10 @@ export default function DetailHeader({
 }: DetailHeaderProps) {
   const isStage = layout === 'stage';
   const title = image.name || `图片 #${image.id}`;
-  /* The uploader link is the one row here that is focusable, so it is the one that
-     can carry a real tooltip: `useTooltip` hangs `aria-describedby` off the anchor
-     and shows the bubble on focus as well as on hover, neither of which a native
-     `title` does. The other rows name a *value* on a non-focusable `<div>`, so they
-     take an `sr-only` label instead. */
+  /* The uploader link is the one row here that is focusable, so it is the one
+     that can carry a real tooltip (`useTooltip` hangs `aria-describedby` and
+     shows on focus as well as hover). The other rows name a *value* on a
+     non-focusable `<div>`, so they take an `sr-only` label instead. */
   const {
     anchorRef: uploaderRef,
     anchorProps: uploaderProps,

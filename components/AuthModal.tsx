@@ -8,20 +8,12 @@ import IconButton from './IconButton';
 import Modal from './Modal';
 import CodeInput from './CodeInput';
 /**
- * The captcha is behind `dynamic()` and behind a "has ever opened" flag, and the second half is
- * what makes the first one work.
- *
- * `CaptchaModal` renders a `SliderCaptcha`, which was this file's only path to `lib/motion` — and
- * that module registers GSAP and five plugins at module scope. `AuthModal` is mounted by six
- * screens that want nothing else from GSAP (/upload, /history, /favorites, /block-groups,
- * /forum/create and the image detail), so a slider nobody has asked for was putting 43 KB of
- * animation engine on each of them.
- *
- * `dynamic()` alone would not have helped: the modal was rendered unconditionally with
- * `isOpen={false}`, so its chunk would have been fetched the moment the sign-in dialog mounted.
- * `captchaMounted` is a one-way latch rather than `showCaptchaModal` itself, so the chunk arrives
- * on the first challenge and the element then *stays* mounted — which is what `Modal`'s exit
- * animation needs, and what conditional rendering on `isOpen` would have taken away.
+ * The captcha is behind `dynamic()` and behind a "has ever opened" flag, and the
+ * second half is what makes the first one work: the modal was rendered
+ * unconditionally with `isOpen={false}`, so `dynamic()` alone would have fetched
+ * the chunk the moment the sign-in dialog mounted. `captchaMounted` is a one-way
+ * latch, so the chunk arrives on the first challenge and the element then *stays*
+ * mounted — which is what `Modal`'s exit animation needs.
  */
 const CaptchaModal = dynamic(() => import('./CaptchaModal'), { ssr: false });
 import Button from './Button';
@@ -132,8 +124,7 @@ function AuthModal({
                resized it when the chunk landed. */
             aspect={3257 / 2148}
             /* The wordmark, which is what /about already falls back to under
-               `prefers-reduced-motion`. It was `null`, so this pane — 60% of the
-               dialog — was simply empty for anyone with the preference on. */
+               reduced motion — so this pane is never empty. */
             fallback={<Logo className="h-auto w-2/3" />}
           />
         </div>
@@ -170,10 +161,8 @@ function AuthModal({
 }
 
 /**
- * "返回登录", which appeared three times byte-for-byte — in the register form,
- * the reset form and the verify step. Identical enough that a change to one
- * would silently have left the other two behind, and none of the three carried
- * a focus ring.
+ * "返回登录", which appeared three times byte-for-byte. One component, so a
+ * change to one cannot silently leave the other two behind.
  */
 function BackToLogin({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
   return (
@@ -201,8 +190,8 @@ function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
 
-  /* One-way: once the challenge has been shown the element stays mounted, so its exit animation
-     has something to run on. See the note on the import. */
+  /* One-way: once the challenge has been shown the element stays mounted, so its
+     exit animation has something to run on. See the note on the import. */
   const [captchaMounted, setCaptchaMounted] = useState(false);
 
   const setCaptcha = (open: boolean) => {
@@ -238,9 +227,10 @@ function LoginForm({
         };
         localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(baseUserInfo));
         try {
-          /* Through the shared resource, so the shell does not immediately ask the same question
-             again: this fills the cache entry for the new token, and `AppLayout`'s own read of it —
-             which fires as soon as `user_info_updated` below lands — is then a hit. */
+          /* Through the shared resource, so the shell does not immediately ask
+             the same question again: this fills the cache entry for the new
+             token, so `AppLayout`'s own read (fired by `user_info_updated`
+             below) is a hit. */
           const result = await sessionUser.read({ token: data.token });
           if (result.kind === 'ok') {
             localStorage.setItem(
@@ -487,12 +477,8 @@ function RegisterForm({
             请输入 6 位验证码
           </p>
           <div className="flex items-center justify-center gap-2 sm:gap-3">
-            {/* `CodeInput`, the primitive. This was ~40 lines inline: a ref array,
-                four handlers and a class string that gave the boxes an 8dp corner
-                (the chip's step, not a field's) and both focus indicators at once.
-                It also had no arrow keys, no `autoComplete="one-time-code"` and no
-                per-box accessible name, so a screen reader read six unlabelled
-                fields and the only way back to an earlier digit was the mouse. */}
+            {/* `CodeInput`, the primitive — the boxes, the focus advance, paste
+                distribution, the arrow keys and the a11y labels are its job. */}
             <CodeInput
               value={code}
               onChange={setCode}

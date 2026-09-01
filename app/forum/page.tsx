@@ -52,19 +52,17 @@ export default function ForumPage() {
       setError(null);
       setPage(newPage);
       router.push(`/forum?page=${newPage}`, { scroll: false });
-      // No scroll call here: `ForumPostList` renders `Pagination`, which owns
-      // the reset. The `window.scrollTo` that used to sit here never fired —
-      // the scroll container is <main>, not the window.
+      // No scroll call here: `ForumPostList` renders `Pagination`, which owns the reset
+      // (the scroll container is <main>, not the window).
     }
   };
 
-  /* NOTE: this component is currently unreachable. `next.config.ts` redirects
-     `/forum` (exact) to `/?tab=forum`, so the home route's forum tab renders
-     instead and nothing here ever mounts. `/forum/[id]` and `/forum/create` are
-     unaffected — the redirect matches the bare path only. Kept rather than
-     deleted because removing the redirect is the other way to resolve it, and
-     that is a product call. It deliberately has no back affordance: the route it
-     resolves to is a sidebar destination. */
+  /* NOTE: currently unreachable. `next.config.ts` redirects `/forum` (exact) to
+     `/?tab=forum`, so the home route's forum tab renders instead and nothing here
+     ever mounts. `/forum/[id]` and `/forum/create` are unaffected — the redirect
+     matches the bare path only. Kept because removing the redirect is the other
+     way to resolve it, and that is a product call. Deliberately no back
+     affordance: the route it resolves to is a sidebar destination. */
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader

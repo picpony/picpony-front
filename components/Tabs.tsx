@@ -48,39 +48,19 @@ interface TabsProps<T extends string = string> {
 }
 
 /**
- * The one tab control.
- *
- * There were **four**, and they had drifted apart in every dimension a tab has:
- *
- *   `TabBar`              underlined, `role="tablist"`, no keyboard contract
- *   `AppLayout` pill      no ARIA roles at all, `shadow-e3` (the dialog step)
- *   `app/admin` rail      no ARIA roles, an icon that scaled 110% when active
- *   `app/tasks`           no ARIA roles, its own copy of the sliding-indicator
- *                         wiring, and an active tab distinguished by colour
- *                         alone — the exact defect `TabBar`'s own comment
- *                         records having fixed, grown back one screen over
- *
- * So three of the four told a screen reader nothing about being tabs, and the
- * one that did tell it made a promise it could not keep: `role="tab"` commits to
- * arrow-key navigation and a roving tab stop, and there was neither. That is the
- * same failure `Menu` was written to end — a control announcing a contract it has
- * not implemented is worse than a plain button row, because the user is told
- * which keys to press and then they do nothing.
+ * The one tab control, and the only one — it takes no other.
  *
  * **The keyboard contract, in full.** Arrow keys move between tabs and select as
  * they go (automatic activation, which is what APG prescribes when switching is
  * cheap — and here both panes are already mounted, so it is). Home and End jump
  * the ends. Exactly one tab is in the tab order at a time, so Tab leaves the
- * group rather than walking it, which is the difference between a tab list and a
- * toolbar. Focus follows selection, so the browser announces the new tab.
+ * group rather than walking it — the difference between a tab list and a toolbar.
+ * Focus follows selection, so the browser announces the new tab.
  *
  * **The indicator is a spring.** A tab indicator is the textbook M3 Expressive
  * spatial motion — a small object crossing a known distance where the settle is
- * the whole character — and it is driven by `useSlidingIndicator`, which lands it on
- * the **standard** scheme's default spatial spring (ζ0.9 k700, 194ms), which is what
- * `TabRow.kt` assigns. It ran on a back-eased approximation of a spring, and then
- * briefly on the *expressive* scheme's tier — ζ0.8 k380 settling in 326ms — which is
- * the more general problem that pass was fixing.
+ * the whole character — driven by `useSlidingIndicator` on the **standard**
+ * scheme's default spatial spring, which is what `TabRow.kt` assigns.
  *
  * Pair with `TabPanes` / `TabPane`, which own the shared-axis pane transition.
  * The panes must be written in the same order as the tabs: direction is derived
@@ -142,18 +122,13 @@ export default function Tabs<T extends string = string>({
   };
 
   /* Where the accent lives depends on whether there *is* a bar.
-     `underline` is M3's secondary tab set: the 2dp indicator carries the accent and
-     the label carries `on-surface`
-     (`SecondaryNavigationTabTokens.ActiveLabelTextColor`). Giving the label the
-     accent as well leaves the row with no ink hierarchy, only two weights of pink.
-     `pill` and `rail` have no bar — their indicator *is* a container — so the
-     selected item takes a container pair, and in this app that pair is
-     `secondary-container`: the sidebar's current route, a chosen `Select` option, a
-     selected `Chip`, the current contact. Read as `on-surface` on a plain
-     `surface-raised` pill the selected tab had no state colour at all, which is
-     what made the floating home switch look unfinished.
-     `tone="warning"` keeps an accent on the underline set because it marks a tab
-     group that is *about* a warning (/tasks) — a deliberate divergence. */
+     `underline` is M3's secondary tab set: the 2dp indicator carries the accent
+     and the label carries `on-surface` — giving the label the accent too leaves
+     the row with no ink hierarchy. `pill` and `rail` have no bar (their indicator
+     *is* a container), so the selected item takes a container pair, and in this
+     app that pair is `secondary-container` — what "selected" means everywhere
+     here. `tone="warning"` keeps an accent on the underline set because it marks
+     a tab group that is *about* a warning (/tasks) — a deliberate divergence. */
   const activeInk =
     variant === 'underline'
       ? tone === 'warning'
@@ -176,13 +151,11 @@ export default function Tabs<T extends string = string>({
         role="tab"
         type="button"
         aria-selected={selected}
-        /* Only on the selected tab, and that is on the merits rather than a
-           compromise. An inactive `TabPane` is `display: none`, so it is not in
-           the accessibility tree and a reference to it resolves to nothing; and
-           /admin mounts only the pane it is showing, so a reference to the other
-           thirteen would dangle outright — which axe reports and AT cannot
-           follow. The selected tab is the one whose panel the user is about to
-           enter, and it always exists. */
+        /* Only on the selected tab. An inactive `TabPane` is hidden, so it is not
+           in the accessibility tree and a reference to it resolves to nothing;
+           /admin mounts only the pane it is showing, so a reference to the others
+           would dangle outright. The selected tab is the one whose panel the user
+           is about to enter, and it always exists. */
         aria-controls={selected ? (panelId ?? tabPanelId)(tab.value) : undefined}
         /* Roving: one tab stop for the whole group. */
         tabIndex={selected ? 0 : -1}
@@ -191,26 +164,18 @@ export default function Tabs<T extends string = string>({
         className={cn(
           'relative flex shrink-0 cursor-pointer items-center gap-2 outline-none transition-ui',
           'focus-visible:ring-2 focus-ring',
-          /* 48dp, M3's tab height. `underline` had `py-3`, which came out at
-             about 44 — near the right answer and on no scale. The `pill`'s own
-             rows are 40dp because they sit inside a 48dp container that carries
-             4dp of padding, which is what makes the pill concentric. */
+          /* 48dp, M3's tab height. The pill's own rows are 40dp because they sit
+             inside a 48dp container carrying 4dp of padding, which is what makes
+             the pill concentric. */
           variant === 'underline' && 'h-12 px-4',
           variant === 'pill' && 'z-10 h-10 rounded-full px-5',
           variant === 'rail' && 'h-12 w-full rounded-full px-4 text-left whitespace-nowrap',
-          /* `title-small`, which is `PrimaryNavigationTabTokens.LabelTextFont` and
-             `SecondaryNavigationTabTokens.LabelTextFont` alike. Worth knowing that
-             this is a *naming* fix and nothing else: in M3 `TitleSmall` and
-             `LabelLarge` are the same four values (14sp / 20sp line height / 0.1
-             tracking / Medium), and their emphasized twins are both Bold — this
-             app's `--text-title-s` and `--text-label-l` are byte-identical too. So
-             the pixels do not move; the role now matches the one the spec names for
-             a tab, which is what makes it greppable.
-             The role lives in the branches, never above them: a selected tab used to
-             add a bare medium-weight utility on top of `text-label-l`, whose own
-             token is already 500 — so the active tab got no weight contrast at all,
-             only colour. Both roles must not be emitted on one element (`cn` is a
-             plain join and resolves nothing), so each branch names exactly one. */
+          /* `title-small`, both tab token sets' `LabelTextFont` — in M3 `TitleSmall`
+             and `LabelLarge` are the same four values, so the pixels do not move;
+             the role now matches the one the spec names for a tab.
+             The role lives in the branches, never above them: one type role per
+             element (`cn` is a plain join and resolves nothing), and the selected
+             branch is what gives the active tab its weight contrast. */
           selected ? 'text-title-s-emphasized' : 'text-title-s',
           /* The `rail` paints its own container because it has no sliding
              indicator to paint one for it; `pill` gets the fill from the indicator
@@ -221,7 +186,7 @@ export default function Tabs<T extends string = string>({
         )}
       >
         {tab.icon && (
-          /* A fixed, centred cell rather than a bare glyph: an inline <svg> sits
+          /* A fixed, centred cell rather than a bare glyph: an inline svg sits
              on the text baseline and inherits the line box, so each icon lands a
              fraction low and by a different amount per glyph. */
           <span className="grid shrink-0 place-items-center [&>svg]:block" aria-hidden="true">
@@ -267,12 +232,11 @@ export default function Tabs<T extends string = string>({
         <span
           ref={indicatorRef}
           aria-hidden="true"
-          /* `secondary-container`, the app's "selected" pair, rather than the
-             `surface-raised` house token — which is a *tone* and carries no state
-             meaning, so the pill read as a blank white lozenge. Its ink is
-             `on-secondary-container`, from `activeInk` above.
-             The shadow goes with it: a selected segment is not a floating surface,
-             it is a filled container inside one, and M3 puts no elevation on it. */
+          /* `secondary-container`, the app's "selected" pair — a state colour,
+             not a plain raised tone, which read as a blank lozenge. Its ink is
+             `on-secondary-container`, from `activeInk` above. No shadow: a
+             selected segment is a filled container inside one, and M3 puts no
+             elevation on it. */
           className="bg-secondary-container absolute top-1 bottom-1 left-0 z-0 rounded-full"
         />
         {tabButtons}

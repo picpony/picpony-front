@@ -81,9 +81,9 @@ export default function InlineEditorPanel({
       const pendingState = pendingLayoutState;
       pendingLayoutState = null;
 
-      /* Reduced cross-fades the panel and leaves its box alone: the clip-path expand and
-         the `Flip` reflow are a container changing size, which is what the tier removes.
-         Off keeps the original behaviour of appearing outright. */
+      /* Reduced cross-fades the panel and leaves its box alone: the clip-path
+         expand and the `Flip` reflow are a container changing size, which is
+         what the tier removes. Off keeps appearing outright. */
       const tier = motionTier();
       if (tier === 'reduced') {
         const fade = isClosing
@@ -161,10 +161,8 @@ export default function InlineEditorPanel({
           );
 
         if (closingTargets.length > 0) {
-          /* The rows below close on the panel's own clock and curve. They ran 300ms
-             on `standard` while the panel clipped away in 200ms on `accelerate`, so
-             the list kept sliding for 100ms after the thing it was closing over had
-             gone — the gap outlived the panel. One gesture, one clock. */
+          /* The rows below close on the panel's own clock and curve — one
+             gesture, one clock, or the gap outlives the panel. */
           animation.to(closingTargets, { y: -closingDistance, ...spring('fastEffects') }, 0);
         }
       } else {

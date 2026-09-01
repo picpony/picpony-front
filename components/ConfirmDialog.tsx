@@ -22,37 +22,17 @@ export interface ConfirmOptions {
 }
 
 /**
- * One "are you sure?" for the whole app.
+ * One "are you sure?" for the whole app — `Modal` at `max-w-sm`, a body, a text
+ * 取消 next to the tone's confirm. Two shapes, because call sites want both:
  *
- * Ten admin tabs had hand-rolled this — `Modal` at `max-w-sm`, a `<p>` body, a
- * text 取消 next to a danger 确认 — and each carried four pieces of state to do
- * it: an open flag, a title, a message, and the pending action stashed in a ref.
- * Two more places skipped the dialog entirely and called the browser's own
- * `confirm()`/`prompt()`, which is a system-chrome box in the OS font with OS
- * buttons: no scrim, no M3 type, no focus trap of ours, and on iOS Safari it
- * carries the origin string. The upload guidelines — the one place in the app a
- * user is asked to affirm a legal condition — were shown that way.
- *
- * Five of the ten converted and five did not, and the copy split followed the
- * code split exactly: every hand-rolled body dropped the sentence-final 吗
- * (`确定要删除此徽章？`) while every converted one kept it
- * (`确定要永久删除这个词条吗？`). Fixing one was fixing the other.
- *
- * Two shapes, because the wrappers proved which one call sites want. The promise
- * form reads as a straight line where the caller already has one:
- *
- *   if (!(await confirm({ title: '…', message: '…' }))) return;
- *
- * and `confirmThen` is the fire-and-forget form five tabs each rebuilt by hand,
- * with the same three-line justifying comment pasted five times:
- *
- *   confirmThen('确认删除', '确定要删除此徽章吗？', async () => { … });
+ *   if (!(await confirm({ title: '…', message: '…' }))) return;   // promise
+ *   confirmThen('确认删除', '确定要删除此徽章吗？', async () => { … }); // fire-and-forget
  *
  * Render `confirmDialog` once, anywhere in the tree.
  *
  * The options are held through the close animation rather than cleared with the
- * open flag. Clearing both at once emptied the title and body for the 200ms the
- * panel spends scaling away, so every dismissal ended on a blank card.
+ * open flag — clearing both at once emptied the card for the 200ms it spends
+ * scaling away.
  */
 export function useConfirm() {
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
@@ -127,13 +107,7 @@ export interface PromptOptions {
  * The same dialog with a field in it, replacing the browser's `prompt()`.
  *
  * Resolves to the entered string, or `null` if cancelled — the same contract
- * `prompt()` had, so a call site converts by adding `await` and losing nothing.
- * The value is trimmed here rather than at each call site, because both existing
- * callers trimmed it and one of them forgot.
- *
- * Its confirm button says 确认, like `useConfirm`'s. It said 确定 — two sibling
- * hooks in one file disagreeing on the app's most-pressed word, against a docblock
- * that named 确认.
+ * `prompt()` had. The value is trimmed here rather than at each call site.
  */
 export function usePrompt() {
   const [options, setOptions] = useState<PromptOptions | null>(null);

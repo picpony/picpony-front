@@ -3,17 +3,14 @@
 import type { DerivedTheme } from '@/lib/paletteRule';
 
 /**
- * What a colour *becomes*: the bar with its own ink, the mark colour, and the dark scheme.
+ * What a colour *becomes*: the bar with its own ink, the mark colour, and the
+ * dark scheme — the whole reason the palette dialogs exist instead of an OS
+ * colour picker, since what is being chosen is a `primary` fill whose
+ * consequences are invisible in a swatch. Shared by both dialogs so they cannot
+ * disagree about what a seed means.
  *
- * This is the reason both palette dialogs exist rather than an `<input type="color">`. What is
- * being chosen is not a colour, it is a `primary` fill, and everything that follows from it —
- * whether the bar takes white or dark text, what `primary-ink` comes out as, what the dark
- * scheme becomes — is invisible in a swatch. Shared by 选择颜色 and 从图片取色 so the two
- * cannot disagree about what a seed means.
- *
- * The colours are inline `style` rather than tokens on purpose, and it is the same reason the
- * chips are: every `--md-sys-color-*` is the *active* theme's, and this panel's whole job is
- * to show a theme that is not in force yet.
+ * Colours are inline `style` rather than tokens on purpose: every colour token
+ * is the *active* theme's, and this panel shows a theme not yet in force.
  */
 export default function PalettePreview({ derived, caption }: { derived: DerivedTheme; caption: string }) {
   return (

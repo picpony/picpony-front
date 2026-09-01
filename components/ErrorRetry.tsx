@@ -13,10 +13,8 @@ interface ErrorRetryProps {
   retryLabel?: string;
   /**
    * Replaces the retry button, for a failure whose one useful exit is not "try
-   * again" — the image detail offers 上一张, a missing Derpibooru profile offers
-   * the original site. Both used to render `StatusView` directly and re-type this
-   * component's glyph and default title by hand, so the two drifted apart the
-   * moment either changed.
+   * again" — the image detail offers 上一张, a missing profile offers the
+   * original site.
    */
   action?: React.ReactNode;
   icon?: React.ReactNode;
@@ -27,17 +25,13 @@ interface ErrorRetryProps {
 }
 
 /**
- * "That did not load."
+ * "That did not load." The sibling of `EmptyState` — both render `StatusView`,
+ * so a failed list and an empty list share one silhouette, type scale and
+ * entrance; only the glyph, the sentence and the retry differ.
  *
- * The sibling of `EmptyState`, and now the same component underneath: both
- * render `StatusView`, so a failed list and an empty list have one silhouette,
- * one type scale and one entrance instead of two that were close enough to look
- * like a mistake. The only differences left are the ones that carry meaning —
- * the glyph, the sentence, and the fact that this one has something to retry.
- *
- * The rotating refresh glyph is kept: it is the one piece of motion that says
+ * The refresh glyph's hover rotation is kept: it is the one motion that says
  * "this button will try again" rather than "this button will navigate", and it
- * is hung off `group-hover` so it costs nothing until the pointer arrives.
+ * costs nothing until the pointer arrives.
  */
 export default function ErrorRetry({
   title = '加载失败',
@@ -56,10 +50,8 @@ export default function ErrorRetry({
       title={title}
       description={message}
       /* No glyph at `inline`, matching `EmptyState`: the two are presets over one
-         `StatusView` so that a list which is empty and a list which failed have one
-         silhouette, and this default was leaving ~120px of tray-and-gap inside wells that
-         cap at 120px. At that size the words are the status. A call site with something
-         better to show still passes `icon`. */
+         `StatusView` with one silhouette, and the default tray-and-gap stood
+         taller than the ~120px wells this size serves. The words are the status. */
       icon={icon ?? (size === 'inline' ? undefined : <MdErrorOutline size={ICON.display} />)}
       action={
         action ??

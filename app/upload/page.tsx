@@ -34,9 +34,8 @@ export default function UploadPage() {
     ? ((user as Record<string, unknown>).api_key as string | undefined)
     : undefined;
 
-  /* One object URL per file, revoked when it is replaced. The video branch used
-     to call `URL.createObjectURL(file)` inline in the JSX, which minted a fresh
-     URL — and leaked the previous one — on every single render. */
+  /* One object URL per file, revoked when it is replaced — the video branch used to
+     mint a fresh URL, leaking the previous one, on every render. */
   const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => {
     if (!objectUrl) return;
@@ -102,9 +101,8 @@ export default function UploadPage() {
       return;
     }
 
-    /* The one place in the app where a user affirms a legal condition, and it
-       used to be the browser's own `confirm()` — a system box in the OS font,
-       outside our scrim, our type scale and our focus trap. */
+    /* The one place in the app where a user affirms a legal condition — through the
+       app's own confirm dialog, not the browser's OS-styled `confirm()`. */
     const agreed = await confirm({
       title: '确认发布',
       message:
@@ -215,13 +213,10 @@ export default function UploadPage() {
 
       {uploadResult ? (
         /* ──── 上传成功 ──── */
-        /* The container tone is the separation; the `border-success` at 40% hairline
-           it carried was an alpha on a text role and did nothing the fill was
-           not already doing. The disc inside was `bg-success-container` on a
-           `bg-success-container` card — the same colour on itself, so the tick
-           floated with no disc behind it at all. `success-fill` gives it one
-           that is the same green in both schemes, which is what the fill roles
-           exist for. */
+      /* The container tone is the separation; the 40% hairline it carried was an alpha
+         on a text role doing nothing the fill was not already doing. The disc inside
+         was the container colour on itself, so the tick floated with no disc behind it;
+         `success-fill` gives it one that is the same green in both schemes. */
         <div className="bg-success-container text-on-success-container rounded-md p-8 text-center">
           <div className="bg-success-fill text-on-fill mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
             <svg
@@ -258,10 +253,9 @@ export default function UploadPage() {
       ) : (
         <>
           {/* ──── 拖拽/点击选区 ──── */}
-          {/* The drag state used to add `scale-[1.02]` — an arbitrary value, and a
-              transform on the container of the `<img>` preview inside it. The
-              border, tone and elevation change already read as "let go here", and
-              the two `/50` alphas on tokens are gone with it. */}
+          {/* The drag state used to add a 2% `scale` — an arbitrary value, and a
+              transform on the container of the `<img>` preview inside it. The border,
+              tone and elevation change already read as "let go here". */}
           <DropZone
             size="lg"
             accept="image/*,video/webm,video/mp4"
@@ -272,12 +266,10 @@ export default function UploadPage() {
           >
 
             {preview ? (
-              /* `animate-fade-in` (400ms `decelerate`, the enters-the-screen pairing),
-                 not `animate-pop-in`. `popIn` is the floating-surface growth — a 4px
-                 rise plus a 0.95 scale — which is right for a popover appearing out of
-                 its anchor and wrong for a half-viewport image appearing in a drop
-                 zone: the scale made the preview visibly settle into its own box, as
-                 if it had been dropped slightly off-target. */
+              /* A fade, not the floating-surface pop: pop's rise-plus-scale is right for
+                 a popover appearing out of its anchor and wrong for a half-viewport image
+                 in a drop zone — the scale made the preview visibly settle into its own
+                 box, as if it had been dropped slightly off-target. */
               <div className="relative inline-block max-w-full animate-fade-in">
                 {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
                 <img
@@ -285,14 +277,12 @@ export default function UploadPage() {
                   alt="预览"
                   className="max-h-[50vh] max-w-full rounded-md object-contain mx-auto"
                 />
-                {/* `IconButton` gives the box, the state layer, the ripple and the
-                    focus ring. What was here combined `touch-target` with a
-                    hand-sized `w-8 h-8` box — and `touch-target` cannot be
-                    combined with a ripple anyway, since `data-ripple`'s
-                    `overflow: hidden` clips the hit-area pseudo-element out of
-                    hit-testing. It also stacked the dismiss rotation *and* a
-                    10% hover scale, where the app's one precedent for a rotating
-                    dismiss (`Modal`'s close) uses the rotation alone. */}
+                {/* `IconButton` gives the box, the state layer, the ripple and the focus
+                    ring. `touch-target` cannot be combined with a ripple anyway —
+                    `data-ripple`'s `overflow: hidden` clips the hit-area pseudo-element
+                    out of hit-testing — and it stacked the dismiss rotation *and* a hover
+                    scale, where the app's one precedent for a rotating dismiss uses the
+                    rotation alone. */}
                 <IconButton
                   size="sm"
                   onClick={(e) => {
