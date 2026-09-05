@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { MdInbox } from 'react-icons/md';
 import StatusView, { type StatusViewSize } from './StatusView';
+import { ICON } from '@/lib/icons';
 
 interface EmptyStateProps {
   title: string;
@@ -12,28 +13,24 @@ interface EmptyStateProps {
   /** Override the default tray glyph with something the screen is about. */
   icon?: ReactNode;
   size?: StatusViewSize;
+  /** The whole route is this block — fill the scroller and centre. See `StatusView`. */
+  fill?: boolean;
   className?: string;
 }
 
 /**
- * "There is nothing here yet."
+ * "There is nothing here yet." One preset over `StatusView` (its sibling is
+ * `ErrorRetry`), so empty and failed share one silhouette, type scale and
+ * entrance.
  *
- * This existed as a local `function EmptyState` inside `app/favorites/page.tsx`,
- * which is the whole problem: it was the best of the fourteen and the only one
- * no other screen could reach. The other thirteen were written inline, and
- * because each was written next to the list it belonged to, they inherited that
- * list's type roles rather than a shared one — so /user announced 暂无上传记录 in
- * `title-m` over a `body-m` line while /history used `title-m` alone and the
- * messages tabs used bare `text-on-surface-variant` with no glyph.
+ * The glyph defaults to a tray so a call site that forgets still shows an
+ * absence rather than a rendering failure; override it where the screen has
+ * something more specific to say.
  *
- * The glyph defaults to a tray rather than being required. A missing icon is
- * what made three of the inline versions read as a rendering failure, and asking
- * every call site to choose one is how you get three screens with no icon.
- * Override it where the screen has something more specific to say — a bookmark
- * for a collection, a chat bubble for a thread.
- *
- * Geometry, type scale and entrance all come from `StatusView`, which
- * `ErrorRetry` also renders. Empty and failed are the same shape on purpose.
+ * **`inline` deliberately shows no glyph.** It had a default 36px tray which,
+ * with its gap, stood taller than the 120px wells this size exists for — the
+ * empty state itself made them scroll. At this size the sentence *is* the empty
+ * state; a call site with something better can still pass `icon`.
  */
 export default function EmptyState({
   title,
@@ -41,20 +38,18 @@ export default function EmptyState({
   action,
   icon,
   size = 'page',
+  fill = false,
   className = '',
 }: EmptyStateProps) {
   return (
     <StatusView
       size={size}
+      fill={fill}
       className={className}
       title={title}
       description={description}
       action={action}
-      icon={
-        /* `inline` is a hint inside a small well; a 48px tray there is larger
-           than the box it is apologising for. */
-        icon ?? (size === 'inline' ? <MdInbox size={32} /> : <MdInbox size={48} />)
-      }
+      icon={icon ?? (size === 'inline' ? undefined : <MdInbox size={ICON.display} />)}
     />
   );
 }

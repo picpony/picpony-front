@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, ForumPostDetail, ForumComment } from '@/lib/api';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { api, ForumPostDetail } from '@/lib/api';
 import {
   MdErrorOutline,
   MdThumbUp,
@@ -17,6 +17,7 @@ import {
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { ICON } from '@/lib/icons';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 import RichTextRenderer from '@/components/RichTextRenderer';
 import FadeInImage from '@/components/FadeInImage';
@@ -26,15 +27,20 @@ import Skeleton, { SkeletonCircle, SkeletonText } from '@/components/Skeleton';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import PageBack from '@/components/PageBack';
+import Card from '@/components/Card';
 import RoleBadge from '@/components/RoleBadge';
 import Avatar from '@/components/Avatar';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import { useEscapeBack } from '@/lib/hooks';
+import { readUserInfo, useEscapeBack } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 import { readForumOrigin, playForumContainerTransform } from '@/lib/forumTransition';
-import { scrollAppToElement } from '@/lib/motion';
+import { scrollAppToElement } from '@/lib/scrollTo';
+import { copyText, getAssetUrl } from '@/lib/utils';
 import SectionHeading from '@/components/SectionHeading';
+import { formatDateTime, formatShortDateTime } from '@/lib/format';
+import { useResource } from '@/lib/resource';
+import { forumThread } from '@/lib/resources';
 
 export default function ForumPostPage() {
   const params = useParams();
@@ -45,20 +51,45 @@ export default function ForumPostPage() {
   const pageParam = searchParams.get('page');
   const initialPage = pageParam ? parseInt(pageParam, 10) : 1;
 
-  const [post, setPost] = useState<ForumPostDetail | null>(null);
-  const [comments, setComments] = useState<ForumComment[]>([]);
   const [page, setPage] = useState(initialPage);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+
+  /* The thread comes from the resource layer, which is what makes the hover prefetch in
+     `lib/prefetchRoute.ts` worth anything: it warmed `forumThread` while this screen fetched
+     independently, so hovering a thread link sent a request nobody read.
+
+     `keepPrevious` because the page number is in the key — without it, turning a page
+     unmounts the comment list for a round trip, the scroller collapses, and the browser
+     clamps `scrollTop` to the new tiny maximum. See the option's own note in
+     `lib/resource.ts`. */
+  const read = useResource(forumThread, { id, page }, { keepPrevious: true });
+  const post = read.data?.post ?? null;
+  const comments = useMemo(() => read.data?.comments ?? [], [read.data]);
+  const totalPages = read.data?.total_pages ?? 1;
+  /* Nothing at all yet — not `isLoading`, which is also true for a revalidation under a
+     thread that is already on screen. */
+  const isLoading = read.data === undefined && read.error === undefined;
+  const error = (read.error as Error | null) ?? null;
+
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
+  /* The like is read from the cached thread and written back to it, so it survives a
+     remount and cannot disagree with the list the resource is holding. */
+  const isLiked = post?.is_liked === 1;
+  const likeCount = post?.like_count ?? 0;
   const [isLikeLoading, setIsLikeLoading] = useState(false);
+
+  /* Patches the cached thread in place. `write` is the optimistic path: it leaves
+     `fetchedAt` alone, so the next revalidation still confirms against the server. */
+  const patchPost = useCallback(
+    (patch: Partial<ForumPostDetail>) => {
+      forumThread.write({ id, page }, (previous) =>
+        previous?.post ? { ...previous, post: { ...previous.post, ...patch } } : previous!,
+      );
+    },
+    [id, page],
+  );
 
   // Reply state
   const [replyTo, setReplyTo] = useState<{
@@ -69,87 +100,42 @@ export default function ForumPostPage() {
   } | null>(null);
 
   useEffect(() => {
-    const checkLoginStatus = () => {
-      const userInfo = localStorage.getItem('user_info');
-      setIsLoggedIn(!!userInfo);
-    };
+    const checkLoginStatus = () => setIsLoggedIn(Boolean(readUserInfo()));
 
     checkLoginStatus();
     window.addEventListener('user_info_updated', checkLoginStatus);
     return () => window.removeEventListener('user_info_updated', checkLoginStatus);
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (!isMounted) return;
-      setIsLoading(true);
-      setError(null);
-    });
-
-    api
-      .getForumPostDetail(id, page)
-      .then((res) => {
-        if (isMounted) {
-          setPost(res.post);
-          setComments(res.comments);
-          setTotalPages(res.total_pages);
-          setIsLiked(res.post.is_liked === 1);
-          setLikeCount(res.post.like_count);
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(err);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [id, page, retryCount]);
+  /* The fetch, the `isMounted` flag, the `retryCount` and the four `setState`s that used to
+     live here are all `useResource`'s now — including cancellation on unmount and dedup
+     against the hover prefetch that may already have this exact key in flight. */
 
   const handleToggleLike = useCallback(async () => {
-    const userInfoStr = localStorage.getItem('user_info');
-    if (!userInfoStr) {
+    const userInfo = readUserInfo();
+    if (!userInfo) {
       setSubmitError('请先登录');
       return;
     }
     setIsLikeLoading(true);
     try {
-      const userInfo = JSON.parse(userInfoStr);
       const res = await api.toggleForumPostLike(userInfo.token, parseInt(id));
       const data = await res.json();
       if (data.success) {
-        setIsLiked(data.is_liked === 1);
-        setLikeCount(data.like_count);
+        patchPost({ is_liked: data.is_liked, like_count: data.like_count });
       }
     } catch (err) {
       console.error('Toggle like error:', err);
     } finally {
       setIsLikeLoading(false);
     }
-  }, [id]);
+  }, [id, patchPost]);
 
   const handleCopyLink = useCallback(() => {
     const shareUrl = `${window.location.origin}/forum/${id}`;
-    navigator.clipboard
-      .writeText(shareUrl)
-      .then(() => {
-        showToast('分享链接已复制到剪贴板！', 'success');
-      })
-      .catch(() => {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = shareUrl;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        showToast('分享链接已复制到剪贴板！', 'success');
-      });
+    void copyText(shareUrl).then((ok) =>
+      showToast(ok ? '链接已复制' : '复制失败，请手动复制地址栏链接', ok ? 'success' : 'error'),
+    );
   }, [id]);
 
   /* Back goes back, not to `/forum`.
@@ -162,7 +148,7 @@ export default function ForumPostPage() {
    * entry — a shared link, a new tab — where there is nothing to pop. */
   const handleBack = useCallback(() => {
     if (window.history.length > 1) router.back();
-    else router.push('/?tab=forum');
+    else router.push('/?tab=forum', { scroll: false });
   }, [router]);
 
   /* Escape leaves, as on every other full-screen view. Stood down while a reply
@@ -187,8 +173,10 @@ export default function ForumPostPage() {
    * remount React simulates in development kills the first flight and plays
    * the second, rather than losing both. */
   const cardBodyRef = useRef<HTMLDivElement>(null);
+  /* `HTMLElement`, matching `Card`'s own ref type — it renders a `<div>` or a
+     `<button>`, so it cannot promise the narrower one. */
   const cardRef = useCallback(
-    (card: HTMLDivElement | null) => {
+    (card: HTMLElement | null) => {
       if (!card) return;
       const origin = readForumOrigin(id);
       if (!origin) return;
@@ -205,7 +193,7 @@ export default function ForumPostPage() {
       }
       setReplyTo({ userId, username, commentId, text });
       /* One easing for every scroll in the app. `scrollIntoView({ behavior:
-         'smooth' })` used the browser's own curve, which is not `--ease-scroll`
+         'smooth' })` used the browser's own curve, not the app's `eases.scroll`
          and is not the curve pagination or "back to top" use — so the same page
          glided three different ways depending on which control you pressed.
          The timeout stays: the editor is only mounted once `replyTo` commits, so
@@ -225,7 +213,7 @@ export default function ForumPostPage() {
     (newPage: number) => {
       if (newPage >= 1 && newPage <= totalPages) {
         setPage(newPage);
-        router.push(`/forum/${id}?page=${newPage}`);
+        router.push(`/forum/${id}?page=${newPage}`, { scroll: false });
       }
     },
     [id, totalPages, router],
@@ -234,8 +222,8 @@ export default function ForumPostPage() {
   const handleSubmitComment = useCallback(async () => {
     if (!newComment.trim() || isSubmitting) return;
 
-    const userInfoStr = localStorage.getItem('user_info');
-    if (!userInfoStr) {
+    const userInfo = readUserInfo();
+    if (!userInfo) {
       setSubmitError('请先登录');
       return;
     }
@@ -243,7 +231,6 @@ export default function ForumPostPage() {
     try {
       setIsSubmitting(true);
       setSubmitError(null);
-      const userInfo = JSON.parse(userInfoStr);
 
       // Build final content with reply quote prefix
       let finalContent = newComment;
@@ -268,7 +255,7 @@ export default function ForumPostPage() {
       if (data.success) {
         setNewComment('');
         setReplyTo(null); // Clear reply state
-        setRetryCount((c) => c + 1); // Reload comments
+        void read.refresh(); // Reload comments
       } else {
         setSubmitError(data.message || '发送评论失败');
       }
@@ -278,7 +265,7 @@ export default function ForumPostPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [id, newComment, isSubmitting, replyTo]);
+  }, [id, newComment, isSubmitting, replyTo, read]);
 
   /* The loading state is the destination's own layout, not a separate page:
      same wrapper, same back button, same card, so React reuses those DOM nodes
@@ -291,7 +278,7 @@ export default function ForumPostPage() {
       <>
         <PageBack onClick={handleBack} title="返回论坛 (Esc)" label="返回论坛" />
         <div className="max-w-4xl mx-auto pt-14">
-          <div ref={cardRef} className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8">
+          <Card ref={cardRef} variant="filled" padding="lg" className="mb-8">
             <div ref={cardBodyRef}>
               <Skeleton className="h-8 w-3/4 mb-4" />
               <div className="mb-6 flex items-center gap-3 border-b border-outline-variant pb-4">
@@ -300,7 +287,7 @@ export default function ForumPostPage() {
               </div>
               <SkeletonText lines={3} delay={120} />
             </div>
-          </div>
+          </Card>
         </div>
       </>
     );
@@ -321,7 +308,7 @@ export default function ForumPostPage() {
           <ErrorRetry
             title="帖子加载失败"
             message={error?.message || '帖子不存在'}
-            onRetry={() => setRetryCount((c) => c + 1)}
+            onRetry={() => void read.refresh()}
           />
         </div>
       </>
@@ -335,7 +322,7 @@ export default function ForumPostPage() {
           sits outside the centred wrapper. */}
       <PageBack onClick={handleBack} title="返回论坛 (Esc)" label="返回论坛" />
       <div className="max-w-4xl mx-auto pt-14">
-        <div ref={cardRef} className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8">
+        <Card ref={cardRef} variant="filled" padding="lg" className="mb-8">
           <div ref={cardBodyRef}>
             <h1 className="text-title-l sm:text-headline-s text-on-surface mb-4">{post.title}</h1>
             {/* `flex-wrap` plus `min-w-0` on the author block: with neither, the
@@ -344,7 +331,7 @@ export default function ForumPostPage() {
             characters — wraps one character per line. */}
             <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-outline-variant pb-4">
               <div className="flex min-w-0 items-center gap-3">
-                <Link href={`/user/${post.user_id}`} className="shrink-0">
+                <Link scroll={false} href={`/user/${post.user_id}`} className="shrink-0">
                   {/* `Avatar`. Every avatar in the forum section fell back to
                       `/img/default-avatar.png`, and that file does not exist —
                       `public/img/` holds only the emoji folder and the two
@@ -359,8 +346,9 @@ export default function ForumPostPage() {
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
                     <Link
+                      scroll={false}
                       href={`/user/${post.user_id}`}
-                      className="text-label-l-emphasized text-on-surface hover:text-primary truncate transition-ui"
+                      className="text-label-l-emphasized text-on-surface hover:text-primary-ink truncate transition-ui"
                     >
                       {post.username}
                     </Link>
@@ -376,26 +364,22 @@ export default function ForumPostPage() {
                   </div>
                   <time
                     dateTime={post.created_at}
-                    title={new Date(post.created_at).toLocaleString('zh-CN')}
+                    title={formatDateTime(post.created_at)}
                     className="text-body-s text-on-surface-variant mt-0.5 block truncate tabular-nums"
                   >
                     发布于{' '}
-                    {new Date(post.created_at).toLocaleString('zh-CN', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatDateTime(post.created_at)}
                   </time>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-3 text-label-l text-on-surface-variant sm:gap-4">
-                <span className="flex items-center gap-1 tabular-nums" title="浏览量">
-                  <MdVisibility size={16} /> {post.views}
+                <span className="flex items-center gap-1 tabular-nums">
+                  <span className="sr-only">浏览量</span>
+                  <MdVisibility size={ICON.dense} /> {post.views}
                 </span>
-                <span className="flex items-center gap-1 tabular-nums" title="回复数">
-                  <MdComment size={16} /> {post.reply_count}
+                <span className="flex items-center gap-1 tabular-nums">
+                  <span className="sr-only">回复数</span>
+                  <MdComment size={ICON.dense} /> {post.reply_count}
                 </span>
               </div>
             </div>
@@ -403,7 +387,7 @@ export default function ForumPostPage() {
               <div className="mb-8 rounded-md overflow-hidden bg-surface-container-high">
                 <div className="relative w-full aspect-video sm:aspect-[2/1]">
                   <FadeInImage
-                    src={`https://picpony.top${post.cover_image}`}
+                    src={getAssetUrl(post.cover_image)}
                     alt={post.title}
                     fill
                     className="object-cover"
@@ -434,9 +418,8 @@ export default function ForumPostPage() {
                 onClick={handleToggleLike}
                 loading={isLikeLoading}
                 selected={isLiked}
-                title={isLiked ? '取消点赞' : '点赞'}
                 aria-label={isLiked ? '取消点赞' : '点赞'}
-                icon={isLiked ? <MdThumbUp size={20} /> : <MdOutlineThumbUp size={20} />}
+                icon={isLiked ? <MdThumbUp size={ICON.control} /> : <MdOutlineThumbUp size={ICON.control} />}
               />
               <span className="min-w-6 text-label-l text-on-surface-variant tabular-nums">
                 {likeCount}
@@ -444,20 +427,23 @@ export default function ForumPostPage() {
               <div className="mx-1 h-6 w-px bg-outline-variant" />
               <IconButton
                 onClick={handleCopyLink}
-                title="复制分享链接"
                 aria-label="分享"
-                icon={<MdContentCopy size={20} />}
+                icon={<MdContentCopy size={ICON.control} />}
               />
             </div>
           </div>
-        </div>
-        <div className="mb-8">
+        </Card>
+        {/* The anchor is this block — heading, replies and the pager they belong to.
+            `Pagination` finds it with `closest()`, so it has to *enclose* the pager; and
+            the heading naming the list is the right landing edge for a page turn, where
+            the page header is not. */}
+        <div data-pagination-anchor className="mb-8">
           <SectionHeading>全部回复 ({post.reply_count})</SectionHeading>
           <div>
             {comments.length === 0 ? (
               <EmptyState
                 size="pane"
-                icon={<MdComment size={48} />}
+                icon={<MdComment size={ICON.display} />}
                 title="暂无回复"
                 description="来抢下沙发吧"
               />
@@ -476,17 +462,19 @@ export default function ForumPostPage() {
                   className="m3-row bg-surface-container-low flex gap-3 p-3 sm:gap-4 sm:p-4"
                 >
                   <Link
+                    scroll={false}
                     href={`/user/${comment.user_id}`}
-                    className="block shrink-0 self-start rounded-full ring-2 ring-transparent transition-ui hover:ring-primary focus-visible:focus-ring"
-                    title={`查看 ${comment.username} 的个人资料`}
+                    className="block shrink-0 self-start rounded-full ring-2 ring-transparent transition-ui hover:ring-primary-ink focus-visible:focus-ring"
+                    aria-label={`查看 ${comment.username} 的个人资料`}
                   >
                     <Avatar src={comment.avatar} name={comment.username} size={40} />
                   </Link>
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <Link
+                        scroll={false}
                         href={`/user/${comment.user_id}`}
-                        className="text-label-l-emphasized text-on-surface hover:text-primary truncate transition-ui"
+                        className="text-label-l-emphasized text-on-surface hover:text-primary-ink truncate transition-ui"
                       >
                         {comment.username}
                       </Link>
@@ -508,7 +496,7 @@ export default function ForumPostPage() {
                         <div className="-ms-2">
                           <Button
                             variant="text"
-                            icon={<MdReply size={18} />}
+                            icon={<MdReply size={ICON.dense} />}
                             onClick={() =>
                               handleReplyTo(
                                 comment.user_id,
@@ -524,15 +512,10 @@ export default function ForumPostPage() {
                       )}
                       <time
                         dateTime={comment.created_at}
-                        title={new Date(comment.created_at).toLocaleString('zh-CN')}
+                        title={formatDateTime(comment.created_at)}
                         className="text-body-s text-on-surface-variant ms-auto"
                       >
-                        {new Date(comment.created_at).toLocaleString('zh-CN', {
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {formatShortDateTime(comment.created_at)}
                       </time>
                     </div>
                   </div>
@@ -554,10 +537,7 @@ export default function ForumPostPage() {
           )}
         </div>
         {/* Comment Input */}
-        <div
-          id="comment-input-area"
-          className="bg-surface-container-lowest p-4 sm:p-6 rounded-md mb-8"
-        >
+        <Card id="comment-input-area" variant="filled" padding="lg" className="mb-8">
           <SectionHeading as="h3">发表回复</SectionHeading>
           {!isLoggedIn ? (
             /* `EmptyState`, which takes an action for exactly this. The
@@ -566,7 +546,7 @@ export default function ForumPostPage() {
                type scale none of the other fifteen used. */
             <EmptyState
               size="pane"
-              icon={<MdLogin size={48} />}
+              icon={<MdLogin size={ICON.display} />}
               title="登录后才能发表回复"
               action={
                 <Button variant="filled" onClick={() => openAuth('login')}>
@@ -580,7 +560,7 @@ export default function ForumPostPage() {
               {replyTo && (
                 <div className="bg-primary-container text-on-primary-container flex items-center justify-between gap-2 rounded-md px-4 py-2.5 text-body-m">
                   <div className="flex items-center gap-2 min-w-0">
-                    <MdReply size={16} className="shrink-0" />
+                    <MdReply size={ICON.dense} className="shrink-0" />
                     <span className="truncate">
                       回复 <strong>{replyTo.username}</strong>：
                       {/* Quieter by size, not by opacity — the same treatment
@@ -597,21 +577,20 @@ export default function ForumPostPage() {
                   <IconButton
                     size="sm"
                     onClick={handleCancelReply}
-                    title="取消回复"
                     aria-label="取消回复"
                     className="-me-1.5 shrink-0"
-                    icon={<MdClose size={16} />}
+                    icon={<MdClose size={ICON.dense} />}
                   />
                 </div>
               )}
               <RichTextEditor
                 value={newComment}
                 onChange={setNewComment}
-                placeholder={replyTo ? `回复 ${replyTo.username}...` : '写下你的回复...'}
+                placeholder={replyTo ? `回复 ${replyTo.username}…` : '写下你的回复…'}
               />
               {submitError && (
                 <div className="text-error text-body-m flex items-center gap-1">
-                  <MdErrorOutline size={16} />
+                  <MdErrorOutline size={ICON.dense} />
                   {submitError}
                 </div>
               )}
@@ -621,14 +600,14 @@ export default function ForumPostPage() {
                   variant="filled"
                   loading={isSubmitting}
                   disabled={!newComment.trim()}
-                  icon={<MdSend size={18} />}
+                  icon={<MdSend size={ICON.dense} />}
                 >
                   发送回复
                 </Button>
               </div>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </>
   );

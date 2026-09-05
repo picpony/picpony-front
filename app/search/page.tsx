@@ -1,11 +1,11 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback, useId, useMemo } from 'react';
 import { MdSearch, MdImageSearch, MdSearchOff, MdArrowBack, MdExpandMore } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import Badge from '@/components/Badge';
-import { api, PonyImage, applyCdn } from '@/lib/api';
+import { api, PonyImage } from '@/lib/api';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
@@ -22,9 +22,12 @@ import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import IconButton from '@/components/IconButton';
 import Chip from '@/components/Chip';
-import { useEscapeBack } from '@/lib/hooks';
+import { readToken, useEscapeBack } from '@/lib/hooks';
 import SectionHeading from '@/components/SectionHeading';
 import Popover from '@/components/Popover';
+import { ICON } from '@/lib/icons';
+import { useResource, SKIP } from '@/lib/resource';
+import { searchFeed } from '@/lib/resources';
 
 interface DictionaryEntry {
   id: number;
@@ -40,11 +43,11 @@ function CustomImageList({ images, onBack }: { images: PonyImage[]; onBack: () =
   if (images.length === 0) {
     return (
       <EmptyState
-        icon={<MdImageSearch size={48} />}
+        icon={<MdImageSearch size={ICON.display} />}
         title="没有找到匹配的图片"
         description="换一张图，或者放宽一点相似度再试。"
         action={
-          <Button variant="tonal" onClick={onBack} icon={<MdArrowBack size={20} />}>
+          <Button variant="tonal" onClick={onBack} icon={<MdArrowBack size={ICON.control} />}>
             返回
           </Button>
         }
@@ -54,13 +57,12 @@ function CustomImageList({ images, onBack }: { images: PonyImage[]; onBack: () =
 
   return (
     <>
-      <div className="mb-6 flex items-center justify-between rounded-md p-4">
+      <div className="mb-6 flex items-center">
         <div className="flex items-center gap-3">
           <IconButton
             onClick={onBack}
-            title="返回"
             aria-label="返回"
-            icon={<MdArrowBack size={20} />}
+            icon={<MdArrowBack size={ICON.control} />}
           />
           <div>
             <SectionHeading className="mb-0" subtitle={`找到 ${images.length} 张相似图片`}>
@@ -86,16 +88,34 @@ function SearchPageContent() {
       : 'created_at';
 
   const [inputValue, setInputValue] = useState(q);
-  const [images, setImages] = useState<PonyImage[]>([]);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
   const [customResults, setCustomResults] = useState<PonyImage[] | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
   const [sortBy, setSortBy] = useState(sortParam || defaultSort);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>((dirParam as 'asc' | 'desc') || 'desc');
+
+  /* `SKIP` covers the two states with nothing to ask for: an empty query, and a 以图搜图
+     result already on screen (from a different endpoint entirely, held in
+     `customResults`). Skipping rather than guarding inside a fetch is the mechanism that
+     stops a screen paying for content nobody asked for.
+
+     `keepPrevious`, same as the home feed: the page number is in the key, so without it
+     a page turn unmounts the grid for a round trip and the browser clamps the scroll
+     position to the collapsed height. */
+  const read = useResource(
+    searchFeed,
+    q && !customResults
+      ? { query: q, page, sortField: sortBy === 'random' ? undefined : sortBy, sortDir }
+      : SKIP,
+    { keepPrevious: true },
+  );
+  const images = useMemo(() => read.data?.images ?? [], [read.data]);
+  const hasMore = images.length === 50;
+  const error = (read.error as Error | null) ?? null;
+  /* Nothing yet, rather than `isLoading` — which is also true while a warm result
+     revalidates underneath, and swapping that for a skeleton undoes the point of the
+     cache. */
+  const isLoading = Boolean(q) && !customResults && read.data === undefined && !read.error;
 
   // Advanced search panel state
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -135,7 +155,7 @@ function SearchPageContent() {
     setInputValue(newQuery);
     setCustomResults(null);
     setPage(1);
-    router.push(`/search?q=${encodeURIComponent(newQuery)}`);
+    router.push(`/search?q=${encodeURIComponent(newQuery)}`, { scroll: false });
   }, [
     advUpvoteOp,
     advUpvoteVal,
@@ -158,6 +178,14 @@ function SearchPageContent() {
   const [suggestions, setSuggestions] = useState<DictionaryEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [acCursor, setAcCursor] = useState(0);
+  /* The combobox contract needs stable ids: one for the listbox so the field can point
+     `aria-controls` at it, one per row so `aria-activedescendant` can name the cursor.
+     Without them the field declared no relationship to the list at all — rows carried
+     `role="option"` and `aria-selected` inside a listbox nobody had been told about,
+     and the keyboard cursor was announced to nothing. */
+  const acId = useId();
+  const acListboxId = `${acId}-listbox`;
+  const acOptionId = (i: number) => `${acId}-option-${i}`;
   const acChunkRef = useRef<{ start: number; end: number; prefix: string }>({
     start: 0,
     end: 0,
@@ -244,18 +272,13 @@ function SearchPageContent() {
     };
   }, []);
 
-  /* Back leaves for the gallery, not for whatever page happened to be before
-     this one.
-     `history.back()` was the old answer and it contradicts the space the
-     transitions describe: /search sits directly above / on the app's notional
-     plane (see `ROUTE_CELL`), so leaving it is a move *down* to the gallery,
-     wherever the user came in from. Reaching it from a forum post and stepping
-     back onto that post played the down-move onto a screen that is not below it.
-     Layered, though — a search result is state the user put there, and throwing
-     it away and the screen with it in one keystroke is two undos in one. The
-     first press clears the query and lands on the empty search; the second
-     leaves. Which is also the shape the messages page already had for its
-     conversation list. */
+  /* Back leaves for the gallery, not for whatever page happened to be before this one.
+     `history.back()` contradicts the space the transitions describe: /search sits
+     directly above / on the app's notional plane (see `ROUTE_CELL`), so leaving it is a
+     move *down* to the gallery wherever the user came in from.
+     Layered, though — a search result is state the user put there, and throwing it away
+     and the screen with it in one keystroke is two undos in one. The first press clears
+     the query and lands on the empty search; the second leaves. */
   const handleBack = useCallback(() => {
     if (customResults) {
       setCustomResults(null);
@@ -264,24 +287,30 @@ function SearchPageContent() {
     if (q || inputValue) {
       setInputValue('');
       setPage(1);
-      router.push('/search');
+      router.push('/search', { scroll: false });
       return;
     }
-    router.push('/');
+    router.push('/', { scroll: false });
   }, [customResults, inputValue, q, router]);
 
-  /* Escape leaves the page — but only once nothing nearer owns the key. The
-     suggestion list closes on Escape first (below), and the image-search dialog
-     handles its own, so both stand this down while they are open. */
+  /* Escape leaves the page — but only once nothing nearer owns the key. The suggestion
+     list closes on Escape first (below), and the image-search dialog handles its own,
+     so both stand this down while they are open. */
   useEscapeBack(handleBack, !showSuggestions && !isImageSearchOpen);
+
+  /* One expression for "the popup is showing", because three things have to agree: the
+     `Popover`'s own `open`, `aria-expanded`, and whether `aria-controls` /
+     `aria-activedescendant` should be present at all. Spelling the condition out at
+     each of them is how they drift. */
+  const acOpen = showSuggestions && suggestions.length > 0;
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (!showSuggestions || suggestions.length === 0) return;
       if (e.key === 'Escape') {
-        /* The list owns Escape while it is open. Moved here from a document
-           listener so the ordering against `useEscapeBack` is structural rather
-           than a matter of which listener happened to be registered first. */
+        /* The list owns Escape while it is open. Moved here from a document listener so
+           the ordering against `useEscapeBack` is structural rather than a matter of
+           which listener registered first. */
         e.preventDefault();
         setShowSuggestions(false);
       } else if (e.key === 'ArrowDown') {
@@ -307,66 +336,14 @@ function SearchPageContent() {
   }, [q]);
 
   useEffect(() => {
-    try {
-      const userInfoStr = localStorage.getItem('user_info');
-      if (userInfoStr) {
-        const userInfo = JSON.parse(userInfoStr);
-        tokenRef.current = userInfo.token || null;
-      }
-    } catch {}
+    tokenRef.current = readToken();
   }, []);
 
-  useEffect(() => {
-    if (customResults) return;
-
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (!isMounted) return;
-      setIsLoading(true);
-      setError(null);
-
-      if (!q) {
-        setIsLoading(false);
-        setImages([]);
-      }
-    });
-
-    if (!q) {
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    api
-      .getImages(q, page, sortBy === 'random' ? undefined : sortBy, sortDir)
-      .then((res) => {
-        if (isMounted) {
-          let imgs = res.images;
-          if (localStorage.getItem('trixie_use_cdn') === 'true') {
-            imgs = imgs.map((img) => ({
-              ...img,
-              representations: Object.fromEntries(
-                Object.entries(img.representations).map(([k, v]) => [k, applyCdn(v)]),
-              ) as unknown as PonyImage['representations'],
-              view_url: applyCdn(img.view_url),
-            }));
-          }
-          setImages(imgs);
-          setHasMore(imgs.length === 50);
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(err);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [q, page, retryCount, customResults, sortBy, sortDir]);
+  /* The fetch, the `isMounted` flag and the four `setState`s that used to live here are
+     `useResource`'s now — see `read` above. Wiring `searchFeed` (previously unreferenced)
+     is what makes going back to a search cost nothing. `applyImageLine` is not re-applied
+     either: `lib/api/derpi.ts` applies it centrally to every image-bearing response, so
+     the map here was a second, idempotent pass over 50 images on every render. */
 
   useEffect(() => {
     const isSingleTag = !!q && !/[ ,:*?]/.test(q) && !q.startsWith('-');
@@ -420,9 +397,9 @@ function SearchPageContent() {
         setPage(1);
         const sortParam =
           sortBy !== 'created_at' || sortDir !== 'desc' ? `&sort=${sortBy}&dir=${sortDir}` : '';
-        router.push(`/search?q=${encodeURIComponent(formattedQuery)}${sortParam}`);
+        router.push(`/search?q=${encodeURIComponent(formattedQuery)}${sortParam}`, { scroll: false });
       } else {
-        router.push('/');
+        router.push('/', { scroll: false });
       }
     },
     [inputValue, router, sortBy, sortDir],
@@ -430,8 +407,8 @@ function SearchPageContent() {
 
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1) {
-      setIsLoading(true);
-      setError(null);
+      /* Only the page number: changing it changes the key, which is the signal
+         `useResource` reads — the loading/error clearing is the resource's now. */
       setPage(newPage);
       // <Pagination> scrolls the shell's real scroll container back to the top.
     }
@@ -447,40 +424,71 @@ function SearchPageContent() {
   };
 
   const handleRetry = useCallback(() => {
-    setRetryCount((c) => c + 1);
-  }, []);
+    void read.refresh();
+  }, [read]);
 
   return (
     <>
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6 max-w-3xl mx-auto">
+        {/* `2xl`, the form column, not a sixth page width. The page itself is `7xl`
+            because what fills it is a grid of pictures; the field and the advanced panel
+            below are a *form* inside that column, and a form column is `2xl` here (see
+            /upload). Both blocks carry the same value so the panel lines up with the
+            field that opens it. */}
+        <div className="mb-6 max-w-2xl mx-auto">
           <form onSubmit={handleSearch} className="flex items-center gap-2">
             <div className="flex-1 relative" ref={inputWrapRef}>
               <Input
                 type="text"
                 size="lg"
-                icon={<MdSearch size={24} />}
+                icon={<MdSearch size={ICON.standard} />}
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}
-                placeholder="搜索图片..."
+                placeholder="搜索图片…"
                 aria-label="搜索图片"
-                /* The two actions live *inside* the box. Outside, a search box,
-                   a submit button and an image-search button were three objects
-                   in a row that the eye had to associate before it could tell
-                   which button belonged to which field — and on a phone the row
-                   was most of the screen wide. Inside, it is one control that
-                   does one job. The slot is in flow, so an icon button and a
-                   button with a word in it need no width reserved for them.
-                   Both stay pills: the field is a pill too, and a centred pill
-                   inside a pill is concentric without anyone doing arithmetic. */
+                /* The field is the combobox, so the whole contract sits on it:
+                   `aria-controls` names the popup, `aria-expanded` whether it is showing,
+                   `aria-activedescendant` the row the arrow keys are on. It had none of
+                   these, so a screen reader was told there were options but never that
+                   this field owned them. `aria-autocomplete="list"` because typing
+                   filters a list rather than completing inline. */
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls={acOpen ? acListboxId : undefined}
+                aria-expanded={acOpen}
+                aria-activedescendant={
+                  acOpen && acCursor >= 0 && acCursor < suggestions.length
+                    ? acOptionId(acCursor)
+                    : undefined
+                }
+                /* The two actions live *inside* the box. Outside, a search box, a submit
+                   button and an image-search button were three objects in a row the eye
+                   had to associate — and on a phone most of the screen wide. Inside, it
+                   is one control that does one job; the slot is in flow, so no width
+                   needs reserving. Both stay pills: a centred pill inside a pill is
+                   concentric without anyone doing arithmetic. */
+                /* Two controls that read as a pair. Both are 40dp pills in a 56dp pill
+                   field, concentric for free — but only one had a container: a bare glyph
+                   beside a solid brand pill, so the image-search action was easy to miss.
+                   `tonal` gives it the secondary container — visible, clearly a sibling of
+                   the submit, and quieter than it, which is the ranking these two actions
+                   have. The glyph drops to 20dp to match a 40dp button's own icon slot. */
                 trailing={
                   <>
+                    {/* `tonal` — a *visible* container, and that is what makes the spacing
+                        round the submit read as equal. Measured, every gap around 搜索 was
+                        already exactly 8px (40dp control in a 56dp field); but the control
+                        on its left had no container, so its 40dp box was invisible and the
+                        *perceived* gap on that side was 18 against 8 on the other three.
+                        The boxes were even and the picture was not. So both controls carry
+                        a container, and the hierarchy is `tonal` against `filled` rather
+                        than nothing against something. */}
                     <IconButton
+                      variant="tonal"
                       onClick={() => setIsImageSearchOpen(true)}
-                      title="以图搜图"
                       aria-label="以图搜图"
-                      icon={<MdImageSearch size={22} />}
+                      icon={<MdImageSearch size={ICON.control} />}
                     />
                     <Button type="submit" variant="filled">
                       搜索
@@ -488,14 +496,14 @@ function SearchPageContent() {
                   </>
                 }
               />
-              {/* `Popover`, so the suggestion list wears the app's one floating
-                  surface (8dp, elevation 2, no outline) instead of a fourth
-                  hand-rolled recipe, and escapes any clipping ancestor by
-                  portalling rather than relying on this wrapper. */}
+              {/* `Popover`, so the suggestion list wears the app's one floating surface
+                  instead of a fourth hand-rolled recipe, and escapes any clipping ancestor
+                  by portalling rather than relying on this wrapper. */}
               <Popover
-                open={showSuggestions && suggestions.length > 0}
+                open={acOpen}
                 onClose={() => setShowSuggestions(false)}
                 anchorRef={inputWrapRef}
+                id={acListboxId}
                 role="listbox"
                 aria-label="搜索建议"
                 estimatedHeight={suggestions.length * 40}
@@ -504,6 +512,7 @@ function SearchPageContent() {
                       <button
                         key={tag.id}
                         type="button"
+                        id={acOptionId(i)}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           selectSuggestion(tag);
@@ -513,108 +522,115 @@ function SearchPageContent() {
                         aria-selected={i === acCursor}
                         className={`flex items-center justify-between w-full px-3 py-2 text-left transition-ui outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
                           i === acCursor
-                            ? 'bg-primary-container text-on-primary-container'
+                            /* The keyboard cursor is the state layer at the focus weight,
+                               not a container fill: a container pair means *selected*
+                               everywhere else in this app (sidebar route, chosen `Select`
+                               option, selected chip), and nothing here is selected until
+                               it is committed. Same treatment as `Select`'s listbox. */
+                            ? 'state-layer-active'
                             : 'state-layer'
                         }`}
                       >
-                        {' '}
+                        
                         <div className="flex items-center gap-2 min-w-0">
-                          {' '}
+                          
                           <span
                             className={`w-2.5 h-2.5 rounded-full shrink-0 ${tagCategoryDot(tag.cat)}`}
-                          />{' '}
+                          />
                           <div className="min-w-0">
                             {' '}
                             {tag.cn ? (
                               <span className="text-body-m text-on-surface">
                                 {' '}
-                                <span className="text-primary ">{tag.cn}</span>{' '}
-                                <span className="ml-1.5 text-on-surface-variant">{tag.en}</span>{' '}
+                                <span className="text-primary-ink ">{tag.cn}</span>
+                                <span className="ml-1.5 text-on-surface-variant">{tag.en}</span>
                               </span>
                             ) : (
                               <span className="text-body-m text-on-surface">{tag.en}</span>
                             )}{' '}
-                          </div>{' '}
-                        </div>{' '}
+                          </div>
+                        </div>
                         <span className="text-body-s text-on-surface-variant shrink-0 ml-2">
                           {' '}
-                          {tag.count?.toLocaleString()}{' '}
-                        </span>{' '}
+                          {tag.count?.toLocaleString()}
+                        </span>
                       </button>
                     ))}{' '}
-              </Popover>{' '}
-            </div>{' '}
-          </form>{' '}
+              </Popover>
+            </div>
+          </form>
         </div>{' '}
         {tagInfo.loading ? (
           <div className="mb-6 flex items-center gap-2 text-body-m text-on-surface-variant">
-            {' '}
-            <Spinner size="sm" /> <span>查询中...</span>{' '}
+            
+            <Spinner size="sm" /> <span>查询中…</span>
           </div>
         ) : tagInfo.data ? (
           <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-body-m text-on-surface-variant">
-            {' '}
+            
             {tagInfo.data.cn && (
               <div>
                 {' '}
-                <span className="text-body-s text-on-surface-variant">中文翻译</span>{' '}
-                <p className="text-body-m text-on-surface">{tagInfo.data.cn}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">中文翻译</span>
+                <p className="text-body-m text-on-surface">{tagInfo.data.cn}</p>
               </div>
-            )}{' '}
+            )}
             {tagInfo.data.count > 0 && (
               <div>
                 {' '}
-                <span className="text-body-s text-on-surface-variant">使用量</span>{' '}
-                <p className="text-body-m text-on-surface">{tagInfo.data.count.toLocaleString()}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">使用量</span>
+                <p className="text-body-m text-on-surface">{tagInfo.data.count.toLocaleString()}</p>
               </div>
-            )}{' '}
+            )}
             {tagInfo.data.cat && (
               <div>
                 {' '}
-                <span className="text-body-s text-on-surface-variant">分类</span>{' '}
-                <p className="text-body-m text-on-surface">{tagInfo.data.cat}</p>{' '}
+                <span className="text-body-s text-on-surface-variant">分类</span>
+                <p className="text-body-m text-on-surface">{tagInfo.data.cat}</p>
               </div>
-            )}{' '}
+            )}
             {tagInfo.data.aliases && tagInfo.data.aliases.length > 0 && (
               <div>
                 {' '}
-                <span className="text-body-s text-on-surface-variant">别名</span>{' '}
+                <span className="text-body-s text-on-surface-variant">别名</span>
                 <div className="flex flex-wrap gap-1 mt-0.5">
                   {tagInfo.data.aliases.map((alias) => (
                     <Badge key={alias}>{alias}</Badge>
                   ))}
-                </div>{' '}
+                </div>
               </div>
-            )}{' '}
+            )}
             {tagInfo.data.description && (
               <div className="sm:col-span-2">
                 {' '}
-                <span className="text-body-s text-on-surface-variant">标签简介</span>{' '}
-                <MarkdownRenderer content={tagInfo.data.description} />{' '}
+                <span className="text-body-s text-on-surface-variant">标签简介</span>
+                <MarkdownRenderer content={tagInfo.data.description} />
               </div>
-            )}{' '}
+            )}
           </div>
         ) : null}{' '}
         {customResults ? (
           <CustomImageList images={customResults} onBack={clearCustomResults} />
         ) : !q ? (
-          /* The Lottie rides in `StatusView`'s glyph slot rather than being its
-             own centred column, so the resting search screen has the same
-             geometry and the same staggered entrance as every empty list in the
-             app. Its own class string carried `mb-4` *and* `mb-12`, i.e. two
-             values for one property with Tailwind's output order deciding. */
+          /* The Lottie rides in `StatusView`'s glyph slot rather than being its own
+             centred column, so the resting search screen has the same geometry and
+             entrance as every empty list in the app. */
           <EmptyState
             icon={
               <LottieIcon
-                /* `max-w-full` cannot constrain this. It resolves against
-                   `StatusView`'s icon slot, which is a shrink-to-fit flex item
-                   whose own width comes from this element — so the percentage
-                   has no reference and the 624px composition ran off the right
-                   of a 390px screen. A viewport unit has a reference by
-                   definition. */
+                /* `max-w-full` cannot constrain this: it resolves against `StatusView`'s
+                   icon slot, a shrink-to-fit flex item whose own width comes from this
+                   element — the percentage has no reference, and the 624px composition
+                   ran off the right of a 390px screen. A viewport unit has a reference. */
                 className="w-[min(39rem,88vw)]"
                 load={() => import('@/lib/lottie/search.json').then((m) => m.default)}
-                fallback={null}
+                /* 3000×1553, the composition's own box. */
+                aspect={3000 / 1553}
+                /* The reduced-motion fallback: a `null` fallback meant no illustration at
+                   all under `prefers-reduced-motion`. The glyph is `display` (48dp), the
+                   app's size for an illustration over an empty state, and it inherits
+                   `StatusView`'s own icon colour like every other empty state's glyph. */
+                fallback={<MdImageSearch size={ICON.display} />}
               />
             }
             title="输入关键词搜索图片"
@@ -629,14 +645,14 @@ function SearchPageContent() {
               (error as { status?: number }).status == 429 ||
               error.message === 'Failed to fetch' ||
               error.message === 'Too Many Requests'
-                ? '请求次数过快，超出原站限制'
+                ? '您的请求次数过快，超出原站限制'
                 : `${(error as { status?: number }).status ? `HTTP Error ${(error as { status?: number }).status}: ` : ''}${error.message}`
             }
             onRetry={handleRetry}
           />
         ) : images.length === 0 ? (
           <EmptyState
-            icon={<MdSearchOff size={48} />}
+            icon={<MdSearchOff size={ICON.display} />}
             title="没有找到匹配的图片"
             description={<>没有与「{q}」相关的结果，换个关键词或检查一下拼写。</>}
           />
@@ -647,7 +663,22 @@ function SearchPageContent() {
                 搜索：{q} — 第 {page} 页
               </div>
               <MasonryGrid images={images} />
-              <Pagination currentPage={page} hasMore={hasMore} onPageChange={handlePageChange} />
+              <Pagination
+                currentPage={page}
+                hasMore={hasMore}
+                onPageChange={handlePageChange}
+                /* Warmed on hover/focus/press of a page control, like the home feed's —
+                   this pager had no warmer because the screen had no resource to warm. */
+                onPrefetchPage={(next) =>
+                  q &&
+                  searchFeed.prefetch({
+                    query: q,
+                    page: next,
+                    sortField: sortBy === 'random' ? undefined : sortBy,
+                    sortDir,
+                  })
+                }
+              />
             </div>
             {/* Bottom sort controls */}
             {q && (
@@ -673,31 +704,36 @@ function SearchPageContent() {
                   ]}
                 />
                 {sortBy !== 'random' && (
-                  <Button variant="tonal" size="sm" onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))} data-ripple>
-                    <span
-                      key={sortDir}
-                      className="inline-block animate-[icon-swap_0.3s_var(--ease-spring)]"
-                    >
+                  <Button variant="tonal" size="xs" onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))} data-ripple>
+                    {/* A fade, not a glyph spin-in: that keyframe (90° rotation, 0.6
+                        scale on the expressive spring) is built for a *glyph*, and text
+                        tumbling into place reads as a rendering fault. The arrow already
+                        carries the meaning, so the swap only has to be noticed: `fade-in`
+                        is 400ms `decelerate` on opacity alone, restarted by the `key`. */}
+                    <span key={sortDir} className="animate-fade-in inline-block">
                       {sortDir === 'desc' ? '↓ 降序' : '↑ 升序'}
                     </span>
                   </Button>
                 )}
+                {/* No floating-surface entrance on the button below: its two neighbours
+                    enter without one, so a third entrance here had the row arriving in
+                    instalments. */}
                 {(sortParam || sortBy !== defaultSort || sortDir !== 'desc') && (
-                  <Button variant="tonal" size="sm" className="animate-pop-in" onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }} data-ripple>
+                  <Button variant="tonal" size="xs" onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }} data-ripple>
                     重置排序
                   </Button>
                 )}
-                {/* `Chip variant="filter"`, not a third hand-rolled pill: this
-                    control is a filter that is on or off, which is the one thing
-                    a filter chip is for, and it was wearing `rounded-full` while
-                    every tag chip beside it wore the spec's 8dp. */}
+                {/* `Chip variant="filter"`, not a third hand-rolled pill: this control is
+                    a filter that is on or off, which is the one thing a filter chip is
+                    for, and it was fully rounded while every tag chip beside it wore the
+                    spec's 8dp. */}
                 <Chip
                   variant="filter"
                   tone="primary"
                   selected={showAdvanced}
                   onClick={() => setShowAdvanced((prev) => !prev)}
                   aria-expanded={showAdvanced}
-                  icon={<MdExpandMore size={14} />}
+                  icon={<MdExpandMore size={ICON.dense} />}
                 >
                   高级排序
                 </Chip>
@@ -707,12 +743,24 @@ function SearchPageContent() {
             {/* Advanced search panel */}
             {q && (
               <div
-                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-standard)] ${
-                  showAdvanced ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                /* The drawer's springs, per direction — `DefaultSpatial` opening,
+                   `FastEffects` closing, per `NavigationDrawer.kt`. The last of the app's
+                   collapsible panels still on a one-sided 200/300ms curve, which dropped
+                   then crept.
+                   `grid-template-rows` stays as the mechanism. It is a layout property,
+                   which the guillotine note in AGENTS.md warns about — but the failure
+                   there is a box resizing *past* fixed-width contents, and here the inner
+                   `min-h-0 overflow-hidden` track carries the whole subtree, so the
+                   contents are clipped rather than left behind. A translate would need a
+                   measured height; `0fr → 1fr` does not. */
+                className={`grid transition-[grid-template-rows,opacity] ${
+                  showAdvanced
+                    ? 'spring-default-spatial grid-rows-[1fr] opacity-100'
+                    : 'spring-fast-effects grid-rows-[0fr] opacity-0'
                 }`}
               >
                 <div className="min-h-0 overflow-hidden">
-                  <div className="mt-4 p-4 border border-outline-variant rounded-md bg-surface-container max-w-2xl mx-auto">
+                  <div className="mt-4 p-4 border border-outline-variant rounded-md bg-surface max-w-2xl mx-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {/* Upvotes */}
                       <div>
@@ -832,10 +880,10 @@ function SearchPageContent() {
                         点击&quot;应用&quot;后，筛选条件会拼接到搜索框并执行搜索。
                       </span>
                       <div className="flex gap-2">
-                        <Button variant="tonal" size="sm" onClick={clearAdvancedFilters} data-ripple>
+                        <Button variant="tonal" size="xs" onClick={clearAdvancedFilters} data-ripple>
                           重置
                         </Button>
-                        <Button onClick={applyAdvancedFilters} variant="filled" size="sm">
+                        <Button onClick={applyAdvancedFilters} variant="filled" size="xs">
                           应用并搜索
                         </Button>
                       </div>

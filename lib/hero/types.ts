@@ -46,8 +46,10 @@ export type ImageHeroRuntimeState = {
   phase: HeroControllerPhase;
   sessionId: number | null;
   imageId: number | null;
+  /* No `interactionQuiet` here: it was published and never read, and every quiet↔active
+     transition would re-render the runtime's subscribers — see `subscribeHeroInteraction`
+     in the controller. */
   stage: ImageHeroStageState;
-  interactionQuiet: boolean;
   background: ImageHeroBackgroundLocation | null;
 };
 
@@ -68,6 +70,13 @@ export type HeroRouteRegistration = HeroSurfaceNodes & {
   target: HTMLElement | null;
   /** The route can paint the same pixels the flyer is showing. */
   previewPaintable: boolean;
+  /**
+   * The route has finished resolving and has **no** hero media — the failure state. The
+   * handoff requires a paintable preview and a target, and only `DetailImage`/`DetailVideo`
+   * set either, so without this flag the wait ran to `HERO_DETAIL_ROUTE_TIMEOUT_MS` and a
+   * missing image left the error page sealed and the screen blank for 30 seconds.
+   */
+  resolvedWithoutMedia: boolean;
 };
 
 export type HeroStageNodes = HeroSurfaceNodes & {
@@ -90,6 +99,16 @@ export type HeroOpenIntent = {
   /** Replaying a history entry rather than starting a fresh navigation. */
   historyRestore?: boolean;
 };
+
+/**
+ * Which of the two exit choreographies a close runs.
+ *
+ * `container` shrinks the whole detail surface back into the thumbnail — Material's container
+ * transform read backwards. `dismiss` does not: a swipe-down is a gesture the hand is already
+ * driving, so the surface keeps the translate and veil the finger left it at and only
+ * continues them. M3 draws the same line for a drawer.
+ */
+export type HeroChoreography = 'container' | 'dismiss';
 
 export type HeroCloseIntent = {
   imageId: number;

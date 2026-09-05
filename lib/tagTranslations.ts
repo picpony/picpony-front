@@ -3,8 +3,7 @@
 import { getTagTranslations } from '@/lib/api/picpony';
 
 /**
- * 词库中文翻译的批量加载与缓存（对应旧前端 `applyTagTranslations` 的
- * `get_tag_translations` 接口）。词库的 en 存的是不带命名空间前缀的纯标签名
+ * 词库中文翻译的批量加载与缓存。词库的 en 存的是不带命名空间前缀的纯标签名
  * （接口验证：`character:trixie` 查不到、`trixie` 查得到），所以查询与缓存
  * 的 key 统一剥离 `xxx:` 前缀并转小写。
  *
@@ -21,7 +20,7 @@ const CACHE_EVICT = 500;
 const HIT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MISS_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** 单次请求上限，与旧前端一致。 */
+/** 单次请求上限。 */
 const BATCH_SIZE = 500;
 
 interface CacheEntry {
@@ -56,7 +55,7 @@ function store(): Map<string, CacheEntry> {
 
 function persist() {
   const entries = store();
-  /* 插入序即最旧在前，从头部丢弃即旧前端同款 FIFO。 */
+  /* 插入序即最旧在前，从头部丢弃即 FIFO。 */
   if (entries.size > CACHE_LIMIT) {
     let toDrop = entries.size - CACHE_LIMIT + CACHE_EVICT;
     for (const key of entries.keys()) {
@@ -83,10 +82,8 @@ const inFlight = new Map<string, Promise<string | null>>();
 /**
  * 各标签的中文翻译，key 为剥离前缀后的小写名；词库未收录的标签对应 null
  * （与 `tagCounts` 的 null 语义一致：null 也是"已查询过"的结果，调用方据此
- * 停止追问，避免一张全未翻译的图反复触发请求）。
- *
- * `onPartial` 会在每组结果到达时被调用（缓存命中在下一微任务、请求逐批），
- * 让画面先拿到手头已有的翻译。
+ * 停止追问）。`onPartial` 会在每组结果到达时被调用（缓存命中在下一微任务、
+ * 请求逐批），让画面先拿到手头已有的翻译。
  */
 export async function loadTagTranslations(
   tags: string[],

@@ -3,27 +3,31 @@ import type { NextRequest } from 'next/server';
 /**
  * Reverse proxy for the PicPony PHP backend.
  *
- * This replaces the old `rewrites()` entry in next.config.ts, because a rewrite
- * cannot touch upstream *response* headers — and that is exactly what the
- * slider captcha needs.
+ * Replaces the old `rewrites()` entry in next.config.ts, because a rewrite cannot touch
+ * upstream *response* headers — and that is exactly what the slider captcha needs: the
+ * backend hands out its session as `Set-Cookie: PHPSESSID=...; Secure`, and a browser
+ * silently discards a `Secure` cookie when the page origin is not a secure context.
+ * Over plain HTTP (e.g. a LAN address from a phone) the PHP session is lost entirely —
+ * `captcha_get` stores the puzzle answer in a session the browser throws away, so
+ * `captcha_verify` fails no matter how well the piece is aligned. http://localhost is
+ * exempt (browsers treat it as trustworthy), which is why this only reproduced on other
+ * devices.
  *
- * The backend hands out its session as `Set-Cookie: PHPSESSID=...; Secure`.
- * A browser silently discards a `Secure` cookie when the page origin is not a
- * secure context, so opening the app over plain HTTP (a LAN address such as
- * http://192.168.31.12:3100 from a phone) loses the PHP session entirely:
- * `captcha_get` stores the puzzle answer in a session the browser then throws
- * away, `captcha_verify` arrives without it, and the backend answers
- * "验证失败，请重新对齐滑块" no matter how perfectly the piece is aligned.
- * http://localhost is exempt — browsers treat it as trustworthy and keep the
- * cookie — which is why this only ever reproduced on other devices.
- *
- * So: when the request did not reach us over HTTPS, drop `Secure` on the way
- * back out. Over HTTPS (production, or an HTTPS tunnel in front of dev) every
- * header passes through untouched.
+ * So: when the request did not reach us over HTTPS, drop `Secure` on the way back out.
+ * Over HTTPS every header passes through untouched.
  */
 
 const UPSTREAM_ORIGIN = 'https://picpony.top';
 const UPSTREAM_PATH = '/api.php';
+
+/**
+ * Upstream timeout. Generous by design, unlike `lib/route.server.ts`'s 1500ms: that one
+ * bounds a *document* every visitor pays for; this bounds a request the client is
+ * explicitly waiting on, where the guarded failure is a connection that never closes.
+ * The backend's observed latency is ~9s under load, so anything much under 20s would
+ * turn a slow answer into a failover.
+ */
+const UPSTREAM_TIMEOUT_MS = 30_000;
 
 /** Hop-by-hop headers, plus ones `fetch` must recompute for the new request. */
 const SKIP_REQUEST_HEADERS = new Set([
@@ -68,9 +72,9 @@ function downgradeCookie(cookie: string): string {
   return (
     cookie
       .replace(/;\s*Secure\b/gi, '')
-      // `SameSite=None` is only honoured on Secure cookies, so leaving it would
-      // just lose the cookie to a different rule. Lax is the safe equivalent for
-      // a same-origin flow like this one.
+      // `SameSite=None` is only honoured on Secure cookies, so leaving it would lose
+      // the cookie to a different rule; Lax is the safe equivalent for this
+      // same-origin flow.
       .replace(/;\s*SameSite\s*=\s*None\b/gi, '; SameSite=Lax')
   );
 }
@@ -90,13 +94,28 @@ async function proxy(
   });
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
-  const upstream = await fetch(target, {
-    method: request.method,
-    headers,
-    body: hasBody ? await request.arrayBuffer() : undefined,
-    redirect: 'manual',
-    cache: 'no-store',
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: request.method,
+      headers,
+      body: hasBody ? await request.arrayBuffer() : undefined,
+      redirect: 'manual',
+      cache: 'no-store',
+      /* Bounded: without this the handler inherits the platform's socket timeout, so a
+         hung upstream hangs this route with it, holding a Node connection open. */
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch {
+    /* Same shape `app/relay/route.ts` returns for the same condition: `proxyFetch`
+       (lib/api/client.ts) treats 502 as a failover trigger, which is exactly what it
+       would have concluded from the network throw this is standing in for. A timeout
+       and a refused connection are one answer here — the line is not answering. */
+    return Response.json(
+      { success: false, message: 'PicPony 接口暂时不可用' },
+      { status: 502 },
+    );
+  }
 
   const secure = isSecureRequest(request);
   const responseHeaders = new Headers();

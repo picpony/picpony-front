@@ -25,8 +25,23 @@ export type HeroScrollPlane = {
   maxScrollTop: number;
 };
 
-function createPlane(anchor: HTMLElement, scroller: HTMLElement): HeroScrollPlane {
-  const rect = scroller.getBoundingClientRect();
+/**
+ * @param host An element whose border box is the plane's origin, defaulting to the scroller.
+ *   It exists because the scroller may sit **inside the container transform's window**, and a
+ *   mid-flight `rebuild` re-creates the plane — at which point the scroller's rect is the
+ *   *scaled* box and every later `screenRectToPlane` is wrong by the whole transform. The
+ *   Stage passes its overlay, the one node in that chain never carrying a transform; its box
+ *   *is* the scroller's untransformed box — exact, one rect read, no matrix.
+ *
+ *   Only `top`/`left` are read from it. The client/scroll sizes and offsets are layout
+ *   values, unaffected by any ancestor transform.
+ */
+function createPlane(
+  anchor: HTMLElement,
+  scroller: HTMLElement,
+  host: HTMLElement = scroller,
+): HeroScrollPlane {
+  const rect = host.getBoundingClientRect();
   const scrollLeft = scroller.scrollLeft;
   const scrollTop = scroller.scrollTop;
   const viewportWidth = scroller.clientWidth;
@@ -58,8 +73,12 @@ export function getGalleryScrollPlane(): HeroScrollPlane | null {
   return anchor && scroller ? createPlane(anchor, scroller) : null;
 }
 
-export function getElementScrollPlane(anchor: HTMLElement, scroller: HTMLElement) {
-  return createPlane(anchor, scroller);
+export function getElementScrollPlane(
+  anchor: HTMLElement,
+  scroller: HTMLElement,
+  host?: HTMLElement,
+) {
+  return createPlane(anchor, scroller, host);
 }
 
 /**

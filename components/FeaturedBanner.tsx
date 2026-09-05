@@ -1,22 +1,22 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { api, PonyImage, applyCdn } from '@/lib/api';
+import { useResource } from '@/lib/resource';
+import { featuredImage } from '@/lib/resources';
 import { MdThumbUp, MdComment, MdPerson } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
 import Badge from '@/components/Badge';
 import Skeleton from '@/components/Skeleton';
 import { useHeroLink } from '@/lib/useHero';
-import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
+import { ICON } from '@/lib/icons';
+import { readUserInfo } from '@/lib/hooks';
 
 /* The banner's scrims are drawn over photography, so they must be black in both
    schemes — but "black" should still come from the token, not from a literal,
    or a change to `scrim` silently skips these two gradients. */
 const scrim = (alpha: number) =>
   `color-mix(in oklab, var(--md-sys-color-scrim) ${alpha * 100}%, transparent)`;
-
-const FEATURED_KEY = 'home:featured';
 
 /**
  * The banner's placeholder, shared with the home page's Suspense fallback.
@@ -29,9 +29,9 @@ const FEATURED_KEY = 'home:featured';
  */
 export function FeaturedBannerSkeleton() {
   return (
-    <div data-tab-row className="mb-6 sm:mb-8 overflow-hidden rounded-md" aria-hidden="true">
+    <div data-tab-row className="mb-6 sm:mb-8 overflow-hidden rounded-lg" aria-hidden="true">
       <div className="relative w-full" style={{ paddingBottom: 'min(40vh, 400px)' }}>
-        <Skeleton className="absolute inset-0 rounded-md" />
+        <Skeleton className="absolute inset-0 rounded-lg" />
       </div>
     </div>
   );
@@ -40,86 +40,25 @@ export function FeaturedBannerSkeleton() {
 export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }) {
   const heroElementRef = useRef<HTMLDivElement>(null);
   /* The banner is the first thing on the page, so its skeleton is the one you
-     cannot miss. Seeded from the last load, refreshed underneath — see
-     `lib/pageCache.ts`. */
-  const snapshot = useState(() => readSnapshot<PonyImage>(FEATURED_KEY))[0];
-  const [featured, setFeatured] = useState<PonyImage | null>(snapshot?.value ?? null);
-  const [loading, setLoading] = useState(!snapshot);
-  const [error, setError] = useState(false);
-  /* Whether a render has already been served. Once it has, the banner only
-     re-requests when the parent bumps `reloadKey` — which the home feed's
-     retry does, so clicking 重试 reloads the 近日推荐 banner alongside the
-     信息流. Served is flagged on delivery (not dispatch), the same reason as
-     `app/page.tsx`. */
-  const served = useRef(snapshot && !snapshot.stale ? 'snap' : '');
+     cannot miss — it gets the cached picture in the first frame and is
+     refreshed underneath (`lib/resource.ts` owns the served/stale apparatus). */
+  const apiKey = (readUserInfo()?.api_key as string) || undefined;
+  const read = useResource(featuredImage, { apiKey });
+  const featured = read.data ?? null;
+  const loading = read.data === undefined && read.error === undefined;
+  /* A refresh that fails leaves the picture on screen rather than replacing
+     something correct with an error — the resource keeps the last good value
+     beside the error. */
+  const error = Boolean(read.error) && read.data === undefined;
+
+  /* The home feed's 重试 reloads the banner alongside the 信息流. It skips the TTL, because the
+     point of pressing 重试 is that you do not believe what is on screen. */
   const lastReload = useRef(reloadKey);
-  /* True the moment there is something to put on screen, so a reload of an
-     already-loaded banner refreshes underneath without flashing its skeleton,
-     while a reload of an errored (blank) banner shows the placeholder again. */
-  const hasContent = useRef<boolean>(Boolean(snapshot?.value));
-
   useEffect(() => {
-    /* An explicit reload is the difference from the other served paths: the
-       guard below normally drinks the snapshot result to keep a remount from
-       re-requesting, but a retry must break through it. */
-    const reloadRequested = lastReload.current !== reloadKey;
+    if (lastReload.current === reloadKey) return;
     lastReload.current = reloadKey;
-    if (served.current && !reloadRequested) return;
-    let isMounted = true;
-    if (reloadRequested && !hasContent.current) {
-      setLoading(true);
-      setError(false);
-    }
-    // Flagged on delivery, not on dispatch — see `app/page.tsx` for why.
-    const getApiKey = (): string | undefined => {
-      try {
-        const userInfoStr = localStorage.getItem('user_info');
-        if (userInfoStr) {
-          const userInfo = JSON.parse(userInfoStr);
-          return userInfo.api_key || undefined;
-        }
-      } catch {}
-      return undefined;
-    };
-
-    api
-      .getFeatured(getApiKey())
-      .then((data) => {
-        if (isMounted) {
-          served.current = 'snap';
-          if (data && data.image) {
-            hasContent.current = true;
-            let img = data.image;
-            // 应用 CDN
-            if (localStorage.getItem('trixie_use_cdn') === 'true') {
-              img = {
-                ...img,
-                representations: Object.fromEntries(
-                  Object.entries(img.representations).map(([k, v]) => [k, applyCdn(v)]),
-                ) as unknown as PonyImage['representations'],
-                view_url: applyCdn(img.view_url),
-              };
-            }
-            setFeatured(img);
-            writeSnapshot<PonyImage>(FEATURED_KEY, img);
-          }
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          served.current = 'snap';
-          // A refresh that fails leaves the snapshot on screen rather than
-          // replacing something correct with an error.
-          if (!hasContent.current) setError(true);
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [reloadKey, snapshot]);
+    read.refresh();
+  }, [reloadKey, read]);
 
   const fullUrl = featured?.representations?.full || featured?.view_url || '';
   const imgFormat = (
@@ -160,10 +99,18 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
   const isWideAspect = aspectRatio > 1.5;
   const paddingBottom = isWideAspect ? 'min(45vh, 420px)' : 'min(55vh, 500px)';
   return (
+    /* 16dp, the gallery tile's step, on all six of this component's layers —
+       they were the 12dp card step, one smaller than the tiles under it. It is
+       a grid entry, not the shape table's 28dp "large media" row (that row
+       means the detail surface). It also matters to the flight: the flyer reads
+       the source's computed radius and morphs it to the target 16, so at 16 the
+       corner morph is a no-op and the handoff is continuous. All six layers are
+       coincident, so they must move together — including the skeleton's two,
+       or the placeholder stops matching what it replaces. */
     <Link
       {...heroLinkProps}
       data-tab-row
-      className="image-hero-card-link mb-6 sm:mb-8 rounded-md relative group block"
+      className="image-hero-card-link mb-6 sm:mb-8 rounded-lg relative group block"
     >
       {/* Media only — hero hides this while the flyer flies. */}
       <div
@@ -171,7 +118,7 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
         data-image-hero-role="thumbnail"
         data-image-hero-id={featured.id}
         data-image-hero-source-key={heroSourceKey}
-        className="relative w-full overflow-hidden rounded-md"
+        className="relative w-full overflow-hidden rounded-lg"
         style={{ paddingBottom }}
       >
         <div className="absolute inset-0">
@@ -188,8 +135,14 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
           ) : (
             <FadeInImage
               src={displayImageUrl}
-              alt={featured.name || `Featured Image ${featured.id}`}
+              alt={featured.name || `近日推荐 #${featured.id}`}
               eager
+              /* This is the LCP element on the front page, and `eager` alone
+                 does not say so: `preload` emits a `<link rel="preload">` in
+                 the document head, so the fetch starts while the HTML is still
+                 being parsed. `preload`, not `priority` (Next 16 deprecated the
+                 latter; they do the same thing). */
+              preload
               width={featured.width || 0}
               height={featured.height || 0}
               quality={88}
@@ -203,34 +156,30 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
       {/* Labels stay in the original card slot and simply fade via CSS. */}
       <div
         data-image-hero-chrome
-        className="pointer-events-none absolute inset-0 z-20 rounded-md"
+        className="pointer-events-none absolute inset-0 z-20 rounded-lg"
         aria-hidden="true"
       >
         <div
-          className="absolute inset-0 rounded-md"
+          className="absolute inset-0 rounded-lg"
           style={{
             backgroundImage: [
               `linear-gradient(to right, ${scrim(0.3)}, transparent)`,
               `linear-gradient(to top, ${scrim(0.6)}, ${scrim(0.2)}, transparent)`,
             ].join(', '),
           }}
-        />{' '}
+        />
         <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8">
-          {/* `Badge`, not a hand-rolled pill. It was `rounded-full px-3 py-1.5`
-              with its own container/ink pair written out — the exact silhouette
-              the primitive exists to stop from drifting, and the reason this
-              banner's mark was a capsule while every other mark in the app is a
-              rounded rectangle.
-              The fill stays `primary`/`on-primary` rather than a media role:
-              those two are documented as not inverting between schemes, so the
-              banner's own mark reads as one constant material over any
-              photograph — which is what a media role would otherwise buy. */}
+          {/* `Badge`, not a hand-rolled pill: one shape, one owner for the
+              colour pair. The fill stays `primary`/`on-primary` rather than a
+              media role — those two are documented as not inverting between
+              schemes, so the banner's own mark reads as one constant material
+              over any photograph. */}
           <Badge
             size="md"
             colors="bg-primary text-on-primary"
             className="mb-2 sm:mb-3"
             icon={
-              <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <svg fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
             }
@@ -254,8 +203,8 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
             <div className="mb-2 flex max-w-2xl flex-wrap gap-1.5 sm:mb-3">
               {featured.tags.slice(0, 6).map((tag) => (
                 /* `tone="media"` — the plate/ink pair, which is what this wrote
-                   out by hand. `max-w-36` caps a long tag as the old `[140px]`
-                   did, on the spacing scale rather than as an arbitrary value. */
+                   out by hand. `max-w-36` caps a long tag on the spacing scale
+                   rather than as an arbitrary value. */
                 <Badge key={tag} tone="media" className="max-w-36">
                   {tag}
                 </Badge>
@@ -269,16 +218,16 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
           )}
           <div className="text-body-s text-on-media-variant sm:text-body-m flex items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-1">
-              <MdThumbUp size={14} />
+              <MdThumbUp size={ICON.dense} />
               <span>{featured.score?.toLocaleString() || 0}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MdComment size={14} />
+              <MdComment size={ICON.dense} />
               <span>{featured.comment_count?.toLocaleString() || 0}</span>
             </div>
             {featured.uploader && (
               <div className="flex items-center gap-1">
-                <MdPerson size={14} />
+                <MdPerson size={ICON.dense} />
                 <span>{featured.uploader}</span>
               </div>
             )}

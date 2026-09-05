@@ -1,9 +1,6 @@
 import { PICPONY_API_BASE } from '@/lib/constants';
+import type { SiteStatusResponse } from '@/lib/types/site';
 import { readJson } from './client';
-
-// ---------------------------------------------------------------------------
-// 用户管理
-// ---------------------------------------------------------------------------
 
 export async function adminGetUsers(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_users&_t=${Date.now()}`, {
@@ -28,10 +25,6 @@ export async function adminDeleteUser(token: string, targetId: number) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 财富管理
-// ---------------------------------------------------------------------------
-
 export async function adminGetWealth(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_users&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -46,10 +39,6 @@ export async function adminUpdateWealth(token: string, data: Record<string, unkn
     body: JSON.stringify(data),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 商店管理
-// ---------------------------------------------------------------------------
 
 export async function adminGetShopItems(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_shop_items&_t=${Date.now()}`, {
@@ -74,10 +63,6 @@ export async function adminDeleteShopItem(token: string, id: number) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 举报管理
-// ---------------------------------------------------------------------------
-
 export async function adminGetReports(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_reports&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -92,10 +77,6 @@ export async function adminHandleReport(token: string, reportId: number, status:
     body: JSON.stringify({ report_id: reportId, status }),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 黑名单管理
-// ---------------------------------------------------------------------------
 
 export async function adminGetBlacklist(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_blacklist&_t=${Date.now()}`, {
@@ -120,10 +101,6 @@ export async function adminRemoveBlacklist(token: string, imageId: number) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 公告管理
-// ---------------------------------------------------------------------------
-
 export async function saveAnnouncement(
   token: string,
   data: { version: string; title: string; content: string },
@@ -143,20 +120,12 @@ export async function adminDeleteAnnouncement(token: string, id: number) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 消息审计
-// ---------------------------------------------------------------------------
-
 export async function adminGetAllMessages(token: string, userId?: number) {
   let url = `${PICPONY_API_BASE}?action=admin_get_all_messages&_t=${Date.now()}`;
   if (userId) url += `&user_id=${userId}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   return readJson(res);
 }
-
-// ---------------------------------------------------------------------------
-// 通知管理
-// ---------------------------------------------------------------------------
 
 export async function adminSendNotification(
   token: string,
@@ -186,10 +155,6 @@ export async function adminDeleteNotification(token: string, id: number) {
     body: JSON.stringify({ id }),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 徽章管理
-// ---------------------------------------------------------------------------
 
 export async function adminGrantBadge(token: string, data: Record<string, unknown>) {
   return fetch(`${PICPONY_API_BASE}?action=admin_grant_badge`, {
@@ -241,11 +206,15 @@ export async function adminEditBadge(
   });
 }
 
-// ---------------------------------------------------------------------------
-// 运维管理
-// ---------------------------------------------------------------------------
-
-export async function getMaintenanceStatus() {
+/**
+ * The site status document for the console's editors; also carries the global route policy.
+ *
+ * `lib/route.ts` reads the same document with its own `fetch` on purpose: that module sits on
+ * every page's request path, while this one may not be imported outside `/admin` (`api` is a
+ * runtime spread, so an import here would pull all 48 admin calls into a gallery bundle).
+ * `SiteStatusResponse` is the shared shape, so the two cannot drift on it.
+ */
+export async function getMaintenanceStatus(): Promise<SiteStatusResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`);
   return readJson(res);
 }
@@ -285,10 +254,6 @@ export async function adminSyncSiteStats(
   });
 }
 
-// ---------------------------------------------------------------------------
-// 吉祥物管理
-// ---------------------------------------------------------------------------
-
 export async function adminGetMascotConfig(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_mascot_config&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -324,10 +289,6 @@ export async function adminDeleteMascotImage(token: string) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 屏蔽标签管理
-// ---------------------------------------------------------------------------
-
 export async function getBlockTags(token: string) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_block_tags&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -353,10 +314,6 @@ export async function adminRemoveBlockTag(token: string, id: number) {
     body: JSON.stringify({ id }),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 开发者管理
-// ---------------------------------------------------------------------------
 
 export async function adminGetDeveloperPassword(token: string) {
   const res = await fetch(
@@ -398,15 +355,6 @@ export async function adminEnableDeveloper(token: string, targetId: number) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 团队管理
-// ---------------------------------------------------------------------------
-
-export async function getTeamMembers() {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_team_members&_t=${Date.now()}`);
-  return readJson(res);
-}
-
 export async function addTeamMember(token: string, data: Record<string, unknown>) {
   return fetch(`${PICPONY_API_BASE}?action=add_team_member`, {
     method: 'POST',
@@ -430,10 +378,6 @@ export async function deleteTeamMember(token: string, id: number) {
     body: JSON.stringify({ id }),
   });
 }
-
-// ---------------------------------------------------------------------------
-// 标签反馈管理
-// ---------------------------------------------------------------------------
 
 export async function getTagFeedback(
   token: string,

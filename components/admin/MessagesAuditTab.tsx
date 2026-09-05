@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Badge from '@/components/Badge';
 import { MdMessage, MdSearch, MdRefresh } from 'react-icons/md';
@@ -10,6 +9,10 @@ import { SectionHeader } from './';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
+import { ICON } from '@/lib/icons';
+/* Namespace import, deliberately: `api` is a runtime spread and
+   un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
+import * as adminApi from '@/lib/api/admin';
 
 interface AuditMessage {
   id: number;
@@ -22,9 +25,9 @@ interface AuditMessage {
   created_at: string;
 }
 
-/* The message body leads the phone card — it is the only column an auditor is
-   actually reading; the ids and timestamps around it are context. On desktop it
-   stays an ordinary cell, clamped so one long message can't blow out the grid. */
+/* The message body leads the card — the only column an auditor is actually
+   reading; ids and timestamps around it are context. Clamped so one long
+   message cannot blow out the grid. */
 const AUDIT_COLUMNS: Column<AuditMessage>[] = [
   {
     key: 'content',
@@ -33,7 +36,7 @@ const AUDIT_COLUMNS: Column<AuditMessage>[] = [
     className: 'max-w-xs truncate',
     render: (m) => m.content,
   },
-  { key: 'id', header: '消息ID', render: (m) => m.id },
+  { key: 'id', header: '消息 ID', render: (m) => m.id },
   { key: 'sender', header: '发送方', render: (m) => m.sender_name },
   { key: 'receiver', header: '接收方', render: (m) => m.receiver_name },
   {
@@ -58,7 +61,7 @@ export default function MessagesAuditTab({ token }: { token: string }) {
   const loadMessages = async (userId?: number) => {
     setLoading(true);
     try {
-      const res = await api.adminGetAllMessages(token, userId);
+      const res = await adminApi.adminGetAllMessages(token, userId);
       const data = await res.json();
       if (data.success) {
         setMessages(data.messages || []);
@@ -75,38 +78,38 @@ export default function MessagesAuditTab({ token }: { token: string }) {
     <div className="space-y-6">
       {' '}
       <SectionHeader
-        icon={<MdMessage className="text-primary" size={24} />}
+        icon={<MdMessage size={ICON.standard} />}
         title="私信安全审计查阅"
         onRefresh={() => loadMessages()}
-      />{' '}
+      />
       <Card variant="transparent">
         {' '}
         <div className="text-body-s bg-error-container text-on-error-container mb-4 rounded-md p-3">
           {' '}
           警告：作为管理员，您有权审计全站私信以排查违规交易、辱骂或诈骗行为。请严格遵守用户隐私准则，切勿滥用此功能。{' '}
-        </div>{' '}
+        </div>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          {' '}
+          
           <Input
             type="number"
             min={1}
             value={searchUserId}
             onChange={(e) => setSearchUserId(e.target.value)}
-            placeholder="输入用户 ID 查询 TA 的私信..."
+            placeholder="输入用户 ID 查询 TA 的私信…"
             fieldClassName="flex-1"
-          />{' '}
+          />
           <div className="flex items-center gap-3">
-            {' '}
+            
             <Button
               onClick={() => loadMessages(searchUserId ? parseInt(searchUserId) : undefined)}
               variant="filled"
               className="flex-1 sm:flex-none"
-              icon={<MdSearch size={16} />}
+              icon={<MdSearch size={ICON.dense} />}
             >
               检索
             </Button>
             <Button
-              icon={<MdRefresh size={16} />}
+              icon={<MdRefresh size={ICON.dense} />}
               variant="tonal"
               className="flex-1 sm:flex-none"
               onClick={() => {

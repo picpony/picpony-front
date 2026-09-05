@@ -36,6 +36,8 @@ type HeroFrameCapture = {
   sourceHeight: number;
   width: number;
   height: number;
+  /** `<= 1`. 1 means a 1:1 blit, which needs no resampling filter at all. */
+  scale: number;
 };
 
 const heroFrameCache = new Map<string, FrameAsset>();
@@ -64,6 +66,7 @@ function getHeroFrameCapture(media: VisualMedia): HeroFrameCapture | null {
     sourceHeight,
     width: Math.max(1, Math.round(sourceWidth * scale)),
     height: Math.max(1, Math.round(sourceHeight * scale)),
+    scale,
   };
 }
 
@@ -174,8 +177,13 @@ export function captureHeroFrame(media: VisualMedia | null): FrameAsset | null {
   frame.height = capture.height;
   const context = frame.getContext('2d');
   if (!context) return null;
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
+  /* Quality follows the scale rather than being `high` unconditionally: this `drawImage`
+     is the biggest single item in the press handler. At `scale === 1` it is a 1:1 blit —
+     a resampling filter has nothing to resample and `high`'s multi-pass filter is pure
+     cost — and `medium` covers the genuine downscales: a bitmap that exists for one leg
+     behind a growing mask, not the picture the user is going to look at. */
+  context.imageSmoothingEnabled = capture.scale < 1;
+  context.imageSmoothingQuality = 'medium';
   try {
     context.drawImage(media, 0, 0, frame.width, frame.height);
   } catch {
@@ -190,7 +198,23 @@ export function captureHeroFrame(media: VisualMedia | null): FrameAsset | null {
   return asset;
 }
 
-export function warmImageHeroFrame(source: HTMLElement | null) {
+/**
+ * Captures a source's pixels into the cache before they are needed.
+ *
+ * `immediate` is for the press path, and it changes *when* rather than *what*. The idle
+ * path refuses to run while input is active and schedules through `requestIdleCallback`,
+ * neither of which can fire during a tap (no hover on touch, no idle callback during a
+ * gesture) — so the one capture that mattered always landed synchronously in the click
+ * handler, which is exactly the intermittent press-time spike. With `immediate` the
+ * capture is posted as a macrotask from `pointerdown`, and pointerdown-to-click is ≥100ms
+ * on touch, so the click finds it in the LRU and costs nothing. A press that turns into a
+ * scroll therefore pays one `drawImage` it did not need — bounded by the viewport check
+ * and the LRU, and one capture against the alternative of paying it at the worst moment.
+ */
+export function warmImageHeroFrame(
+  source: HTMLElement | null,
+  { immediate = false }: { immediate?: boolean } = {},
+) {
   if (!source || typeof window === 'undefined') return () => {};
   initializeHeroInput();
   const initialMedia = getVisualMedia(source);
@@ -210,14 +234,17 @@ export function warmImageHeroFrame(source: HTMLElement | null) {
   let cancelled = false;
   let finished = false;
   let idleId = 0;
+  let timerId = 0;
   let firstFrame = 0;
   let secondFrame = 0;
 
   const clearScheduled = () => {
     if (idleId) window.cancelIdleCallback(idleId);
+    if (timerId) window.clearTimeout(timerId);
     if (firstFrame) cancelAnimationFrame(firstFrame);
     if (secondFrame) cancelAnimationFrame(secondFrame);
     idleId = 0;
+    timerId = 0;
     firstFrame = 0;
     secondFrame = 0;
   };
@@ -233,12 +260,13 @@ export function warmImageHeroFrame(source: HTMLElement | null) {
 
   const captureFrame = () => {
     idleId = 0;
+    timerId = 0;
     if (cancelled || finished) return;
     if (!source.isConnected) {
       finish();
       return;
     }
-    if (!isHeroInteractionQuiet()) return;
+    if (!immediate && !isHeroInteractionQuiet()) return;
     const media = getVisualMedia(source);
     if (!media) return;
     if (isVolatileVisualMedia(media)) {
@@ -254,7 +282,14 @@ export function warmImageHeroFrame(source: HTMLElement | null) {
 
   const schedule = () => {
     clearScheduled();
-    if (cancelled || finished || !isHeroInteractionQuiet()) return;
+    if (cancelled || finished) return;
+    if (immediate) {
+      // A macrotask, not an idle callback: an idle callback does not run while a
+      // gesture is live, which is the whole reason this option exists.
+      timerId = window.setTimeout(captureFrame, 0);
+      return;
+    }
+    if (!isHeroInteractionQuiet()) return;
     if ('requestIdleCallback' in window) {
       idleId = window.requestIdleCallback(captureFrame, { timeout: 400 });
     } else {

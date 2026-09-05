@@ -14,6 +14,12 @@ import {
   MdHome,
   MdVerifiedUser,
   MdLinkOff,
+  MdPalette,
+  MdBrightness6,
+  MdAnimation,
+  MdRefresh,
+  MdRoute,
+  MdSpeed as MdSpeedIcon,
 } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
 import Badge from '@/components/Badge';
@@ -25,21 +31,65 @@ import Select from '@/components/Select';
 import Button from '@/components/Button';
 import ImageCropper from '@/components/ImageCropper';
 import { api } from '@/lib/api';
-import { readJson } from '@/lib/api/client';
+import { proxyFetch, readJson } from '@/lib/api/client';
 import { useAuthModal } from '@/components/AuthModal';
 import { Input, Textarea } from '@/components/Input';
 import PageHeader from '@/components/PageHeader';
 import SectionHeading from '@/components/SectionHeading';
+import PaletteSwatches from '@/components/PaletteSwatches';
+import Tabs from '@/components/Tabs';
+import TabPanes, { TabPane } from '@/components/TabPanes';
+import { ICON } from '@/lib/icons';
+import { readUserInfo } from '@/lib/hooks';
+import { DERPIBOORU_API_BASE, LS_KEYS } from '@/lib/constants';
+import { changeScheme } from '@/lib/motionLazy';
+import {
+  commitEntranceMotion,
+  commitMotion,
+  useEntranceMotion,
+  useMotionSetting,
+  useMotionSpeed,
+  useMotionTier,
+  useSchemeSetting,
+  type MotionSetting,
+  type MotionSpeed,
+  type SchemeSetting,
+} from '@/lib/appearance';
+import {
+  apiPolicy,
+  currentLineLabels,
+  imagePolicy,
+  raceImageLines,
+  refreshRoutePolicy,
+  subscribeRouteState,
+  syncLinePrefs,
+  type ApiPolicy,
+  type ImagePolicy,
+} from '@/lib/route';
+import { getAssetUrl, processImageFile } from '@/lib/utils';
 
-/* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run
-   of rows as one cut block rather than as separate floating cards. */
-const rowClass =
-  'm3-row flex flex-wrap items-center justify-between gap-x-2 gap-y-3 p-4 sm:flex-nowrap sm:gap-x-4 bg-surface-container-low transition-ui state-layer';
+/* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run of rows
+   as one cut block rather than separate floating cards.
+   Two variants rather than one string plus an override, because `align-items` can only be
+   spelled once: appending `items-start` to a base carrying `items-center` renders
+   left-aligned only for as long as Tailwind happens to emit `.items-center` first. */
+const rowBase =
+  'm3-row flex flex-wrap justify-between gap-x-2 gap-y-3 p-4 sm:gap-x-4 bg-surface-container-low transition-ui state-layer';
+const rowClass = `${rowBase} items-center sm:flex-nowrap`;
+/** A row whose control needs the full width under its label — the palette picker's ten chips. */
+const rowStackedClass = `${rowBase} flex-col items-start`;
 /* The label column of a row. `min-w-0` is what lets a long value truncate
    instead of pushing the action out of the card. */
 const rowLabelClass = 'min-w-0 flex-1';
-const labelClass = 'text-body-m text-on-surface-variant mb-1';
+/* A row's primary label, matching `ToggleSwitch layout="row"`'s own — `label-l` on
+   `on-surface`, 2px to the supporting line (`body-s` on `on-surface-variant`). It read
+   as the supporting role in the primary slot, so a row holding a `Select` and a row
+   holding a switch announced two different hierarchies inside one card. */
+const labelClass = 'text-label-l text-on-surface mb-0.5';
 const valueClass = 'text-body-m-emphasized text-on-surface';
+
+/** The two halves of this screen: what the device remembers, and what the account does. */
+type SettingsTab = 'personalise' | 'general';
 
 /** 计算年龄 */
 function calcAge(birthday: string): number {
@@ -68,6 +118,146 @@ function lsSet(key: string, val: string | boolean) {
   localStorage.setItem(key, String(val));
 }
 
+/**
+ * 外观 — the five device-local appearance preferences, the whole of the 个性化 tab.
+ *
+ * It renders **outside** the cloud-config gate the rest of this page sits behind, which
+ * is what makes it a tab of its own: the gate exists so a default cannot be written back
+ * over a value the server has not returned yet, and none of these five has a server
+ * value — behind it they would be dimmed and inert for a fetch they are not waiting on.
+ *
+ * `lsGet`/`lsSet` are not used here: these are owned by `lib/appearance`, which keeps the
+ * stored keys, the cookie, the `<html>` attribute and the subscription in one place.
+ *
+ * **No supporting lines.** The four these rows carried were implementation notes — the
+ * sort of thing this repo writes down at length, in `AGENTS.md`. A settings row needs a
+ * name.
+ *
+ * 主题模式 is new rather than moved: the app bar's three-state cycle button is not a
+ * discoverable control and does not say what the third state is.
+ */
+function AppearanceSection() {
+  const schemeSetting = useSchemeSetting();
+  const motionSetting = useMotionSetting();
+  const motionSpeed = useMotionSpeed();
+  const motionTier = useMotionTier();
+  const entrances = useEntranceMotion();
+
+  /* Speed applies to every tier that has a length: the tier decides the form, the speed
+     decides the clock. Disabled rather than hidden when 动画效果 is off — a control that
+     vanishes is a control the user has to rediscover. */
+  const speedAvailable = motionTier !== 'off';
+
+  return (
+    <section className="mb-8">
+      <SectionHeading icon={<MdPalette size={ICON.control} />} subtitle="仅保存在本设备，不随账号同步">
+        外观
+      </SectionHeading>
+
+      <div className={rowStackedClass}>
+        <div className={rowLabelClass}>
+          <p className={labelClass}>主题配色</p>
+        </div>
+        <PaletteSwatches className="w-full" />
+      </div>
+
+      <div className={rowClass}>
+        <div className="flex items-center gap-2">
+          <MdBrightness6 size={ICON.control} className="text-outline" />
+          <div className={rowLabelClass}>
+            <p className={labelClass}>主题模式</p>
+          </div>
+        </div>
+        <Select
+          size="sm"
+          value={schemeSetting}
+          onChange={(v) => changeScheme(v as SchemeSetting)}
+          aria-label="主题模式"
+          className="w-full sm:w-auto"
+          options={[
+            { value: 'system', label: '跟随系统' },
+            { value: 'light', label: '浅色' },
+            { value: 'dark', label: '深色' },
+          ]}
+        />
+      </div>
+
+      <div className={rowClass}>
+        <div className="flex items-center gap-2">
+          <MdAnimation size={ICON.control} className="text-outline" />
+          <div className={rowLabelClass}>
+            <p className={labelClass}>动画效果</p>
+          </div>
+        </div>
+        {/* Three options, not four. 跟随系统 is gone: the OS preference still decides
+            what an unset value resolves to, but the *control* shows the tier in force —
+            a visitor whose system asks for less motion sees 减弱动画 selected, not a
+            label that only says where the answer came from. Nothing to migrate:
+            `system` remains the stored value until then. */}
+        <Select
+          size="sm"
+          value={motionTier}
+          onChange={(v) => commitMotion(v as MotionSetting, motionSpeed)}
+          aria-label="动画效果"
+          className="w-full sm:w-auto"
+          options={[
+            { value: 'off', label: '关闭动画' },
+            { value: 'reduced', label: '减弱动画' },
+            { value: 'standard', label: '标准动画' },
+          ]}
+        />
+      </div>
+
+      <div className={rowClass}>
+        <div className="flex items-center gap-2">
+          <MdSpeedIcon size={ICON.control} className="text-outline" />
+          <div className={rowLabelClass}>
+            <p className={labelClass}>动画速度</p>
+          </div>
+        </div>
+        <Select
+          size="sm"
+          value={motionSpeed}
+          disabled={!speedAvailable}
+          onChange={(v) => commitMotion(motionSetting, v as MotionSpeed)}
+          aria-label="动画速度"
+          className="w-full sm:w-auto"
+          options={[
+            { value: 'fast', label: '快速' },
+            { value: 'default', label: '默认' },
+            { value: 'slow', label: '缓慢' },
+          ]}
+        />
+      </div>
+
+      {/* `layout="row"` so the label leads and the switch sits at the trailing edge,
+          the reading order every other value row on this page has. */}
+      <div className={rowClass}>
+        <ToggleSwitch
+          layout="row"
+          checked={entrances}
+          onChange={commitEntranceMotion}
+          disabled={motionTier === 'off'}
+          label="入场动画"
+        />
+      </div>
+    </section>
+  );
+}
+
+/* What the server renders for the 当前线路 row. `resolveApiLine` answers `direct` on the server
+   and no policy is ever loaded there, so these are the SSR truth rather than a placeholder;
+   `ready` is what keeps the row from claiming a line before the client has read one. */
+const INITIAL_LINES = {
+  ready: false,
+  apiLabel: '直连',
+  imageLabel: '直连',
+  apiForced: false,
+  imageForced: false,
+  forcedApi: 'auto' as ApiPolicy,
+  forcedImage: 'auto' as ImagePolicy,
+};
+
 type CloudSettings = {
   contentFilter?: string;
   showTagCounts?: boolean;
@@ -78,6 +268,7 @@ type CloudSettings = {
   useCdn?: boolean;
   usePicponyProxy?: boolean;
   useApiAccel?: boolean;
+  useHongKongRelay?: boolean;
   showUploads?: boolean;
   showFaves?: boolean;
   showPosts?: boolean;
@@ -148,6 +339,32 @@ export default function SettingsPage() {
   const [useCdn, setUseCdn] = useState(false);
   const [usePicponyProxy, setUsePicponyProxy] = useState(true);
   const [useApiAccel, setUseApiAccel] = useState(true);
+  const [useHongKongRelay, setUseHongKongRelay] = useState(true);
+  const [refreshingLines, setRefreshingLines] = useState(false);
+
+  /* The line in force, which is not only this user's business: an administrator can pin
+     the whole site to one, in which case the four toggles below report that value and
+     stop being editable. Subscribed rather than read once, because a failover can move
+     it while this page is open. `useState` + an effect rather than `useSyncExternalStore`
+     — a store's client snapshot is read during hydration, so it would report the device's
+     real line against server HTML built from the SSR fallback, which differ by default. */
+  const [lines, setLines] = useState(INITIAL_LINES);
+  useEffect(() => {
+    const read = () => {
+      const l = currentLineLabels();
+      setLines({
+        ready: true,
+        apiLabel: l.api,
+        imageLabel: l.raceWon ? `${l.image}（竞速优选）` : l.image,
+        apiForced: l.apiForced,
+        imageForced: l.imageForced,
+        forcedApi: apiPolicy(),
+        forcedImage: imagePolicy(),
+      });
+    };
+    read();
+    return subscribeRouteState(read);
+  }, []);
 
   const [showUploads, setShowUploads] = useState(true);
   const [showFaves, setShowFaves] = useState(true);
@@ -163,16 +380,17 @@ export default function SettingsPage() {
   // 云端配置获取完成前禁用整页交互（防止默认值误写 localStorage/云端）
   const [settingsReady, setSettingsReady] = useState(false);
 
+  /** 设置 / 个性化. Local state — see the note above `<Tabs>`. */
+  const [tab, setTab] = useState<SettingsTab>('general');
+
   const [userToken, setUserToken] = useState('');
   const [isDeveloper, setIsDeveloper] = useState(false);
 
   const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [bannerLoaded, setBannerLoaded] = useState(false);
 
-  /* `Modal` keeps the panel mounted through its own exit animation, so these
-     just flip the flag — the previous 200ms setTimeout dance existed only to
-     hold the hand-rolled overlay on screen long enough to animate out. The
-     in-flight guards stay: a half-submitted form should not be dismissable. */
+  /* `Modal` keeps the panel mounted through its own exit animation, so these just flip
+     the flag. The in-flight guards stay: a half-submitted form should not be dismissable. */
   const closeModal = () => {
     if (isLoading) return;
     setIsModalOpen(false);
@@ -214,6 +432,7 @@ export default function SettingsPage() {
         useCdn,
         usePicponyProxy,
         useApiAccel,
+        useHongKongRelay,
         showUploads,
         showFaves,
         showPosts,
@@ -243,6 +462,7 @@ export default function SettingsPage() {
       useCdn,
       usePicponyProxy,
       useApiAccel,
+      useHongKongRelay,
       showUploads,
       showFaves,
       showPosts,
@@ -283,41 +503,45 @@ export default function SettingsPage() {
       }
     };
 
-    apply('contentFilter', 'trixie_content_filter', setContentFilter);
-    apply('showTagCounts', 'trixie_show_tag_counts', setShowTagCounts);
-    apply('banAnthro', 'trixie_ban_anthro', setBanAnthro);
-    apply('banDiscomfort', 'trixie_ban_discomfort', setBanDiscomfort);
-    apply('onlyPony', 'trixie_only_pony', setOnlyPony);
-    apply('showChineseTags', 'picpony_show_chinese_tags', setShowChineseTags);
-    apply('useCdn', 'trixie_use_cdn', setUseCdn);
-    apply('usePicponyProxy', 'picpony_use_proxy', setUsePicponyProxy);
-    apply('useApiAccel', 'picpony_api_accel', setUseApiAccel);
-    apply('showUploads', 'picpony_show_uploads', setShowUploads);
-    apply('showFaves', 'picpony_show_faves', setShowFaves);
-    apply('showPosts', 'picpony_show_posts', setShowPosts);
-    apply('showComments', 'picpony_show_comments', setShowComments);
-    apply('emailNotifMessage', 'picpony_email_notif_message', setEmailNotifMessage);
-    apply('emailNotifReply', 'picpony_email_notif_reply', setEmailNotifReply);
-    apply('defaultHomeSort', 'picpony_default_home_sort', setDefaultHomeSort);
-    apply('defaultSearchSort', 'picpony_default_search_sort', setDefaultSearchSort);
+    apply('contentFilter', LS_KEYS.contentFilter, setContentFilter);
+    apply('showTagCounts', LS_KEYS.showTagCounts, setShowTagCounts);
+    apply('banAnthro', LS_KEYS.banAnthro, setBanAnthro);
+    apply('banDiscomfort', LS_KEYS.banDiscomfort, setBanDiscomfort);
+    apply('onlyPony', LS_KEYS.onlyPony, setOnlyPony);
+    apply('showChineseTags', LS_KEYS.showChineseTags, setShowChineseTags);
+    apply('useCdn', LS_KEYS.useCdn, setUseCdn);
+    apply('usePicponyProxy', LS_KEYS.usePicponyProxy, setUsePicponyProxy);
+    apply('useApiAccel', LS_KEYS.useApiAccel, setUseApiAccel);
+    apply('useHongKongRelay', LS_KEYS.useHongKongRelay, setUseHongKongRelay);
+    /* The account's stored lines have just landed in localStorage, so the request layer
+       has to be told to re-read them — otherwise this session keeps resolving against
+       whatever the device had before signing in. */
+    syncLinePrefs();
+    apply('showUploads', LS_KEYS.showUploads, setShowUploads);
+    apply('showFaves', LS_KEYS.showFaves, setShowFaves);
+    apply('showPosts', LS_KEYS.showPosts, setShowPosts);
+    apply('showComments', LS_KEYS.showComments, setShowComments);
+    apply('emailNotifMessage', LS_KEYS.emailNotifMessage, setEmailNotifMessage);
+    apply('emailNotifReply', LS_KEYS.emailNotifReply, setEmailNotifReply);
+    apply('defaultHomeSort', LS_KEYS.homeSort, setDefaultHomeSort);
+    apply('defaultSearchSort', LS_KEYS.searchSort, setDefaultSearchSort);
   }, []);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user_info');
-    if (!storedUser) {
+    const user = readUserInfo();
+    if (!user) {
       openAuth('login');
       // 无云端配置可等，直接恢复交互
       queueMicrotask(() => setSettingsReady(true));
       return;
     }
     try {
-      const user = JSON.parse(storedUser);
       queueMicrotask(() => {
-        setCurrentUsername(user.username);
-        setCurrentAvatar(user.avatar || '');
+        setCurrentUsername(String(user.username ?? ''));
+        setCurrentAvatar(String(user.avatar ?? ''));
         setUserToken(user.token || '');
 
-        const dev = localStorage.getItem('picpony_developer') === 'true';
+        const dev = localStorage.getItem(LS_KEYS.developer) === 'true';
         setIsDeveloper(dev);
       });
 
@@ -332,16 +556,16 @@ export default function SettingsPage() {
             setCurrentApiKey(u.api_key || '');
             setDerpiUserId(u.derpi_user_id || '');
             setDerpiUsername(u.derpi_username || '');
-            if (u.api_key) localStorage.setItem('derpi_api_key', u.api_key);
-            else localStorage.removeItem('derpi_api_key');
+            if (u.api_key) localStorage.setItem(LS_KEYS.derpiApiKey, u.api_key);
+            else localStorage.removeItem(LS_KEYS.derpiApiKey);
 
             if (u.avatar) {
               const fullUrl = u.avatar.startsWith('http')
                 ? u.avatar
-                : `https://picpony.top/${u.avatar}`;
+                : getAssetUrl(u.avatar);
               setCurrentAvatar(fullUrl);
               const updatedUser = { ...user, avatar: fullUrl };
-              localStorage.setItem('user_info', JSON.stringify(updatedUser));
+              localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
             }
 
             setCurrentEmail(u.email || '');
@@ -373,22 +597,23 @@ export default function SettingsPage() {
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
-      setShowTagCounts(lsBool('trixie_show_tag_counts', false));
-      setBanAnthro(lsBool('trixie_ban_anthro', false));
-      setBanDiscomfort(lsBool('trixie_ban_discomfort', true));
-      setOnlyPony(lsBool('trixie_only_pony', false));
-      setShowChineseTags(lsBool('picpony_show_chinese_tags', true));
-      setUseCdn(lsBool('trixie_use_cdn', false));
-      setUsePicponyProxy(lsBool('picpony_use_proxy', true));
-      setUseApiAccel(lsBool('picpony_api_accel', true));
-      setShowUploads(lsBool('picpony_show_uploads', true));
-      setShowFaves(lsBool('picpony_show_faves', true));
-      setShowPosts(lsBool('picpony_show_posts', true));
-      setShowComments(lsBool('picpony_show_comments', true));
-      setEmailNotifMessage(lsBool('picpony_email_notif_message', true));
-      setEmailNotifReply(lsBool('picpony_email_notif_reply', true));
-      setDefaultHomeSort(lsGet('picpony_default_home_sort', 'created_at'));
-      setDefaultSearchSort(lsGet('picpony_default_search_sort', 'created_at'));
+      setShowTagCounts(lsBool(LS_KEYS.showTagCounts, false));
+      setBanAnthro(lsBool(LS_KEYS.banAnthro, false));
+      setBanDiscomfort(lsBool(LS_KEYS.banDiscomfort, true));
+      setOnlyPony(lsBool(LS_KEYS.onlyPony, false));
+      setShowChineseTags(lsBool(LS_KEYS.showChineseTags, true));
+      setUseCdn(lsBool(LS_KEYS.useCdn, false));
+      setUsePicponyProxy(lsBool(LS_KEYS.usePicponyProxy, true));
+      setUseApiAccel(lsBool(LS_KEYS.useApiAccel, true));
+      setUseHongKongRelay(lsBool(LS_KEYS.useHongKongRelay, true));
+      setShowUploads(lsBool(LS_KEYS.showUploads, true));
+      setShowFaves(lsBool(LS_KEYS.showFaves, true));
+      setShowPosts(lsBool(LS_KEYS.showPosts, true));
+      setShowComments(lsBool(LS_KEYS.showComments, true));
+      setEmailNotifMessage(lsBool(LS_KEYS.emailNotifMessage, true));
+      setEmailNotifReply(lsBool(LS_KEYS.emailNotifReply, true));
+      setDefaultHomeSort(lsGet(LS_KEYS.homeSort, 'created_at'));
+      setDefaultSearchSort(lsGet(LS_KEYS.searchSort, 'created_at'));
     });
     return () => {
       cancelled = true;
@@ -397,13 +622,13 @@ export default function SettingsPage() {
 
   // 开发者模式激活/关闭后（关于页向导广播）即时刷新，让下拉框选项跟上
   useEffect(() => {
-    const read = () => setIsDeveloper(localStorage.getItem('picpony_developer') === 'true');
+    const read = () => setIsDeveloper(localStorage.getItem(LS_KEYS.developer) === 'true');
     window.addEventListener('developer_mode_changed', read);
     return () => window.removeEventListener('developer_mode_changed', read);
   }, []);
 
   useEffect(() => {
-    const storedFilter = lsGet('trixie_content_filter', 'safe');
+    const storedFilter = lsGet(LS_KEYS.contentFilter, 'safe');
     let validFilter = storedFilter;
     if (!['safe', 'spoilers', 'developer'].includes(storedFilter)) {
       validFilter = 'safe';
@@ -412,25 +637,25 @@ export default function SettingsPage() {
       const age = calcAge(profileBirthday);
       if (!userToken || age < 16) {
         validFilter = 'safe';
-        lsSet('trixie_content_filter', 'safe');
+        lsSet(LS_KEYS.contentFilter, 'safe');
       }
     }
     if (validFilter === 'developer' && !isDeveloper) {
       validFilter = 'safe';
-      lsSet('trixie_content_filter', 'safe');
+      lsSet(LS_KEYS.contentFilter, 'safe');
     }
     queueMicrotask(() => setContentFilter(validFilter));
   }, [userToken, profileBirthday, isDeveloper]);
 
-  const handleAvatarPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      showToast('请选择图片文件', 'error');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('图片大小不能超过 5MB', 'error');
+    /* `processImageFile`, not the type-and-size check written out (four copies of the
+       byte arithmetic existed, all emitting the wrong toast copy). */
+    try {
+      await processImageFile(file, 5);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
       return;
     }
     setAvatarPick(file);
@@ -442,9 +667,8 @@ export default function SettingsPage() {
   const handleAvatarCropped = async (blob: Blob) => {
     setIsAvatarUploading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const file = new File([blob], `avatar.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, {
         type: blob.type,
       });
@@ -455,30 +679,28 @@ export default function SettingsPage() {
         setAvatarPick(null);
         const fullUrl = data.avatar_url.startsWith('http')
           ? data.avatar_url
-          : `https://picpony.top/${data.avatar_url}`;
+          : getAssetUrl(data.avatar_url);
         setCurrentAvatar(fullUrl);
         const updatedUser = { ...user, avatar: fullUrl };
-        localStorage.setItem('user_info', JSON.stringify(updatedUser));
+        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
         window.dispatchEvent(new Event('user_info_updated'));
       } else {
         showToast(data.message || '上传失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setIsAvatarUploading(false);
     }
   };
 
-  const handleBannerPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      showToast('请选择图片文件', 'error');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('图片大小不能超过 10MB', 'error');
+    try {
+      await processImageFile(file, 10);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
       return;
     }
     setBannerPick(file);
@@ -488,9 +710,8 @@ export default function SettingsPage() {
   const handleBannerCropped = async (blob: Blob) => {
     setIsBannerUploading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const file = new File([blob], `banner.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, {
         type: blob.type,
       });
@@ -501,16 +722,16 @@ export default function SettingsPage() {
         setBannerPick(null);
         const fullUrl = data.banner_url.startsWith('http')
           ? data.banner_url
-          : `https://picpony.top/${data.banner_url}`;
+          : getAssetUrl(data.banner_url);
         setCurrentBanner(fullUrl);
         const updatedUser = { ...user, banner: fullUrl };
-        localStorage.setItem('user_info', JSON.stringify(updatedUser));
+        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
         window.dispatchEvent(new Event('user_info_updated'));
       } else {
         showToast(data.message || '上传失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setIsBannerUploading(false);
     }
@@ -531,9 +752,8 @@ export default function SettingsPage() {
     }
     setApiKeyLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.saveApikey(user.token, {
         api_key: key,
         derpi_user_id: derpiUserId,
@@ -543,14 +763,14 @@ export default function SettingsPage() {
       if (data.success) {
         showToast('Derpibooru API Key 已保存', 'success');
         setCurrentApiKey(key);
-        localStorage.setItem('derpi_api_key', key);
+        localStorage.setItem(LS_KEYS.derpiApiKey, key);
         closeApiKeyModal();
         window.dispatchEvent(new Event('user_info_updated'));
       } else {
         showToast(data.message || '配置失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setApiKeyLoading(false);
     }
@@ -558,13 +778,12 @@ export default function SettingsPage() {
 
   // Detect user identity from Derpibooru API
   const detectRealIdentity = useCallback(async (apiKey: string) => {
-    const base = 'https://trixiebooru.org/api/v1/json';
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
       try {
         // 1. Try my:uploads
-        const uploadsRes = await fetch(
-          `${base}/search/images?q=my:uploads&per_page=1&key=${encodeURIComponent(apiKey)}`,
+        const uploadsRes = await proxyFetch(
+          `${DERPIBOORU_API_BASE}/search/images?q=my:uploads&per_page=1&key=${encodeURIComponent(apiKey)}`,
         );
         if (uploadsRes.status === 401 || uploadsRes.status === 403) return null;
         if (uploadsRes.ok) {
@@ -576,8 +795,8 @@ export default function SettingsPage() {
           throw new Error(`HTTP ${uploadsRes.status}`);
         }
         // 2. Try my:comments
-        const commentsRes = await fetch(
-          `${base}/search/comments?q=my:comments&per_page=1&key=${encodeURIComponent(apiKey)}`,
+        const commentsRes = await proxyFetch(
+          `${DERPIBOORU_API_BASE}/search/comments?q=my:comments&per_page=1&key=${encodeURIComponent(apiKey)}`,
         );
         if (commentsRes.status === 401 || commentsRes.status === 403) return null;
         if (commentsRes.ok) {
@@ -608,18 +827,17 @@ export default function SettingsPage() {
       }
       setDerpiUserId(identity.id);
       setDerpiUsername(identity.name);
-      const storedUser = localStorage.getItem('user_info');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (user) {
         await api.saveApikey(user.token, {
           api_key: currentApiKey,
           derpi_user_id: identity.id,
           derpi_username: identity.name,
         });
-        localStorage.setItem('derpi_api_key', currentApiKey);
+        localStorage.setItem(LS_KEYS.derpiApiKey, currentApiKey);
         window.dispatchEvent(new Event('user_info_updated'));
       }
-      showToast(`核验成功！已确认您的身份：${identity.name}`, 'success');
+      showToast(`核验成功，已确认您的身份：${identity.name}`, 'success');
       window.dispatchEvent(new Event('user_info_updated'));
     } catch {
       showToast('核验请求失败（API 限流/网络问题），请稍后再试', 'error');
@@ -636,9 +854,8 @@ export default function SettingsPage() {
   const handleClearApiKeyConfirm = async () => {
     setIsClearApiKeyModalOpen(false);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) return;
       await api.saveApikey(user.token, {
         api_key: '',
         derpi_user_id: '',
@@ -647,7 +864,7 @@ export default function SettingsPage() {
       setCurrentApiKey('');
       setDerpiUserId('');
       setDerpiUsername('');
-      localStorage.removeItem('derpi_api_key');
+      localStorage.removeItem(LS_KEYS.derpiApiKey);
       window.dispatchEvent(new Event('user_info_updated'));
       showToast('API Key 已解除绑定', 'success');
     } catch {
@@ -663,9 +880,8 @@ export default function SettingsPage() {
     }
     setPasswordLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.changePassword(user.token, {
         old_password: oldPassword,
         new_password: newPassword,
@@ -675,7 +891,7 @@ export default function SettingsPage() {
         showToast('密码修改成功，即将重新登录', 'success');
         closePasswordModal();
         setTimeout(() => {
-          localStorage.removeItem('user_info');
+          localStorage.removeItem(LS_KEYS.userInfo);
           window.dispatchEvent(new Event('user_info_updated'));
           openAuth('login');
         }, 1500);
@@ -683,7 +899,7 @@ export default function SettingsPage() {
         showToast(data.message || '修改失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setPasswordLoading(false);
     }
@@ -697,23 +913,22 @@ export default function SettingsPage() {
     }
     setIsLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.changeUsername(user.token, newUsername.trim());
       const data = await res.json();
       if (data.success) {
-        showToast('用户名修改成功！', 'success');
+        showToast('用户名已更新', 'success');
         setCurrentUsername(newUsername.trim());
         const updatedUser = { ...user, username: newUsername.trim() };
-        localStorage.setItem('user_info', JSON.stringify(updatedUser));
+        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
         window.dispatchEvent(new Event('user_info_updated'));
         closeModal();
       } else {
         showToast(data.message || '修改失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -733,9 +948,8 @@ export default function SettingsPage() {
 
     setEmailLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.updateEmail(user.token, newEmail.trim());
       const data = await res.json();
       if (data.success) {
@@ -747,7 +961,7 @@ export default function SettingsPage() {
         showToast(data.message || '更新失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setEmailLoading(false);
     }
@@ -760,9 +974,8 @@ export default function SettingsPage() {
     }
     setEmailLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) return;
       const res = await api.verifyEmail(user.token, verifyCode.trim());
       const data = await res.json();
       if (data.success) {
@@ -783,9 +996,8 @@ export default function SettingsPage() {
   const handleResendCode = async () => {
     setIsResending(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) return;
       const res = await api.resendVerifyCode(user.token);
       const data = await res.json();
       if (data.success) {
@@ -803,9 +1015,8 @@ export default function SettingsPage() {
   const handleProfileSubmit = async () => {
     setProfileLoading(true);
     try {
-      const storedUser = localStorage.getItem('user_info');
-      if (!storedUser) throw new Error('未登录');
-      const user = JSON.parse(storedUser);
+      const user = readUserInfo();
+      if (!user) throw new Error('未登录');
       const res = await api.saveProfile(user.token, {
         bio: profileBio,
         gender: profileGender,
@@ -821,7 +1032,7 @@ export default function SettingsPage() {
         showToast(data.message || '保存失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误', 'error');
+      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       setProfileLoading(false);
     }
@@ -844,32 +1055,64 @@ export default function SettingsPage() {
       }
     }
     setContentFilter(val);
-    lsSet('trixie_content_filter', val);
+    lsSet(LS_KEYS.contentFilter, val);
     syncSettingsToCloud({ contentFilter: val });
     showToast(
-      `内容过滤器已切换至: ${val === 'safe' ? '安全模式' : val === 'spoilers' ? '中等限制' : '开发者模式'}`,
+      `内容过滤器已切换至：${val === 'safe' ? '安全模式' : val === 'spoilers' ? '中等限制' : '开发者模式'}`,
       'info',
     );
   };
 
+  /* All four line writers end with `syncLinePrefs()`: the request layer re-reads these
+     keys from localStorage on every call, but *which line it is currently sitting on* is
+     separate runtime state — and turning the relay on has to take the accel line out of
+     the running. */
+  const handleUseCdnChange = (val: boolean) => {
+    setUseCdn(val);
+    lsSet(LS_KEYS.useCdn, val);
+    syncLinePrefs();
+    syncSettingsToCloud({ useCdn: val });
+  };
+
   const handleUsePicponyProxyChange = (val: boolean) => {
     setUsePicponyProxy(val);
-    lsSet('picpony_use_proxy', val);
+    lsSet(LS_KEYS.usePicponyProxy, val);
     if (val) {
       setUseCdn(true);
-      lsSet('trixie_use_cdn', true);
+      lsSet(LS_KEYS.useCdn, true);
     }
+    syncLinePrefs();
     syncSettingsToCloud({ usePicponyProxy: val, useCdn: val || useCdn });
   };
 
+  /* No API-key gate, a deliberate divergence from the old frontend: the accel line is a
+     `?url=` worker that needs no credential, so gating the switch on a key created a
+     state nobody could leave — the row read off and was permanently disabled while the
+     stored value stayed on, and `stepApiFailover` went on using the line the UI said
+     was unavailable. */
   const handleUseApiAccelChange = (val: boolean) => {
-    if (val && !currentApiKey) {
-      showToast('您当前未绑定 API Key，该功能无法使用', 'warning');
-      return;
-    }
     setUseApiAccel(val);
-    lsSet('picpony_api_accel', val);
+    lsSet(LS_KEYS.useApiAccel, val);
+    syncLinePrefs();
     syncSettingsToCloud({ useApiAccel: val });
+  };
+
+  const handleUseHongKongRelayChange = (val: boolean) => {
+    setUseHongKongRelay(val);
+    lsSet(LS_KEYS.useHongKongRelay, val);
+    syncLinePrefs();
+    syncSettingsToCloud({ useHongKongRelay: val });
+  };
+
+  /* Re-read the site policy and re-measure the image lines: the policy is fetched once
+     per load, so without this the only way to notice an administrator switching lines is
+     to reload. The race reports through the same subscription, not this promise — it can
+     take up to five seconds and there is no reason to hold the button that long. */
+  const handleRefreshLines = async () => {
+    setRefreshingLines(true);
+    raceImageLines();
+    await refreshRoutePolicy();
+    setRefreshingLines(false);
   };
 
   const sortOptions = [
@@ -882,26 +1125,54 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto" aria-busy={!settingsReady}>
+    <div className="max-w-4xl mx-auto">
       <PageHeader title="设置" />
-      {/* The cloud config gate, from master: until the fetch resolves the page
-          is dimmed and inert, so a default value cannot be written back over a
-          setting the server has not returned yet. Same 50% the gallery uses for
-          a list being replaced — one weight for "this content is in flight". */}
+      {/* Two tabs, and the line between them is not a matter of taste: 设置 is what the
+          account does, 个性化 what this device remembers — which is also why only one side
+          needs the gate below (see `AppearanceSection`). 设置 leads because it is the
+          page's own name; pane order matches, because `TabPanes` derives direction from
+          DOM order.
+
+          Local state rather than `?tab=` (AGENTS.md): a tab whose value lives in
+          `useState` needs nothing but `TabPanes` — the URL form exists for screens that
+          have to be linkable into a tab.
+
+          No `lean`: the 设置 pane replaces most of its subtree the moment the cloud
+          config lands, exactly the case AGENTS.md names as the counter-example. */}
+      <Tabs
+        tabs={[
+          { value: 'general', label: '设置' },
+          { value: 'personalise', label: '个性化' },
+        ]}
+        value={tab}
+        onChange={setTab}
+        label="设置分区"
+        className="mb-6"
+      />
+      <TabPanes value={tab}>
+        <TabPane value="general">
+      {/* The cloud config gate: until the fetch resolves the page is dimmed and inert,
+          so a default value cannot be written back over a setting the server has not
+          returned yet. `disabled-content` (38%), not the gallery's 50% paging dim — the
+          gallery *replaces* content the user can still read, this is a form that cannot
+          be used yet, which is what "disabled" means (M3 gives it 38%). */}
       <div
-        className={`transition-[opacity] duration-300 ease-[var(--ease-standard)] ${
-          settingsReady ? '' : 'opacity-50 pointer-events-none'
+        aria-busy={!settingsReady}
+        /* `aria-busy` belongs on the gate, not on the page: the wrapper also encloses
+           the tablist *and* the 个性化 pane, so a screen-reader user switching tabs was
+           told the region was still loading — the one state the split exists to keep out
+           of that pane. */
+        className={`transition-[opacity] duration-standard ease-[var(--ease-standard)] ${
+          settingsReady ? '' : 'disabled-content pointer-events-none'
         }`}
       >
-      {/* No entrance animation. This is a settings form — rows of switches and
-          values the user came here to change, not content to be revealed. Both
-          the mount-time `<Reveal>` that used to wrap these sections and the
-          scroll reveal that replaced it made a control列 arrive like an article.
-          Entrance cascades are for picture content. */}
+      {/* No entrance animation: this is a settings form — rows of switches and values
+          the user came here to change, not content to be revealed. Entrance cascades
+          are for picture content. */}
       <div>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdPerson size={20} />}>账户设置</SectionHeading>
+            <SectionHeading icon={<MdPerson size={ICON.control} />}>账户设置</SectionHeading>
 
             <div className={rowClass}>
               <div className="flex items-center gap-4">
@@ -910,14 +1181,16 @@ export default function SettingsPage() {
                     <>
                       {!avatarLoaded && (
                         <div className="absolute inset-0 flex items-center justify-center text-outline z-10">
-                          <MdPerson size={24} />
+                          <MdPerson size={ICON.standard} />
                         </div>
                       )}
                       <FadeInImage
                         key={currentAvatar}
                         src={currentAvatar}
-                        alt="Avatar"
+                        alt="头像预览"
                         fill
+                        /* `w-16 h-16`. A `fill` image with no `sizes` resolves to `100vw`. */
+                        sizes="64px"
                         className="object-cover"
                         onLoad={() => setAvatarLoaded(true)}
                       />
@@ -929,7 +1202,7 @@ export default function SettingsPage() {
                   )}
                   {isAvatarUploading && (
                     <div className="bg-media-plate absolute inset-0 flex items-center justify-center">
-                      <Spinner white />
+                      <Spinner tone="on-primary" />
                     </div>
                   )}
                 </div>
@@ -949,7 +1222,7 @@ export default function SettingsPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!currentUsername}
                 loading={isAvatarUploading}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title="修改头像"
               >
                 修改头像
@@ -963,7 +1236,7 @@ export default function SettingsPage() {
                     <>
                       {!bannerLoaded && (
                         <div className="absolute inset-0 flex items-center justify-center text-outline z-10">
-                          <MdImage size={20} />
+                          <MdImage size={ICON.control} />
                         </div>
                       )}
                       <FadeInImage
@@ -971,22 +1244,24 @@ export default function SettingsPage() {
                         src={
                           currentBanner.startsWith('http')
                             ? currentBanner
-                            : `https://picpony.top/${currentBanner}`
+                            : getAssetUrl(currentBanner)
                         }
-                        alt="Banner"
+                        alt="横幅预览"
                         fill
+                        /* `w-24 h-14`. Same reason as the avatar preview above. */
+                        sizes="96px"
                         className="object-cover"
                         onLoad={() => setBannerLoaded(true)}
                       />
                     </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-outline">
-                      <MdImage size={20} />
+                      <MdImage size={ICON.control} />
                     </div>
                   )}
                   {isBannerUploading && (
                     <div className="bg-media-plate absolute inset-0 flex items-center justify-center">
-                      <Spinner white />
+                      <Spinner tone="on-primary" />
                     </div>
                   )}
                 </div>
@@ -1006,7 +1281,7 @@ export default function SettingsPage() {
                 onClick={() => bannerInputRef.current?.click()}
                 disabled={!currentUsername}
                 loading={isBannerUploading}
-                icon={<MdImage size={16} />}
+                icon={<MdImage size={ICON.dense} />}
                 title="上传 Banner"
               >
                 上传 Banner
@@ -1021,7 +1296,7 @@ export default function SettingsPage() {
               <Button
                 onClick={() => setIsModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title="修改用户名"
               >
                 修改用户名
@@ -1036,7 +1311,7 @@ export default function SettingsPage() {
               <Button
                 onClick={() => setIsPasswordModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title="修改密码"
               >
                 修改密码
@@ -1065,7 +1340,7 @@ export default function SettingsPage() {
                   setIsEmailModalOpen(true);
                 }}
                 disabled={!currentUsername}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title={currentEmail ? '修改邮箱' : '绑定邮箱'}
               >
                 {currentEmail ? '修改' : '绑定'}
@@ -1077,14 +1352,14 @@ export default function SettingsPage() {
                 <p className={labelClass}>个人资料</p>
                 <p className="text-body-s text-on-surface-variant">
                   {profileBio
-                    ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '...' : '')
+                    ? profileBio.substring(0, 30) + (profileBio.length > 30 ? '…' : '')
                     : '点击编辑个人简介、性别、生日'}
                 </p>
               </div>
               <Button
                 onClick={() => setIsProfileModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={16} />}
+                icon={<MdEdit size={ICON.dense} />}
                 title="编辑个人资料"
               >
                 编辑
@@ -1111,7 +1386,7 @@ export default function SettingsPage() {
                       disabled={!currentUsername}
                       loading={isVerifyLoading}
                       variant="tonal"
-                      icon={<MdVerifiedUser size={16} />}
+                      icon={<MdVerifiedUser size={ICON.dense} />}
                       title="核验身份"
                       responsiveLabel
                     >
@@ -1121,7 +1396,7 @@ export default function SettingsPage() {
                       onClick={handleClearApiKey}
                       disabled={!currentUsername}
                       variant="text"
-                      icon={<MdLinkOff size={16} />}
+                      icon={<MdLinkOff size={ICON.dense} />}
                       title="解除绑定"
                       responsiveLabel
                       className="text-error hover:bg-error-container hover:text-on-error-container"
@@ -1136,7 +1411,7 @@ export default function SettingsPage() {
                     setIsApiKeyModalOpen(true);
                   }}
                   disabled={!currentUsername}
-                  icon={<MdEdit size={16} />}
+                  icon={<MdEdit size={ICON.dense} />}
                   title={currentApiKey ? '修改配置' : '去配置'}
                   responsiveLabel
                 >
@@ -1148,22 +1423,27 @@ export default function SettingsPage() {
         </section>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdFilterList size={20} />}>内容筛选</SectionHeading>
+            <SectionHeading icon={<MdFilterList size={ICON.control} />}>内容筛选</SectionHeading>
 
             <div className={rowClass}>
               <div className={rowLabelClass}>
                 <p className={labelClass}>内容分级过滤器</p>
-                <p className="text-body-s text-on-surface-variant mt-1">
+                <p className="text-body-s text-on-surface-variant">
                   {contentFilter === 'safe' && '仅显示安全内容'}
                   {contentFilter === 'spoilers' && '拦截限制级内容（需 16 岁以上）'}
                   {contentFilter === 'developer' && '开发者模式，显示所有内容'}
                 </p>
               </div>
+              {/* `size="sm"` — 40dp, not the field's 56: this control sits in an `.m3-row`
+                  whose next three siblings hold a 32dp `ToggleSwitch`, and at 56 this row
+                  read as 1.75x the control below it. A control's step comes from its
+                  enclosure; in a row it matches the row's other controls. */}
               <Select
+                size="sm"
                 value={contentFilter}
                 onChange={handleContentFilterChange}
                 aria-label="内容分级过滤器"
-                className="w-full sm:w-auto sm:min-w-[11rem]"
+                className="w-full sm:w-auto"
                 options={[
                   { value: 'safe', label: '完全安全 (Safe)' },
                   { value: 'spoilers', label: '中等限制 (Spoilers)' },
@@ -1176,7 +1456,7 @@ export default function SettingsPage() {
               <ToggleSwitch
                 layout="row"
                 checked={banAnthro}
-                onChange={(v) => updateSetting('banAnthro', v, 'trixie_ban_anthro', setBanAnthro)}
+                onChange={(v) => updateSetting('banAnthro', v, LS_KEYS.banAnthro, setBanAnthro)}
                 label="禁止类人生物 (马头人)"
                 description="隐藏 anthropomorphic 标签的图片"
               />
@@ -1187,7 +1467,7 @@ export default function SettingsPage() {
                 layout="row"
                 checked={banDiscomfort}
                 onChange={(v) =>
-                  updateSetting('banDiscomfort', v, 'trixie_ban_discomfort', setBanDiscomfort)
+                  updateSetting('banDiscomfort', v, LS_KEYS.banDiscomfort, setBanDiscomfort)
                 }
                 label="屏蔽可能令您不适的内容"
                 description="隐藏血腥、恐怖等内容"
@@ -1198,7 +1478,7 @@ export default function SettingsPage() {
               <ToggleSwitch
                 layout="row"
                 checked={onlyPony}
-                onChange={(v) => updateSetting('onlyPony', v, 'trixie_only_pony', setOnlyPony)}
+                onChange={(v) => updateSetting('onlyPony', v, LS_KEYS.onlyPony, setOnlyPony)}
                 label="只看小马 (含类马)"
                 description="仅显示 pony 相关标签的图片"
               />
@@ -1207,14 +1487,14 @@ export default function SettingsPage() {
         </section>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdVisibility size={20} />}>显示偏好</SectionHeading>
+            <SectionHeading icon={<MdVisibility size={ICON.control} />}>显示偏好</SectionHeading>
 
             <div className={rowClass}>
               <ToggleSwitch
                 layout="row"
                 checked={showTagCounts}
                 onChange={(v) =>
-                  updateSetting('showTagCounts', v, 'trixie_show_tag_counts', setShowTagCounts)
+                  updateSetting('showTagCounts', v, LS_KEYS.showTagCounts, setShowTagCounts)
                 }
                 label="显示各标签数量"
                 description="在标签列表旁显示图片计数"
@@ -1229,7 +1509,7 @@ export default function SettingsPage() {
                   updateSetting(
                     'showChineseTags',
                     v,
-                    'picpony_show_chinese_tags',
+                    LS_KEYS.showChineseTags,
                     setShowChineseTags,
                   )
                 }
@@ -1240,40 +1520,42 @@ export default function SettingsPage() {
 
             <div className={rowClass}>
               <div className="flex items-center gap-2">
-                <MdHome size={20} className="text-outline" />
+                <MdHome size={ICON.control} className="text-outline" />
                 <div className={rowLabelClass}>
                   <p className={labelClass}>首页瀑布流默认排序</p>
                 </div>
               </div>
               <Select
+                size="sm"
                 value={defaultHomeSort}
                 onChange={(v) => {
                   setDefaultHomeSort(v);
-                  lsSet('picpony_default_home_sort', v);
+                  lsSet(LS_KEYS.homeSort, v);
                   syncSettingsToCloud({ defaultHomeSort: v });
                 }}
                 aria-label="首页瀑布流默认排序"
-                className="w-full sm:w-auto sm:min-w-[9rem]"
+                className="w-full sm:w-auto"
                 options={sortOptions}
               />
             </div>
 
             <div className={rowClass}>
               <div className="flex items-center gap-2">
-                <MdSearch size={20} className="text-outline" />
+                <MdSearch size={ICON.control} className="text-outline" />
                 <div className={rowLabelClass}>
                   <p className={labelClass}>搜索默认排序</p>
                 </div>
               </div>
               <Select
+                size="sm"
                 value={defaultSearchSort}
                 onChange={(v) => {
                   setDefaultSearchSort(v);
-                  lsSet('picpony_default_search_sort', v);
+                  lsSet(LS_KEYS.searchSort, v);
                   syncSettingsToCloud({ defaultSearchSort: v });
                 }}
                 aria-label="搜索默认排序"
-                className="w-full sm:w-auto sm:min-w-[9rem]"
+                className="w-full sm:w-auto"
                 options={sortOptions}
               />
             </div>
@@ -1281,51 +1563,111 @@ export default function SettingsPage() {
         </section>
         <section className="mb-8">
           <div>
-            <SectionHeading icon={<MdSpeed size={20} />}>性能与加速</SectionHeading>
+            <SectionHeading
+              icon={<MdSpeed size={ICON.control} />}
+              actions={
+                <Button
+                  size="xs"
+                  variant="tonal"
+                  icon={<MdRefresh />}
+                  loading={refreshingLines}
+                  onClick={handleRefreshLines}
+                >
+                  重新检测
+                </Button>
+              }
+            >
+              性能与加速
+            </SectionHeading>
+
+            {/* Which line is actually in use — not always what the switches below say:
+                an administrator can pin the whole site to one, and a failover can move it
+                mid-session. Read-only: the row reports, the switches ask. */}
+            <div className={rowClass}>
+              <div className="flex items-center gap-2">
+                <MdRoute size={ICON.control} className="text-outline" />
+                <div className={rowLabelClass}>
+                  <p className={labelClass}>当前线路</p>
+                  <p className={valueClass}>
+                    {lines.ready ? `API：${lines.apiLabel} ｜ 图片：${lines.imageLabel}` : '检测中…'}
+                  </p>
+                </div>
+              </div>
+              {(lines.apiForced || lines.imageForced) && (
+                <Badge tone="warning" size="sm">
+                  全站强制
+                </Badge>
+              )}
+            </div>
 
             <div className={rowClass}>
               <ToggleSwitch
                 layout="row"
-                checked={useCdn}
-                onChange={(v) => updateSetting('useCdn', v, 'trixie_use_cdn', setUseCdn)}
+                checked={lines.imageForced ? lines.forcedImage === 'cdn' : useCdn}
+                onChange={handleUseCdnChange}
+                disabled={lines.imageForced}
                 label="启用图片 CDN 加速"
-                description="通过 wsrv.nl 加速图片加载"
-              />
-            </div>
-
-            <div className={rowClass}>
-              <ToggleSwitch
-                layout="row"
-                checked={usePicponyProxy}
-                onChange={handleUsePicponyProxyChange}
-                label="启用 PicPony 加速服务器 (beta)"
-                description="使用 picpony 代理服务器加速请求，开启后自动启用 CDN"
-              />
-            </div>
-
-            <div className={rowClass}>
-              <ToggleSwitch
-                layout="row"
-                checked={useApiAccel}
-                onChange={handleUseApiAccelChange}
-                disabled={!currentApiKey}
-                label="启用 API 加速"
                 description={
-                  currentApiKey
-                    ? '通过备用 API 代理提升请求稳定性'
-                    : '需要先配置 Derpibooru API Key'
+                  lines.imageForced ? '图片线路已被全站强制指定' : '通过 wsrv.nl 加速图片加载'
                 }
               />
-              {!currentApiKey && (
-                <span className="text-body-s text-on-surface-variant ml-2">需先配置 API Key</span>
-              )}
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                layout="row"
+                checked={lines.imageForced ? lines.forcedImage === 'picpony' : usePicponyProxy}
+                onChange={handleUsePicponyProxyChange}
+                disabled={lines.imageForced}
+                label="启用 PicPony 加速服务器 (beta)"
+                description={
+                  lines.imageForced
+                    ? '图片线路已被全站强制指定'
+                    : '通过 PicPony 代理服务器加载图片，开启后自动启用 CDN 作为下一档'
+                }
+              />
+            </div>
+
+            <div className={rowClass}>
+              <ToggleSwitch
+                layout="row"
+                checked={lines.apiForced ? lines.forcedApi === 'picpony_api' : useHongKongRelay}
+                onChange={handleUseHongKongRelayChange}
+                disabled={lines.apiForced}
+                label="启用 PicPony API"
+                description={
+                  lines.apiForced
+                    ? 'API 线路已被全站强制指定'
+                    : '通过 PicPony 中转访问 Derpibooru，直连不通时的首选线路'
+                }
+              />
+            </div>
+
+            {/* Disabled while the relay is on rather than hidden: with the relay preferred
+                this toggle has nothing left to select, and a vanished row would just have
+                to be rediscovered. */}
+            <div className={rowClass}>
+              <ToggleSwitch
+                layout="row"
+                checked={lines.apiForced ? lines.forcedApi === 'api_accel' : useApiAccel}
+                onChange={handleUseApiAccelChange}
+                disabled={lines.apiForced || useHongKongRelay}
+                label="启用 API 加速"
+                description={
+                  lines.apiForced
+                    ? 'API 线路已被全站强制指定'
+                    : useHongKongRelay
+                      ? '已优先使用 PicPony API，关闭后此项可选'
+                      : '通过备用 API 代理提升请求稳定性'
+                }
+              />
             </div>
           </div>
         </section>
         <section className="mb-8">
           <div>
             <SectionHeading
-              icon={<MdSecurity size={20} />}
+              icon={<MdSecurity size={ICON.control} />}
               subtitle="控制您的个人主页上对外显示的内容"
             >
               隐私设置
@@ -1338,28 +1680,28 @@ export default function SettingsPage() {
                   label: '公开我的上传',
                   val: showUploads,
                   setter: setShowUploads,
-                  lsKey: 'picpony_show_uploads',
+                  lsKey: LS_KEYS.showUploads,
                 },
                 {
                   key: 'showFaves' as const,
                   label: '公开我的收藏',
                   val: showFaves,
                   setter: setShowFaves,
-                  lsKey: 'picpony_show_faves',
+                  lsKey: LS_KEYS.showFaves,
                 },
                 {
                   key: 'showPosts' as const,
                   label: '公开我的帖子',
                   val: showPosts,
                   setter: setShowPosts,
-                  lsKey: 'picpony_show_posts',
+                  lsKey: LS_KEYS.showPosts,
                 },
                 {
                   key: 'showComments' as const,
                   label: '公开我的评论',
                   val: showComments,
                   setter: setShowComments,
-                  lsKey: 'picpony_show_comments',
+                  lsKey: LS_KEYS.showComments,
                 },
               ].map((item) => (
                 <div key={item.key} className={rowClass}>
@@ -1377,7 +1719,7 @@ export default function SettingsPage() {
         <section className="mb-8">
           <div>
             <SectionHeading
-              icon={<MdNotifications size={20} />}
+              icon={<MdNotifications size={ICON.control} />}
               subtitle="选择接收哪些邮件通知（需要先绑定邮箱）"
             >
               通知偏好
@@ -1391,7 +1733,7 @@ export default function SettingsPage() {
                     updateSetting(
                       'emailNotifMessage',
                       v,
-                      'picpony_email_notif_message',
+                      LS_KEYS.emailNotifMessage,
                       setEmailNotifMessage,
                     )
                   }
@@ -1407,7 +1749,7 @@ export default function SettingsPage() {
                     updateSetting(
                       'emailNotifReply',
                       v,
-                      'picpony_email_notif_reply',
+                      LS_KEYS.emailNotifReply,
                       setEmailNotifReply,
                     )
                   }
@@ -1428,7 +1770,7 @@ export default function SettingsPage() {
         outputWidth={512}
         title="调整头像"
         busy={isAvatarUploading}
-      />{' '}
+      />
       <ImageCropper
         file={bannerPick}
         onClose={() => setBannerPick(null)}
@@ -1438,17 +1780,16 @@ export default function SettingsPage() {
         outputHeight={400}
         title="调整个人横幅"
         busy={isBannerUploading}
-      />{' '}
+      />
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
         title="修改用户名"
         footer={
           <>
-            {' '}
             <Button variant="text" type="button" onClick={closeModal} disabled={isLoading}>
               取消
-            </Button>{' '}
+            </Button>
             <Button
               variant="filled"
               type="submit"
@@ -1457,16 +1798,14 @@ export default function SettingsPage() {
               disabled={!newUsername.trim()}
             >
               确认修改
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <form id="username-form" onSubmit={handleUsernameSubmit}>
-          {' '}
           <label htmlFor="new-username" className="block text-label-l text-on-surface mb-2">
             新用户名
-          </label>{' '}
+          </label>
           <Input
             id="new-username"
             data-autofocus
@@ -1475,16 +1814,15 @@ export default function SettingsPage() {
             onChange={(e) => setNewUsername(e.target.value)}
             placeholder="请输入新用户名"
             disabled={isLoading}
-          />{' '}
-        </form>{' '}
-      </Modal>{' '}
+          />
+        </form>
+      </Modal>
       <Modal
         isOpen={isPasswordModalOpen}
         onClose={closePasswordModal}
         title="修改密码"
         footer={
           <>
-            {' '}
             <Button
               variant="text"
               type="button"
@@ -1492,7 +1830,7 @@ export default function SettingsPage() {
               disabled={passwordLoading}
             >
               取消
-            </Button>{' '}
+            </Button>
             <Button
               variant="filled"
               type="submit"
@@ -1501,18 +1839,15 @@ export default function SettingsPage() {
               disabled={!oldPassword.trim() || !newPassword.trim()}
             >
               确认修改
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <form id="password-form" onSubmit={handlePasswordSubmit} className="space-y-4">
-          {' '}
           <div>
-            {' '}
             <label htmlFor="old-password" className="block text-label-l text-on-surface mb-2">
               原密码
-            </label>{' '}
+            </label>
             <Input
               id="old-password"
               data-autofocus
@@ -1521,13 +1856,12 @@ export default function SettingsPage() {
               onChange={(e) => setOldPassword(e.target.value)}
               placeholder="请输入原密码"
               disabled={passwordLoading}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
-            {' '}
             <label htmlFor="new-password" className="block text-label-l text-on-surface mb-2">
               新密码
-            </label>{' '}
+            </label>
             <Input
               id="new-password"
               type="password"
@@ -1535,17 +1869,16 @@ export default function SettingsPage() {
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="请输入新密码"
               disabled={passwordLoading}
-            />{' '}
-          </div>{' '}
-        </form>{' '}
-      </Modal>{' '}
+            />
+          </div>
+        </form>
+      </Modal>
       <Modal
         isOpen={isApiKeyModalOpen}
         onClose={closeApiKeyModal}
         title="配置 API Key"
         footer={
           <>
-            {' '}
             <Button
               variant="text"
               type="button"
@@ -1553,19 +1886,17 @@ export default function SettingsPage() {
               disabled={apiKeyLoading}
             >
               取消
-            </Button>{' '}
+            </Button>
             <Button variant="filled" type="submit" form="apikey-form" loading={apiKeyLoading}>
               确认保存
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <form id="apikey-form" onSubmit={handleApiKeySubmit}>
-          {' '}
           <label htmlFor="derpi-api-key" className="block text-label-l text-on-surface mb-2">
             Derpibooru API Key
-          </label>{' '}
+          </label>
           <Input
             id="derpi-api-key"
             data-autofocus
@@ -1574,93 +1905,110 @@ export default function SettingsPage() {
             onChange={(e) => setNewApiKey(e.target.value)}
             placeholder="请输入你的 API Key"
             disabled={apiKeyLoading}
-          />{' '}
+          />
           <p className="text-body-s text-on-surface-variant mt-2">
-            {' '}
             通过绑定 Derpibooru API Key 可同步黑名单过滤等设置。
             <br /> 获取方法：登录 Derpibooru → Account Settings → API Key 区域。{' '}
-          </p>{' '}
-        </form>{' '}
-      </Modal>{' '}
+          </p>
+        </form>
+      </Modal>
       <Modal
         isOpen={isClearApiKeyModalOpen}
         onClose={() => setIsClearApiKeyModalOpen(false)}
         title="解除绑定 API Key"
         footer={
           <>
-            {' '}
             <Button
               variant="text"
               onClick={() => setIsClearApiKeyModalOpen(false)}
               data-ripple
             >
               取消
-            </Button>{' '}
+            </Button>
             <Button variant="danger" onClick={handleClearApiKeyConfirm} data-ripple>
               确认解除
-            </Button>{' '}
+            </Button>
           </>
         }
       >
-        {' '}
         <p className="text-body-m text-on-surface-variant">
-          {' '}
           确定要解除 Derpibooru API Key
           的绑定吗？解除后部分功能（如黑名单过滤同步）将无法使用。{' '}
-        </p>{' '}
-      </Modal>{' '}
-      <Modal isOpen={isEmailModalOpen} onClose={closeEmailModal} title="邮箱设置">
-        {' '}
-        {!showVerifyInput ? (
-          <div className="space-y-4">
-            {' '}
-            <div>
-              {' '}
-              <label htmlFor="new-email" className="block text-label-l text-on-surface mb-2">
-                新邮箱地址
-              </label>{' '}
-              <Input
-                id="new-email"
-                data-autofocus
-                type="email"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="example@email.com"
-                disabled={emailLoading}
-              />{' '}
-            </div>{' '}
-            <div className="flex justify-end gap-3">
-              {' '}
-              <Button
-                variant="text"
-                type="button"
-                onClick={closeEmailModal}
-                disabled={emailLoading}
+        </p>
+      </Modal>
+      <Modal
+        isOpen={isEmailModalOpen}
+        onClose={closeEmailModal}
+        title="邮箱设置"
+        /* One `footer` with two branches rather than an action row inside each half of
+           the body: hand-rolled rows sat inside the body's scroller, so on a short
+           viewport with the verification step open 验证邮箱 scrolled out of view while
+           every sibling dialog pinned its own. 重新发送 keeps the leading edge through
+           `mr-auto` — an auto margin in `Modal`'s `justify-end` row absorbs the space
+           to its right. */
+        footer={
+          showVerifyInput ? (
+            <>
+              <button
+                onClick={handleResendCode}
+                disabled={isResending}
+                className="prose-link text-body-m focus-visible:ring-2 focus-ring disabled:disabled-content mr-auto"
               >
+                {isResending ? '发送中…' : '重新发送'}
+              </button>
+              <Button variant="text" type="button" onClick={closeEmailModal} disabled={emailLoading}>
                 取消
-              </Button>{' '}
+              </Button>
+              <Button
+                variant="filled"
+                onClick={handleVerifyEmail}
+                disabled={emailLoading || !verifyCode.trim()}
+              >
+                {emailLoading ? '验证中…' : '验证邮箱'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="text" type="button" onClick={closeEmailModal} disabled={emailLoading}>
+                取消
+              </Button>
               <Button
                 variant="filled"
                 onClick={handleEmailSubmit}
                 disabled={emailLoading || !newEmail.trim()}
               >
-                {' '}
-                {emailLoading ? '提交中...' : '更新邮箱'}{' '}
-              </Button>{' '}
-            </div>{' '}
+                {emailLoading ? '提交中…' : '更新邮箱'}
+              </Button>
+            </>
+          )
+        }
+      >
+        {!showVerifyInput ? (
+          /* No `space-y-*` wrapper: this half is one field now that its action row has
+             moved to the footer; the other half keeps one because it holds two blocks. */
+          <div>
+            <label htmlFor="new-email" className="block text-label-l text-on-surface mb-2">
+              新邮箱地址
+            </label>
+            <Input
+              id="new-email"
+              data-autofocus
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="example@email.com"
+              disabled={emailLoading}
+            />
           </div>
         ) : (
           <div className="space-y-4">
-            {' '}
-            <div className="bg-accent-blue text-on-accent-blue text-body-m rounded-sm p-3">
-              {' '}
+            <div className="bg-primary-container text-on-primary-container text-body-m rounded-md p-3">
               验证码已发送至 {newEmail}，请查收{' '}
-            </div>{' '}
+            </div>
             <div>
-              {' '}
               <label htmlFor="email-code" className="block text-label-l text-on-surface mb-2">
                 验证码
-              </label>{' '}
+              </label>
               <Input
                 id="email-code"
                 data-autofocus
@@ -1669,35 +2017,7 @@ export default function SettingsPage() {
                 onChange={(e) => setVerifyCode(e.target.value)}
                 placeholder="请输入验证码"
                 disabled={emailLoading}
-              />{' '}
-            </div>{' '}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {' '}
-              <button
-                onClick={handleResendCode}
-                disabled={isResending}
-                className="text-body-m text-link hover:underline disabled:disabled-content"
-              >
-                {' '}
-                {isResending ? '发送中...' : '重新发送'}
-              </button>
-              <div className="flex gap-3">
-                <Button
-                  variant="text"
-                  type="button"
-                  onClick={closeEmailModal}
-                  disabled={emailLoading}
-                >
-                  取消
-                </Button>
-                <Button
-                  variant="filled"
-                  onClick={handleVerifyEmail}
-                  disabled={emailLoading || !verifyCode.trim()}
-                >
-                  {emailLoading ? '验证中...' : '验证邮箱'}
-                </Button>
-              </div>
+              />
             </div>
           </div>
         )}
@@ -1706,7 +2026,7 @@ export default function SettingsPage() {
         isOpen={isProfileModalOpen}
         onClose={closeProfileModal}
         title="编辑个人资料"
-        maxWidth="max-w-lg"
+        maxWidth="lg"
         footer={
           <>
             <Button
@@ -1718,19 +2038,16 @@ export default function SettingsPage() {
               取消
             </Button>
             <Button variant="filled" onClick={handleProfileSubmit} disabled={profileLoading}>
-              {profileLoading ? '保存中...' : '保存资料'}{' '}
-            </Button>{' '}
+              {profileLoading ? '保存中…' : '保存资料'}
+            </Button>
           </>
         }
       >
-        {' '}
         <div className="space-y-4">
-          {' '}
           <div>
-            {' '}
             <label htmlFor="profile-bio" className="block text-label-l text-on-surface mb-2">
               个人简介 (Bio)
-            </label>{' '}
+            </label>
             <Textarea
               id="profile-bio"
               data-autofocus
@@ -1739,13 +2056,12 @@ export default function SettingsPage() {
               rows={3}
               maxLength={500}
               className="resize-none"
-              placeholder="介绍一下你自己..."
-            />{' '}
-            <p className="text-body-s text-on-surface-variant mt-1">{profileBio.length}/500</p>{' '}
-          </div>{' '}
+              placeholder="介绍一下你自己…"
+            />
+            <p className="text-body-s text-on-surface-variant mt-1">{profileBio.length}/500</p>
+          </div>
           <div>
-            {' '}
-            <p className="block text-label-l text-on-surface mb-2">性别</p>{' '}
+            <p className="block text-label-l text-on-surface mb-2">性别</p>
             <Select
               value={profileGender}
               onChange={setProfileGender}
@@ -1757,23 +2073,21 @@ export default function SettingsPage() {
                 { value: '女', label: '女' },
                 { value: '武装直升机', label: '其他' },
               ]}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
-            {' '}
             <label htmlFor="profile-birthday" className="block text-label-l text-on-surface mb-2">
               生日
-            </label>{' '}
+            </label>
             <Input
               id="profile-birthday"
               type="date"
               value={profileBirthday}
               onChange={(e) => setProfileBirthday(e.target.value)}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div>
-            {' '}
-            <p className="block text-label-l text-on-surface mb-2">种族</p>{' '}
+            <p className="block text-label-l text-on-surface mb-2">种族</p>
             <Select
               value={profileRace}
               onChange={setProfileRace}
@@ -1795,6 +2109,11 @@ export default function SettingsPage() {
         </div>
       </Modal>
       </div>
+        </TabPane>
+        <TabPane value="personalise">
+          <AppearanceSection />
+        </TabPane>
+      </TabPanes>
     </div>
   );
 }

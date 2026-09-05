@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import ForumPostList from '@/components/ForumPostList';
 import Button from '@/components/Button';
 import PageHeader from '@/components/PageHeader';
+import { ICON } from '@/lib/icons';
 
 export default function ForumPage() {
   const searchParams = useSearchParams();
@@ -50,29 +51,27 @@ export default function ForumPage() {
       setIsLoading(true);
       setError(null);
       setPage(newPage);
-      router.push(`/forum?page=${newPage}`);
-      // No scroll call here: `ForumPostList` renders `Pagination`, which owns
-      // the reset. The `window.scrollTo` that used to sit here never fired —
-      // the scroll container is <main>, not the window.
+      router.push(`/forum?page=${newPage}`, { scroll: false });
+      // No scroll call here: `ForumPostList` renders `Pagination`, which owns the reset
+      // (the scroll container is <main>, not the window).
     }
   };
 
-  /* NOTE: this component is currently unreachable. `next.config.ts` redirects
-     `/forum` (exact) to `/?tab=forum`, so the home route's forum tab renders
-     instead and nothing here ever mounts. `/forum/[id]` and `/forum/create` are
-     unaffected — the redirect matches the bare path only. Kept rather than
-     deleted because removing the redirect is the other way to resolve it, and
-     that is a product call. It deliberately has no back affordance: the route it
-     resolves to is a sidebar destination. */
+  /* NOTE: currently unreachable. `next.config.ts` redirects `/forum` (exact) to
+     `/?tab=forum`, so the home route's forum tab renders instead and nothing here
+     ever mounts. `/forum/[id]` and `/forum/create` are unaffected — the redirect
+     matches the bare path only. Kept because removing the redirect is the other
+     way to resolve it, and that is a product call. Deliberately no back
+     affordance: the route it resolves to is a sidebar destination. */
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
         title="论坛"
         actions={
           <Button
-            onClick={() => router.push('/forum/create')}
+            onClick={() => router.push('/forum/create', { scroll: false })}
             variant="filled"
-            icon={<MdAdd size={18} />}
+            icon={<MdAdd size={ICON.dense} />}
             responsiveLabel
           >
             发帖
@@ -92,7 +91,7 @@ export default function ForumPage() {
           setRetryCount((c) => c + 1);
         }}
         onPageChange={handlePageChange}
-        onPostClick={(postId) => router.push(`/forum/${postId}`)}
+        onPostClick={(postId) => router.push(`/forum/${postId}`, { scroll: false })}
       />
     </div>
   );

@@ -1,5 +1,9 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
+import CheckGlyph from './CheckGlyph';
+
 interface CheckboxProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -14,28 +18,48 @@ interface CheckboxProps {
   'aria-label'?: string;
   'aria-labelledby'?: string;
   disabled?: boolean;
+  /**
+   * Rendered beside the box, inside the same `<label>` — which is what makes it
+   * the control's accessible name rather than text that happens to sit next to
+   * it. Keep the visible words and the accessible name the same thing.
+   */
+  label?: ReactNode;
 }
 
-/** Checkbox whose check mark draws itself in (stroke-dashoffset). */
+/**
+ * M3 checkbox: an 18dp box inside a 40dp state layer, inside a 48dp touch target.
+ *
+ * The check mark draws itself in (`stroke-dashoffset`) rather than appearing,
+ * which is what M3 does and what makes the selection read as an act.
+ *
+ * **The 40dp state layer is not decoration.** M3 gives every selection control
+ * one, and hover/focus on this most-used control had been a border colour change
+ * on an 18px box. It is a real element rather than the `state-layer` utility, as
+ * on `ToggleSwitch`: that utility keys on the element's own `:hover` and paints
+ * the element's own box, while what has to light up here is a circle more than
+ * twice the box's width, driven by a hover anywhere on the label.
+ *
+ * The 18dp box and the `on-surface-variant` unselected outline are the spec's.
+ */
 export default function Checkbox({
   checked,
   onChange,
   className = '',
   disabled,
+  label,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
 }: CheckboxProps) {
   return (
     /* `touch-target` because the label *is* the whole hit area: the input is
-       `sr-only` and both the box and the tick are `pointer-events-none`, so the
-       control was a 20px target — under M3's 48dp checkbox target, under WCAG
-       2.5.8's 24px floor, and under this app's own 44px rule, on its most-used
-       form control. The utility expands the hit area without changing the 20px
-       box, which is what keeps the row heights it sits in unchanged. Safe here
-       because there is no `data-ripple` to clip it. */
+       `sr-only` and everything painted is `pointer-events-none`, leaving an 18px
+       target on the app's most-used form control. The utility expands the hit
+       area without changing the box (keeping the row heights it sits in
+       unchanged) — safe here because there is no `data-ripple` to clip it. */
     <label
-      className={`touch-target relative flex items-center justify-center w-5 h-5 shrink-0 ${disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer'} ${className}`}
+      className={`group ${label ? 'inline-flex items-center gap-2' : ''} cursor-pointer ${disabled ? 'cursor-not-allowed' : ''} ${className}`}
     >
+      <span className="touch-target relative flex size-4.5 shrink-0 items-center justify-center">
       <input
         type="checkbox"
         checked={checked}
@@ -45,39 +69,60 @@ export default function Checkbox({
         onChange={(e) => onChange(e.target.checked)}
         className="peer sr-only"
       />
-      {/* `rounded-xs` (4dp): the shape table gives a 12dp step to cards and
-          section surfaces, and at 12dp on a 20px box this read as a radio button
-          rather than a checkbox. M3 specs the extra-small corner here.
 
-          `peer-focus-visible:focus-ring`, not `peer-focus-ring`: a Tailwind
-          variant needs the colon. Without it the string is not a utility at all,
-          emits nothing, and the 2px ring fell back to `currentColor` — taking the
-          colour of whatever text happened to surround the control, which is the
-          exact failure the `focus-ring` utility was added to end. */}
-      <div
-        className={`w-5 h-5 rounded-xs border-2 peer-focus-visible:ring-2 peer-focus-visible:focus-ring transition-ui pointer-events-none ${
-          checked
-            ? 'bg-primary border-primary animate-[control-pop_0.2s_var(--ease-spring)]'
-            : 'bg-surface-raised border-outline'
+      {/* The state layer, painted from the box's own ink — so it takes the brand
+          tint once selected and the neutral one before, which is what the M3
+          overlay does. At the shared state opacities, so a checkbox, a button and
+          a list row all respond by the same amount. */}
+      <span
+        aria-hidden="true"
+        className={`spring-fast-effects pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity ${
+          checked ? 'text-primary-ink' : 'text-on-surface'
+        } ${
+          disabled
+            ? ''
+            : 'group-hover:opacity-[var(--md-sys-state-hover-opacity)] group-active:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]'
         }`}
       />
-      <svg
-        className="text-on-primary pointer-events-none absolute h-3.5 w-3.5"
-        viewBox="0 0 12 12"
-        fill="none"
-      >
-        <path
-          d="M2.5 6L5 8.5L9.5 3.5"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray="10.5"
-          strokeDashoffset={checked ? 0 : 10.5}
-          className="transition-[stroke-dashoffset] duration-300 ease-[var(--ease-decelerate)]"
-          style={{ transitionDelay: checked ? '80ms' : '0ms' }}
-        />
-      </svg>
+
+      {/* `rounded-xs` (4dp), M3's corner for this control — the card step reads
+          as a radio button on an 18px box.
+
+          `peer-focus-visible:focus-ring`, not `peer-focus-ring`: a Tailwind
+          variant needs the colon. Without it the string matches no utility,
+          emits nothing, and the 2px ring falls back to `currentColor`. */}
+      <span
+        aria-hidden="true"
+        className={`peer-focus-visible:focus-ring transition-ui pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
+          checked
+            ? 'bg-primary-ink border-primary-ink animate-control-pop'
+            : /* Transparent, which is `Checkbox.kt`'s own `uncheckedBoxColor` —
+                 `CheckboxTokens` defines no unselected container at all, because
+                 an unchecked box is an outline and nothing else. An opaque box
+                 colour here shows as a seam on every container step darker than
+                 the page. */
+              'border-on-surface-variant bg-transparent'
+        }`}
+      />
+      <CheckGlyph
+        className="text-on-primary pointer-events-none absolute size-3"
+        pathProps={{
+          strokeDasharray: '10.5',
+          strokeDashoffset: checked ? 0 : 10.5,
+          /* An *effects* spring, not a spatial one: this is a mark being drawn,
+             so it must not overshoot — a dash offset that overshoots draws past
+             the end of the path and then retracts. The 80ms delay holds the
+             stroke until the container's pop has finished, so the two read as one
+             gesture rather than as a race. */
+          className: 'spring-fast-effects transition-[stroke-dashoffset]',
+          style: { transitionDelay: checked ? '80ms' : '0ms' },
+        }}
+      />
+      </span>
+      {/* `label-l`, matching `Radio` and `ToggleSwitch` — one type role for the
+          same object across all three selection controls. A control's label is a
+          label. */}
+      {label && <span className="text-label-l text-on-surface">{label}</span>}
     </label>
   );
 }

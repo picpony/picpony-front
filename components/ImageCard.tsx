@@ -7,6 +7,10 @@ import ImageCardVideo from './ImageCardVideo';
 import { MdThumbUp, MdComment, MdVisibility } from 'react-icons/md';
 import { PonyImage } from '@/lib/api';
 import { useHeroLink } from '@/lib/useHero';
+import { ICON } from '@/lib/icons';
+import Badge from './Badge';
+import { useSsrSpoilerTags } from './ImageLineProvider';
+import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
 
 interface ImageCardProps {
   image: PonyImage;
@@ -18,7 +22,7 @@ let spoilerTags = new Set<string>();
 function getActiveSpoilerTags() {
   if (typeof window === 'undefined') return spoilerTags;
   try {
-    const nextRaw = localStorage.getItem('trixie_active_spoilered_tags') || '[]';
+    const nextRaw = localStorage.getItem(LS_KEYS.spoilerTags) || '[]';
     if (nextRaw === spoilerTagsRaw) return spoilerTags;
     spoilerTagsRaw = nextRaw;
     const values: unknown = JSON.parse(nextRaw);
@@ -29,6 +33,17 @@ function getActiveSpoilerTags() {
             .map((value) => value.trim().toLowerCase())
         : [],
     );
+     /* Mirrored to a cookie for the *next* document, so the server can draw the
+        cover before hydration. Written here because this is the one place that
+        already parses the list. */
+    try {
+      const joined = [...spoilerTags].join(',');
+      document.cookie = `${COOKIE_KEYS.spoilerTags}=${encodeURIComponent(joined)};path=/;max-age=${
+        60 * 60 * 24 * 365
+      };samesite=lax`;
+    } catch {
+      /* Cookies blocked. The effect still covers the card; only the first frame is exposed. */
+    }
   } catch {
     spoilerTagsRaw = null;
     spoilerTags = new Set();
@@ -61,7 +76,18 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
   ).toUpperCase();
   const isWebm = format === 'WEBM' || format === 'MP4';
 
-  const [isSpoilered, setIsSpoilered] = useState(false);
+  /* **Covered from the very first render when the server knew to cover it.**
+     The server emits `<img>` tags the browser paints before any effect runs, so
+     a user who spoilered a tag saw exactly the pictures they asked to hide on
+     every cold load. The cookie carries the list so this render can ask the
+     same question the effect will; the effect still runs and still wins, so a
+     stale or absent cookie costs one frame rather than a wrong answer. */
+  const ssrSpoilerTags = useSsrSpoilerTags();
+  const [isSpoilered, setIsSpoilered] = useState(() =>
+    ssrSpoilerTags.length === 0
+      ? false
+      : (image.tags || []).some((tag) => ssrSpoilerTags.includes(tag.trim().toLowerCase())),
+  );
   const [isRevealed, setIsRevealed] = useState(false);
   const { sourceKey: heroSourceKey, ...heroLinkProps } = useHeroLink({
     image,
@@ -114,7 +140,7 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           ) : (
             <FadeInImage
               src={thumbUrl}
-              alt={image.name || `Image ${image.id}`}
+              alt={image.name || `图片 #${image.id}`}
               /* Fall back to the card's own aspect box rather than 0 — `0` is
                  not a valid next/image dimension, and the API omits width and
                  height on some records. */
@@ -133,58 +159,67 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
         {/* Stay at the card slot; CSS fades when the sibling thumb is hero-locked. */}
         <div
           data-image-hero-chrome
-          className="pointer-events-none absolute inset-0 z-[2] rounded-lg"
+          className="pointer-events-none absolute inset-0 z-2 rounded-lg"
           aria-hidden="true"
         >
           <div className="media-hover-scrim absolute inset-0 rounded-lg" />
-          {/* 贴角圆角 = 图片大圆角(--radius-lg) - 角标间距(top-2/left-2/right-2)，
-              与图片外角同心弧，间距均匀、视觉平衡 */}
-          <div className="absolute top-2 right-2 rounded-xs rounded-tr-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media">
+          {/* `Badge tone="media"`, which owns the plate, the `on-media` ink,
+              the blur, the 4dp corner and the glyph size — these three marks
+              wrote all of that out by hand and dropped the blur, so a score
+              over a pale photograph lost its plate.
+
+              The one corner that cannot come from the primitive is the one
+              hugging the card's: concentric means `outer - gap`, so at a 16dp
+              card corner with an 8px inset that corner is 8dp. */}
+          <Badge tone="media" className="absolute top-2 right-2 rounded-tr-sm">
             {format}
-          </div>
-          <div
-            title="点赞数"
-            className="absolute bottom-2 left-2 flex items-center gap-1 rounded-xs rounded-bl-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media"
+          </Badge>
+          {/* No `title` on either count. This whole chrome layer is
+              `pointer-events-none aria-hidden`, so a native tooltip could never be
+              hovered and the name could never be read — two dead attributes. */}
+          <Badge
+            tone="media"
+            icon={<MdThumbUp />}
+            className="absolute bottom-2 left-2 rounded-bl-sm"
           >
-            <MdThumbUp size={12} />
-            <span>{image.score}</span>
-          </div>
-          <div
-            title="评论数"
-            className="absolute bottom-2 right-2 flex items-center gap-1 rounded-xs rounded-br-[calc(var(--radius-lg)-var(--spacing)*2)] bg-media-plate px-3 py-1.5 text-label-m text-on-media"
+            {image.score}
+          </Badge>
+          <Badge
+            tone="media"
+            icon={<MdComment />}
+            className="absolute bottom-2 right-2 rounded-br-sm"
           >
-            <MdComment size={12} />
-            <span>{image.comment_count}</span>
-          </div>
+            {image.comment_count}
+          </Badge>
         </div>
       </Link>
 
-      {/* The spoiler cover is a sibling of the link, not a child of it.
-          Interactive content nested inside an `<a>` is invalid HTML, and it
-          behaved exactly as invalid HTML does: the cover was a `<div onClick>`,
-          so the only focusable thing on the card was the link — Tab landed on
-          it, Enter navigated straight to the picture the cover exists to hide,
-          and the reveal could not be reached from a keyboard at all. As a
-          sibling it is a real `<button>` in its own right, in front of the link
-          in both paint order and tab order.
+      {/* The spoiler cover is a sibling of the link, not a child of it:
+          interactive content nested inside an `<a>` is invalid HTML, and it
+          behaved as such — the cover was a `<div onClick>`, so Tab landed on
+          the link and Enter navigated straight to the picture the cover exists
+          to hide. As a sibling it is a real `<button>` in its own right, in
+          front of the link in both paint order and tab order.
 
-          Kept mounted through the reveal so the cover can dissolve; it used to
-          unmount on click, swapping a fully-opaque plate for the image in one
-          frame — the one moment on this card where a transition carries
-          information. `inert` (React 19) takes the faded remains out of the tab
-          order and the accessibility tree together, which `aria-hidden` alone
-          would not: that leaves a focusable element inside a hidden subtree. */}
+          Kept mounted through the reveal so the cover can dissolve; unmounting
+          on click swapped a fully-opaque plate for the image in one frame.
+          `inert` (React 19) takes the faded remains out of the tab order and
+          the accessibility tree together.
+
+          No per-element motion guard, deliberately: the off tier's global rule
+          already does the right thing here — it keeps `opacity` and drops
+          `backdrop-filter`, so the cover fades without the blur animating. */}
       {isSpoilered && (
         <button
           type="button"
           onClick={handleReveal}
           inert={isRevealed}
           aria-label="显示被剧透标签遮住的图片"
-          className={`absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-lg bg-media-plate backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-300 ease-[var(--ease-standard)] outline-none select-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset motion-reduce:transition-none ${
+          className={`absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-lg bg-media-plate backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-composite ease-[var(--ease-standard)] outline-none select-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
             isRevealed ? 'pointer-events-none opacity-0 backdrop-blur-0' : 'opacity-100'
           }`}
         >
-          <MdVisibility size={36} className="text-on-media mb-2" />
+          <MdVisibility size={ICON.large} className="text-on-media mb-2" />
           <span className="text-on-media-variant text-label-l">点击查看</span>
         </button>
       )}

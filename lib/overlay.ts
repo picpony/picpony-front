@@ -1,20 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
-import { getAppScroller } from '@/lib/motion';
+import { getAppScroller } from '@/lib/appScroller';
+import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 
 /* ---------------------------------------------------------------------------
- * Overlay behaviour, shared by every surface that covers the page.
- *
- * All of this lived inside `Modal.tsx`, which meant the second such surface —
- * a bottom sheet — either duplicated eighty lines of focus and scroll handling
- * or shipped without them. Neither is acceptable: a sheet that does not lock the
- * scroller lets the gallery move behind it, and one that does not trap focus
- * drops the keyboard caret onto the page underneath. Both are the *same*
- * requirements, so they are stated once here and composed by both.
- *
- * Nothing about layout, shape or motion lives here. That is deliberate — a
- * dialog and a sheet differ in exactly those three things and in nothing else.
+ * Overlay behaviour — focus trap, scroll lock, exit hold, Esc — lives here, once,
+ * composed by every surface that covers the page; never re-implement it at a call
+ * site. Layout, shape and motion deliberately stay out.
  * ------------------------------------------------------------------------ */
 
 /** True only after hydration, for portals that must not render on the server. */
@@ -28,44 +21,41 @@ export function useMounted(): boolean {
 
 /**
  * Keeps a surface in the tree for `durationMs` after `isOpen` goes false, so its
- * exit animation has something to play on. Returns false until the first open,
- * so a closed overlay costs nothing on first paint.
+ * exit animation has something to play on; false until the first open, so a closed
+ * overlay costs nothing on first paint.
+ *
+ * The hold is `durationMs * MOTION_SPEED_SCALE.slow` — the maximum tier, not the live
+ * speed. A wall-clock timer that bounds an animation must take the maximum (the slow
+ * tier): one written against the unscaled figure fires inside the motion it was meant
+ * to outlast.
  */
 export function useExitAnimation(isOpen: boolean, durationMs: number): boolean {
   const [rendering, setRendering] = useState(isOpen);
   const everOpened = useRef(isOpen);
+  const hold = Math.round(durationMs * MOTION_SPEED_SCALE.slow);
 
   useEffect(() => {
     if (isOpen) {
       everOpened.current = true;
       queueMicrotask(() => setRendering(true));
     } else if (everOpened.current) {
-      const timer = setTimeout(() => setRendering(false), durationMs);
+      const timer = setTimeout(() => setRendering(false), hold);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, durationMs]);
+  }, [isOpen, hold]);
 
   return rendering;
 }
 
 /**
- * Scroll lock, refcounted.
+ * Scroll lock, refcounted — closing an inner overlay must not unlock the page while an
+ * outer one is still up.
  *
- * Each overlay used to set `overflow` on open and blindly reset it on unmount,
- * so closing an inner dialog unlocked the page while an outer one was still up.
- *
- * It also has to target the *app scroller*, not `<body>`. The shell already sets
- * `overflow: hidden` on the body and scrolls a `<main>` inside it, so locking the
- * body was a no-op and the gallery went on scrolling behind every open dialog.
- * `.main-scrollbar` reserves a stable gutter, so switching that element to
- * `hidden` does not reflow the content underneath.
- *
- * And `getAppScroller()` alone names one fixed element, which is wrong whenever
- * the overlay was opened from something that scrolls independently — an
- * image-detail overlay brings its own scroller and covers the gallery entirely,
- * so a confirm dialog opened inside it froze the hidden page and left the visible
- * one moving. The element that actually scrolls under the trigger is found by
- * walking up from it instead.
+ * Locks the app scroller, not the body: the shell hides the body and scrolls a main element
+ * inside it, and that element reserves a stable gutter, so hiding it does not reflow the
+ * content underneath. And a fixed "the app scroller" answer is wrong whenever the overlay
+ * was opened inside something that scrolls independently, so the element that actually
+ * scrolls under the trigger is found by walking up from the still-focused trigger.
  */
 let scrollLocks = 0;
 let lockedEl: HTMLElement | null = null;
@@ -83,8 +73,7 @@ function findScroller(from: Element | null): HTMLElement {
 export function useScrollLock(isOpen: boolean): void {
   useEffect(() => {
     if (!isOpen) return;
-    // The element that opened the overlay is still focused at this point, which
-    // is what tells us which scroller the user was actually looking at.
+    // The still-focused trigger tells us which scroller the user was actually looking at.
     const from = document.activeElement;
     if (scrollLocks === 0) {
       lockedEl = findScroller(from);
@@ -108,11 +97,10 @@ const FOCUSABLE =
  * Moves focus into the panel on open, cycles Tab inside it, and hands focus back
  * to whatever opened it on close.
  *
- * The panel itself takes focus, not its first control: focusing the close button
- * lands a visible ring on it the instant the surface opens, which reads as "the
- * dismiss button is what you want". The panel is labelled by its own heading, so
- * a screen reader still announces it; Tab from there reaches the first real
- * control. `[data-autofocus]` overrides this for a surface built around one field.
+ * The panel itself takes focus, not its first control: focusing a button lands a
+ * visible ring on it the instant the surface opens. The panel is labelled by its
+ * own heading, so a screen reader still announces it. `[data-autofocus]` overrides
+ * this for a surface built around one field.
  */
 export function useFocusTrap(isOpen: boolean, panelRef: RefObject<HTMLElement | null>): void {
   const returnFocusTo = useRef<HTMLElement | null>(null);

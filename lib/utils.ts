@@ -1,58 +1,42 @@
 const API_BASE = 'https://picpony.top';
 
 /**
- * Joins class names, keeping only non-empty strings. The components in this
- * repo compose classes with template literals, which leaves `undefined` and
- * `false` in the output string; this keeps the conditional cases readable
- * without pulling in clsx/tailwind-merge.
- *
- * Takes `unknown` so that `someReactNode && 'pl-10'` type-checks — a ReactNode
- * narrows to `0 | 0n | '' | false | null | undefined` on the falsy branch, none
- * of which a narrower signature would accept.
- *
- * It does not resolve Tailwind conflicts, and **ordering the arguments does not
- * resolve them either**. This used to advise putting the overridable classes
- * first and letting `className` land last, which does not work: for two utilities
- * that set the same property, the winner is decided by the order the rules appear
- * in the generated stylesheet, not by the order the class names appear in the
- * attribute. `mt-12` beats a caller's `mt-8` wherever you put it.
- *
- * So a primitive that hard-codes a property a call site might want to change has
- * to detect the override and stand its own default down. `Skeleton` does this for
- * its radius and `Pagination` for its top margin; both carry the regex and the
- * reasoning. The alternative is to make the value a prop.
+ * Joins class names, keeping only non-empty strings (repo components compose
+ * classes with template literals, which leak undefined/false into the output).
+ * Takes `unknown` so a falsy-guard expression type-checks: a ReactNode narrows
+ * to `0 | 0n | '' | false | null | undefined` on the falsy branch. Does not
+ * resolve conflicting utilities, and argument order does not either — for two
+ * rules setting the same property, the winner is the order in the generated
+ * stylesheet, not the attribute — so a primitive with a hard-coded default must
+ * detect the override and stand it down.
  */
 export function cn(...parts: unknown[]): string {
   return parts.filter((p): p is string => typeof p === 'string' && p !== '').join(' ');
 }
 
-export function getAvatarUrl(avatar: string | undefined | null): string {
-  if (!avatar) return '';
-  if (avatar.startsWith('http')) return avatar;
-  return `${API_BASE}/${avatar}`;
+/** Bound a number to a range — the shared bounded-number helper. */
+export function clamp(value: number, min: number, max: number): number {
+  return value < min ? min : value > max ? max : value;
 }
 
+/** The [0, 1] case of clamp. */
+export function clamp01(value: number): number {
+  return clamp(value, 0, 1);
+}
+
+/** A PicPony-hosted path, made absolute, normalising the leading slash — one function because call sites hand-joined the host with several conflicting join semantics, and the URL shape must have a single answer. */
 export function getAssetUrl(path: string): string {
-  if (path.startsWith('http')) return path;
-  return `${API_BASE}/${path}`;
+  if (!path) return '';
+  if (/^https?:\/\//.test(path)) return path;
+  return `${API_BASE}/${path.replace(/^\/+/, '')}`;
 }
 
-/**
- * Copies text, and reports whether it actually worked.
- *
- * There were two of these and neither was right. The image detail's share menu
- * called `navigator.clipboard.writeText` bare and then showed 链接已复制
- * unconditionally — but the Clipboard API is undefined outside a secure context
- * and rejects on a denied permission, so on plain HTTP or with clipboard access
- * blocked the toast claimed a copy that never happened, and the rejection went
- * unhandled besides. The admin badge tab had the `execCommand` fallback but
- * announced its own failure through the browser's `prompt()` — a system box in
- * the OS font, outside the app's scrim, type scale and focus trap.
- *
- * `document.execCommand('copy')` is deprecated and is here on purpose: it is the
- * only path that works on an insecure origin, and it returns `false` rather than
- * throwing when the UA refuses, which is why its result is checked.
- */
+/** The avatar case of getAssetUrl, which tolerates a missing value. */
+export function getAvatarUrl(avatar: string | undefined | null): string {
+  return avatar ? getAssetUrl(avatar) : '';
+}
+
+/** Copies text and reports whether it actually worked: the Clipboard API needs a secure context and can reject, so a failed first attempt falls through to the deprecated-but-intentional execCommand copy — the only path that works on an insecure origin, whose false return is checked rather than trusted. */
 export async function copyText(text: string): Promise<boolean> {
   if (navigator.clipboard && window.isSecureContext) {
     try {
@@ -66,8 +50,7 @@ export async function copyText(text: string): Promise<boolean> {
     const staging = document.createElement('textarea');
     staging.value = text;
     staging.setAttribute('readonly', '');
-    // Off-screen rather than hidden: `display:none` is not selectable, and a
-    // visible focus jump would scroll the page.
+    // Off-screen rather than hidden: a hidden element is not selectable.
     staging.style.position = 'fixed';
     staging.style.top = '-9999px';
     staging.style.opacity = '0';
@@ -81,16 +64,6 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function formatDate(date: string | Date, locale: string = 'zh-CN'): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleString(locale, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export function processImageFile(file: File, maxSizeMB: number = 5): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -143,11 +116,9 @@ export function distributeToMasonryColumns<T extends { height?: number; width?: 
 /**
  * Encrypt track data using XOR with key 0x5A (90), then base64 encode.
  * Matches backend validation in api.php captcha_verify / production Vue captcha.
- * Track format: array of [x, relativeY, elapsedMs] points
- *   - x: slider offset in the 310-wide puzzle (0..260)
- *   - relativeY: clientY - startY (NOT absolute clientY)
- *   - elapsedMs: ms since drag start
- * First point is always [0, 0, 0].
+ * Track format: array of [x, relativeY, elapsedMs] points — x: slider offset in the
+ * 310-wide puzzle (0..260); relativeY: clientY - startY (NOT absolute clientY);
+ * elapsedMs: ms since drag start. First point is always [0, 0, 0].
  */
 export function encodeTrack(track: [number, number, number][]): string {
   const jsonStr = JSON.stringify(track);
@@ -161,4 +132,20 @@ export function encodeTrack(track: [number, number, number][]): string {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+}
+
+/**
+ * Run something once the browser is idle, and hand back a way to cancel it.
+ * `timeoutMs` is the deadline either way: it is `requestIdleCallback`'s own
+ * `timeout` and, on browsers without one, the `setTimeout` fallback's delay —
+ * not before idle if idle comes first, never later than this.
+ */
+export function runWhenIdle(task: () => void, timeoutMs = 4000): () => void {
+  if (typeof window === 'undefined') return () => {};
+  if (typeof window.requestIdleCallback === 'function') {
+    const handle = window.requestIdleCallback(task, { timeout: timeoutMs });
+    return () => window.cancelIdleCallback?.(handle);
+  }
+  const handle = window.setTimeout(task, timeoutMs);
+  return () => window.clearTimeout(handle);
 }

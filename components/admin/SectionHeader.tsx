@@ -1,5 +1,6 @@
 'use client';
 
+import SectionHeading from '@/components/SectionHeading';
 import RefreshButton from './RefreshButton';
 
 interface SectionHeaderProps {
@@ -12,6 +13,11 @@ interface SectionHeaderProps {
   actions?: React.ReactNode;
 }
 
+/**
+ * The admin console's panel header: composes `SectionHeading` (which owns the
+ * type role, the tinted icon cell and the subtitle) plus the console-specific
+ * refresh affordance. Pass a bare glyph — it is tinted on arrival.
+ */
 export default function SectionHeader({
   icon,
   title,
@@ -22,20 +28,20 @@ export default function SectionHeader({
   actions,
 }: SectionHeaderProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 className="text-title-l text-on-surface flex items-center gap-2">
-          {icon}
-          {title}
-        </h2>
-        {subtitle && <p className="text-body-m text-on-surface-variant mt-1">{subtitle}</p>}
-      </div>
-      <div className="flex items-center gap-2">
-        {actions}
-        {onRefresh && (
-          <RefreshButton onClick={onRefresh} label={refreshLabel} loading={isLoading} />
-        )}
-      </div>
-    </div>
+    <SectionHeading
+      as="h2"
+      icon={<span className="text-primary-ink [&>svg]:block">{icon}</span>}
+      subtitle={subtitle}
+      actions={
+        <>
+          {actions}
+          {onRefresh && (
+            <RefreshButton onClick={onRefresh} label={refreshLabel} loading={isLoading} />
+          )}
+        </>
+      }
+    >
+      {title}
+    </SectionHeading>
   );
 }

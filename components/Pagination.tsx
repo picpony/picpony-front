@@ -1,9 +1,12 @@
 'use client';
 
-import { useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from 'react-icons/md';
-import { scrollAppToTop, scrollAppToElement } from '@/lib/motion';
+import Button from './Button';
+import { scrollAppToTop, scrollAppToElement } from '@/lib/scrollTo';
 import { cn } from '@/lib/utils';
+import { ICON } from '@/lib/icons';
 
 interface PaginationProps {
   currentPage: number;
@@ -16,26 +19,34 @@ interface PaginationProps {
   siblings?: number;
   /** Opt out of the automatic scroll reset (e.g. an inline widget mid-page). */
   scrollToTop?: boolean;
+  /**
+   * Warm a page's data before it is asked for.
+   *
+   * The pager calls this for whichever page a pointer, focus or press is resting on — never
+   * speculatively; see the note on `pageIntent` below. It is a prop rather than something the pager
+   * derives, because only the call site knows which resource a page number means, and the pager
+   * must not grow an opinion about the thirteen different lists it serves.
+   *
+   * Everything it starts goes out at `background` priority, so a guessed page can never take a
+   * slot from the page somebody is waiting for; see `lib/resource.ts`.
+   */
+  onPrefetchPage?: (page: number) => void;
   className?: string;
 }
 
 /**
  * The one pager.
  *
- * There were three: this component, an inline copy inside `ForumPostList`, and
- * another inside the profile page repeated four times, each with different
- * button sizes and a different idea of how many numbers to show.
+ * It owns the scroll reset (the scroll container is not the window, so a hand-rolled
+ * `window.scrollTo` silently does nothing). The target is the nearest
+ * `[data-pagination-anchor]` **ancestor** — `closest()` walks up; a marker with the
+ * pager as its *sibling* is invisible to it and the failure is silent. Several
+ * pagers may share one enclosing anchor, and a pager passed into a list component
+ * as `children` is inside its anchor by construction.
  *
- * It also owns the scroll reset. Every call site used to do
- * `window.scrollTo({ top: 0 })` by hand, which silently did nothing because the
- * scroll container is not the window (see `scrollAppToTop`). Putting it here
- * means a new call site cannot forget it or get it wrong.
- *
- * The target is the nearest `[data-pagination-anchor]` ancestor — i.e. the top
- * of the list this pager belongs to — rather than the top of the document, so
- * turning a page lands on the first new row instead of replaying the featured
- * banner. Pages with several independent pagers (the profile tabs) each get
- * their own anchor. With no anchor it falls back to the top.
+ * With no anchor it falls back to the top of the scroll container — unless the
+ * container is a dialog's, where it does nothing rather than scrolling a surface
+ * the user is not looking at.
  */
 /** Matches a caller-supplied top margin (`mt-*`, `my-*`, or a breakpoint form). */
 const HAS_TOP_MARGIN = /(?:^|\s|:)(?:mt|my)-/;
@@ -48,6 +59,7 @@ export default function Pagination({
   disabled,
   siblings = 2,
   scrollToTop = true,
+  onPrefetchPage,
   className = '',
 }: PaginationProps) {
   const rootRef = useRef<HTMLElement>(null);
@@ -55,15 +67,65 @@ export default function Pagination({
   const canPrev = currentPage > 1;
   const canNext = known ? currentPage < totalPages : Boolean(hasMore);
 
+  /**
+   * Whichever page the pointer or the keyboard is resting on, through the same
+   * intent ladder every link in the app uses — 70ms for a hover, 120ms for focus,
+   * immediate on press.
+   *
+   * **On intent only, never on idle**, and that is a decision: warming the next
+   * page on settle is a request for a page that may never be looked at, and the
+   * rule is that speculation may move a request *earlier*, never add one (asserted
+   * by `npm run net:audit`). The head start survives on hover and (on touch,
+   * 100ms+ before click) on `onPointerDown`; the unasked-for request does not.
+   */
+  const warmRef = useRef<((page: number) => void) | undefined>(undefined);
+  useEffect(() => {
+    warmRef.current = onPrefetchPage;
+  }, [onPrefetchPage]);
+  const [intentPage, setIntentPage] = useState<number | null>(null);
+  const intent = useIntentPrefetch(
+    useCallback(() => {
+      if (intentPage !== null) warmRef.current?.(intentPage);
+    }, [intentPage]),
+  );
+  const pageIntent = (page: number) => ({
+    onPointerEnter: () => {
+      setIntentPage(page);
+      intent.onPointerEnter();
+    },
+    onPointerLeave: intent.onPointerLeave,
+    onFocus: () => {
+      setIntentPage(page);
+      intent.onFocus();
+    },
+    onBlur: intent.onBlur,
+    onPointerDown: intent.onPointerDown,
+  });
+
   const go = (page: number) => {
     if (disabled) return;
     if (page < 1 || (known && page > totalPages)) return;
     if (page === currentPage) return;
     onPageChange(page);
     if (!scrollToTop) return;
+    /* Which *container* to scroll, before deciding where in it. A pager inside a
+       modal was scrolling the page behind the dialog while its own list stayed
+       put — the app scroller is not the only thing that scrolls. With a nearer
+       scroll container, an anchorless pager does nothing rather than moving a
+       surface the user is not looking at. */
+    const scroller =
+      rootRef.current?.closest<HTMLElement>('[data-app-scroll-container]') ?? undefined;
+    /* The distance law, `scrollAppToElement`'s default — no duration override.
+       The law scales the length with the square root of the travel, so the *rate*
+       is non-linear in the distance: a short hop is brisk, a long one takes its
+       time. A fixed length makes the speed rise with however far you happen to be
+       scrolled — a whip-pan from the bottom of a long gallery, a crawl from near
+       the top. When the glide looked wrong, the fault was blank cards underneath
+       it, not the duration; with the placeholder fixed, the honest glide passes
+       over skeletons in the row's own geometry. */
     const anchor = rootRef.current?.closest('[data-pagination-anchor]');
-    if (anchor) scrollAppToElement(anchor);
-    else scrollAppToTop();
+    if (anchor) scrollAppToElement(anchor, { scroller });
+    else if (!scroller) scrollAppToTop();
   };
 
   // Centre the window on the current page and clamp it to the known range.
@@ -74,8 +136,12 @@ export default function Pagination({
   const pages = Array.from({ length: count }, (_, i) => start + i);
 
   const navBtn = cn(
-    // 44px below `sm` for the same reason as the number buttons above.
-    'inline-flex h-11 min-w-11 sm:h-10 sm:min-w-10 cursor-pointer items-center justify-center rounded-full px-2',
+    /* **40dp, with `touch-size` for the floor.** The 40 is the button step; the
+       floor is `--touch-floor` (48 under a coarse pointer, 24 under a fine one).
+       `touch-size` rather than `touch-target` because `data-ripple` sets
+       `overflow: hidden` and would clip a hit-area pseudo-element out of
+       hit-testing with it — this control's floor has to be a real box. */
+    'inline-flex h-10 min-w-10 touch-size cursor-pointer items-center justify-center rounded-full px-2',
     'text-on-surface-variant state-layer outline-none',
     'transition-ui',
     'focus-visible:ring-2 focus-ring',
@@ -90,12 +156,9 @@ export default function Pagination({
          outside a tab pane, which is the only place that attribute is read. */
       data-tab-row
       className={cn(
-        /* The default gap stands down when the call site names its own, the same
-           guard `Skeleton` uses for its radius and for the same reason: `cn` is a
-           plain join, so `mt-12` plus a caller's `mt-8` emitted both and let the
-           stylesheet's order pick the winner — which is `mt-12`, so every
-           override silently lost. `ForumPostList` asks for `mt-8` and
-           `GlossaryTab` for `mt-0`; both were being ignored. */
+        /* The default top margin stands down when the call site names its own,
+           same guard as `Skeleton`'s radius: `cn` is a plain join, so both would
+           be emitted and the stylesheet's order — not the caller — would pick. */
         !HAS_TOP_MARGIN.test(className) && 'mt-12',
         'flex items-center justify-center gap-1',
         className,
@@ -109,18 +172,19 @@ export default function Pagination({
           data-ripple
           className={cn(navBtn, 'max-sm:hidden')}
         >
-          <MdFirstPage size={20} />
+          <MdFirstPage size={ICON.control} />
         </button>
       )}
 
       <button
         onClick={() => go(currentPage - 1)}
+        {...pageIntent(currentPage - 1)}
         disabled={!canPrev || disabled}
         aria-label="上一页"
         data-ripple
         className={navBtn}
       >
-        <MdChevronLeft size={20} />
+        <MdChevronLeft size={ICON.control} />
         <span className="max-sm:hidden text-label-l pr-1">上一页</span>
       </button>
 
@@ -131,26 +195,25 @@ export default function Pagination({
             <button
               key={page}
               onClick={() => go(page)}
+              {...pageIntent(page)}
               disabled={disabled}
               aria-label={`第 ${page} 页`}
               aria-current={active ? 'page' : undefined}
               data-ripple
               className={cn(
-                /* `h-11 w-11` below `sm`: this is the most-tapped chrome in the
-                   app and 40px is under the 44px minimum. `touch-target` cannot
-                   help here — `data-ripple` sets `overflow: hidden`, which clips
-                   the utility's pseudo-element out of hit-testing — so the box
-                   itself has to grow. It returns to 40px from `sm` up, where a
-                   pointer is doing the aiming. */
-                'inline-flex h-11 w-11 sm:h-10 sm:w-10 cursor-pointer items-center justify-center rounded-full outline-none',
+                /* 40dp with `touch-size`, for the reason on `navBtn` above:
+                   most-tapped chrome in the app, and `data-ripple` rules out a
+                   hit-area pseudo-element. */
+                'inline-flex h-10 w-10 touch-size cursor-pointer items-center justify-center rounded-full outline-none',
                 'transition-ui',
                 'focus-visible:ring-2 focus-ring',
                 'disabled:pointer-events-none disabled:disabled-content',
-                /* One type role per branch — the active page used to add a bare
-                   `font-medium` over `text-label-l`, which is already weight 500,
-                   so the current page was distinguished by colour alone. */
+                /* One type role per branch, so the active page gets weight
+                   contrast and not colour alone. `state-layer` on both branches —
+                   the current page is still a button. No elevation: M3 gives a
+                   pagination item level 0. */
                 active
-                  ? 'bg-primary text-on-primary text-label-l-emphasized shadow-e1'
+                  ? 'bg-primary text-on-primary text-label-l-emphasized state-layer'
                   : 'text-label-l text-on-surface-variant state-layer',
                 // Beyond five numbers the row overflows a 390px viewport, so
                 // the outer two collapse instead of wrapping to a second line.
@@ -165,13 +228,14 @@ export default function Pagination({
 
       <button
         onClick={() => go(currentPage + 1)}
+        {...pageIntent(currentPage + 1)}
         disabled={!canNext || disabled}
         aria-label="下一页"
         data-ripple
         className={navBtn}
       >
         <span className="max-sm:hidden text-label-l pl-1">下一页</span>
-        <MdChevronRight size={20} />
+        <MdChevronRight size={ICON.control} />
       </button>
 
       {known && (
@@ -182,7 +246,7 @@ export default function Pagination({
           data-ripple
           className={cn(navBtn, 'max-sm:hidden')}
         >
-          <MdLastPage size={20} />
+          <MdLastPage size={ICON.control} />
         </button>
       )}
     </nav>
@@ -195,40 +259,48 @@ interface LoadMoreButtonProps {
   disabled?: boolean;
 }
 
+/**
+ * The "load more" affordance under a cursor-paged list.
+ *
+ * `Button`, not a hand-rolled one — `variant="tonal" size="lg"` (the M3 medium
+ * step), the size this button's job asks for: it is the only control on its row.
+ *
+ * The three bouncing dots stay. They are not a `Spinner` and should not be one —
+ * `loading` on `Button` swaps in the circular indicator, which is right for a
+ * submit that blocks and wrong for appending to a list you are still reading.
+ * They ride in the `icon` slot so the label keeps its place instead of being
+ * replaced.
+ */
 export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonProps) {
   return (
     <div className="mt-12 flex justify-center">
-      <button
+      <Button
+        variant="tonal"
+        size="lg"
         onClick={onClick}
         disabled={isLoading || disabled}
-        data-ripple
-        className={cn(
-          'group flex cursor-pointer items-center gap-2 rounded-full px-8 py-3',
-          'bg-secondary-container text-on-secondary-container text-label-l',
-          'state-layer outline-none transition-ui',
-          'focus-visible:ring-2 focus-ring',
-          'disabled:cursor-not-allowed disabled:disabled-content',
-          '',
-        )}
+        className="group"
+        icon={
+          isLoading ? (
+            <span className="flex items-center gap-1">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="bg-primary-ink animate-dot-bounce h-1.5 w-1.5 rounded-full"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </span>
+          ) : (
+            <MdRefresh
+              size={ICON.control}
+              className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
+            />
+          )
+        }
       >
-        {isLoading ? (
-          <div className="flex items-center gap-1">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="bg-primary h-1.5 w-1.5 rounded-full animate-[dot-bounce_1s_var(--ease-loop)_infinite]"
-                style={{ animationDelay: `${i * 0.15}s` }}
-              />
-            ))}
-          </div>
-        ) : (
-          <MdRefresh
-            size={20}
-            className="transition-transform duration-300 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:group-hover:rotate-0"
-          />
-        )}
-        <span>{isLoading ? '正在加载' : '加载更多'}</span>
-      </button>
+        {isLoading ? '正在加载' : '加载更多'}
+      </Button>
     </div>
   );
 }

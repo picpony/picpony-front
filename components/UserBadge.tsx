@@ -11,22 +11,12 @@ interface UserBadgeProps {
 }
 
 /**
- * A user's earned badge.
+ * A user's earned badge, in three places. Shape, size and type role come from
+ * `Badge` (the same primitive `RoleBadge` renders); only the fill — an
+ * author-chosen hex, outside the token scale — and its ink are computed here.
  *
- * Rendered in three places (profile, task page, admin list) from three
- * near-identical inline spans that had drifted in radius and weight. The colour
- * is picked per badge in the admin panel and cannot come from the token scale,
- * which is exactly why the *rest* of it needs to be shared: the one arbitrary
- * value should not drag the whole appearance out of the system with it.
- *
- * That is now literal — the shape, size and type role come from `Badge`, the
- * same primitive `RoleBadge` renders, so the two marks in a profile header are
- * one silhouette instead of a round pill under two square ones. Only the fill
- * and its ink are computed here, because only they are outside the system.
- *
- * The ink is chosen from the fill's relative luminance rather than pinned to
- * white — a badge set to a pale yellow was previously white-on-pale and
- * unreadable.
+ * The ink is picked from the fill's relative luminance rather than pinned to
+ * white, which was unreadable on pale fills.
  */
 function inkFor(hex: string): string {
   const m = /^#?([\da-f]{3}|[\da-f]{6})$/i.exec(hex.trim());

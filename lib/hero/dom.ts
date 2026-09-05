@@ -68,6 +68,15 @@ export function getHeroRect(element: HTMLElement): HeroRect {
 }
 
 /**
+ * The corner a flyer or a container mask starts from. Read rather than assumed: the
+ * gallery tile and the detail media happen to share 16dp today, and pinning either one
+ * would silently break the morph the day the shape scale moves.
+ */
+export function getHeroCornerRadius(element: HTMLElement) {
+  return Number.parseFloat(getComputedStyle(element).borderRadius) || 0;
+}
+
+/**
  * Measure an element as if a transformed ancestor were at rest.
  *
  * The gallery sinks under an open detail view, so a thumbnail measured during
@@ -378,12 +387,20 @@ export function leaseHeroCardChrome(element: HTMLElement | null): DomLease {
   );
 }
 
-/** Make a detail route invisible and non-interactive without unmounting it. */
+/**
+ * Make a detail route invisible and non-interactive without unmounting it.
+ *
+ * **`visibility`, not `opacity`.** `IconButton` carries `opacity` in its own transition
+ * list, so a seal that also set `opacity: 0` made the routed back affordance ramp 0 → 1
+ * over 200ms while the Stage's copy was hidden in the same frame by `visibility` — one
+ * blink per open. `visibility: hidden` hides the subtree, takes the node out of the tab
+ * order, and is not transitionable, so the reveal is a single frame.
+ */
 export function leaseHeroRouteSealed(nodes: {
   overlay: HTMLElement;
   floatingBack: HTMLElement | null;
 }): DomLease {
-  const sealed = { opacity: '0', visibility: 'hidden', pointerEvents: 'none' } as const;
+  const sealed = { visibility: 'hidden', pointerEvents: 'none' } as const;
   return combineHeroLeases(
     leaseInlineStyles(nodes.overlay, sealed),
     leaseAttribute(nodes.overlay, 'inert', ''),

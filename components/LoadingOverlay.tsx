@@ -1,60 +1,85 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Logo, { INTRO_DURATION_MS, INTRO_CHUNK_BUDGET_MS } from './Logo';
+import Logo, { INTRO_DURATION_MS } from './Logo';
+import { MOTION_SPEED_SCALE, entranceMotion, motionTier } from '@/lib/appearance';
+import { isAppPainted, subscribeAppPainted } from '@/lib/splash';
 
 /** How long the finished mark holds before the overlay leaves. */
-const HOLD_MS = 220;
-const FADE_MS = 400;
+const HOLD_MS = 200;
+/**
+ * The fade out. `short4` paired with `accelerate` — the leaves-the-screen pairing.
+ */
+const FADE_MS = 200;
+/* The unmount has to outlast the fade at *every* speed, and `duration-exit` goes
+ * through `--motion-scale` — so the slowest multiplier rather than the live one:
+ * this number bounds the animation, so it has to be the maximum the animation can
+ * ever take. Holding an already-invisible node 40% longer costs nothing. */
+const FADE_HOLD_MS = Math.round(FADE_MS * MOTION_SPEED_SCALE.slow);
 /** Reduced motion loads nothing, so there is no animation to wait for. */
 const REDUCED_HOLD_MS = 300;
 
 /**
  * The splash.
  *
- * The mark writes itself on — the same Lottie the header plays on hover, cut so
- * the colour layer waits for the outline instead of racing it — and the overlay
- * leaves once it lands. The logo used to sit still and breathe on a 1.6s loop,
- * which is a placeholder gesture: it says "wait" without saying what for, it
- * never ends, and the dismissal always cut it mid-cycle.
+ * The mark writes itself on — the same Lottie the header plays on hover — and the
+ * overlay leaves once it lands. **Once it lands, not "after `INTRO_DURATION_MS`"**:
+ * the player's 60KB chunk takes a few hundred ms to arrive, so a mount-time timer
+ * runs ahead of the animation and the last strokes were written onto an
+ * already-dissolving screen. `Logo` reports when it is genuinely done — including
+ * when it has given up on a slow chunk — and the hold counts from there.
  *
- * "Once it lands", not "after `INTRO_DURATION_MS`". The player's chunk is 60KB
- * and takes a few hundred milliseconds to arrive, so a timer started at mount
- * runs ahead of the animation by exactly that much: measured, the overlay began
- * fading at 1534ms while the mark did not finish drawing until ~1714ms, and the
- * last strokes were written onto an already-dissolving screen. `Logo` reports
- * when it is genuinely done — including when it has given up on a slow chunk —
- * and the hold counts from there.
+ * The ceiling is the backstop for the case where that report never comes at all.
+ * A splash is a decoration and must never be why the app is unreachable.
  *
- * The ceiling below is the backstop for the case where that report never comes
- * at all. A splash is a decoration and must never be why the app is unreachable.
- *
- * Under `prefers-reduced-motion` nothing is loaded and the static mark simply
+ * Below the standard motion tier nothing is loaded and the static mark simply
  * fades, so the whole overlay is over in well under a second.
  */
 export default function LoadingOverlay() {
-  const [isVisible, setIsVisible] = useState(true);
-  const [isMounted, setIsMounted] = useState(true);
+  /* Read synchronously rather than defaulted to `true`: a client navigation (or
+     a fast refresh) can remount this, and an overlay that fades in over a
+     painted app to fade straight back out is worse than no overlay. */
+  const [isVisible, setIsVisible] = useState(() => !isAppPainted());
+  const [isMounted, setIsMounted] = useState(() => !isAppPainted());
   const [settled, setSettled] = useState(false);
 
   const onSettled = useCallback(() => setSettled(true), []);
 
+  /**
+   * The dismissal is the app's to trigger, not the animation's.
+   * `subscribeAppPainted` fires on the frame after the shell's first commit is
+   * presented, so the overlay covers exactly the gap it was supposed to and
+   * nothing more. The timers below survive as *ceilings*, for the case where
+   * that signal never arrives.
+   */
+  useEffect(() => subscribeAppPainted(onSettled), [onSettled]);
+
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    /* Read through `motionTier()`, an attribute lookup — the tier is on `<html>`
+        before the first paint, so there is nothing to justify a private copy of
+        the OS media query here.
+        `entranceMotion()` joins it because `Logo` reads the same pair before it
+        loads a player: if the two disagreed, this would sit waiting for a
+        `settled` report from a draw that was never going to start. */
+    if (!entranceMotion() || motionTier() !== 'standard') {
       const timer = setTimeout(() => setSettled(true), REDUCED_HOLD_MS);
       return () => clearTimeout(timer);
     }
-    const ceiling = setTimeout(
-      () => setSettled(true),
-      INTRO_DURATION_MS + INTRO_CHUNK_BUDGET_MS + FADE_MS,
-    );
+    /* `INTRO_CHUNK_BUDGET_MS` is deliberately *not* in this sum: it is the grace
+        period `Logo` gives its own chunk, and adding it here meant the screen
+        stayed covered while a decoration downloaded. */
+    const ceiling = setTimeout(() => setSettled(true), INTRO_DURATION_MS + FADE_MS);
     return () => clearTimeout(ceiling);
   }, []);
 
   useEffect(() => {
     if (!settled) return;
-    const fadeOutTimer = setTimeout(() => setIsVisible(false), HOLD_MS);
-    const unmountTimer = setTimeout(() => setIsMounted(false), HOLD_MS + FADE_MS);
+    /* No hold once the app has painted: the point of the paint signal is that
+       there is something behind this to look at. The hold survives only for the
+       ceiling path, where nothing has reported. */
+    const hold = isAppPainted() ? 0 : HOLD_MS;
+    const fadeOutTimer = setTimeout(() => setIsVisible(false), hold);
+    const unmountTimer = setTimeout(() => setIsMounted(false), hold + FADE_HOLD_MS);
     return () => {
       clearTimeout(fadeOutTimer);
       clearTimeout(unmountTimer);
@@ -65,8 +90,12 @@ export default function LoadingOverlay() {
 
   return (
     <div
-      className={`bg-surface fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-400 ease-[var(--ease-accelerate)] ${
-        isVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
+      /* `pointer-events-none` unconditionally, not only once it has begun
+         fading. The overlay is decoration over a live app from the first
+         frame; leaving it hit-testable meant a tap in its first seconds went
+         nowhere at all. */
+      className={`bg-surface pointer-events-none fixed inset-0 z-app-loading flex items-center justify-center transition-opacity duration-exit ease-[var(--ease-accelerate)] ${
+        isVisible ? 'opacity-100' : 'opacity-0'
       }`}
     >
       {/* Nothing to point at on a splash, so the hover cut is never loaded.

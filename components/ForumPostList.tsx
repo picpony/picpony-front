@@ -12,6 +12,9 @@ import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import { rememberForumOrigin } from '@/lib/forumTransition';
 import Link from 'next/link';
 import Badge from '@/components/Badge';
+import { ICON } from '@/lib/icons';
+import { formatDate } from '@/lib/format';
+import { getAssetUrl } from '@/lib/utils';
 
 interface ForumPostListProps {
   posts: ForumPost[];
@@ -38,65 +41,74 @@ export default memo(function ForumPostList({
 }: ForumPostListProps) {
   if (isLoading) {
     return (
+      /* Three bars and the wrapper margin, matching the row below — the
+         placeholder must not be measurably shorter than the row it replaces,
+         or the pager jumps when the posts land. */
       <div className={className}>
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="m3-row bg-surface-container-low p-4 flex gap-4">
-            <SkeletonCircle size={48} delay={i * 80} />
-            <div className="flex flex-1 flex-col gap-3">
-              <Skeleton className="h-5 w-3/4" delay={i * 80 + 40} />
-              <Skeleton className="h-4 w-1/4" delay={i * 80 + 80} />
+        <div className="mb-8">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="m3-row bg-surface-container-low p-4 flex gap-4">
+              <SkeletonCircle size={48} delay={i * 80} />
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <Skeleton className="h-5 w-3/4" delay={i * 80 + 40} />
+                <Skeleton className="h-4 w-1/3" delay={i * 80 + 80} />
+                <Skeleton className="h-4 w-1/4" delay={i * 80 + 120} />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error) {
-    return <ErrorRetry title="帖子加载失败" message={error.message} onRetry={onRetry} />;
+    return (
+      /* `pane`, matching the empty branch below — one list, one silhouette. */
+      <ErrorRetry size="pane" title="帖子加载失败" message={error.message} onRetry={onRetry} />
+    );
   }
 
   return (
-    <div className={className}>
+    /* `data-pagination-anchor` on the list root, so turning a page lands on
+       the first new row rather than the top of the page. The anchor is meant
+       to be the top of the *list*. */
+    <div data-pagination-anchor className={className}>
       <div className="mb-8">
         {posts.length === 0 ? (
           <EmptyState
             size="pane"
-            icon={<MdForum size={48} />}
+            icon={<MdForum size={ICON.display} />}
             title="暂无帖子"
             description="还没有人开过话题，来发第一个吧。"
           />
         ) : (
           posts.map((post) => {
+            /* No `sm:size-4` on these glyphs. It overrode the `size` prop, so the
+               icon got *smaller* on the wider viewport — and 16 is off the icon
+               scale entirely (below 18 a Material Symbol's strokes stop
+               resolving and it reads as a smudge). `dense` at both sizes. */
             const stats = (
               <>
-                <span
-                  className="flex items-center gap-1 whitespace-nowrap tabular-nums"
-                  title="浏览量"
-                >
-                  <MdVisibility size={14} className="sm:size-4" /> {post.views}
+                <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
+                  <MdVisibility size={ICON.dense} aria-hidden="true" />
+                  <span className="sr-only">浏览量</span> {post.views}
                 </span>
-                <span
-                  className="flex items-center gap-1 whitespace-nowrap tabular-nums"
-                  title="回复数"
-                >
-                  <MdComment size={14} className="sm:size-4" /> {post.reply_count}
+                <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
+                  <MdComment size={ICON.dense} aria-hidden="true" />
+                  <span className="sr-only">回复数</span> {post.reply_count}
                 </span>
-                <span
-                  className="flex items-center gap-1 whitespace-nowrap tabular-nums"
-                  title="点赞数"
-                >
-                  <MdThumbUp size={14} className="sm:size-4" /> {post.like_count}
+                <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
+                  <MdThumbUp size={ICON.dense} aria-hidden="true" />
+                  <span className="sr-only">点赞数</span> {post.like_count}
                 </span>
               </>
             );
             return (
-              /* A `<Link>`, not a `<div onClick>`.
-                 This is the forum's primary navigation and it had no `href`, no
-                 `tabIndex` and no key handler, so it could not be reached by
-                 keyboard at all, middle-clicked, or opened in a new tab. The
-                 handler stays for `rememberForumOrigin`, which hands the pressed
-                 rectangle to the detail page's container transform. */
+              /* A `<Link>`, not a `<div onClick>`: the forum's primary
+                 navigation gets a real href, a tab stop, keyboard activation,
+                 middle-click and new-tab. The handler stays for
+                 `rememberForumOrigin`, which hands the pressed rectangle to
+                 the detail page's container transform. */
               <Link
                 key={post.id}
                 href={`/forum/${post.id}`}
@@ -110,39 +122,26 @@ export default memo(function ForumPostList({
                 data-ripple
                 data-tab-row
                 /* M3 grouped list row, settings-page style: one continuous cut
-                 block of `bg-surface-container-low` rows with 2px seams and
-                 large outer corners.
+                 block of rows with 2px seams and large outer corners.
 
-                 No entrance cascade. The rows used to fade in on a 45ms-per-row
-                 stagger, which lands *on top of* the tab shared axis: switching
-                 to 论坛 played a slide and a per-row fade at once, so the list
-                 arrived twice. The slide already carries the arrival — an
-                 entrance cascade belongs to picture content, where the wait is
-                 real, not to a text list that is already in the DOM.
+                 No entrance cascade: it landed *on top of* the tab shared axis
+                 (a slide plus a per-row fade at once, so the list arrived
+                 twice). The slide already carries the arrival — an entrance
+                 cascade belongs to picture content where the wait is real.
 
-                 `state-layer` alone carries hover. The tone step that used to sit
-                 beside it (`hover:` on the container-high role) was left behind
-                 when the alpha tint was replaced, so the row ran two hover
-                 treatments at once, on 150ms and 200ms. */
+                 `state-layer` alone carries hover; no second hover tone step
+                 beside it. */
                 className="m3-row block bg-surface-container-low p-4 cursor-pointer state-layer transition-ui focus-visible:ring-2 focus-ring"
               >
                 <div className="flex gap-4">
                   <div className="shrink-0">
                     <Avatar src={post.avatar} name={post.username} size={48} />
                   </div>
-                  {/* One shape, cover or no cover.
-                      Three rows: the title, the author under it, and a baseline
-                      carrying the date on the left and the counts on the right.
-                      The middle column stretches to whatever the row is tall,
-                      so `mt-auto` drops that baseline to the bottom edge of the
-                      thumbnail when there is one and changes nothing when there
-                      is not — which is the point. Branching on the cover gave
-                      the two kinds of post visibly different anatomy; here the
-                      picture only decides how tall the row is.
-                      Date and counts share the baseline rather than each owning
-                      a row of their own: it keeps the card to three lines, and
-                      the two ends anchor the bottom the way the avatar and the
-                      thumbnail anchor the top. */}
+                  {/* One shape, cover or no cover. Three rows: title, author,
+                      baseline (date left, counts right). `mt-auto` drops that
+                      baseline to the bottom edge of the thumbnail when there is
+                      one and changes nothing when there is not — the picture
+                      only decides how tall the row is. */}
                   <div className="flex min-w-0 flex-1 flex-col">
                     <div className="flex items-center gap-2">
                       {post.is_pinned === 1 && (
@@ -154,7 +153,10 @@ export default memo(function ForumPostList({
                         {post.title}
                       </h2>
                     </div>
-                    <span className="block truncate text-body-s text-on-surface sm:text-body-m">
+                    {/* `on-surface-variant`, which is
+                        `ListTokens.ItemSupportingTextColor` — supporting ink,
+                        so the row's two lines carry a hierarchy. */}
+                    <span className="block truncate text-body-s text-on-surface-variant sm:text-body-m">
                       {post.username}
                     </span>
                     {/* `flex-wrap` and a shrinkable stats group: with a cover
@@ -166,7 +168,7 @@ export default memo(function ForumPostList({
                         outer page numbers for the same reason. */}
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1.5 text-body-s text-on-surface-variant sm:text-body-m">
                       <span className="truncate">
-                        {new Date(post.created_at).toLocaleDateString()}
+                        {formatDate(post.created_at)}
                       </span>
                       <div className="flex items-center gap-3 sm:gap-4">{stats}</div>
                     </div>
@@ -174,11 +176,14 @@ export default memo(function ForumPostList({
                   {post.cover_image && (
                     <div className="shrink-0">
                       <FadeInImage
-                        src={`https://picpony.top${post.cover_image}`}
-                        alt="Cover"
+                        src={getAssetUrl(post.cover_image)}
+                        alt="帖子封面"
                         width={80}
                         height={80}
-                        className="object-cover rounded-md w-12 h-12 sm:w-20 sm:h-20"
+                        /* 56dp and an 8dp corner (`ListTokens.ItemLeadingImageWidth` /
+                           `-Height` and `-ExpressiveShape`). A leading image is not
+                           a card. */
+                        className="object-cover rounded-sm size-14"
                       />
                     </div>
                   )}

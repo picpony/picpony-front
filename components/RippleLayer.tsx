@@ -1,19 +1,22 @@
 'use client';
 
 import { useEffect } from 'react';
-import { prefersReducedMotion, spawnRipple } from '@/lib/motion';
+import { spawnRipple } from '@/lib/ripple';
 
 /**
  * Global press-ripple system. Mount once (root layout); any element carrying
  * `data-ripple` gets a Material-style ripple on pointerdown via event
- * delegation — no per-component wiring. `[data-ripple]` in globals.css
- * provides positioning, clipping and tap-highlight removal; the ripple
- * inherits `currentColor`, so it adapts to any surface automatically.
+ * delegation. `[data-ripple]` in globals.css provides positioning, clipping and
+ * tap-highlight removal; the ripple inherits `currentColor`.
+ *
+ * The motion tier is `spawnRipple`'s to read, not this delegator's: the wave
+ * has to be created for the tier that still paints one, which a guard here
+ * would prevent.
  */
 export default function RippleLayer() {
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button !== 0 || prefersReducedMotion()) return;
+      if (event.button !== 0) return;
       const target = (event.target as Element | null)?.closest<HTMLElement>('[data-ripple]');
       if (!target || target.hasAttribute('disabled')) return;
 

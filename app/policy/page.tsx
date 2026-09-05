@@ -3,7 +3,7 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
-import TabBar, { type TabItem } from '@/components/TabBar';
+import Tabs, { type TabItem } from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import PageHeader from '@/components/PageHeader';
 import PageBack from '@/components/PageBack';
@@ -40,7 +40,7 @@ function UL({ children }: { children: ReactNode }) {
 
 function Code({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded-sm bg-surface-container-high px-1.5 py-0.5 font-mono text-body-s text-on-surface">
+    <code className="rounded-xs bg-surface-container-high px-1.5 py-0.5 font-mono text-body-s text-on-surface">
       {children}
     </code>
   );
@@ -52,7 +52,7 @@ function OutLink({ href, children }: { href: string; children: ReactNode }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-link hover:text-link-hover hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+      className="prose-link focus-visible:ring-2 focus-ring"
     >
       {children}
     </a>
@@ -363,7 +363,7 @@ export default function PolicyPage() {
       <PageHeader title="声明与政策" />
 
       {/* 板块切换，样式与消息/通知页一致 */}
-      <TabBar
+      <Tabs
         tabs={TABS}
         value={active}
         onChange={setActive}
@@ -371,15 +371,12 @@ export default function PolicyPage() {
         className="mb-6"
       />
 
-      {/* `lean`: these four panes are static prose that never refetches, which is
-          the precondition for sampling the wave over a pane's own blocks — see
-          `TabPanes`. The card is *inside* each pane, not around all of them.
-          It reads like an inversion and it is the only arrangement that works:
-          the shared axis translates the panes a full window sideways, and a pane
-          nested inside a card would slide out of a surface that stayed put —
-          the border and background sitting still while their own contents left
-          the box. Every other screen slides content blocks *including* their
-          surfaces, so the card travels with the text it belongs to. */}
+      {/* `lean`: these four panes are static prose that never refetches, which is the
+          precondition for sampling the wave over a pane's own blocks — see `TabPanes`.
+          The card is *inside* each pane, not around all of them: the shared axis
+          translates the panes a full window sideways, and a pane nested inside a card
+          would slide out of a surface that stayed put. Every other screen slides content
+          blocks *including* their surfaces. */}
       <TabPanes value={active} lean>
         <TabPane value="cookie">
           <Card variant="filled" padding="lg">

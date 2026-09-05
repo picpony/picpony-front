@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
@@ -24,19 +24,16 @@ import PageHeader from '@/components/PageHeader';
 import Radio from '@/components/Radio';
 import Chip from '@/components/Chip';
 import Popover from '@/components/Popover';
+import { ICON } from '@/lib/icons';
+import { readUserInfo } from '@/lib/hooks';
+import { useResource, SKIP } from '@/lib/resource';
+import { blockGroups, type BlockGroup } from '@/lib/resources';
 
-const TRIXIE_SEARCH = 'https://trixiebooru.org/api/v1/json/search/tags';
 const MAX_GROUPS = 50;
 const MAX_TAGS_PER_GROUP = 100;
 
-interface BlockGroup {
-  id: number;
-  name: string;
-  tags: string[];
-  hidden_tags: string[];
-  spoilered_tags: string[];
-  is_active: number;
-}
+/* `BlockGroup` is imported from `lib/resources` rather than re-declared: two
+   structurally-identical types is one type and a copy that can drift. */
 
 type UserInfo = {
   id: number;
@@ -46,23 +43,36 @@ type UserInfo = {
   avatar: string | null;
 };
 
-function readUserInfo(): UserInfo | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem('user_info');
-    if (!stored) return null;
-    const u = JSON.parse(stored);
-    return { id: u.id, token: u.token, username: u.username, role: u.role, avatar: u.avatar };
-  } catch {
-    return null;
-  }
-}
-
 export default function BlockGroupsPage() {
   const { openAuth } = useAuthModal();
-  const [userInfo] = useState<UserInfo | null>(() => readUserInfo());
-  const [groups, setGroups] = useState<BlockGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [userInfo] = useState<UserInfo | null>(() => readUserInfo() as UserInfo | null);
+
+  /* The list comes from the resource layer rather than its own `useState` + effect — that
+     is what makes the sidebar's hover prefetch (`lib/prefetchRoute.ts`) worth anything:
+     it warmed `blockGroups` and this screen then fetched independently, so the hover cost
+     a request nobody read. `SKIP` while signed out — no token to key on. */
+  const read = useResource(blockGroups, userInfo?.token ? { token: userInfo.token } : SKIP);
+  const groups = useMemo(() => read.data?.groups ?? [], [read.data]);
+  /* The placeholder branches on having nothing at all, never on `isLoading` — a
+     revalidation under a warm screen has both, and dimming that to a skeleton is what
+     makes a cache not worth having. */
+  const loading = read.data === undefined && read.error === undefined;
+
+  /* Local edits go through the resource's own store so a refresh cannot resurrect a value
+     the user just changed. `write` is the optimistic path: `fetchedAt` stays put, so the
+     next read still confirms against the server. */
+  const setGroups = useCallback(
+    (update: (previous: BlockGroup[]) => BlockGroup[]) => {
+      const token = userInfo?.token;
+      if (!token) return;
+      blockGroups.write({ token }, (previous) => ({
+        ...(previous ?? {}),
+        success: true,
+        groups: update(previous?.groups ?? []),
+      }));
+    },
+    [userInfo?.token],
+  );
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -76,8 +86,8 @@ export default function BlockGroupsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<{ name: string; images: number }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  /* Anchors the suggestion popover. `Popover` measures this to place itself
-     and to decide which way to open. */
+  /* Anchors the suggestion popover: `Popover` measures this to place itself and decide
+     which way to open. */
   const searchFieldRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -92,31 +102,22 @@ export default function BlockGroupsPage() {
     }
   }, [userInfo, openAuth]);
 
-  const loadGroups = useCallback(async () => {
-    if (!userInfo?.token) return;
-    setLoading(true);
-    try {
-      const data = await api.getBlockGroups(userInfo.token);
-      if (data.success) {
-        setGroups(data.groups || []);
-        updateLocalStorageCache(data.groups || []);
-      } else {
-        showToast(data.error || '加载失败', 'error');
-      }
-    } catch {
-      showToast('网络错误', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [userInfo?.token]);
+  /* `refresh` rather than a hand-rolled reload: the resource owns the request, the dedup
+     and the in-flight state. Mutations below call this to reconcile with the server. */
+  const loadGroups = useCallback(() => {
+    void read.refresh();
+  }, [read]);
+
+  /* The localStorage mirror that `lib/api/client.ts`'s browsing settings read from. It has
+     to follow whatever the list currently is — server or optimistic write — so it keys off
+     the rendered value rather than off the fetch. */
+  useEffect(() => {
+    if (read.data?.groups) updateLocalStorageCache(read.data.groups);
+  }, [read.data]);
 
   useEffect(() => {
-    if (!userInfo) return;
-    // Defer so setLoading inside loadGroups is not sync in the effect body
-    queueMicrotask(() => {
-      void loadGroups();
-    });
-  }, [userInfo, loadGroups]);
+    if (read.error) showToast('网络错误，请稍后再试', 'error');
+  }, [read.error]);
 
   function updateLocalStorageCache(groups: BlockGroup[]) {
     const hidden = new Set<string>();
@@ -145,18 +146,17 @@ export default function BlockGroupsPage() {
           return;
         }
         try {
-          const res = await fetch(
-            `${TRIXIE_SEARCH}?q=name:*${encodeURIComponent(searchQuery)}*&per_page=10`,
-          );
-          if (!res.ok) return;
-          const data = await res.json();
-          if (data?.tags?.length > 0) {
-            setSuggestions(
-              data.tags.map((t: { name: string; images: number }) => ({
-                name: t.name,
-                images: t.images,
-              })),
-            );
+          /* `searchDerpiTags`, not a bare `fetch` on a locally re-declared base.
+             The shared wrapper goes through `proxyFetch`, so this autocomplete
+             gets the accelerator fallback and its health degradation like every
+             other Derpibooru call — and it escapes quotes and whitespace before
+             interpolating, which a raw query does not: a `"` in the box broke the
+             Philomena expression and returned nothing. It asks for 30 rows where
+             this list shows 10, hence the slice. */
+          const data = await api.searchDerpiTags(searchQuery);
+          const tags = (data?.tags ?? []) as { name: string; images: number }[];
+          if (tags.length > 0) {
+            setSuggestions(tags.slice(0, 10).map((t) => ({ name: t.name, images: t.images })));
             setShowSuggestions(true);
           } else {
             setShowSuggestions(false);
@@ -252,7 +252,7 @@ export default function BlockGroupsPage() {
         showToast(data.error || '保存失败', 'error');
       }
     } catch {
-      showToast('网络错误', 'error');
+      showToast('网络错误，请稍后再试', 'error');
     }
   }, [editGroupId, groupName, hiddenTags, spoileredTags, userInfo?.token, loadGroups]);
 
@@ -273,11 +273,11 @@ export default function BlockGroupsPage() {
           loadGroups();
         }
       } catch {
-        showToast('网络错误', 'error');
+        showToast('网络错误，请稍后再试', 'error');
         loadGroups();
       }
     },
-    [userInfo?.token, loadGroups],
+    [userInfo?.token, loadGroups, setGroups],
   );
 
   const confirmDeleteGroup = useCallback((id: number) => {
@@ -299,7 +299,7 @@ export default function BlockGroupsPage() {
         showToast(data.error || '删除失败', 'error');
       }
     } catch {
-      showToast('网络错误', 'error');
+      showToast('网络错误，请稍后再试', 'error');
     }
   }, [userInfo?.token, loadGroups]);
   if (!userInfo) return null;
@@ -311,9 +311,9 @@ export default function BlockGroupsPage() {
         actions={
           <Button
             variant="filled"
-            size="sm"
+            size="xs"
             onClick={() => openEditModal()}
-            icon={<MdAdd size={16} />}
+            icon={<MdAdd size={ICON.dense} />}
           >
             新建
           </Button>
@@ -327,7 +327,12 @@ export default function BlockGroupsPage() {
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="bg-surface-container border-outline-variant flex flex-col gap-3 rounded-md border p-4 shadow-e1"
+              /* The outlined card's own recipe: `surface` + `outline-variant` at
+                 elevation 0. This was `surface-container` + a border *and* an
+                 `e1` shadow — a tone from no row of the colour table plus both
+                 separators at once, written out twice in this file (here and on
+                 the real row below, byte-identical). */
+              className="bg-surface border-outline-variant flex flex-col gap-3 rounded-md border p-4"
             >
               <div className="border-outline-variant flex items-center justify-between border-b border-dashed pb-3">
                 <Skeleton className="h-4 w-24" delay={i * 90} />
@@ -343,18 +348,18 @@ export default function BlockGroupsPage() {
            64px glyph at 30% opacity over two untyped paragraphs — and the only
            one of the sixteen with an opacity on its icon. */
         <EmptyState
-          icon={<MdShield size={48} />}
+          icon={<MdShield size={ICON.display} />}
           title="还没有任何屏蔽组"
           description="创建一个后，主页会自动处理包含这些标签的图片。"
           action={
-            <Button variant="filled" icon={<MdAdd size={18} />} onClick={() => openEditModal()}>
+            <Button variant="filled" icon={<MdAdd size={ICON.dense} />} onClick={() => openEditModal()}>
               新建屏蔽组
             </Button>
           }
         />
       ) : (
         /* Group grid */ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {' '}
+          
           {groups.map((group) => {
             const hTags = group.hidden_tags || group.tags || [];
             const sTags = group.spoilered_tags || [];
@@ -375,12 +380,12 @@ export default function BlockGroupsPage() {
                    force. The tag lines below drop to `on-surface-variant` when
                    it is not, because the red and amber *mean* "being blocked
                    right now"; off, they are just a list of words. */
-                className={`bg-surface-container flex flex-col gap-3 rounded-md border p-4 shadow-e1 transition-ui ${isActive ? 'border-error' : 'border-outline-variant'}`}
+                className={`bg-surface flex flex-col gap-3 rounded-md border p-4 transition-ui ${isActive ? 'border-error' : 'border-outline-variant'}`}
               >
-                {' '}
-                {/* Header */}{' '}
+                
+                {/* Header */}
                 <div className="flex items-center justify-between border-b border-dashed border-outline-variant pb-3">
-                  {' '}
+                  
                   <span
                     className={`text-label-l-emphasized truncate ${isActive ? 'text-error' : 'text-on-surface-variant'}`}
                   >
@@ -406,25 +411,23 @@ export default function BlockGroupsPage() {
                       onChange={(v) => handleToggleGroup(group.id, v)}
                       aria-label={`启用屏蔽组 ${group.name}`}
                     />
-                    {/* `IconButton size="sm"` is the sanctioned 36dp box. The
+                    {/* `IconButton size="sm"` is the sanctioned 32dp box. The
                         pair used to be `p-1.5 rounded` with `touch-target` — a
-                        bare `rounded` (4dp) on a control whose role is
+                        a bare 4dp corner on a control whose role is
                         `rounded-full`, and a hit-area shim standing in for a box
                         the primitive already gives. */}
                     <IconButton
                       size="sm"
                       onClick={() => openEditModal(group)}
-                      title="编辑"
                       aria-label={`编辑屏蔽组 ${group.name}`}
-                      icon={<MdEdit size={16} />}
+                      icon={<MdEdit size={ICON.dense} />}
                     />
                     <IconButton
                       size="sm"
                       onClick={() => confirmDeleteGroup(group.id)}
-                      title="删除"
                       aria-label={`删除屏蔽组 ${group.name}`}
                       className="hover:text-error"
-                      icon={<MdDelete size={16} />}
+                      icon={<MdDelete size={ICON.dense} />}
                     />
                   </div>
                 </div>
@@ -432,12 +435,12 @@ export default function BlockGroupsPage() {
                 <div className="text-body-s space-y-1">
                   {hTags.length > 0 && (
                     <div className={isActive ? 'text-error' : 'text-on-surface-variant'}>
-                      <MdBlock size={12} className="inline mr-0.5" /> 隐藏: {hTags.join(', ')}
+                      <MdBlock size={ICON.dense} className="inline mr-0.5" /> 隐藏：{hTags.join(', ')}
                     </div>
                   )}
                   {sTags.length > 0 && (
                     <div className={isActive ? 'text-warning' : 'text-on-surface-variant'}>
-                      <MdVisibility size={12} className="inline mr-0.5" /> 遮挡: {sTags.join(', ')}
+                      <MdVisibility size={ICON.dense} className="inline mr-0.5" /> 遮挡：{sTags.join(', ')}
                     </div>
                   )}
                   {hTags.length === 0 && sTags.length === 0 && (
@@ -454,7 +457,28 @@ export default function BlockGroupsPage() {
         isOpen={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         title={editGroupId ? '编辑屏蔽组' : '创建新屏蔽组'}
-        maxWidth="max-w-lg"
+        maxWidth="lg"
+        /* The action row goes through `footer`, which is what the app's other nineteen
+           dialogs do — including the delete confirm forty lines below. It was two
+           full-width buttons in a 12px-gap flex row of its own, and that is broken rather
+           than merely unconventional: `buttonClasses` always emits a no-shrink rule, so two
+           buttons at 100% came to 200% plus the gap with neither allowed to give, and
+           `Modal`'s panel clips its overflow — 保存屏蔽组 was cut off the right edge of the
+           dialog. `cn` is a plain join and resolves no Tailwind conflict, so nothing was
+           going to drop that rule.
+           The footer also pins the row outside the body's scroller, where it belongs: this
+           dialog is tall enough to scroll, and the buttons used to scroll away with the
+           tag wells. */
+        footer={
+          <>
+            <Button variant="text" onClick={() => setEditModalOpen(false)}>
+              取消
+            </Button>
+            <Button variant="danger" onClick={handleSaveGroup}>
+              保存屏蔽组
+            </Button>
+          </>
+        }
       >
         {' '}
         <div className="space-y-4">
@@ -466,20 +490,20 @@ export default function BlockGroupsPage() {
               type="text"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
-              placeholder="例如：重口味屏蔽、黑名单画师..."
+              placeholder="例如：重口味屏蔽、黑名单画师…"
               maxLength={30}
-            />{' '}
-          </div>{' '}
+            />
+          </div>
           <div className="flex flex-wrap items-center gap-4">
             <Radio
               name="tagActionType"
               value="hide"
               checked={tagActionType === 'hide'}
               onChange={() => setTagActionType('hide')}
-              labelClassName="text-error"
+              tone="error"
               label={
                 <span className="flex items-center gap-1.5">
-                  <MdBlock size={16} /> 彻底隐藏
+                  <MdBlock size={ICON.dense} /> 彻底隐藏
                 </span>
               }
             />
@@ -488,10 +512,10 @@ export default function BlockGroupsPage() {
               value="spoiler"
               checked={tagActionType === 'spoiler'}
               onChange={() => setTagActionType('spoiler')}
-              labelClassName="text-warning"
+              tone="warning"
               label={
                 <span className="flex items-center gap-1.5">
-                  <MdVisibility size={16} /> 遮挡打码
+                  <MdVisibility size={ICON.dense} /> 遮挡打码
                 </span>
               }
             />
@@ -505,10 +529,10 @@ export default function BlockGroupsPage() {
               ref={searchInputRef}
               label="搜索并添加标签（支持联想）"
               type="text"
-              icon={<MdSearch size={16} />}
+              icon={<MdSearch size={ICON.dense} />}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="输入英文标签..."
+              placeholder="输入英文标签…"
             />
             {/* `Popover` — the app's one floating surface. This was a fourth
                 hand-rolled recipe (an outline on top of the tonal step and the
@@ -528,20 +552,19 @@ export default function BlockGroupsPage() {
                     onClick={() => addTag(s.name)}
                     className="w-full text-left px-3 py-2 text-body-m state-layer flex justify-between items-center border-b border-outline-variant last:border-0 outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
                   >
-                    {' '}
-                    <span className="text-on-surface">{s.name}</span>{' '}
-                    <span className="text-body-s text-on-surface-variant">{s.images}</span>{' '}
+                    
+                    <span className="text-on-surface">{s.name}</span>
+                    <span className="text-body-s text-on-surface-variant">{s.images}</span>
                   </button>
                 ))}{' '}
-            </Popover>{' '}
-          </div>{' '}
+            </Popover>
+          </div>
           <div>
             {' '}
             <p className="block text-body-m text-error mb-1">
-              <MdBlock size={14} className="inline mr-0.5" /> 隐藏标签列表：
-            </p>{' '}
-            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-[40px] max-h-[120px] overflow-y-auto">
-              {' '}
+              <MdBlock size={ICON.dense} className="inline mr-0.5" /> 隐藏标签列表：
+            </p>
+            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-10 max-h-30 overflow-y-auto">
               {hiddenTags.length === 0 ? (
                 <EmptyState size="inline" title="暂无标签" />
               ) : (
@@ -550,16 +573,15 @@ export default function BlockGroupsPage() {
                     {tag}
                   </Chip>
                 ))
-              )}{' '}
-            </div>{' '}
-          </div>{' '}
+              )}
+            </div>
+          </div>
           <div>
             {' '}
             <p className="block text-body-m text-warning mb-1">
-              <MdVisibility size={14} className="inline mr-0.5" /> 遮挡标签列表：
-            </p>{' '}
-            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-[40px] max-h-[120px] overflow-y-auto">
-              {' '}
+              <MdVisibility size={ICON.dense} className="inline mr-0.5" /> 遮挡标签列表：
+            </p>
+            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-10 max-h-30 overflow-y-auto">
               {spoileredTags.length === 0 ? (
                 <EmptyState size="inline" title="暂无标签" />
               ) : (
@@ -571,14 +593,6 @@ export default function BlockGroupsPage() {
               )}
             </div>
           </div>
-          <div className="flex gap-3">
-            <Button variant="tonal" fullWidth onClick={() => setEditModalOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" fullWidth onClick={handleSaveGroup}>
-              保存屏蔽组
-            </Button>
-          </div>
         </div>
       </Modal>
       {/* ================= Delete Confirm Modal ================= */}
@@ -586,7 +600,7 @@ export default function BlockGroupsPage() {
         isOpen={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
         title="确认删除"
-        maxWidth="max-w-sm"
+        maxWidth="sm"
         footer={
           <>
             <Button variant="text" onClick={() => setDeleteConfirmOpen(false)}>

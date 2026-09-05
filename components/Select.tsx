@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { MdCheck, MdExpandMore } from 'react-icons/md';
-import Popover, { type PopoverHandle } from './Popover';
+import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';
+import { ICON } from '@/lib/icons';
 
 export interface SelectOption<T extends string = string> {
   value: T;
@@ -25,11 +26,9 @@ interface SelectProps<T extends string = string> {
   'aria-label'?: string;
 }
 
-/** M3 menu item height, and the container's block padding. Keep in step with
- *  the `min-h-12` / `py-2` on the elements below — `Popover` uses them to pick
- *  a side before the menu has been laid out. */
-const MENU_ITEM_HEIGHT = 48;
-const MENU_PADDING = 8;
+/* The menu's height estimate comes from `estimateMenuHeight` in `Popover`, which
+   owns the placement decision and therefore owns the arithmetic. */
+
 
 /**
  * Listbox with an animated popover, replacing the unstylable native <select>.
@@ -72,9 +71,7 @@ export default function Select<T extends string = string>({
   };
 
   /* `Popover` owns the exit animation and defers its own unmount until it has
-     played, so closing is just a state flip here. It used to be sixty lines of
-     WAAPI plus a re-entrancy guard, duplicated in every other floating surface
-     that wanted the same behaviour and therefore present in none of them. */
+     played, so closing is just a state flip here. */
   const close = useCallback((refocus = true) => {
     if (refocus) triggerRef.current?.focus();
     setOpen(false);
@@ -142,16 +139,18 @@ export default function Select<T extends string = string>({
     }
   };
 
-  /* The trigger is a form control and sits in the same rows as one — an admin
-     filter bar is a search field, then two of these. So it takes the text
-     field's box: 12dp corner, 44px tall at `md`. It was 8dp and about 39px,
-     which put a different corner and a 5px step next to every field it stood
-     beside. `sm` stays denser for a toolbar that has no field in it. */
-  const pad = size === 'sm' ? 'h-9 px-3 text-body-s' : 'h-11 px-4 text-body-m';
+  /* **The trigger's step is decided by its enclosure, not by its type.** The two
+     values are the field's box (56dp with the field's 4dp corner and `body-l`
+     ink — a form slot) and the small control step (40dp, `body-m` — a filter
+     bar, toolbar, card header or `.m3-row`, where the neighbours are a 32dp
+     switch and a 32dp chip and matching them is what "coordinated" means). */
+  const pad = size === 'sm' ? 'h-10 px-3 text-body-m' : 'h-14 px-4 text-body-l';
 
-  /* Rows are taller below `sm`: 36px is fine under a mouse and too small a
-     target under a thumb. Handled with a breakpoint rather than a second
-     component so there is only ever one list to keep in step. */
+  /* **A menu row is 40dp under a pointer and 48 under a finger**, which is
+     `touch-size` — the row carries `data-ripple`, so `touch-target`'s
+     pseudo-element would be clipped away. 48 is M3's minimum *target*; the
+     item's own height is 40, so writing 48 unconditionally imports a touch
+     figure into the desktop layout. */
   const optionRows = () =>
     options.map((option, index) => {
       const isSelected = option.value === value;
@@ -166,22 +165,24 @@ export default function Select<T extends string = string>({
           aria-disabled={option.disabled}
           onPointerEnter={() => !option.disabled && setActiveIndex(index)}
           onClick={() => commit(option)}
-          /* M3 menu item, per the same reference: 48dp minimum, 16dp inline /
-             4dp block padding, label-large, and NO corner radius — rows are
-             full-bleed, which is the single biggest thing that makes a menu
-             read as a menu rather than as a list of chips.
-
-             Selection is a translucent overlay of the accent at the M3
-             "activated" opacity, not a solid container fill. A filled row was
-             my own invention and it shouted; the reference tints. */
-          className={`flex min-h-12 cursor-pointer items-center gap-3 px-4 py-1 text-label-l transition-ui ${
+          /* M3 menu item: 16dp inline / 4dp block padding, label-large, and NO
+             corner radius — rows are full-bleed. The current value takes the
+             `secondary-container` pair, the app's "selected" pair everywhere.
+             The keyboard cursor is `state-layer-active`: `state-layer` paints
+             nothing until a pointer arrives, so arrowing through the list used
+             to show no cursor at all. */
+          className={`flex min-h-10 touch-size cursor-pointer items-center gap-3 px-4 py-1 text-label-l transition-ui ${
             option.disabled
               ? 'cursor-not-allowed text-on-surface disabled-content'
               : isSelected
                 ? 'bg-secondary-container text-on-secondary-container'
                 : index === activeIndex
-                  ? 'state-layer text-on-surface'
-                  : 'text-on-surface'
+                  /* The keyboard cursor. `state-layer` paints nothing until a
+                     pointer arrives, so arrowing through this list used to show
+                     no cursor at all — the scroll moved and the row was
+                     announced, and nothing on screen said which one it was. */
+                  ? 'state-layer-active text-on-surface'
+                  : 'state-layer text-on-surface'
           }`}
         >
           <span className="min-w-0 flex-1">
@@ -199,7 +200,7 @@ export default function Select<T extends string = string>({
           {/* 18dp trailing check — M3 uses a trailing element, not a colour
               change, to say which item is current. */}
           <MdCheck
-            size={18}
+            size={ICON.dense}
             aria-hidden="true"
             className={`shrink-0 transition-ui ${
               isSelected ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
@@ -220,36 +221,55 @@ export default function Select<T extends string = string>({
         aria-haspopup="listbox"
         aria-label={ariaLabel}
         disabled={disabled}
+        /* On the **trigger**, not on the listbox. `aria-activedescendant` names
+           the current item to whichever element holds DOM focus, and focus never
+           leaves this button — the listbox is a portalled panel that is never
+           focused. Declared over there, it named a row to an element no screen
+           reader was listening to, so arrowing through the list moved the scroll,
+           painted the cursor and announced nothing. */
+        aria-activedescendant={
+          open && activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined
+        }
         onClick={() => (open ? close() : openMenu())}
         onKeyDown={handleKeyDown}
-        className={`group inline-flex items-center justify-between gap-2 rounded-md text-on-surface transition-ui outline-none disabled:disabled-content disabled:cursor-not-allowed focus-visible:ring-2 focus-ring ${pad} ${
-          open
-            ? 'bg-primary-container text-on-primary-container'
-            : 'bg-surface-container-high state-layer hover:text-primary'
-        } ${className}`}
+        className={`group inline-flex items-center justify-between gap-2 rounded-xs text-on-surface transition-ui outline-none disabled:disabled-content disabled:cursor-not-allowed focus-visible:ring-2 focus-ring bg-surface-container-highest state-layer ${pad} ${className}`}
       >
-        {/* `on-surface-variant`, not `outline`. A placeholder is text, and
-            `outline` is a boundary role specified to the 3:1 that a *non-text*
-            element needs — measured against this app's light surface it lands
-            at 4.3:1, under the 4.5:1 AA asks of body text. It passes in the
-            dark scheme (5.8:1), which is why it survived this long. The chevron
-            beside it keeps `outline`: a glyph only has to clear 3:1. */}
-        <span className={`truncate ${selected ? '' : 'text-on-surface-variant'}`}>
-          {selected?.label ?? placeholder}
+        {/* **The trigger is as wide as its widest option, not as its current one.**
+            A combobox that resizes when you pick a value re-lays-out the row it
+            sits in under the pointer that just chose. A grid cell with every
+            label stacked in it, all but one `invisible`, is what makes the box
+            the max of them — no measurement, no hand-typed `min-w`, and it stays
+            true when the options change. `truncate` still caps it. */}
+        <span className="grid min-w-0 flex-1 text-left">
+          {options.map((o) => (
+            <span
+              key={o.value}
+              aria-hidden="true"
+              className="col-start-1 row-start-1 invisible truncate"
+            >
+              {o.label}
+            </span>
+          ))}
+          {/* `on-surface-variant`, not `outline`. A placeholder is text, and
+              `outline` is a boundary role specified to the 3:1 a *non-text*
+              element needs — under the 4.5:1 AA bar for body text on this app's
+              light surface. */}
+          <span
+            className={`col-start-1 row-start-1 truncate ${selected ? '' : 'text-on-surface-variant'}`}
+          >
+            {selected?.label ?? placeholder}
+          </span>
         </span>
+        {/* `on-surface-variant`, which is `FilledTextFieldTokens.TrailingIconColor`. */}
         <MdExpandMore
-          size={size === 'sm' ? 16 : 18}
-          className={`shrink-0 text-outline transition-transform duration-300 ease-[var(--ease-standard)] ${open ? 'rotate-180 text-primary' : ''}`}
+          size={ICON.control}
+          className={`shrink-0 text-on-surface-variant transition-ui ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
-      {/* M3 menu container, from `Popover`: 8dp corner (`small`, which the
-          shape scale specifies for "text fields, menus"), elevation 2 (which it
-          specifies for "menus, nav bar"), no outline. This used to spell out a
-          4dp corner with a comment arguing for it against the emoji picker's
-          comment arguing the opposite — see the note in `Popover`. What stays
-          here is the 8dp block padding with NONE on the inline axis, so rows
-          run edge to edge. */}
+      {/* M3 menu container, from `Popover` (which owns corner, tone and
+          elevation — see its note). What stays here is the 8dp block padding
+          with NONE on the inline axis, so rows run edge to edge. */}
       <Popover
         open={open}
         onClose={close}
@@ -257,8 +277,7 @@ export default function Select<T extends string = string>({
         handleRef={popoverRef}
         id={listboxId}
         role="listbox"
-        aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
-        estimatedHeight={options.length * MENU_ITEM_HEIGHT + MENU_PADDING * 2}
+        estimatedHeight={estimateMenuHeight(options.length)}
         className="py-2"
       >
         {optionRows()}

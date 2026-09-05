@@ -2,6 +2,7 @@
 
 import {
   HERO_DETAIL_ROUTE_TIMEOUT_MS,
+  HERO_INPUT_TRANSFER_MAX_MS,
   HERO_INPUT_TRANSFER_QUIET_MS,
   HERO_ROUTE_TIMEOUT_MS,
   HERO_VIEWPORT_REBUILD_EPSILON_PX,
@@ -11,6 +12,7 @@ import {
   combineHeroLeases,
   findImageHeroThumbnail,
   getHeroBackgroundVisual,
+  getHeroCornerRadius,
   getHeroRect,
   getHeroRectWithoutAncestorTransform,
   getVisualMedia,
@@ -151,7 +153,6 @@ const INITIAL_RUNTIME: ImageHeroRuntimeState = {
   sessionId: null,
   imageId: null,
   stage: EMPTY_STAGE,
-  interactionQuiet: true,
   background: null,
 };
 
@@ -225,8 +226,11 @@ export class HeroController {
     initializeHeroInput();
     this.observedHref = normalizeHeroHref(window.location.href);
     this.releaseHistory = imageHeroHistory.initialize(this.handleHistoryNavigation);
+    /* `this.events.notify()` and nothing else. The published runtime must not fold in
+       `interactionQuiet` — no consumer reads it, and every quiet↔active transition would
+       re-render all three `useSyncExternalStore` subscribers, one of which lands in the task
+       immediately preceding a press. Internal waiters get the signal via `events`. */
     this.releaseInteraction = subscribeHeroInteraction(() => {
-      this.updateRuntime({ interactionQuiet: isHeroInteractionQuiet() });
       this.events.notify();
     });
     this.releaseViewport = subscribeHeroViewportInvalidation(this.handleViewportInvalidation);
@@ -352,6 +356,13 @@ export class HeroController {
     this.events.notify();
   }
 
+  markRouteResolvedWithoutMedia(surfaceId: string) {
+    const route = this.routes.get(surfaceId);
+    if (!route || route.resolvedWithoutMedia) return;
+    route.resolvedWithoutMedia = true;
+    this.events.notify();
+  }
+
   markRoutePreviewPaintable(surfaceId: string, target?: HTMLElement | null) {
     const route = this.routes.get(surfaceId);
     if (!route) return;
@@ -414,12 +425,10 @@ export class HeroController {
       const opening = this.foreground;
       if (opening?.kind === 'opening') {
         // One physical tap can arrive twice: the dismiss bridge synthesizes a
-        // click from a pointerup whose hit test still pointed at the dead route,
-        // and the browser then dispatches its own click once hit testing
-        // refreshes onto the card. Re-activating the image that is already
-        // flying must therefore be idempotent — treating the duplicate as
-        // "open something else" reverses the very flight it just started, and
-        // the unwind drops the queued intent, so the tap does nothing at all.
+        // click from a pointerup whose hit test still pointed at the dead route.
+        // Re-activating the image already flying must be idempotent — treating
+        // the duplicate as "open something else" reverses the flight it just
+        // started, and the unwind drops the queued intent, so the tap does nothing.
         if (opening.snapshot.image.id === intent.snapshot.image.id && !opening.reversing) {
           return true;
         }
@@ -547,10 +556,9 @@ export class HeroController {
       )
       .then(async () => {
         if (this.pendingOpen !== intent) return;
-        /* The gate opening is not the same as the gallery being ready. A route
-           commit can land a frame before the unwind finishes releasing the
-           foreground, and a queued tap discarded there is a tap that did
-           nothing — so wait the rest of the way out rather than testing once. */
+        /* The gate opening is not the same as the gallery being ready: a route commit can
+           land a frame before the unwind finishes releasing the foreground, and a queued tap
+           discarded there is a tap that did nothing. Wait the rest of the way out. */
         if (this.runtime.phase !== 'gallery-idle' || this.foreground) {
           if (!(await this.waitForGalleryIdle())) {
             if (this.pendingOpen === intent) this.pendingOpen = null;
@@ -824,7 +832,7 @@ export class HeroController {
 
   private launchFlight(session: OpeningSession, stage: HeroStageNodes) {
     const { intent } = session;
-    const plane = getElementScrollPlane(stage.anchor, stage.scroller);
+    const plane = getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
     const targetRect = getHeroRect(stage.target);
     const flight = createHeroFlight({
       asset: session.snapshot.previewFrame,
@@ -849,7 +857,15 @@ export class HeroController {
       overlay: stage.overlay,
       floatingBack: stage.floatingBack,
       continueBackground: Boolean(session.collapseRecord),
+      // The container grows from the card itself, not from the picture's landing box:
+      // `_rectTween.end = Offset.zero & navSize` — the whole surface, not the media slot.
+      container: {
+        card: session.sourceRect,
+        cardRadius: getHeroCornerRadius(intent.source),
+      },
+      choreography: 'container',
     });
+
     session.viewportBaseline = {
       destination: targetRect,
       planeWidth: plane.viewportWidth,
@@ -910,11 +926,20 @@ export class HeroController {
     this.setPhase('opening.handoff', session, session.intent.background!);
 
     if (session.pullSeized) {
+      /* Bounded; on expiry the drag is reset rather than the handoff abandoned. A backstop —
+         the recognizer does terminate reliably — but the one wait in the handoff that must
+         have a ceiling, since everything downstream (route reveal, pointer shield,
+         publication) is gated on reaching it. */
       const settled = await waitForSignal(this.events, {
         signal: session.abort.signal,
+        timeout: HERO_ROUTE_TIMEOUT_MS,
         read: () => (session.pullSeized ? null : true),
       });
-      if (!settled || !this.owns(session) || !session.motion) return;
+      if (!this.owns(session) || !session.motion) return;
+      if (!settled) {
+        session.pull?.reset();
+        session.pullSeized = false;
+      }
     }
 
     if (!(await this.establishOpeningGuard(session))) {
@@ -1185,18 +1210,9 @@ export class HeroController {
     const pending = this.pendingOpen;
     this.pendingOpen = null;
     if (!pending) return;
-    /* Wait for the gallery to be idle rather than testing for it once.
-     *
-     * The queued tap used to be dropped on any of three single-shot conditions:
-     * `onBackground` false, the router commit not confirming inside its window,
-     * or `gallery-idle` not happening to hold at that instant. Tapping a second
-     * image while the first was flying home therefore did nothing at all about
-     * a third of the time — the flight unwound, the queue was cleared, and the
-     * tap vanished. Which is why it read as "it plays a little of the animation
-     * and then just goes back".
-     *
-     * `queuePendingOpen` already owns the "start it once the gate opens" shape,
-     * so this hands the intent straight to it instead of arbitrating again. */
+    /* Wait for the gallery to be idle rather than testing once: the queued tap
+       used to be dropped whenever a single-shot condition happened not to hold
+       (background not reached, commit window missed, idle not current). */
     if (!onBackground) {
       this.queuePendingOpen(pending, this.waitForGalleryIdle());
       return;
@@ -1398,7 +1414,12 @@ export class HeroController {
         overlay: route.overlay,
         floatingBack: route.floatingBack,
         continueBackground: session.intent.backgroundMode === 'continue',
+        container: { card: to, cardRadius: getHeroCornerRadius(thumbnail) },
+        // A swipe-down is already a motion the hand started, so it keeps the gesture's pose
+        // instead of the container return.
+        choreography: session.intent.cause === 'dismiss' ? 'dismiss' : 'container',
       });
+
       session.viewportBaseline = {
         destination: to,
         planeWidth: plane.viewportWidth,
@@ -2079,8 +2100,10 @@ export class HeroController {
           const stage = this.stage?.sessionId === session.id ? this.stage.nodes : null;
           if (!stage?.target.isConnected) return null;
           return {
-            destination: getHeroRect(stage.target),
-            plane: getElementScrollPlane(stage.anchor, stage.scroller),
+            // The Stage's landing target sits inside the container transform's fit, so a
+            // mid-flight read is the scaled box; undo the fit before re-aiming.
+            destination: motion.unprojectRect(getHeroRect(stage.target)),
+            plane: getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay),
             pose: motion.measurePose(),
           };
         }
@@ -2167,14 +2190,29 @@ export class HeroController {
    * Wait until the browser has genuinely stopped delivering input to the old
    * scroller, then confirm across a frame. A wheel stream stays latched to its
    * original receiver, so releasing early makes the rest of that stream vanish.
+   *
+   * Bounded by `HERO_INPUT_TRANSFER_MAX_MS`, proceeding on expiry: the quiet window
+   * (320ms) is longer than a wheel event's refresh (160ms), so an inertial trackpad stream
+   * can hold this loop open indefinitely, and every caller treats `false` as "abandon the
+   * handoff", which parks the session and withholds the detail body. A lost 160ms of
+   * momentum is the cheaper failure.
+   *
+   * **The budget must go *into* the quiet wait, not around it.** A deadline checked at the
+   * top of the loop cannot fire while the `await` below is what never returns — precisely
+   * the case being bounded — so the quiet wait takes the remaining budget and the `!quiet`
+   * branch tells expiry from abort via the deadline.
    */
   private async waitForInputTransfer(session: HeroSession, sync?: () => void) {
+    const deadline = performance.now() + HERO_INPUT_TRANSFER_MAX_MS;
     while (this.owns(session)) {
+      if (performance.now() >= deadline) return true;
       const quiet = await waitForHeroInteractionQuiet(
         session.abort.signal,
         HERO_INPUT_TRANSFER_QUIET_MS,
+        deadline - performance.now(),
       );
-      if (!quiet || !this.owns(session)) return false;
+      if (!this.owns(session)) return false;
+      if (!quiet) return performance.now() >= deadline;
       sync?.();
       if (
         !(await waitForFrame(
@@ -2243,7 +2281,6 @@ export class HeroController {
       next.sessionId === this.runtime.sessionId &&
       next.imageId === this.runtime.imageId &&
       next.stage === this.runtime.stage &&
-      next.interactionQuiet === this.runtime.interactionQuiet &&
       next.background === this.runtime.background
     ) {
       return;

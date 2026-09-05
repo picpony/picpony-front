@@ -26,15 +26,9 @@ interface DataTableProps<T> {
   rowKey: (row: T, index: number) => string | number;
   loading?: boolean;
   /**
-   * Shown when `rows` is empty and not loading.
-   *
-   * A `string` is the common case and is wrapped in `EmptyState` — it is not
-   * rendered raw. That distinction is the whole point of the type: this used to
-   * be a bare `ReactNode` spliced in with `??`, and eleven of the fourteen admin
-   * tabs pass a plain string, so eleven tables rendered an unstyled, glyphless
-   * run of text inside the `m3-row` while the comment below claimed they went
-   * through `EmptyState`. Pass a node only when the empty body genuinely needs
-   * custom content.
+   * Shown when `rows` is empty and not loading. A `string` is the common case
+   * and is wrapped in `EmptyState` — it is not rendered raw. Pass a node only
+   * when the empty body genuinely needs custom content.
    */
   empty?: string | ReactNode;
   skeletonRows?: number;
@@ -45,32 +39,22 @@ interface DataTableProps<T> {
 
 /**
  * Admin data table: a `.m3-row` grouped list that keeps the table's header row.
- * The header is the first row of the cut block (`bg-surface-container-high`),
- * naming every column; the data rows below it are `bg-surface-container-low`
- * with 2px seams and large outer corners — matching the settings list, but
- * with the column names the old `<table>` header carried.
+ * A `primary` column becomes the row heading, an `actions` column renders as a
+ * trailing button group, and `hideOnMobile` columns render as bare leading
+ * controls (the select-all checkbox is the only user).
  *
- * Each row keeps the same information as before: a `primary` column becomes
- * the row heading, every other column renders its value (its name lives in
- * the header row), and an `actions` column a trailing button group.
- * `hideOnMobile` columns (the select-all checkbox) render as a bare leading
- * control.
+ * Owns the loading state as row-shaped skeletons (a `{loading ? <Spinner/> : rows}`
+ * ternary collapses the list to nothing and snaps it back).
  *
- * It also owns the loading state: the tables previously did
- * `{loading ? <Spinner/> : rows}`, which collapsed the list to nothing and then
- * snapped the rows back in.
+ * Call sites build their `columns` array as a plain `const` in the component body
+ * rather than a module-level factory taking the row handlers: passing a handler
+ * staged in a ref as an argument to a function invoked during render trips
+ * `react-hooks/refs`; referencing it from inside a `render` closure does not.
  *
- * Call sites build their `columns` array as a plain `const` in the component
- * body rather than a module-level factory taking the row handlers. Several of
- * those handlers stage a confirm action in a ref, and passing one as an
- * argument to a function invoked during render trips `react-hooks/refs` —
- * referencing it from inside a `render` closure does not.
- *
- * There is deliberately no `onRowClick`. It existed, had no call sites in the
- * whole app, and made the row a `<div onClick>` — a control no keyboard could
- * reach, inside rows that already carry real buttons in their `actions` column.
- * A row that needs to do something puts a button in that column; a row that
- * needs to expand uses `expandedRow`.
+ * There is deliberately no `onRowClick`: it made the row a `<div onClick>` — a
+ * control no keyboard could reach, inside rows that already carry real buttons.
+ * A row that needs to do something puts a button in the `actions` column; a row
+ * that needs to expand uses `expandedRow`.
  */
 export default function DataTable<T>({
   columns,
@@ -120,7 +104,7 @@ export default function DataTable<T>({
            <div> would break the `.m3-row` sibling chain and give the header
            row the "last row" bottom corner radius while the list was loading. */}
       {loading &&
-        Array.from({ length: Math.min(skeletonRows, 6) }, (_, i) => (
+        Array.from({ length: skeletonRows }, (_, i) => (
           <div
             key={i}
             className="m3-row flex flex-col gap-2 bg-surface-container-low p-4"
@@ -131,13 +115,9 @@ export default function DataTable<T>({
           </div>
         ))}
 
-      {/* ---- Empty ----
-           `EmptyState`, like every other "nothing here" in the app. `inline`
-           because it sits in a table body that already has a header row above it.
-
-           A string `empty` is wrapped rather than spliced: `{empty ?? <EmptyState/>}`
-           meant the eleven tabs that pass a string bypassed the primitive entirely
-           and printed the text raw, with no glyph and no type role. */}
+      {/* ---- Empty: `EmptyState`, like every other "nothing here" in the app.
+           `inline` because it sits in a table body that already has a header row
+           above it. A string `empty` is wrapped rather than spliced. */}
       {isEmpty && (
         <div className="m3-row bg-surface-container-low">
           {typeof empty === 'string' || empty == null ? (
@@ -156,14 +136,8 @@ export default function DataTable<T>({
               className={cn(
                 'm3-row flex flex-wrap items-center gap-x-4 gap-y-2 p-4',
                 /* The tone is flat and stays flat: this row is not a control.
-                   It carried a hand-picked hover on the container-high tone,
-                   which made the admin table the one list in the app whose
-                   hover was a fill change instead of the M3 tinted overlay —
-                   and it ran on `transition-ui`'s 200ms against the state
-                   layer's 150ms, so tables and lists settled at different
-                   speeds. Nothing hovers here now, because nothing here is
-                   pressable except the buttons in the `actions` column, which
-                   carry their own state layer. */
+                   Nothing hovers here except the buttons in the `actions`
+                   column, which carry their own state layer. */
                 'bg-surface-container-low',
               )}
             >

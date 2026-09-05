@@ -4,8 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MdRotateRight, MdZoomIn, MdZoomOut, MdRestartAlt } from 'react-icons/md';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
+import IconButton from '@/components/IconButton';
+import Slider from '@/components/Slider';
 import Spinner from '@/components/Spinner';
 import { showToast } from '@/components/Toast';
+import { ICON } from '@/lib/icons';
 
 export type CropShape = 'circle' | 'rect';
 
@@ -42,25 +45,18 @@ const INITIAL: View = { zoom: 1, x: 0, y: 0, rotation: 0 };
 /**
  * Avatar / banner cropper.
  *
- * Uploading a profile image used to be: hidden `<input type=file>` → OS picker
- * → straight to the server. No preview, no framing, no size control — the crop
- * was whatever `object-fit: cover` happened to do afterwards, so a portrait
- * photo became a picture of somebody's chin.
- *
  * Geometry model, in CSS pixels relative to the centre of the crop window:
  *
  *     screen = translate(x, y) · rotate(rotation) · scale(S) · imagePoint
  *
- * with `S = base · zoom`, and `base` the scale at which the (possibly rotated)
- * image exactly covers the window. `zoom >= 1` therefore guarantees the window
- * is always full, and the pan clamp below is just "don't drag an edge inside
- * the window". Export replays the same matrix onto a canvas, so what is drawn
- * is what is saved — there is no second, subtly different code path.
+ * with `S = base · zoom`, `base` the scale at which the (possibly rotated) image
+ * exactly covers the window. `zoom >= 1` therefore guarantees the window is
+ * always full, and the pan clamp is just "don't drag an edge inside the window".
+ * Export replays the same matrix onto a canvas — what is drawn is what is saved.
  *
  * Pointer handling is hand-rolled rather than GSAP Draggable: the bounds are a
  * function of zoom and rotation and change on every wheel tick, and pinch needs
- * two-pointer tracking that Draggable does not model. The clamp is four lines;
- * keeping it explicit is smaller than reconfiguring a plugin around it.
+ * two-pointer tracking.
  */
 export default function ImageCropper({
   file,
@@ -79,9 +75,8 @@ export default function ImageCropper({
 
   // Callback ref, not `useRef`: the stage is rendered through Modal's portal,
   // which mounts a tick after `file` is set. A plain ref meant the measuring
-  // effect below ran before the node existed, returned early, and never re-ran
-  // — cropBox stayed at 0, `ready` stayed false, and the spinner never left.
-  // Holding the node in state re-runs both effects the moment it attaches.
+  // effect ran before the node existed and never re-ran. Holding the node in
+  // state re-runs both effects the moment it attaches.
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [cropBox, setCropBox] = useState({ w: 0, h: 0 });
@@ -272,7 +267,7 @@ export default function ImageCropper({
       isOpen={Boolean(file)}
       onClose={working ? () => {} : onClose}
       title={title}
-      maxWidth="max-w-2xl"
+      maxWidth="2xl"
       bodyClassName="p-0"
       closeOnOverlayClick={!working}
       closeOnEscape={!working}
@@ -282,7 +277,7 @@ export default function ImageCropper({
             取消
           </Button>
           <Button variant="filled" onClick={confirm} disabled={!ready || working}>
-            {working ? <Spinner size="sm" white /> : null}
+            {working ? <Spinner size="sm" tone="on-primary" /> : null}
             {working ? '处理中…' : '确认'}
           </Button>
         </>
@@ -322,7 +317,7 @@ export default function ImageCropper({
 
         {!ready && (
           <div className="absolute inset-0 grid place-items-center">
-            <Spinner size="lg" white />
+            <Spinner size="lg" tone="on-primary" />
           </div>
         )}
 
@@ -331,7 +326,7 @@ export default function ImageCropper({
         {ready && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 shadow-[0_0_0_9999px_color-mix(in_oklab,var(--md-sys-color-scrim)_62%,transparent)]"
+            className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 shadow-[0_0_0_9999px_var(--md-sys-color-crop-mask)]"
             style={{
               width: cropBox.w,
               height: cropBox.h,
@@ -358,46 +353,40 @@ export default function ImageCropper({
 
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          {/* `IconButton`, not a hand-rolled box: a padding-sized box changes
+              the control's size whenever the glyph changes. */}
+          <IconButton
             onClick={() => nudgeZoom(-ZOOM_STEP)}
             disabled={!ready || v.zoom <= 1}
             aria-label="缩小"
-            className="state-layer text-on-surface-variant rounded-full p-2 disabled:disabled-content outline-none focus-visible:ring-2 focus-ring"
-          >
-            <MdZoomOut size={20} />
-          </button>
-          <input
-            type="range"
+            icon={<MdZoomOut size={ICON.control} />}
+          />
+          {/* `Slider`, the primitive — not a global class remembered at each
+              call site, which left the two range inputs without a focus ring. */}
+          <Slider
             min={1}
             max={MAX_ZOOM}
             step={0.01}
             value={v.zoom}
             disabled={!ready}
             aria-label="缩放"
-            onChange={(e) => setView((prev) => clamp({ ...prev, zoom: Number(e.target.value) }))}
-            /* `range-slider` is the app's slider — the track, the thumb and the
-               focus ring. Without it this was the browser's own control, so the
-               one in the image-search dialog and the one here were two different
-               sliders doing the same job on the same screen size. */
-            className="range-slider w-full min-w-[8rem] flex-1 sm:w-40"
+            valueText={(z) => `缩放 ${z.toFixed(2)} 倍`}
+            onValueChange={(zoom) => setView((prev) => clamp({ ...prev, zoom }))}
+            className="min-w-32 flex-1 sm:w-40"
           />
-          <button
-            type="button"
+          <IconButton
             onClick={() => nudgeZoom(ZOOM_STEP)}
             disabled={!ready || v.zoom >= MAX_ZOOM}
             aria-label="放大"
-            className="state-layer text-on-surface-variant rounded-full p-2 disabled:disabled-content outline-none focus-visible:ring-2 focus-ring"
-          >
-            <MdZoomIn size={20} />
-          </button>
+            icon={<MdZoomIn size={ICON.control} />}
+          />
         </div>
 
         <div className="flex items-center gap-2 sm:ml-auto">
           <Button
             variant="text"
-            size="sm"
-            icon={<MdRotateRight size={18} />}
+            size="xs"
+            icon={<MdRotateRight size={ICON.dense} />}
             disabled={!ready}
             onClick={() =>
               setView((prev) => clamp({ ...prev, rotation: (prev.rotation + 90) % 360 }))
@@ -407,8 +396,8 @@ export default function ImageCropper({
           </Button>
           <Button
             variant="text"
-            size="sm"
-            icon={<MdRestartAlt size={18} />}
+            size="xs"
+            icon={<MdRestartAlt size={ICON.dense} />}
             disabled={!ready}
             onClick={() => setView(INITIAL)}
           >

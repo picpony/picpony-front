@@ -10,6 +10,7 @@ import {
   type SyntheticEvent,
 } from 'react';
 import { getHeroMediaPreviewSizes } from '@/lib/hero/geometry';
+import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
 
 const HERO_MEDIA_PREVIEW_SIZES = getHeroMediaPreviewSizes();
 
@@ -30,6 +31,10 @@ type DetailVideoProps = {
   onTargetChange?: DetailMediaTargetCallback;
   onPreviewReady?: DetailMediaReadyCallback;
   onFinalReady?: DetailMediaReadyCallback;
+  /** The preview will never paint. Lets the route drop `heroActive` and show the final. */
+  onPreviewFailed?: (surfaceId: string) => void;
+  /** Neither layer will ever paint. The terminal answer the handoff waits for. */
+  onMediaUnavailable?: (surfaceId: string) => void;
 };
 
 type VideoFrameElement = HTMLVideoElement & {
@@ -98,6 +103,8 @@ export default function DetailVideo({
   onTargetChange,
   onPreviewReady,
   onFinalReady,
+  onPreviewFailed,
+  onMediaUnavailable,
 }: DetailVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
@@ -106,8 +113,13 @@ export default function DetailVideo({
   const surfaceIdRef = useRef(surfaceId);
   const onPreviewReadyRef = useRef(onPreviewReady);
   const onFinalReadyRef = useRef(onFinalReady);
+  const onPreviewFailedRef = useRef(onPreviewFailed);
+  const onMediaUnavailableRef = useRef(onMediaUnavailable);
   const previewReadyRef = useRef(false);
   const finalReadyRef = useRef(false);
+  const previewFailedRef = useRef(false);
+  const finalFailedRef = useRef(false);
+  const previewFallbackRef = useRef<number | null>(null);
   const publishedPreviewSurfaceRef = useRef<string | null>(null);
   const publishedFinalSurfaceRef = useRef<string | null>(null);
   const finalFrameLeaseRef = useRef<VideoFrameLease | null>(null);
@@ -192,10 +204,39 @@ export default function DetailVideo({
     callback(readySurfaceId, target);
   }, []);
 
+  const clearPreviewFallback = useCallback(() => {
+    if (previewFallbackRef.current === null) return;
+    window.clearTimeout(previewFallbackRef.current);
+    previewFallbackRef.current = null;
+  }, []);
+
   const markPreviewReady = useCallback(() => {
+    clearPreviewFallback();
     previewReadyRef.current = true;
     publishPreviewReady();
-  }, [publishPreviewReady]);
+  }, [clearPreviewFallback, publishPreviewReady]);
+
+  /** Same contract as `DetailImage`'s — see the docstring there. */
+  const markPreviewFailed = useCallback(() => {
+    clearPreviewFallback();
+    if (previewFailedRef.current) return;
+    previewFailedRef.current = true;
+    cancelPreviewReady();
+    const failedSurfaceId = surfaceIdRef.current;
+    if (failedSurfaceId) onPreviewFailedRef.current?.(failedSurfaceId);
+    if (finalReadyRef.current) markPreviewReady();
+    else if (finalFailedRef.current && failedSurfaceId) {
+      onMediaUnavailableRef.current?.(failedSurfaceId);
+    }
+  }, [cancelPreviewReady, clearPreviewFallback, markPreviewReady]);
+
+  const markFinalFailed = useCallback(() => {
+    finalFailedRef.current = true;
+    cancelFinalReady();
+    const failedSurfaceId = surfaceIdRef.current;
+    if (!failedSurfaceId || previewReadyRef.current) return;
+    onMediaUnavailableRef.current?.(failedSurfaceId);
+  }, [cancelFinalReady]);
 
   const markFinalPaintable = useCallback(() => {
     const target = targetRef.current;
@@ -203,8 +244,15 @@ export default function DetailVideo({
     finalReadyRef.current = true;
     target.setAttribute('data-image-detail-final-ready', 'true');
     publishFinalReady();
-    if (!sourceRef.current.previewSrc) markPreviewReady();
-  }, [markPreviewReady, publishFinalReady]);
+    if (!sourceRef.current.previewSrc || previewFailedRef.current) {
+      markPreviewReady();
+      return;
+    }
+    if (previewReadyRef.current || previewFallbackRef.current !== null) return;
+    previewFallbackRef.current = window.setTimeout(markPreviewFailed, HERO_PREVIEW_FALLBACK_MS);
+  }, [markPreviewFailed, markPreviewReady, publishFinalReady]);
+
+  useEffect(() => clearPreviewFallback, [clearPreviewFallback]);
 
   useLayoutEffect(() => {
     const target = targetRef.current;
@@ -214,11 +262,14 @@ export default function DetailVideo({
     if (previous.previewSrc !== previewSrc) {
       cancelPreviewReady();
       previewReadyRef.current = false;
+      previewFailedRef.current = false;
+      clearPreviewFallback();
       publishedPreviewSurfaceRef.current = null;
     }
     if (previous.finalSrc !== finalSrc) {
       cancelFinalReady();
       finalReadyRef.current = false;
+      finalFailedRef.current = false;
       publishedFinalSurfaceRef.current = null;
       target.removeAttribute('data-image-detail-final-ready');
       if (!previewSrc) {
@@ -228,7 +279,7 @@ export default function DetailVideo({
     }
     sourceRef.current = { previewSrc, finalSrc };
     if (!previewSrc && finalReadyRef.current) previewReadyRef.current = true;
-  }, [cancelFinalReady, cancelPreviewReady, finalSrc, previewSrc]);
+  }, [cancelFinalReady, cancelPreviewReady, clearPreviewFallback, finalSrc, previewSrc]);
 
   useLayoutEffect(() => {
     if (mountFinal) return;
@@ -240,6 +291,8 @@ export default function DetailVideo({
   useLayoutEffect(() => {
     onPreviewReadyRef.current = onPreviewReady;
     onFinalReadyRef.current = onFinalReady;
+    onPreviewFailedRef.current = onPreviewFailed;
+    onMediaUnavailableRef.current = onMediaUnavailable;
     surfaceIdRef.current = surfaceId;
     if (!surfaceId) {
       publishedPreviewSurfaceRef.current = null;
@@ -251,6 +304,8 @@ export default function DetailVideo({
   }, [
     finalSrc,
     onFinalReady,
+    onMediaUnavailable,
+    onPreviewFailed,
     onPreviewReady,
     previewSrc,
     publishFinalReady,
@@ -394,6 +449,7 @@ export default function DetailVideo({
           playsInline
           preload={heroActive && hasPreview && !preloadFinal ? 'metadata' : 'auto'}
           onLoadedData={handleFinalLoaded}
+          onError={markFinalFailed}
           data-image-detail-layer="final"
           className="image-detail-final absolute inset-0 z-0 block h-full w-full object-contain"
         />
@@ -408,6 +464,7 @@ export default function DetailVideo({
             playsInline
             preload="auto"
             onLoadedData={handlePreviewVideoLoaded}
+            onError={markPreviewFailed}
             data-image-detail-layer="preview"
             className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
           />
@@ -422,6 +479,7 @@ export default function DetailVideo({
             fetchPriority={heroActive ? 'low' : 'high'}
             unoptimized
             onLoad={handlePreviewImageLoaded}
+            onError={markPreviewFailed}
             data-image-detail-layer="preview"
             className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
           />

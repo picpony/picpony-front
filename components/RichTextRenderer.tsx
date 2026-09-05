@@ -6,8 +6,8 @@ import MarkdownRenderer from './MarkdownRenderer';
 
 interface RichTextRendererProps {
   content: string;
-  /** Render as inline content — see `MarkdownRenderer`. BBCode is block-shaped
-   *  by construction ([quote], [list], [table]) and ignores this. */
+  /** Inline rendering, passed through to the markdown path; BBCode is
+   *  block-shaped by construction ([quote], [list], [table]) and ignores it. */
   inline?: boolean;
 }
 

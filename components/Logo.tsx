@@ -2,30 +2,29 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { prefersReducedMotion } from '@/lib/motion';
+import { entranceMotion, motionTier } from '@/lib/appearance';
+import { isAppPainted } from '@/lib/splash';
 
 interface LogoProps {
   className?: string;
   /**
    * Draws a hairline in the current colour around the animated mark.
    *
-   * For the brand bar only, where the colour wordmark's own hues sit close to
-   * the pink fill and the letterforms lose their edges without it. Everywhere
-   * else the mark sits on a `surface` tone it already contrasts with, and the
-   * outline only thickens the strokes — the footer copy carried one for no
-   * reason and read heavier than the header's at half the size.
+   * For the brand bar only: the colour wordmark's own hues sit close to the pink
+   * fill and the letterforms lose their edges without it. Elsewhere the mark
+   * already contrasts with its surface and the outline only thickens the strokes.
    *
    * Four offset drop-shadows rather than a blur: a blur reads as a glow and
-   * thickens the strokes, and the point is for the colour mark to keep exactly
-   * the weight of the base underneath. Where the two overlap it is invisible.
+   * thickens the strokes; the point is for the colour mark to keep exactly the
+   * weight of the base underneath.
    */
   keyline?: boolean;
   /** `false` for a logo nobody can point at — the loading overlay's. */
   interactive?: boolean;
   /**
    * Play the splash cut once on mount instead of waiting for a pointer. The
-   * overlay uses this; nothing else should, because two marks writing
-   * themselves on at the same time is a competition rather than an entrance.
+   * overlay uses this; nothing else should — two marks writing themselves on at
+   * once is a competition rather than an entrance.
    */
   intro?: boolean;
   /** Fires when the intro cut has finished drawing, or when it has been given
@@ -58,18 +57,22 @@ function loadTrace(kind: TraceKind) {
 }
 
 /**
- * The splash plays at 1.65x.
- *
- * 140 frames at 60fps is 2.33s, and the first thing anyone sees is not the
- * place to spend two and a third seconds — the overlay it lives in used to be
- * gone in one. At this speed the whole signature lands in 1.41s, which is the
- * most of it that fits without the splash becoming the slowest part of a cold
- * start.
+ * The splash plays at 1.65x: 140 frames at 60fps is 2.33s and the first thing
+ * anyone sees is not the place to spend it. At this speed the signature lands
+ * in 1.41s.
  */
 const INTRO_SPEED = 1.65;
 export const INTRO_DURATION_MS = Math.round((140 / 60 / INTRO_SPEED) * 1000);
 /** If the chunk is slower than this, the splash leaves without it. */
 export const INTRO_CHUNK_BUDGET_MS = 600;
+
+/**
+ * How long to wait before deciding this cold start is slow enough to be worth
+ * animating. Two frames at 60Hz plus slack: a warm start — shell paints the
+ * frame after its first commit — has always reported in by then, so the 60KB
+ * player is never requested at all. See the intro effect below.
+ */
+const INTRO_PROBE_MS = 40;
 
 /**
  * The wordmark.
@@ -80,19 +83,17 @@ export const INTRO_CHUNK_BUDGET_MS = 600;
  * it. The base never leaves, so there is no frame in which the logo is missing
  * and no fade gap on the way out.
  *
- * The hover used to be a `clip-path` wipe across a static colour SVG, which is
- * a curtain rather than a signature — and it was written out twice, here and
- * again inline in `AppLayout`'s header, where it had drifted to a different
- * width and gained a keyline the other copy never had. Both are now this.
- *
  * The trace is a Lottie: six layers with nine trim paths, 140 frames at 60fps,
  * exactly the file the mark was drawn in. Player and artwork are a dynamic
  * import so neither is in the first-load bundle, warmed on an idle callback so
  * the first hover is not the one that pays for it, and shared across every
  * instance on the page.
  *
- * Under `prefers-reduced-motion` nothing is loaded at all and the base simply
- * stays. A colour reveal is decorative; the mark is legible without it.
+ * Below the standard tier nothing is loaded at all and the base simply stays —
+ * a colour reveal is decorative where the mark is legible without it, which is
+ * exactly what the reduced tier's rule drops (decorative loops, Lottie
+ * playback), and the tier's audience is a device that cannot afford the flight,
+ * let alone a speculative fetch for a hover.
  */
 export default function Logo({
   className = 'w-32 h-auto',
@@ -135,40 +136,59 @@ export default function Logo({
   }, [kind]);
 
   useEffect(() => {
-    if (!intro || prefersReducedMotion()) return;
-    /* The splash cannot warm on idle — it is the first thing on the screen and
-       the chunk is 60KB. So it is requested immediately and *not* waited on:
-       the masked base is server-rendered and already visible, so a slow network
-       costs the animation, never the mark. Past the budget the splash gives up
-       and lets the overlay leave on schedule rather than holding a cold start
-       open for a decoration. */
+    /* Standard only, and this one stays that way while the hover trace below does not.
+       The splash is on the critical path: a 60KB player chunk fetched before anything
+       else is on screen, and `LoadingOverlay` holds the whole app until it reports
+       done. It is also the one animation here whose weak form would be *worse* than
+       nothing — the overlay's own short hold would cut the trace off mid-stroke — so
+       the two agree instead: no player, static mark, overlay gone fast.
+
+       `entranceMotion()` for the same reason the overlay reads it: the splash is the
+       app's first entrance, and the two must answer that question the same way. */
+    if (!intro || !entranceMotion() || motionTier() !== 'standard') return;
+    /* The chunk is only requested if this is actually a slow start: the overlay now
+     * leaves as soon as the app paints, so on a warm load the mark is gone within a
+     * couple of frames, and requesting the player would download it in the one window
+     * where it competes with the gallery's own images. Wait one short beat, and only
+     * load if the app still has nothing on screen.
+     */
     let cancelled = false;
-    /* Past the budget the splash gives up: the overlay is told to carry on
-       without the animation rather than holding a cold start open for a
-       decoration. */
-    const deadline = window.setTimeout(() => {
-      cancelled = true;
-      settledRef.current?.();
-    }, INTRO_CHUNK_BUDGET_MS);
-    void ensure().then((animation) => {
-      window.clearTimeout(deadline);
-      if (cancelled || !animation) return;
-      hostRef.current?.setAttribute('data-shown', '');
-      /* The base steps aside once the mark is written — see `.logo-intro` in
-         globals.css for why it has to — and the overlay leaves on the same
-         signal. Both key off the player's own completion rather than a second
-         copy of the duration: the chunk takes a few hundred ms to arrive, so a
-         clock started at mount runs ahead of the animation and was dismissing
-         the splash while the mark was still drawing. */
-      animation.addEventListener('complete', () => {
-        hostRef.current?.setAttribute('data-settled', '');
+    let deadline = 0;
+    const probe = window.setTimeout(() => {
+      if (cancelled) return;
+      if (isAppPainted()) {
+        /* Nothing to cover. Report settled so the overlay does not sit on its
+           ceiling waiting for a draw that is deliberately never going to start. */
         settledRef.current?.();
+        return;
+      }
+      /* Past the budget the splash gives up: the overlay carries on without the
+         animation rather than holding a cold start open for a decoration. */
+      deadline = window.setTimeout(() => {
+        cancelled = true;
+        settledRef.current?.();
+      }, INTRO_CHUNK_BUDGET_MS);
+      void ensure().then((animation) => {
+        window.clearTimeout(deadline);
+        if (cancelled || !animation) return;
+        hostRef.current?.setAttribute('data-shown', '');
+        /* The base steps aside once the mark is written — see `.logo-intro` in
+           globals.css for why it has to — and the overlay leaves on the same
+           signal. Both key off the player's own completion rather than a second
+           copy of the duration: a mount-time clock runs ahead of the animation
+           and was dismissing the splash mid-stroke. */
+        animation.addEventListener('complete', () => {
+          hostRef.current?.setAttribute('data-settled', '');
+          settledRef.current?.();
+        });
+        animation.setSpeed(INTRO_SPEED);
+        animation.goToAndPlay(0, true);
       });
-      animation.setSpeed(INTRO_SPEED);
-      animation.goToAndPlay(0, true);
-    });
+    }, INTRO_PROBE_MS);
+
     return () => {
       cancelled = true;
+      window.clearTimeout(probe);
       window.clearTimeout(deadline);
       animationRef.current?.destroy();
       animationRef.current = null;
@@ -176,10 +196,10 @@ export default function Logo({
   }, [ensure, intro]);
 
   useEffect(() => {
-    if (intro || !interactive || prefersReducedMotion()) return;
+    if (intro || !interactive || motionTier() !== 'standard') return;
     /* Warm on idle. The player is a 60KB chunk and the first hover would
-       otherwise wait on the network for it — which is the one moment the
-       animation has to be instant, because the pointer is already there. */
+       otherwise wait on the network for it — the one moment the animation has
+       to be instant, because the pointer is already there. */
     const idle =
       typeof window.requestIdleCallback === 'function'
         ? window.requestIdleCallback(() => void ensure(), { timeout: 4000 })
@@ -193,7 +213,11 @@ export default function Logo({
   }, [ensure, interactive, intro]);
 
   const onEnter = useCallback(() => {
-    if (intro || !interactive || prefersReducedMotion()) return;
+    /* Standard only. The trace needs a 60KB player and six layers of trim paths
+       rasterised per frame — the second most expensive thing in the app, and
+       exactly what the reduced tier's rule names. Below standard, the static
+       mark is the answer. */
+    if (intro || !interactive || motionTier() !== 'standard') return;
     wantedRef.current = true;
     hostRef.current?.setAttribute('data-shown', '');
     void ensure().then((animation) => {

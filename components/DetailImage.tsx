@@ -12,7 +12,10 @@ import {
 import { MdFullscreen } from 'react-icons/md';
 import IconButton from './IconButton';
 import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
+import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
+import { getRawImageUrl } from '@/lib/imageLoader';
 import { warmImageHeroFrame } from '@/lib/hero';
+import { ICON } from '@/lib/icons';
 
 type DetailMediaTargetCallback = (surfaceId: string, target: HTMLDivElement | null) => void;
 
@@ -37,6 +40,10 @@ type DetailImageProps = {
   onTargetChange?: DetailMediaTargetCallback;
   onPreviewReady?: DetailMediaReadyCallback;
   onFinalReady?: DetailMediaReadyCallback;
+  /** The preview will never paint. Lets the route drop `heroActive` and show the final. */
+  onPreviewFailed?: (surfaceId: string) => void;
+  /** Neither layer will ever paint. The terminal answer the handoff waits for. */
+  onMediaUnavailable?: (surfaceId: string) => void;
   onOpen: () => void;
 };
 
@@ -45,9 +52,31 @@ type ImagePrefetchLease = {
   release: () => void;
 };
 
+/**
+ * Derpibooru's own derivatives: `large`, `medium`, `small`, the thumbs. These are already
+ * size-appropriate files off a CDN, which is what makes running them through `/_next/image` a pure
+ * loss — see `shouldBypassImageOptimization`.
+ *
+ * Matched on the *raw* URL, because the image line may have wrapped it in a proxy's `?url=`.
+ */
+const CDN_DERIVATIVE = /\/(?:large|medium|small|tall|thumb|thumb_small|thumb_tiny)\.[a-z0-9]+$/;
+
+/**
+ * **The detail's picture is served as-is, not re-encoded — this is the fix for the
+ * blur.** The source is already one of Derpibooru's CDN derivatives, sized for
+ * exactly this job; running it through `/_next/image` at `q=82` measurably destroys
+ * it (a real picture, at identical pixel dimensions: 373KB source → 171KB re-encoded)
+ * and costs 3–4 seconds of server CPU per variant. That is why the report was
+ * "production is soft, dev is completely fine": dev skips the optimizer. The bytes
+ * given up are the right way round — the picture *is* the content — and gallery
+ * cards keep the optimizer, where a small card from a large source is a real saving.
+ */
 function shouldBypassImageOptimization(src: string) {
-  const pathname = src.split(/[?#]/, 1)[0].toLowerCase();
-  return pathname.endsWith('.gif') || pathname.endsWith('.svg') || pathname.endsWith('.apng');
+  const pathname = getRawImageUrl(src).split(/[?#]/, 1)[0].toLowerCase();
+  if (pathname.endsWith('.gif') || pathname.endsWith('.svg') || pathname.endsWith('.apng')) {
+    return true;
+  }
+  return CDN_DERIVATIVE.test(pathname);
 }
 
 function getPrefetchCandidate(
@@ -112,6 +141,8 @@ export default function DetailImage({
   onTargetChange,
   onPreviewReady,
   onFinalReady,
+  onPreviewFailed,
+  onMediaUnavailable,
   onOpen,
 }: DetailImageProps) {
   const targetRef = useRef<HTMLDivElement>(null);
@@ -120,8 +151,13 @@ export default function DetailImage({
   const surfaceIdRef = useRef(surfaceId);
   const onPreviewReadyRef = useRef(onPreviewReady);
   const onFinalReadyRef = useRef(onFinalReady);
+  const onPreviewFailedRef = useRef(onPreviewFailed);
+  const onMediaUnavailableRef = useRef(onMediaUnavailable);
   const previewReadyRef = useRef(false);
   const finalReadyRef = useRef(false);
+  const previewFailedRef = useRef(false);
+  const finalFailedRef = useRef(false);
+  const previewFallbackRef = useRef<number | null>(null);
   const publishedPreviewSurfaceRef = useRef<string | null>(null);
   const publishedFinalSurfaceRef = useRef<string | null>(null);
   const hasPreview = Boolean(previewSrc);
@@ -129,6 +165,11 @@ export default function DetailImage({
   // final underneath so clearing heroActive is only a CSS swap (no mount jank).
   const mountFinal = Boolean(finalSrc) && (!heroActive || !hasPreview || preloadFinal);
   const responsiveSizes = getHeroMediaResponsiveSizes({ width, height });
+
+  /* The preview layer needs no resolution ladder of its own. It paints the bitmap
+     the gallery card already decoded — instant, and soft, because that bitmap was
+     picked for a small slot — and the final layer arrives as the CDN's own file in
+     one hop, so there is nothing for a middle rung to be faster than. */
 
   const publishPreviewReady = useCallback(() => {
     const readySurfaceId = surfaceIdRef.current;
@@ -162,10 +203,51 @@ export default function DetailImage({
     callback(readySurfaceId, target);
   }, []);
 
+  const clearPreviewFallback = useCallback(() => {
+    if (previewFallbackRef.current === null) return;
+    window.clearTimeout(previewFallbackRef.current);
+    previewFallbackRef.current = null;
+  }, []);
+
   const markPreviewReady = useCallback(() => {
+    clearPreviewFallback();
     previewReadyRef.current = true;
     publishPreviewReady();
-  }, [publishPreviewReady]);
+  }, [clearPreviewFallback, publishPreviewReady]);
+
+  /**
+   * The preview will never paint: it errored, or it went quiet past the grace
+   * timer. The route is told first so `heroActive` drops and the CSS swap puts the
+   * *final* layer on top; then paintability is published — or, if neither layer
+   * will ever paint, the terminal answer the flight waits for goes out instead.
+   *
+   * **The order is the call order and nothing stronger.** `onPreviewFailed`
+   * schedules a React state update while `markPreviewReady()` publishes
+   * synchronously, so the controller can learn the preview is paintable in the
+   * same task, while the hero-active flag is still set and the final layer is
+   * still transparent. Guaranteeing the order would mean waiting for the flag to
+   * land before publishing — another round trip on the failure path. Against a
+   * 30-second hang, one possibly blank frame is the trade taken here.
+   */
+  const markPreviewFailed = useCallback(() => {
+    clearPreviewFallback();
+    if (previewFailedRef.current) return;
+    previewFailedRef.current = true;
+    const failedSurfaceId = surfaceIdRef.current;
+    if (failedSurfaceId) onPreviewFailedRef.current?.(failedSurfaceId);
+    if (finalReadyRef.current) markPreviewReady();
+    else if (finalFailedRef.current && failedSurfaceId) {
+      onMediaUnavailableRef.current?.(failedSurfaceId);
+    }
+  }, [clearPreviewFallback, markPreviewReady]);
+
+  /** A paintable preview is still a handoff target, so only escalate when there is none. */
+  const markFinalFailed = useCallback(() => {
+    finalFailedRef.current = true;
+    const failedSurfaceId = surfaceIdRef.current;
+    if (!failedSurfaceId || previewReadyRef.current) return;
+    onMediaUnavailableRef.current?.(failedSurfaceId);
+  }, []);
 
   const markFinalReady = useCallback(() => {
     const target = targetRef.current;
@@ -173,8 +255,19 @@ export default function DetailImage({
     finalReadyRef.current = true;
     target.setAttribute('data-image-detail-final-ready', 'true');
     publishFinalReady();
-    if (!sourceRef.current.previewSrc) markPreviewReady();
-  }, [markPreviewReady, publishFinalReady]);
+    /* A decoded final is enough on its own when there is no preview to wait for, or
+       when the one there was has already failed. Otherwise it starts the grace
+       timer — gated on both, or a dead preview holds the flight for the full
+       timeout while the picture sits decoded underneath it. */
+    if (!sourceRef.current.previewSrc || previewFailedRef.current) {
+      markPreviewReady();
+      return;
+    }
+    if (previewReadyRef.current || previewFallbackRef.current !== null) return;
+    previewFallbackRef.current = window.setTimeout(markPreviewFailed, HERO_PREVIEW_FALLBACK_MS);
+  }, [markPreviewFailed, markPreviewReady, publishFinalReady]);
+
+  useEffect(() => clearPreviewFallback, [clearPreviewFallback]);
 
   useLayoutEffect(() => {
     const target = targetRef.current;
@@ -183,10 +276,13 @@ export default function DetailImage({
 
     if (previous.previewSrc !== previewSrc) {
       previewReadyRef.current = false;
+      previewFailedRef.current = false;
+      clearPreviewFallback();
       publishedPreviewSurfaceRef.current = null;
     }
     if (previous.finalSrc !== finalSrc) {
       finalReadyRef.current = false;
+      finalFailedRef.current = false;
       publishedFinalSurfaceRef.current = null;
       target.removeAttribute('data-image-detail-final-ready');
       if (!previewSrc) {
@@ -196,7 +292,7 @@ export default function DetailImage({
     }
     sourceRef.current = { previewSrc, finalSrc };
     if (!previewSrc && finalReadyRef.current) previewReadyRef.current = true;
-  }, [finalSrc, previewSrc]);
+  }, [clearPreviewFallback, finalSrc, previewSrc]);
 
   useLayoutEffect(() => {
     if (mountFinal) return;
@@ -208,6 +304,8 @@ export default function DetailImage({
   useLayoutEffect(() => {
     onPreviewReadyRef.current = onPreviewReady;
     onFinalReadyRef.current = onFinalReady;
+    onPreviewFailedRef.current = onPreviewFailed;
+    onMediaUnavailableRef.current = onMediaUnavailable;
     surfaceIdRef.current = surfaceId;
     if (!surfaceId) {
       publishedPreviewSurfaceRef.current = null;
@@ -219,6 +317,8 @@ export default function DetailImage({
   }, [
     finalSrc,
     onFinalReady,
+    onMediaUnavailable,
+    onPreviewFailed,
     onPreviewReady,
     previewSrc,
     publishFinalReady,
@@ -340,9 +440,12 @@ export default function DetailImage({
           // A confirmed detail route owns the final image request even while
           // its preview is still the visual authority. Deferring this behind
           // input activity made a held touch/wheel appear to stop loading.
-          fetchPriority="high"
-          unoptimized={shouldBypassImageOptimization(finalSrc)}
+          fetchPriority="high"          unoptimized={shouldBypassImageOptimization(finalSrc)}
           onLoad={markFinalDecoded}
+          /* `next/image` re-assigns `src` to itself so a lost error re-fires, and
+             there was nothing here to receive it — so a final that 404s was
+             indistinguishable from one still in flight. */
+          onError={markFinalFailed}
           data-image-detail-layer="final"
           className="image-detail-final pointer-events-none absolute inset-0 z-0 block h-full w-full object-contain"
         />
@@ -358,6 +461,7 @@ export default function DetailImage({
           fetchPriority="high"
           unoptimized
           onLoad={markPreviewDecoded}
+          onError={markPreviewFailed}
           data-image-detail-layer="preview"
           // Absolute so preloading final never shifts the box.
           className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
@@ -366,20 +470,15 @@ export default function DetailImage({
       {/* Hover veil, and nothing else — `pointer-events-none` so it never eats
           the press the media box below it is listening for. */}
       <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />
-      {/* The zoom affordance was a 32px glyph dead-centre over the subject,
-          revealed on `group-hover` — so on a touch device, where there is no
-          hover, the primary action of this screen had no affordance at all. And
-          the press target was the `<div onClick>` above: not focusable, no key
-          handler, so the screen's main action could not be reached from a
-          keyboard.
-
-          It is now a real control on the media plate, in the corner rather than
-          over the picture, present by default and hover-revealed from `sm` up —
-          the same rule the gallery tiles' captions follow. The box click stays as
-          a pointer convenience; this button is what makes it reachable. */}
+      {/* The zoom affordance is a real control on the media plate, in the corner
+          rather than over the picture, present by default and hover-revealed from
+          `sm` up — the same rule the gallery tiles' captions follow. The box click
+          stays as a pointer convenience; this button is what makes the action
+          reachable from a keyboard (and present on touch, where there is no
+          hover). */}
       <IconButton
         variant="media"
-        icon={<MdFullscreen size={22} />}
+        icon={<MdFullscreen size={ICON.standard} />}
         aria-label="放大查看原图"
         /* Stops the press reaching the media box's own handler underneath, which
            would open the lightbox a second time in the same tick. */
@@ -387,6 +486,11 @@ export default function DetailImage({
           e.stopPropagation();
           onOpen();
         }}
+        /* Hidden for the length of a hero flight — see the rule in globals.css. Below `sm`
+           this control is `opacity-100` rather than hover-revealed, and `HeroStage`'s
+           landing target renders no children at all, so on a phone the handoff frame was
+           conjuring a 40dp button into the picture's corner out of nothing. */
+        data-image-detail-zoom
         className="absolute right-3 bottom-3 z-30 cursor-zoom-in opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
       />
     </div>

@@ -1,0 +1,166 @@
+{
+  "cold home": [
+    {
+      "label": "GET /",
+      "api": 3,
+      "media": 31,
+      "serverApi": 1,
+      "contentRound": 0
+    }
+  ],
+  "home → forum tab": [
+    {
+      "label": "GET /",
+      "api": 3,
+      "media": 29,
+      "serverApi": 1,
+      "contentRound": 0
+    },
+    {
+      "label": "tap 论坛",
+      "api": 0,
+      "media": 0,
+      "serverApi": 1,
+      "contentRound": null
+    }
+  ],
+  "home → search → back": [
+    {
+      "label": "GET /",
+      "api": 3,
+      "media": 29,
+      "serverApi": 1,
+      "contentRound": 0
+    },
+    {
+      "label": "→ /search",
+      "api": 0,
+      "media": 22,
+      "serverApi": 0,
+      "contentRound": null
+    },
+    {
+      "label": "← back",
+      "api": 0,
+      "media": 0,
+      "serverApi": 0,
+      "contentRound": null
+    }
+  ],
+  "cold profile": [
+    {
+      "label": "GET /user/1",
+      "api": 2,
+      "media": 12,
+      "serverApi": 1,
+      "contentRound": 1
+    }
+  ],
+  "profile → back → profile": [
+    {
+      "label": "GET /user/1",
+      "api": 2,
+      "media": 12,
+      "serverApi": 1,
+      "contentRound": 1
+    },
+    {
+      "label": "→ /",
+      "api": 2,
+      "media": 28,
+      "serverApi": 1,
+      "contentRound": 0
+    },
+    {
+      "label": "← back",
+      "api": 0,
+      "media": 23,
+      "serverApi": 0,
+      "contentRound": null
+    }
+  ],
+  "cold about": [
+    {
+      "label": "GET /about",
+      "api": 1,
+      "media": 0,
+      "serverApi": 1,
+      "contentRound": 0
+    }
+  ],
+  "cold policy": [
+    {
+      "label": "GET /policy",
+      "api": 1,
+      "media": 0,
+      "serverApi": 0,
+      "contentRound": null
+    }
+  ],
+  "cold favorites": [
+    {
+      "label": "GET /favorites",
+      "api": 5,
+      "media": 33,
+      "serverApi": 1,
+      "contentRound": 2
+    }
+  ],
+  "favorites → back → favorites": [
+    {
+      "label": "GET /favorites",
+      "api": 5,
+      "media": 33,
+      "serverApi": 1,
+      "contentRound": 2
+    },
+    {
+      "label": "→ /",
+      "api": 2,
+      "media": 18,
+      "serverApi": 1,
+      "contentRound": 0
+    },
+    {
+      "label": "→ /favorites",
+      "api": 0,
+      "media": 0,
+      "serverApi": 0,
+      "contentRound": null
+    },
+    {
+      "label": "← back",
+      "api": 0,
+      "media": 0,
+      "serverApi": 0,
+      "contentRound": null
+    }
+  ],
+  "cold history": [
+    {
+      "label": "GET /history",
+      "api": 4,
+      "media": 0,
+      "serverApi": 1,
+      "contentRound": 1
+    }
+  ],
+  "cold tasks": [
+    {
+      "label": "GET /tasks",
+      "api": 4,
+      "media": 0,
+      "serverApi": 1,
+      "contentRound": 1
+    }
+  ],
+  "cold messages": [
+    {
+      "label": "GET /messages",
+      "api": 4,
+      "media": 0,
+      "serverApi": 1,
+      "contentRound": 1
+    }
+  ]
+}

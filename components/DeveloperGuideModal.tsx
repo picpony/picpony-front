@@ -8,6 +8,8 @@ import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { MdCheckCircle, MdCancel, MdConstruction } from 'react-icons/md';
+import { ICON } from '@/lib/icons';
+import { readToken } from '@/lib/hooks';
 
 interface DevPrerequisites {
   logged_in?: boolean;
@@ -25,9 +27,9 @@ function PreqRow({ label, met }: { label: string; met: boolean }) {
   return (
     <div className="flex items-center gap-2 text-body-m">
       {met ? (
-        <MdCheckCircle className="text-success" size={18} />
+        <MdCheckCircle className="text-success" size={ICON.dense} />
       ) : (
-        <MdCancel className="text-error" size={18} />
+        <MdCancel className="text-error" size={ICON.dense} />
       )}
       {/* `on-surface-variant`, not `outline`: this is a label, and `outline` is
           the boundary role — 4.3:1 on the light surface, under the AA floor for
@@ -63,7 +65,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       setSubmitting(false);
       let token = '';
       try {
-        token = JSON.parse(localStorage.getItem('user_info') || 'null')?.token || '';
+        token = readToken() || '';
       } catch {
         token = '';
       }
@@ -152,14 +154,13 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       isOpen={isOpen}
       onClose={onClose}
       title="开发者模式"
-      maxWidth="max-w-sm"
+      maxWidth="sm"
       closeOnOverlayClick={false}
     >
       <div className="space-y-4">
-        {/* The destination's own shape — three prerequisite rows — rather than a
-            centred spinner. A dot says "something is happening somewhere" and
-            then reflows the whole dialog when the rows land; three bars say "a
-            checklist is arriving here", in the geometry it arrives in. */}
+        {/* The destination's own shape — three prerequisite rows — rather than
+            a centred spinner: three bars say "a checklist is arriving here",
+            in the geometry it arrives in. */}
         {status === 'loading' && (
           <div className="space-y-2" aria-hidden="true">
             {[0, 1, 2].map((i) => (
@@ -179,8 +180,8 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
           <>
             {isDeveloper ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-body-m text-primary">
-                  <MdConstruction size={20} />
+                <div className="flex items-center gap-2 text-body-m text-primary-ink">
+                  <MdConstruction size={ICON.control} />
                   当前已处于开发者模式
                 </div>
                 <Button variant="tonal" onClick={handleDisable} loading={submitting}>

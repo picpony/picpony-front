@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
-import { encodeTrack } from '@/lib/utils';
-import { gsap, prefersReducedMotion } from '@/lib/motion';
+import { encodeTrack, clamp, clamp01 } from '@/lib/utils';
+import { gsap, spring } from '@/lib/motion';
+import { motionTier } from '@/lib/appearance';
 import Spinner from './Spinner';
 import Skeleton from './Skeleton';
 
@@ -33,6 +34,9 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   const puzzleHeight = 155;
   const pieceSize = 50;
   const maxSliderX = puzzleWidth - pieceSize;
+  /** `long1` on M3's scale — the shake is a pre-sampled keyframe track, so this
+   *  is its whole clock and the curve is `none`. */
+  const SHAKE_SECONDS = 0.45;
 
   const [bgImage, setBgImage] = useState('');
   const [pieceImage, setPieceImage] = useState('');
@@ -43,8 +47,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   const [errorMsg, setErrorMsg] = useState('');
   const [isDragging, setIsDragging] = useState(false);
 
-  const sliderXRef = useRef(0);
-  const sliderBtnRef = useRef<HTMLDivElement>(null);
+  const sliderXRef = useRef(0);  const sliderBtnRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
   const trackRefElement = useRef<HTMLDivElement>(null);
@@ -112,15 +115,18 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
     snapTweenRef.current?.kill();
     const from = sliderXRef.current;
     sliderXRef.current = 0;
-    if (from <= 0 || prefersReducedMotion()) {
+    /* Only `off`. The knob returning home is the control reporting that the
+       attempt was rejected — a value snapping back with no travel reads as the
+       input never having been registered — so `reduced` keeps the glide. */
+    if (from <= 0 || motionTier() === 'off') {
       setSliderX(0);
       return;
     }
     const proxy = { x: from };
     snapTweenRef.current = gsap.to(proxy, {
       x: 0,
-      duration: 0.5,
-      ease: 'expo.out',
+      /* `fast-spatial`, the spring `Switch.kt` gives a handle. */
+      ...spring('fastSpatial'),
       onUpdate: () => {
         sliderXRef.current = proxy.x;
         setSliderX(proxy.x);
@@ -141,13 +147,19 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
   // Physical feedback on failure: shake the puzzle while the error overlay
   // fades in.
   useEffect(() => {
-    if (!errorMsg || prefersReducedMotion()) return;
+    /* The shake is pure feedback with no state in it, so both non-standard tiers
+        drop it and the error overlay's own fade carries the message. */
+    if (!errorMsg || motionTier() !== 'standard') return;
     const el = containerRef.current;
     if (!el) return;
     const tween = gsap.to(el, {
       keyframes: { x: [0, -9, 8, -5, 3, 0] },
-      duration: 0.45,
-      ease: 'power2.out',
+      duration: SHAKE_SECONDS,
+      /* `none`, because the amplitudes are already in the keyframe list: laying a
+          curve over an explicit track re-shapes the whole shake, so the numbers
+          were not the ones that played. The pre-sampled-track case the motion
+          rules allow `linear` for. */
+      ease: 'none',
     });
     return () => {
       tween.kill();
@@ -188,7 +200,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
         setErrorMsg('获取验证码失败');
       }
     } catch {
-      setErrorMsg('网络错误，请重试');
+      setErrorMsg('网络错误，请稍后再试');
     }
     setLoading(false);
     loadingRef.current = false;
@@ -223,7 +235,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       const buttonRect = button?.getBoundingClientRect();
       grabRatioRef.current =
         buttonRect && buttonRect.width > 0
-          ? Math.max(0, Math.min(1, (clientX - buttonRect.left) / buttonRect.width))
+          ? clamp01((clientX - buttonRect.left) / buttonRect.width)
           : 0.5;
       startXRef.current = clientX;
       startYRef.current = clientY;
@@ -247,7 +259,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
             getClientX(moveEvent) - contentLeft - buttonWidth * grabRatioRef.current;
           x = (visualLeft / visualMaxX) * maxSliderX;
         }
-        x = Math.max(0, Math.min(maxSliderX, x));
+        x = clamp(x, 0, maxSliderX);
 
         sliderXRef.current = x;
         setSliderX(x);
@@ -332,7 +344,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
         } catch {
           snapBack();
           trackRef.current = [];
-          setErrorMsg('网络错误，请重试');
+          setErrorMsg('网络错误，请稍后再试');
           setTimeout(() => {
             void fetchCaptchaRef.current();
           }, 500);
@@ -377,13 +389,11 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       <div className="flex justify-center items-center w-full">
         <span className="text-title-s text-on-surface">请完成安全验证</span>
       </div>
-      <div ref={containerRef} className="relative w-full max-w-[310px]">
+      <div ref={containerRef} className="relative w-full max-w-78">
         {loading && !bgImage && (
-          /* A `Skeleton` in the puzzle's own box, not a `Spinner` inside it. The
+          /* A `Skeleton` in the puzzle's own box, not a `Spinner` inside it: the
              box is already reserved at the exact aspect ratio, so there is a
-             destination shape to load into — which is the whole test for which
-             of the two to use. A spinner here said "something is happening"
-             inside a frame that was already telling you where. */
+             destination shape to load into. */
           <Skeleton
             className="w-full rounded-md"
             style={{ aspectRatio: `${puzzleWidth} / ${puzzleHeight}` }}
@@ -403,7 +413,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
               <img
                 src={pieceImage}
                 alt="滑动拼图"
-                className="absolute drop-shadow-[0_0_5px_color-mix(in_oklab,var(--md-sys-color-scrim)_50%,transparent)] pointer-events-none"
+                className="absolute pointer-events-none drop-shadow-[var(--md-sys-elevation-drop-1)]"
                 style={{
                   top: `${(pieceY * layout.imageWidth) / puzzleWidth}px`,
                   left: `${(sliderX * layout.imageMaxX) / maxSliderX}px`,
@@ -415,7 +425,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
             )}
             {verifying && (
               <div className="bg-media-plate animate-fade-in absolute inset-0 z-20 flex items-center justify-center">
-                <Spinner size="lg" white />
+                <Spinner size="lg" tone="on-primary" />
               </div>
             )}
             {errorMsg && !verifying && (
@@ -446,7 +456,7 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
       {bgImage && (
         <div
           ref={trackRefElement}
-          className="relative w-full max-w-[310px] h-10 bg-surface-container-high rounded-full border border-outline-variant mt-2"
+          className="relative w-full max-w-78 h-10 bg-surface-container-high rounded-full border border-outline-variant mt-2"
           style={{ touchAction: 'none' }}
         >
           <div
@@ -458,14 +468,16 @@ export default function SliderCaptcha({ onVerify }: SliderCaptchaProps) {
 
           <div
             ref={sliderBtnRef}
-            /* `duration-120` + `standard`, i.e. the motion table's press row.
-               Grabbing the handle is a press, and the 200ms this carried — with
-               no curve at all, so it fell through to the default — left the
-               fill and the scale still catching up after the handle had already
-               moved under the finger. */
-            className={`bg-surface-raised text-title-m absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline shadow-e2 transition-[color,background-color,border-color,scale,box-shadow] duration-120 ease-[var(--ease-standard)] select-none ${
+            /* `duration-press` + `standard`, the motion table's press row:
+               grabbing the handle is a press, and the fill must keep up with the
+               handle under the finger.
+
+               No scale on grab, no elevation at all — a slider handle is level 0
+               (the primitive gives its handle no shadow either), and the state
+               layer is what reports the press. */
+            className={`bg-surface-raised text-title-m state-layer absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline transition-[color,background-color,border-color] duration-press ease-[var(--ease-standard)] select-none ${
               isDragging
-                ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill scale-110 shadow-e3'
+                ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill'
                 : 'cursor-grab text-on-surface-variant'
             } ${verifying ? 'pointer-events-none disabled-content' : ''}`}
             style={{

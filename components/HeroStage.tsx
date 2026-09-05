@@ -116,8 +116,17 @@ export default function HeroStage() {
         data-image-hero-stage
         data-image-hero-stage-state={state.phase}
         aria-hidden="true"
-        className="pointer-events-auto absolute inset-0 z-[var(--z-hero-stage)] overflow-hidden"
+        className="pointer-events-auto absolute inset-0 z-hero-stage overflow-hidden"
       >
+        {/* The container transform's window, and the counter-scale that makes
+            the content's accumulated transform uniform. Inert until
+            `buildContainerAnimations` drives them — and neither may ever hold a
+            resting transform: a transform is a containing block for
+            fixed-position descendants. Both boxes are `absolute inset-0`, so
+            inserting them changes no geometry; the route's shell must stay
+            structurally identical to this. */}
+        <div data-image-detail-clip className="image-detail-clip absolute inset-0">
+          <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
         <div
           ref={surfaceRef}
           data-image-detail-surface
@@ -136,22 +145,23 @@ export default function HeroStage() {
             inert
             className="image-detail-overlay-content pointer-events-none relative min-h-full w-full"
           >
+            {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR. */}
+            <div data-image-detail-crossfade className="w-full">
             <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
               <div className="flex flex-col rounded-md bg-transparent">
                 <DetailHeader key={image.id} image={image} layout="stage" metadataReady={false} />
                 <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
-                  <div className="pointer-events-none absolute inset-x-4 top-2 z-20 flex justify-center">
-                    <div
-                      ref={targetRef}
-                      data-image-hero-stage-target
-                      data-image-hero-stage-id={image.id}
-                      className="invisible relative flex-none overflow-hidden rounded-lg"
-                      style={getHeroMediaStyle(image)}
-                    ></div>
-                  </div>
+                  {/* The landing target is an ordinary in-flow flex item, because
+                      the routed `DetailImage` is one too and the two must measure
+                      identically — a second box inside an absolutely-positioned
+                      wrapper resolved its width against a containing block 16px
+                      narrower per side, and the flyer landed wide and snapped in. */}
                   <div
+                    ref={targetRef}
+                    data-image-hero-stage-target
+                    data-image-hero-stage-id={image.id}
                     aria-hidden="true"
-                    className="invisible flex-none"
+                    className="invisible relative flex-none overflow-hidden rounded-lg"
                     style={getHeroMediaStyle(image)}
                   />
                 </div>
@@ -161,15 +171,18 @@ export default function HeroStage() {
                 >
                   <div className="mx-auto w-full max-w-5xl">
                     <div aria-hidden="true" className="mb-6">
-                      <div className="mb-2 flex justify-between">
+                      <div className="mb-1.5 flex justify-between">
                         <Skeleton className="h-4 w-14" />
                         <Skeleton className="h-4 w-14" delay={60} />
                       </div>
-                      <Skeleton className="h-2.5 w-full" delay={120} />
+                      {/* 4dp, matching the routed vote track — the Stage and the
+                          route must measure identically or the handoff shifts. */}
+                      <Skeleton className="h-1 w-full" delay={120} />
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
           <div
@@ -179,12 +192,22 @@ export default function HeroStage() {
             className="image-hero-stage-anchor"
           />
         </div>
+          </div>
+        </div>
       </section>
+      {/* `passive`: while the Stage's copy rides along, the routed one is mounted
+          too, so without it the app has two focusable 返回图片列表 buttons in the
+          tab order and two in the accessibility tree.
+          No `data-image-detail-reveal` here — both back buttons render as
+          *siblings* of the overlay, so the cascade never reached them. Their
+          entrance is the `floatingBack` branch in `buildOverlayAnimations`, and
+          the pull gesture reaches them through a compound selector on the
+          element itself. */}
       <DetailBack
         ref={backRef}
+        passive
         data-image-detail-back-button
         data-image-detail-floating-back="stage"
-        data-image-detail-reveal="chrome"
         data-image-hero-stage-back
         data-image-hero-stage-foreground
         onClick={() => {

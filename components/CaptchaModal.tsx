@@ -11,6 +11,8 @@ interface CaptchaModalProps {
 }
 
 export default function CaptchaModal({ isOpen, onClose, onVerify }: CaptchaModalProps) {
+  /* Renders null on the server and before hydration: the captcha needs browser
+     APIs, and the Modal is client-only anyway. */
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -20,7 +22,7 @@ export default function CaptchaModal({ isOpen, onClose, onVerify }: CaptchaModal
   if (!mounted) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-fit" hideCloseButton>
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="fit" hideCloseButton>
       <SliderCaptcha onVerify={onVerify} onClose={onClose} />
     </Modal>
   );

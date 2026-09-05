@@ -1,17 +1,31 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import { createContext, useCallback, useContext, useState, useRef } from 'react';
 import { MdClose, MdEmail, MdLock, MdSend, MdArrowBack } from 'react-icons/md';
 import IconButton from './IconButton';
 import Modal from './Modal';
-import CaptchaModal from './CaptchaModal';
+import CodeInput from './CodeInput';
+/**
+ * The captcha is behind `dynamic()` and behind a "has ever opened" flag, and the
+ * second half is what makes the first one work: the modal was rendered
+ * unconditionally with `isOpen={false}`, so `dynamic()` alone would have fetched
+ * the chunk the moment the sign-in dialog mounted. `captchaMounted` is a one-way
+ * latch, so the chunk arrives on the first challenge and the element then *stays*
+ * mounted — which is what `Modal`'s exit animation needs.
+ */
+const CaptchaModal = dynamic(() => import('./CaptchaModal'), { ssr: false });
 import Button from './Button';
 import { Input } from './Input';
 import LottieIcon from './LottieIcon';
+import Logo from './Logo';
 import { showToast } from './Toast';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
-import { readJson } from '@/lib/api/client';
+import { sessionUser } from '@/lib/resources';
+import { LS_KEYS } from '@/lib/constants';
+import { ICON } from '@/lib/icons';
 
 export type AuthView = 'login' | 'register' | 'reset';
 
@@ -84,15 +98,15 @@ function AuthModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-4xl"
+      maxWidth="4xl"
       bodyClassName="p-0"
       closeOnEscape={closeOnEscape}
       hideCloseButton
       // 整个窗口组件在验证码弹窗打开时缩小让位，带动画
       // 用独立 scale 属性（Tailwind v4），避开 modalContent 动画 forwards 对 transform/opacity 的填充锁定
       panelClassName={cn(
-        'transition-[scale] duration-300 ease-[var(--ease-standard)]',
-        innerModalOpen ? 'scale-[0.96]' : 'scale-100',
+        'transition-[scale] spring-default-spatial',
+        innerModalOpen ? 'scale-95' : 'scale-100',
       )}
     >
       {/* 手机高度跟随内容自适应，桌面保持固定较高高度 */}
@@ -104,7 +118,14 @@ function AuthModal({
           <LottieIcon
             className="w-4/5 max-w-md"
             load={() => import('@/lib/lottie/login.json').then((m) => m.default)}
-            fallback={null}
+            /* 3257×2148, the composition's own box. Reserving it matters more here
+               than on /search: this pane is 60% of a 640px-tall dialog, so an
+               unreserved host let the form column decide the height and then
+               resized it when the chunk landed. */
+            aspect={3257 / 2148}
+            /* The wordmark, which is what /about already falls back to under
+               reduced motion — so this pane is never empty. */
+            fallback={<Logo className="h-auto w-2/3" />}
           />
         </div>
         {/* flex-col + my-auto：内容短时垂直居中，超高时正常滚动 */}
@@ -114,7 +135,7 @@ function AuthModal({
             aria-label="关闭"
             dismiss
             className="absolute right-1 top-5 z-10 hover:text-on-surface"
-            icon={<MdClose size={22} />}
+            icon={<MdClose size={ICON.standard} />}
           />
           <div key={view} className="my-auto animate-page-transition">
             {view === 'login' && (
@@ -140,10 +161,8 @@ function AuthModal({
 }
 
 /**
- * "返回登录", which appeared three times byte-for-byte — in the register form,
- * the reset form and the verify step. Identical enough that a change to one
- * would silently have left the other two behind, and none of the three carried
- * a focus ring.
+ * "返回登录", which appeared three times byte-for-byte. One component, so a
+ * change to one cannot silently leave the other two behind.
  */
 function BackToLogin({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
   return (
@@ -152,7 +171,7 @@ function BackToLogin({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
       onClick={() => onSwitch('login')}
       className="mb-8 flex items-center rounded-xs text-label-l text-on-surface-variant outline-none transition-ui hover:text-on-surface focus-visible:ring-2 focus-ring"
     >
-      <MdArrowBack size={18} className="mr-1" /> 返回登录
+      <MdArrowBack size={ICON.dense} className="mr-1" /> 返回登录
     </button>
   );
 }
@@ -171,7 +190,12 @@ function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
 
+  /* One-way: once the challenge has been shown the element stays mounted, so its
+     exit animation has something to run on. See the note on the import. */
+  const [captchaMounted, setCaptchaMounted] = useState(false);
+
   const setCaptcha = (open: boolean) => {
+    if (open) setCaptchaMounted(true);
     setShowCaptchaModal(open);
     onCaptchaChange(open);
   };
@@ -201,16 +225,19 @@ function LoginForm({
           derpi_user_id: data.derpi_user_id,
           derpi_username: data.derpi_username,
         };
-        localStorage.setItem('user_info', JSON.stringify(baseUserInfo));
+        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(baseUserInfo));
         try {
-          const userRes = await api.getUser(data.token);
-          const userData = await readJson(userRes);
-          if (userData.success && userData.user) {
+          /* Through the shared resource, so the shell does not immediately ask
+             the same question again: this fills the cache entry for the new
+             token, so `AppLayout`'s own read (fired by `user_info_updated`
+             below) is a hit. */
+          const result = await sessionUser.read({ token: data.token });
+          if (result.kind === 'ok') {
             localStorage.setItem(
-              'user_info',
+              LS_KEYS.userInfo,
               JSON.stringify({
                 ...baseUserInfo,
-                ...userData.user,
+                ...result.user,
                 token: data.token,
                 api_key: data.api_key,
                 derpi_user_id: data.derpi_user_id,
@@ -256,11 +283,13 @@ function LoginForm({
           required
           placeholder="请输入密码"
         />
-        <CaptchaModal
-          isOpen={showCaptchaModal}
-          onClose={() => setCaptcha(false)}
-          onVerify={onCaptchaVerify}
-        />
+        {captchaMounted && (
+          <CaptchaModal
+            isOpen={showCaptchaModal}
+            onClose={() => setCaptcha(false)}
+            onVerify={onCaptchaVerify}
+          />
+        )}
         <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading}>
           登录
         </Button>
@@ -271,7 +300,7 @@ function LoginForm({
           <button
             type="button"
             onClick={() => onSwitch('register')}
-            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+            className="text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             立即注册
           </button>
@@ -280,7 +309,7 @@ function LoginForm({
           <button
             type="button"
             onClick={() => onSwitch('reset')}
-            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+            className="text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             忘记密码？
           </button>
@@ -310,12 +339,18 @@ function RegisterForm({
   const registeredUserId = useRef<number>(0);
   const registeredUsername = useRef<string>('');
 
-  const [codeDigits, setCodeDigits] = useState<string[]>(Array(6).fill(''));
-  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  /* One string, not six characters plus a ref array. `CodeInput` owns the boxes,
+     the focus advance, paste distribution, the arrow keys and the a11y labels. */
+  const [code, setCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
+  /* One-way: once the challenge has been shown the element stays mounted, so its exit animation
+     has something to run on. See the note on the import. */
+  const [captchaMounted, setCaptchaMounted] = useState(false);
+
   const setCaptcha = (open: boolean) => {
+    if (open) setCaptchaMounted(true);
     setShowCaptchaModal(open);
     onCaptchaChange(open);
   };
@@ -374,7 +409,6 @@ function RegisterForm({
   };
 
   const handleVerify = async () => {
-    const code = codeDigits.join('');
     if (code.length !== 6) {
       showToast('请输入完整的 6 位验证码', 'error');
       return;
@@ -385,7 +419,7 @@ function RegisterForm({
       const data = await res.json();
       if (data.success) {
         localStorage.setItem(
-          'user_info',
+          LS_KEYS.userInfo,
           JSON.stringify({
             token: data.token,
             username: data.username,
@@ -396,7 +430,7 @@ function RegisterForm({
             derpi_username: data.derpi_username,
           }),
         );
-        showToast('邮箱验证成功，欢迎加入！', 'success');
+        showToast('邮箱验证成功，欢迎加入', 'success');
         window.dispatchEvent(new Event('user_info_updated'));
         onSuccess();
       } else {
@@ -443,52 +477,15 @@ function RegisterForm({
             请输入 6 位验证码
           </p>
           <div className="flex items-center justify-center gap-2 sm:gap-3">
-            {/* Six one-character text fields, wearing the text field's own
-                geometry and the text field's own focus state rather than a
-                second set: 12dp, and a thickened `primary` outline on focus with
-                no ring beside it. It used to carry an 8dp corner — the chip's
-                step, not a field's — and *both* indicators at once, a border
-                colour change and a 2px ring around it, which is the one control
-                in the app where the keyboard's position was announced twice. */}
-            {codeDigits.map((digit, i) => (
-              <input
-                key={i}
-                ref={(el) => {
-                  codeInputRefs.current[i] = el;
-                }}
-                type="text"
-                inputMode="numeric"
-                value={digit}
-                maxLength={1}
-                autoFocus={i === 0}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '');
-                  const newDigits = [...codeDigits];
-                  newDigits[i] = val.slice(0, 1);
-                  setCodeDigits(newDigits);
-                  if (val && i < 5) codeInputRefs.current[i + 1]?.focus();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Backspace' && !digit && i > 0) {
-                    codeInputRefs.current[i - 1]?.focus();
-                    const newDigits = [...codeDigits];
-                    newDigits[i - 1] = '';
-                    setCodeDigits(newDigits);
-                  }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-                  const newDigits = Array(6).fill('');
-                  for (let j = 0; j < text.length; j++) newDigits[j] = text[j];
-                  setCodeDigits(newDigits);
-                  const nextIndex = Math.min(text.length, 5);
-                  codeInputRefs.current[nextIndex]?.focus();
-                }}
-                className="w-10 h-12 sm:w-11 text-center text-title-m-emphasized rounded-md border border-outline bg-surface-container-lowest text-on-surface outline-none transition-[border-color] duration-200 ease-[var(--ease-standard)] focus:border-2 focus:border-primary"
-              />
-            ))}
+            {/* `CodeInput`, the primitive — the boxes, the focus advance, paste
+                distribution, the arrow keys and the a11y labels are its job. */}
+            <CodeInput
+              value={code}
+              onChange={setCode}
+              autoFocus
+              disabled={isVerifying}
+              aria-label="邮箱验证码"
+            />
           </div>
         </div>
         <Button
@@ -497,7 +494,7 @@ function RegisterForm({
           size="lg"
           fullWidth
           loading={isVerifying}
-          disabled={codeDigits.join('').length !== 6}
+          disabled={code.length !== 6}
         >
           验证并登录
         </Button>
@@ -505,9 +502,9 @@ function RegisterForm({
           <button
             onClick={handleResend}
             disabled={isResending}
-            className="text-body-m text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring disabled:disabled-content disabled:cursor-not-allowed"
+            className="text-body-m text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring disabled:disabled-content disabled:cursor-not-allowed"
           >
-            {isResending ? '发送中...' : '未收到？重新发送验证码'}
+            {isResending ? '发送中…' : '未收到？重新发送验证码'}
           </button>
         </div>
         </div>
@@ -552,11 +549,13 @@ function RegisterForm({
           maxLength={20}
           helper="长度 8-20 位，必须包含字母和数字或特殊字符"
         />
-        <CaptchaModal
-          isOpen={showCaptchaModal}
-          onClose={() => setCaptcha(false)}
-          onVerify={onCaptchaVerify}
-        />
+        {captchaMounted && (
+          <CaptchaModal
+            isOpen={showCaptchaModal}
+            onClose={() => setCaptcha(false)}
+            onVerify={onCaptchaVerify}
+          />
+        )}
         <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading}>
           注册
         </Button>
@@ -567,7 +566,7 @@ function RegisterForm({
           <button
             type="button"
             onClick={() => onSwitch('login')}
-            className="text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+            className="text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
           >
             立即登录
           </button>
@@ -668,7 +667,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
           <Input
             type="email"
             label="邮箱"
-            icon={<MdEmail size={18} />}
+            icon={<MdEmail size={ICON.dense} />}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -681,7 +680,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
             fullWidth
             loading={isLoading}
             disabled={!email.trim()}
-            icon={<MdSend size={18} />}
+            icon={<MdSend size={ICON.dense} />}
           >
             发送验证码
           </Button>
@@ -702,7 +701,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
           <Input
             type="password"
             label="新密码"
-            icon={<MdLock size={18} />}
+            icon={<MdLock size={ICON.dense} />}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
@@ -712,7 +711,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
           <Input
             type="password"
             label="确认密码"
-            icon={<MdLock size={18} />}
+            icon={<MdLock size={ICON.dense} />}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
@@ -732,7 +731,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
             <button
               type="button"
               onClick={() => setStep('request')}
-              className="text-body-m text-primary cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
+              className="text-body-m text-primary-ink cursor-pointer hover:underline rounded-xs outline-none focus-visible:ring-2 focus-ring"
             >
               重新发送验证码
             </button>

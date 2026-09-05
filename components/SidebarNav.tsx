@@ -1,7 +1,9 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
+import { prefetchRoute } from '@/lib/prefetchRoute';
 import {
   MdHome,
   MdForum,
@@ -21,6 +23,7 @@ import { useBackgroundSearchParams } from './BackgroundLocation';
 import { CountBadge } from './Badge';
 import { cn } from '@/lib/utils';
 import { isStaff } from '@/lib/roles';
+import { ICON } from '@/lib/icons';
 
 export interface SidebarUser {
   id?: number;
@@ -37,10 +40,20 @@ interface SidebarNavProps {
   onLogout: () => void;
 }
 
-/* 48px rows. The previous `py-2` gave ~36px, under the comfortable touch
-   target, and this drawer is the only navigation on a phone. */
+/* **48dp rows under a pointer, 56 under a finger.** 56 is M3's navigation-drawer
+   item height and it is a touch figure — this drawer is the only navigation on a
+   phone; on a desktop it is a repeated element and takes the density step down.
+
+   `pointer-coarse:h-14` rather than `touch-size`, and the difference matters:
+   `touch-size` raises a box *to* `--touch-floor` (48), which can only help a
+   control smaller than the floor. This row is already at the floor and needs to
+   go past it — a size decision, not a hit-area one.
+
+   The padding is **asymmetric, and that is the spec's** (`NavigationDrawer.kt`:
+   `padding(start = 16.dp, end = 24.dp)`), which gives the trailing unread badge
+   its air. The pill shape is the spec's (`ActiveIndicatorShape = CornerFull`). */
 const ROW = cn(
-  'flex h-12 w-full items-center gap-3 rounded-full px-4',
+  'flex h-12 pointer-coarse:h-14 w-full items-center gap-3 rounded-full pl-4 pr-6',
   'text-label-l outline-none transition-ui',
   'focus-visible:ring-2 focus-ring',
 );
@@ -52,7 +65,6 @@ function NavItem({
   active,
   badge,
   onClick,
-  scroll,
 }: {
   href?: string;
   icon: ReactNode;
@@ -60,24 +72,28 @@ function NavItem({
   active?: boolean;
   badge?: number;
   onClick?: () => void;
-  /** `false` leaves the scroller alone on commit — see the home entries below. */
-  scroll?: boolean;
 }) {
+  /* Only the rows that navigate. The drawer's two `<button>` rows (sign out,
+     sign in) have no destination to warm, and `useIntentPrefetch` is given a
+     null warmer rather than being called conditionally — a hook cannot be. */
+  const intent = useIntentPrefetch(
+    useCallback(() => {
+      if (href) prefetchRoute(href);
+    }, [href]),
+  );
+
   const inner = (
     <>
-      {/* A fixed, centred cell rather than a bare span around the glyph. An
-          inline <svg> sits on the text baseline, which left each icon a
-          fraction low and by a different amount per glyph; a grid cell takes
-          it out of inline flow entirely and pins every label to the same x. */}
+      {/* A fixed, centred cell rather than a bare span around the glyph: an
+          inline svg sits on the text baseline, which left each icon a fraction
+          low and by a different amount per glyph. */}
       <span className="grid h-6 w-6 shrink-0 place-items-center [&>svg]:block" aria-hidden="true">
         {icon}
       </span>
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-      {/* `CountBadge`, not a second copy of it. This span was byte-identical to
-          the primitive's class string — same 18px box, same `min-w`, same `99+`
-          clamp — minus the two things the primitive adds: the spring pop when
-          the count arrives, and an accessible name, so a screen reader read the
-          drawer as "消息 3" with no unit. */}
+      {/* `CountBadge`, not a second copy of it: the primitive adds the spring
+          pop and an accessible name ("3 条未读"), which a hand-rolled span
+          dropped. */}
       <CountBadge count={badge ?? 0} label={badge ? `${badge} 条未读` : undefined} />
     </>
   );
@@ -85,22 +101,11 @@ function NavItem({
   const className = cn(
     ROW,
     active
-      ? /* `secondary-container`, which is both M3's own navigation-drawer active
-           fill and the pair this app already uses everywhere else it means
-           "selected" — `IconButton`'s selected state, a selected `Chip`, the
-           messages contact list. The sidebar was the one holdout.
-
-           It also settles the concern the previous value was chosen for. That was
-           `bg-primary` at 10%, tinted at state-layer weight because "a filled pill at
-           container strength dominated the drawer — the active row read louder
-           than the page content beside it". True of `primary-container`, which is
-           the brand hue; `secondary` is the muted rose two steps off it, so its
-           container marks position without shouting.
-
-           And a 10% alpha could not do the job in both schemes: composited over
-           the dark surface it was very nearly invisible, which left `text-primary`
-           carrying "you are here" on its own. A tonal step reads in both — the
-           same argument the `*-fill` tokens in globals.css are built on. */
+      ? /* `secondary-container`: M3's own navigation-drawer active fill, and
+           the pair this app already uses everywhere it means "selected". The
+           previous 10% `bg-primary` tint was nearly invisible composited over
+           the dark surface, leaving the ink to carry "you are here" alone; a
+           tonal step reads in both schemes. */
         'bg-secondary-container text-on-secondary-container'
       : 'text-on-surface-variant state-layer',
   );
@@ -120,9 +125,14 @@ function NavItem({
 
   return (
     <Link
+      scroll={false}
       href={href}
-      scroll={scroll}
       onClick={onClick}
+      /* Hover, focus and press each start the destination's *data*, not only its code. Next's own
+         `<Link>` prefetch already warms the RSC payload and the chunk, and on this app that buys
+         less than it looks like: every screen here is a client component that begins its reads in
+         its first effect, so a warm chunk still arrives at an empty page. See `prefetchRoute`. */
+      {...intent}
       data-ripple
       aria-current={active ? 'page' : undefined}
       className={className}
@@ -135,20 +145,18 @@ function NavItem({
 function Section({ label, children }: { label?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      {label && <h2 className="text-label-m text-on-surface-variant px-4 pt-3 pb-1">{label}</h2>}
+      {/* `pt-2 pb-1` — 8 above and 4 below a 20px `title-s` line box. A heading
+          binds to what it introduces, so the space above has to be the larger
+          one (the same 2:1 asymmetry the base heading rule uses). */}
+      {label && <h2 className="text-title-s text-on-surface-variant px-4 pt-2 pb-1">{label}</h2>}
       {children}
     </div>
   );
 }
 
 /**
- * The drawer's navigation.
- *
- * The main `<nav>` used to contain exactly one entry — 主页 — with everything
- * else buried inside a collapsed menu that only appeared once you were signed
- * in. So a signed-out visitor had no route to the forum, search or anything
- * else except by guessing a URL. Destinations are grouped by what you're trying
- * to do instead, and the browse/create groups are always present.
+ * The drawer's navigation. Destinations grouped by what you're trying to do;
+ * the browse/create groups are always present, signed in or not.
  */
 export default function SidebarNav({
   user,
@@ -165,32 +173,27 @@ export default function SidebarNav({
   return (
     <nav aria-label="主导航" className="flex flex-1 flex-col gap-1 px-3 pb-3">
       <Section>
-        {/* `scroll={false}` only while already on the home page: from here these
-            two are the same control as the tab bar, and the tab machinery owns
-            the scroller — it restores each tab's own offset and holds the
-            outgoing pane over the pixels you were looking at. Letting Next reset
-            the scroller on top of that is what made the sidebar land at the top
-            while the tab bar came back to where you were. Arriving from another
-            route it is a genuine navigation and the default (top) is right. */}
+        {/* `scroll={false}` unconditionally: these two are the same control as
+            the tab bar, and the tab machinery owns the scroller (it restores
+            each tab's own offset). `lib/scrollMemory.ts` owns every case and
+            skips a search-only change. */}
         <NavItem
           href="/"
-          icon={<MdHome size={22} />}
+          icon={<MdHome size={ICON.standard} />}
           label="主页"
           active={onHome && !forumTab}
-          scroll={onHome ? false : undefined}
           onClick={onNavigate}
         />
         <NavItem
           href="/?tab=forum"
-          icon={<MdForum size={22} />}
+          icon={<MdForum size={ICON.standard} />}
           label="论坛"
           active={onHome && forumTab}
-          scroll={onHome ? false : undefined}
           onClick={onNavigate}
         />
         <NavItem
           href="/search"
-          icon={<MdSearch size={22} />}
+          icon={<MdSearch size={ICON.standard} />}
           label="搜索"
           active={backgroundPathname === '/search'}
           onClick={onNavigate}
@@ -201,14 +204,14 @@ export default function SidebarNav({
         <Section label="创作">
           <NavItem
             href="/upload"
-            icon={<MdCloudUpload size={22} />}
+            icon={<MdCloudUpload size={ICON.standard} />}
             label="发布图片"
             active={backgroundPathname === '/upload'}
             onClick={onNavigate}
           />
           <NavItem
             href="/forum/create"
-            icon={<MdEditNote size={22} />}
+            icon={<MdEditNote size={ICON.standard} />}
             label="发布帖子"
             active={backgroundPathname === '/forum/create'}
             onClick={onNavigate}
@@ -220,14 +223,14 @@ export default function SidebarNav({
         <Section label="我的">
           <NavItem
             href="/favorites"
-            icon={<MdCollectionsBookmark size={22} />}
+            icon={<MdCollectionsBookmark size={ICON.standard} />}
             label="我的收藏"
             active={backgroundPathname === '/favorites'}
             onClick={onNavigate}
           />
           <NavItem
             href="/messages"
-            icon={<MdNotifications size={22} />}
+            icon={<MdNotifications size={ICON.standard} />}
             label="消息"
             active={backgroundPathname === '/messages'}
             badge={unread}
@@ -235,21 +238,21 @@ export default function SidebarNav({
           />
           <NavItem
             href="/history"
-            icon={<MdHistory size={22} />}
+            icon={<MdHistory size={ICON.standard} />}
             label="浏览历史"
             active={backgroundPathname === '/history'}
             onClick={onNavigate}
           />
           <NavItem
             href="/tasks"
-            icon={<MdEmojiEvents size={22} />}
+            icon={<MdEmojiEvents size={ICON.standard} />}
             label="任务"
             active={backgroundPathname === '/tasks'}
             onClick={onNavigate}
           />
           <NavItem
             href="/block-groups"
-            icon={<MdShield size={22} />}
+            icon={<MdShield size={ICON.standard} />}
             label="屏蔽组"
             active={backgroundPathname === '/block-groups'}
             onClick={onNavigate}
@@ -257,13 +260,16 @@ export default function SidebarNav({
         </Section>
       )}
 
-      {user && <div className="bg-outline-variant mx-4 my-2 h-px" />}
+      {/* `shrink-0` for the same reason as the structural rule in `AppLayout`:
+          a 1px flex item in a column absorbs overflow and collapses to
+          nothing. */}
+      {user && <div className="bg-outline-variant mx-4 my-2 h-px shrink-0" />}
 
       <Section>
         {user && (
           <NavItem
             href="/settings"
-            icon={<MdSettings size={22} />}
+            icon={<MdSettings size={ICON.standard} />}
             label="设置"
             active={backgroundPathname === '/settings'}
             onClick={onNavigate}
@@ -272,13 +278,13 @@ export default function SidebarNav({
         {staff && (
           <NavItem
             href="/admin"
-            icon={<MdDashboard size={22} />}
+            icon={<MdDashboard size={ICON.standard} />}
             label="管理面板"
             active={backgroundPathname.startsWith('/admin')}
             onClick={onNavigate}
           />
         )}
-        {user && <NavItem icon={<MdLogout size={22} />} label="登出" onClick={onLogout} />}
+        {user && <NavItem icon={<MdLogout size={ICON.standard} />} label="登出" onClick={onLogout} />}
       </Section>
     </nav>
   );

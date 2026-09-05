@@ -1,14 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { MEDIA } from './constants';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { LS_KEYS, MEDIA } from './constants';
 
 /**
- * Subscribes to a media query.
- *
- * `useSyncExternalStore` rather than `useState` + an effect: the server
- * snapshot is explicit, so a component branching on width renders the same
- * markup on both sides instead of hydrating desktop-first and then snapping.
+ * Subscribes to a media query. useSyncExternalStore over useState + an
+ * effect: the server snapshot is explicit, so a component branching on width
+ * renders the same markup on both sides of hydration.
  */
 export function useMediaQuery(query: string, serverValue = false): boolean {
   return useSyncExternalStore(
@@ -32,14 +30,9 @@ interface DisplayInfo {
 }
 
 /**
- * Coarse device class.
- *
- * Was a `resize` listener with no debounce that called `setState` on every
- * single event, re-rendering whatever consumed it throughout a drag. Media
- * queries fire only when a threshold is actually crossed.
- *
- * The exact `width` this used to return is gone: nothing needed the number,
- * and exposing it invited more undebounced width branching.
+ * Coarse device class, from media queries rather than a `resize` listener:
+ * queries fire only when a threshold is actually crossed, so consumers do not
+ * re-render throughout a drag.
  */
 export function useDisplay(): DisplayInfo {
   const atLeastSm = useMediaQuery(MEDIA.sm, true);
@@ -54,63 +47,42 @@ export function useMasonryColumns() {
 }
 
 /**
- * Reads the stored session.
- *
- * Every member is memoised and so is the returned object. This is not a
- * micro-optimisation: the hook is read by components that put `getUserInfo` in
- * an effect's dependency array, and a fresh closure per render made that effect
- * re-run after every render — including the renders its own `setState` calls
- * caused. `/favorites` looped on exactly that, firing three requests per turn
- * until the upstream API rate-limited it.
+ * The stored session, as a plain function: the one reader of the localStorage
+ * user_info JSON, so nothing hand-parses it (and every call site gets the
+ * window guard for free). A function rather than a hook because many call
+ * sites are not in hook position; `useAuth` wraps it for the effect-dependency case.
  */
-export function useAuth() {
-  const getUserInfo = useCallback((): { token: string; [key: string]: unknown } | null => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const stored = localStorage.getItem('user_info');
-      if (!stored) return null;
-      return JSON.parse(stored);
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const getToken = useCallback((): string | null => {
-    const user = getUserInfo();
-    return user?.token || null;
-  }, [getUserInfo]);
-
-  return useMemo(() => ({ getUserInfo, getToken }), [getUserInfo, getToken]);
+export function readUserInfo(): { token: string; [key: string]: unknown } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(LS_KEYS.userInfo);
+    if (!stored) return null;
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
 }
 
-export function useModalAnimation(onClose: () => void) {
-  const [isClosing, setIsClosing] = useState(false);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-      setIsClosing(false);
-    }, 200);
-  };
-
-  return { isClosing, handleClose };
+/** The token alone, which is what most call sites actually wanted. */
+export function readToken(): string | null {
+  return readUserInfo()?.token || null;
 }
 
 /**
- * Smooths a loading flag so placeholders never flicker.
- *
- * Two failure modes, both of which the app had:
- *
- * - A cached or fast response resolves in ~80ms, so the skeleton appears and
- *   vanishes within a frame or two. That flash is more distracting than
- *   showing nothing, so nothing is shown until `delay` has passed.
- * - A response arrives just after the skeleton appears, so it is on screen for
- *   ~50ms. Once shown it therefore stays for at least `minDuration`.
- *
- * The defaults are the usual perceptual numbers: under ~200ms reads as
- * instant, and a state needs roughly 400ms on screen to register as
- * deliberate rather than as a glitch.
+ * Reads the stored session. Every member and the returned object are memoised,
+ * so `useAuth` is safe in dependency arrays: a fresh closure per render made
+ * effects re-run every render — a dependency-identity cascade that once
+ * rate-limited /favorites.
+ */
+export function useAuth() {
+  return useMemo(() => ({ getUserInfo: readUserInfo, getToken: readToken }), []);
+}
+
+/**
+ * Smooths a loading flag so placeholders never flicker. Nothing is shown until
+ * `delay` passes — a skeleton that appears and vanishes within a frame is more
+ * distracting than showing nothing — and once shown it stays at least
+ * `minDuration`.
  */
 export function useDeferredLoading(
   isLoading: boolean,
@@ -128,8 +100,7 @@ export function useDeferredLoading(
       return () => clearTimeout(timer);
     }
 
-    // Not loading any more: hide immediately if it never appeared, otherwise
-    // hold until it has had its minimum time on screen.
+    // Hide immediately if it never appeared; otherwise hold its minimum time on screen.
     let cancelled = false;
     const elapsed = performance.now() - shownAt.current;
     const remaining = Math.max(0, minDuration - elapsed);
@@ -152,29 +123,14 @@ export function useDeferredLoading(
 }
 
 /**
- * Escape closes the screen.
- *
- * Every full-screen view in the app owes the user two ways out — the pinned
- * back button and this — and they were being written one at a time: the image
- * detail had it, the forum post did not, search and messages did not, and the
- * one that existed spelled its own guard conditions inline. Same key, same
- * meaning, one implementation.
- *
- * `enabled` is how a screen stands down while something is layered on top of
- * it. A dialog, a lightbox, a share popover and an open combobox all own Escape
- * first, and if two handlers fire on one press the user loses two levels for
- * one keystroke. Pass `false` whenever any of those is open.
- *
- * `event.defaultPrevented` covers the same hazard for anything that calls
- * `preventDefault()` rather than being tracked in state, and the handler is
- * bound to `window` in the bubble phase so a nearer listener gets first refusal.
- *
- * The callback is held in a ref: a page that rebuilds its back handler every
- * render would otherwise re-bind on every render, and `handleBack` is usually a
- * closure over `router`. The ref is written from an effect rather than during
- * render — writing it inline is the shorter spelling and the one the lint rule
- * `react-hooks/refs` rejects, because a render that React discards would still
- * have mutated it.
+ * Escape closes the screen — every full-screen view's second way out beside its
+ * pinned back button. `enabled` stands the screen down while something layered on
+ * top (dialog, lightbox, popover, combobox) owns Escape first: one press must not
+ * close two levels. `defaultPrevented` covers the same hazard for handlers that
+ * call preventDefault rather than being tracked in state, and the listener is
+ * on window in the bubble phase so a nearer listener gets first refusal.
+ * `onBack` is held in a ref written from an effect: pages rebuild their handler
+ * every render, and a render React discards must not mutate it.
  */
 export function useEscapeBack(onBack: () => void, enabled = true) {
   const latest = useRef(onBack);

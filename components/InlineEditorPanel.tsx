@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
-import { DURATION, Flip, gsap, prefersReducedMotion, useGSAP } from '@/lib/motion';
+import { Flip, gsap, spring, useGSAP } from '@/lib/motion';
+import { motionTier } from '@/lib/appearance';
 
 interface InlineEditorPanelProps {
   id: string;
@@ -80,7 +81,25 @@ export default function InlineEditorPanel({
       const pendingState = pendingLayoutState;
       pendingLayoutState = null;
 
-      if (prefersReducedMotion()) {
+      /* Reduced cross-fades the panel and leaves its box alone: the clip-path
+         expand and the `Flip` reflow are a container changing size, which is
+         what the tier removes. Off keeps appearing outright. */
+      const tier = motionTier();
+      if (tier === 'reduced') {
+        const fade = isClosing
+          ? gsap.to(panel, {
+              autoAlpha: 0,
+              ...spring('fastEffects'),
+              onComplete: () => onExitCompleteRef.current(),
+            })
+          : gsap.fromTo(
+              panel,
+              { autoAlpha: 0 },
+              { autoAlpha: 1, ...spring('fastEffects'), clearProps: 'opacity,visibility' },
+            );
+        return () => fade.kill();
+      }
+      if (tier === 'off') {
         if (isClosing) queueMicrotask(() => onExitCompleteRef.current());
         return;
       }
@@ -97,8 +116,7 @@ export default function InlineEditorPanel({
       const layoutAnimation =
         !isClosing && pendingState
           ? Flip.from(pendingState, {
-              duration: DURATION.long,
-              ease: 'decelerate',
+              ...spring('defaultSpatial'),
               simple: true,
               prune: true,
             })
@@ -133,34 +151,19 @@ export default function InlineEditorPanel({
           .timeline({ onComplete: finishClose })
           .to(
             content,
-            {
-              autoAlpha: 0,
-              y: -8,
-              duration: DURATION.short,
-              ease: 'accelerate',
-            },
+            { autoAlpha: 0, y: -8, ...spring('fastEffects') },
             0,
           )
           .to(
             panel,
-            {
-              clipPath: 'inset(0 0 100% 0)',
-              duration: DURATION.short,
-              ease: 'accelerate',
-            },
+            { clipPath: 'inset(0 0 100% 0)', ...spring('fastEffects') },
             0,
           );
 
         if (closingTargets.length > 0) {
-          animation.to(
-            closingTargets,
-            {
-              y: -closingDistance,
-              duration: DURATION.medium,
-              ease: 'standard',
-            },
-            0,
-          );
+          /* The rows below close on the panel's own clock and curve — one
+             gesture, one clock, or the gap outlives the panel. */
+          animation.to(closingTargets, { y: -closingDistance, ...spring('fastEffects') }, 0);
         }
       } else {
         animation = gsap
@@ -168,22 +171,18 @@ export default function InlineEditorPanel({
           .fromTo(
             panel,
             { clipPath: 'inset(0 0 100% 0)' },
-            {
-              clipPath: 'inset(0 0 0% 0)',
-              duration: DURATION.long,
-              ease: 'decelerate',
-            },
+            { clipPath: 'inset(0 0 0% 0)', ...spring('defaultSpatial') },
             0,
           )
+          /* Content arrives on the panel's clock too, offset rather than shortened:
+             it was 300ms inside the panel's 400ms, which is a second clock for the
+             same arrival. The 40ms offset is what makes the content read as arriving
+             *behind* the opening panel — the same "container first, contents after"
+             split `Popover` uses. */
           .fromTo(
             content,
             { autoAlpha: 0, y: -8 },
-            {
-              autoAlpha: 1,
-              y: 0,
-              duration: DURATION.medium,
-              ease: 'decelerate',
-            },
+            { autoAlpha: 1, y: 0, ...spring('defaultSpatial') },
             0.04,
           );
       }
@@ -200,6 +199,12 @@ export default function InlineEditorPanel({
     <section
       ref={panelRef}
       id={id}
+      /* `inert` for the ~200ms the close animation holds it on screen. `autoAlpha`
+         sets `visibility: hidden` only at the end of the tween, so until then a
+         panel that is clipped away — and full of `Input`s and `Button`s — was still
+         focusable. Every other overlay in the app already covers this window; this
+         was the one that did not. */
+      inert={isClosing}
       className="m3-row overflow-hidden bg-surface-container px-4 py-5"
       aria-label={label}
     >

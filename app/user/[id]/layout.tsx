@@ -1,28 +1,19 @@
 import { Metadata } from 'next';
-import { api } from '@/lib/api';
+import { readUserProfile } from '@/lib/profile.server';
 
 type Props = {
   params: Promise<{ id: string }>;
 };
 
+/**
+ * The title, from the same memoised read the page itself is seeded with — the two
+ * callers cost one upstream read between them. (It must use the absolute origin rather
+ * than `api.getUserProfile`, whose relative base makes Node's `fetch` throw.)
+ */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const resolvedParams = await params;
-  const id = resolvedParams.id;
-
-  try {
-    const res = await api.getUserProfile(id);
-    if (res.success && res.user) {
-      return {
-        title: `${res.user.username}`,
-      };
-    }
-  } catch (error) {
-    console.error('Failed to fetch user profile for metadata:', error);
-  }
-
-  return {
-    title: '个人资料',
-  };
+  const { id } = await params;
+  const seed = await readUserProfile(id);
+  return { title: seed?.data?.username ?? '个人资料' };
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {

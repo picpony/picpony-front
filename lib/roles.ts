@@ -1,14 +1,9 @@
 /**
- * Roles, their display names, and the badge they render as.
+ * Roles, their display names, and the badge each renders as — one definition, so the
+ * badge beside a username is the same everywhere.
  *
- * The admin user table and the public profile page each carried their own copy
- * of this, and they had drifted: `super_admin` showed as 超管 in the table and
- * 创始人 on the profile, with unrelated colours. One definition means the badge
- * beside a username is the same badge wherever you meet that user.
- *
- * Colours come from the categorical accent scale rather than error/warning —
- * being an admin is a category, not a severity. See the accent block in
- * app/globals.css.
+ * Colours come from the categorical accent scale rather than error/warning: being an
+ * admin is a category, not a severity.
  */
 export type Role = 'super_admin' | 'admin' | 'editor' | 'user';
 

@@ -1,21 +1,9 @@
 /**
- * lib/api.ts — 兼容性导出层
- *
- * 此文件将逐步被废弃。各 API 方法已按域拆分到 lib/api/ 子目录:
- *   - lib/api/client.ts   — HTTP 客户端、浏览设置、搜索查询构建
- *   - lib/api/derpi.ts    — Derpibooru 图片/标签/用户 API
- *   - lib/api/picpony.ts  — PicPony 用户/论坛/消息/认证等 API
- *   - lib/api/admin.ts    — 管理后台 API
- *
- * 类型定义已移动到 lib/types/:
- *   - lib/types/image.ts, forum.ts, user.ts, message.ts, captcha.ts
- *
- * 请在页面/组件中将 import 逐步迁移到新的拆分路径。
+ * lib/api.ts — 兼容性导出层,将逐步废弃:方法在 lib/api/(client|derpi|picpony|admin).ts,
+ * 类型在 lib/types/(image/forum/user/message/captcha)。新代码请直接从拆分路径导入。
  */
 
-// ---------------------------------------------------------------------------
-// 类型重导出
-// ---------------------------------------------------------------------------
+// --- 类型重导出 ---
 
 export type {
   ImageRepresentation,
@@ -54,183 +42,39 @@ export type {
   Notification,
   InteractionNotificationsResponse,
   UnreadCountsResponse,
+  Announcement,
 } from '@/lib/types/message';
 
 export type { CaptchaGetResponse, CaptchaVerifyResponse } from '@/lib/types/captcha';
 
-// ---------------------------------------------------------------------------
-// API 方法重导出 (命名导出)
-// ---------------------------------------------------------------------------
+// --- API 方法重导出 (命名导出) ---
 
-export { getBrowsingSettings, applyCdn, buildSearchQuery, proxyFetch } from '@/lib/api/client';
+export { getBrowsingSettings, applyImageLine, buildSearchQuery, proxyFetch } from '@/lib/api/client';
 
-export {
-  getImage,
-  getImages,
-  getFeatured,
-  searchDerpiImages,
-  searchImagesByIds,
-  searchDerpiTags,
-  getDerpiPopularTags,
-  getDerpiProfile,
-  uploadImageToDerpi,
-} from '@/lib/api/derpi';
+/* Admin surface deliberately **not** re-exported: every gallery route imports lib/api.ts, and a
+   re-export would pin the admin module into their graph. The eleven admin tabs use
+   `import * as adminApi from '@/lib/api/admin'` instead — each already a dynamic(…, { ssr: false }) chunk. */
 
-export {
-  login,
-  register,
-  getUser,
-  getUserProfile,
-  changeUsername,
-  changePassword,
-  saveProfile,
-  uploadAvatar,
-  uploadBanner,
-  getFaves,
-  toggleFave,
-  getSharedFaves,
-  getSharedFavesByUsername,
-  postComment,
-  getComments,
-  getUserComments,
-  getUserPosts,
-  getForumPosts,
-  getForumPostDetail,
-  createForumPost,
-  createForumComment,
-  toggleForumPostLike,
-  uploadForumImage,
-  getNotifications,
-  getInteractionNotifications,
-  getRecentContacts,
-  getMessages,
-  getUnreadCounts,
-  sendMessage,
-  captchaGet,
-  captchaVerify,
-  getAnnouncement,
-  getAnnouncementHistory,
-  saveApikey,
-  updateSettings,
-  updateEmail,
-  verifyEmail,
-  resendVerifyCode,
-  verifyEmailById,
-  resendVerifyCodeById,
-  reportImage,
-  resetPasswordRequest,
-  resetPassword,
-  searchImage,
-  getBrowsingHistory,
-  clearBrowsingHistory,
-  deleteBrowsingHistoryItem,
-  recordWeeklyUpload,
-  addBrowsingHistory,
-  checkHasPrivacyPassword,
-  setPrivacyPassword,
-  verifyPrivacyPassword,
-  getPrivacyFaves,
-  addPrivacyFave,
-  removePrivacyFave,
-  getMyBadges,
-  equipBadge,
-  getTasks,
-  claimTask,
-  getCoinTransactions,
-  getBlockGroups,
-  saveBlockGroup,
-  deleteBlockGroup,
-  toggleBlockGroup,
-  getGlossaryEntries,
-  createGlossaryEntry,
-  updateGlossaryEntry,
-  deleteGlossaryEntry,
-  getDictionary,
-  getTagTranslations,
-  getDeveloperStatus,
-  enableDeveloperMode,
-  disableDeveloperMode,
-  getDictionaryDuplicates,
-  saveDictionaryTag,
-  deleteDictionaryTag,
-  getDictionaryLeaderboard,
-  getDictionaryTagHistory,
-  getTagGroups,
-  saveTagGroup,
-  deleteTagGroup,
-} from '@/lib/api/picpony';
-
-export {
-  adminGetUsers,
-  adminUpdateUser,
-  adminDeleteUser,
-  adminGetWealth,
-  adminUpdateWealth,
-  adminGetShopItems,
-  adminSaveShopItem,
-  adminDeleteShopItem,
-  adminGetReports,
-  adminHandleReport,
-  adminGetBlacklist,
-  adminAddBlacklist,
-  adminRemoveBlacklist,
-  saveAnnouncement,
-  adminDeleteAnnouncement,
-  adminGetAllMessages,
-  adminSendNotification,
-  adminGetNotifications,
-  adminDeleteNotification,
-  adminGrantBadge,
-  adminGetBadgeLinks,
-  adminCreateBadgeLink,
-  adminToggleBadgeLink,
-  adminDeleteBadge,
-  adminEditBadge,
-  getMaintenanceStatus,
-  adminToggleMaintenance,
-  adminToggleTranslate,
-  getSiteStats,
-  adminSyncSiteStats,
-  adminGetMascotConfig,
-  adminSaveMascotConfig,
-  adminUploadMascotImage,
-  adminDeleteMascotImage,
-  getBlockTags,
-  adminAddBlockTag,
-  adminRemoveBlockTag,
-  adminGetDeveloperPassword,
-  adminRefreshDeveloperPassword,
-  adminGetDeveloperUsers,
-  adminRevokeDeveloper,
-  adminEnableDeveloper,
-  getTeamMembers,
-  addTeamMember,
-  updateTeamMember,
-  deleteTeamMember,
-  getTagFeedback,
-  handleTagFeedback,
-  checkTagExists,
-} from '@/lib/api/admin';
-
-// ---------------------------------------------------------------------------
-// 兼容性 api 命名空间对象
-// 保持原有的 `import { api } from '@/lib/api'` 模式仍然可用
-// ---------------------------------------------------------------------------
+// --- 兼容性 api 命名空间对象:保持原有的 `import { api } from '@/lib/api'` 模式仍可用 ---
 
 import * as derpi from '@/lib/api/derpi';
 import * as picpony from '@/lib/api/picpony';
-import * as admin from '@/lib/api/admin';
-import { applyCdn, proxyFetch, buildSearchQuery } from '@/lib/api/client';
+import { applyImageLine, proxyFetch, buildSearchQuery } from '@/lib/api/client';
 
+/**
+ * Built by spreading modules, `api` is a runtime value no bundler can tree-shake: every
+ * importer pulls every member — so the admin surface must stay out of here. It lives on
+ * `adminApi` (`@/lib/api/admin`), whose only importers are the eleven admin tabs, each
+ * already dynamic(…, { ssr: false }) and so in its own chunk.
+ * TODO: split this object into named re-exports — the intended end state.
+ */
 export const api = {
   // Derpibooru
   ...derpi,
   // PicPony
   ...picpony,
-  // Admin
-  ...admin,
   // 工具
-  applyCdn,
+  applyImageLine,
   proxyFetch,
   buildSearchQuery,
 };

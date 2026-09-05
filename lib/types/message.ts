@@ -48,3 +48,12 @@ export interface UnreadCountsResponse {
   unread_interactions: number;
   total_unread: number;
 }
+
+/** A site announcement; one declaration on purpose — a shape declared twice will disagree. */
+export interface Announcement {
+  id: number;
+  version: string;
+  title: string;
+  content: string;
+  date: string;
+}

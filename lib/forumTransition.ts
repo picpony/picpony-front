@@ -1,25 +1,17 @@
 /**
  * Container transform for opening a forum post.
  *
- * The pressed row's rectangle is handed across the navigation so the post's
- * card can grow out of exactly the row you tapped, instead of the generic
- * cross-fade every other route gets. It is deliberately not built on
- * `lib/hero/**`: that system owns the gallery's shared-element flight — a
- * flyer over a frozen, transformed background, with its own history bridge —
- * and none of that is needed here, because the list row and the post card are
- * already the same surface at the same tone.
- *
- * It also composes with the route cross-fade rather than standing it down. The
- * clone the cross-fade paints still shows the row where the row was, and the
- * card starts at exactly that rectangle, so the two are registered: the clone
- * fades off a container that is growing out from underneath it, which is what
- * the transform is supposed to look like.
+ * The pressed row's rect crosses the navigation so the post card can grow out of the row you
+ * tapped. Deliberately not built on the gallery's `lib/hero/**` flight system — the row and the
+ * card are already the same surface here. Composes with the route cross-fade: the card starts at
+ * exactly the rectangle the cross-fade's clone still paints, so the two are registered.
  */
 
-import { gsap, prefersReducedMotion } from '@/lib/motion';
+import { heroOwnsScreen } from '@/lib/appScroller';
+import { motionTier } from '@/lib/appearance';
 
 /** Viewport-space box of the row that was pressed. */
-interface ForumOrigin {
+export interface ForumOrigin {
   id: string;
   left: number;
   top: number;
@@ -28,20 +20,20 @@ interface ForumOrigin {
   at: number;
 }
 
-/**
- * How long a remembered rect stays usable.
- *
- * Long enough to cover the navigation, short enough that a back/forward or a
- * later direct visit to the same post cannot pick up a stale rectangle and
- * grow the card out of wherever the row happened to be some minutes ago.
- */
+/** How long a remembered rect stays usable — long enough for the navigation, short enough
+ *  that a back/forward cannot replay a stale rectangle. */
 const ORIGIN_TTL_MS = 1500;
 
 let pending: ForumOrigin | null = null;
 
-/** Call on the press, before pushing the route. */
+/** Call on the press, before pushing the route. Nothing is recorded under `off`;
+ *  `reduced` still records — the transform degrades to a fade, built in
+ *  `playForumContainerTransform` below. */
 export function rememberForumOrigin(id: number | string, row: HTMLElement) {
-  if (prefersReducedMotion()) return;
+  if (motionTier() === 'off') return;
+  /* The gesture-driven warm (see facade). Below the `off` guard: on that tier the transform can
+     never run, so warming there would fetch GSAP for an animation that is unreachable. */
+  ensurePlay();
   const rect = row.getBoundingClientRect();
   pending = {
     id: String(id),
@@ -55,80 +47,54 @@ export function rememberForumOrigin(id: number | string, row: HTMLElement) {
 
 /** Takes the rect if it belongs to this post and is still fresh.
  *
- * Deliberately *not* single use. It is read from a ref callback, and React
- * runs those again on any remount — including the one StrictMode simulates in
- * development, measured here as attach / detach / attach 32ms apart. A rect
- * that destroyed itself on the first read therefore left the second attach
- * with nothing, and the flight never played at all in dev. The id match and
- * the TTL are what bound its lifetime instead: a rect can only be used by the
- * post whose row was pressed, and only for about as long as a navigation
- * plausibly takes. */
+ *  Deliberately not single-use: it is read from a ref callback, which React re-runs on remounts
+ *  (StrictMode's dev remount included), so destroying it on first read would leave the second
+ *  attach with nothing. The id match and the TTL bound its lifetime instead. */
 export function readForumOrigin(id: number | string): ForumOrigin | null {
   const origin = pending;
   if (!origin || origin.id !== String(id)) return null;
   if (performance.now() - origin.at > ORIGIN_TTL_MS) return null;
   if (origin.width === 0 || origin.height === 0) return null;
+  /* Stand down while a flight owns the screen: the premise is that the row is still painted
+     where it was, and the cross-fade also stands itself down during a flight. */
+  if (heroOwnsScreen()) return null;
   return origin;
 }
 
 /**
- * Grows `card` from `origin` to wherever it has just been laid out.
+ * Facade for the container transform, which lives in `lib/forumTransitionPlay.ts` behind a
+ * dynamic import. The split keeps GSAP off the app's front door: `rememberForumOrigin` is called
+ * by `ForumPostList`, rendered by `/forum` and the home page's forum pane, while the play half is
+ * only ever wanted on `/forum/[id]`, one navigation later.
  *
- * A FLIP: the card is already in its final position, so the tween only has to
- * put it back at the origin and release it. The scale is non-uniform, which
- * would smear the text — hence `content`, which is held out and faded in over
- * the back half. That is the spec's own answer, and it is why a container
- * transform reads as one surface changing shape rather than as a page being
- * zoomed.
- *
- * Returns a cleanup that reverts everything, for a navigation that unmounts
- * mid-flight.
+ * The warm is gesture-driven, not timer-driven: recording an origin *is* a press on a post, and
+ * the detail route is a network round trip away, so the chunk is fetched exactly when it is about
+ * to be needed. If it loses that race the card simply appears.
  */
+let play: typeof import('@/lib/forumTransitionPlay') | null = null;
+let loading = false;
+
+function ensurePlay() {
+  if (play || loading) return;
+  loading = true;
+  void import('@/lib/forumTransitionPlay').then(
+    (module) => {
+      play = module;
+    },
+    () => {
+      /* A failed chunk fetch is not retried per press: every open is then a plain appearance. */
+    },
+  );
+}
+
 export function playForumContainerTransform(
   card: HTMLElement,
   content: HTMLElement | null,
   origin: ForumOrigin,
 ): () => void {
-  const to = card.getBoundingClientRect();
-  if (to.width === 0 || to.height === 0) return () => {};
-
-  const timeline = gsap.timeline().fromTo(
-    card,
-    {
-      x: origin.left - to.left,
-      y: origin.top - to.top,
-      scaleX: origin.width / to.width,
-      scaleY: origin.height / to.height,
-      transformOrigin: 'top left',
-    },
-    {
-      x: 0,
-      y: 0,
-      scaleX: 1,
-      scaleY: 1,
-      duration: 0.4,
-      ease: 'decelerate',
-      /* Nothing may keep a transform: this card is an ancestor of the post's
-           images, and a residual one would make it a containing block for any
-           fixed descendant. */
-      clearProps: 'transform,transformOrigin,willChange',
-    },
-    0,
-  );
-
-  if (content) {
-    timeline.fromTo(
-      content,
-      { autoAlpha: 0 },
-      { autoAlpha: 1, duration: 0.25, ease: 'none', clearProps: 'opacity,visibility' },
-      0.15,
-    );
+  if (!play) {
+    ensurePlay();
+    return () => {};
   }
-
-  return () => {
-    timeline.kill();
-    gsap.set(content ? [card, content] : card, {
-      clearProps: 'transform,transformOrigin,opacity,visibility,willChange',
-    });
-  };
+  return play.playForumContainerTransform(card, content, origin);
 }

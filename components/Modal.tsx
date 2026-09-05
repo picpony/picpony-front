@@ -12,16 +12,27 @@ import {
   useMounted,
   useScrollLock,
 } from '@/lib/overlay';
+import { ICON } from '@/lib/icons';
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
-  maxWidth?: string;
+  /**
+   * The panel's width cap, as a closed set rather than any Tailwind class.
+   *
+   * M3 caps a basic dialog at 560dp (`max-w-xl` here is 576, the nearest step), and
+   * a free-form `string` let a call site pass anything — including the `max-w-4xl`
+   * that `AuthModal` needs and that is a *documented divergence*, not a default. A
+   * union keeps the divergence visible: `4xl` appears in exactly one file, and a new
+   * one cannot be introduced without touching this type.
+   *
+   * `fit` is the captcha's, whose content is a fixed-size widget.
+   */
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | 'fit';
   /** Overrides the shared dialog layer. Only for a dialog opened *from* another
    *  dialog, which has to sit above its parent. */
-  zIndex?: number;
   hideCloseButton?: boolean;
   footer?: React.ReactNode;
   closeOnOverlayClick?: boolean;
@@ -40,18 +51,28 @@ const CLOSE_ANIM_DURATION = 200;
  * The centred dialog.
  *
  * Focus trapping, the refcounted scroll lock, Esc handling and the exit-animation
- * hold now live in `lib/overlay.ts`, because `Sheet` needs all four and had no
- * way to reach them from here. What is left in this file is what makes a dialog a
- * dialog rather than a sheet: it is centred, it is `rounded-2xl` on all four
- * corners, and it grows from 93% scale rather than rising from the bottom edge.
+ * hold live in `lib/overlay.ts` (shared with `Sheet`). What is left here is what
+ * makes a dialog a dialog rather than a sheet: centred, `rounded-2xl` on all four
+ * corners, growing from 93% scale rather than rising from the bottom edge.
  */
+/* Spelled per key rather than interpolated, because Tailwind scans source text and
+   a template literal would compile to nothing. */
+const MAX_WIDTHS = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '4xl': 'max-w-4xl',
+  fit: 'max-w-fit',
+} as const;
+
 export default function Modal({
   isOpen,
   onClose,
   title,
   children,
-  maxWidth = 'max-w-md',
-  zIndex,
+  maxWidth = 'md',
   hideCloseButton = false,
   footer,
   closeOnOverlayClick = true,
@@ -76,14 +97,20 @@ export default function Modal({
     <div
       className={cn(
         'fixed inset-0 flex items-center justify-center p-4 sm:p-6',
-        'bg-scrim/50',
+        'bg-scrim-veil',
         /* The shared dialog layer, unless the caller names one — see the
            stacking-order block in globals.css. */
-        zIndex === undefined && 'z-dialog',
+        'z-dialog',
         isOpen ? 'animate-modal-overlay' : 'animate-modal-overlay-out',
       )}
-      style={{ zIndex, pointerEvents: isOpen ? 'auto' : 'none' }}
       onClick={closeOnOverlayClick ? handleClose : undefined}
+      /* `inert` while leaving, not `pointer-events: none`. The dialog is held in
+       * the tree so its exit has something to play on, and for those 200ms it
+       * was still a focusable subtree — the focus trap has already released, so
+       * Tab could walk into a dialog that was visibly scaling away. `inert`
+       * (React 19) removes the subtree from the tab order and the accessibility
+       * tree together. */
+      inert={!isOpen}
     >
       <div
         ref={panelRef}
@@ -93,8 +120,10 @@ export default function Modal({
         tabIndex={-1}
         className={cn(
           'flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden outline-none',
-          'bg-surface-container-lowest text-on-surface rounded-2xl shadow-e3',
-          maxWidth,
+          /* `surface-container-high` is M3's dialog container — tone first,
+             shadow second is the whole M3 depth recipe. */
+          'bg-surface-container-high text-on-surface rounded-2xl shadow-e3',
+          MAX_WIDTHS[maxWidth],
           isOpen ? 'animate-modal-content' : 'animate-modal-content-out',
           panelClassName,
         )}
@@ -113,17 +142,31 @@ export default function Modal({
                 aria-label="关闭"
                 dismiss
                 className="-mr-2 ml-auto hover:text-on-surface"
-                icon={<MdClose size={22} />}
+                icon={<MdClose size={ICON.standard} />}
               />
             )}
           </div>
         )}
         {/* `bodyClassName` 完整接管 padding：cn 只拼接不解决 Tailwind
-            冲突，所以默认 p-6 不能留在 base 里，否则会盖掉传入的 p-0。 */}
-        <div className={cn('main-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'p-6')}>
+            冲突，所以默认 p-6 不能留在 base 里，否则会盖掉传入的 p-0。
+            `data-app-scroll-container` marks this as the nearest real scroller —
+            a `Pagination` in a dialog was turning a page and scrolling the *page
+            behind the dialog* to the top. */}
+        <div
+          data-app-scroll-container
+          className={cn('main-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'p-6')}
+        >
           {children}
         </div>
-        {footer && <div className="flex shrink-0 justify-end gap-3 px-6 pb-6">{footer}</div>}
+        {/* The action row, and the only place a dialog's actions belong (AGENTS.md
+            says why). `flex-wrap justify-end gap-3`; a leading member takes
+            `mr-auto` — an auto margin in a justify-end row absorbs the free
+            space to its right, no nested wrapper needed. `flex-wrap` is a guard:
+            a fourth action or a longer label wraps to a second line instead of
+            being clipped, and changes nothing for a row that fits. */}
+        {footer && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-3 px-6 pb-6">{footer}</div>
+        )}
       </div>
     </div>,
     document.body,

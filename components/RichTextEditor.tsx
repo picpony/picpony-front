@@ -23,7 +23,7 @@ interface RichTextEditorProps {
 export default function RichTextEditor({
   value,
   onChange,
-  placeholder = '请输入内容...',
+  placeholder = '请输入内容…',
   disabled = false,
   enableImageUpload = true,
   imageUploadUrl,
@@ -111,7 +111,7 @@ export default function RichTextEditor({
             }
           } catch (err) {
             console.error('上传图片异常:', err);
-            showToast('上传图片发生异常', 'error');
+            showToast('上传图片失败', 'error');
           }
         },
         maxFileSize: 5 * 1024 * 1024,
@@ -238,14 +238,21 @@ export default function RichTextEditor({
   }, [disabled]);
 
   return (
-    <div className="w-full overflow-hidden rounded-sm border border-outline-variant transition-ui focus-within:border-primary focus-within:ring-2 focus-within:focus-ring">
+    /* outline, not outline-variant: this is the boundary of a control you
+       type into — the same object as a text field's border, which the app's
+       rule gives outline while outline-variant is for dividers. (The w-e
+       custom properties below keep outline-variant where they genuinely
+       are dividers.)
+
+       **One focus indicator, and 4dp not 8**: the outline thickening to
+       primary *is* the indicator — no ring beside it (two nested boxes is the
+       defect CodeInput records removing) — and the corner is the text field's
+       4dp step, not the chip's 8dp. */
+    <div className="w-full overflow-hidden rounded-xs border border-outline transition-ui focus-within:border-2 focus-within:border-primary-ink">
       <style>{`
-        /* wangEditor is themed entirely through its own \`--w-e-*\` variables.
-           These used to be set only under \`.dark\`, and to a cold slate palette:
-           light mode fell through to the library's stock greys, and dark mode
-           got a blue-grey that fought the warm rose neutral everywhere else.
-           Pointing them at the design tokens instead means the editor follows
-           the scheme on its own and neither branch can drift. */
+        /* wangEditor is themed entirely through its own w-e custom properties.
+           Pointing them at the design tokens means the editor follows the
+           scheme on its own, and neither branch can drift. */
         .w-e-bar,
         .w-e-text-container,
         .w-e-modal,
@@ -258,8 +265,13 @@ export default function RichTextEditor({
           --w-e-textarea-slight-border-color: var(--md-sys-color-outline-variant);
           --w-e-textarea-slight-color: var(--md-sys-color-on-surface-variant);
           --w-e-textarea-slight-bg-color: var(--md-sys-color-surface-container);
-          --w-e-textarea-selected-border-color: var(--md-sys-color-primary);
-          --w-e-textarea-handler-bg-color: var(--md-sys-color-primary);
+          /* A selection border and four drag handles: marks on the composer's surface with
+             nothing sitting inside them, so they take the ink rather than the fill — the
+             same call the focus outline twenty lines above makes. On a palette whose brand
+             sits above tone 61 the fill would put the handles at 1.5–2.4:1 against the
+             container behind them. */
+          --w-e-textarea-selected-border-color: var(--md-sys-color-primary-ink);
+          --w-e-textarea-handler-bg-color: var(--md-sys-color-primary-ink);
           --w-e-toolbar-color: var(--md-sys-color-on-surface-variant);
           --w-e-toolbar-bg-color: var(--md-sys-color-surface-container-low);
           --w-e-toolbar-active-color: var(--md-sys-color-on-surface);
@@ -309,18 +321,11 @@ export default function RichTextEditor({
         }
 
         /* ---- Toolbar -------------------------------------------------
-           wangEditor ships a 32px-tall row of bare 14px glyphs with a square
-           grey hover — none of which is M3, and none of which is usable with a
-           thumb. It also lays the row out as a single unwrapped flex line, so
-           in simple mode (~15 items, roughly 600px) it spilled straight through
-           the rounded border on a phone and pushed horizontal overflow onto the
-           whole detail page.
-
            Rebuilt here as a row of M3 icon buttons: 40dp round targets, a
            state-layer hover, secondary-container for the active state, and the
-           row wraps instead of overflowing. Wrapping rather than a horizontal
-           scroller because a scroller here would compete with pull-to-dismiss,
-           which force-writes touch-action on the surrounding scroller.
+           row wraps instead of overflowing (a horizontal scroller here would
+           compete with pull-to-dismiss, which force-writes touch-action on the
+           surrounding scroller).
            (No backticks in this block: it lives inside a JS template literal.) */
         .w-e-bar {
           padding: 6px;
@@ -348,30 +353,42 @@ export default function RichTextEditor({
           padding: 0 8px;
           border-radius: 9999px;
           transition:
-            background-color 200ms var(--ease-standard),
-            color 200ms var(--ease-standard);
+            background-color var(--transition-duration-standard) var(--ease-standard),
+            color var(--transition-duration-standard) var(--ease-standard);
         }
 
+        /* The three state weights read the tokens rather than repeating numbers.
+           The old hand-typed weights had no focus weight at all — the one state
+           a keyboard user actually needs to see. */
         .w-e-bar-item button:hover {
           background-color: color-mix(
             in oklab,
-            var(--md-sys-color-on-surface) 8%,
+            var(--md-sys-color-on-surface) calc(var(--md-sys-state-hover-opacity) * 100%),
             transparent
           );
           color: var(--md-sys-color-on-surface);
         }
 
+        /* Focus gets the state layer *and* the app's own ring — a ring sits
+           outside the target, unlike the inset outline this used to draw.
+           No backticks anywhere in this block: it lives inside a template
+           literal, and one would end the string. */
+        .w-e-bar-item button:focus-visible {
+          background-color: color-mix(
+            in oklab,
+            var(--md-sys-color-on-surface) calc(var(--md-sys-state-focus-opacity) * 100%),
+            transparent
+          );
+          outline: none;
+          box-shadow: 0 0 0 2px var(--md-sys-color-focus);
+        }
+
         .w-e-bar-item button:active {
           background-color: color-mix(
             in oklab,
-            var(--md-sys-color-on-surface) 12%,
+            var(--md-sys-color-on-surface) calc(var(--md-sys-state-pressed-opacity) * 100%),
             transparent
           );
-        }
-
-        .w-e-bar-item button:focus-visible {
-          outline: 2px solid var(--md-sys-color-primary);
-          outline-offset: -2px;
         }
 
         /* Selected state — the M3 pairing, not a grey wash. */
@@ -412,11 +429,3 @@ export default function RichTextEditor({
   );
 }
 
-export function getEditorBBCode(editor: IDomEditor | null): string {
-  if (!editor) return '';
-  try {
-    return htmlToBBCode(editor.getHtml());
-  } catch {
-    return '';
-  }
-}

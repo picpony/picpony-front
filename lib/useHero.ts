@@ -19,6 +19,7 @@ import {
   prepareImageHero,
   requestImageHeroOpen,
   warmImageHero,
+  warmImageHeroSource,
   warmImageHeroFrame,
   type ImageHeroSnapshot,
 } from '@/lib/hero';
@@ -74,8 +75,17 @@ export function useHeroLink<T extends HTMLElement>({
       if (!image) return;
       router.prefetch(href);
       void warmImageHero(image.id, priority);
+      /* The detail-sized bytes, on the same ladder: the exact bytes the final layer will
+         request. `prepareImageHero` uses them only once decoded, so a warm that has not
+         landed changes nothing. */
+      warmImageHeroSource(image);
       cancelFrameWarmRef.current?.();
-      cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current);
+      /* `immediate` on the press path. Hover warming cannot reach a touch screen, so
+         without it the tapped card's capture always lands synchronously in the click
+         handler — see `warmImageHeroFrame`. */
+      cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current, {
+        immediate: priority === 'immediate',
+      });
     },
     [href, image, router, sourceRef],
   );
@@ -189,8 +199,8 @@ export function useHeroLink<T extends HTMLElement>({
         return;
       }
       // Pressing is a firmer signal than hovering, and on touch there is no
-      // hover at all — this is the earliest honest moment to start fetching,
-      // typically 100ms or more before the click lands.
+      // hover at all — the earliest honest moment to start fetching, typically
+      // 100ms or more before the click lands.
       cancelIntent();
       warmRouteAndMedia('immediate');
       try {

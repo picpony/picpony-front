@@ -16,15 +16,15 @@ export default function RefreshButton({
 }: RefreshButtonProps) {
   return (
     /* `loading`, not `disabled` plus a hand-spun glyph: the primitive already
-       swaps the icon for a real `Spinner` and blocks interaction, which is what
-       every other busy button in the console does. Doing it by hand here meant the
-       spinner was a rotating `MdRefresh` in one place and a `Spinner` everywhere
-       else, for the same state.
+       swaps the icon for a real `Spinner` and blocks interaction, which is
+       what every other busy button in the console does.
 
-       `motion-reduce:` on the hover rotate, which the identical idiom in
-       `Modal` and `AuthModal` already carries — the reduced-motion enumeration
-       covers `animate-*` keyframes and (now) `transition-ui`, but a named
-       `transition-transform` still needs its own opt-out. */
+       `no-motion:` guards the hover *end state* only: the off tier's globals
+       block re-declares the transition property with `!important`, so a
+       transition-suppressing utility beside it never won; what that rule
+       cannot reach is the rotation the hover leaves behind. The
+       one-attribute form is shared with the dismiss icon button and
+       `Pagination`. */
     <Button
       variant="accent"
       className="group"
@@ -32,8 +32,10 @@ export default function RefreshButton({
       loading={loading}
       icon={
         <MdRefresh
-          size={18}
-          className="transition-transform duration-300 ease-[var(--ease-standard)] group-hover:rotate-180 motion-reduce:transition-none motion-reduce:group-hover:rotate-0"
+          /* No `size`: `Button` sizes its own icon slot (20dp at this step).
+             Passing the 18dp chip/metadata size here was one glyph, two
+             opinions. */
+          className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
         />
       }
       data-ripple

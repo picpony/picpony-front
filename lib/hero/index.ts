@@ -1,10 +1,8 @@
 'use client';
 
 /**
- * Public surface of the Hero transition system.
- *
- * Components should import from here rather than reaching into `lib/hero/*`, so
- * the internal module layout stays free to change.
+ * Public surface of the Hero transition system. Components import from here
+ * rather than reaching into `lib/hero/*`, so the internal layout stays free to change.
  */
 
 import { imageHeroController } from './controller';
@@ -33,7 +31,12 @@ export type {
 export { warmImageHeroFrame } from './frameCache';
 export { isScrollLikelyActive } from './input';
 export { publishWhenHeroSettled } from './publish';
-export { canAnimateImageHero, prepareImageHero, warmImageHero } from './media';
+export {
+  canAnimateImageHero,
+  prepareImageHero,
+  warmImageHero,
+  warmImageHeroSource,
+} from './media';
 
 // --- Setup ---------------------------------------------------------------
 
@@ -80,6 +83,11 @@ export function updateImageHeroRouteTarget(surfaceId: string, target: HTMLElemen
 
 export function markImageHeroRoutePreviewPaintable(surfaceId: string, target?: HTMLElement | null) {
   imageHeroController.markRoutePreviewPaintable(surfaceId, target);
+}
+
+/** The detail resolved with nothing to fly to — see `HeroRouteRegistration`. */
+export function markImageHeroRouteResolvedWithoutMedia(surfaceId: string) {
+  imageHeroController.markRouteResolvedWithoutMedia(surfaceId);
 }
 
 export function bindImageHeroDismissGesture(

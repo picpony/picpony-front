@@ -9,12 +9,17 @@ import { roleInfo } from '@/lib/roles';
  * `lib/roles.ts` already existed to stop exactly this drifting, and its own
  * comment says so: "One definition means the badge beside a username is the same
  * badge wherever you meet that user." It delivered the *colour* and nothing
- * else, so the shape drifted anyway — `rounded-sm px-2 py-1 text-label-m` on a
- * profile, `rounded px-2 py-0.5 text-label-m` in the admin table.
+ * else, so the shape drifted anyway: an 8dp corner with 8/4dp padding on a profile
+ * against a 4dp corner with 8/2dp padding in the admin table, both at the same
+ * 12px label role. (Spelled in prose rather than as class names — Tailwind extracts
+ * bare kebab-case utilities from comments, so naming the deleted ones would put
+ * them straight back into the bundle and defeat any grep that tries to prove they
+ * are gone.)
  *
  * Worse, two of the four call sites never reached it at all. A forum post's
  * author and every reply in the thread hand-rolled
- * `bg-primary` at 10% with `text-primary`, uppercased and letter-spaced, so a founder's badge
+ * a 10% tint of the brand colour with brand-coloured ink, uppercased and
+ * letter-spaced, so a founder's badge
  * was purple on their profile and brand-pink in a thread — and `uppercase
  * tracking-wider` on a Chinese role label does nothing but widen it, since the
  * label roles already carry a tracking token deliberately halved for Han glyphs

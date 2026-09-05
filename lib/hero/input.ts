@@ -287,20 +287,35 @@ export function waitForHeroInputRelease(signal?: AbortSignal) {
   });
 }
 
-/** Resolves once input has been quiet continuously for `quietFor` ms. */
-export function waitForHeroInteractionQuiet(signal?: AbortSignal, quietFor = QUIET_AFTER_MS) {
+/**
+ * Resolves once input has been quiet continuously for `quietFor` ms.
+ *
+ * `budget` is a wall-clock ceiling on the *wait*, and without one this cannot be bounded from
+ * outside: a wheel stream refreshes `wheelActive` every `WHEEL_RELEASE_MS`, so `quietFor` may
+ * never elapse and a caller that checks a deadline around its `await` never gets to check it.
+ * Expiry resolves `false`, i.e. the same answer as an abort — the caller distinguishes them by
+ * looking at its own deadline, which is what `waitForInputTransfer` does.
+ */
+export function waitForHeroInteractionQuiet(
+  signal?: AbortSignal,
+  quietFor = QUIET_AFTER_MS,
+  budget?: number,
+) {
   if (signal?.aborted) return Promise.resolve(false);
   if (isHeroInteractionQuiet() && now() - lastActivityAt >= quietFor) {
     return Promise.resolve(true);
   }
+  if (typeof budget === 'number' && budget <= 0) return Promise.resolve(false);
 
   return new Promise<boolean>((resolve) => {
     let timer = 0;
+    let expiry = 0;
     let finished = false;
     const finish = (value: boolean) => {
       if (finished) return;
       finished = true;
       if (timer) window.clearTimeout(timer);
+      if (expiry) window.clearTimeout(expiry);
       activityListeners.delete(check);
       signal?.removeEventListener('abort', abort);
       resolve(value);
@@ -324,6 +339,9 @@ export function waitForHeroInteractionQuiet(signal?: AbortSignal, quietFor = QUI
     const abort = () => finish(false);
     activityListeners.add(check);
     signal?.addEventListener('abort', abort, { once: true });
+    /* The ceiling is its own timer rather than a check inside `check`, because a live wheel
+       stream is exactly the case where `check` stops being scheduled. */
+    if (typeof budget === 'number') expiry = window.setTimeout(() => finish(false), budget);
     check();
   });
 }

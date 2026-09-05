@@ -11,6 +11,9 @@ import {
   type LoadAttempt,
 } from '@/lib/imageLoader';
 import Skeleton from '@/components/Skeleton';
+import { DURATION } from '@/lib/motionTokens';
+import { MOTION_SPEED_SCALE } from '@/lib/appearance';
+import { useSsrImageLine } from '@/components/ImageLineProvider';
 
 interface FadeInImageProps extends ImageProps {
   fallbackSrc?: string;
@@ -36,26 +39,13 @@ interface FadeInImageProps extends ImageProps {
 /**
  * The one image reveal.
  *
- * Three things were wrong before:
+ * The shimmer continues *under* the real card until its own image is ready, so the
+ * placeholder never stops mid-sentence. The `complete` check runs in
+ * `useLayoutEffect` (before paint), so a cached image is simply there instead of
+ * fading in over a frame it already had. The fade is the utility standard, 200ms.
  *
- * 1. Two loading languages ran back to back. `ImageGridSkeleton` shimmered,
- *    then the real grid swapped in and showed a flat `surface-container-high`
- *    while each thumb decoded, then each thumb faded. The flat grey in the
- *    middle was exactly the "unstyled colour" the shimmer existed to prevent.
- *    The shimmer now continues *under* the real card until its own image is
- *    ready, so the placeholder never stops mid-sentence.
- *
- * 2. Cached images flickered. The `complete` check ran in `useEffect`, which
- *    fires after paint — so returning to the gallery painted at least one frame
- *    at `opacity: 0` and then faded in over 150ms, on an image the browser
- *    already had. `useLayoutEffect` runs before paint, so a warm image is
- *    simply there.
- *
- * 3. The fade used Tailwind's `ease-out` at 150ms, matching nothing else. It is
- *    a utility fade now: `standard`, 200ms.
- *
- * The card-level entrance cascade (`useStaggerGrid`) animates the tile, not the
- * picture — the two used to fade independently and their opacities multiplied.
+ * The card-level entrance cascade animates the tile, not the picture — the two
+ * fading independently would multiply their opacities.
  *
  * 分层加载（resilient）时，外层用 src 作 key 强制重挂载内层，让内层用
  * lazy initializer 一次性初始化分层状态，避免在 effect 中同步 setState。
@@ -86,11 +76,26 @@ function FadeInImageInner({
   ...props
 }: FadeInImageProps & { useLayers: boolean }) {
   const [isLoaded, setIsLoaded] = useState(eager);
+  /**
+   * Whether the placeholder may leave the tree — one fade after `isLoaded`, not with it.
+   *
+   * `MOTION_SPEED_SCALE.slow` rather than the live speed, per the wall-clock rule: every CSS
+   * duration stretches by up to 1.4, and a timer written against the unscaled figure fires
+   * inside the motion it is meant to outlast. Holding an already-invisible node 40% longer
+   * costs nothing; releasing it early is the blank frame this exists to remove.
+   */
+  const [placeholderGone, setPlaceholderGone] = useState(eager);
   const imgRef = useRef<HTMLImageElement>(null);
   const src = typeof props.src === 'string' ? props.src : '';
   // 挂载时一次性初始化分层尝试（key 变化会重挂载）
+   /* The line the *server* used, when there is one. Without it this component resolves
+      the line itself on both sides of hydration and every server-rendered `<img>`
+      mismatches for anyone who changed the setting — and React leaves a mismatched
+      attribute alone, so the preference was ignored for the whole first screen.
+      See `components/ImageLineProvider.tsx`. */
+  const ssrLine = useSsrImageLine();
   const [attempt, setAttempt] = useState<LoadAttempt | null>(() =>
-    useLayers ? createInitialAttempt(getRawImageUrl(src), proxyThumb) : null,
+    useLayers ? createInitialAttempt(getRawImageUrl(src), proxyThumb, ssrLine) : null,
   );
   const rawUrlRef = useRef(getRawImageUrl(src));
   const loadedRef = useRef(false);
@@ -110,10 +115,33 @@ function FadeInImageInner({
     return () => window.clearTimeout(timerRef.current);
   }, [attempt, proxyThumb]);
 
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timer = window.setTimeout(
+      () => setPlaceholderGone(true),
+      /* DURATION.short is the 200ms step the duration-standard utility emits. */
+      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+    );
+    return () => window.clearTimeout(timer);
+  }, [isLoaded]);
+
   useLayoutEffect(() => {
-    // Synchronous complete check — no rAF (rAF during a fling is jank), and
-    // before paint so a decoded image never shows a transparent frame.
-    if (imgRef.current?.complete) setIsLoaded(true);
+    /* Synchronous, before paint, so a decoded image never shows a transparent frame.
+
+       **`complete` alone is not "loaded"** — it is also true for an image that has
+       *failed*, which removed the shimmer and left a blank, opaque card.
+       `naturalWidth > 0` distinguishes a decoded image from a dead one.
+
+       **And it must reset.** `displaySrc` changes every time the layered loader
+       steps down to the next line, and this only ever set `true` — so a card that
+       had loaded anything never shimmered again. Assigning the predicate rather
+       than only raising it is the whole fix. */
+    const img = imgRef.current;
+    const loaded = Boolean(img?.complete && img.naturalWidth > 0);
+    setIsLoaded(loaded);
+    /* The placeholder's own latch resets here rather than in an effect of its own:
+       it is the same fact as `isLoaded`. */
+    if (!loaded) setPlaceholderGone(false);
   }, [displaySrc]);
 
   const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -145,18 +173,27 @@ function FadeInImageInner({
 
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden contain-paint">
-      {shimmer && !isLoaded && (
-        /* `Skeleton`, not a hand-built `.skeleton` span: same tone and sweep,
-           but one owner for the app's loading language. `rounded-none` because
-           the media container already clips this to its own corner. */
-        <Skeleton className="absolute inset-0 block rounded-none" />
+      {shimmer && !placeholderGone && (
+        /* `Skeleton`, not a hand-built span: one owner for the app's loading
+           language. `rounded-none` because the media container already clips
+           this to its own corner.
+
+           It **cross-fades with the image rather than unmounting on
+           `isLoaded`** — unmounting it in the same commit that flips the image
+           to full opacity left the fade starting from 0 with nothing behind it,
+           so the first frames of an arriving image were a blank card. */
+        <Skeleton
+          className={`absolute inset-0 block rounded-none transition-opacity duration-standard ease-[var(--ease-standard)] ${
+            isLoaded ? 'opacity-0' : 'opacity-100'
+          }`}
+        />
       )}
       <Image
         {...props}
         src={displaySrc}
         alt={props.alt || ''}
         ref={imgRef}
-        className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} relative transition-opacity duration-200 ease-[var(--ease-standard)] motion-reduce:transition-none`}
+        className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} relative transition-opacity duration-standard ease-[var(--ease-standard)]`}
         onLoad={handleLoad}
         onError={handleError}
         loading={props.loading ?? (eager ? 'eager' : 'lazy')}

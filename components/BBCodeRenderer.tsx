@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 
 import { safeColor, safeUrl } from '@/lib/bbcode';
+import { getAssetUrl } from '@/lib/utils';
 
 interface BBCodeRendererProps {
   content: string;
@@ -31,13 +32,12 @@ function bbcodeToSafeHtml(bbcode: string): string {
     const src = url.trim();
     if (!src) return '';
     // Resolve relative paths
-    const resolved = src.startsWith('/') ? `https://picpony.top${src}` : src;
+    const resolved = getAssetUrl(src);
     const safe = safeUrl(resolved);
     if (!safe) return '';
     /* `alt=""` marks it decorative — a BBCode `[img]` carries no description and
        an `<img>` with no `alt` at all is announced by its URL. No inline style:
-       the size cap, the corner and the rhythm are one rule in globals.css, and an
-       inline `margin` there beat it. */
+       size, corner and rhythm are one rule in globals.css. */
     return `<img src="${safe}" alt="" loading="lazy" />`;
   });
 
@@ -45,16 +45,15 @@ function bbcodeToSafeHtml(bbcode: string): string {
   html = html.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
   // Italic
   html = html.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
-  /* Underline and strikethrough are elements, not styled spans. `<u>` and `<s>`
-     carry the decoration in every UA stylesheet, so the span pair was inline CSS
-     restating what the semantics already said — and it left the editor's
-     converter, which emits `<strike>`, describing the same BBCode differently. */
+  /* Underline and strikethrough are elements, not styled spans: `<u>`/`<s>` carry
+     the decoration in every UA stylesheet, and the editor's converter emits
+     `<strike>` — the span pair described the same BBCode two different ways. */
   html = html.replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '<u>$1</u>');
   html = html.replace(/\[s\]([\s\S]*?)\[\/s\]/gi, '<s>$1</s>');
 
   /* Colour — validated, not interpolated. `escapeHTML` leaves `;` and `:` alone,
-     so a raw capture here let `[color=red;position:fixed;inset:0;background:#000]`
-     paint a full-viewport plate over the app from inside a post body. */
+     so a raw capture here let a style value paint a full-viewport plate over the
+     app from inside a post body. */
   html = html.replace(/\[color=(.*?)\]([\s\S]*?)\[\/color\]/gi, (_m, c: string, text: string) => {
     const color = safeColor(c);
     return color ? `<span style="color:${color};">${text}</span>` : text;
@@ -69,12 +68,10 @@ function bbcodeToSafeHtml(bbcode: string): string {
 
   /* URL with custom text [url=href]text[/url].
      `safeUrl` allowlists the scheme. `escapeHTML` escapes `& < > " '`, none of
-     which occur in `javascript:alert(document.cookie)`, so an unvalidated capture
-     here was a live script href authored from any post or comment. A rejected
-     href degrades to its own link text rather than vanishing.
-     No inline `text-decoration`: link appearance is one rule in globals.css, and
-     stating it here meant a link in a thread was underlined at rest while the
-     same link in the editor's preview was not. */
+     which occur in `javascript:alert(1)`, so an unvalidated capture here was a
+     live script href authored from any post. A rejected href degrades to its own
+     link text rather than vanishing. No inline `text-decoration`: link appearance
+     is one rule in globals.css. */
   html = html.replace(/\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi, (_m, href: string, text: string) => {
     const url = safeUrl(href);
     return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
@@ -89,12 +86,8 @@ function bbcodeToSafeHtml(bbcode: string): string {
   // Quote with username [quote="username"]text[/quote]
   // Note: quotes are already escaped to &quot; by escapeHTML() above
   //
-  // Semantic markup, no inline styles: both quote forms now emit a plain
+  // Semantic markup, no inline styles: both quote forms emit a plain
   // `<blockquote>` and the appearance comes from the single rule in globals.css.
-  // The inline version carried its own fill, its own border and a
-  // `margin-top:-20px` fudge to pull the attribution back over the padding it had
-  // just set — the sort of thing that only ever looks right in the one thread it
-  // was tuned against.
   html = html.replace(
     /\[quote=&quot;(.*?)&quot;\]([\s\S]*?)\[\/quote\]/gi,
     (match, username: string, text: string) =>
@@ -107,10 +100,9 @@ function bbcodeToSafeHtml(bbcode: string): string {
     '<blockquote>$1</blockquote>',
   );
 
-  /* Code block (preserve inner content exactly). Bare `<pre><code>` — the fill,
-     the corner, the padding and the rhythm are all in globals.css, which is also
-     where `MarkdownRenderer`'s listings get theirs. Spelled inline here, the two
-     renderers produced two different code blocks in the same thread. */
+  /* Code block (preserve inner content exactly). Bare `<pre><code>` — fill,
+     corner, padding and rhythm all in globals.css, shared with
+     `MarkdownRenderer`'s listings. */
   html = html.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, '<pre><code>$1</code></pre>');
 
   // Ordered list [list=1]
@@ -129,10 +121,8 @@ function bbcodeToSafeHtml(bbcode: string): string {
   // HTML-mapped tags: div wrapper
   html = html.replace(/\[div\]([\s\S]*?)\[\/div\]/gi, '<div>$1</div>');
 
-  /* Headings h1-h6, as bare elements. They used to carry hardcoded `font-size`
-     and `font-weight` in rem — a sixteenth type scale, sitting outside the
-     fifteen M3 roles and outside the `@layer base` rules that give h1-h6 theirs.
-     Being inline, it also could not be overridden from anywhere. */
+  /* Headings h1-h6, as bare elements — no hardcoded type scale outside the M3
+     roles and the `@layer base` rules that give h1-h6 theirs. */
   for (const level of [1, 2, 3, 4, 5, 6]) {
     html = html.replace(
       new RegExp(`\\[h${level}\\]([\\s\\S]*?)\\[/h${level}\\]`, 'gi'),
@@ -146,15 +136,12 @@ function bbcodeToSafeHtml(bbcode: string): string {
   // Span
   html = html.replace(/\[span\]([\s\S]*?)\[\/span\]/gi, '<span>$1</span>');
 
-  /* Table, in a scroll container.
-     `width:100%` does not stop a 4-column table's *min-content* width from
-     exceeding the post card — on a 360px phone the card's content box is ~296px,
-     and any table with real cell text blows past it and takes the page's
-     horizontal scrollbar with it. `MarkdownRenderer` already wraps its tables for
-     this reason; the BBCode path did not. `.popover-scrollbar` because the gutter
-     belongs to the table, not to the page.
-     The cell borders and the header fill moved to globals.css, where the Markdown
-     path's tables are described too — they were two different tables before. */
+  /* Table, in a scroll container. A table's *min-content* width exceeds the post
+     card on a phone and takes the page's horizontal scrollbar with it;
+     `MarkdownRenderer` wraps its tables for this reason and the BBCode path did
+     not. `.popover-scrollbar` because the gutter belongs to the table, not the
+     page. Cell borders and header fill live in globals.css, shared with the
+     Markdown path's tables. */
   html = html.replace(
     /\[table\]([\s\S]*?)\[\/table\]/gi,
     '<div class="popover-scrollbar overflow-x-auto"><table>$1</table></div>',
@@ -230,23 +217,13 @@ function wrapBlockEdges(body: string): string {
 /**
  * A blank line starts a paragraph; a single newline is a line break.
  *
- * This step used to be `html.replace(/\n/g, '<br />')` and nothing else, which
- * meant a BBCode post had no paragraphs at all — every gap in it, whether the
- * author had pressed Return once or twice, came out as the same one-line break.
- * A `<br>` also carries no margin, so a body's rhythm could not be described in
- * CSS: the prose spacing lived in the *content*, while the picture and the quote
- * beside it carried their own, unrelated, inline margins. That is the whole of
- * why a thread's spacing looked arbitrary.
- *
- * Real `<p>`s put the rhythm back under `.bbcode-content` in globals.css, where
- * `MarkdownRenderer`'s output already lived — so the two renderers now describe
- * the same document and one rule set governs both.
+ * Real `<p>`s put the rhythm under `.bbcode-content` in globals.css, shared with
+ * `MarkdownRenderer`'s output — one rule set governs both renderers.
  *
  * A chunk that already contains a nesting block is emitted as it stands rather
  * than wrapped, because a `<p>` may not contain one: the browser would close the
- * paragraph early and the markup would stop being what this function returned.
- * Those blocks carry their own margins, which is the right spacing for them
- * anyway.
+ * paragraph early. Those blocks carry their own margins, which is the right
+ * spacing for them anyway.
  */
 function paragraphise(html: string): string {
   return (
@@ -282,12 +259,10 @@ export default function BBCodeRenderer({ content }: BBCodeRendererProps) {
 
   if (!html) return null;
 
-  /* `break-words` on the root, not just via the `@layer base` safety net.
-     That net covers `:where(p, li, blockquote, td, dd)`, and this converter emits
-     bare text nodes and `<br>` straight into the div — so a long URL or an
-     unbroken username in any post or comment body pushed past the column. The
-     app scroller is `overflow-y: scroll` with `overflow-x` computing to `auto`,
-     which meant one such post gave the *whole page* a horizontal scrollbar. */
+  /* `break-words` on the root, not just via the `@layer base` safety net. That
+     net covers p/li/blockquote/td/dd, and this converter emits bare text nodes
+     and `<br>` straight into the div — so one unbroken URL in a post gave the
+     *whole page* a horizontal scrollbar. */
   return (
     <div className="bbcode-content break-words" dangerouslySetInnerHTML={{ __html: html }} />
   );

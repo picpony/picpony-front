@@ -4,16 +4,9 @@ import { useMasonryColumns } from '@/lib/hooks';
 import Skeleton from '@/components/Skeleton';
 
 /**
- * Aspect ratios, not pixel heights, and a fixed sequence rather than random
- * values so the server and client render the same thing.
- *
- * The old version hard-coded three tiles per column at 200–380px, so the
- * placeholder was roughly 900px tall while a real page is 50 images deep. The
- * skeleton ended well above the fold, leaving empty space under it, and the
- * page then grew abruptly when the data arrived.
- *
- * The spread is deliberately portrait-heavy: this is fan art, and most of it is
- * taller than it is wide, so a skeleton of squares does not predict the layout.
+ * Fixed aspect-ratio sequence (deliberately portrait-heavy — this is fan art),
+ * not random values, so server and client render the same thing and the
+ * placeholder fills a real page's depth instead of ending above the fold.
  */
 const RATIOS = [
   1.32, 0.78, 1.5, 1.0, 1.18, 0.72, 1.41, 0.95, 1.25, 1.62, 0.84, 1.1, 1.38, 0.9, 1.55, 1.05, 0.8,
@@ -21,13 +14,8 @@ const RATIOS = [
 ];
 
 /**
- * Rows per column, derived rather than guessed.
- *
- * A page is `PAGE_SIZE` images spread over `columns`, so that — not a fixed 7 —
- * is how deep the placeholder has to run. At 7 the skeleton came out roughly a
- * third of the real height, so the scroll container jumped sharply the moment
- * the data arrived, which is the exact problem this file's header comment says
- * it was written to solve. It under-corrected by 3×.
+ * Rows per column = a real page (`PAGE_SIZE` images) over `columns`, so the
+ * placeholder's height tracks the content it stands in for.
  */
 const PAGE_SIZE = 50;
 
@@ -47,10 +35,8 @@ export default function ImageGridSkeleton() {
                 className="w-full rounded-lg"
                 style={{
                   aspectRatio: `1 / ${ratio}`,
-                  /* Diagonal stagger, so the shimmer sweeps across the grid as
-                     one wave rather than every tile flashing together. Capped:
-                     past a second the tail tiles read as broken rather than
-                     loading, and they are all below the fold anyway. */
+                  /* Diagonal stagger so the shimmer sweeps the grid as one wave;
+                     capped — a slow tail reads as broken, not loading. */
                   animationDelay: `${Math.min((colIndex + rowIndex) * 90, 900)}ms`,
                 }}
               />
