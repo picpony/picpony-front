@@ -17,7 +17,7 @@ import UserBadge from '@/components/UserBadge';
 import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
 import { ICON } from '@/lib/icons';
-import { readToken, readUserInfo } from '@/lib/hooks';
+import { readUserInfo, useSession } from '@/lib/hooks';
 
 interface TaskData {
   success: boolean;
@@ -62,7 +62,7 @@ const tabs: { id: TaskTab; label: string; subtitle: string }[] = [
 ];
 
 export default function TasksPage() {
-  const token = readToken();
+  const { token } = useSession();
   const [activeTab, setActiveTab] = useScreenState<TaskTab>('tasks:tab', 'novice');
   const [claiming, setClaiming] = useState<string | null>(null);
 

@@ -24,7 +24,7 @@ import Skeleton from '@/components/Skeleton';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 import { ICON } from '@/lib/icons';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
-import { readUserInfo } from '@/lib/hooks';
+import { useSession } from '@/lib/hooks';
 
 /* One loading shape for all fourteen lazy tabs — without it, the first switch to a tab
    rendered an empty well the height of the panel until its chunk arrived. This is the
@@ -170,16 +170,12 @@ const DEFAULT_TAB: TabId = 'welcome';
  */
 const TAB_PUSH_COALESCE_MS = Math.round(400 * MOTION_SPEED_SCALE.slow);
 
-function readAdminIdentity(): { userRole: string; token: string } {
-  const user = readUserInfo();
-  return { userRole: (user?.role as string) || 'user', token: user?.token || '' };
-}
-
 function AdminPanel() {
   const router = useRouter();
   const searchParams = useBackgroundSearchParams();
-  const [{ userRole, token }] = useState(readAdminIdentity);
-  const [isLoading] = useState(false);
+  const { user, token: sessionToken, ready } = useSession();
+  const userRole = typeof user?.role === 'string' ? user.role : 'user';
+  const token = sessionToken ?? '';
 
   const isEditor = userRole === 'editor';
   const isAdmin = ['super_admin', 'admin'].includes(userRole);
@@ -247,8 +243,8 @@ function AdminPanel() {
     }, TAB_PUSH_COALESCE_MS);
   };
 
-  if (isLoading) {
-    return null;
+  if (!ready) {
+    return <AdminTabFallback />;
   }
   if (!isAdmin && !isEditor) {
     return (

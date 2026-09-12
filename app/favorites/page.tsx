@@ -3,7 +3,8 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { MdCollectionsBookmark, MdKey } from 'react-icons/md';
 import { PonyImage } from '@/lib/api';
-import { useAuth, useDeferredLoading } from '@/lib/hooks';
+import { readToken, useDeferredLoading, useSession } from '@/lib/hooks';
+import { SKIP, useResource } from '@/lib/resource';
 import { useAuthModal } from '@/components/AuthModal';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
@@ -19,6 +20,7 @@ import { faveIds as faveIdsResource, imagesByIds, sessionUser } from '@/lib/reso
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import PageHeader from '@/components/PageHeader';
 import { ICON } from '@/lib/icons';
+import { clamp } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
 const DERPI_SEARCH = `${DERPIBOORU_API_BASE}/search/images`;
@@ -46,9 +48,10 @@ function PageShell({ children }: { children: React.ReactNode }) {
  * number and error — so switching back no longer refetches, and no longer re-reads
  * `/user` for the API key.
  */
-function FavoritesPane({ source }: { source: FaveSource }) {
+function FavoritesPane({ source, token }: { source: FaveSource; token: string | null }) {
   const [images, setImages] = useState<PonyImage[]>([]);
   const [page, setPage] = useState(1);
+  const loadedPage = useRef(1);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,8 +60,12 @@ function FavoritesPane({ source }: { source: FaveSource }) {
   const [faveIds, setFaveIds] = useState<number[]>([]);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const router = useRouter();
-  const { getUserInfo } = useAuth();
   const { openAuth } = useAuthModal();
+  /* A live subscription is needed while a detail overlay is open above this grid.
+     A successful favourite toggle writes this entry and refreshes the visible list. */
+  const favesRead = useResource(faveIdsResource, source === 'picpony' && token ? { token } : SKIP);
+  const cachedFaveIds = favesRead.data;
+  const faveIdsError = favesRead.error;
 
   /* Every request carries the generation it was issued in. A tab switch, a retry or an
      unmount bumps it, so a slow response from a previous generation is discarded rather
@@ -68,7 +75,7 @@ function FavoritesPane({ source }: { source: FaveSource }) {
   const generation = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const isStale = useCallback((run: number) => generation.current !== run, []);
+  const isStale = useCallback((run: number) => generation.current !== run || readToken() !== token, [token]);
 
   const searchDerpi = useCallback(
     async (query: string, targetPage: number, key: string | null, signal: AbortSignal) => {
@@ -132,9 +139,9 @@ function FavoritesPane({ source }: { source: FaveSource }) {
   );
 
   const loadImages = useCallback(
-    async (ids: number[], targetPage: number, run: number, signal: AbortSignal) => {
+    async (ids: number[], targetPage: number, run: number, signal: AbortSignal, replace = false) => {
       try {
-        const idsForPage = ids.slice((targetPage - 1) * PAGE_SIZE, targetPage * PAGE_SIZE);
+        const idsForPage = ids.slice(replace ? 0 : (targetPage - 1) * PAGE_SIZE, targetPage * PAGE_SIZE);
         if (idsForPage.length === 0) {
           if (!isStale(run)) setHasMore(false);
           return;
@@ -143,22 +150,27 @@ function FavoritesPane({ source }: { source: FaveSource }) {
         /* Through the shared resource rather than a bare search, so a second visit to this
            screen costs nothing — the same `id:X OR id:Y` query `searchImagesByIds` builds.
            The favourite order is restored below because the API answers in its own. */
-        const data = await imagesByIds.read({ ids: idsForPage, page: 1, perPage: PAGE_SIZE });
+        const batches = [];
+        for (let offset = 0; offset < idsForPage.length; offset += PAGE_SIZE) {
+          batches.push(imagesByIds.read({ ids: idsForPage.slice(offset, offset + PAGE_SIZE), page: 1, perPage: PAGE_SIZE }));
+        }
+        const results = await Promise.all(batches);
         if (isStale(run)) return;
 
         // The API returns them in its own order; restore the favourite order.
         const rank = new Map(idsForPage.map((id, index) => [id, index]));
-        const sorted = [...data.images].sort(
+        const sorted = results.flatMap((data) => data.images).sort(
           (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
         );
 
-        commit(sorted, targetPage);
+        commit(sorted, replace ? 1 : targetPage);
+        loadedPage.current = targetPage;
         setPage(targetPage);
         setHasMore(targetPage * PAGE_SIZE < ids.length);
       } catch (err) {
         if (signal.aborted || isStale(run)) return;
         console.error('Failed to load image details:', err);
-        if (targetPage === 1) setError(err as Error);
+        if (replace || targetPage === 1) setError(err as Error);
       } finally {
         if (!isStale(run)) {
           setIsLoading(false);
@@ -178,10 +190,10 @@ function FavoritesPane({ source }: { source: FaveSource }) {
 
     const fetchFaves = async () => {
       setIsLoading(true);
+      setIsLoadingMore(false);
       setError(null);
       try {
-        const userInfo = getUserInfo();
-        if (!userInfo) {
+        if (!token || readToken() !== token) {
           // Without this the flag stayed true and the page sat on a skeleton for as
           // long as the redirect took — or forever, if it was blocked.
           setIsLoading(false);
@@ -189,33 +201,42 @@ function FavoritesPane({ source }: { source: FaveSource }) {
           return;
         }
 
+        if (source === 'picpony') {
+          if (cachedFaveIds === undefined) {
+            if (faveIdsError) {
+              setError(faveIdsError instanceof Error ? faveIdsError : new Error('收藏列表读取失败'));
+              setIsLoading(false);
+            }
+            return;
+          }
+          setFaveIds(cachedFaveIds);
+          // A live mutation must remove its card immediately without discarding the
+          // pages already explored beneath a detail overlay. Refill that same range.
+          const allowedIds = new Set(cachedFaveIds);
+          setImages((current) => current.filter((image) => allowedIds.has(image.id)));
+          if (cachedFaveIds.length === 0) {
+            loadedPage.current = 1;
+            setPage(1);
+            setHasMore(false);
+            setIsLoading(false);
+            return;
+          }
+          const targetPage = clamp(loadedPage.current, 1, Math.ceil(cachedFaveIds.length / PAGE_SIZE));
+          await loadImages(cachedFaveIds, targetPage, run, signal, true);
+          return;
+        }
+
         /* The shared session, not a second `get_user`: the shell already reads it and
            holds it for five minutes, so this is a cache hit and the Derpibooru key
            arrives without a request (this screen used to send `get_user` twice on every
            cold load, the second a whole round in front of the list). */
-        const sessionResult = await sessionUser.read({ token: userInfo.token });
+        const sessionResult = await sessionUser.read({ token });
         if (isStale(run)) return;
         const currentApiKey =
           sessionResult.kind === 'ok'
             ? ((sessionResult.user as { api_key?: string }).api_key ?? null)
             : null;
         setApiKey(currentApiKey);
-
-        if (source === 'picpony') {
-          /* Shared with the profile page's favourites tab, so opening one after the
-             other costs one read rather than two. */
-          const ids = await faveIdsResource.read({ token: userInfo.token });
-          if (isStale(run)) return;
-          setFaveIds(ids);
-          if (ids.length === 0) {
-            setImages([]);
-            setHasMore(false);
-            setIsLoading(false);
-            return;
-          }
-          await loadImages(ids, 1, run, signal);
-          return;
-        }
 
         if (!currentApiKey) {
           setImages([]);
@@ -239,10 +260,10 @@ function FavoritesPane({ source }: { source: FaveSource }) {
       generation.current += 1;
       controller.abort();
     };
-  }, [retryCount, source, router, getUserInfo, openAuth, isStale, loadImages, loadDerpibooruFaves]);
+  }, [retryCount, source, token, cachedFaveIds, faveIdsError, openAuth, isStale, loadImages, loadDerpibooruFaves]);
 
   const loadMore = () => {
-    if (isLoadingMore || !hasMore) return;
+    if (isLoading || isLoadingMore || !hasMore) return;
     const controller = abortRef.current;
     if (!controller || controller.signal.aborted) return;
     setIsLoadingMore(true);
@@ -257,6 +278,10 @@ function FavoritesPane({ source }: { source: FaveSource }) {
   // Held back so a warm response never flashes the placeholder, and held on so
   // it cannot appear for a single frame.
   const showSkeleton = useDeferredLoading(isLoading);
+  const retry = () => {
+    if (source === 'picpony' && faveIdsError) favesRead.refresh();
+    else setRetryCount((count) => count + 1);
+  };
 
   /* Every branch below returns pane content only — no `PageShell`, no tab bar. Those are
      the parent's, and they have to be: both panes are mounted at once, so rendering the
@@ -268,7 +293,7 @@ function FavoritesPane({ source }: { source: FaveSource }) {
         size="pane"
         title="收藏加载失败"
         message={error.message}
-        onRetry={() => setRetryCount((c) => c + 1)}
+        onRetry={retry}
       />
     );
   }
@@ -314,13 +339,14 @@ function FavoritesPane({ source }: { source: FaveSource }) {
         isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
       }`}
     >
+      {error && <ErrorRetry size="inline" title="收藏更新失败" message={error.message} onRetry={retry} />}
       <MasonryGrid images={images} />
-      {hasMore && <LoadMoreButton onClick={loadMore} isLoading={isLoadingMore} />}
+      {hasMore && <LoadMoreButton onClick={loadMore} isLoading={isLoadingMore} disabled={isLoading || Boolean(error)} />}
     </div>
   );
 }
 
-function FavoritesTabs() {
+function FavoritesTabs({ token }: { token: string | null }) {
   const [activeTab, setActiveTab] = useState<FaveSource>('picpony');
   /* The Derpibooru pane is mounted on first use rather than up front, so a page load
      costs one list request instead of two — and then stays mounted, which keeps its
@@ -345,16 +371,22 @@ function FavoritesTabs() {
       />
       <TabPanes value={activeTab}>
         <TabPane value="picpony">
-          <FavoritesPane source="picpony" />
+          <FavoritesPane source="picpony" token={token} />
         </TabPane>
         {(derpiMounted || activeTab === 'derpibooru') && (
           <TabPane value="derpibooru">
-            <FavoritesPane source="derpibooru" />
+            <FavoritesPane source="derpibooru" token={token} />
           </TabPane>
         )}
       </TabPanes>
     </PageShell>
   );
+}
+
+function FavoritesSession() {
+  const { token, ready } = useSession();
+  if (!ready) return <PageShell><ImageGridSkeleton /></PageShell>;
+  return <FavoritesTabs key={token ?? 'anonymous'} token={token} />;
 }
 
 export default function Favorites() {
@@ -366,7 +398,7 @@ export default function Favorites() {
         </PageShell>
       }
     >
-      <FavoritesTabs />
+      <FavoritesSession />
     </Suspense>
   );
 }

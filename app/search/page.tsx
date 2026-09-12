@@ -476,14 +476,6 @@ function SearchPageContent() {
                    have. The glyph drops to 20dp to match a 40dp button's own icon slot. */
                 trailing={
                   <>
-                    {/* `tonal` — a *visible* container, and that is what makes the spacing
-                        round the submit read as equal. Measured, every gap around 搜索 was
-                        already exactly 8px (40dp control in a 56dp field); but the control
-                        on its left had no container, so its 40dp box was invisible and the
-                        *perceived* gap on that side was 18 against 8 on the other three.
-                        The boxes were even and the picture was not. So both controls carry
-                        a container, and the hierarchy is `tonal` against `filled` rather
-                        than nothing against something. */}
                     <IconButton
                       variant="tonal"
                       onClick={() => setIsImageSearchOpen(true)}

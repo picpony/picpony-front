@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
-import Popover, { estimateMenuHeight } from './Popover';
+import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';
+import { moveFocusFrom } from '@/lib/overlay';
 
 /* The row's height estimate comes from `estimateMenuHeight` in `Popover`, which owns
    the placement decision. The one copy of the row arithmetic. */
@@ -57,6 +58,7 @@ export default function Menu({
      that unmounts), so there is no remount to reset state. */
   const [chosenIndex, setChosenIndex] = useState(-1);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const popoverRef = useRef<PopoverHandle | null>(null);
 
   const firstEnabled = Math.max(0, items.findIndex((i) => !i.disabled));
   const activeIndex = chosenIndex < 0 ? firstEnabled : chosenIndex;
@@ -126,13 +128,16 @@ export default function Menu({
         /* Tab dismisses rather than moving through the items. A menu is a
            transient layer over the page, so the next Tab stop belongs to the
            page, not to the menu's fourth entry. */
+        event.preventDefault();
         handleClose(false);
+        moveFocusFrom(anchorRef.current, event.shiftKey, popoverRef.current?.element);
         break;
     }
   };
 
   return (
     <Popover
+      handleRef={popoverRef}
       open={open}
       onClose={handleClose}
       anchorRef={anchorRef}

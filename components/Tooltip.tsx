@@ -194,7 +194,7 @@ export function useTooltip(label?: string) {
 
   /* Escape dismisses it, which WCAG 1.4.13 requires of any content that appears on
      hover: it has to go away without moving the pointer.
-     A second copy of `lib/overlay.ts`'s `useEscapeToClose` is deliberately *not*
+     A second copy of `lib/overlay.ts`'s `useOverlayLayer` is deliberately *not*
      used, and this is the one place that call is right: that hook calls
      `stopPropagation` so the innermost overlay consumes the key, which is correct for
      a dialog and wrong here — a tooltip open over a dialog must dismiss *and* let the

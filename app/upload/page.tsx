@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/hooks';
+import { readToken, useSession } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 import { MdCloudUpload, MdClose, MdInfoOutline, MdOpenInNew } from 'react-icons/md';
 import Button, { buttonClasses } from '@/components/Button';
@@ -17,8 +17,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { ICON } from '@/lib/icons';
 
 export default function UploadPage() {
-  const { getUserInfo } = useAuth();
-  const user = getUserInfo();
+  const { user } = useSession();
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { confirm, confirmDialog } = useConfirm();
@@ -28,6 +27,7 @@ export default function UploadPage() {
   const [source, setSource] = useState('');
   const [description, setDescription] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const uploadPending = useRef(false);
   const [uploadResult, setUploadResult] = useState<{ id: number } | null>(null);
 
   const userApiKey = user
@@ -93,7 +93,7 @@ export default function UploadPage() {
   // ---- 上传 ----
 
   const handleUpload = async () => {
-    if (!file || !userApiKey) return;
+    if (uploadPending.current || !file || !userApiKey || !user?.token) return;
 
     const trimmedTags = tags.trim();
     if (!trimmedTags) {
@@ -101,22 +101,24 @@ export default function UploadPage() {
       return;
     }
 
-    /* The one place in the app where a user affirms a legal condition — through the
-       app's own confirm dialog, not the browser's OS-styled `confirm()`. */
-    const agreed = await confirm({
-      title: '确认发布',
-      message:
-        '请遵守 Derpibooru 上传准则：\n' +
-        '• 您必须拥有上传作品的版权或授权\n' +
-        '• 请正确添加分级标签（safe / suggestive / questionable / explicit）\n' +
-        '• 请勿上传重复图片',
-      confirmLabel: '确认发布',
-      tone: 'filled',
-    });
-    if (!agreed) return;
-
-    setIsUploading(true);
+    uploadPending.current = true;
     try {
+      /* The one place in the app where a user affirms a legal condition — through
+         the app's own confirm dialog. Lock before awaiting it, so a second
+         activation cannot enqueue another confirmation or another upload. */
+      const agreed = await confirm({
+        title: '确认发布',
+        message:
+          '请遵守 Derpibooru 上传准则：\n' +
+          '• 您必须拥有上传作品的版权或授权\n' +
+          '• 请正确添加分级标签（safe / suggestive / questionable / explicit）\n' +
+          '• 请勿上传重复图片',
+        confirmLabel: '确认发布',
+        tone: 'filled',
+      });
+      if (!agreed || readToken() !== user.token) return;
+
+      setIsUploading(true);
       const res = await api.uploadImageToDerpi(
         file,
         trimmedTags,
@@ -124,17 +126,19 @@ export default function UploadPage() {
         source.trim() || undefined,
         description.trim() || undefined,
       );
+      if (readToken() !== user.token) return;
 
       if (res.ok) {
         const data = await res.json();
-        const imageId = data?.image?.id;
-        if (imageId) {
+        if (readToken() !== user.token) return;
+        const imageId = Number(data?.image?.id);
+        if (Number.isSafeInteger(imageId) && imageId > 0) {
           setUploadResult({ id: imageId });
           showToast(`发布成功，图片 ID：${imageId}`, 'success');
+          recordWeekly();
         } else {
-          showToast('上传成功，但未能获取图片 ID', 'success');
+          showToast('服务器未返回有效图片 ID，无法确认上传结果；文件和填写内容已保留', 'error');
         }
-        recordWeekly();
       } else {
         let errorMsg = `上传失败 (HTTP ${res.status})`;
         try {
@@ -149,23 +153,16 @@ export default function UploadPage() {
         } catch {
           /* ignore */
         }
-        showToast(errorMsg, 'error');
+        if (readToken() === user.token) showToast(errorMsg, 'error');
       }
-    } catch (err) {
-      /* Derpibooru 上传是异步落库的：源站可能已接收文件却在响应前断开，
-         此时 fetch 抛 TypeError/Failed to fetch，作品实际上已提交。
-         与完整版前端一致，按「已提交等待上架」处理而非报网络错误。 */
-      const isNetworkFailure =
-        err instanceof TypeError ||
-        (err instanceof Error && err.message.includes('Failed to fetch'));
-      if (isNetworkFailure) {
-        showToast('作品已成功提交，请等待几分钟后即可上架（若内容不符合 Derpibooru 上传规则将不会上架）', 'success');
-        recordWeekly();
-        resetForm();
-      } else {
-        showToast('网络错误，请稍后再试', 'error');
+    } catch {
+      // A missing response proves neither acceptance nor rejection. Keep the
+      // draft and record progress only after an acknowledged successful upload.
+      if (readToken() === user.token) {
+        showToast('未能确认上传结果，文件和填写内容已保留。请先检查 Derpibooru 是否已有此图片，再重试', 'error');
       }
     } finally {
+      uploadPending.current = false;
       setIsUploading(false);
     }
   };

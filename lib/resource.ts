@@ -270,7 +270,7 @@ export interface Resource<Args, T> {
    */
   peekKey: (key: string) => ResourceSnapshot<T>;
   subscribeKey: (key: string, listener: () => void) => () => void;
-  /** Drop one entry, or every entry of this resource. The next read is a real request. */
+  /** Drop cached answers, preserving subscribers and immediately re-reading mounted keys. */
   invalidate: (args?: Args) => void;
   /** Mark stale without dropping, so the value is still shown while it is re-read. */
   expire: (args?: Args) => void;
@@ -282,10 +282,7 @@ export interface Resource<Args, T> {
    * A Server Component hands the first page to the client island as a prop; seeding it before the
    * first `read` means the effect finds a fresh entry and sends nothing.
    *
-   * **Not `write`.** `write`'s cold-key branch runs `create` → `enqueue` → `pump` → `job.run()`
-   * synchronously — firing the very request the seed exists to prevent — and the `dropQueued`
-   * after it may cancel an entry, leaving `write` to populate an entry no longer in the store
-   * (`peekKey` then returns EMPTY for that key forever).
+   * Unlike `write`, the first snapshot is synchronous and the server's timestamp is preserved.
    *
    * **Browser only.** This is a `'use client'` module still evaluated in Node during SSR, where
    * the module-scope `store` is shared across concurrent requests: seeding server-side would leak
@@ -367,6 +364,40 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     store.set(key, entry);
   }
 
+  /** Detach first, so cancellation and late responses cannot publish a removed answer. */
+  function discard(key: string, entry: Entry<T>) {
+    store.delete(key);
+    entry.controller?.abort();
+    dropQueued(`${name}:${key}`);
+    dropQueued(`${name}:${key}:revalidate`);
+    entry.settle.reject(new DOMException(`${name} read was replaced`, 'AbortError'));
+    if (entry.pendingCommit) {
+      pendingPublish.delete(entry.pendingCommit);
+      entry.pendingCommit = undefined;
+    }
+  }
+
+  function clear(refetch: boolean, args?: Args) {
+    const entries = args === undefined
+      ? Array.from(store)
+      : [[keyOf(args), store.get(keyOf(args))] as const];
+    for (const [key, entry] of entries) {
+      if (!entry) continue;
+      discard(key, entry);
+      if (refetch && entry.listeners.size > 0) {
+        if (entry.args !== undefined) {
+          const replacement = create(key, entry.args as Args, 'immediate');
+          replacement.listeners = entry.listeners;
+        } else {
+          /* An as-yet unread subscriber still needs its listener slot. */
+          entry.snapshot = EMPTY as ResourceSnapshot<T>;
+          store.set(key, entry);
+        }
+      }
+      for (const listener of entry.listeners) listener();
+    }
+  }
+
   function trim(preserve?: string) {
     if (store.size <= maxEntries) return;
     for (const [key, entry] of store) {
@@ -374,8 +405,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       /* Never evict a key a mounted component is reading, nor an entry with no answer yet —
          dropping an in-flight one would restart it on the next render. */
       if (key === preserve || entry.listeners.size > 0 || entry.value === undefined) continue;
-      entry.controller?.abort();
-      store.delete(key);
+      discard(key, entry);
     }
   }
 
@@ -476,10 +506,14 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
            refresh runs underneath with no loading state — this layer's point over a plain cache. */
         void revalidate(args, key, existing);
       }
+      /* A promise settles once; background refreshes and mutation writes change the answer.
+         Returning the first read's promise here handed imperative callers that first answer
+         forever, even while React was already displaying a newer one. */
+      if (existing.status === 'resolved') return Promise.resolve(existing.value as T);
       if (existing.status !== 'error') return existing.promise;
       /* A previous failure is not a cached answer. Retry, keeping any value it had. */
       const previous = existing.value;
-      store.delete(key);
+      discard(key, existing);
       const retried = create(key, args, priority);
       retried.value = previous;
       retried.listeners = existing.listeners;
@@ -487,9 +521,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     }
 
     if (stored) {
-      stored.controller?.abort();
-      dropQueued(`${name}:${key}`);
-      store.delete(key);
+      discard(key, stored);
     }
     const entry = create(key, args, priority);
     /* Carried over from whatever was there, placeholder or not. Losing them is how a component
@@ -500,26 +532,34 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
 
   /** A refresh that never shows a loading state and never replaces a good value with an error. */
   function revalidate(args: Args, key: string, stale: Entry<T>) {
-    if (stale.status !== 'resolved') return;
+    if (stale.status !== 'resolved' || stale.controller) return;
     /* Marked resolved-but-refreshing by moving `fetchedAt` forward, so a second render in the
        same second does not start a second refresh. */
     stale.fetchedAt = Date.now();
     const controller = new AbortController();
+    stale.controller = controller;
     enqueue({
       key: `${name}:${key}:revalidate`,
       priority: 'background',
-      cancel: () => controller.abort(),
+      cancel: () => {
+        controller.abort();
+        if (stale.controller === controller) stale.controller = undefined;
+      },
       run: async () => {
         try {
+          if (controller.signal.aborted || store.get(key) !== stale) return;
           const value = await fetcher(args, controller.signal);
           const current = store.get(key);
-          if (current !== stale) return;
+          if (current !== stale || controller.signal.aborted) return;
           current.value = value;
+          current.promise = Promise.resolve(value);
           current.error = undefined;
           current.fetchedAt = Date.now();
           publish(current);
         } catch {
           /* A failed background refresh leaves the screen alone — the user did not ask for it. */
+        } finally {
+          if (stale.controller === controller) stale.controller = undefined;
         }
       },
     });
@@ -572,26 +612,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       };
     },
     invalidate(args) {
-      const drop = (key: string, entry: Entry<T>) => {
-        entry.controller?.abort();
-        dropQueued(`${name}:${key}`);
-        store.delete(key);
-        /* A queued commit would run on the next paint and hand the dropped value straight back
-           to the listeners still attached. */
-        if (entry.pendingCommit) {
-          pendingPublish.delete(entry.pendingCommit);
-          entry.pendingCommit = undefined;
-        }
-        entry.snapshot = EMPTY as ResourceSnapshot<T>;
-        for (const listener of entry.listeners) listener();
-      };
-      if (args === undefined) {
-        for (const [key, entry] of Array.from(store)) drop(key, entry);
-        return;
-      }
-      const key = keyOf(args);
-      const entry = store.get(key);
-      if (entry) drop(key, entry);
+      clear(true, args);
     },
     expire(args) {
       const mark = (entry: Entry<T>) => {
@@ -634,6 +655,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       ) {
         return;
       }
+
+      if (stored) discard(key, stored);
 
       /* Built literally rather than through `create()`, which would enqueue a real request. */
       let resolve!: (v: T) => void;
@@ -687,29 +710,28 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
         typeof update === 'function'
           ? (update as (previous: T | undefined) => T)(entry?.value)
           : update;
-      if (!entry) {
-        /* Writing to something never read is legitimate — a mutation's response is an answer, so
-           the next screen does not have to ask. Marked fresh so it is not immediately re-read. */
-        if (stored) store.delete(key);
-        const seeded = create(key, args, 'background');
-        if (stored) seeded.listeners = stored.listeners;
-        dropQueued(`${name}:${key}`);
-        seeded.controller?.abort();
-        seeded.controller = undefined;
-        seeded.value = next;
-        seeded.status = 'resolved';
-        seeded.fetchedAt = Date.now();
-        seeded.settle.resolve(next);
-        publish(seeded);
-        return;
+      /* A write is already an answer, including on a cold key. Never call create(): enqueue
+         starts the fetch synchronously. Replacing the entry also fences off older reads and
+         revalidations, so their late responses cannot undo a successful mutation. */
+      if (stored) {
+        stored.settle.resolve(next);
+        discard(key, stored);
       }
-      entry.value = next;
-      entry.error = undefined;
-      entry.status = 'resolved';
-      /* `fetchedAt` is *not* moved forward: an optimistic value is the caller's guess at what the
-         server will say, so it stays as stale as what it replaced and is confirmed by the next
-         revalidation rather than trusted for a full TTL. */
-      publish(entry);
+      const written: Entry<T> = {
+        key,
+        args,
+        status: 'resolved',
+        value: next,
+        fetchedAt: entry?.fetchedAt ?? Date.now(),
+        priority: entry?.priority ?? 'immediate',
+        promise: Promise.resolve(next),
+        settle: { resolve: () => {}, reject: () => {} },
+        snapshot: stored?.snapshot ?? (EMPTY as ResourceSnapshot<T>),
+        listeners: stored?.listeners ?? new Set(),
+      };
+      touch(key, written);
+      trim(key);
+      publish(written);
     },
     cancelBackground(args) {
       const key = keyOf(args);
@@ -717,8 +739,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       if (!entry || entry.priority !== 'background' || entry.listeners.size > 0) return false;
       if (entry.status === 'queued' && dropQueued(`${name}:${key}`)) return true;
       if (entry.status === 'loading') {
-        store.delete(key);
-        entry.controller?.abort();
+        discard(key, entry);
         return true;
       }
       return false;
@@ -726,7 +747,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
   };
 
   registry.add({
-    clear: () => resource.invalidate(),
+    /* Signing out must never re-read entries belonging to the old token. */
+    clear: () => clear(false),
     expireAll: () => resource.expire(),
   });
 

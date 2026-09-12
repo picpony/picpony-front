@@ -5,6 +5,7 @@ import Button from '@/components/Button';
 import Chip from '@/components/Chip';
 import Skeleton from '@/components/Skeleton';
 import { tagCategoryChip } from '@/lib/tagCategories';
+import { tagTranslationKey } from '@/lib/tagTranslations';
 
 const TAG_BATCH_SIZE = 120;
 const RELATION_TAG_BATCH_SIZE = 64;
@@ -59,7 +60,10 @@ export default function TagList({
   const visibleOcs = ocs.slice(0, visibleTagLimits.ocs);
   const visibleRegularTags = regularTags.slice(0, visibleTagLimits.regular);
   /** 有翻译显示中文，否则回退英文。 */
-  const display = (name: string) => tagTranslations?.[name.toLowerCase()] ?? name;
+  const display = (name: string) => {
+    const translation = tagTranslations?.[tagTranslationKey(name)];
+    return typeof translation === 'string' ? translation : name;
+  };
 
   return (
     <div className="space-y-6">

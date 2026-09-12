@@ -130,8 +130,8 @@ export const sessionUser = defineResource<{ token: string }, SessionResult>({
   ttl: 5 * MINUTES,
   /* Two: the current token and at most one it just replaced. */
   maxEntries: 2,
-  fetch: async ({ token }) => {
-    const res = await picpony.getUser(token);
+  fetch: async ({ token }, signal) => {
+    const res = await picpony.getUser(token, signal);
     if (res.status === 401) return { kind: 'unauthorized' };
     const data = await readJson(res);
     if (data?.success && data.user) return { kind: 'ok', user: data.user };
@@ -327,6 +327,7 @@ export const userPosts = defineResource<
   maxEntries: 12,
   fetch: async ({ id, page }) => {
     const res = await picpony.getUserPosts(id, page);
+    if (!res.success) throw new Error('获取用户帖子失败');
     return { posts: res.posts ?? [], totalPages: res.total_pages ?? 1 };
   },
 });
@@ -341,6 +342,7 @@ export const userComments = defineResource<
   maxEntries: 12,
   fetch: async ({ id, page }) => {
     const res = await picpony.getUserComments(id, page);
+    if (!res.success) throw new Error('获取用户评论失败');
     return { comments: res.comments ?? [], totalPages: res.total_pages ?? 1 };
   },
 });
@@ -368,7 +370,7 @@ export const userUploads = defineResource<
   { uploads: UploadItem[]; totalPages: number }
 >({
   name: 'user-uploads',
-  key: ({ id, page, perPage, token }) => `${id}:${page}/${perPage}:${token ? 'auth' : 'anon'}`,
+  key: ({ id, page, perPage, token }) => `${id}:${page}/${perPage}:${token ?? 'anon'}`,
   ttl: 2 * MINUTES,
   maxEntries: 12,
   fetch: async ({ id, page, perPage, token }, signal) => {
@@ -378,7 +380,7 @@ export const userUploads = defineResource<
       { signal },
     );
     const data = await readJson(res);
-    if (!data?.success) return { uploads: [], totalPages: 1 };
+    if (!res.ok || !data?.success) throw new Error(data?.message || '获取用户上传记录失败');
     return { uploads: data.uploads ?? [], totalPages: Math.max(1, data.total_pages || 1) };
   },
 });

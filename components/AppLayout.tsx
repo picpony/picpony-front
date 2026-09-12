@@ -69,11 +69,12 @@ import {
   useSchemeSetting,
   type SchemeSetting,
 } from '@/lib/appearance';
-import { readUserInfo, useMediaQuery } from '@/lib/hooks';
+import { clearUserInfo, readToken, readUserInfo, updateUserInfo, useMediaQuery, useSession } from '@/lib/hooks';
 import { ensureRoutePolicy, setLineNotifier } from '@/lib/route';
 import { showToast } from '@/components/Toast';
 import { cn, runWhenIdle } from '@/lib/utils';
 import { COOKIE_KEYS, LS_KEYS, MEDIA } from '@/lib/constants';
+import { useOverlayLayer, useScrollLock } from '@/lib/overlay';
 
 function SearchBar() {
   const router = useRouter();
@@ -303,9 +304,19 @@ export default function AppLayout({
   const bridgeRouteCommit = Boolean(
     activeHeroBackground && browserAtBackground && !reactRouteAtBackground,
   );
+  // An intercepted detail also opens without a hero flight (reduced/off motion,
+  // or an unavailable source bitmap). Keep that route's real background too:
+  // guessing '/' changes the content key and remounts a multi-page favourites
+  // list or clears a search query beneath the overlay.
+  const [lastPageLocation, setLastPageLocation] = useState({ pathname, search: liveSearch });
+  if (!isImageDetailOpen && !imageHeroRuntime.background && !bridgeRouteCommit &&
+    (lastPageLocation.pathname !== pathname || lastPageLocation.search !== liveSearch)) {
+    setLastPageLocation({ pathname, search: liveSearch });
+  }
   const imageHeroBackground =
-    imageHeroRuntime.background ?? (bridgeRouteCommit ? retainedHeroBackground : null);
-  const backgroundPathname = imageHeroBackground?.pathname ?? (isImageDetailOpen ? '/' : pathname);
+    imageHeroRuntime.background ?? (bridgeRouteCommit ? retainedHeroBackground : null) ??
+    (isImageDetailOpen ? lastPageLocation : null);
+  const backgroundPathname = imageHeroBackground?.pathname ?? pathname;
   /* The hero owns the same pixels during a flight, so the first two conditions stand the
      route cross-fade down while one is in progress. `!isImageDetailOpen` is the narrow
      third term, and the distinction is load-bearing: with the intercepted overlay
@@ -318,7 +329,7 @@ export default function AppLayout({
     imageHeroRuntime.phase === 'gallery-idle' &&
     !imageHeroRuntime.background &&
     !isImageDetailOpen;
-  const frozenBackgroundSearch = imageHeroBackground?.search ?? (isImageDetailOpen ? '' : null);
+  const frozenBackgroundSearch = imageHeroBackground?.search ?? null;
 
   useEffect(() => {
     initializeImageHeroHistory({
@@ -431,19 +442,39 @@ export default function AppLayout({
   };
 
 
-  /* The stored session is the *only* thing that decides whether the shell renders as
-     signed in. It changes on sign-in/out and /settings saves, which announce themselves
-     with `user_info_updated`. Starts `null` and fills after mount — `localStorage` does
-     not exist on the server, and seeding during render would break SSR hydration. */
-  const [storedSession, setStoredSession] = useState<UserInfo | null>(null);
-  useEffect(() => {
-    const reread = () => setStoredSession(readUserInfo() as unknown as UserInfo | null);
-    reread();
-    window.addEventListener('user_info_updated', reread);
-    return () => window.removeEventListener('user_info_updated', reread);
-  }, []);
+  const { user: storedUser, token } = useSession();
+  const storedSession = storedUser as unknown as UserInfo | null;
+  const [sessionEpoch, setSessionEpoch] = useState(0);
 
-  const token = storedSession?.token ?? null;
+  /* Clear account-owned state before the next render, for manual logout, a 401,
+     and a change in another tab alike. Initial hydration adopts the current token
+     without remounting the public SSR content or discarding the login's warm read. */
+  useEffect(() => {
+    let previous = readToken();
+    const changed = () => {
+      const current = readUserInfo();
+      const next = current?.token ?? null;
+      if (previous !== next && previous !== null) {
+        clearAllResources();
+        clearScreenState();
+        clearSnapshots();
+        setSessionEpoch((epoch) => epoch + 1);
+      }
+      previous = next;
+      const key = current?.api_key;
+      if (typeof key === 'string' && key) localStorage.setItem(LS_KEYS.derpiApiKey, key);
+      else localStorage.removeItem(LS_KEYS.derpiApiKey);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === LS_KEYS.userInfo) changed();
+    };
+    window.addEventListener('user_info_updated', changed);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('user_info_updated', changed);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   /* Two shell reads through `lib/resource.ts`, keyed on the token string, deduplicated by
      the resource, refreshed on their own TTLs (5min session / 1min badge). Never key these
@@ -460,7 +491,6 @@ export default function AppLayout({
      *write*: the merge keeps the four fields the server does not return (token + three
      Derpibooru identifiers) and hands the rest over. Guarded on the serialised result so
      a cache hit does not set an identical object and re-render the whole shell. */
-  const mergedRef = useRef<string | null>(null);
   useEffect(() => {
     const result = session.data;
     if (!result) return;
@@ -468,14 +498,10 @@ export default function AppLayout({
        state it sets — with it in the dependency list the guard below is all that
        stands between this and a loop. */
     const stored = readUserInfo();
-    if (!stored) return;
+    if (!stored || stored.token !== token) return;
 
     if (result.kind === 'unauthorized') {
-      localStorage.removeItem(LS_KEYS.userInfo);
-      mergedRef.current = null;
-      /* Out of the effect's synchronous body, per `react-hooks/set-state-in-effect`;
-         still before paint. */
-      queueMicrotask(() => setStoredSession(null));
+      clearUserInfo(stored.token);
       return;
     }
     /* `unreadable` = a 200 with an empty body (dropped PHP session, proxy hiccup);
@@ -486,16 +512,12 @@ export default function AppLayout({
       ...stored,
       ...result.user,
       token: stored.token,
-      api_key: stored.api_key,
-      derpi_user_id: stored.derpi_user_id,
-      derpi_username: stored.derpi_username,
+      api_key: result.user.api_key ?? stored.api_key,
+      derpi_user_id: result.user.derpi_user_id ?? stored.derpi_user_id,
+      derpi_username: result.user.derpi_username ?? stored.derpi_username,
     };
-    const serialised = JSON.stringify(merged);
-    if (mergedRef.current === serialised) return;
-    mergedRef.current = serialised;
-    localStorage.setItem(LS_KEYS.userInfo, serialised);
-    setStoredSession(merged as unknown as UserInfo);
-  }, [session.data]);
+    updateUserInfo(stored.token, merged);
+  }, [session.data, token]);
 
   const userInfo = storedSession;
 
@@ -530,6 +552,9 @@ export default function AppLayout({
   };
 
   const setDrawerOpen = useCallback((next: boolean) => setIsCollapsed(!next), []);
+  const modalDrawerOpen = isOverlayDrawer && !isCollapsed;
+  useScrollLock(modalDrawerOpen);
+  useOverlayLayer(modalDrawerOpen, sidebarRef, { onClose: () => setIsCollapsed(true) });
 
 
 
@@ -538,15 +563,7 @@ export default function AppLayout({
   };
 
   const handleLogoutConfirm = () => {
-    localStorage.removeItem(LS_KEYS.userInfo);
-    /* Signing out does not reload the document, so every in-memory store must be
-       dropped by hand or the next account inherits this one's inbox: what the server
-       said, which page each screen was on, and that screen's whole render. */
-    clearAllResources();
-    clearScreenState();
-    clearSnapshots();
-    mergedRef.current = null;
-    setStoredSession(null);
+    if (token) clearUserInfo(token);
     setIsLogoutDialogOpen(false);
     router.push('/', { scroll: false });
   };
@@ -569,7 +586,7 @@ export default function AppLayout({
             These five are the app's most-used controls, alone on a 64dp coloured band;
             at 40dp with 104px of air either side they read as small glyphs rather than
             chrome. One declaration on the band rather than five on the controls. */}
-        <header className="h-16 [--touch-floor:48px] bg-primary text-on-primary flex items-center px-4 sm:px-26 shrink-0 relative z-app-bar">
+        <header inert={modalDrawerOpen || isImageDetailOpen || undefined} className="h-16 [--touch-floor:48px] bg-primary text-on-primary flex items-center px-4 sm:px-26 shrink-0 relative z-app-bar">
           {/* `IconButton variant="on-primary"`. The app bar's four controls
               were each a hand-rolled 48px box repeating the same eight classes,
               because the primitive had no variant whose focus ring survives a
@@ -684,10 +701,14 @@ export default function AppLayout({
           <aside
             ref={sidebarRef}
             id="app-sidebar"
+            role={modalDrawerOpen ? 'dialog' : undefined}
+            aria-modal={modalDrawerOpen || undefined}
+            aria-label="主导航"
+            tabIndex={-1}
             /* Hidden from assistive tech while closed, so the nav links inside
                are not reachable by Tab from behind the scrim. */
             aria-hidden={isCollapsed ? 'true' : undefined}
-            inert={isCollapsed ? true : undefined}
+            inert={isCollapsed || isImageDetailOpen || undefined}
             /* 288dp, a **deliberate divergence** from M3's 360dp navigation drawer,
                and not to be "fixed": this drawer is *docked* from `md` up, so its width
                comes out of the content area — on an image gallery those 72px are a
@@ -811,6 +832,7 @@ export default function AppLayout({
           </aside>
           <section
             data-image-detail-host
+            inert={modalDrawerOpen || undefined}
             className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface sm:m-3 sm:rounded-md"
           >
             
@@ -818,6 +840,7 @@ export default function AppLayout({
               
               <main
                 data-image-detail-background
+                inert={isImageDetailOpen || undefined}
                 data-image-hero-gallery-scroll
                 data-scroll-hidden={isImageDetailOpen || undefined}
                 className="app-scroller main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-surface"
@@ -829,7 +852,7 @@ export default function AppLayout({
                 >
                   
                   <div
-                    key={backgroundPathname}
+                    key={`${backgroundPathname}:${sessionEpoch}`}
                     data-page-content
                     className="animate-page-transition flex flex-1 flex-col p-4 sm:p-6"
                   >

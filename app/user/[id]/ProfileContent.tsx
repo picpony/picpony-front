@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
@@ -42,7 +42,7 @@ import RoleBadge from '@/components/RoleBadge';
 import Pagination from '@/components/Pagination';
 import Tabs from '@/components/Tabs';
 import PageBack from '@/components/PageBack';
-import { readToken, readUserInfo, useEscapeBack } from '@/lib/hooks';
+import { useEscapeBack, useSession } from '@/lib/hooks';
 import Skeleton from '@/components/Skeleton';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import EmptyState from '@/components/EmptyState';
@@ -94,7 +94,8 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   const router = useRouter();
   const id = params.id as string;
 
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const { user, token, ready } = useSession();
+  const currentUserId = typeof user?.id === 'number' ? user.id : null;
 
   /* Every page number survives a remount, so coming back to a profile lands on the page you left
      rather than on page 1. Scoped per profile id: two profiles are two screens that happen to
@@ -104,13 +105,6 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   const [commentsPage, setCommentsPage] = useScreenStateFor('profile:comments', id, 1);
   const [postsPage, setPostsPage] = useScreenStateFor('profile:posts', id, 1);
   const [uploadsPage, setUploadsPage] = useScreenStateFor('profile:uploads', id, 1);
-
-  useEffect(() => {
-    const user = readUserInfo();
-    if (user) queueMicrotask(() => setCurrentUserId(user.id as number));
-  }, []);
-
-  const token = readToken();
 
   /**
    * Five reads. The point is that only the favourites wait on the profile:
@@ -134,7 +128,7 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
 
   const uploadsRead = useResource(
     userUploads,
-    id && tabValue === 'uploads' ? { id, page: uploadsPage, perPage: PER_PAGE, token } : SKIP,
+    ready && id && tabValue === 'uploads' ? { id, page: uploadsPage, perPage: PER_PAGE, token } : SKIP,
     { keepPrevious: true },
   );
   const postsRead = useResource(
@@ -177,7 +171,10 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   const isUploadsLoading = uploadsRead.data === undefined;
   const isPostsLoading = postsRead.data === undefined;
   const isCommentsLoading = commentsRead.data === undefined;
-  const isFavesLoading = favesActive && faveImagesRead.data === undefined && allFaveIds.length > 0;
+  const isFavesLoading = favesActive && (
+    faveIdsRead.data === undefined || (faveImagesRead.data === undefined && allFaveIds.length > 0)
+  );
+  const favesError = faveIdsRead.error ?? faveImagesRead.error;
 
   const isLoading = profileRead.data === undefined && profileRead.error === undefined;
   const error = profileRead.error
@@ -497,7 +494,9 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
               detached nodes. The primitive defaults it off, which is correct here. */}
           <TabPanes value={tabValue}>
             <TabPane value="uploads">
-              {isUploadsLoading ? (
+              {uploadsRead.error ? (
+                <ErrorRetry size="pane" title="上传记录加载失败" onRetry={uploadsRead.refresh} />
+              ) : isUploadsLoading ? (
                 /* `PER_PAGE`, the number the request actually asks for: a full page is
                    12, so an 8-row placeholder left the pane growing by one row after the
                    tab switch had visibly finished. */
@@ -560,7 +559,13 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
             </TabPane>
 
             <TabPane value="faves">
-              {isFavesLoading && faveImages.length === 0 ? (
+              {favesError ? (
+                <ErrorRetry
+                  size="pane"
+                  title="收藏加载失败"
+                  onRetry={faveIdsRead.error ? faveIdsRead.refresh : faveImagesRead.refresh}
+                />
+              ) : isFavesLoading && faveImages.length === 0 ? (
                 /* Same page size as the request — see the uploads pane. */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {Array.from({ length: PER_PAGE }).map((_, i) => (
@@ -617,7 +622,9 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
 
             <TabPane value="posts">
               {' '}
-              {isPostsLoading ? (
+              {postsRead.error ? (
+                <ErrorRetry size="pane" title="帖子加载失败" onRetry={postsRead.refresh} />
+              ) : isPostsLoading ? (
                 /* The card these stand in for: 12px rhythm, 56px cover thumbnail,
                    two-line title. The placeholder must match the real card's geometry or
                    the list re-spaces the moment the posts land — the one thing a skeleton
@@ -713,7 +720,9 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
 
             <TabPane value="comments">
               {' '}
-              {isCommentsLoading ? (
+              {commentsRead.error ? (
+                <ErrorRetry size="pane" title="评论加载失败" onRetry={commentsRead.refresh} />
+              ) : isCommentsLoading ? (
                 /* The card these stand in for: 12px rhythm, 56px cover thumbnail,
                    two-line title. The placeholder must match the real card's geometry or
                    the list re-spaces the moment the posts land — the one thing a skeleton

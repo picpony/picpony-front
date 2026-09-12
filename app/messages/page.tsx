@@ -53,7 +53,7 @@ import ErrorRetry from '@/components/ErrorRetry';
 const Sheet = dynamic(() => import('@/components/Sheet'), { ssr: false });
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { readSnapshot, writeSnapshot } from '@/lib/pageCache';
-import { readToken, readUserInfo, useEscapeBack, useMediaQuery } from '@/lib/hooks';
+import { readToken, useEscapeBack, useMediaQuery, useSession } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import Popover from '@/components/Popover';
@@ -84,7 +84,7 @@ interface MessagesSnapshot {
   contacts: Contact[];
 }
 
-const MESSAGES_KEY = 'messages';
+type RequestKind = MessagesTab | 'thread' | 'send' | 'target' | 'emoji';
 
 /**
  * The 系统 and 互动 tabs, which were ~50 lines of identical markup each — a change to
@@ -283,10 +283,19 @@ const COMPOSER_MAX_HEIGHT_PX = 160;
 const EMOJI_MARKER = /(\$emoji_[a-zA-Z0-9_]+\$)/g;
 
 export default function MessagesPage() {
+  const { token, ready } = useSession();
+  if (!ready) return <MessageRowsSkeleton />;
+  /* Remount synchronously when the account changes: no private pane, draft or contact
+     from the previous session can survive even the render before effect cleanup. */
+  return <MessagesContent key={token ?? 'anonymous'} token={token} />;
+}
+
+function MessagesContent({ token }: { token: string | null }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const toUserIdParam = searchParams.get('to');
-  const snapshot = useState(() => readSnapshot<MessagesSnapshot>(MESSAGES_KEY))[0];
+  const snapshotKey = `messages:${token ?? 'anonymous'}`;
+  const snapshot = useState(() => readSnapshot<MessagesSnapshot>(snapshotKey))[0];
   const [activeTab, setActiveTab] = useState<MessagesTab>(snapshot?.value.tab ?? 'announcement');
   const [announcements, setAnnouncements] = useState<Announcement[]>(
     snapshot?.value.announcements ?? [],
@@ -301,6 +310,18 @@ export default function MessagesPage() {
      people forget they collapsed. */
   const [contactsCollapsed, setContactsCollapsed] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const selectedContactId = useRef<number | null>(null);
+  const lifetime = useRef(0);
+  const requests = useRef<Record<RequestKind, number>>({
+    announcement: 0, notification: 0, interaction: 0, chat: 0,
+    thread: 0, send: 0, target: 0, emoji: 0,
+  });
+  useEffect(() => () => { lifetime.current += 1; }, []);
+  const beginRequest = useCallback((kind: RequestKind) => {
+    const run = ++requests.current[kind];
+    const epoch = lifetime.current;
+    return () => lifetime.current === epoch && requests.current[kind] === run && readToken() === token;
+  }, [token]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   /* One `loading` and one `error` per tab, not one for the page. A shared pair, with the
@@ -324,11 +345,26 @@ export default function MessagesPage() {
   }, []);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const sendPending = useRef(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   /* One-way: once the sheet has been opened it stays mounted, so its exit animation has
      something to run on. See the note on the import. */
   const [emojiSheetMounted, setEmojiSheetMounted] = useState(false);
   const [emojiList, setEmojiList] = useState<string[]>([]);
+  const selectContact = useCallback((contact: Contact | null) => {
+    requests.current.target += 1;
+    if (selectedContactId.current === (contact?.id ?? null)) return;
+    selectedContactId.current = contact?.id ?? null;
+    requests.current.thread += 1;
+    requests.current.send += 1;
+    sendPending.current = false;
+    setSelectedContact(contact);
+    setMessages([]);
+    setLoadingMessages(Boolean(contact));
+    setSending(false);
+    setNewMessage('');
+    setShowEmojiPicker(false);
+  }, []);
   const [interactionNotifications, setInteractionNotifications] = useState<Notification[]>(
     snapshot?.value.interactions ?? [],
   );
@@ -383,7 +419,6 @@ export default function MessagesPage() {
      server-side, which is why the loaders below still force a re-read — but one request
      now updates both, where the old arrangement fetched here, dispatched an event, and
      made the shell fetch it again to learn the same number. */
-  const token = readToken();
   const unreadRead = useResource(unreadCountsResource, token ? { token } : SKIP);
   const unreadCounts = useMemo(
     () => ({
@@ -395,37 +430,44 @@ export default function MessagesPage() {
   );
 
   const fetchUnreadCounts = useCallback(async () => {
-    if (!token) return;
+    if (!token || readToken() !== token) return;
     await unreadCountsResource.read({ token }, { force: true }).catch(() => {});
   }, [token]);
 
   useEffect(() => {
+    const isCurrent = beginRequest('emoji');
     const loadEmojis = async () => {
-      const emojis = await getEmojis();
-      setEmojiList(emojis);
+      try {
+        const emojis = await getEmojis();
+        if (isCurrent()) setEmojiList(emojis);
+      } catch {
+        /* Emoji are optional; text composition remains available offline. */
+      }
     };
-    loadEmojis();
-  }, []);
+    void loadEmojis();
+  }, [beginRequest]);
 
   useEffect(() => {
     if (!toUserIdParam) return;
 
     const targetId = parseInt(toUserIdParam, 10);
-    if (isNaN(targetId)) return;
+    if (!Number.isSafeInteger(targetId) || targetId <= 0 || !token) return;
+    const isCurrent = beginRequest('target');
+    const requestGenerations = requests.current;
 
-    queueMicrotask(() => setActiveTab('chat'));
+    queueMicrotask(() => { if (isCurrent()) setActiveTab('chat'); });
 
     const timer = setTimeout(async () => {
+      if (!isCurrent()) return;
       const existing = contacts.find((c) => c.id === targetId);
       if (existing) {
-        setSelectedContact(existing);
+        selectContact(existing);
         return;
       }
 
       try {
-        if (!readUserInfo()) return;
-
         const res = await api.getUserProfile(String(targetId));
+        if (!isCurrent()) return;
         if (res.success && res.user) {
           const tempContact = {
             id: targetId,
@@ -438,17 +480,20 @@ export default function MessagesPage() {
             if (prev.some((c) => c.id === targetId)) return prev;
             return [tempContact, ...prev];
           });
-          setSelectedContact(tempContact);
+          selectContact(tempContact);
         }
       } catch (err) {
-        console.error('获取用户信息失败', err);
+        if (isCurrent()) console.error('获取用户信息失败', err);
       }
     }, 500);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      requestGenerations.target += 1;
+    };
     // contacts intentionally omitted: only re-run when deep-link target changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toUserIdParam]);
+  }, [toUserIdParam, token, beginRequest, selectContact]);
 
   /* `Popover` (desktop) and `Sheet` (phone) both hold themselves in the tree until their
      own exit has played, so closing is a plain state flip — this used to be a manual
@@ -462,11 +507,11 @@ export default function MessagesPage() {
      forum post played that down-move onto something not below it. */
   const handleBack = useCallback(() => {
     if (selectedContact) {
-      setSelectedContact(null);
+      selectContact(null);
       return;
     }
     router.push('/', { scroll: false });
-  }, [router, selectedContact]);
+  }, [router, selectedContact, selectContact]);
 
   /* Escape leaves the page. Stood down with the emoji picker open — that is the nearer
      thing to dismiss. Inside a conversation `handleBack` already backs out to the
@@ -486,9 +531,12 @@ export default function MessagesPage() {
      only its own tab's state — see `paneState`. */
   const fetchAnnouncements = useCallback(
     async (silent = false) => {
+      const isCurrent = beginRequest('announcement');
+      if (!isCurrent()) return;
       if (!silent) setPane('announcement', { loading: true, error: null });
       try {
         const data = await api.getAnnouncementHistory();
+        if (!isCurrent()) return;
         if (data.success) {
           shown.current.add('announcement');
           setAnnouncements(data.announcements);
@@ -496,25 +544,28 @@ export default function MessagesPage() {
           setPane('announcement', { error: '获取公告失败' });
         }
       } catch (err) {
+        if (!isCurrent()) return;
         if (!silent) setPane('announcement', { error: '网络请求失败' });
         console.error(err);
       } finally {
-        if (!silent) setPane('announcement', { loading: false });
+        if (isCurrent()) setPane('announcement', { loading: false });
       }
     },
-    [setPane],
+    [beginRequest, setPane],
   );
 
   const fetchNotifications = useCallback(
     async (silent = false) => {
+      const isCurrent = beginRequest('notification');
+      if (!isCurrent()) return;
       if (!silent) setPane('notification', { loading: true, error: null });
       try {
-        const user = readUserInfo();
-        if (!user) {
+        if (!token) {
           if (!silent) setPane('notification', { error: '请先登录' });
           return;
         }
-        const data = await api.getNotifications(user.token);
+        const data = await api.getNotifications(token);
+        if (!isCurrent()) return;
         if (data.success) {
           shown.current.add('notification');
           setNotifications(data.notifications);
@@ -523,25 +574,28 @@ export default function MessagesPage() {
           setPane('notification', { error: '获取通知失败' });
         }
       } catch (err) {
+        if (!isCurrent()) return;
         if (!silent) setPane('notification', { error: '网络请求失败' });
         console.error(err);
       } finally {
-        if (!silent) setPane('notification', { loading: false });
+        if (isCurrent()) setPane('notification', { loading: false });
       }
     },
-    [fetchUnreadCounts, setPane],
+    [token, beginRequest, fetchUnreadCounts, setPane],
   );
 
   const fetchInteractionNotifications = useCallback(
     async (page: number = 1, silent = false) => {
+      const isCurrent = beginRequest('interaction');
+      if (!isCurrent()) return;
       if (!silent) setPane('interaction', { loading: true, error: null });
       try {
-        const user = readUserInfo();
-        if (!user) {
+        if (!token) {
           if (!silent) setPane('interaction', { error: '请先登录' });
           return;
         }
-        const data = await api.getInteractionNotifications(user.token, page);
+        const data = await api.getInteractionNotifications(token, page);
+        if (!isCurrent()) return;
         if (data.success) {
           shown.current.add('interaction');
           setInteractionNotifications(data.notifications);
@@ -552,25 +606,28 @@ export default function MessagesPage() {
           setPane('interaction', { error: '获取互动通知失败' });
         }
       } catch (err) {
+        if (!isCurrent()) return;
         if (!silent) setPane('interaction', { error: '网络请求失败' });
         console.error(err);
       } finally {
-        if (!silent) setPane('interaction', { loading: false });
+        if (isCurrent()) setPane('interaction', { loading: false });
       }
     },
-    [fetchUnreadCounts, setPane],
+    [token, beginRequest, fetchUnreadCounts, setPane],
   );
 
   const fetchContacts = useCallback(
     async (silent = false) => {
+      const isCurrent = beginRequest('chat');
+      if (!isCurrent()) return;
       if (!silent) setPane('chat', { loading: true, error: null });
       try {
-        const user = readUserInfo();
-        if (!user) {
+        if (!token) {
           if (!silent) setPane('chat', { error: '请先登录' });
           return;
         }
-        const data = await api.getRecentContacts(user.token);
+        const data = await api.getRecentContacts(token);
+        if (!isCurrent()) return;
         if (data.success) {
           shown.current.add('chat');
           setContacts(data.contacts);
@@ -578,22 +635,25 @@ export default function MessagesPage() {
           setPane('chat', { error: '获取联系人失败' });
         }
       } catch (err) {
+        if (!isCurrent()) return;
         if (!silent) setPane('chat', { error: '网络请求失败' });
         console.error(err);
       } finally {
-        if (!silent) setPane('chat', { loading: false });
+        if (isCurrent()) setPane('chat', { loading: false });
       }
     },
-    [setPane],
+    [token, beginRequest, setPane],
   );
 
   const fetchMessages = useCallback(
     async (contactId: number, silent = false) => {
+      if (!token || selectedContactId.current !== contactId || readToken() !== token) return;
+      const requestIsCurrent = beginRequest('thread');
+      const isCurrent = () => requestIsCurrent() && selectedContactId.current === contactId;
       if (!silent) setLoadingMessages(true);
       try {
-        const user = readUserInfo();
-        if (!user) return;
-        const data = await api.getMessages(user.token, contactId);
+        const data = await api.getMessages(token, contactId);
+        if (!isCurrent()) return;
         if (data.success) {
           setMessages(data.messages);
           fetchUnreadCounts();
@@ -606,14 +666,15 @@ export default function MessagesPage() {
           showToast('聊天记录加载失败', 'error');
         }
       } catch (err) {
+        if (!isCurrent()) return;
         console.error('获取聊天记录失败', err);
         setMessages([]);
         showToast('网络错误，请稍后再试', 'error');
       } finally {
-        setLoadingMessages(false);
+        if (isCurrent()) setLoadingMessages(false);
       }
     },
-    [fetchUnreadCounts, fetchContacts],
+    [token, beginRequest, fetchUnreadCounts, fetchContacts],
   );
 
   useEffect(() => {
@@ -624,7 +685,9 @@ export default function MessagesPage() {
        refreshes silently, and never clears `loading` — a permanent skeleton. */
     const silent = shown.current.has(activeTab);
     // Defer so loaders' sync setState is not in the effect body
+    let cancelled = false;
     queueMicrotask(() => {
+      if (cancelled || readToken() !== token) return;
       if (activeTab === 'announcement') {
         void fetchAnnouncements(silent);
       } else if (activeTab === 'notification') {
@@ -635,7 +698,9 @@ export default function MessagesPage() {
         void fetchContacts(silent);
       }
     });
+    return () => { cancelled = true; };
   }, [
+    token,
     activeTab,
     fetchAnnouncements,
     fetchNotifications,
@@ -650,8 +715,8 @@ export default function MessagesPage() {
      reopen on. */
   const activePane = paneState[activeTab];
   useEffect(() => {
-    if (activePane.loading || activePane.error) return;
-    writeSnapshot<MessagesSnapshot>(MESSAGES_KEY, {
+    if (activePane.loading || activePane.error || readToken() !== token) return;
+    writeSnapshot<MessagesSnapshot>(snapshotKey, {
       tab: activeTab,
       announcements,
       notifications,
@@ -661,6 +726,8 @@ export default function MessagesPage() {
       contacts,
     });
   }, [
+    snapshotKey,
+    token,
     activePane.loading,
     activePane.error,
     activeTab,
@@ -673,30 +740,39 @@ export default function MessagesPage() {
   ]);
 
   useEffect(() => {
+    let cancelled = false;
+    const requestGenerations = requests.current;
     if (selectedContact) {
       queueMicrotask(() => {
-        void fetchMessages(selectedContact.id);
+        if (!cancelled) void fetchMessages(selectedContact.id);
       });
     }
+    return () => {
+      cancelled = true;
+      requestGenerations.thread += 1;
+    };
   }, [selectedContact, fetchMessages]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedContact || sending) return;
-
+    if (!newMessage.trim() || !selectedContact || sending || sendPending.current) return;
+    if (!token || readToken() !== token) {
+      showToast('请先登录', 'error');
+      return;
+    }
+    const contactId = selectedContact.id;
+    const sentText = newMessage.trim();
+    const requestIsCurrent = beginRequest('send');
+    const isCurrent = () => requestIsCurrent() && selectedContactId.current === contactId;
+    sendPending.current = true;
     setSending(true);
     try {
-      const user = readUserInfo();
-      if (!user) {
-        showToast('请先登录', 'error');
-        return;
-      }
-
-      const res = await api.sendMessage(user.token, selectedContact.id, newMessage.trim());
+      const res = await api.sendMessage(token, contactId, sentText);
       const data = await res.json();
+      if (!isCurrent()) return;
 
       if (data.success) {
-        setNewMessage('');
-        fetchMessages(selectedContact.id, true);
+        setNewMessage((current) => current.trim() === sentText ? '' : current);
+        void fetchMessages(contactId, true);
       } else {
         /* Both failure paths used to stop silently at `console.error` — no toast, nothing
            in the thread; the user had no way to tell whether it had been sent. The typed
@@ -704,10 +780,14 @@ export default function MessagesPage() {
         showToast(data.message || '发送失败，请重试', 'error');
       }
     } catch (err) {
+      if (!isCurrent()) return;
       console.error('发送消息出错:', err);
       showToast('网络错误，请稍后再试', 'error');
     } finally {
-      setSending(false);
+      if (isCurrent()) {
+        sendPending.current = false;
+        setSending(false);
+      }
     }
   };
 
@@ -734,7 +814,10 @@ export default function MessagesPage() {
         newMessage.substring(0, startPos) + emojiPlaceholder + newMessage.substring(endPos);
       setNewMessage(newValue);
 
+      const epoch = lifetime.current;
+      const contactId = selectedContactId.current;
       setTimeout(() => {
+        if (lifetime.current !== epoch || readToken() !== token || selectedContactId.current !== contactId) return;
         input.focus();
         input.setSelectionRange(
           startPos + emojiPlaceholder.length,
@@ -1155,7 +1238,7 @@ export default function MessagesPage() {
                         <button
                           key={contact.id}
                           type="button"
-                          onClick={() => setSelectedContact(contact)}
+                          onClick={() => selectContact(contact)}
                           aria-current={active ? 'true' : undefined}
                           aria-label={contactsCollapsed ? contact.username : undefined}
                           data-ripple
@@ -1241,7 +1324,7 @@ export default function MessagesPage() {
                   <>
                     <div className="bg-surface-container flex min-w-0 items-center gap-3 p-3 sm:p-4">
                       <IconButton
-                        onClick={() => setSelectedContact(null)}
+                        onClick={() => selectContact(null)}
                         aria-label="返回联系人列表"
                         icon={<MdArrowBack size={ICON.control} />}
                         className="md:hidden"

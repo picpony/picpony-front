@@ -6,11 +6,11 @@ import { MdClose } from 'react-icons/md';
 import IconButton from './IconButton';
 import { cn } from '@/lib/utils';
 import {
-  useEscapeToClose,
   useExitAnimation,
-  useFocusTrap,
+  useOverlayLayer,
   useMounted,
   useScrollLock,
+  OverlayLayerContext,
 } from '@/lib/overlay';
 import { ICON } from '@/lib/icons';
 
@@ -18,6 +18,8 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
+  /** A surface with its own visible heading still needs a dialog name. */
+  'aria-label'?: string;
   children: React.ReactNode;
   /**
    * The panel's width cap, as a closed set rather than any Tailwind class.
@@ -71,6 +73,7 @@ export default function Modal({
   isOpen,
   onClose,
   title,
+  'aria-label': ariaLabel,
   children,
   maxWidth = 'md',
   hideCloseButton = false,
@@ -86,15 +89,18 @@ export default function Modal({
   const titleId = useId();
 
   useScrollLock(isOpen);
-  useFocusTrap(isOpen, panelRef);
-  useEscapeToClose(isOpen, onClose, closeOnEscape);
+  const layer = useOverlayLayer(isOpen && mounted && rendering, panelRef, { onClose, closeOnEscape });
 
   const handleClose = useCallback(() => onClose(), [onClose]);
 
   if (!mounted || !rendering) return null;
 
   return createPortal(
+    <OverlayLayerContext.Provider value={layer}>
     <div
+      // Portals can mount child-first, so DOM insertion order cannot decide
+      // which of two nested dialogs paints above the other.
+      style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
       className={cn(
         'fixed inset-0 flex items-center justify-center p-4 sm:p-6',
         'bg-scrim-veil',
@@ -117,6 +123,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : (ariaLabel ?? '对话框')}
         tabIndex={-1}
         className={cn(
           'flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden outline-none',
@@ -168,7 +175,8 @@ export default function Modal({
           <div className="flex shrink-0 flex-wrap justify-end gap-3 px-6 pb-6">{footer}</div>
         )}
       </div>
-    </div>,
+    </div>
+    </OverlayLayerContext.Provider>,
     document.body,
   );
 }

@@ -33,9 +33,10 @@ export async function register(data: Record<string, unknown>) {
   });
 }
 
-export async function getUser(token: string) {
+export async function getUser(token: string, signal?: AbortSignal) {
   return fetch(`${PICPONY_API_BASE}?action=get_user`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
 }
 

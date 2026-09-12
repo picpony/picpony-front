@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
   /**
    * Automatic memoisation. Enabled last on purpose, so anything it breaks is attributable to it.
    *
-   * Risk surface: three render-phase writes exist on purpose and are guarded by *identity*
+   * Risk surface: render-phase writes exist on purpose and are guarded by *identity*
    * comparisons (`lib/resource.ts`'s `setRetained`, `AppLayout`'s drawer state) — a memoised
    * snapshot that changed identity for an unchanged value would loop. And `useGSAP`'s
    * `dependencies` is a runtime argument the compiler does not model while still memoising the

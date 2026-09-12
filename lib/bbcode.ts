@@ -1,3 +1,5 @@
+import { getAssetUrl } from '@/lib/utils';
+
 export function escapeHTML(str: string): string {
   if (!str) return '';
   return String(str)
@@ -10,14 +12,13 @@ export function escapeHTML(str: string): string {
 
 /* `escapeHTML` alone is not enough for a value landing in an `href` or a `style`:
  * it leaves `;` and `:` untouched, so `[color=red;position:fixed]` is an injection.
- * Both converters interpolate BBCode attributes into exactly those two places, so
- * these validators sit next to it — defined once, so it cannot be fixed in one
- * copy and forgotten in the other. */
+ * URL schemes and CSS values are validated first, then escaped at their HTML
+ * attribute sink by the shared renderer below. */
 
 /** Allowlists the URL schemes that are safe in an `href`. Returns null to drop. */
 export function safeUrl(raw: string): string | null {
   /* Browsers ignore tabs and newlines *inside* a URL before resolving the
-     scheme, so `java&#9;script:` executes: strip anything ignorable before
+     scheme, so `java\tscript:` executes: strip anything ignorable before
      testing, and return the stripped form, or the browser would still see
      the original. */
   const url = raw.trim().replace(/[\s\x00-\x1F\x7F]/g, '');
@@ -71,7 +72,9 @@ export function htmlToBBCode(html: string | null | undefined): string {
 
     switch (tag) {
       case 'p':
-        return content + '\n';
+        // The shared renderer treats one newline as <br> and two as a paragraph
+        // boundary. Editor <p> siblings must remain separate after a round trip.
+        return content + '\n\n';
       case 'br':
         return '\n';
       case 'strong':
@@ -117,6 +120,17 @@ export function htmlToBBCode(html: string | null | undefined): string {
         return `[code]${content}[/code]\n`;
       case 'a':
         return `[url=${el.getAttribute('href')}]${content}[/url]`;
+      case 'h1':
+      case 'h2':
+      case 'h3':
+      case 'h4':
+      case 'h5':
+      case 'h6':
+      case 'table':
+      case 'tr':
+      case 'td':
+      case 'th':
+        return `[${tag}]${content}[/${tag}]`;
       default:
         return content;
     }
@@ -127,61 +141,210 @@ export function htmlToBBCode(html: string | null | undefined): string {
     .replace(/\n{3,}/g, '\n\n');
 }
 
+interface BBElement {
+  tag: string;
+  parameter?: string;
+  opening: string;
+  children: BBNode[];
+  closed: boolean;
+}
+type BBNode = string | BBElement;
+type Piece = { kind: 'inline' | 'block' | 'paragraph'; html: string };
+
+const TAGS = new Set([
+  'b', 'i', 'u', 's', 'color', 'center', 'url', 'quote', 'code', 'img', 'list',
+  'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'table', 'tr', 'td', 'th',
+]);
+
+/** Parse only the author's source. Generated HTML is never fed back through a
+ *  BBCode replacement: an [url] inside an [img] used to escape its src attribute
+ *  when the later replacement injected an <a> into an already-generated tag.
+ *  Code, image URLs and bare links are literal leaves, even when they contain
+ *  BBCode. Depth is bounded so adversarial nesting cannot exhaust the stack. */
+function parseBBCode(source: string): BBNode[] {
+  const root: BBElement = { tag: '', opening: '', children: [], closed: true };
+  const stack = [root];
+  const tokens = /\[(\/?)([a-z][a-z0-9]*|\*)(?:=([^\]\r\n]*))?\]/gi;
+  let cursor = 0;
+  for (const match of source.matchAll(tokens)) {
+    let parent = stack[stack.length - 1];
+    if (match.index > cursor) parent.children.push(source.slice(cursor, match.index));
+    cursor = match.index + match[0].length;
+    const [, closing, name, parameter] = match;
+    const tag = name.toLowerCase();
+    const literal = parent.tag === 'code' || parent.tag === 'img' ||
+      (parent.tag === 'url' && parent.parameter === undefined);
+    if (literal) {
+      if (closing && tag === parent.tag && parameter === undefined) {
+        parent.closed = true;
+        stack.pop();
+      } else {
+        parent.children.push(match[0]);
+      }
+      continue;
+    }
+    if (!closing && tag === 'br' && parameter === undefined) {
+      parent.children.push({ tag, opening: match[0], children: [], closed: true });
+      continue;
+    }
+    if (!closing && tag === '*' && parameter === undefined) {
+      const listIndex = stack.findLastIndex((node) => node.tag === 'list');
+      if (listIndex > 0) {
+        stack.length = listIndex + 1;
+        parent = stack[listIndex];
+        const item: BBElement = { tag: 'li', opening: '', children: [], closed: true };
+        parent.children.push(item);
+        stack.push(item);
+      } else {
+        parent.children.push(match[0]);
+      }
+      continue;
+    }
+    if (!TAGS.has(tag) || (parameter !== undefined &&
+      !['color', 'url', 'quote', 'list'].includes(tag))) {
+      parent.children.push(match[0]);
+      continue;
+    }
+    if (closing) {
+      const index = parameter === undefined ? stack.findLastIndex((node) => node.tag === tag) : -1;
+      if (index > 0) {
+        stack[index].closed = true;
+        stack.length = index;
+      } else {
+        parent.children.push(match[0]);
+      }
+      continue;
+    }
+    if (stack.length >= 128) {
+      parent.children.push(match[0]);
+      continue;
+    }
+    const node: BBElement = { tag, parameter, opening: match[0], children: [], closed: false };
+    parent.children.push(node);
+    stack.push(node);
+  }
+  if (cursor < source.length) stack[stack.length - 1].children.push(source.slice(cursor));
+  return root.children;
+}
+
+function textPieces(text: string): Piece[] {
+  return text.split(/(\n[ \t]*\n+)/).map((part, index) => index % 2
+    ? { kind: 'paragraph', html: '' }
+    : { kind: 'inline', html: escapeHTML(part).replace(/\n/g, '<br />') });
+}
+
+/** Keep paragraph boundaries outside inline wrappers, and block elements outside
+ *  <p>. In particular, a code block's own newlines never become HTML breaks. */
+function flow(pieces: Piece[], paragraphs = true): string {
+  let output = '';
+  let run = '';
+  const flush = () => {
+    const body = run.replace(/^(?:\s|<br \/>)+|(?:\s|<br \/>)+$/g, '');
+    if (body) output += paragraphs ? `<p>${body}</p>` : body;
+    run = '';
+  };
+  for (const piece of pieces) {
+    if (piece.kind === 'inline') run += piece.html;
+    else {
+      flush();
+      if (piece.kind === 'block') output += piece.html;
+      else if (!paragraphs) output += '<br /><br />';
+    }
+  }
+  flush();
+  return output;
+}
+
+function wrapInline(pieces: Piece[], open: string, close: string, links = false): Piece[] {
+  const result: Piece[] = [];
+  let run = '';
+  const flush = () => {
+    if (run) result.push({ kind: 'inline', html: open + run + close });
+    run = '';
+  };
+  for (const piece of pieces) {
+    if (piece.kind === 'inline') run += piece.html;
+    else {
+      flush();
+      result.push(links && piece.kind === 'block'
+        ? { kind: 'block', html: open + piece.html + close }
+        : piece);
+    }
+  }
+  flush();
+  return result;
+}
+
+function renderNodes(nodes: BBNode[], inLink = false, editor = false): Piece[] {
+  return nodes.flatMap((node): Piece[] => {
+    if (typeof node === 'string') return textPieces(node);
+    if (!node.closed) return [...textPieces(node.opening), ...renderNodes(node.children, inLink, editor)];
+    const { tag, parameter, children } = node;
+    if (tag === 'br') return [{ kind: 'inline', html: '<br />' }];
+    if (tag === 'code') {
+      return [{ kind: 'block', html: `<pre><code>${escapeHTML(children.join(''))}</code></pre>` }];
+    }
+    if (tag === 'img') {
+      const url = safeUrl(children.join(''));
+      const src = url && safeUrl(getAssetUrl(url));
+      return src ? [{ kind: 'block', html: `<img src="${escapeHTML(src)}" alt="" loading="lazy" />` }] : [];
+    }
+    if (tag === 'url') {
+      const bare = parameter === undefined;
+      const url = safeUrl(bare ? children.join('') : parameter);
+      const content = bare ? textPieces(children.join('')) : renderNodes(children, true, editor);
+      if (!url || inLink) return content;
+      return wrapInline(content, `<a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">`, '</a>', true);
+    }
+    const content = tag === 'list' ? [] : renderNodes(children, inLink, editor);
+    if (tag === 'color') {
+      const color = safeColor(parameter || '');
+      return color ? wrapInline(content, `<span style="color:${escapeHTML(color)};">`, '</span>') : content;
+    }
+    const inlineTag = ({ b: 'strong', i: 'em', u: 'u', s: 's', span: 'span' } as Record<string, string>)[tag];
+    if (inlineTag) return wrapInline(content, `<${inlineTag}>`, `</${inlineTag}>`);
+    if (tag === 'quote') {
+      const who = parameter?.replace(/^"|"$/g, '').trim();
+      /* wangEditor's existing quote parser accepts inline content. A nested <p>
+         makes it flatten the whole blockquote, concatenating <cite> into the
+         body. Keep its supported shape while the published view retains real
+         paragraphs. The editor still does not preserve citation metadata. */
+      return [{ kind: 'block', html: `<blockquote>${who ? `<cite>${escapeHTML(who)}</cite>` : ''}${flow(content, !editor)}</blockquote>` }];
+    }
+    if (tag === 'list') {
+      const listTag = parameter === '1' ? 'ol' : 'ul';
+      // Only items may be direct list children; preserve any text before [*].
+      const items = children.flatMap((child) => {
+        if (typeof child === 'string' && !child.trim()) return [];
+        const rendered = flow(renderNodes([child], inLink, editor), false);
+        return [typeof child !== 'string' && child.tag === 'li'
+          ? rendered : `<li>${rendered}</li>`];
+      }).join('');
+      return [{ kind: 'block', html: `<${listTag}>${items}</${listTag}>` }];
+    }
+    if (tag === 'table') {
+      return [{ kind: 'block', html: `<div class="popover-scrollbar overflow-x-auto"><table>${flow(content, false)}</table></div>` }];
+    }
+    if (tag === 'center') return [{ kind: 'block', html: `<div style="text-align:center;">${flow(content)}</div>` }];
+    if (tag === 'p' || /^h[1-6]$/.test(tag)) {
+      // Malformed input can place blocks inside a paragraph/heading. Lift those
+      // blocks out rather than relying on the browser to repair nested <p>s.
+      return wrapInline(content, `<${tag}>`, `</${tag}>`).map((piece) =>
+        piece.kind === 'inline' ? { kind: 'block', html: piece.html } : piece);
+    }
+    return [{ kind: 'block', html: `<${tag}>${flow(content, tag === 'div')}</${tag}>` }];
+  });
+}
+
+/** Both presentations share parsing, URL validation and every escaping boundary. */
+function renderBBCode(bbcode: string | null | undefined, editor: boolean): string {
+  return bbcode ? flow(renderNodes(parseBBCode(bbcode.replace(/\r\n?/g, '\n')), false, editor)) : '';
+}
+
+export function bbcodeToSafeHtml(bbcode: string | null | undefined): string {
+  return renderBBCode(bbcode, false);
+}
+
 export function bbcodeToHtml(bbcode: string | null | undefined): string {
-  if (!bbcode) return '<p><br></p>';
-
-  let html = escapeHTML(bbcode);
-
-  html = html.replace(/\[img\](.*?)\[\/img\]/gi, (_m, url: string) => {
-    const src = safeUrl(url);
-    /* `alt=""`, not a missing attribute: an `<img>` with no `alt` at all is read
-       out by its URL, while empty marks it decorative (a BBCode image carries no
-       description). `loading="lazy"` because a forum post can hold a dozen. */
-    return src ? `<img src="${src}" alt="" loading="lazy" style="max-width:100%;" />` : '';
-  });
-  html = html.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
-  html = html.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
-  html = html.replace(
-    /\[u\]([\s\S]*?)\[\/u\]/gi,
-    '<span style="text-decoration:underline;">$1</span>',
-  );
-  html = html.replace(/\[s\]([\s\S]*?)\[\/s\]/gi, '<strike>$1</strike>');
-  /* `safeColor`, not `$1`: `;` and `:` survive `escapeHTML`, so an unvalidated
-     capture let a post body inject arbitrary declarations into this `style`. */
-  html = html.replace(/\[color=(.*?)\]([\s\S]*?)\[\/color\]/gi, (_m, c: string, text: string) => {
-    const color = safeColor(c);
-    return color ? `<span style="color:${color};">${text}</span>` : text;
-  });
-  html = html.replace(
-    /\[center\]([\s\S]*?)\[\/center\]/gi,
-    '<div style="text-align:center;">$1</div>',
-  );
-  /* `safeUrl` blocks `javascript:`, and `rel` must match `BBCodeRenderer` so a
-     link is tabnabbing-safe in a thread and in the editor's preview alike. */
-  html = html.replace(/\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi, (_m, href: string, text: string) => {
-    const url = safeUrl(href);
-    return url
-      ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`
-      : text;
-  });
-  /* Named quotes first, or the bare-quote pattern below matches the same span
-     and leaves `="username"` stranded as literal text. The attribute is already
-     `&quot;`-escaped by `escapeHTML` above, and the two converters have to agree
-     on the tag set or a post renders one way in a thread and another in the editor. */
-  html = html.replace(
-    /\[quote=&quot;(.*?)&quot;\]([\s\S]*?)\[\/quote\]/gi,
-    (_m, who: string, text: string) =>
-      `<blockquote><cite>${who.trim()}</cite>${text.trim()}</blockquote>`,
-  );
-  html = html.replace(/\[quote\]([\s\S]*?)\[\/quote\]/gi, '<blockquote>$1</blockquote>');
-  html = html.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, '<pre><code>$1</code></pre>');
-  html = html.replace(/\[list\]([\s\S]*?)\[\/list\]/gi, '<ul>$1</ul>');
-  html = html.replace(/\[list=1\]([\s\S]*?)\[\/list\]/gi, '<ol>$1</ol>');
-  html = html.replace(/\[\*\] /gi, '<li>');
-  html = html.replace(/\[\*\]([\s\S]*?)(?=\[\*\]|\[\/list\]|$)/gi, '<li>$1</li>');
-
-  const paragraphs = html.split('\n').filter((line) => line.trim() !== '');
-  if (paragraphs.length === 0) return '<p><br></p>';
-
-  return `<p>${paragraphs.join('</p><p>')}</p>`;
+  return renderBBCode(bbcode, true) || '<p><br></p>';
 }

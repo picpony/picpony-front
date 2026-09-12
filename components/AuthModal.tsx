@@ -24,7 +24,7 @@ import { showToast } from './Toast';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { sessionUser } from '@/lib/resources';
-import { LS_KEYS } from '@/lib/constants';
+import { readToken, updateUserInfo, writeUserInfo } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 
 export type AuthView = 'login' | 'register' | 'reset';
@@ -99,6 +99,7 @@ function AuthModal({
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="4xl"
+      aria-label={view === 'login' ? '登录' : view === 'register' ? '注册' : '找回密码'}
       bodyClassName="p-0"
       closeOnEscape={closeOnEscape}
       hideCloseButton
@@ -210,11 +211,13 @@ function LoginForm({
   };
 
   const onCaptchaVerify = async (token: string) => {
+    const previousToken = readToken();
     setCaptcha(false);
     setIsLoading(true);
     try {
       const res = await api.login({ username, password, cf_token: token });
       const data = await res.json();
+      if (readToken() !== previousToken) return;
       if (res.ok && data.success) {
         const baseUserInfo = {
           token: data.token,
@@ -225,31 +228,28 @@ function LoginForm({
           derpi_user_id: data.derpi_user_id,
           derpi_username: data.derpi_username,
         };
-        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(baseUserInfo));
+        writeUserInfo(baseUserInfo);
         try {
           /* Through the shared resource, so the shell does not immediately ask
              the same question again: this fills the cache entry for the new
-             token, so `AppLayout`'s own read (fired by `user_info_updated`
-             below) is a hit. */
+             token, so `AppLayout` joins the same in-flight read. */
           const result = await sessionUser.read({ token: data.token });
+          if (readToken() !== data.token) return;
           if (result.kind === 'ok') {
-            localStorage.setItem(
-              LS_KEYS.userInfo,
-              JSON.stringify({
-                ...baseUserInfo,
-                ...result.user,
-                token: data.token,
-                api_key: data.api_key,
-                derpi_user_id: data.derpi_user_id,
-                derpi_username: data.derpi_username,
-              }),
-            );
+            updateUserInfo(data.token, {
+              ...baseUserInfo,
+              ...result.user,
+              token: data.token,
+              api_key: data.api_key,
+              derpi_user_id: data.derpi_user_id,
+              derpi_username: data.derpi_username,
+            });
           }
         } catch (err) {
           console.error('Failed to fetch user info after login', err);
         }
+        if (readToken() !== data.token) return;
         showToast('登录成功', 'success');
-        window.dispatchEvent(new Event('user_info_updated'));
         onSuccess();
       } else {
         showToast(data.message || '登录失败，请检查用户名和密码', 'error');
@@ -413,25 +413,23 @@ function RegisterForm({
       showToast('请输入完整的 6 位验证码', 'error');
       return;
     }
+    const previousToken = readToken();
     setIsVerifying(true);
     try {
       const res = await api.verifyEmailById(registeredUserId.current, code);
       const data = await res.json();
+      if (readToken() !== previousToken) return;
       if (data.success) {
-        localStorage.setItem(
-          LS_KEYS.userInfo,
-          JSON.stringify({
-            token: data.token,
-            username: data.username,
-            avatar: data.avatar,
-            role: data.role,
-            api_key: data.api_key,
-            derpi_user_id: data.derpi_user_id,
-            derpi_username: data.derpi_username,
-          }),
-        );
+        writeUserInfo({
+          token: data.token,
+          username: data.username,
+          avatar: data.avatar,
+          role: data.role,
+          api_key: data.api_key,
+          derpi_user_id: data.derpi_user_id,
+          derpi_username: data.derpi_username,
+        });
         showToast('邮箱验证成功，欢迎加入', 'success');
-        window.dispatchEvent(new Event('user_info_updated'));
         onSuccess();
       } else {
         showToast(data.error || data.message || '验证失败', 'error');

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useResource } from '@/lib/resource';
+import { SKIP, useResource } from '@/lib/resource';
 import { featuredImage } from '@/lib/resources';
 import { MdThumbUp, MdComment, MdPerson } from 'react-icons/md';
 import FadeInImage from '@/components/FadeInImage';
@@ -10,7 +10,7 @@ import Badge from '@/components/Badge';
 import Skeleton from '@/components/Skeleton';
 import { useHeroLink } from '@/lib/useHero';
 import { ICON } from '@/lib/icons';
-import { readUserInfo } from '@/lib/hooks';
+import { useSession } from '@/lib/hooks';
 
 /* The banner's scrims are drawn over photography, so they must be black in both
    schemes — but "black" should still come from the token, not from a literal,
@@ -42,8 +42,9 @@ export default function FeaturedBanner({ reloadKey = 0 }: { reloadKey?: number }
   /* The banner is the first thing on the page, so its skeleton is the one you
      cannot miss — it gets the cached picture in the first frame and is
      refreshed underneath (`lib/resource.ts` owns the served/stale apparatus). */
-  const apiKey = (readUserInfo()?.api_key as string) || undefined;
-  const read = useResource(featuredImage, { apiKey });
+  const { user, ready } = useSession();
+  const apiKey = typeof user?.api_key === 'string' ? user.api_key : undefined;
+  const read = useResource(featuredImage, ready ? { apiKey } : SKIP);
   const featured = read.data ?? null;
   const loading = read.data === undefined && read.error === undefined;
   /* A refresh that fails leaves the picture on screen rather than replacing

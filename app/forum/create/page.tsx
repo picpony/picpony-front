@@ -18,7 +18,7 @@ import Chip from '@/components/Chip';
 import { ICON } from '@/lib/icons';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 import PageHeader from '@/components/PageHeader';
-import { readUserInfo } from '@/lib/hooks';
+import { readUserInfo, useSession } from '@/lib/hooks';
 import { processImageFile } from '@/lib/utils';
 
 const categories = [
@@ -35,14 +35,15 @@ export default function CreateForumPostPage() {
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [selectedCoverFile, setSelectedCoverFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoggedIn] = useState(() => Boolean(readUserInfo()));
+  const { token, ready } = useSession();
+  const isLoggedIn = Boolean(token);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (ready && !isLoggedIn) {
       openAuth('login');
     }
-  }, [isLoggedIn, openAuth]);
+  }, [ready, isLoggedIn, openAuth]);
 
   const handleCoverFile = useCallback(async (file: File) => {
     try {

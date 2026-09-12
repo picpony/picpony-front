@@ -36,7 +36,7 @@ radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | "Are you sure?" | `useConfirm` (`components/ConfirmDialog.tsx`) | `window.confirm`, or a `Modal` + 4 useStates |
 | Asking for one value | `usePrompt` (`components/ConfirmDialog.tsx`) | `window.prompt` |
 | Copying to the clipboard | `copyText` (`lib/utils.ts`) | `navigator.clipboard.writeText` with no fallback |
-| Reading the session | `readUserInfo` / `readToken` (`lib/hooks.ts`), `useAuth` in a dependency array | `localStorage.getItem('user_info')` and a `JSON.parse` |
+| Reading the session | `useSession` for rendering (`ready` gates login prompts); `readUserInfo` / `readToken` for event-time reads; `updateUserInfo` for token-checked response writes (`lib/hooks.ts`) | reading localStorage in a render initializer, or overwriting a session from a stale response |
 | Formatting a date | `lib/format.ts` — four shapes, `zh-CN` fixed | `toLocaleString` with an option object at the call site |
 | A PicPony asset URL | `getAssetUrl` / `getAvatarUrl` (`lib/utils.ts`) | `` `https://picpony.top/${path}` `` — three join semantics were in use |
 | Bounding a number | `clamp` / `clamp01` (`lib/utils.ts`) | `Math.max(a, Math.min(b, v))` |
@@ -1046,7 +1046,7 @@ Each "never" is a bug avoided rather than a preference:
 
 `experimental.useOffline` is the other half and they do not overlap: it keeps a soft navigation, prefetch, RSC fetch or Server Action **pending and retrying** through a drop, which the worker cannot do; the worker covers the one case no retry reaches, a hard refresh with nothing on the wire. `<OfflineBanner>` is what tells the user why something is taking a while — without it, "pending" and "broken" look the same.
 
-`app/manifest.ts` omits **`theme_color`** deliberately: the app has eleven palettes, so any single value is wrong for nine, and `app/layout.tsx` already renders that tag from the palette cookie — the same reason Next's own `viewport.themeColor` export was removed. `background_color` is safe to fix because it paints only the installed app's splash, before any CSS is in force. The icons are **128px only**, which is a gap rather than a decision: an install prompt wants 192, 512 and a maskable, and the app's only other mark is a 2851x1001 wordmark. Add two PNGs and it becomes installable with no other change.
+`app/manifest.ts` omits **`theme_color`** deliberately: the app has eleven palettes, so any single value is wrong for nine, and `app/layout.tsx` already renders that tag from the palette cookie — the same reason Next's own `viewport.themeColor` export was removed. `background_color` paints only the installed app's splash. `npm run icons` produces 192px, 512px and maskable 512px icons from the existing square mark; the maskable artwork fits wholly inside the 80%-diameter safe circle. Keep the source mark and generator together when changing the installed-app artwork.
 
 Registration is `components/ServiceWorker.tsx`, on an idle callback, with a `?v=<buildId>` query (a file in `public/` cannot read a build-time variable, and a changing script URL is what makes the browser find a new worker) and `updateViaCache: 'none'` (without it the browser may satisfy its own update check from the HTTP cache and never see one; `next.config.ts`'s `headers()` covers the other half of that failure). It opts out under `navigator.webdriver` so `npm run net:audit` measures the code rather than a cache.
 
@@ -1062,7 +1062,7 @@ On, through **Babel**, with `experimental.turbopackRustReactCompiler` deliberate
 
 It was enabled **last** on purpose, so anything it broke would be attributable to it. The risk surface here is not the usual one:
 
-- Three **render-phase writes** exist on purpose and each is guarded by an *identity* comparison — `lib/resource.ts`'s `setRetained` against `snapshot.data`, and `AppLayout`'s drawer state. A memoised snapshot that changed identity for an unchanged value loops rather than merely re-renders, so this is the first place to look.
+- **Render-phase writes** exist on purpose and each is guarded by an *identity* comparison — `lib/resource.ts`'s `setRetained` against `snapshot.data`, and `AppLayout`'s drawer and background-location state. A memoised snapshot that changed identity for an unchanged value loops rather than merely re-renders, so this is the first place to look.
 - **`useGSAP`'s `dependencies`** is a runtime argument the compiler does not model while still memoising the values fed into it. How often those identities change is how often the GSAP context is disposed, which is the accumulated-`Observer` bug this file already records. `lib/motion.ts` and `components/Sheet.tsx` pass hand-tuned lists and two of those call sites omit `revertOnUpdate` on purpose, so both carry **`'use no memo'`** for the first release. Lift them one file at a time with `npm run net:tabs` and `npm run hero:path` as guardrails.
 - `RouteCrossFade` is **not** a risk: it is a class component, which the compiler does not touch.
 
@@ -1170,7 +1170,7 @@ Pass `SKIP` for a read that should not happen yet — an unselected tab, a signe
 
 Three screens render their first read on the server and hand it down: `/` (the first page of the gallery), `/about` (the team roster) and `/user/[id]` (the profile header, not the four tabs). Each has a `.server.ts` module beside it, a server shell that awaits it, and an island that takes it as a prop and passes it to `useResource` as `initial`.
 
-**The seam is `resource.seed(args, value, fetchedAt)`, and `write()` could not be it.** `write`'s cold-key branch calls `create(key, args, 'background')`, which ends in `enqueue` → `pump` → `job.run()` **synchronously** — firing the very request the seed exists to prevent — and the `dropQueued` that follows may `cancel()`, leaving `write` to publish one that is no longer in the store so `peekKey` returns `EMPTY` for ever. `seed` builds the `Entry` literally instead: no queue, no controller, nothing to cancel.
+**The seam is `resource.seed(args, value, fetchedAt)`.** Both `seed` and `write` build a resolved `Entry` directly: a cold write must not call `create`, because `enqueue` → `pump` → `job.run()` starts a fetch synchronously. `seed` additionally preserves the server's timestamp and publishes its first snapshot synchronously; ordinary writes retain the existing entry's age and publish on a paint boundary. A write replaces the old entry and cancels its work, so an older response cannot undo a successful mutation. Imperative `read()` returns the current value, including after a write or background refresh; an already-settled first-read promise is not a mutable cache.
 
 Four details of it are load-bearing:
 
@@ -1198,6 +1198,8 @@ That is the rule, and `npm run net:audit` asserts it: every journey's request co
 `bindResourceRefresh`, mounted once in the shell, re-reads what is on screen when the tab returns after a minute away and whenever the network reconnects. It **expires rather than invalidates**, and that is the whole difference between a refresh and a reload: every mounted screen keeps what it is showing and re-reads underneath, with no loading state. Dropping the entries instead would empty every screen in the app in one frame.
 
 `expire` also has to *start* the re-read rather than merely mark: `useResource`'s effect is keyed on the resource and the key, and neither changes when a value goes stale. The entry holds its own args for this.
+
+`invalidate` preserves mounted subscribers and immediately re-reads their keys; deleting the listener slot would leave an unchanged key permanently empty. `clearAllResources` is separate: signing out aborts and drops every entry without issuing requests for the old account. `node scripts/testResources.mjs` checks these distinctions and the races between reads, refreshes and writes.
 
 ### Two mistakes this layer made, both worth not repeating
 

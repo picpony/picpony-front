@@ -25,7 +25,7 @@ import Radio from '@/components/Radio';
 import Chip from '@/components/Chip';
 import Popover from '@/components/Popover';
 import { ICON } from '@/lib/icons';
-import { readUserInfo } from '@/lib/hooks';
+import { useSession } from '@/lib/hooks';
 import { useResource, SKIP } from '@/lib/resource';
 import { blockGroups, type BlockGroup } from '@/lib/resources';
 
@@ -35,17 +35,9 @@ const MAX_TAGS_PER_GROUP = 100;
 /* `BlockGroup` is imported from `lib/resources` rather than re-declared: two
    structurally-identical types is one type and a copy that can drift. */
 
-type UserInfo = {
-  id: number;
-  token: string;
-  username: string;
-  role: string;
-  avatar: string | null;
-};
-
 export default function BlockGroupsPage() {
   const { openAuth } = useAuthModal();
-  const [userInfo] = useState<UserInfo | null>(() => readUserInfo() as UserInfo | null);
+  const { user: userInfo, ready } = useSession();
 
   /* The list comes from the resource layer rather than its own `useState` + effect — that
      is what makes the sidebar's hover prefetch (`lib/prefetchRoute.ts`) worth anything:
@@ -97,10 +89,10 @@ export default function BlockGroupsPage() {
   const deleteTargetRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!userInfo) {
+    if (ready && !userInfo) {
       openAuth('login');
     }
-  }, [userInfo, openAuth]);
+  }, [ready, userInfo, openAuth]);
 
   /* `refresh` rather than a hand-rolled reload: the resource owns the request, the dedup
      and the in-flight state. Mutations below call this to reconcile with the server. */

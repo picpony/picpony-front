@@ -40,7 +40,8 @@ import PaletteSwatches from '@/components/PaletteSwatches';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { ICON } from '@/lib/icons';
-import { readUserInfo } from '@/lib/hooks';
+import { clearUserInfo, readToken, readUserInfo, resolveDerpiCredentials, updateUserInfo, useSession } from '@/lib/hooks';
+import { sessionUser } from '@/lib/resources';
 import { DERPIBOORU_API_BASE, LS_KEYS } from '@/lib/constants';
 import { changeScheme } from '@/lib/motionLazy';
 import {
@@ -279,8 +280,20 @@ type CloudSettings = {
   defaultSearchSort?: string;
 };
 
+/** Keep the resource and stored session in step, without replaying a stale account. */
+function updateAccountFields(token: string, fields: Record<string, unknown>): boolean {
+  const current = readUserInfo();
+  if (!current || current.token !== token) return false;
+  sessionUser.write({ token }, (previous) => ({
+    kind: 'ok',
+    user: { ...(previous?.kind === 'ok' ? previous.user : current), ...fields },
+  }));
+  return updateUserInfo(token, fields);
+}
+
 export default function SettingsPage() {
   const { openAuth } = useAuthModal();
+  const { token: userToken, ready: sessionReady } = useSession();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newUsername, setNewUsername] = useState('');
@@ -383,7 +396,6 @@ export default function SettingsPage() {
   /** 设置 / 个性化. Local state — see the note above `<Tabs>`. */
   const [tab, setTab] = useState<SettingsTab>('general');
 
-  const [userToken, setUserToken] = useState('');
   const [isDeveloper, setIsDeveloper] = useState(false);
 
   const [avatarLoaded, setAvatarLoaded] = useState(false);
@@ -421,7 +433,7 @@ export default function SettingsPage() {
 
   const syncSettingsToCloud = useCallback(
     async (overrides?: CloudSettings) => {
-      if (!userToken) return;
+      if (!settingsReady || !userToken || readToken() !== userToken) return;
       const settings: CloudSettings = overrides ?? {
         contentFilter,
         showTagCounts,
@@ -452,6 +464,7 @@ export default function SettingsPage() {
       }
     },
     [
+      settingsReady,
       userToken,
       contentFilter,
       showTagCounts,
@@ -528,45 +541,49 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (!sessionReady) return;
+    let active = true;
+    const controller = new AbortController();
+    const current = () => active && readToken() === userToken;
     const user = readUserInfo();
     if (!user) {
       openAuth('login');
       // 无云端配置可等，直接恢复交互
-      queueMicrotask(() => setSettingsReady(true));
-      return;
+      queueMicrotask(() => { if (current()) setSettingsReady(true); });
+      return () => { active = false; };
     }
     try {
       queueMicrotask(() => {
+        if (!current()) return;
+        setSettingsReady(false);
         setCurrentUsername(String(user.username ?? ''));
         setCurrentAvatar(String(user.avatar ?? ''));
-        setUserToken(user.token || '');
 
         const dev = localStorage.getItem(LS_KEYS.developer) === 'true';
         setIsDeveloper(dev);
       });
 
       api
-        .getUser(user.token)
+        .getUser(user.token, controller.signal)
         // Same empty-body hazard as `AppLayout`'s own `get_user` call — and
         // here it lands as an unhandled rejection, since nothing follows.
         .then((res) => readJson(res))
         .then((data) => {
+          if (!current()) return;
           if (data.success && data.user) {
             const u = data.user;
-            setCurrentApiKey(u.api_key || '');
-            setDerpiUserId(u.derpi_user_id || '');
-            setDerpiUsername(u.derpi_username || '');
-            if (u.api_key) localStorage.setItem(LS_KEYS.derpiApiKey, u.api_key);
-            else localStorage.removeItem(LS_KEYS.derpiApiKey);
+            const credentials = resolveDerpiCredentials(u, readUserInfo());
+            setCurrentApiKey(credentials.api_key);
+            setDerpiUserId(credentials.derpi_user_id);
+            setDerpiUsername(credentials.derpi_username);
 
-            if (u.avatar) {
-              const fullUrl = u.avatar.startsWith('http')
-                ? u.avatar
-                : getAssetUrl(u.avatar);
-              setCurrentAvatar(fullUrl);
-              const updatedUser = { ...user, avatar: fullUrl };
-              localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
-            }
+            const fullUrl = u.avatar ? getAssetUrl(u.avatar) : '';
+            setCurrentAvatar(fullUrl);
+            updateAccountFields(user.token, {
+              ...u,
+              avatar: fullUrl,
+              ...credentials,
+            });
 
             setCurrentEmail(u.email || '');
             setIsEmailVerified(u.email_verified === 1);
@@ -583,13 +600,17 @@ export default function SettingsPage() {
             }
           }
         })
-        .catch((err) => console.error('Failed to fetch user info', err))
+        .catch((err) => { if (current()) console.error('Failed to fetch user info', err); })
         // 云端配置获取结束（成功应用或失败）才解除页面锁定
-        .finally(() => setSettingsReady(true));
+        .finally(() => { if (current()) setSettingsReady(true); });
     } catch (e) {
       console.error('Failed to parse user info', e);
     }
-  }, [applyCloudSettings, openAuth]);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [sessionReady, userToken, applyCloudSettings, openAuth]);
 
   // Hydrate preference toggles from localStorage after mount so the first
   // client render stays identical to SSR (avoids ToggleSwitch className mismatch).
@@ -681,9 +702,7 @@ export default function SettingsPage() {
           ? data.avatar_url
           : getAssetUrl(data.avatar_url);
         setCurrentAvatar(fullUrl);
-        const updatedUser = { ...user, avatar: fullUrl };
-        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
-        window.dispatchEvent(new Event('user_info_updated'));
+        updateAccountFields(user.token, { avatar: fullUrl });
       } else {
         showToast(data.message || '上传失败', 'error');
       }
@@ -724,9 +743,7 @@ export default function SettingsPage() {
           ? data.banner_url
           : getAssetUrl(data.banner_url);
         setCurrentBanner(fullUrl);
-        const updatedUser = { ...user, banner: fullUrl };
-        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
-        window.dispatchEvent(new Event('user_info_updated'));
+        updateAccountFields(user.token, { banner: fullUrl });
       } else {
         showToast(data.message || '上传失败', 'error');
       }
@@ -761,11 +778,14 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (data.success) {
+        if (!updateAccountFields(user.token, {
+          api_key: key, derpi_user_id: derpiUserId, derpi_username: derpiUsername,
+        })) return;
         showToast('Derpibooru API Key 已保存', 'success');
         setCurrentApiKey(key);
         localStorage.setItem(LS_KEYS.derpiApiKey, key);
-        closeApiKeyModal();
-        window.dispatchEvent(new Event('user_info_updated'));
+        setIsApiKeyModalOpen(false);
+        setNewApiKey('');
       } else {
         showToast(data.message || '配置失败', 'error');
       }
@@ -818,9 +838,12 @@ export default function SettingsPage() {
 
   const handleVerifyIdentity = async () => {
     if (!currentApiKey) return;
+    const requestedToken = readToken();
+    if (!requestedToken) return;
     setIsVerifyLoading(true);
     try {
       const identity = await detectRealIdentity(currentApiKey);
+      if (readToken() !== requestedToken) return;
       if (!identity) {
         showToast('身份核验失败：无法通过该 API Key 找到您的身份，请确认 Key 是否正确', 'error');
         return;
@@ -829,16 +852,19 @@ export default function SettingsPage() {
       setDerpiUsername(identity.name);
       const user = readUserInfo();
       if (user) {
-        await api.saveApikey(user.token, {
+        const res = await api.saveApikey(user.token, {
           api_key: currentApiKey,
           derpi_user_id: identity.id,
           derpi_username: identity.name,
         });
+        const data = await readJson(res);
+        if (!res.ok || !data.success) throw new Error(data.message || '身份保存失败');
+        if (!updateAccountFields(requestedToken, {
+          api_key: currentApiKey, derpi_user_id: identity.id, derpi_username: identity.name,
+        })) return;
         localStorage.setItem(LS_KEYS.derpiApiKey, currentApiKey);
-        window.dispatchEvent(new Event('user_info_updated'));
       }
       showToast(`核验成功，已确认您的身份：${identity.name}`, 'success');
-      window.dispatchEvent(new Event('user_info_updated'));
     } catch {
       showToast('核验请求失败（API 限流/网络问题），请稍后再试', 'error');
     } finally {
@@ -856,16 +882,18 @@ export default function SettingsPage() {
     try {
       const user = readUserInfo();
       if (!user) return;
-      await api.saveApikey(user.token, {
+      const res = await api.saveApikey(user.token, {
         api_key: '',
         derpi_user_id: '',
         derpi_username: '',
       });
+      const data = await readJson(res);
+      if (!res.ok || !data.success) throw new Error(data.message || '解除绑定失败');
+      if (!updateAccountFields(user.token, { api_key: '', derpi_user_id: '', derpi_username: '' })) return;
       setCurrentApiKey('');
       setDerpiUserId('');
       setDerpiUsername('');
       localStorage.removeItem(LS_KEYS.derpiApiKey);
-      window.dispatchEvent(new Event('user_info_updated'));
       showToast('API Key 已解除绑定', 'success');
     } catch {
       showToast('操作失败', 'error');
@@ -889,11 +917,11 @@ export default function SettingsPage() {
       const data = await res.json();
       if (data.success) {
         showToast('密码修改成功，即将重新登录', 'success');
-        closePasswordModal();
+        setIsPasswordModalOpen(false);
+        setOldPassword('');
+        setNewPassword('');
         setTimeout(() => {
-          localStorage.removeItem(LS_KEYS.userInfo);
-          window.dispatchEvent(new Event('user_info_updated'));
-          openAuth('login');
+          if (clearUserInfo(user.token)) openAuth('login');
         }, 1500);
       } else {
         showToast(data.message || '修改失败', 'error');
@@ -920,10 +948,9 @@ export default function SettingsPage() {
       if (data.success) {
         showToast('用户名已更新', 'success');
         setCurrentUsername(newUsername.trim());
-        const updatedUser = { ...user, username: newUsername.trim() };
-        localStorage.setItem(LS_KEYS.userInfo, JSON.stringify(updatedUser));
-        window.dispatchEvent(new Event('user_info_updated'));
-        closeModal();
+        updateAccountFields(user.token, { username: newUsername.trim() });
+        setIsModalOpen(false);
+        setNewUsername('');
       } else {
         showToast(data.message || '修改失败', 'error');
       }
@@ -982,7 +1009,9 @@ export default function SettingsPage() {
         setIsEmailVerified(true);
         setShowVerifyInput(false);
         showToast('邮箱验证成功', 'success');
-        closeEmailModal();
+        setIsEmailModalOpen(false);
+        setNewEmail('');
+        setVerifyCode('');
       } else {
         showToast(data.message || '验证失败', 'error');
       }
@@ -1026,8 +1055,10 @@ export default function SettingsPage() {
       const data = await res.json();
       if (data.success) {
         showToast('个人资料已更新', 'success');
-        window.dispatchEvent(new Event('user_info_updated'));
-        closeProfileModal();
+        updateAccountFields(user.token, {
+          bio: profileBio, gender: profileGender, birthday: profileBirthday, race: profileRace,
+        });
+        setIsProfileModalOpen(false);
       } else {
         showToast(data.message || '保存失败', 'error');
       }
@@ -1158,6 +1189,7 @@ export default function SettingsPage() {
           be used yet, which is what "disabled" means (M3 gives it 38%). */}
       <div
         aria-busy={!settingsReady}
+        inert={!settingsReady}
         /* `aria-busy` belongs on the gate, not on the page: the wrapper also encloses
            the tablist *and* the 个性化 pane, so a screen-reader user switching tabs was
            told the region was still loading — the one state the split exists to keep out

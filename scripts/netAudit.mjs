@@ -863,9 +863,10 @@ try {
            `srv` deliberately cannot satisfy the floor on its own: a step's server tally picks up
            reads no part of that screen asked for (Next prefetches the sidebar's account link, so
            unrelated screens carry a `get_user_profile`). Keyed on `api + srv` those steps could
-           stop fetching entirely and still pass — measured. So the browser layer carries the floor
-           unless the step genuinely had no browser reads to begin with. */
-        if (was.api > 0 && step.api === 0) {
+           stop fetching entirely and still pass — measured. A matching content read at r0 is
+           different: it proves this very screen loaded its content on the server. In that case
+           an idle announcement missing the observation window cannot make the screen fail. */
+        if (was.api > 0 && step.api === 0 && step.contentRound !== 0) {
           fail(name, `${step.label} now sends no browser requests at all — the screen is not loading`);
         } else if (wasTotal > 0 && stepTotal === 0) {
           fail(name, `${step.label} now sends no requests at all — the screen is not loading`);

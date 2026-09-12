@@ -20,11 +20,11 @@ import { useAuthModal } from '@/components/AuthModal';
 import PageHeader from '@/components/PageHeader';
 import { ICON } from '@/lib/icons';
 import { formatDateTime } from '@/lib/format';
-import { readToken, readUserInfo } from '@/lib/hooks';
+import { readToken, readUserInfo, useSession } from '@/lib/hooks';
 
 export default function HistoryPage() {
   const { openAuth } = useAuthModal();
-  const token = readToken();
+  const { token, ready } = useSession();
   /* The page number survives a remount: leaving page 3 for a picture and coming back
      lands on page 3 — see `lib/screenState.ts`. */
   const [page, setPage] = useScreenState('history:page', 1);
@@ -33,12 +33,12 @@ export default function HistoryPage() {
   const read = useResource(browsingHistory, token ? { token, page } : SKIP, { keepPrevious: true });
   const history = read.data?.history ?? [];
   const totalPages = read.data?.totalPages ?? 1;
-  const isLoading = Boolean(token) && read.data === undefined && read.error === undefined;
+  const isLoading = !ready || (Boolean(token) && read.data === undefined && read.error === undefined);
   const error = read.error ? ((read.error as Error).message ?? '网络请求失败') : null;
 
   useEffect(() => {
-    if (!token) openAuth('login');
-  }, [token, openAuth]);
+    if (ready && !token) openAuth('login');
+  }, [token, ready, openAuth]);
 
   const handleClear = async () => {
     setIsClearModalOpen(true);
@@ -48,21 +48,25 @@ export default function HistoryPage() {
     setIsClearModalOpen(false);
     try {
       const user = readUserInfo();
-      if (!user) return;
+      if (!user || user.token !== token) return;
       const res = await api.clearBrowsingHistory(user.token);
       const data = await res.json();
+      if (readToken() !== user.token) return;
       if (data.success) {
         showToast('浏览历史已清空', 'success');
-        /* Every page of it, not just the one on screen: clearing empties the list, so any
-           other page still cached is now a lie. `invalidate` with no argument drops them
-           all; the next read of page 1 is a real request. */
+        /* Drop every cached page, then publish the mutation's authoritative empty answer.
+           Page 1 may already be selected, so changing the page alone cannot re-run the read.
+           The current page also needs the empty answer before keepPrevious can retain it. */
         browsingHistory.invalidate();
+        const empty = { history: [], totalPages: 1 };
+        browsingHistory.write({ token: user.token, page }, empty);
+        if (page !== 1) browsingHistory.write({ token: user.token, page: 1 }, empty);
         setPage(1);
       } else {
         showToast(data.error || '清空失败', 'error');
       }
     } catch {
-      showToast('操作失败', 'error');
+      if (readToken() === token) showToast('操作失败', 'error');
     }
   };
 
@@ -77,8 +81,10 @@ export default function HistoryPage() {
         showToast('登录已过期，请重新登录', 'error');
         return;
       }
+      if (user.token !== token) return;
       const res = await api.deleteBrowsingHistoryItem(user.token, imageId);
       const data = await res.json();
+      if (readToken() !== user.token) return;
       if (data.success) {
         /* Written through rather than re-read: the row is gone from the server and the
            screen should say so in the same frame — a refetch would blank the list and
@@ -93,6 +99,7 @@ export default function HistoryPage() {
         showToast(data.error || '删除失败', 'error');
       }
     } catch (err) {
+      if (readToken() !== token) return;
       console.error('Delete history item error:', err);
       showToast('操作失败', 'error');
     }

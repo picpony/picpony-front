@@ -42,12 +42,15 @@ import Skeleton from '@/components/Skeleton';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import PageBack from '@/components/PageBack';
-import { readToken, useEscapeBack } from '@/lib/hooks';
+import { readToken, useEscapeBack, useSession } from '@/lib/hooks';
+import { SKIP, useResource } from '@/lib/resource';
+import { faveIds as faveIdsResource, sharedFaveIds } from '@/lib/resources';
+import { useOverlayLayer } from '@/lib/overlay';
 import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
 import TagList, { groupTags } from '@/components/TagList';
 import { loadTagCounts } from '@/lib/tagCounts';
-import { loadTagTranslations } from '@/lib/tagTranslations';
+import { loadTagTranslations, tagTranslationKey } from '@/lib/tagTranslations';
 import CommentSection from '@/components/CommentSection';
 import Button, { buttonClasses } from '@/components/Button';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -140,6 +143,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const params = useParams();
   const router = useRouter();
   const { openAuth } = useAuthModal();
+  const session = useSession();
   const id = params.id as string;
   const imageId = Number(id);
   const heroRuntime = useSyncExternalStore(
@@ -229,8 +233,19 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const error = detailError?.id === imageId ? detailError.error : null;
   const isLoading = !image && !error;
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const [isFaved, setIsFaved] = useState(false);
-  const [isFaveLoading, setIsFaveLoading] = useState(false);
+  const favesRead = useResource(
+    faveIdsResource,
+    deferredBodyReady && session.token ? { token: session.token } : SKIP,
+  );
+  const isFaved = favesRead.data?.includes(imageId) ?? false;
+  const [favePending, setFavePending] = useState<{ imageId: number; token: string } | null>(null);
+  const faveRequest = useRef(0);
+  const faveBusy = useRef(false);
+  const isFaveLoading = favePending?.imageId === imageId && favePending?.token === session.token;
+  useEffect(() => {
+    faveBusy.current = false;
+    return () => { faveRequest.current += 1; };
+  }, [imageId, session.token]);
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
@@ -440,7 +455,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     ];
     /* 翻译 key 由 lib/tagTranslations 内部剥前缀转小写；这里只取画面上没见过的标签。 */
     const missingTags = visibleTags.filter(
-      (tag) => tagTranslations[tag.toLowerCase()] === undefined,
+      (tag) => !Object.hasOwn(tagTranslations, tagTranslationKey(tag)),
     );
     if (missingTags.length === 0) return;
     let cancelled = false;
@@ -563,31 +578,6 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   }, [isLightboxOpen, tagInfoModal.open, isReportModalOpen, isShareOpen, replyTo]);
 
   const fetchComments = useCallback(() => getCommentsOnce(id), [id]);
-
-  useEffect(() => {
-    if (!deferredBodyReady) return;
-    let cancelled = false;
-    const checkFaveStatus = async () => {
-      try {
-        const token = readToken();
-        if (token) {
-          const res = await api.getFaves(token);
-          if (res.success && res.faves) {
-            if (!cancelled) setIsFaved(res.faves.includes(Number(id)));
-          }
-        }
-      } catch (err) {
-        console.error('Failed to get faves:', err);
-      }
-    };
-
-    if (id) {
-      void checkFaveStatus();
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredBodyReady, id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -740,6 +730,17 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     });
   }, [heroNavigation, imageId, presentation, router]);
 
+  useOverlayLayer(presentation === 'overlay' && !isLightboxOpen, overlayRef, {
+    onClose: () => {
+      if (replyTo) setReplyTo(null);
+      else handleBackToGallery();
+    },
+    additionalRefs: [overlayBackRef],
+    returnFocus: () => document.querySelector<HTMLElement>(
+      `[data-image-hero-role="thumbnail"][data-image-hero-id="${imageId}"]`,
+    )?.closest<HTMLAnchorElement>('a') ?? null,
+  });
+
   // Stable dismiss bind: rebinding on isLoading/modal state disposed the gesture
   // mid-pull and made pull-to-dismiss feel random.
   const dismissCanStartRef = useRef<() => boolean>(() => true);
@@ -826,24 +827,47 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       return;
     }
 
-    if (isFaveLoading || !image) return;
+    if (faveBusy.current || !image || token !== session.token) return;
 
-    setIsFaveLoading(true);
+    const targetId = image.id;
+    const run = ++faveRequest.current;
+    const isCurrent = () => run === faveRequest.current && readToken() === token;
+    faveBusy.current = true;
+    setFavePending({ imageId: targetId, token });
     try {
-      const res = await api.toggleFave(token, image.id);
+      /* Start from the shared complete list, even when the button is pressed before its
+         first status read lands. Writing a one-item array on a cold key loses other faves. */
+      const knownIds = await faveIdsResource.read({ token });
+      if (!isCurrent()) return;
+      const res = await api.toggleFave(token, targetId);
       const data = await res.json();
+      /* Once the server has accepted a mutation, its cache correction survives navigation.
+         UI feedback is still scoped to this detail; account changes discard both. */
+      if (readToken() !== token) return;
       if (data.success) {
-        const newFavedStatus = data.is_faved !== undefined ? data.is_faved : !isFaved;
-        setIsFaved(newFavedStatus);
-        showToast(newFavedStatus ? '收藏成功' : '已取消收藏', 'success');
-      } else {
+        const newFavedStatus = data.is_faved !== undefined ? Boolean(data.is_faved) : !knownIds.includes(targetId);
+        faveIdsResource.write({ token }, (previous) => {
+          const ids = previous ?? knownIds;
+          return newFavedStatus
+            ? (ids.includes(targetId) ? ids : [targetId, ...ids])
+            : ids.filter((faveId) => faveId !== targetId);
+        });
+        if (typeof session.user?.username === 'string') {
+          sharedFaveIds.expire({ username: session.user.username });
+        }
+        if (isCurrent()) showToast(newFavedStatus ? '收藏成功' : '已取消收藏', 'success');
+      } else if (isCurrent()) {
         showToast(data.message || '操作失败', 'error');
       }
     } catch (err) {
+      if (!isCurrent()) return;
       console.error('Toggle fave error:', err);
       showToast('操作失败', 'error');
     } finally {
-      setIsFaveLoading(false);
+      if (isCurrent()) {
+        faveBusy.current = false;
+        setFavePending(null);
+      }
     }
   };
 
@@ -986,8 +1010,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
           data-image-detail-overlay
           data-image-hero-route-id={String(imageId)}
           data-image-hero-surface-id={surfaceId}
-          role="region"
+          role="dialog"
+          aria-modal="true"
           aria-label="图片详情"
+          tabIndex={-1}
           className="image-detail-route absolute inset-0 z-detail-overlay overflow-hidden"
         >
           {/* The container transform's window and counter-scale, structurally identical

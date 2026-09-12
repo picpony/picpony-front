@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
@@ -10,6 +10,7 @@ import { SectionHeader, SearchInput } from './';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import { ICON } from '@/lib/icons';
+import { readToken } from '@/lib/hooks';
 /* Namespace import, deliberately: `api` is a runtime spread and
    un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
@@ -27,6 +28,8 @@ export default function WealthTab({ token }: { token: string }) {
   const [searchKw, setSearchKw] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [form, setForm] = useState({
     experience: 0,
     coinsOp: 'add',
@@ -35,30 +38,39 @@ export default function WealthTab({ token }: { token: string }) {
   });
 
   const loadUsers = useCallback(async () => {
+    if (readToken() !== token) return;
     setIsLoading(true);
     try {
       const data = await adminApi.adminGetWealth(token);
+      if (readToken() !== token) return;
       if (data.success) {
         setUsers(data.users || []);
       }
     } catch {
-      showToast('用户加载失败', 'error');
+      if (readToken() === token) showToast('用户加载失败', 'error');
     } finally {
-      setIsLoading(false);
+      if (readToken() === token) setIsLoading(false);
     }
   }, [token]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || readToken() !== token) return;
+    let cancelled = false;
     adminApi
       .adminGetWealth(token)
       .then((data) => {
+        if (cancelled || readToken() !== token) return;
         if (data.success) {
           setUsers(data.users || []);
         }
       })
-      .catch(() => showToast('用户加载失败', 'error'))
-      .finally(() => setIsLoading(false));
+      .catch(() => {
+        if (!cancelled && readToken() === token) showToast('用户加载失败', 'error');
+      })
+      .finally(() => {
+        if (!cancelled && readToken() === token) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [token]);
 
   const filteredUsers = useMemo(() => {
@@ -68,6 +80,7 @@ export default function WealthTab({ token }: { token: string }) {
   }, [searchKw, users]);
 
   const openModal = (user: User) => {
+    if (submittingRef.current) return;
     setEditingUser(user);
     setForm({
       experience: user.experience || 0,
@@ -79,16 +92,21 @@ export default function WealthTab({ token }: { token: string }) {
   };
 
   const closeModal = () => {
+    if (submittingRef.current) return;
     setIsModalOpen(false);
     setEditingUser(null);
   };
 
   const submit = async () => {
-    if (!editingUser) return;
+    if (!editingUser || submittingRef.current || readToken() !== token) return;
     if (!form.reason.trim()) {
       showToast('请填写变动原因', 'error');
       return;
     }
+    // A ref closes the gap before React renders the disabled button. A double
+    // activation must never apply a non-idempotent coin increment twice.
+    submittingRef.current = true;
+    setIsSubmitting(true);
     try {
       const res = await adminApi.adminUpdateWealth(token, {
         target_id: editingUser.id,
@@ -98,15 +116,20 @@ export default function WealthTab({ token }: { token: string }) {
         reason: form.reason,
       });
       const data = await res.json();
+      if (readToken() !== token) return;
       if (data.success) {
         showToast('已更新', 'success');
-        closeModal();
-        loadUsers();
+        setIsModalOpen(false);
+        setEditingUser(null);
+        await loadUsers();
       } else {
         showToast(data.error || '修改失败', 'error');
       }
     } catch {
-      showToast('修改失败', 'error');
+      if (readToken() === token) showToast('修改失败', 'error');
+    } finally {
+      submittingRef.current = false;
+      if (readToken() === token) setIsSubmitting(false);
     }
   };
 
@@ -157,10 +180,10 @@ export default function WealthTab({ token }: { token: string }) {
         maxWidth="md"
         footer={
           <>
-            <Button variant="text" onClick={closeModal}>
+            <Button variant="text" onClick={closeModal} disabled={isSubmitting}>
               取消
             </Button>
-            <Button variant="filled" onClick={submit}>
+            <Button variant="filled" onClick={submit} loading={isSubmitting}>
               确认修改
             </Button>
           </>
@@ -172,6 +195,7 @@ export default function WealthTab({ token }: { token: string }) {
               label="经验值"
               id="wealthtab-f1"
               type="number"
+              disabled={isSubmitting}
               value={form.experience}
               onChange={(e) => setForm({ ...form, experience: parseInt(e.target.value) || 0 })}
             />
@@ -181,6 +205,7 @@ export default function WealthTab({ token }: { token: string }) {
             <div className="flex gap-2">
               
               <Select
+                disabled={isSubmitting}
                 value={form.coinsOp}
                 onChange={(v) => setForm({ ...form, coinsOp: v })}
                 aria-label="金币操作方式"
@@ -192,6 +217,7 @@ export default function WealthTab({ token }: { token: string }) {
               />
               <Input
                 type="number"
+                disabled={isSubmitting}
                 value={form.coinsValue}
                 onChange={(e) => setForm({ ...form, coinsValue: e.target.value })}
                 placeholder="数值"
@@ -203,6 +229,7 @@ export default function WealthTab({ token }: { token: string }) {
             <Input
               label="变动原因（必填）"
               type="text"
+              disabled={isSubmitting}
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
               placeholder="例如：违规惩罚、特殊活动奖励…"

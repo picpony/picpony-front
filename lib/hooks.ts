@@ -52,15 +52,108 @@ export function useMasonryColumns() {
  * window guard for free). A function rather than a hook because many call
  * sites are not in hook position; `useAuth` wraps it for the effect-dependency case.
  */
-export function readUserInfo(): { token: string; [key: string]: unknown } | null {
+export type StoredUserInfo = { token: string; [key: string]: unknown };
+
+function readSessionText(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const stored = localStorage.getItem(LS_KEYS.userInfo);
-    if (!stored) return null;
-    return JSON.parse(stored);
+    return localStorage.getItem(LS_KEYS.userInfo);
   } catch {
     return null;
   }
+}
+
+function parseSession(stored: string | null): StoredUserInfo | null {
+  if (!stored) return null;
+  try {
+    const user: unknown = JSON.parse(stored);
+    return user !== null && typeof user === 'object' && !Array.isArray(user) &&
+      'token' in user && typeof user.token === 'string' && user.token.length > 0
+      ? user as StoredUserInfo
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readUserInfo(): StoredUserInfo | null {
+  return parseSession(readSessionText());
+}
+
+/** A profile response may omit credentials. Only an explicit empty string
+ * clears a binding; absent/null fields retain the current account's values. */
+export function resolveDerpiCredentials(
+  incoming: Record<string, unknown>,
+  current: Record<string, unknown> | null,
+): { api_key: string; derpi_user_id: string; derpi_username: string } {
+  const key = incoming.api_key ?? current?.api_key;
+  const id = incoming.derpi_user_id ?? current?.derpi_user_id;
+  const username = incoming.derpi_username ?? current?.derpi_username;
+  return {
+    api_key: typeof key === 'string' ? key : '',
+    derpi_user_id: typeof id === 'string' || typeof id === 'number' ? String(id) : '',
+    derpi_username: typeof username === 'string' ? username : '',
+  };
+}
+
+function subscribeSession(listener: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === LS_KEYS.userInfo) listener();
+  };
+  window.addEventListener('user_info_updated', listener);
+  window.addEventListener('storage', onStorage);
+  return () => {
+    window.removeEventListener('user_info_updated', listener);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+const noSession = () => null;
+const subscribeHydration = () => () => {};
+const hydrated = () => true;
+const serverHydrated = () => false;
+
+/** Reactive device session. SSR and hydration both start signed out; the raw string
+ * is the stable external-store snapshot, so JSON parsing cannot cause render loops.
+ * `ready` distinguishes hydration from a genuinely signed-out visitor. */
+export function useSession() {
+  const stored = useSyncExternalStore(subscribeSession, readSessionText, noSession);
+  const ready = useSyncExternalStore(subscribeHydration, hydrated, serverHydrated);
+  const user = useMemo(() => parseSession(stored), [stored]);
+  return useMemo(() => ({ user, token: user?.token ?? null, ready }), [user, ready]);
+}
+
+/** Publish a new login and its API key together before starting account reads. */
+export function writeUserInfo(user: StoredUserInfo): void {
+  const serialised = JSON.stringify(user);
+  if (!parseSession(serialised)) throw new Error('登录信息无效');
+  localStorage.setItem(LS_KEYS.userInfo, serialised);
+  if (typeof user.api_key === 'string' && user.api_key) {
+    localStorage.setItem(LS_KEYS.derpiApiKey, user.api_key);
+  } else {
+    localStorage.removeItem(LS_KEYS.derpiApiKey);
+  }
+  window.dispatchEvent(new Event('user_info_updated'));
+}
+
+/** Merge a response into the current account only. */
+export function updateUserInfo(token: string, patch: Record<string, unknown>): boolean {
+  const current = readUserInfo();
+  if (!current || current.token !== token) return false;
+  const next = { ...current, ...patch, token };
+  const serialised = JSON.stringify(next);
+  if (serialised === readSessionText()) return true;
+  writeUserInfo(next);
+  return true;
+}
+
+/** The expected token protects a new login from an older request's 401. */
+export function clearUserInfo(expectedToken: string): boolean {
+  if (readToken() !== expectedToken) return false;
+  localStorage.removeItem(LS_KEYS.userInfo);
+  localStorage.removeItem(LS_KEYS.derpiApiKey);
+  window.dispatchEvent(new Event('user_info_updated'));
+  return true;
 }
 
 /** The token alone, which is what most call sites actually wanted. */

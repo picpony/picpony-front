@@ -15,7 +15,7 @@ import { cn, clamp } from '@/lib/utils';
 import { MEDIA } from '@/lib/constants';
 import { motionTier, scaledMs } from '@/lib/appearance';
 import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
-import { useEscapeToClose, useExitAnimation, useMounted } from '@/lib/overlay';
+import { OverlayLayerContext, useOverlayLayer, useExitAnimation, useMounted } from '@/lib/overlay';
 
 const MENU_MARGIN = 8;
 const VIEWPORT_PADDING = 12;
@@ -339,11 +339,12 @@ export default function Popover({
   }, [open, onClose, anchorRef]);
 
   const closeAndRefocus = useCallback(() => onClose(true), [onClose]);
-  useEscapeToClose(open, closeAndRefocus);
+  const layer = useOverlayLayer(open && mounted && rendering, panelRef, { onClose: closeAndRefocus, modal: false });
 
   if (!mounted || !rendering) return null;
 
   return createPortal(
+    <OverlayLayerContext.Provider value={layer}>
     <div
       ref={panelRef}
       id={id}
@@ -359,6 +360,7 @@ export default function Popover({
        * inert. */
       inert={!open}
       style={{
+        zIndex: layer.depth ? `calc(var(--z-popover) + ${layer.depth})` : undefined,
         position: 'fixed',
         top: placement.up ? undefined : placement.top,
         bottom: placement.up ? window.innerHeight - placement.top : undefined,
@@ -387,7 +389,8 @@ export default function Popover({
       )}
     >
       {children}
-    </div>,
+    </div>
+    </OverlayLayerContext.Provider>,
     document.body,
   );
 }

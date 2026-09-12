@@ -11,11 +11,11 @@ import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
 import {
-  useEscapeToClose,
   useExitAnimation,
-  useFocusTrap,
+  useOverlayLayer,
   useMounted,
   useScrollLock,
+  OverlayLayerContext,
 } from '@/lib/overlay';
 
 interface SheetProps {
@@ -84,8 +84,7 @@ export default function Sheet({
   const titleId = useId();
 
   useScrollLock(isOpen);
-  useFocusTrap(isOpen, panelRef);
-  useEscapeToClose(isOpen, onClose, closeOnEscape);
+  const layer = useOverlayLayer(isOpen && mounted && rendering, panelRef, { onClose, closeOnEscape });
 
   const handleClose = useCallback(() => onClose(), [onClose]);
   /* Read through a ref inside the Observer, for the reason `useDrawerSwipe`
@@ -268,7 +267,9 @@ export default function Sheet({
   if (!mounted || !rendering) return null;
 
   return createPortal(
+    <OverlayLayerContext.Provider value={layer}>
     <div
+      style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
       /* A sheet is a dialog that docks to the bottom edge, so it shares the
          dialog layer — see the stacking-order block in globals.css. */
       className={cn('fixed inset-0 flex flex-col justify-end z-dialog')}
@@ -331,7 +332,8 @@ export default function Sheet({
             the sheet would otherwise carry 34px of dead space. */}
         <div className="h-[max(1rem,env(safe-area-inset-bottom))] shrink-0" />
       </div>
-    </div>,
+    </div>
+    </OverlayLayerContext.Provider>,
     document.body,
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdEmojiEvents, MdAdd, MdEdit, MdDelete, MdContentCopy, MdLink } from 'react-icons/md';
@@ -18,6 +18,7 @@ import Radio from '@/components/Radio';
 import { copyText } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { readToken } from '@/lib/hooks';
 /* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
    spread and therefore un-tree-shakeable, so while the admin surface was in it
    every gallery route shipped all 48 of these. Only the eleven admin tabs
@@ -55,6 +56,7 @@ export default function BadgesTab({ token }: { token: string }) {
   const [expiresAt, setExpiresAt] = useState('');
   const [isPermanent, setIsPermanent] = useState(true);
   const [granting, setGranting] = useState(false);
+  const grantingRef = useRef(false);
 
   // Badge edit
   const [editingBadge, setEditingBadge] = useState<Badge | null>(null);
@@ -68,6 +70,7 @@ export default function BadgesTab({ token }: { token: string }) {
   const [linkBadgeExpiresAt, setLinkBadgeExpiresAt] = useState('');
   const [linkExpiresAt, setLinkExpiresAt] = useState('');
   const [creatingLink, setCreatingLink] = useState(false);
+  const creatingLinkRef = useRef(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -110,10 +113,13 @@ export default function BadgesTab({ token }: { token: string }) {
   const { confirmThen, confirmDialog } = useConfirm();
 
   const handleGrantBadge = async () => {
+    if (grantingRef.current || readToken() !== token) return;
     if (!badgeName.trim()) {
       showToast('请填写徽章名称', 'warning');
       return;
     }
+    // Block a second activation before React commits the disabled button.
+    grantingRef.current = true;
     setGranting(true);
     try {
       const payload: Record<string, unknown> = {
@@ -132,6 +138,7 @@ export default function BadgesTab({ token }: { token: string }) {
 
       const res = await adminApi.adminGrantBadge(token, payload);
       const data = await res.json();
+      if (readToken() !== token) return;
       if (data.success) {
         showToast('徽章授予成功', 'success');
         setBadgeName('');
@@ -144,8 +151,9 @@ export default function BadgesTab({ token }: { token: string }) {
         showToast(data.error || '授予失败', 'error');
       }
     } catch {
-      showToast('授予失败', 'error');
+      if (readToken() === token) showToast('授予失败', 'error');
     } finally {
+      grantingRef.current = false;
       setGranting(false);
     }
   };
@@ -196,10 +204,12 @@ export default function BadgesTab({ token }: { token: string }) {
   };
 
   const handleCreateBadgeLink = async () => {
+    if (creatingLinkRef.current || readToken() !== token) return;
     if (!linkBadgeName.trim()) {
       showToast('请填写徽章名称', 'warning');
       return;
     }
+    creatingLinkRef.current = true;
     setCreatingLink(true);
     try {
       const payload: Record<string, unknown> = {
@@ -211,6 +221,7 @@ export default function BadgesTab({ token }: { token: string }) {
 
       const res = await adminApi.adminCreateBadgeLink(token, payload);
       const data = await res.json();
+      if (readToken() !== token) return;
       if (data.success) {
         showToast('领取链接已生成', 'success');
         setLinkBadgeName('');
@@ -222,8 +233,9 @@ export default function BadgesTab({ token }: { token: string }) {
         showToast(data.error || '创建失败', 'error');
       }
     } catch {
-      showToast('创建失败', 'error');
+      if (readToken() === token) showToast('创建失败', 'error');
     } finally {
+      creatingLinkRef.current = false;
       setCreatingLink(false);
     }
   };
@@ -242,8 +254,9 @@ export default function BadgesTab({ token }: { token: string }) {
   };
 
   const copyBadgeLink = async (link: BadgeLink) => {
-    const url = `${window.location.origin}/claim-badge?token=${link.token}`;
-    if (await copyText(url)) showToast('领取链接已复制', 'success');
+    const url = new URL('/claim-badge', window.location.origin);
+    url.searchParams.set('token', link.token);
+    if (await copyText(url.href)) showToast('领取链接已复制', 'success');
     else showToast('复制失败，请手动选中链接复制', 'error');
   };
 
@@ -497,7 +510,7 @@ export default function BadgesTab({ token }: { token: string }) {
             {' '}
             <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
               {' '}
-              生成一个包含徽章信息的专属链接，用户点击链接即可自动领取指定的徽章。{' '}
+              生成徽章领取链接，用户打开链接并登录后即可领取指定的徽章。{' '}
             </Card>
             <div className="flex gap-4">
               
