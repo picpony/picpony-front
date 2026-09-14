@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { showToast } from '@/components/Toast';
 import { MdShield, MdAdd } from 'react-icons/md';
 import { SectionHeader } from './';
+import SectionHeading from '@/components/SectionHeading';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Chip from '@/components/Chip';
@@ -13,28 +14,20 @@ import ErrorRetry from '@/components/ErrorRetry';
 import { Input } from '@/components/Input';
 import { ICON } from '@/lib/icons';
 import { useConfirm } from '@/components/ConfirmDialog';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
 import { adminData, defineAdminQuery, useAdminQuery } from './queries';
 import { useAdminMutation } from './useAdminMutation';
-import { installBlockFilters, parseBlockFilters } from '@/lib/blockFilters';
+import { BLOCK_FILTER_KEYS, installBlockFilters, parseBlockFilters, type BlockFilterKey } from '@/lib/blockFilters';
 
 interface BlockTag {
   id: number;
   tag_name: string;
-  filter_key?: string;
+  filter_key?: BlockFilterKey;
 }
 
-interface BlockTagsGroup {
-  [key: string]: BlockTag[];
-}
+type BlockTagsGroup = Partial<Record<BlockFilterKey, BlockTag[]>>;
 
-const filterKeys = ['safe', 'spoilers', 'banAnthro', 'banDiscomfort', 'onlyPony'];
-
-const filterLabels: Record<string, string> = {
+const filterLabels: Record<BlockFilterKey, string> = {
   safe: '安全模式 (safe) — 排除项',
   spoilers: '剧透模式 (spoilers) — 排除项',
   banAnthro: '屏蔽拟人 (banAnthro) — 排除项',
@@ -51,12 +44,12 @@ const blockTagsQuery = defineAdminQuery<BlockTagsGroup>('block-tags', async (tok
   const grouped: BlockTagsGroup = {};
   if (Array.isArray(data.tags)) {
     for (const tag of data.tags as BlockTag[]) {
-      if (tag.filter_key && filterKeys.includes(tag.filter_key)) {
+      if (tag.filter_key && BLOCK_FILTER_KEYS.includes(tag.filter_key)) {
         (grouped[tag.filter_key] ??= []).push(tag);
       }
     }
   } else if (data.grouped && typeof data.grouped === 'object') {
-    for (const key of filterKeys) grouped[key] = Array.isArray(data.grouped[key]) ? data.grouped[key] : [];
+    for (const key of BLOCK_FILTER_KEYS) grouped[key] = Array.isArray(data.grouped[key]) ? data.grouped[key] : [];
   }
   return grouped;
 });
@@ -67,16 +60,12 @@ export default function BlockTagsTab({ token }: { token: string }) {
   const loading = read.loading;
   const loadBlockTags = read.refresh;
   const mutation = useAdminMutation(token);
-  const [addingKey, setAddingKey] = useState<string | null>(null);
+  const [addingKey, setAddingKey] = useState<BlockFilterKey | null>(null);
   const [newTagName, setNewTagName] = useState('');
 
-  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
-     converted to the shared dialog and five — this among them — kept their own,
-     which is also why their copy drifted: every hand-rolled body dropped the
-     sentence-final 吗 that every converted one kept. */
   const { confirmThen, confirmDialog } = useConfirm();
 
-  const handleAddTag = async (key: string) => {
+  const handleAddTag = async (key: BlockFilterKey) => {
     if (!read.data || !newTagName.trim()) return;
     await mutation.run(() => adminApi.adminAddBlockTag(token, {
         filter_key: key,
@@ -85,21 +74,18 @@ export default function BlockTagsTab({ token }: { token: string }) {
         showToast('已添加', 'success');
         setNewTagName('');
         setAddingKey(null);
-        loadBlockTags();
-      }, '添加失败');
+      }, '添加失败', { onCommitted: loadBlockTags });
   };
 
-  const handleRemoveTag = (_key: string, tagId: number) => {
+  const handleRemoveTag = (tagId: number) => {
     confirmThen('确认删除', '确定要删除此标签吗？', async () => {
       await mutation.run(() => adminApi.adminRemoveBlockTag(token, tagId), () => {
           showToast('已删除', 'success');
-          loadBlockTags();
-        }, '移除失败');
+        }, '移除失败', { onCommitted: loadBlockTags });
     });
   };
   return (
     <div className="space-y-6">
-      {' '}
       <SectionHeader
         icon={<MdShield size={ICON.standard} />}
         title="底层屏蔽标签管理"
@@ -115,7 +101,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
            chips — not a spinner, which reflowed three cards' worth of layout in
            when the list landed. */
         <div className="space-y-6">
-          {filterKeys.map((key, i) => (
+          {BLOCK_FILTER_KEYS.map((key, i) => (
             <Card key={key} variant="filled">
               <div className="mb-3 flex items-center justify-between">
                 <Skeleton className="h-5 w-24" delay={i * 90} />
@@ -136,14 +122,14 @@ export default function BlockTagsTab({ token }: { token: string }) {
         </div>
       ) : (
         <div className="space-y-6">
-          {filterKeys.map((key) => {
+          {BLOCK_FILTER_KEYS.map((key) => {
             const tags = blockTags[key] || [];
             return (
               <Card key={key} variant="filled">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-label-l text-on-surface">{filterLabels[key]}</h3>
+                  <SectionHeading as="h3" className="mb-0">{filterLabels[key]}</SectionHeading>
                   <Button
-                    icon={<MdAdd size={ICON.dense} />}
+                    icon={<MdAdd />}
                     variant="accent"
                     size="xs"
                     disabled={mutation.busy}
@@ -173,14 +159,14 @@ export default function BlockTagsTab({ token }: { token: string }) {
                   <EmptyState size="inline" title="暂无标签" />
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {tags.map((tag: BlockTag) => (
+                    {tags.map((tag) => (
                       /* `Chip` with `onRemove`, not a hand-rolled pill with a
                          literal `×` in it: a chip is 8dp, not a pill, and the
                          unlabelled button was read out as "times". */
                       <Chip
                         key={tag.id}
                         disabled={mutation.busy}
-                        onRemove={() => handleRemoveTag(key, tag.id)}
+                        onRemove={() => handleRemoveTag(tag.id)}
                         removeLabel={`移除标签 ${tag.tag_name}`}
                       >
                         {tag.tag_name}

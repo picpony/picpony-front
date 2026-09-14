@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useRef } from 'react';
+import { Suspense, useRef, type ComponentType, type ReactNode } from 'react';
 import {
   MdBook,
   MdDashboard,
@@ -48,109 +48,101 @@ function AdminTabFallback() {
   );
 }
 
-const WelcomeTab = dynamic(() => import('@/components/admin/WelcomeTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const GlossaryTab = dynamic(() => import('@/components/admin/GlossaryTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const UsersTab = dynamic(() => import('@/components/admin/UsersTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const NotificationsTab = dynamic(() => import('@/components/admin/NotificationsTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const MessagesAuditTab = dynamic(() => import('@/components/admin/MessagesAuditTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const BadgesTab = dynamic(() => import('@/components/admin/BadgesTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const BlockTagsTab = dynamic(() => import('@/components/admin/BlockTagsTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const DeveloperTab = dynamic(() => import('@/components/admin/DeveloperTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const TeamTab = dynamic(() => import('@/components/admin/TeamTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const ShopTab = dynamic(() => import('@/components/admin/ShopTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const ReportsTab = dynamic(() => import('@/components/admin/ReportsTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const BlacklistTab = dynamic(() => import('@/components/admin/BlacklistTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const WealthTab = dynamic(() => import('@/components/admin/WealthTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const OtherTab = dynamic(() => import('@/components/admin/OtherTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-
-type TabId =
-  | 'welcome'
-  | 'glossary'
-  | 'users'
-  | 'notifications'
-  | 'messages'
-  | 'reports'
-  | 'blacklist'
-  | 'shop'
-  | 'wealth'
-  | 'other'
-  | 'badges'
-  | 'blocktags'
-  | 'developer'
-  | 'team';
-
-interface TabConfig {
-  id: TabId;
-  label: string;
-  icon: React.ReactNode;
-  adminOnly?: boolean;
-  superAdminOnly?: boolean;
-  editorOnly?: boolean;
+interface AdminPanelProps {
+  token: string;
+  myRole: string;
 }
 
-const TABS: TabConfig[] = [
-  { id: 'welcome', label: '欢迎', icon: <MdDashboard size={ICON.control} />, editorOnly: true },
-  { id: 'glossary', label: '词库编辑', icon: <MdBook size={ICON.control} />, editorOnly: true },
-  { id: 'users', label: '用户管理', icon: <MdPeople size={ICON.control} />, adminOnly: true },
+const WelcomeTab = dynamic<AdminPanelProps>(() => import('@/components/admin/WelcomeTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const GlossaryTab = dynamic<AdminPanelProps>(() => import('@/components/admin/GlossaryTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const UsersTab = dynamic<AdminPanelProps>(() => import('@/components/admin/UsersTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const NotificationsTab = dynamic<AdminPanelProps>(() => import('@/components/admin/NotificationsTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const MessagesAuditTab = dynamic<AdminPanelProps>(() => import('@/components/admin/MessagesAuditTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const BadgesTab = dynamic<AdminPanelProps>(() => import('@/components/admin/BadgesTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const BlockTagsTab = dynamic<AdminPanelProps>(() => import('@/components/admin/BlockTagsTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const DeveloperTab = dynamic<AdminPanelProps>(() => import('@/components/admin/DeveloperTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const TeamTab = dynamic<AdminPanelProps>(() => import('@/components/admin/TeamTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const ShopTab = dynamic<AdminPanelProps>(() => import('@/components/admin/ShopTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const ReportsTab = dynamic<AdminPanelProps>(() => import('@/components/admin/ReportsTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const BlacklistTab = dynamic<AdminPanelProps>(() => import('@/components/admin/BlacklistTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const WealthTab = dynamic<AdminPanelProps>(() => import('@/components/admin/WealthTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+const OtherTab = dynamic<AdminPanelProps>(() => import('@/components/admin/OtherTab'), {
+  ssr: false,
+  loading: AdminTabFallback,
+});
+
+interface TabConfig {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  access: 'staff' | 'admin' | 'super_admin';
+  component: ComponentType<AdminPanelProps>;
+}
+
+/** Navigation, access and the lazy panel share one entry per destination. */
+const TABS = [
+  { id: 'welcome', label: '欢迎', icon: <MdDashboard size={ICON.control} />, access: 'staff', component: WelcomeTab },
+  { id: 'glossary', label: '词库编辑', icon: <MdBook size={ICON.control} />, access: 'staff', component: GlossaryTab },
+  { id: 'users', label: '用户管理', icon: <MdPeople size={ICON.control} />, access: 'admin', component: UsersTab },
   {
     id: 'notifications',
     label: '通知管理',
     icon: <MdNotifications size={ICON.control} />,
-    adminOnly: true,
+    access: 'admin',
+    component: NotificationsTab,
   },
-  { id: 'messages', label: '私信审计', icon: <MdMessage size={ICON.control} />, adminOnly: true },
-  { id: 'badges', label: '徽章管理', icon: <MdEmojiEvents size={ICON.control} />, adminOnly: true },
-  { id: 'blocktags', label: '屏蔽标签', icon: <MdShield size={ICON.control} />, adminOnly: true },
-  { id: 'developer', label: '开发者', icon: <MdBuild size={ICON.control} />, adminOnly: true },
-  { id: 'team', label: '团队管理', icon: <MdPeople size={ICON.control} />, adminOnly: true },
-  { id: 'shop', label: '商店管理', icon: <MdStore size={ICON.control} />, adminOnly: true },
-  { id: 'reports', label: '举报处理', icon: <MdReport size={ICON.control} />, adminOnly: true },
-  { id: 'blacklist', label: '屏蔽图库', icon: <MdBlock size={ICON.control} />, adminOnly: true },
-  { id: 'wealth', label: '经验金币', icon: <MdAttachMoney size={ICON.control} />, superAdminOnly: true },
-  { id: 'other', label: '其他功能', icon: <MdBuild size={ICON.control} />, adminOnly: true },
-];
+  { id: 'messages', label: '私信审计', icon: <MdMessage size={ICON.control} />, access: 'admin', component: MessagesAuditTab },
+  { id: 'badges', label: '徽章管理', icon: <MdEmojiEvents size={ICON.control} />, access: 'admin', component: BadgesTab },
+  { id: 'blocktags', label: '屏蔽标签', icon: <MdShield size={ICON.control} />, access: 'admin', component: BlockTagsTab },
+  { id: 'developer', label: '开发者', icon: <MdBuild size={ICON.control} />, access: 'admin', component: DeveloperTab },
+  { id: 'team', label: '团队管理', icon: <MdPeople size={ICON.control} />, access: 'admin', component: TeamTab },
+  { id: 'shop', label: '商店管理', icon: <MdStore size={ICON.control} />, access: 'admin', component: ShopTab },
+  { id: 'reports', label: '举报处理', icon: <MdReport size={ICON.control} />, access: 'admin', component: ReportsTab },
+  { id: 'blacklist', label: '屏蔽图库', icon: <MdBlock size={ICON.control} />, access: 'admin', component: BlacklistTab },
+  { id: 'wealth', label: '经验金币', icon: <MdAttachMoney size={ICON.control} />, access: 'super_admin', component: WealthTab },
+  { id: 'other', label: '其他功能', icon: <MdBuild size={ICON.control} />, access: 'admin', component: OtherTab },
+] as const satisfies readonly TabConfig[];
+
+type TabId = (typeof TABS)[number]['id'];
 
 /** The tab bare `/admin` lands on — the one spelled by `?tab=`'s absence, same rule
  *  the home tabs use for 图库. */
@@ -168,21 +160,16 @@ function AdminPanel() {
   const isEditor = userRole === 'editor';
   const isAdmin = ['super_admin', 'admin'].includes(userRole);
   const isSuperAdmin = userRole === 'super_admin';
-  const visibleTabs = TABS.filter((tab) => {
-    if (isEditor) return tab.editorOnly;
-    if (tab.superAdminOnly) return isSuperAdmin;
-    if (tab.adminOnly) return isAdmin;
-    return true;
-  });
+  const visibleTabs = TABS.filter((tab) =>
+    tab.access === 'staff' || (tab.access === 'admin' ? isAdmin : isSuperAdmin));
 
   /* The tab the URL asks for. An unknown name, or one this role cannot see, falls back
      rather than erroring — a bookmarked `?tab=wealth` kept by someone who has since
      lost super-admin should still open the panel. */
   const tabParam = searchParams.get('tab');
-  const urlTab: TabId =
-    visibleTabs.find((tab) => tab.id === tabParam)?.id ?? visibleTabs[0]?.id ?? DEFAULT_TAB;
-
-  const activeTab = urlTab;
+  const selectedTab = visibleTabs.find((tab) => tab.id === tabParam) ?? visibleTabs[0] ?? TABS[0];
+  const activeTab = selectedTab.id;
+  const ActivePanel = selectedTab.component;
   const lastTabWrite = useRef<{ at: number; href: string } | null>(null);
 
   const handleTabChange = (tabId: TabId) => {
@@ -215,7 +202,6 @@ function AdminPanel() {
   }
   return (
     <div className="max-w-6xl mx-auto">
-      {' '}
       {/* `surface-container-low`, not `surface`: the app scroller behind this is itself
           `bg-surface`, so a panel painted the same tone was a card the exact colour of
           the page it sits on. Same fault AGENTS.md's layout note records for /settings'
@@ -252,34 +238,20 @@ function AdminPanel() {
               rise with an 80ms backwards-filled delay — which on a lateral move between
               siblings read as the panel dropping in from above. `animate-fade-in` is the
               same 400ms `decelerate` without the travel. The `key` stays: it restarts the
-              animation on each switch, and with `{cond && ...}` mounting there is nothing
-              for it to destroy that was not destroyed anyway.
+              animation on each switch and resets form state when the account changes.
 
               It carries the panel half of `role="tab"`'s contract itself — one panel,
               re-identified as the active tab changes, so the selected tab's
               `aria-controls` always resolves. */}
           <div
-            key={activeTab}
+            key={`${token}:${activeTab}`}
             id={tabPanelId(activeTab)}
             role="tabpanel"
             aria-labelledby={tabId(activeTab)}
             tabIndex={0}
             className="animate-fade-in"
           >
-            {activeTab === 'welcome' && <WelcomeTab />}
-            {activeTab === 'glossary' && <GlossaryTab />}
-            {activeTab === 'users' && <UsersTab token={token} myRole={userRole} />}
-            {activeTab === 'notifications' && <NotificationsTab token={token} />}
-            {activeTab === 'messages' && <MessagesAuditTab token={token} />}
-            {activeTab === 'badges' && <BadgesTab token={token} />}
-            {activeTab === 'blocktags' && <BlockTagsTab token={token} />}
-            {activeTab === 'developer' && <DeveloperTab token={token} />}
-            {activeTab === 'team' && <TeamTab token={token} />}
-            {activeTab === 'shop' && <ShopTab token={token} />}
-            {activeTab === 'reports' && <ReportsTab token={token} />}
-            {activeTab === 'blacklist' && <BlacklistTab token={token} />}
-            {activeTab === 'wealth' && <WealthTab token={token} />}
-            {activeTab === 'other' && <OtherTab token={token} />}
+            <ActivePanel token={token} myRole={userRole} />
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { PICPONY_API_BASE } from '@/lib/constants';
+import { picponyPostJson } from './http';
 
 export interface ClaimBadgeResult {
   success: boolean;
@@ -10,11 +10,7 @@ export interface ClaimBadgeResult {
  *  is in the Authorization header; `token` in the body is the badge-link token.
  *  Keep this mutation out of the admin namespace and never retry it implicitly. */
 export async function claimBadge(userToken: string, claimToken: string): Promise<ClaimBadgeResult> {
-  const response = await fetch(`${PICPONY_API_BASE}?action=user_claim_badge`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: claimToken }),
-  });
+  const response = await picponyPostJson('user_claim_badge', { token: claimToken }, { token: userToken });
   const data: unknown = await response.json();
   if (!data || typeof data !== 'object' || !('success' in data)) {
     throw new Error('徽章领取响应无效');

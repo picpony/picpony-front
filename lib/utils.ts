@@ -1,4 +1,4 @@
-const API_BASE = 'https://picpony.top';
+import { PICPONY_API_ORIGIN } from './constants';
 
 /**
  * Joins class names, keeping only non-empty strings (repo components compose
@@ -28,7 +28,7 @@ export function clamp01(value: number): number {
 export function getAssetUrl(path: string): string {
   if (!path) return '';
   if (/^https?:\/\//.test(path)) return path;
-  return `${API_BASE}/${path.replace(/^\/+/, '')}`;
+  return `${PICPONY_API_ORIGIN}/${path.replace(/^\/+/, '')}`;
 }
 
 /** The avatar case of getAssetUrl, which tolerates a missing value. */
@@ -38,6 +38,7 @@ export function getAvatarUrl(avatar: string | undefined | null): string {
 
 /** Copies text and reports whether it actually worked: the Clipboard API needs a secure context and can reject, so a failed first attempt falls through to the deprecated-but-intentional execCommand copy — the only path that works on an insecure origin, whose false return is checked rather than trusted. */
 export async function copyText(text: string): Promise<boolean> {
+  if (typeof navigator === 'undefined' || typeof document === 'undefined') return false;
   if (navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
@@ -46,8 +47,10 @@ export async function copyText(text: string): Promise<boolean> {
       // Fall through — a denied permission is still worth one more attempt.
     }
   }
+  const focused = document.activeElement;
+  let staging: HTMLTextAreaElement | undefined;
   try {
-    const staging = document.createElement('textarea');
+    staging = document.createElement('textarea');
     staging.value = text;
     staging.setAttribute('readonly', '');
     // Off-screen rather than hidden: a hidden element is not selectable.
@@ -56,34 +59,36 @@ export async function copyText(text: string): Promise<boolean> {
     staging.style.opacity = '0';
     document.body.appendChild(staging);
     staging.select();
-    const ok = document.execCommand('copy');
-    staging.remove();
-    return ok;
+    return document.execCommand('copy');
   } catch {
     return false;
+  } finally {
+    staging?.remove();
+    if (focused instanceof HTMLElement && focused.isConnected) {
+      focused.focus({ preventScroll: true });
+    }
   }
 }
 
+/** Validate without allocating a Data URL when a cropper will read the file itself. */
+export function validateImageFile(file: File, maxSizeMB = 5): void {
+  if (!file.type.startsWith('image/')) throw new Error('请选择有效的图片文件');
+  if (file.size > maxSizeMB * 1024 * 1024) {
+    throw new Error(`图片大小不能超过 ${maxSizeMB}MB`);
+  }
+}
 
-export function processImageFile(file: File, maxSizeMB: number = 5): Promise<string> {
+export function processImageFile(file: File, maxSizeMB = 5): Promise<string> {
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('请选择有效的图片文件'));
-      return;
-    }
-
-    if (file.size > maxSizeMB * 1024 * 1024) {
-      reject(new Error(`图片大小不能超过 ${maxSizeMB}MB`));
-      return;
-    }
-
+    validateImageFile(file, maxSizeMB);
     const reader = new FileReader();
-    reader.onloadend = () => {
-      resolve(reader.result as string);
+    const fail = () => reject(new Error('读取图片失败'));
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else fail();
     };
-    reader.onerror = () => {
-      reject(new Error('读取图片失败'));
-    };
+    reader.onerror = fail;
+    reader.onabort = fail;
     reader.readAsDataURL(file);
   });
 }

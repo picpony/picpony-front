@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { MdCollectionsBookmark, MdKey } from 'react-icons/md';
-import { PonyImage } from '@/lib/api';
+import { type PonyImage } from '@/lib/api';
 import { readToken, useDeferredLoading, useSession } from '@/lib/hooks';
 import { SKIP, useResource } from '@/lib/resource';
 import { useAuthModal } from '@/components/AuthModal';

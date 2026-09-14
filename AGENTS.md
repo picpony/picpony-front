@@ -1166,6 +1166,13 @@ Pass `SKIP` for a read that should not happen yet — an unselected tab, a signe
 
 **A paged list must pass `keepPrevious`, and forgetting it is a scroll bug rather than a data one.** Changing the page changes the key, and a key with nothing cached reports `data === undefined` — the rows unmount for one round trip, the scroll container collapses, the browser clamps `scrollTop` to the new tiny maximum, and the page snaps to the very top with the pager's own scroll-to-the-list undone. `node scripts/netAuditScroll.mjs` samples the card count every frame across a page turn and fails on a single empty frame, because one commit is enough. It is off by default because for an unpaged screen it is wrong: showing the *previous* profile while the next one loads is worse than a skeleton.
 
+**Pass a scope string when a paged list changes owner or content filter.** `keepPrevious: true`
+retains pages within the resource; a string made from `userId` and `contentFilter` retains only
+within that scope. A new profile or filter drops the old answer immediately, including when the
+new read fails. Disabling a read with `SKIP` also clears its retained answer. The Derpi uploader
+resource puts the filter snapshot in both its key and its actual request, so a preference change
+while waiting for route policy cannot store an unfiltered answer under a safe key.
+
 ### Arriving with the answer: `seed` and `initial`
 
 Three screens render their first read on the server and hand it down: `/` (the first page of the gallery), `/about` (the team roster) and `/user/[id]` (the profile header, not the four tabs). Each has a `.server.ts` module beside it, a server shell that awaits it, and an island that takes it as a prop and passes it to `useResource` as `initial`.

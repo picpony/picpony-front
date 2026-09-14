@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { UserComment } from '@/lib/api';
+import { type UserComment } from '@/lib/api';
 import { SKIP, useResource } from '@/lib/resource';
 import { useScreenStateFor } from '@/lib/screenState';
 import type { ProfileSeed } from '@/lib/profile.server';

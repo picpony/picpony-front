@@ -181,7 +181,7 @@ export default function CommentComposer({
           variant="filled"
           loading={isSubmitting}
           disabled={!trimmedComment}
-          icon={<MdSend size={ICON.dense} />}
+          icon={<MdSend />}
         >
           {isSubmitting ? '发送中…' : replyTo ? '发送回复' : '发送评论'}
         </Button>

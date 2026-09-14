@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   MdStar,
@@ -11,14 +11,18 @@ import {
   MdChatBubbleOutline,
   MdEdit,
 } from 'react-icons/md';
-import { api, DerpiProfileUser, PonyImage } from '@/lib/api';
+import { SKIP, useResource } from '@/lib/resource';
+import { derpiUserProfile, derpiUserUploads } from '@/lib/resources';
+import { useScreenStateFor } from '@/lib/screenState';
 import Pagination from '@/components/Pagination';
 import Skeleton from '@/components/Skeleton';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
 import ErrorRetry from '@/components/ErrorRetry';
 import PageBack from '@/components/PageBack';
-import { useEscapeBack } from '@/lib/hooks';
+import { useEscapeBack, useStoredValue } from '@/lib/hooks';
+import { LS_KEYS } from '@/lib/constants';
+import { parseContentFilter } from '@/lib/searchQuery';
 import EmptyState from '@/components/EmptyState';
 import Button, { buttonClasses } from '@/components/Button';
 import SectionHeading from '@/components/SectionHeading';
@@ -27,81 +31,32 @@ import { ICON } from '@/lib/icons';
 const PER_PAGE = 24;
 
 export default function DerpiUserPage() {
-  const params = useParams();
+  const { id: userId } = useParams<{ id: string }>();
+  const contentFilter = parseContentFilter(useStoredValue(LS_KEYS.contentFilter, 'safe'));
+  const scope = `${userId}:${contentFilter}`;
+
+  // A filter change must adopt its own remembered page before starting a read.
+  return <DerpiUserContent key={scope} scope={scope} userId={userId} contentFilter={contentFilter} />;
+}
+
+function DerpiUserContent({ userId, contentFilter, scope }: {
+  userId: string;
+  contentFilter: ReturnType<typeof parseContentFilter>;
+  scope: string;
+}) {
   const router = useRouter();
-  const userId = (params.id as string) || '';
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [profile, setProfile] = useState<DerpiProfileUser | null>(null);
-  const [profileRetry, setProfileRetry] = useState(0);
-
-  // Uploads tab
-  const [uploads, setUploads] = useState<PonyImage[]>([]);
-  const [uploadsPage, setUploadsPage] = useState(1);
-  const [uploadsTotal, setUploadsTotal] = useState(0);
-  const [isUploadsLoading, setIsUploadsLoading] = useState(false);
-  const [uploadsError, setUploadsError] = useState<string | null>(null);
-  const [uploadsRetry, setUploadsRetry] = useState(0);
-
-  // Fetch profile
-  useEffect(() => {
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (!isMounted) return;
-      setIsLoading(true);
-      setError(null);
-    });
-
-    (async () => {
-      try {
-        const data = await api.getDerpiProfile(userId);
-        if (!isMounted) return;
-        if (!data?.user) throw new Error('用户资料加载失败，或该用户不存在');
-        setProfile(data.user);
-      } catch (err) {
-        if (isMounted) setError(err instanceof Error ? err.message : '用户资料加载失败');
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [userId, profileRetry]);
-
-  // Fetch uploads
-  useEffect(() => {
-    if (!profile) return;
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (isMounted) {
-        setIsUploadsLoading(true);
-        setUploadsError(null);
-      }
-    });
-
-    (async () => {
-      try {
-        const query = `uploader_id:${profile.id}`;
-        const data = await api.searchDerpiImages(query, uploadsPage, PER_PAGE);
-        if (!isMounted) return;
-        if (!data || !Array.isArray(data.images)) throw new Error('上传记录加载失败');
-        setUploads(data.images);
-        setUploadsTotal(data.total || 0);
-      } catch {
-        if (isMounted) setUploadsError('上传记录加载失败，请稍后重试');
-      } finally {
-        if (isMounted) setIsUploadsLoading(false);
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [profile, uploadsPage, uploadsRetry]);
-
+  const [uploadsPage, setUploadsPage] = useScreenStateFor('derpi-profile:uploads-page', scope, 1);
+  const profileRead = useResource(derpiUserProfile, { id: userId });
+  const profile = profileRead.data;
+  const error = profileRead.error instanceof Error ? profileRead.error.message : '用户资料加载失败';
+  const uploadsRead = useResource(
+    derpiUserUploads,
+    profile ? { id: profile.id, page: uploadsPage, perPage: PER_PAGE, contentFilter } : SKIP,
+    { keepPrevious: scope },
+  );
+  const uploads = uploadsRead.data?.images ?? [];
+  const uploadsTotal = uploadsRead.data?.total ?? 0;
+  const uploadsError = uploadsRead.error instanceof Error ? uploadsRead.error.message : '上传记录加载失败';
   const totalPages = Math.ceil(uploadsTotal / PER_PAGE);
 
   const handleUploadClick = useCallback(
@@ -121,7 +76,7 @@ export default function DerpiUserPage() {
   const handleBack = useCallback(() => router.back(), [router]);
   useEscapeBack(handleBack);
 
-  if (isLoading) {
+  if (profile === undefined && profileRead.error === undefined) {
     return (
       <>
       <PageBack onClick={handleBack} title="返回 (Esc)" />
@@ -146,7 +101,7 @@ export default function DerpiUserPage() {
   }
 
   // --- Error state ---
-  if (error || !profile) {
+  if (!profile) {
     /* One action, and it is the one this screen alone can offer — the source
        profile on Derpibooru. 返回上一页 is dropped because the leading back
        affordance is already chrome on this route, the same call the forum
@@ -163,8 +118,8 @@ export default function DerpiUserPage() {
           same place rather than one being centred and two sitting high. */}
       <ErrorRetry
         fill
-        message={error || '用户可能不存在'}
-        onRetry={() => setProfileRetry((value) => value + 1)}
+        message={error}
+        onRetry={profileRead.refresh}
         action={
           userId && (
             <a
@@ -286,7 +241,7 @@ export default function DerpiUserPage() {
               variant="filled"
               size="lg"
               className="flex-1"
-              icon={<MdSearch size={ICON.dense} />}
+              icon={<MdSearch />}
             >
               搜搜 TA 的所有作品
             </Button>
@@ -311,8 +266,8 @@ export default function DerpiUserPage() {
               最近上传
             </SectionHeading>
 
-            {uploadsError && <ErrorRetry size="inline" title={uploadsError} onRetry={() => setUploadsRetry((value) => value + 1)} />}
-            {isUploadsLoading && uploads.length === 0 ? (
+            {Boolean(uploadsRead.error) && <ErrorRetry size="inline" title={uploadsError} onRetry={uploadsRead.refresh} />}
+            {uploadsRead.data === undefined && uploadsRead.error === undefined ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                 {Array.from({ length: PER_PAGE }).map((_, i) => (
                   <Skeleton key={i} className="aspect-square rounded-lg" />
@@ -321,7 +276,7 @@ export default function DerpiUserPage() {
             ) : uploads.length > 0 ? (
               /* The anchor wraps the grid *and* its pager: `Pagination` reaches it with
                  `closest()`, so one that sits beside the pager is one it cannot see. */
-              <div data-pagination-anchor aria-busy={isUploadsLoading}>
+              <div data-pagination-anchor aria-busy={uploadsRead.isLoading}>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                   {uploads.map((img) => {
                     const thumbUrl =
@@ -381,14 +336,11 @@ export default function DerpiUserPage() {
                   <Pagination
                     currentPage={uploadsPage}
                     totalPages={totalPages}
-                    onPageChange={(next) => {
-                      setIsUploadsLoading(true);
-                      setUploadsPage(next);
-                    }}
+                    onPageChange={setUploadsPage}
                   />
                 )}
               </div>
-            ) : !uploadsError ? (
+            ) : !uploadsRead.error ? (
               <EmptyState
                 size="pane"
                 icon={<MdImage size={ICON.display} />}

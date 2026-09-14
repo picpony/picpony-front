@@ -11,56 +11,52 @@
  * parameter — a Chinese-language UI, pinned so server and client output stay identical.
  */
 
-const ZH = 'zh-CN';
+const FORMATS = {
+  dateTime: new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }),
+  shortDateTime: new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }),
+  date: new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }),
+  monthDay: new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }),
+};
 
 function toDate(value: string | Date): Date | null {
-  const d = typeof value === 'string' ? new Date(value) : value;
+  // PHP's space-separated local timestamps need ISO's T in Safari. Leave an
+  // existing ISO timezone/offset intact rather than replacing every hyphen.
+  const d = typeof value === 'string'
+    ? new Date(value.replace(/^(\d{4}-\d{2}-\d{2}) (?=\d{2}:\d{2})/, '$1T'))
+    : value;
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function formatDateTime(value: string | Date): string {
+function format(value: string | Date, formatter: Intl.DateTimeFormat): string {
   const d = toDate(value);
-  if (!d) return typeof value === 'string' ? value : '';
-  return d.toLocaleString(ZH, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return d ? formatter.format(d) : typeof value === 'string' ? value : '';
+}
+
+export function formatDateTime(value: string | Date): string {
+  return format(value, FORMATS.dateTime);
 }
 
 export function formatShortDateTime(value: string | Date): string {
-  const d = toDate(value);
-  if (!d) return typeof value === 'string' ? value : '';
-  return d.toLocaleString(ZH, {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return format(value, FORMATS.shortDateTime);
 }
 
 export function formatDate(value: string | Date): string {
-  const d = toDate(value);
-  if (!d) return typeof value === 'string' ? value : '';
-  return d.toLocaleDateString(ZH, { year: 'numeric', month: '2-digit', day: '2-digit' });
+  return format(value, FORMATS.date);
 }
 
 export function formatMonthDay(value: string | Date): string {
-  const d = toDate(value);
-  if (!d) return typeof value === 'string' ? value : '';
-  return d.toLocaleString(ZH, { month: '2-digit', day: '2-digit' });
+  return format(value, FORMATS.monthDay);
 }
 
-/**
- * "在线" / "刚刚" / "12分钟前" / … / a bare date past a month. `replace(/-/g, '/')` is load-bearing:
- * `new Date('2026-08-20 00:55')` (space, not `T`) is invalid in Safari, and that is this backend's shape.
- */
+/** "在线" / "刚刚" / "12分钟前" / … / a bare date past a month. */
 export function formatLastOnline(lastOnline: string): string {
-  const lastTime = new Date(lastOnline.replace(/-/g, '/')).getTime();
-  if (Number.isNaN(lastTime)) return lastOnline;
-  const diffMs = Date.now() - lastTime;
+  const lastTime = toDate(lastOnline);
+  if (!lastTime) return lastOnline;
+  const diffMs = Date.now() - lastTime.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
@@ -71,5 +67,5 @@ export function formatLastOnline(lastOnline: string): string {
   if (diffHours < 24) return `${diffHours}小时${diffMins % 60}分前`;
   if (diffDays <= 5) return `${diffDays}天${diffHours % 24}小时前`;
   if (diffDays <= 30) return `${diffDays}天前`;
-  return lastOnline.split(' ')[0];
+  return lastOnline.split(/[T ]/, 1)[0];
 }

@@ -12,8 +12,6 @@ import { ICON } from '@/lib/icons';
 import ErrorRetry from '@/components/ErrorRetry';
 import Skeleton from '@/components/Skeleton';
 import SectionHeading from '@/components/SectionHeading';
-/* Namespace import, deliberately: `api` is a runtime spread and
-   un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
 import { adminData, defineAdminQuery, useAdminQuery } from './queries';
 import { useAdminMutation } from './useAdminMutation';
@@ -27,6 +25,11 @@ const statusQuery = defineAdminQuery('site-status', async (_token, signal) => {
   });
 });
 interface SiteStats { images: number; tags: number; comments: number; updated_at: string }
+const STAT_FIELDS = [
+  { key: 'images', label: '图片总数' },
+  { key: 'tags', label: '标签总数' },
+  { key: 'comments', label: '评论总数' },
+] as const;
 const statsQuery = defineAdminQuery<SiteStats>('site-stats', async (_token, signal) => {
   const data = await adminApi.getSiteStats(signal);
   adminData(data, undefined);
@@ -55,11 +58,12 @@ export default function OtherTab({ token }: { token: string }) {
       maintenance_mode: newValue,
       maintenance_message: message,
     }), () => {
-      statusQuery.write(token, { ...current, maintenanceMode: newValue, maintenanceMessage: message });
       setMaintenanceMessage(null);
       showToast(newValue === current.maintenanceMode ? '维护提示已保存' : newValue ? '维护模式已开启' : '维护模式已关闭', 'success');
+    }, '操作失败', { onCommitted: () => {
+      statusQuery.write(token, { ...current, maintenanceMode: newValue, maintenanceMessage: message });
       status.refresh();
-    });
+    } });
   };
 
   const toggleMaintenance = async () => {
@@ -81,11 +85,11 @@ export default function OtherTab({ token }: { token: string }) {
     const current = status.data;
     const newValue = !translateEnabled;
     await mutation.run(() => adminApi.adminToggleTranslate(token, { translate_enabled: newValue }),
-      () => {
+      () => showToast(newValue ? '翻译功能已开启' : '翻译功能已关闭', 'success'),
+      '操作失败', { onCommitted: () => {
         statusQuery.write(token, { ...current, translateEnabled: newValue });
-        showToast(newValue ? '翻译功能已开启' : '翻译功能已关闭', 'success');
         status.refresh();
-      });
+      } });
   };
   return (
     <div className="space-y-6">
@@ -146,27 +150,14 @@ export default function OtherTab({ token }: { token: string }) {
         {statistics.error ? <ErrorRetry size="inline" message={statistics.error} onRetry={statistics.refresh} /> : <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
           
-          <div className="text-center p-3 rounded-md">
-            {' '}
-            <div className="text-body-s text-on-surface-variant mb-1">图片总数</div>
-            <div className="text-title-l-emphasized text-primary-ink">
-              {statistics.loading ? <Skeleton className="mx-auto h-8 w-20" /> : stats.images?.toLocaleString() || 0}
+          {STAT_FIELDS.map(({ key, label }) => (
+            <div key={key} className="text-center p-3 rounded-md">
+              <div className="text-body-s text-on-surface-variant mb-1">{label}</div>
+              <div className="text-title-l-emphasized text-primary-ink">
+                {statistics.loading ? <Skeleton className="mx-auto h-8 w-20" /> : stats[key]?.toLocaleString() || 0}
+              </div>
             </div>
-          </div>
-          <div className="text-center p-3 rounded-md">
-            {' '}
-            <div className="text-body-s text-on-surface-variant mb-1">标签总数</div>
-            <div className="text-title-l-emphasized text-primary-ink">
-              {statistics.loading ? <Skeleton className="mx-auto h-8 w-20" /> : stats.tags?.toLocaleString() || 0}
-            </div>
-          </div>
-          <div className="text-center p-3 rounded-md">
-            {' '}
-            <div className="text-body-s text-on-surface-variant mb-1">评论总数</div>
-            <div className="text-title-l-emphasized text-primary-ink">
-              {statistics.loading ? <Skeleton className="mx-auto h-8 w-20" /> : stats.comments?.toLocaleString() || 0}
-            </div>
-          </div>
+          ))}
         </div>
         <div className="flex items-center justify-between">
           

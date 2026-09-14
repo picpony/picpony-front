@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api } from '@/lib/api';
+import {
+  deleteDictionaryTag,
+  getDictionary,
+  getDictionaryDuplicates,
+  getDictionaryTagHistory,
+  saveDictionaryTag,
+} from '@/lib/api/picpony';
+import { getDerpiPopularTags, searchDerpiTags } from '@/lib/api/derpi';
 import { showToast } from '@/components/Toast';
 import Checkbox from '@/components/Checkbox';
 import Modal from '@/components/Modal';
@@ -45,19 +52,10 @@ import { clamp } from '@/lib/utils';
 import { readToken, useSession } from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
 import { requireAdminSuccess } from '@/lib/adminMutations';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable — only the admin tabs import this, and
-   each is already its own `dynamic` chunk. */
+import { dictionaryTag, type DictionaryEntry } from '@/lib/resources';
 import * as adminApi from '@/lib/api/admin';
 
-interface Tag {
-  id: number;
-  cn: string;
-  en: string;
-  aliases: string[];
-  cat: string;
-  count: number;
-  description: string;
+interface Tag extends DictionaryEntry {
   last_editor?: string;
   created_at?: string;
 }
@@ -126,8 +124,6 @@ const TAG_CATEGORY_OPTIONS = [
   { value: 'content-fanmade', label: '同人内容 (content-fanmade)' },
   { value: 'error', label: '错误 (error)' },
 ];
-
-const requireDictionarySuccess = requireAdminSuccess;
 
 export default function GlossaryTab() {
   const [tags, setTags] = useState<Tag[]>([]);
@@ -281,7 +277,7 @@ export default function GlossaryTab() {
     setIsHistoryLoading(true);
 
     try {
-      const data = await api.getDictionaryTagHistory(token, tag.id);
+      const data = await getDictionaryTagHistory(token, tag.id);
       if (!current()) return;
       if (data.success) {
         const list: TagHistory[] = data.history || [];
@@ -310,7 +306,7 @@ export default function GlossaryTab() {
       setError(null);
 
       try {
-        const data = await api.getDictionary(token, {
+        const data = await getDictionary(token, {
           page,
           limit: itemsPerPage,
           keyword: searchKeyword,
@@ -347,7 +343,7 @@ export default function GlossaryTab() {
 
     setIsLoading(true);
     try {
-      const data = await api.getDictionaryDuplicates(token);
+      const data = await getDictionaryDuplicates(token);
       if (!current()) return;
       if (data.success && data.tags) {
         setDuplicateTags(data.tags);
@@ -465,7 +461,7 @@ export default function GlossaryTab() {
     }
 
     try {
-      const data = await api.searchDerpiTags(query);
+      const data = await searchDerpiTags(query);
       if (!current()) return;
       if (data.tags && data.tags.length > 0) {
         setDerpiSuggestions(data.tags);
@@ -529,7 +525,7 @@ export default function GlossaryTab() {
         }
       }
 
-      const res = await api.saveDictionaryTag(token, {
+      const res = await saveDictionaryTag(token, {
         id: id || undefined,
         en: en.trim(),
         cn: finalCn,
@@ -539,48 +535,45 @@ export default function GlossaryTab() {
         description: description.trim(),
       });
 
-      const data = await res.json();
+      await requireAdminSuccess(res, '保存失败');
+      dictionaryTag.invalidate();
       if (!isActive()) return;
 
-      if (res.ok && data.success) {
-        showToast(id ? '已更新' : '已添加', 'success');
-        // 若有挂起的用户工单，保存成功后自动标记为已处理（与 ciku.html 行为一致）
-        if (activeFeedbackWorkOrder) {
-          const workOrder = activeFeedbackWorkOrder;
-          try {
-            const feedbackResponse = await adminApi.handleTagFeedback(
-              token,
-              workOrder.id,
-              'processed',
-              '已采纳并写入词库',
-              workOrder.status,
-            );
-            await requireDictionarySuccess(feedbackResponse);
-            if (!isActive()) return;
-          } catch {
-            if (isActive()) showToast('标签已保存，但工单仍保持待处理', 'warning');
-          }
-          setActiveFeedbackWorkOrder(null);
+      showToast(id ? '已更新' : '已添加', 'success');
+      // Saving a tag and closing its feedback work order are separate writes.
+      if (activeFeedbackWorkOrder) {
+        const workOrder = activeFeedbackWorkOrder;
+        try {
+          const feedbackResponse = await adminApi.handleTagFeedback(
+            token,
+            workOrder.id,
+            'processed',
+            '已采纳并写入词库',
+            workOrder.status,
+          );
+          await requireAdminSuccess(feedbackResponse);
+        } catch {
+          if (isActive()) showToast('标签已保存，但工单仍保持待处理', 'warning');
         }
-        if (id) {
-          refreshAfterInlineCloseRef.current = true;
-          closeInlineEditor();
-        } else {
-          setIsEditModalOpen(false);
-          if (isDuplicateMode) {
-            loadDuplicates();
-          } else {
-            loadTags(currentPage);
-          }
-        }
+        if (!isActive()) return;
+        setActiveFeedbackWorkOrder(null);
+      }
+      if (id) {
+        refreshAfterInlineCloseRef.current = true;
+        closeInlineEditor();
       } else {
-        showToast(data.error || '保存失败', 'error');
+        setIsEditModalOpen(false);
+        if (isDuplicateMode) {
+          loadDuplicates();
+        } else {
+          loadTags(currentPage);
+        }
       }
     } catch (err) {
       if (isActive()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
       savePending.current = false;
-      setIsSaving(false);
+      if (isActive()) setIsSaving(false);
     }
   };
 
@@ -591,8 +584,9 @@ export default function GlossaryTab() {
       if (!isActive() || feedbackPending.current.has(id)) return;
       feedbackPending.current.add(id);
       try {
-        const res = await api.deleteDictionaryTag(token, id);
-        await requireDictionarySuccess(res);
+        const res = await deleteDictionaryTag(token, id);
+        await requireAdminSuccess(res);
+        dictionaryTag.invalidate();
         if (!isActive()) return;
 
         showToast('已删除', 'success');
@@ -623,9 +617,9 @@ export default function GlossaryTab() {
         for (const id of selectedIds) {
           if (!current()) return;
           try {
-            await requireDictionarySuccess(await api.deleteDictionaryTag(token, id));
-            if (!current()) return;
+            await requireAdminSuccess(await deleteDictionaryTag(token, id));
             removed.add(id);
+            if (!current()) return;
           } catch {
             if (!current()) return;
             failed++;
@@ -638,6 +632,8 @@ export default function GlossaryTab() {
         if (isDuplicateMode) void loadDuplicates();
         else void loadTags(currentPage);
       } finally {
+        // One invalidation per batch also clears cached "not found" lookups.
+        if (removed.size) dictionaryTag.invalidate();
         bulkPending.current = false;
       }
     });
@@ -731,9 +727,9 @@ export default function GlossaryTab() {
             const exists = await adminApi.checkTagExists(token, task.en);
             if (!current()) return;
             if (exists) { skipped++; continue; }
-            await requireDictionarySuccess(await api.saveDictionaryTag(token, task));
-            if (!current()) return;
+            await requireAdminSuccess(await saveDictionaryTag(token, task));
             success++;
+            if (!current()) return;
           } catch {
             if (!current()) return;
             failed++;
@@ -745,6 +741,7 @@ export default function GlossaryTab() {
         if (!failed) { setIsBatchModalOpen(false); setBatchInput(''); }
         void loadTags(1);
       } finally {
+        if (success) dictionaryTag.invalidate();
         bulkPending.current = false;
         if (isActive()) setIsBatchImporting(false);
       }
@@ -778,7 +775,7 @@ export default function GlossaryTab() {
       for (let page = syncStartPage; page <= syncEndPage && current(); page++) {
         setSyncProgress({ current: page - syncStartPage + 1, total: totalPagesToFetch, message: `正在拉取第 ${page} 页…` });
         try {
-          const data = await api.getDerpiPopularTags(page);
+          const data = await getDerpiPopularTags(page);
           if (!current()) break;
           if (!Array.isArray(data.tags)) throw new Error('原站标签响应无效');
           if (!data.tags.length) break;
@@ -788,12 +785,12 @@ export default function GlossaryTab() {
               const exists = await adminApi.checkTagExists(token, tag.name);
               if (!current()) break;
               if (exists) { skipped++; continue; }
-              await requireDictionarySuccess(await api.saveDictionaryTag(token, {
+              await requireAdminSuccess(await saveDictionaryTag(token, {
                 en: tag.name, cn: '未翻译', aliases: [], cat: tag.category || 'general',
                 count: tag.images || 0, description: '',
               }));
-              if (!scopeCurrent()) break;
               added++;
+              if (!scopeCurrent()) break;
               if (!current()) break;
             } catch {
               if (!scopeCurrent()) break;
@@ -814,6 +811,7 @@ export default function GlossaryTab() {
       if (!stopped && !failedTags && !failedPages) setIsSyncModalOpen(false);
       void loadTags(1);
     } finally {
+      if (added) dictionaryTag.invalidate();
       bulkPending.current = false;
       if (isActive()) { setIsSyncing(false); setSyncStopping(false); }
     }
@@ -829,7 +827,7 @@ export default function GlossaryTab() {
 
     setIsDerpiSearching(true);
     try {
-      const data = await api.searchDerpiTags(derpiSearchQuery);
+      const data = await searchDerpiTags(derpiSearchQuery);
       setDerpiResults(data.tags || []);
     } catch {
       showToast('搜索失败', 'error');
@@ -896,7 +894,7 @@ export default function GlossaryTab() {
     if (!isActive() || feedbackPending.current.has(id)) return;
     feedbackPending.current.add(id);
     try {
-      await requireDictionarySuccess(await adminApi.handleTagFeedback(token, id, status, note || undefined, expectedStatus));
+      await requireAdminSuccess(await adminApi.handleTagFeedback(token, id, status, note || undefined, expectedStatus));
       if (isActive()) void loadFeedbacks();
     } catch (err) {
       if (isActive()) showToast(err instanceof Error ? err.message : '操作失败', 'error');
@@ -918,7 +916,7 @@ export default function GlossaryTab() {
         (t) => t.en.toLowerCase() === (item.tag_name || '').toLowerCase(),
       );
       if (!target) {
-        const data = await api.getDictionary(token, {
+        const data = await getDictionary(token, {
           keyword: item.tag_name,
           page: 1,
           limit: 100,
@@ -1020,7 +1018,7 @@ export default function GlossaryTab() {
         <Button
           variant="tonal"
           size="xs"
-          icon={<MdArrowDownward size={ICON.dense} />}
+          icon={<MdArrowDownward />}
           onClick={useFeedbackAsTranslation}
         >
           填入中文翻译框
@@ -1055,7 +1053,7 @@ export default function GlossaryTab() {
               <Button
                 variant="text"
                 size="xs"
-                icon={<MdHistory size={ICON.dense} />}
+                icon={<MdHistory />}
                 onClick={() => openTagHistory(tag)}
                 title="查看该标签的历史编辑记录"
                 className="text-primary-ink"
@@ -1296,13 +1294,15 @@ export default function GlossaryTab() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         
-        <h2 className="text-title-l text-on-surface flex items-center gap-2">
-          
-          <MdLibraryBooks size={ICON.standard} /> 中英标签词库管理 ({totalMatches}
-          条)
-        </h2>
+        <SectionHeading
+          className="mb-0"
+          icon={<MdLibraryBooks size={ICON.standard} />}
+          aside={`${totalMatches} 条`}
+        >
+          中英标签词库管理
+        </SectionHeading>
         {isAdmin && (
-          <Button variant="filled" icon={<MdAdd size={ICON.dense} />} onClick={() => openCreateModal()}>
+          <Button variant="filled" icon={<MdAdd />} onClick={() => openCreateModal()}>
             添加新标签
           </Button>
         )}
@@ -1373,7 +1373,7 @@ export default function GlossaryTab() {
             {showUntranslatedOnly ? '取消未翻译过滤' : '只看未翻译'}
           </Chip>
           {selectedIds.size > 0 && (
-            <Button icon={<MdDelete size={ICON.dense} />} variant="danger" size="xs" onClick={batchDelete}>
+            <Button icon={<MdDelete />} variant="danger" size="xs" onClick={batchDelete}>
               批量删除 ({selectedIds.size})
             </Button>
           )}
@@ -1387,7 +1387,7 @@ export default function GlossaryTab() {
             {isDuplicateMode ? '退出查重' : '查重模式'}
           </Chip>
           <Button
-            icon={<MdFeedback size={ICON.dense} />}
+            icon={<MdFeedback />}
             variant="accent"
             size="xs"
             onClick={() => setIsFeedbackModalOpen(true)}
@@ -1395,7 +1395,7 @@ export default function GlossaryTab() {
             用户反馈
           </Button>
           <Button
-            icon={<MdFileDownload size={ICON.dense} />}
+            icon={<MdFileDownload />}
             variant="accent"
             size="xs"
             onClick={exportCurrentPage}
@@ -1403,7 +1403,7 @@ export default function GlossaryTab() {
             导出当前页
           </Button>
           <Button
-            icon={<MdFileUpload size={ICON.dense} />}
+            icon={<MdFileUpload />}
             variant="accent"
             size="xs"
             onClick={() => setIsBatchModalOpen(true)}
@@ -1411,7 +1411,7 @@ export default function GlossaryTab() {
             批量导入
           </Button>
           <Button
-            icon={<MdCloudDownload size={ICON.dense} />}
+            icon={<MdCloudDownload />}
             variant="accent"
             size="xs"
             onClick={() => setIsSyncModalOpen(true)}
@@ -1419,7 +1419,7 @@ export default function GlossaryTab() {
             同步热门
           </Button>
           <Button
-            icon={<MdSearch size={ICON.dense} />}
+            icon={<MdSearch />}
             variant="accent"
             size="xs"
             onClick={() => setIsDerpiModalOpen(true)}
@@ -1525,10 +1525,8 @@ export default function GlossaryTab() {
         <div className="space-y-4">
           {renderFeedbackReference()}
           <div className="relative" ref={enFieldRef}>
-            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="glossarytab-f1">
-              英文原标签{' '}
-            </label>
             <Input
+              label="英文原标签"
               id="glossarytab-f1"
               type="text"
               value={editForm.en}
@@ -1566,10 +1564,9 @@ export default function GlossaryTab() {
             </Popover>
           </div>
           <div>
-            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="glossarytab-f2">
-              中文翻译 <span className="text-on-surface-variant">(多重翻译请用英文逗号 , 隔开)</span>
-            </label>
             <Input
+              label="中文翻译"
+              helper="多个翻译请用英文逗号隔开"
               id="glossarytab-f2"
               type="text"
               value={editForm.cn}

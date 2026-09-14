@@ -27,14 +27,13 @@ import {
 import Modal from '@/components/Modal';
 import { cn, copyText } from '@/lib/utils';
 import { useAuthModal } from '@/components/AuthModal';
-import { api, Comment } from '@/lib/api';
+import { api, type Comment } from '@/lib/api';
 import dynamic from 'next/dynamic';
 import { ICON } from '@/lib/icons';
 import type { PicLightboxSlide } from '@/components/PicLightbox';
 /* The whole lightbox — core *and* its five plugins — behind one boundary. See `PicLightbox`. */
 const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false });
 import { showToast } from '@/components/Toast';
-import Spinner from '@/components/Spinner';
 import IconButton from '@/components/IconButton';
 import Card from '@/components/Card';
 import Menu, { type MenuAction } from '@/components/Menu';
@@ -42,19 +41,20 @@ import Skeleton from '@/components/Skeleton';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import PageBack from '@/components/PageBack';
-import { readToken, useEscapeBack, useSession } from '@/lib/hooks';
+import { readToken, useEscapeBack, useSession, useStoredBoolean } from '@/lib/hooks';
+import { LS_KEYS } from '@/lib/constants';
 import { SKIP, useResource } from '@/lib/resource';
 import { faveIds as faveIdsResource, sharedFaveIds } from '@/lib/resources';
 import { useOverlayLayer } from '@/lib/overlay';
 import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
 import TagList, { groupTags } from '@/components/TagList';
+import TagInfoModal from '@/components/TagInfoModal';
 import { loadTagCounts } from '@/lib/tagCounts';
 import { loadTagTranslations, tagTranslationKey } from '@/lib/tagTranslations';
 import CommentSection from '@/components/CommentSection';
 import Button, { buttonClasses } from '@/components/Button';
 import ErrorRetry from '@/components/ErrorRetry';
-import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/Input';
 import { getHeroMediaStyle } from '@/lib/hero/geometry';
 import { scrollAppToElement } from '@/lib/scrollTo';
@@ -75,16 +75,6 @@ import {
   subscribeImageHeroRuntime,
   updateImageHeroRouteTarget,
 } from '@/lib/hero';
-
-interface DictionaryEntry {
-  id: number;
-  en: string;
-  cn: string;
-  cat: string;
-  count: number;
-  description: string;
-  aliases: string[];
-}
 
 type PicDetailProps = {
   presentation?: 'page' | 'overlay';
@@ -284,17 +274,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   });
 
   // --- Tag info modal state ---
-  const [tagInfoModal, setTagInfoModal] = useState<{
-    open: boolean;
-    tag: string;
-    data: DictionaryEntry | null;
-    loading: boolean;
-  }>({
-    open: false,
-    tag: '',
-    data: null,
-    loading: false,
-  });
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   // --- Comment reply state ---
   const [replyTo, setReplyTo] = useState<{ id: number; username: string; body: string } | null>(
@@ -395,17 +375,10 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     markImageHeroRouteResolvedWithoutMedia(surfaceId);
   }, [resolvedWithoutMedia, surfaceId]);
 
-  const tokenRef = useRef<string | null>(null);
-
-  // Load token once
-  useEffect(() => {
-    tokenRef.current = readToken();
-  }, []);
-
   // 浏览历史：登录用户打开详情时同步到云端（与旧前端 add_browsing_history 一致），
   // fire-and-forget；依赖 image?.id，同一张图只记一次，prefetch 不算浏览。
   useEffect(() => {
-    const token = tokenRef.current;
+    const token = readToken();
     if (!token || !image) return;
     const reps = image.representations ?? {};
     const previewUrl = reps.thumb || reps.small || reps.large || image.view_url;
@@ -419,24 +392,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 只需跟随 image.id
   }, [image?.id]);
 
-  // Read "显示各标签数量" setting from localStorage
-  const [showTagCounts, setShowTagCounts] = useState(false);
-  useEffect(() => {
-    const read = () => setShowTagCounts(localStorage.getItem('trixie_show_tag_counts') === 'true');
-    read();
-    window.addEventListener('settings_updated', read);
-    return () => window.removeEventListener('settings_updated', read);
-  }, []);
-
-  // Read "显示中文标签" setting from localStorage (默认开启)
-  const [showChineseTags, setShowChineseTags] = useState(true);
-  useEffect(() => {
-    const read = () =>
-      setShowChineseTags(localStorage.getItem('picpony_show_chinese_tags') !== 'false');
-    read();
-    window.addEventListener('settings_updated', read);
-    return () => window.removeEventListener('settings_updated', read);
-  }, []);
+  const showTagCounts = useStoredBoolean(LS_KEYS.showTagCounts);
+  const showChineseTags = useStoredBoolean(LS_KEYS.showChineseTags, true);
 
   // Tag count map: tag name → image count
   const [tagCounts, setTagCounts] = useState<Record<string, number | null>>({});
@@ -561,7 +518,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   // Keyboard shortcuts (for detail page only - YARL handles its own)
   useEffect(() => {
     if (isLightboxOpen) return;
-    if (tagInfoModal.open) return;
+    if (selectedTag !== null) return;
     if (isReportModalOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -575,7 +532,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLightboxOpen, tagInfoModal.open, isReportModalOpen, isShareOpen, replyTo]);
+  }, [isLightboxOpen, selectedTag, isReportModalOpen, isShareOpen, replyTo]);
 
   const fetchComments = useCallback(() => getCommentsOnce(id), [id]);
 
@@ -747,8 +704,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
 
   useLayoutEffect(() => {
     dismissCanStartRef.current = () =>
-      !isLightboxOpen && !tagInfoModal.open && !isReportModalOpen && !isShareOpen;
-  }, [isLightboxOpen, isReportModalOpen, isShareOpen, tagInfoModal.open]);
+      !isLightboxOpen && selectedTag === null && !isReportModalOpen && !isShareOpen;
+  }, [isLightboxOpen, isReportModalOpen, isShareOpen, selectedTag]);
 
   useEffect(() => {
     if (presentation !== 'overlay') return;
@@ -764,34 +721,8 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
      `isShareOpen` and `replyTo`). */
   useEscapeBack(
     handleBackToGallery,
-    !isLightboxOpen && !tagInfoModal.open && !isReportModalOpen && !isShareOpen && !replyTo,
+    !isLightboxOpen && selectedTag === null && !isReportModalOpen && !isShareOpen && !replyTo,
   );
-
-  // --- Tag info modal ---
-  const handleTagClick = async (tag: string) => {
-    setTagInfoModal({ open: true, tag, data: null, loading: true });
-    try {
-      const token = tokenRef.current;
-      if (token) {
-        const res = await api.getDictionary(token, {
-          keyword: tag,
-          limit: 5,
-        });
-        if (res.success && res.tags) {
-          const match = res.tags.find(
-            (t: DictionaryEntry) => t.en.toLowerCase() === tag.toLowerCase(),
-          );
-          setTagInfoModal((prev) => ({ ...prev, data: match || null, loading: false }));
-        } else {
-          setTagInfoModal((prev) => ({ ...prev, data: null, loading: false }));
-        }
-      } else {
-        setTagInfoModal((prev) => ({ ...prev, data: null, loading: false }));
-      }
-    } catch {
-      setTagInfoModal((prev) => ({ ...prev, data: null, loading: false }));
-    }
-  };
 
   // --- Comment reply ---
   const handleReply = (comment: Comment) => {
@@ -1436,8 +1367,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                   showTagCounts={showTagCounts}
                   tagCounts={tagCounts}
                   tagTranslations={showChineseTags ? tagTranslations : undefined}
-                  imageId={imageId}
-                  onTagClick={handleTagClick}
+                  onTagClick={setSelectedTag}
                   onShowMore={setVisibleTags}
                 />
                 {/* Action buttons.
@@ -1453,7 +1383,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
                     variant="filled"
                     size="lg"
                     className="max-sm:w-full"
-                    icon={<MdDownload size={ICON.control} />}
+                    icon={<MdDownload />}
                   >
                     下载原图
                   </Button>
@@ -1492,91 +1422,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       {isLightboxOpen && (
         <PicLightbox open={isLightboxOpen} close={handleCloseLightbox} slides={yarlSlides} />
       )}
-      {/* ========== Tag Info Modal ========== */}
-      <Modal
-        isOpen={tagInfoModal.open}
-        onClose={() => setTagInfoModal({ open: false, tag: '', data: null, loading: false })}
-        title={tagInfoModal.tag}
-        maxWidth="md"
-        /* Through `footer`, like every other dialog in the app. It was a flex row at the end
-           of the body, which put the one action inside the body's scroller — this dialog's
-           content is a variable-length list of tag fields, so on a phone the button scrolled
-           away with it. `fullWidth` survives the move: the footer row is `justify-end`, and a
-           member at 100% fills it, so this stays the prominent single CTA it was. */
-        footer={
-          <Button
-            variant="accent"
-            fullWidth
-            onClick={() => {
-              router.push(`/search?q=${encodeURIComponent(tagInfoModal.tag)}`, { scroll: false });
-              setTagInfoModal((prev) => ({ ...prev, open: false }));
-            }}
-          >
-            搜索此标签
-          </Button>
-        }
-      >
-        {' '}
-        {tagInfoModal.loading ? (
-          <Spinner label="查询词库中…" className="py-8" />
-        ) : tagInfoModal.data ? (
-          <div className="space-y-3">
-            {' '}
-            {tagInfoModal.data.cn && (
-              <div>
-                {' '}
-                <span className="text-label-m-emphasized text-on-surface-variant">
-                  中文翻译
-                </span>
-                <p className="text-body-m text-on-surface mt-1">{tagInfoModal.data.cn}</p>
-              </div>
-            )}{' '}
-            {tagInfoModal.data.description && (
-              <div>
-                {' '}
-                <span className="text-label-m-emphasized text-on-surface-variant">
-                  标签简介
-                </span>
-                <p className="text-on-surface-variant mt-1 text-body-m">
-                  {tagInfoModal.data.description}
-                </p>
-              </div>
-            )}{' '}
-            {tagInfoModal.data.cat && (
-              <div>
-                {' '}
-                <span className="text-label-m-emphasized text-on-surface-variant">分类</span>
-                <p className="text-on-surface-variant mt-1 text-body-m">
-                  {tagInfoModal.data.cat}
-                </p>
-              </div>
-            )}{' '}
-            {tagInfoModal.data.aliases && tagInfoModal.data.aliases.length > 0 && (
-              <div>
-                {' '}
-                <span className="text-label-m-emphasized text-on-surface-variant">别名</span>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  
-                  {tagInfoModal.data.aliases.map((alias, i) => (
-                    <span
-                      key={i}
-                      className="px-2 py-0.5 bg-surface-container-high text-on-surface-variant text-label-m rounded-xs"
-                    >
-                      {alias}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}{' '}
-          </div>
-        ) : (
-          <EmptyState
-            size="inline"
-            title="词库中暂无此标签的详细信息"
-            description="登录后可以查询更多标签信息"
-          />
-        )}{' '}
-      </Modal>
+      <TagInfoModal tag={selectedTag} onClose={() => setSelectedTag(null)} />
       {/* ========== Report Modal ========== */}{' '}
       <Modal
         isOpen={isReportModalOpen}

@@ -38,7 +38,6 @@ export default function RefreshButton({
           className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
         />
       }
-      data-ripple
     >
       {label}
     </Button>

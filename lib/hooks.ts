@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { LS_KEYS, MEDIA } from './constants';
 
 /**
@@ -46,11 +46,40 @@ export function useMasonryColumns() {
   return atLeastLg ? 4 : atLeastMd ? 3 : 2;
 }
 
+/** A device preference with the same fallback during SSR and denied storage.
+ * Both this tab's settings writer and another tab can change the value. */
+export function useStoredValue(key: string, fallback: string | null = null): string | null {
+  const subscribe = useCallback((listener: () => void) => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === key) listener();
+    };
+    window.addEventListener('settings_updated', listener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('settings_updated', listener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [key]);
+
+  return useSyncExternalStore(subscribe, () => {
+    try {
+      return localStorage.getItem(key) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }, () => fallback);
+}
+
+export function useStoredBoolean(key: string, fallback = false): boolean {
+  const value = useStoredValue(key, String(fallback));
+  return value === 'true' ? true : value === 'false' ? false : fallback;
+}
+
 /**
  * The stored session, as a plain function: the one reader of the localStorage
  * user_info JSON, so nothing hand-parses it (and every call site gets the
  * window guard for free). A function rather than a hook because many call
- * sites are not in hook position; `useAuth` wraps it for the effect-dependency case.
+ * sites read credentials at event time; rendering uses `useSession` below.
  */
 export type StoredUserInfo = { token: string; [key: string]: unknown };
 
@@ -159,16 +188,6 @@ export function clearUserInfo(expectedToken: string): boolean {
 /** The token alone, which is what most call sites actually wanted. */
 export function readToken(): string | null {
   return readUserInfo()?.token || null;
-}
-
-/**
- * Reads the stored session. Every member and the returned object are memoised,
- * so `useAuth` is safe in dependency arrays: a fresh closure per render made
- * effects re-run every render — a dependency-identity cascade that once
- * rate-limited /favorites.
- */
-export function useAuth() {
-  return useMemo(() => ({ getUserInfo: readUserInfo, getToken: readToken }), []);
 }
 
 /**

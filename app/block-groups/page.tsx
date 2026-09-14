@@ -18,6 +18,7 @@ import {
   MdVisibility,
 } from 'react-icons/md';
 import Button from '@/components/Button';
+import Card from '@/components/Card';
 import IconButton from '@/components/IconButton';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { Input } from '@/components/Input';
@@ -328,7 +329,7 @@ export default function BlockGroupsPage() {
             variant="filled"
             size="xs"
             onClick={() => openEditModal()}
-            icon={<MdAdd size={ICON.dense} />}
+            icon={<MdAdd />}
           >
             新建
           </Button>
@@ -340,14 +341,10 @@ export default function BlockGroupsPage() {
            that then reflows into a three-column layout. */
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <div
+            <Card
               key={i}
-              /* The outlined card's own recipe: `surface` + `outline-variant` at
-                 elevation 0. This was `surface-container` + a border *and* an
-                 `e1` shadow — a tone from no row of the colour table plus both
-                 separators at once, written out twice in this file (here and on
-                 the real row below, byte-identical). */
-              className="bg-surface border-outline-variant flex flex-col gap-3 rounded-md border p-4"
+              variant="outlined"
+              className="flex flex-col gap-3"
             >
               <div className="border-outline-variant flex items-center justify-between border-b border-dashed pb-3">
                 <Skeleton className="h-4 w-24" delay={i * 90} />
@@ -355,7 +352,7 @@ export default function BlockGroupsPage() {
               </div>
               <Skeleton className="h-3.5 w-3/4" delay={i * 90 + 120} />
               <Skeleton className="h-3.5 w-1/2" delay={i * 90 + 180} />
-            </div>
+            </Card>
           ))}
         </div>
       ) : read.error ? (
@@ -369,7 +366,7 @@ export default function BlockGroupsPage() {
           title="还没有任何屏蔽组"
           description="创建一个后，主页会自动处理包含这些标签的图片。"
           action={
-            <Button variant="filled" icon={<MdAdd size={ICON.dense} />} onClick={() => openEditModal()}>
+            <Button variant="filled" icon={<MdAdd />} onClick={() => openEditModal()}>
               新建屏蔽组
             </Button>
           }

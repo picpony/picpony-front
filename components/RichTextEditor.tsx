@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
-import { useAuth } from '@/lib/hooks';
+import { readToken } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
 import { getAssetUrl } from '@/lib/utils';
 import { isImageHeroTransitionRunning, waitForImageHeroTransition } from '@/lib/hero';
@@ -36,7 +36,6 @@ export default function RichTextEditor({
   const isUpdatingRef = useRef(false);
   const generationRef = useRef(0);
   const uploadsRef = useRef(new Set<AbortController>());
-  const { getToken: getTokenFromAuth } = useAuth();
   const latest = useRef({ value, onChange, placeholder, disabled, enableImageUpload, imageUploadUrl, getToken });
 
   useLayoutEffect(() => {
@@ -86,7 +85,7 @@ export default function RichTextEditor({
           async customUpload(file: File, insertFn: (url: string, alt: string, href: string) => void) {
             const owner = editorRef.current;
             if (!owner || !isCurrent() || latest.current.disabled) return;
-            const readCredential = latest.current.getToken ?? getTokenFromAuth;
+            const readCredential = latest.current.getToken ?? readToken;
             const token = readCredential();
             const controller = new AbortController();
             uploads.add(controller);
@@ -207,7 +206,7 @@ export default function RichTextEditor({
       if (isImageHeroTransitionRunning()) void waitForImageHeroTransition().then(destroy, destroy);
       else queueMicrotask(destroy);
     };
-  }, [getTokenFromAuth, writeValue]);
+  }, [writeValue]);
 
   useEffect(() => {
     const editor = editorRef.current;

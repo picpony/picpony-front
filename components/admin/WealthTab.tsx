@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
@@ -10,11 +10,9 @@ import { SectionHeader, SearchInput } from './';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import { ICON } from '@/lib/icons';
-import { readToken } from '@/lib/hooks';
-/* Namespace import, deliberately: `api` is a runtime spread and
-   un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
 import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { useAdminMutation } from './useAdminMutation';
 
 interface User {
   id: number;
@@ -36,9 +34,8 @@ export default function WealthTab({ token }: { token: string }) {
   const loadUsers = read.refresh;
   const [searchKw, setSearchKw] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const submittingRef = useRef(false);
+  const mutation = useAdminMutation(token);
+  const isSubmitting = mutation.busy;
   const [form, setForm] = useState({
     experience: 0,
     coinsOp: 'add',
@@ -53,7 +50,7 @@ export default function WealthTab({ token }: { token: string }) {
   }, [searchKw, users]);
 
   const openModal = (user: User) => {
-    if (submittingRef.current) return;
+    if (mutation.isPending()) return;
     setEditingUser(user);
     setForm({
       experience: user.experience || 0,
@@ -61,49 +58,34 @@ export default function WealthTab({ token }: { token: string }) {
       coinsValue: '',
       reason: '',
     });
-    setIsModalOpen(true);
   };
 
   const closeModal = () => {
-    if (submittingRef.current) return;
-    setIsModalOpen(false);
+    if (mutation.isPending()) return;
     setEditingUser(null);
   };
 
   const submit = async () => {
-    if (!editingUser || submittingRef.current || readToken() !== token) return;
+    if (!editingUser || mutation.isPending()) return;
     if (!form.reason.trim()) {
       showToast('请填写变动原因', 'error');
       return;
     }
-    // A ref closes the gap before React renders the disabled button. A double
-    // activation must never apply a non-idempotent coin increment twice.
-    submittingRef.current = true;
-    setIsSubmitting(true);
-    try {
-      const res = await adminApi.adminUpdateWealth(token, {
+    await mutation.run(
+      () => adminApi.adminUpdateWealth(token, {
         target_id: editingUser.id,
         experience: form.experience,
         coins_op: form.coinsOp,
         coins_value: form.coinsValue,
         reason: form.reason,
-      });
-      const data = await res.json();
-      if (readToken() !== token) return;
-      if (data.success) {
+      }),
+      () => {
         showToast('已更新', 'success');
-        setIsModalOpen(false);
         setEditingUser(null);
-        await loadUsers();
-      } else {
-        showToast(data.error || '修改失败', 'error');
-      }
-    } catch {
-      if (readToken() === token) showToast('修改失败', 'error');
-    } finally {
-      submittingRef.current = false;
-      if (readToken() === token) setIsSubmitting(false);
-    }
+      },
+      '修改失败',
+      { onCommitted: loadUsers },
+    );
   };
 
   const wealthColumns: Column<User>[] = [
@@ -125,7 +107,7 @@ export default function WealthTab({ token }: { token: string }) {
       header: '操作',
       actions: true,
       render: (u) => (
-        <Button onClick={() => openModal(u)} variant="filled" size="xs">
+        <Button onClick={() => openModal(u)} variant="filled" size="xs" disabled={isSubmitting}>
           修改资产
         </Button>
       ),
@@ -138,7 +120,7 @@ export default function WealthTab({ token }: { token: string }) {
         title="经验与金币管理"
         onRefresh={loadUsers}
       />
-      <SearchInput value={searchKw} onChange={setSearchKw} placeholder="搜索用户 ID或用户名…" />
+      <SearchInput value={searchKw} onChange={setSearchKw} placeholder="搜索用户 ID 或用户名…" />
       <DataTable<User>
         columns={wealthColumns}
         rows={filteredUsers}
@@ -149,7 +131,7 @@ export default function WealthTab({ token }: { token: string }) {
         empty="没有找到匹配的用户"
       />
       <Modal
-        isOpen={isModalOpen}
+        isOpen={editingUser !== null}
         onClose={closeModal}
         title={`修改资产 - ${editingUser?.username || ''}`}
         maxWidth="md"

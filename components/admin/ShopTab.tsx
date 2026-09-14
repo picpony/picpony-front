@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { showToast } from '@/components/Toast';
 import FadeInImage from '@/components/FadeInImage';
 import Checkbox from '@/components/Checkbox';
@@ -9,16 +9,14 @@ import DataTable, { type Column } from '@/components/DataTable';
 import IconButton from '@/components/IconButton';
 import Badge from '@/components/Badge';
 import { SectionHeader } from './';
+import SectionHeading from '@/components/SectionHeading';
 import Button from '@/components/Button';
 import { useConfirm } from '@/components/ConfirmDialog';
 import Card from '@/components/Card';
 import { Input, Textarea } from '@/components/Input';
 import { ICON } from '@/lib/icons';
-/* Namespace import, deliberately: `api` is a runtime spread and
-   un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
 import { adminData, defineAdminQuery, useAdminQuery } from './queries';
-import { readToken } from '@/lib/hooks';
 import { useAdminMutation } from './useAdminMutation';
 
 interface ShopItem {
@@ -31,6 +29,16 @@ interface ShopItem {
   active: number;
 }
 
+const EMPTY_FORM = {
+  id: 0,
+  name: '',
+  description: '',
+  image_url: '',
+  price: 10,
+  stock: 100,
+  active: true,
+};
+
 const itemsQuery = defineAdminQuery<ShopItem[]>('shop', async (token, signal) => {
   const data = await adminApi.adminGetShopItems(token, signal);
   return adminData(data, data.items || []);
@@ -42,39 +50,19 @@ export default function ShopTab({ token }: { token: string }) {
   const items = read.data ?? [];
   const isLoading = read.loading;
   const loadItems = read.refresh;
-  const savingRef = useRef(false);
-  const [saving, setSaving] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
-  const [form, setForm] = useState({
-    id: 0,
-    name: '',
-    description: '',
-    image_url: '',
-    price: 10,
-    stock: 100,
-    active: true,
-  });
+  const saveMutation = useAdminMutation(token);
+  const saving = saveMutation.busy;
+  const [form, setForm] = useState(EMPTY_FORM);
+  const isEditing = form.id !== 0;
 
   const { confirmThen, confirmDialog } = useConfirm();
 
   const resetForm = () => {
-    setForm({
-      id: 0,
-      name: '',
-      description: '',
-      image_url: '',
-      price: 10,
-      stock: 100,
-      active: true,
-    });
-    setEditingItem(null);
-    setIsEditing(false);
+    setForm(EMPTY_FORM);
   };
 
   const startEdit = (item: ShopItem) => {
-    if (savingRef.current) return;
-    setEditingItem(item);
+    if (saveMutation.isPending() || mutation.isPending()) return;
     setForm({
       id: item.id,
       name: item.name,
@@ -84,11 +72,10 @@ export default function ShopTab({ token }: { token: string }) {
       stock: item.stock,
       active: item.active === 1,
     });
-    setIsEditing(true);
   };
 
   const saveItem = async () => {
-    if (savingRef.current || readToken() !== token) return;
+    if (saveMutation.isPending() || mutation.isPending()) return;
     if (!form.name.trim()) {
       showToast('请输入商品名称', 'error');
       return;
@@ -97,37 +84,32 @@ export default function ShopTab({ token }: { token: string }) {
       showToast('价格和库存必须是非负整数', 'error');
       return;
     }
-    savingRef.current = true;
-    setSaving(true);
-    try {
-      const res = await adminApi.adminSaveShopItem(token, {
+    await saveMutation.run(
+      () => adminApi.adminSaveShopItem(token, {
         ...form,
         active: form.active ? 1 : 0,
-      });
-      const data = await res.json();
-      if (readToken() !== token) return;
-      if (data.success) {
-        showToast(editingItem ? '已更新' : '已添加', 'success');
+      }),
+      () => {
+        showToast(isEditing ? '已更新' : '已添加', 'success');
         resetForm();
-        loadItems();
-      } else {
-        showToast(data.error || '保存失败', 'error');
-      }
-    } catch {
-      showToast('保存失败', 'error');
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
+      },
+      '保存失败',
+      { onCommitted: loadItems },
+    );
   };
 
-  const deleteItem = async (id: number) => {
+  const deleteItem = (id: number) => {
     confirmThen('确认删除', '确定要删除此商品吗？', async () => {
-      await mutation.run(() => adminApi.adminDeleteShopItem(token, id), () => {
+      if (saveMutation.isPending()) return;
+      await mutation.run(
+        () => adminApi.adminDeleteShopItem(token, id),
+        () => showToast('已删除', 'success'),
+        '删除失败',
+        { onCommitted: () => {
           itemsQuery.write(token, (previous) => previous?.filter((item) => item.id !== id) ?? []);
-          showToast('已删除', 'success');
           loadItems();
-        }, '删除失败');
+        } },
+      );
     });
   };
 
@@ -179,6 +161,7 @@ export default function ShopTab({ token }: { token: string }) {
         <>
           <IconButton
             size="sm"
+            disabled={saving || mutation.busy}
             onClick={() => startEdit(item)}
             icon={<MdEdit size={ICON.dense} />}
             aria-label={`编辑 ${item.name}`} className="text-primary-ink"
@@ -204,61 +187,64 @@ export default function ShopTab({ token }: { token: string }) {
       />
 
       <Card variant="transparent">
-        <h3 className="text-label-l text-on-surface mb-4 flex items-center gap-2">
-          {isEditing ? <MdEdit size={ICON.control} /> : <MdAdd size={ICON.control} />}
+        <SectionHeading
+          as="h3"
+          className="mb-4"
+          icon={isEditing ? <MdEdit size={ICON.control} /> : <MdAdd size={ICON.control} />}
+        >
           {isEditing ? '编辑商品' : '添加新商品'}
-        </h3>
+        </SectionHeading>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           
           <div>
-            {' '}
             <Input
               label="商品名称"
               id="shoptab-f1"
               type="text"
               value={form.name}
+              disabled={saving}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </div>
           <div>
-            {' '}
             <Input
               label="图片 URL"
               id="shoptab-f2"
               type="text"
               value={form.image_url}
+              disabled={saving}
               onChange={(e) => setForm({ ...form, image_url: e.target.value })}
             />
           </div>
           <div>
-            {' '}
             <Input
               label="价格（金币）"
               id="shoptab-f3"
               type="number"
               value={form.price}
+              min={0}
+              disabled={saving}
               onChange={(e) => setForm({ ...form, price: parseInt(e.target.value) || 0 })}
             />
           </div>
           <div>
-            {' '}
             <Input
               label="库存"
               id="shoptab-f4"
               type="number"
               value={form.stock}
+              min={0}
+              disabled={saving}
               onChange={(e) => setForm({ ...form, stock: parseInt(e.target.value) || 0 })}
             />
           </div>
         </div>
         <div className="mb-4">
-          {' '}
-          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="shoptab-f5">
-            商品简介
-          </label>
           <Textarea
+            label="商品简介"
             id="shoptab-f5"
             value={form.description}
+            disabled={saving}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={3}
             className="resize-none"
@@ -271,6 +257,7 @@ export default function ShopTab({ token }: { token: string }) {
               hears cannot drift from what the eye reads. */}
           <Checkbox
             checked={form.active}
+            disabled={saving}
             onChange={(checked) => setForm({ ...form, active: checked })}
             label="上架展示"
           />
@@ -278,13 +265,11 @@ export default function ShopTab({ token }: { token: string }) {
         <div className="flex gap-3">
           
           {isEditing && (
-            <Button variant="text" onClick={resetForm} disabled={saving}>
-              {' '}
+            <Button variant="text" onClick={resetForm} disabled={saving || mutation.busy}>
               取消
             </Button>
           )}
-          <Button variant="filled" onClick={saveItem} loading={saving}>
-            {' '}
+          <Button variant="filled" onClick={saveItem} loading={saving} disabled={mutation.busy}>
             {isEditing ? '保存修改' : '添加商品'}
           </Button>
         </div>

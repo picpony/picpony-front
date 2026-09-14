@@ -41,6 +41,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   ref,
 ) {
   const isDisabled = disabled || loading;
+  const spinnerTone = variant === 'filled' ? 'on-primary'
+    : variant === 'danger' || variant === 'success' || variant === 'warning' ? 'inherit'
+    : 'primary';
 
   /* Below `sm`, `responsiveLabel` puts the label behind `display: none`, which
      removes it from the accessibility tree as well as from layout — so derive an
@@ -75,7 +78,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
       aria-label={derivedLabel}
     >
       {loading ? (
-        <Spinner size="sm" tone={variant === 'filled' || variant === 'danger' ? 'on-primary' : 'primary'} />
+        <Spinner size="sm" tone={spinnerTone} />
       ) : (
         icon && (
           <span aria-hidden="true" className="shrink-0 [&>svg]:block">

@@ -21,7 +21,6 @@ import { useDeferredLoading } from '@/lib/hooks';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import Button from '@/components/Button';
 import SectionHeading from '@/components/SectionHeading';
-import { ICON } from '@/lib/icons';
 
 type HomeTab = 'gallery' | 'forum';
 
@@ -169,9 +168,9 @@ function ForumTab() {
   const posts = read.data?.posts ?? [];
   const totalPages = read.data?.totalPages ?? 1;
   const isLoading = read.data === undefined && read.error === undefined;
-  const error = read.error as Error | null;
-
-  const handleRetry = useCallback(() => read.refresh(), [read]);
+  const error = read.error
+    ? read.error instanceof Error ? read.error : new Error('论坛帖子加载失败')
+    : null;
 
   const handlePageChange = useCallback(
     (newPage: number) => {
@@ -203,7 +202,7 @@ function ForumTab() {
             onClick={() => router.push('/forum/create', { scroll: false })}
             variant="filled"
             size="xs"
-            icon={<MdAdd size={ICON.dense} />}
+            icon={<MdAdd />}
           >
             发帖
           </Button>
@@ -217,7 +216,7 @@ function ForumTab() {
         totalPages={totalPages}
         isLoading={isLoading}
         error={error}
-        onRetry={handleRetry}
+        onRetry={read.refresh}
         onPageChange={handlePageChange}
         onPostClick={handlePostClick}
       />

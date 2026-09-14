@@ -5,11 +5,13 @@ import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
+import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
-import { api } from '@/lib/api';
+import { disableDeveloperMode, enableDeveloperMode, getDeveloperStatus } from '@/lib/api/picpony';
 import { MdCheckCircle, MdCancel, MdConstruction } from 'react-icons/md';
 import { ICON } from '@/lib/icons';
-import { readToken } from '@/lib/hooks';
+import { readToken, useSession } from '@/lib/hooks';
+import { LS_KEYS } from '@/lib/constants';
 
 interface DevPrerequisites {
   logged_in?: boolean;
@@ -45,32 +47,30 @@ function PreqRow({ label, met }: { label: string; met: boolean }) {
  * enable_developer_mode → 本地标记 + 广播事件（设置页据此显示"开发者模式"选项）。
  */
 export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideModalProps) {
-  const [status, setStatus] = useState<'loading' | 'ready' | 'banned'>('loading');
+  const { token, ready } = useSession();
+  const [status, setStatus] = useState<'loading' | 'ready' | 'banned' | 'error'>('loading');
   const [isDeveloper, setIsDeveloper] = useState(false);
   const [prerequisites, setPrerequisites] = useState<DevPrerequisites>({});
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const tokenRef = useRef('');
+  const [attempt, setAttempt] = useState(0);
+  const generation = useRef(0);
+  const locked = useRef(false);
 
   // 每次打开时同步最新状态（重置 + 拉取均在微任务中，避免 effect 内同步 setState）
   useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
+    const current = ++generation.current;
+    locked.current = false;
+    if (!isOpen || !ready) return;
+    const controller = new AbortController();
+    const isCurrent = () => generation.current === current && readToken() === token;
     queueMicrotask(() => {
-      if (cancelled) return;
+      if (!isCurrent()) return;
       setStatus('loading');
       setError('');
       setPassword('');
       setSubmitting(false);
-      let token = '';
-      try {
-        token = readToken() || '';
-      } catch {
-        token = '';
-      }
-      tokenRef.current = token;
-
       if (!token) {
         // 未登录：前置条件全部不满足
         setPrerequisites({ logged_in: false, api_bound: false, level_gt_3: false });
@@ -79,10 +79,10 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
         return;
       }
 
-      api
-        .getDeveloperStatus(token)
+      getDeveloperStatus(token, controller.signal)
         .then((data) => {
-          if (cancelled) return;
+          if (!isCurrent()) return;
+          if (!data?.success) throw new Error('开发者状态加载失败');
           if (data?.is_developer_banned) {
             setStatus('banned');
             return;
@@ -92,60 +92,52 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
           setStatus('ready');
         })
         .catch(() => {
-          if (!cancelled) setStatus('ready');
+          if (isCurrent()) setStatus('error');
         });
     });
     return () => {
-      cancelled = true;
+      generation.current += 1;
+      controller.abort();
     };
-  }, [isOpen]);
+  }, [isOpen, token, ready, attempt]);
 
   const allMet = !!(prerequisites.logged_in && prerequisites.api_bound && prerequisites.level_gt_3);
 
-  const broadcast = () => {
-    window.dispatchEvent(new Event('settings_updated'));
-    window.dispatchEvent(new Event('developer_mode_changed'));
-  };
-
-  const handleSubmit = async () => {
-    if (password.length < 8) return;
+  const changeMode = async (enabled: boolean) => {
+    if (!isOpen || !token || readToken() !== token || locked.current) return;
+    if (enabled && (password.length !== 8 || !allMet)) return;
+    const current = generation.current;
+    const isCurrent = () => generation.current === current && readToken() === token;
+    locked.current = true;
     setSubmitting(true);
     setError('');
     try {
-      const res = await api.enableDeveloperMode(tokenRef.current, password);
-      const data = await res.json().catch(() => ({}));
-      if (data?.success) {
-        localStorage.setItem('picpony_developer', 'true');
-        setIsDeveloper(true);
-        broadcast();
-        showToast('开发者模式已开启', 'success');
-      } else {
-        setError(data?.error || '密码错误');
+      const res = await (enabled ? enableDeveloperMode(token, password) : disableDeveloperMode(token));
+      const data = await res.json().catch(() => null);
+      if (readToken() !== token) return;
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.error || data?.message || (enabled ? '开启失败' : '关闭失败'));
       }
-    } catch {
-      setError('网络错误，请稍后再试');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDisable = async () => {
-    setSubmitting(true);
-    try {
-      const res = await api.disableDeveloperMode(tokenRef.current);
-      const data = await res.json().catch(() => ({}));
-      if (data?.success) {
-        localStorage.removeItem('picpony_developer');
-        setIsDeveloper(false);
-        broadcast();
-        showToast('开发者模式已关闭', 'info');
-      } else {
-        showToast(data?.error || '关闭失败', 'error');
+      try {
+        if (enabled) localStorage.setItem(LS_KEYS.developer, 'true');
+        else localStorage.removeItem(LS_KEYS.developer);
+      } catch {
+        // The backend accepted the change even if this browser cannot persist it.
       }
-    } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      window.dispatchEvent(new Event('settings_updated'));
+      window.dispatchEvent(new Event('developer_mode_changed'));
+      // The accepted device setting outlives a closed form; UI feedback does not.
+      if (!isCurrent()) return;
+      setIsDeveloper(enabled);
+      showToast(enabled ? '开发者模式已开启' : '开发者模式已关闭', enabled ? 'success' : 'info');
+    } catch (failure) {
+      if (!isCurrent()) return;
+      const message = failure instanceof Error ? failure.message : '网络错误，请稍后再试';
+      if (enabled) setError(message);
+      else showToast(message, 'error');
     } finally {
-      setSubmitting(false);
+      if (generation.current === current) locked.current = false;
+      if (isCurrent()) setSubmitting(false);
     }
   };
 
@@ -156,6 +148,22 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       title="开发者模式"
       maxWidth="sm"
       closeOnOverlayClick={false}
+      footer={status === 'ready' && (
+        isDeveloper ? (
+          <Button variant="tonal" onClick={() => changeMode(false)} loading={submitting}>
+            关闭开发者模式
+          </Button>
+        ) : allMet ? (
+          <Button
+            variant="filled"
+            onClick={() => changeMode(true)}
+            loading={submitting}
+            disabled={password.length !== 8}
+          >
+            确认开启
+          </Button>
+        ) : null
+      )}
     >
       <div className="space-y-4">
         {/* The destination's own shape — three prerequisite rows — rather than
@@ -176,6 +184,10 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
           <p className="text-body-m text-error">您的开发者权限已被封禁，请联系管理员</p>
         )}
 
+        {status === 'error' && (
+          <ErrorRetry size="inline" title="开发者状态加载失败" onRetry={() => setAttempt((value) => value + 1)} />
+        )}
+
         {status === 'ready' && (
           <>
             {isDeveloper ? (
@@ -184,9 +196,6 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                   <MdConstruction size={ICON.control} />
                   当前已处于开发者模式
                 </div>
-                <Button variant="tonal" onClick={handleDisable} loading={submitting}>
-                  关闭开发者模式
-                </Button>
               </div>
             ) : (
               <>
@@ -199,6 +208,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                 {allMet ? (
                   <div className="space-y-3">
                     <Input
+                      label="维护密码"
                       type="password"
                       value={password}
                       onChange={(e) => {
@@ -208,17 +218,8 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                       maxLength={8}
                       autoComplete="current-password"
                       placeholder="请输入 8 位维护密码"
-                      aria-label="维护密码"
                       error={error || undefined}
                     />
-                    <Button
-                      variant="filled"
-                      onClick={handleSubmit}
-                      loading={submitting}
-                      disabled={password.length < 8}
-                    >
-                      确认开启
-                    </Button>
                   </div>
                 ) : (
                   <p className="text-body-s text-on-surface-variant">

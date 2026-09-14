@@ -201,7 +201,7 @@ export default function UploadPage() {
           <Button
             onClick={() => router.push('/settings', { scroll: false })}
             variant="filled"
-            icon={<MdOpenInNew size={ICON.dense} />}
+            icon={<MdOpenInNew />}
           >
             前往设置
           </Button>
@@ -246,7 +246,7 @@ export default function UploadPage() {
             <Button
               onClick={() => router.push(`/pic/${uploadResult.id}`, { scroll: false })}
               variant="filled"
-              icon={<MdOpenInNew size={ICON.dense} />}
+              icon={<MdOpenInNew />}
             >
               查看图片
             </Button>
@@ -316,7 +316,7 @@ export default function UploadPage() {
                 />
                 <Button
                   disabled={isUploading}
-                  icon={<MdClose size={ICON.dense} />}
+                  icon={<MdClose />}
                   variant="danger-text"
                   size="xs"
                   className="mt-3"
@@ -387,7 +387,7 @@ export default function UploadPage() {
               fullWidth
               loading={isUploading}
               disabled={!file}
-              icon={<MdCloudUpload size={ICON.standard} />}
+              icon={<MdCloudUpload />}
             >
               {isUploading ? '上传中…' : '确认发布'}
             </Button>

@@ -820,10 +820,11 @@ export function useResource<Args, T>(
      * a comment about exactly this before it used a cache at all, and the first version of this
      * hook reintroduced it.
      *
-     * Off by default, because for a screen that is not paged it is wrong: showing the *previous*
-     * profile while the next one loads is worse than showing a skeleton.
+     * A string limits retention to that scope, for example a profile id plus content-filter
+     * mode. Page turns keep their rows; switching profiles or filters drops the old answer.
+     * Off by default, because unpaged screens should not show a previous record's content.
      */
-    keepPrevious?: boolean;
+    keepPrevious?: boolean | string;
     /**
      * A server-rendered answer for this exact key.
      *
@@ -843,7 +844,8 @@ export function useResource<Args, T>(
   },
 ): ResourceSnapshot<T> & { refresh: () => void } {
   const key = args === SKIP ? null : resource.keyOf(args as Args);
-  const keepPrevious = options?.keepPrevious ?? false;
+  const retentionScope = options?.keepPrevious ?? false;
+  const keepPrevious = retentionScope !== false;
   const initial = options?.initial;
   const initialApplies = initial !== undefined && initial.key === key;
 
@@ -866,7 +868,7 @@ export function useResource<Args, T>(
      current key — and same key means same answer.
      `args` is deliberately absent from the dependency lists. It is a literal at almost every call
      site, so a new identity every render; keying on it would re-subscribe and re-request on each
-     one, which is the failure `useAuth`'s docstring records `/favorites` hitting a rate limit on. */
+     one, which once made `/favorites` re-run its effects until the API rate-limited it. */
 
   const subscribe = useCallback(
     (listener: () => void) => (key === null ? () => {} : resource.subscribeKey(key, listener)),
@@ -929,23 +931,30 @@ export function useResource<Args, T>(
    * (a render React discards would still have mutated it), and an effect trips
    * `react-hooks/set-state-in-effect` *and* lags a render — which on a page turn is one frame of
    * exactly the empty list this exists to prevent. */
-  const [retained, setRetained] = useState<T | undefined>(undefined);
-  if (keepPrevious && snapshot.data !== undefined && retained !== snapshot.data) {
-    setRetained(snapshot.data);
-  } else if (key === null && retained !== undefined) {
-    /* Dropped when the read is switched off entirely, or a signed-out visitor keeps seeing the
-       list they were signed in for. */
-    setRetained(undefined);
+  const [retained, setRetained] = useState<{
+    resource: Resource<Args, T>;
+    scope: boolean | string;
+    data: T | undefined;
+  }>(() => ({ resource, scope: retentionScope, data: undefined }));
+  const previous = retained.resource === resource && retained.scope === retentionScope
+    ? retained.data
+    : undefined;
+  const nextRetained = keepPrevious && key !== null
+    ? snapshot.data !== undefined ? snapshot.data : previous
+    : undefined;
+  if (retained.resource !== resource || retained.scope !== retentionScope || retained.data !== nextRetained) {
+    // Clearing a scope or disabling the read must also clear its retained answer.
+    setRetained({ resource, scope: retentionScope, data: nextRetained });
   }
 
   return useMemo(() => {
-    if (!keepPrevious || snapshot.data !== undefined || key === null || retained === undefined) {
+    if (!keepPrevious || snapshot.data !== undefined || key === null || previous === undefined) {
       return { ...snapshot, refresh };
     }
     /* `isLoading` stays whatever the *new* key reports — the caller dims on it — while `data` is
        the old page, so the list keeps its box and the scroller keeps its height. */
-    return { ...snapshot, data: retained, refresh };
-  }, [keepPrevious, snapshot, retained, key, refresh]);
+    return { ...snapshot, data: previous, refresh };
+  }, [keepPrevious, snapshot, previous, key, refresh]);
 }
 
 /** Registers a gate-change notifier, so an owner can wake held-back publications. */

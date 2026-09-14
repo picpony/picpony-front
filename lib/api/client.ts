@@ -14,6 +14,9 @@ import {
   stepApiFailover,
 } from '@/lib/route';
 
+// Compatibility for existing callers; the decoder itself has no route-policy dependencies.
+export { readJson } from './http';
+
 /**
  * What the user asked to *see*. The four line preferences are not here — `lib/route.ts`
  * owns those; which host answers is a different question from what the answer contains.
@@ -165,7 +168,11 @@ function waitForRoutePolicy(signal?: AbortSignal | null): Promise<void> {
  * answers, not broken lines. `readJson` turns a dead line into `{ success: false }`, so the
  * decision is made on `res.ok` and the status here.
  */
-export async function proxyFetch(url: string, options?: RequestInit): Promise<Response> {
+export async function proxyFetch(
+  url: string,
+  options?: RequestInit,
+  contentFilter?: string,
+): Promise<Response> {
   options?.signal?.throwIfAborted();
   await waitForRoutePolicy(options?.signal);
   options?.signal?.throwIfAborted();
@@ -177,7 +184,8 @@ export async function proxyFetch(url: string, options?: RequestInit): Promise<Re
     return fetch(applyApiLineToWrite(url), options);
   }
 
-  url = withDerpiContentFilter(url, getBrowsingSettings().contentFilter);
+  // A keyed resource supplies its filter snapshot; waiting for policy must not change its answer.
+  url = withDerpiContentFilter(url, contentFilter ?? getBrowsingSettings().contentFilter);
   const carriesKey = /[?&]key=/.test(url);
 
   let attempts = 0;
@@ -289,30 +297,4 @@ export async function handleDerpiError(res: Response): Promise<never> {
   const error = new Error(errorText || res.statusText || 'Failed to fetch');
   (error as Error & { status?: number }).status = res.status;
   throw error;
-}
-
-/**
- * `Response.json()` that survives an empty or non-JSON body: a dropped session, PHP fatal or
- * proxy hiccup answers `200` with an empty body or HTML page, and a bare `res.json()` threw
- * from inside a background unread-count poll on every tick. Callers branch on `data.success`,
- * so a parse failure is reported as the API's own logical failure, not an exception.
- */
-/* `T = any` mirrors `Response.json()`'s own signature; narrowing to `unknown` would demand
-   an annotation at all 29 call sites. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function readJson<T = any>(res: Response): Promise<T> {
-  const text = await res.text();
-  if (!text) {
-    return { success: false, message: res.statusText || '空响应' } as T;
-  }
-  try {
-    const data: unknown = JSON.parse(text);
-    if (data !== null && typeof data === 'object' && !Array.isArray(data)) return data as T;
-    return { success: false, message: `响应不是合法 API 数据 (HTTP ${res.status})` } as T;
-  } catch {
-    return {
-      success: false,
-      message: `响应不是合法 JSON (HTTP ${res.status})`,
-    } as T;
-  }
 }

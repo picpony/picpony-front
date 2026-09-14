@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useId } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { encodeTrack, clamp, clamp01 } from '@/lib/utils';
 import { gsap, spring } from '@/lib/motion';
@@ -47,9 +47,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [keyboardRejected, setKeyboardRejected] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const instructionsId = useId();
 
   const sliderXRef = useRef(0);
   const sliderBtnRef = useRef<HTMLDivElement>(null);
@@ -66,7 +64,6 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   const verifyingRef = useRef(false);
   const challengeReadyRef = useRef(false);
   const draggingRef = useRef(false);
-  const keyboardRef = useRef(false);
   const mountedRef = useRef(false);
   const activeRef = useRef(active);
   const requestRef = useRef(0);
@@ -211,10 +208,8 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     setSliderX(0);
     sliderXRef.current = 0;
     setErrorMsg('');
-    setKeyboardRejected(false);
     trackRef.current = [];
     draggingRef.current = false;
-    keyboardRef.current = false;
     setIsDragging(false);
     setBgImage('');
     setPieceImage('');
@@ -250,24 +245,19 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     return () => { fetchedRef.current = false; };
   }, [active, fetchCaptcha]);
 
-  // Both input methods send only actual movement samples in the existing
-  // logical coordinate space. Keyboard input does not synthesize mouse events
-  // or add random motion to imitate a pointer; the server still decides validity.
+  // Mouse and touch drags send their actual movement in the backend's logical coordinates.
   const submitTrack = useCallback(async () => {
     if (!challengeReadyRef.current || loadingRef.current || verifyingRef.current || !trackRef.current.length) return;
     const finalX = sliderXRef.current;
     if (finalX < 5) {
       snapBack();
-      keyboardRef.current = false;
       trackRef.current = [];
       return;
     }
     const request = requestRef.current;
-    const keyboardAttempt = keyboardRef.current;
     setVerifying(true);
     verifyingRef.current = true;
     challengeReadyRef.current = false;
-    keyboardRef.current = false;
     try {
       const data = await api.captchaVerify(finalX, encodeTrack(trackRef.current));
       if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
@@ -277,7 +267,6 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
         snapBack();
         trackRef.current = [];
         const fail = data as { error?: string; message?: string };
-        setKeyboardRejected(keyboardAttempt);
         setErrorMsg(fail.error || fail.message || '验证失败，请重试');
       }
     } catch {
@@ -301,7 +290,6 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       if ('cancelable' in e && e.cancelable) e.preventDefault();
 
       draggingRef.current = true;
-      keyboardRef.current = false;
       setIsDragging(true);
       setErrorMsg('');
       snapTweenRef.current?.kill();
@@ -431,43 +419,6 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     [startDrag],
   );
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!challengeReadyRef.current || loadingRef.current || verifyingRef.current || draggingRef.current) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      if (keyboardRef.current) {
-        const last = trackRef.current.at(-1);
-        const sample: [number, number, number] = [Math.round(sliderXRef.current), 0, Date.now() - startTimeRef.current];
-        if (!last || last[2] !== sample[2]) {
-          if (trackRef.current.length < 150) trackRef.current.push(sample);
-          else trackRef.current[149] = sample;
-        }
-        void submitTrack();
-      }
-      return;
-    }
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) return;
-    event.preventDefault();
-    if (!keyboardRef.current) {
-      snapTweenRef.current?.kill();
-      keyboardRef.current = true;
-      sliderXRef.current = 0;
-      startTimeRef.current = Date.now();
-      trackRef.current = [[0, 0, 0]];
-      setErrorMsg('');
-    }
-    const step = event.shiftKey || event.key.startsWith('Page') ? 10 : 1;
-    const direction = ['ArrowLeft', 'ArrowDown', 'PageDown'].includes(event.key) ? -1 : 1;
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? maxSliderX :
-      clamp(sliderXRef.current + direction * step, 0, maxSliderX);
-    if (next === sliderXRef.current) return;
-    sliderXRef.current = next;
-    setSliderX(next);
-    const sample: [number, number, number] = [next, 0, Date.now() - startTimeRef.current];
-    if (trackRef.current.length < 150) trackRef.current.push(sample);
-    else trackRef.current[149] = sample;
-  };
-
   return (
     <div className="flex flex-col items-center gap-4 w-full">
       <div ref={containerRef} className="relative w-full max-w-78">
@@ -528,15 +479,6 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
 
           <div
             ref={sliderBtnRef}
-            role="slider"
-            tabIndex={loading || verifying || Boolean(errorMsg) ? -1 : 0}
-            aria-label="拼图位置"
-            aria-describedby={instructionsId}
-            aria-valuemin={0}
-            aria-valuemax={maxSliderX}
-            aria-valuenow={Math.round(sliderX)}
-            aria-valuetext={`${Math.round(sliderX)} / ${maxSliderX}`}
-            aria-disabled={loading || verifying || Boolean(errorMsg)}
             /* `duration-press` + `standard`, the motion table's press row:
                grabbing the handle is a press, and the fill must keep up with the
                handle under the finger.
@@ -544,7 +486,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
                No scale on grab, no elevation at all — a slider handle is level 0
                (the primitive gives its handle no shadow either), and the state
                layer is what reports the press. */
-            className={`bg-surface-raised text-title-m state-layer focus-ring outline-none focus-visible:ring-2 absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline transition-[color,background-color,border-color] duration-press ease-[var(--ease-standard)] select-none ${
+            className={`bg-surface-raised text-title-m state-layer absolute -top-px z-10 flex h-10 items-center justify-center rounded-full border border-outline transition-[color,background-color,border-color] duration-press ease-[var(--ease-standard)] select-none ${
               isDragging
                 ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill'
                 : 'cursor-grab text-on-surface-variant'
@@ -555,28 +497,20 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
               touchAction: 'none',
             }}
             onMouseDown={onMouseDown}
-            onKeyDown={onKeyDown}
           >
             &rarr;
           </div>
         </div>
       )}
-      <p id={instructionsId} className="text-body-s text-on-surface-variant max-w-78 text-center">
-        拖动拼图对齐缺口。也可用方向键微调，按住 Shift 快移，按 Enter 提交。
+      <p className="text-body-s text-on-surface-variant max-w-78 text-center">
+        拖动拼图对齐缺口。
       </p>
       {errorMsg && !loading && !verifying && (
-        <div role="alert" className="w-full max-w-78">
+        <div className="w-full max-w-78">
           <ErrorRetry size="inline" title={errorMsg}
-            message={keyboardRejected ? '这次键盘操作未通过校验。重试仍失败时，可通过运营团队入口寻求帮助。' : undefined}
             onRetry={() => void fetchCaptcha()} retryLabel="重新获取验证码" />
         </div>
       )}
-      <p className="text-body-s text-on-surface-variant max-w-78 text-center">
-        无法完成拼图时，可查看{' '}
-        <a href="/about" target="_blank" rel="noreferrer" className="text-primary-ink underline underline-offset-2">
-          运营团队的联系入口（新窗口）
-        </a>。
-      </p>
     </div>
   );
 }

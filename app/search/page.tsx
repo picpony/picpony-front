@@ -5,7 +5,7 @@ import { MdSearch, MdImageSearch, MdSearchOff, MdArrowBack, MdExpandMore } from 
 import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import Badge from '@/components/Badge';
-import { api, PonyImage } from '@/lib/api';
+import { api, type PonyImage } from '@/lib/api';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
@@ -49,7 +49,7 @@ function CustomImageList({ images, onBack }: { images: PonyImage[]; onBack: () =
         title="没有找到匹配的图片"
         description="换一张图，或者放宽一点相似度再试。"
         action={
-          <Button variant="tonal" onClick={onBack} icon={<MdArrowBack size={ICON.control} />}>
+          <Button variant="tonal" onClick={onBack} icon={<MdArrowBack />}>
             返回
           </Button>
         }

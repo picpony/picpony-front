@@ -82,6 +82,15 @@ function request(url, init) {
 }
 const context = (path) => ({ params: Promise.resolve({ path }) });
 
+/** The upstream Everything filter exposes one extra image in these profile fixtures. */
+function derpiUploadsResponse(url) {
+  const ids = url.searchParams.get('filter_id') === '56027' ? [1, 2] : [1];
+  return json({
+    total: ids.length,
+    images: ids.map((id) => ({ id, representations: {}, view_url: '' })),
+  });
+}
+
 beforeEach(() => {
   clearAllResources();
   values.clear();
@@ -200,6 +209,166 @@ test('featured resources partition two account API keys and forum errors never b
   await assert.rejects(admin.checkTagExists('fake-token', 'pony'), /upstream failure/);
 });
 
+test('Derpi profile uploads never reuse developer results after returning to safe mode', async () => {
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    const target = new URL(String(url));
+    urls.push(target);
+    assert.ok(target.pathname.endsWith('/search/images'));
+    assert.equal(target.searchParams.get('q'), 'uploader_id:42');
+    return derpiUploadsResponse(target);
+  };
+  const developer = { id: 42, page: 1, perPage: 24, contentFilter: 'developer' };
+  const safe = { ...developer, contentFilter: 'safe' };
+
+  values.set(LS_KEYS.contentFilter, 'developer');
+  const developerKey = catalogue.derpiUserUploads.keyOf(developer);
+  assert.deepEqual((await catalogue.derpiUserUploads.read(developer)).images.map((image) => image.id), [1, 2]);
+
+  values.set(LS_KEYS.contentFilter, 'safe');
+  assert.deepEqual((await catalogue.derpiUserUploads.read(safe)).images.map((image) => image.id), [1]);
+  assert.equal(urls.length, 2, 'safe mode must make its own read while the developer answer is still cached');
+  assert.equal(urls[0].searchParams.get('filter_id'), '56027');
+  assert.equal(urls[1].searchParams.has('filter_id'), false);
+  assert.equal(catalogue.derpiUserUploads.keyOf(developer), developerKey,
+    'a resource key describes its arguments, independent of later localStorage changes');
+  assert.deepEqual((await catalogue.derpiUserUploads.read(developer)).images.map((image) => image.id), [1, 2]);
+  assert.equal(urls.length, 2, 'each content mode retains only its own cached answer');
+});
+
+test('Derpi upload requests retain their filter snapshot while the shared route policy is pending', async () => {
+  const policyResponse = deferred();
+  const imageUrls = [];
+  globalThis.fetch = (url) => {
+    const target = new URL(String(url), 'https://app.invalid');
+    if (target.searchParams.get('action') === 'get_maintenance_status') return policyResponse.promise;
+    if (target.searchParams.get('action') === 'get_block_tags') return Promise.resolve(json(blockFiltersEnvelope()));
+    assert.ok(target.pathname.endsWith('/search/images'));
+    imageUrls.push(target);
+    return Promise.resolve(derpiUploadsResponse(target));
+  };
+  const policy = route.refreshRoutePolicy();
+  const safe = { id: 42, page: 1, perPage: 24, contentFilter: 'safe' };
+  const developer = { ...safe, contentFilter: 'developer' };
+
+  values.set(LS_KEYS.contentFilter, 'safe');
+  const safeRead = catalogue.derpiUserUploads.read(safe);
+  await tick();
+  const requestsBeforePolicy = imageUrls.length;
+  values.set(LS_KEYS.contentFilter, 'developer');
+  const developerRead = catalogue.derpiUserUploads.read(developer);
+  policyResponse.resolve(json({ success: true, global_api_route_policy: 'direct', global_image_route_policy: 'direct' }));
+  await policy;
+  const [safeResult, developerResult] = await Promise.all([safeRead, developerRead]);
+
+  assert.equal(requestsBeforePolicy, 0, 'both image requests must await the shared route policy');
+  assert.deepEqual(safeResult.images.map((image) => image.id), [1],
+    'changing localStorage during the policy wait cannot put developer content into a safe key');
+  assert.deepEqual(developerResult.images.map((image) => image.id), [1, 2]);
+  assert.equal(imageUrls.length, 2);
+  await tick();
+  assert.deepEqual(catalogue.derpiUserUploads.peek(safe).data.images.map((image) => image.id), [1]);
+  assert.deepEqual(catalogue.derpiUserUploads.peek(developer).data.images.map((image) => image.id), [1, 2]);
+});
+
+test('dictionary tag reads isolate concurrent tags and accounts when answers arrive out of order', async () => {
+  const args = [
+    { tag: 'pony', token: 'account-a' },
+    { tag: 'zebra', token: 'account-a' },
+    { tag: 'pony', token: 'account-b' },
+  ];
+  const incoming = args.map(() => deferred());
+  const entries = args.map(({ tag, token }, id) => ({
+    id, en: tag, cn: `${token}: ${tag}`, cat: 'general', count: 1,
+    description: `Details for ${tag}`, aliases: [],
+  }));
+  let calls = 0;
+  globalThis.fetch = (url, init) => {
+    const target = new URL(String(url), 'https://app.invalid');
+    assert.equal(target.searchParams.get('action'), 'get_dictionary');
+    const token = new Headers(init.headers).get('Authorization')?.replace(/^Bearer /, '');
+    const tag = target.searchParams.get('keyword');
+    const index = args.findIndex((arg) => arg.tag === tag && arg.token === token);
+    assert.notEqual(index, -1, 'a dictionary request must use its own account and selected tag');
+    calls += 1;
+    return incoming[index].promise;
+  };
+  const reads = args.map((arg) => catalogue.dictionaryTag.read(arg));
+  await tick();
+  for (const index of [2, 1, 0]) incoming[index].resolve(json({ success: true, tags: [entries[index]] }));
+  assert.deepEqual(await Promise.all(reads), entries);
+  assert.equal(calls, 3);
+  await tick();
+  for (const [index, arg] of args.entries()) {
+    assert.deepEqual(catalogue.dictionaryTag.peek(arg).data, entries[index]);
+    assert.deepEqual(await catalogue.dictionaryTag.read(arg), entries[index]);
+  }
+  assert.deepEqual(await catalogue.dictionaryTag.read({ tag: 'PONY', token: 'account-a' }), entries[0]);
+  assert.equal(calls, 3, 'revisiting either account or tag reuses only its own answer');
+});
+
+test('dictionary failures remain errors while a successful lookup without an exact match is null', async () => {
+  const failures = [
+    { body: { success: false, error: 'dictionary unavailable' }, message: /dictionary unavailable/ },
+    { body: { success: true, tags: null }, message: /词库查询失败/ },
+  ];
+  for (const [index, failure] of failures.entries()) {
+    const args = { tag: `failed-${index}`, token: 'account-a' };
+    globalThis.fetch = async () => json(failure.body);
+    await assert.rejects(catalogue.dictionaryTag.read(args), failure.message);
+    await tick();
+    const snapshot = catalogue.dictionaryTag.peek(args);
+    assert.equal(snapshot.data, undefined);
+    assert.ok(snapshot.error instanceof Error);
+  }
+
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return json({ success: true, tags: [{ en: 'pony related' }] });
+  };
+  const missing = { tag: 'pony', token: 'account-a' };
+  assert.equal(await catalogue.dictionaryTag.read(missing), null);
+  await tick();
+  assert.equal(catalogue.dictionaryTag.peek(missing).data, null);
+  assert.equal(catalogue.dictionaryTag.peek(missing).error, undefined);
+  assert.equal(await catalogue.dictionaryTag.read(missing), null);
+  assert.equal(calls, 1, 'a successful missing-tag result is cached, unlike a request failure');
+});
+
+test('dictionary invalidation replaces missing and existing answers and preserves mounted readers', async () => {
+  const args = { tag: 'new pony', token: 'account-a' };
+  const created = { id: 7, en: args.tag, cn: '新词条', cat: 'general', count: 1, description: 'created', aliases: [] };
+  const updated = { ...created, cn: '更新后的词条', description: 'updated' };
+  let entries = [];
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return json({ success: true, tags: entries });
+  };
+  assert.equal(await catalogue.dictionaryTag.read(args), null);
+  entries = [created];
+  catalogue.dictionaryTag.invalidate();
+  assert.deepEqual(await catalogue.dictionaryTag.read(args), created,
+    'a newly created dictionary entry must replace the earlier not-found answer');
+  assert.equal(calls, 2);
+  await tick();
+
+  let notices = 0;
+  const unsubscribe = catalogue.dictionaryTag.subscribe(args, () => { notices += 1; });
+  try {
+    entries = [updated];
+    catalogue.dictionaryTag.invalidate();
+    assert.deepEqual(await catalogue.dictionaryTag.read(args), updated);
+    await tick();
+    assert.deepEqual(catalogue.dictionaryTag.peek(args).data, updated);
+    assert.equal(calls, 3, 'an imperative read joins the invalidation refresh already started for the modal');
+    assert.ok(notices > 0, 'the open modal keeps receiving the replacement answer');
+  } finally {
+    unsubscribe();
+  }
+});
+
 test('every catalogue read forwards its AbortSignal through its real API adapter', async () => {
   const cases = [
     [catalogue.homeFeed, { page: 2, sort: 'score', fp: 'safe|-|d|-|' }],
@@ -208,6 +377,9 @@ test('every catalogue read forwards its AbortSignal through its real API adapter
     [catalogue.imagesByIds, { ids: [1], page: 1, perPage: 1 }],
     [catalogue.forumPosts, { page: 1 }], [catalogue.forumThread, { id: '1', page: 1 }],
     [catalogue.userProfile, { id: '1' }], [catalogue.sharedFaveIds, { username: 'pony' }],
+    [catalogue.derpiUserProfile, { id: '1' }],
+    [catalogue.derpiUserUploads, { id: 1, page: 1, perPage: 24, contentFilter: 'safe' }],
+    [catalogue.dictionaryTag, { tag: 'pony', token: 'fake' }],
     [catalogue.userPosts, { id: '1', page: 1 }], [catalogue.userComments, { id: '1', page: 1 }],
     [catalogue.userUploads, { id: '1', page: 1, perPage: 1, token: 'fake' }],
     [catalogue.sessionUser, { token: 'fake' }], [catalogue.unreadCounts, { token: 'fake' }],
@@ -673,10 +845,13 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
         },
       } : { data: undefined, error: statsError, loading: false, refresh: () => { statsRefreshes += 1; } },
     },
-    './useAdminMutation': { useAdminMutation: () => ({ busy: false, run: async (request, success) => {
+    './useAdminMutation': { useAdminMutation: () => ({ busy: false, run: async (request, success, _failure, options) => {
       const response = await request(() => true);
       const data = await response.json();
-      if (response.ok && data.success) success(data);
+      if (response.ok && data.success) {
+        options?.onCommitted?.(data);
+        success(data);
+      }
     } }) },
   };
   const exports = {};

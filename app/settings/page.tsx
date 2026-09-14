@@ -68,7 +68,7 @@ import {
   type ApiPolicy,
   type ImagePolicy,
 } from '@/lib/route';
-import { getAssetUrl, processImageFile } from '@/lib/utils';
+import { getAssetUrl, validateImageFile } from '@/lib/utils';
 
 /* Radius and the 2px seam come from `.m3-row` (globals.css), which shapes a run of rows
    as one cut block rather than separate floating cards.
@@ -691,13 +691,12 @@ export default function SettingsPage() {
     queueMicrotask(() => setContentFilter(validFilter));
   }, [userToken, profileBirthday, isDeveloper, settingsReady]);
 
-  const handleAvatarPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    /* `processImageFile`, not the type-and-size check written out (four copies of the
-       byte arithmetic existed, all emitting the wrong toast copy). */
+    // The cropper reads the file; selection only needs the shared type/size check.
     try {
-      await processImageFile(file, 5);
+      validateImageFile(file, 5);
     } catch (err) {
       if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
       return;
@@ -723,9 +722,7 @@ export default function SettingsPage() {
       if (data.success) {
         showToast('头像上传成功', 'success');
         setAvatarPick(null);
-        const fullUrl = data.avatar_url.startsWith('http')
-          ? data.avatar_url
-          : getAssetUrl(data.avatar_url);
+        const fullUrl = getAssetUrl(data.avatar_url);
         setCurrentAvatar(fullUrl);
         updateAccountFields(user.token, { avatar: fullUrl });
       } else {
@@ -739,11 +736,11 @@ export default function SettingsPage() {
     }
   };
 
-  const handleBannerPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      await processImageFile(file, 10);
+      validateImageFile(file, 10);
     } catch (err) {
       if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
       return;
@@ -1312,7 +1309,7 @@ export default function SettingsPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!currentUsername}
                 loading={isAvatarUploading}
-                icon={<MdEdit size={ICON.dense} />}
+                icon={<MdEdit />}
                 title="修改头像"
               >
                 修改头像
@@ -1371,7 +1368,7 @@ export default function SettingsPage() {
                 onClick={() => bannerInputRef.current?.click()}
                 disabled={!currentUsername}
                 loading={isBannerUploading}
-                icon={<MdImage size={ICON.dense} />}
+                icon={<MdImage />}
                 title="上传 Banner"
               >
                 上传 Banner
@@ -1386,7 +1383,7 @@ export default function SettingsPage() {
               <Button
                 onClick={() => setIsModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={ICON.dense} />}
+                icon={<MdEdit />}
                 title="修改用户名"
               >
                 修改用户名
@@ -1401,7 +1398,7 @@ export default function SettingsPage() {
               <Button
                 onClick={() => setIsPasswordModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={ICON.dense} />}
+                icon={<MdEdit />}
                 title="修改密码"
               >
                 修改密码
@@ -1430,7 +1427,7 @@ export default function SettingsPage() {
                   setIsEmailModalOpen(true);
                 }}
                 disabled={!currentUsername}
-                icon={<MdEdit size={ICON.dense} />}
+                icon={<MdEdit />}
                 title={currentEmail ? '修改邮箱' : '绑定邮箱'}
               >
                 {currentEmail ? '修改' : '绑定'}
@@ -1449,7 +1446,7 @@ export default function SettingsPage() {
               <Button
                 onClick={() => setIsProfileModalOpen(true)}
                 disabled={!currentUsername}
-                icon={<MdEdit size={ICON.dense} />}
+                icon={<MdEdit />}
                 title="编辑个人资料"
               >
                 编辑
@@ -1476,7 +1473,7 @@ export default function SettingsPage() {
                       disabled={!currentUsername}
                       loading={isVerifyLoading}
                       variant="tonal"
-                      icon={<MdVerifiedUser size={ICON.dense} />}
+                      icon={<MdVerifiedUser />}
                       title="核验身份"
                       responsiveLabel
                     >
@@ -1486,7 +1483,7 @@ export default function SettingsPage() {
                       onClick={handleClearApiKey}
                       disabled={!currentUsername}
                       variant="text"
-                      icon={<MdLinkOff size={ICON.dense} />}
+                      icon={<MdLinkOff />}
                       title="解除绑定"
                       responsiveLabel
                       className="text-error hover:bg-error-container hover:text-on-error-container"
@@ -1501,7 +1498,7 @@ export default function SettingsPage() {
                     setIsApiKeyModalOpen(true);
                   }}
                   disabled={!currentUsername}
-                  icon={<MdEdit size={ICON.dense} />}
+                  icon={<MdEdit />}
                   title={currentApiKey ? '修改配置' : '去配置'}
                   responsiveLabel
                 >

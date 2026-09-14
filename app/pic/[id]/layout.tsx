@@ -1,4 +1,4 @@
-import { Metadata } from 'next';
+import { type Metadata } from 'next';
 
 type Props = {
   params: Promise<{ id: string }>;

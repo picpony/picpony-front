@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { showToast } from '@/components/Toast';
 import { MdReport, MdOpenInNew } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -8,13 +8,9 @@ import Badge from '@/components/Badge';
 import { SectionHeader, SearchInput } from './';
 import Button from '@/components/Button';
 import { ICON } from '@/lib/icons';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
 import { adminData, defineAdminQuery, useAdminQuery } from './queries';
-import { readToken } from '@/lib/hooks';
+import { useAdminMutation } from './useAdminMutation';
 
 interface Report {
   id: number;
@@ -40,13 +36,27 @@ const reportsQuery = defineAdminQuery<Report[]>('reports', async (token, signal)
 });
 
 export default function ReportsTab({ token }: { token: string }) {
+  const mutation = useAdminMutation(token);
   const read = useAdminQuery(reportsQuery, token);
   const reports = read.data ?? emptyReports;
   const isLoading = read.loading;
   const loadReports = read.refresh;
   const [searchKw, setSearchKw] = useState('');
-  const pendingRef = useRef(new Set<number>());
-  const [pendingIds, setPendingIds] = useState(new Set<number>());
+
+  // Filtering may unmount a row, so its lock and committed write stay with this tab.
+  const handleReport = (id: number, status: Exclude<Report['status'], 'pending'>) => mutation.run(
+    () => adminApi.adminHandleReport(token, id, status),
+    () => showToast('已处理', 'success'),
+    '处理失败',
+    {
+      key: id,
+      onCommitted: () => {
+        reportsQuery.write(token, (previous) => previous?.map((report) =>
+          report.id === id ? { ...report, status } : report) ?? []);
+        loadReports();
+      },
+    },
+  );
 
   const filteredReports = useMemo(() => {
     if (!searchKw) return reports;
@@ -56,30 +66,6 @@ export default function ReportsTab({ token }: { token: string }) {
         String(r.id) === kw || String(r.image_id) === kw || r.username?.toLowerCase().includes(kw),
     );
   }, [searchKw, reports]);
-
-  const handleReport = async (id: number, status: string) => {
-    if (pendingRef.current.has(id) || readToken() !== token) return;
-    pendingRef.current.add(id);
-    setPendingIds(new Set(pendingRef.current));
-    try {
-      const res = await adminApi.adminHandleReport(token, id, status);
-      const data = await res.json();
-      if (readToken() !== token) return;
-      if (data.success) {
-        reportsQuery.write(token, (previous) => previous?.map((report) =>
-          report.id === id ? { ...report, status: status as Report['status'] } : report) ?? []);
-        showToast('处理成功', 'success');
-        loadReports();
-      } else {
-        showToast(data.error || '处理失败', 'error');
-      }
-    } catch {
-      if (readToken() === token) showToast('处理失败', 'error');
-    } finally {
-      pendingRef.current.delete(id);
-      setPendingIds(new Set(pendingRef.current));
-    }
-  };
 
   const reportColumns: Column<Report>[] = [
     { key: 'id', header: '单号', render: (r) => `#${r.id}` },
@@ -123,10 +109,10 @@ export default function ReportsTab({ token }: { token: string }) {
       render: (r) =>
         r.status === 'pending' ? (
           <>
-            <Button variant="success" size="xs" disabled={pendingIds.has(r.id)} onClick={() => handleReport(r.id, 'processed')} data-ripple>
+            <Button variant="success" size="xs" disabled={mutation.pendingKeys.has(r.id)} onClick={() => handleReport(r.id, 'processed')}>
               完结
             </Button>
-            <Button variant="tonal" size="xs" disabled={pendingIds.has(r.id)} onClick={() => handleReport(r.id, 'rejected')} data-ripple>
+            <Button variant="tonal" size="xs" disabled={mutation.pendingKeys.has(r.id)} onClick={() => handleReport(r.id, 'rejected')}>
               驳回
             </Button>
           </>
@@ -147,7 +133,7 @@ export default function ReportsTab({ token }: { token: string }) {
       <SearchInput
         value={searchKw}
         onChange={setSearchKw}
-        placeholder="搜索举报 ID、图片 ID或举报人…"
+        placeholder="搜索举报 ID、图片 ID 或举报人…"
       />
 
       <DataTable<Report>

@@ -1,135 +1,82 @@
-import { PICPONY_API_BASE } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
 import type { AuditMessagesResponse } from '@/lib/types/message';
-import { readJson } from './client';
+import { picponyPostJson, picponyRequest, readJson } from './http';
 
 export async function adminGetUsers(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_users&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal,
-  });
+  const res = await picponyRequest('admin_get_users', { token, query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
 export async function adminUpdateUser(token: string, data: Record<string, unknown>) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_update_user`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_update_user', data, { token });
 }
 
 export async function adminDeleteUser(token: string, targetId: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_delete_user`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_id: targetId }),
-  });
+  return picponyPostJson('admin_delete_user', { target_id: targetId }, { token });
 }
 
-export async function adminGetWealth(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_users&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal,
-  });
-  return readJson(res);
-}
+export const adminGetWealth = adminGetUsers;
 
 export async function adminUpdateWealth(token: string, data: Record<string, unknown>) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_update_wealth`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_update_wealth', data, { token });
 }
 
 export async function adminGetShopItems(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_shop_items&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal,
-  });
+  const res = await picponyRequest('get_shop_items', { token, query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
 export async function adminSaveShopItem(token: string, data: Record<string, unknown>) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_save_shop_item`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_save_shop_item', data, { token });
 }
 
 export async function adminDeleteShopItem(token: string, id: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_delete_shop_item`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id }),
-  });
+  return picponyPostJson('admin_delete_shop_item', { id }, { token });
 }
 
 export async function adminGetReports(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_reports&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal,
-  });
+  const res = await picponyRequest('admin_get_reports', { token, query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
 export async function adminHandleReport(token: string, reportId: number, status: string) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_handle_report`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ report_id: reportId, status }),
-  });
+  return picponyPostJson('admin_handle_report', { report_id: reportId, status }, { token });
 }
 
 export async function adminGetBlacklist(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_blacklist&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal,
-  });
+  const res = await picponyRequest('admin_get_blacklist', { token, query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
 export async function adminAddBlacklist(token: string, imageId: number, reason: string) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_add_blacklist`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image_id: imageId, reason }),
-  });
+  return picponyPostJson('admin_add_blacklist', { image_id: imageId, reason }, { token });
 }
 
 export async function adminRemoveBlacklist(token: string, imageId: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_remove_blacklist`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image_id: imageId }),
-  });
+  return picponyPostJson('admin_remove_blacklist', { image_id: imageId }, { token });
 }
 
 export async function saveAnnouncement(
   token: string,
   data: { version: string; title: string; content: string },
 ) {
-  return fetch(`${PICPONY_API_BASE}?action=save_announcement`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('save_announcement', data, { token });
 }
 
 export async function adminDeleteAnnouncement(token: string, id: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_delete_announcement`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id }),
-  });
+  return picponyPostJson('admin_delete_announcement', { id }, { token });
 }
 
-export async function adminGetAllMessages(token: string, userId?: number): Promise<AuditMessagesResponse> {
-  let url = `${PICPONY_API_BASE}?action=admin_get_all_messages&_t=${Date.now()}`;
-  if (userId) url += `&user_id=${userId}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+export async function adminGetAllMessages(
+  token: string,
+  userId?: number,
+  signal?: AbortSignal,
+): Promise<AuditMessagesResponse> {
+  const res = await picponyRequest('admin_get_all_messages', {
+    token,
+    query: { _t: Date.now(), user_id: userId || undefined },
+    signal,
+  });
   return readJson(res);
 }
 
@@ -137,81 +84,48 @@ export async function adminSendNotification(
   token: string,
   data: { user_id: number; title: string; content: string },
 ) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_send_notification`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_send_notification', data, { token });
 }
 
 export async function adminGetNotifications(token: string, filter: string = 'all', signal?: AbortSignal) {
-  const res = await fetch(
-    `${PICPONY_API_BASE}?action=admin_get_notifications&filter=${encodeURIComponent(filter)}&_t=${Date.now()}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      signal,
-    },
-  );
-  return readJson(res);
-}
-
-export async function adminDeleteNotification(token: string, id: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_delete_notification`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id }),
-  });
-}
-
-export async function adminGrantBadge(token: string, data: Record<string, unknown>) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_grant_badge`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-}
-
-export async function adminGetBadgeLinks(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=admin_list_badge_links&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const res = await picponyRequest('admin_get_notifications', {
+    token,
+    query: { filter, _t: Date.now() },
     signal,
   });
   return readJson(res);
 }
 
+export async function adminDeleteNotification(token: string, id: number) {
+  return picponyPostJson('admin_delete_notification', { id }, { token });
+}
+
+export async function adminGrantBadge(token: string, data: Record<string, unknown>) {
+  return picponyPostJson('admin_grant_badge', data, { token });
+}
+
+export async function adminGetBadgeLinks(token: string, signal?: AbortSignal) {
+  const res = await picponyRequest('admin_list_badge_links', { token, query: { _t: Date.now() }, signal });
+  return readJson(res);
+}
+
 export async function adminCreateBadgeLink(token: string, data: Record<string, unknown>) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_create_badge_link`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_create_badge_link', data, { token });
 }
 
 export async function adminToggleBadgeLink(token: string, id: number, isActive: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_toggle_badge_link`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, is_active: isActive }),
-  });
+  return picponyPostJson('admin_toggle_badge_link', { id, is_active: isActive }, { token });
 }
 
 export async function adminDeleteBadge(token: string, badgeId: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_delete_badge`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ badge_id: badgeId }),
-  });
+  return picponyPostJson('admin_delete_badge', { badge_id: badgeId }, { token });
 }
 
 export async function adminEditBadge(
   token: string,
   data: { badge_id: number; badge_name: string; badge_color: string },
 ) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_edit_badge`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_edit_badge', data, { token });
 }
 
 /**
@@ -223,7 +137,7 @@ export async function adminEditBadge(
  * `SiteStatusResponse` is the shared shape, so the two cannot drift on it.
  */
 export async function getMaintenanceStatus(signal?: AbortSignal): Promise<SiteStatusResponse> {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`, { signal });
+  const res = await picponyRequest('get_maintenance_status', { query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
@@ -231,23 +145,15 @@ export async function adminToggleMaintenance(
   token: string,
   data: { maintenance_mode: boolean; maintenance_message: string },
 ) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_toggle_maintenance`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_toggle_maintenance', data, { token });
 }
 
 export async function adminToggleTranslate(token: string, data: { translate_enabled: boolean }) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_toggle_translate`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_toggle_translate', data, { token });
 }
 
 export async function getSiteStats(signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_site_stats&_t=${Date.now()}`, { signal });
+  const res = await picponyRequest('get_site_stats', { query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
@@ -255,17 +161,11 @@ export async function adminSyncSiteStats(
   token: string,
   data: { images: number; tags: number; comments: number },
 ) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_sync_site_stats`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_sync_site_stats', data, { token });
 }
 
 export async function adminGetMascotConfig(token: string) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_mascot_config&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await picponyRequest('admin_get_mascot_config', { token, query: { _t: Date.now() } });
   return readJson(res);
 }
 
@@ -273,35 +173,21 @@ export async function adminSaveMascotConfig(
   token: string,
   data: { enabled: boolean; tips: string[] },
 ) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_save_mascot_config`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_save_mascot_config', data, { token });
 }
 
 export async function adminUploadMascotImage(token: string, file: File) {
   const formData = new FormData();
   formData.append('mascot_file', file);
-  return fetch(`${PICPONY_API_BASE}?action=admin_upload_mascot_image`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
-  });
+  return picponyRequest('admin_upload_mascot_image', { token, method: 'POST', body: formData });
 }
 
 export async function adminDeleteMascotImage(token: string) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_delete_mascot_image`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  return picponyRequest('admin_delete_mascot_image', { token, method: 'POST' });
 }
 
 export async function getBlockTags(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_block_tags&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal,
-  });
+  const res = await picponyRequest('get_block_tags', { token, query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
@@ -309,100 +195,64 @@ export async function adminAddBlockTag(
   token: string,
   data: { filter_key: string; tag_name: string },
 ) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_add_block_tag`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('admin_add_block_tag', data, { token });
 }
 
 export async function adminRemoveBlockTag(token: string, id: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_remove_block_tag`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id }),
-  });
+  return picponyPostJson('admin_remove_block_tag', { id }, { token });
 }
 
 export async function adminGetDeveloperPassword(token: string, signal?: AbortSignal) {
-  const res = await fetch(
-    `${PICPONY_API_BASE}?action=admin_get_developer_password&_t=${Date.now()}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      signal,
-    },
-  );
+  const res = await picponyRequest('admin_get_developer_password', { token, query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
 export async function adminRefreshDeveloperPassword(token: string) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_refresh_developer_password`, {
+  return picponyRequest('admin_refresh_developer_password', {
+    token,
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
 export async function adminGetDeveloperUsers(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_developer_users&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal,
-  });
+  const res = await picponyRequest('admin_get_developer_users', { token, query: { _t: Date.now() }, signal });
   return readJson(res);
 }
 
 export async function adminRevokeDeveloper(token: string, targetId: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_revoke_developer`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_id: targetId }),
-  });
+  return picponyPostJson('admin_revoke_developer', { target_id: targetId }, { token });
 }
 
 export async function adminEnableDeveloper(token: string, targetId: number) {
-  return fetch(`${PICPONY_API_BASE}?action=admin_enable_developer`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_id: targetId }),
-  });
+  return picponyPostJson('admin_enable_developer', { target_id: targetId }, { token });
 }
 
 export async function addTeamMember(token: string, data: Record<string, unknown>) {
-  return fetch(`${PICPONY_API_BASE}?action=add_team_member`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('add_team_member', data, { token });
 }
 
 export async function updateTeamMember(token: string, data: Record<string, unknown>) {
-  return fetch(`${PICPONY_API_BASE}?action=update_team_member`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  return picponyPostJson('update_team_member', data, { token });
 }
 
 export async function deleteTeamMember(token: string, id: number) {
-  return fetch(`${PICPONY_API_BASE}?action=delete_team_member`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id }),
-  });
+  return picponyPostJson('delete_team_member', { id }, { token });
 }
 
 export async function getTagFeedback(
   token: string,
   params: { status?: string; keyword?: string; page?: number; limit?: number } = {},
 ) {
-  const search = new URLSearchParams();
-  search.set('action', 'admin_get_tag_feedback');
-  if (params.status) search.set('status', params.status);
-  if (params.keyword) search.set('keyword', params.keyword);
-  search.set('page', String(params.page ?? 1));
-  search.set('limit', String(params.limit ?? 40));
-  search.set('_t', String(Date.now()));
-  const res = await fetch(`${PICPONY_API_BASE}?${search}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const res = await picponyRequest('admin_get_tag_feedback', {
+    token,
+    query: {
+      status: params.status || undefined,
+      keyword: params.keyword || undefined,
+      page: params.page ?? 1,
+      limit: params.limit ?? 40,
+      _t: Date.now(),
+    },
   });
   return readJson(res);
 }
@@ -417,16 +267,14 @@ export async function handleTagFeedback(
   const body: Record<string, unknown> = { id, status };
   if (note) body.note = note;
   if (expectedStatus) body.expected_status = expectedStatus;
-  return fetch(`${PICPONY_API_BASE}?action=admin_handle_tag_feedback`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  return picponyPostJson('admin_handle_tag_feedback', body, { token });
 }
 
 export async function checkTagExists(token: string, enTag: string) {
-  const url = `${PICPONY_API_BASE}?action=get_dictionary&page=1&limit=50&keyword=${encodeURIComponent(enTag)}&_t=${Date.now()}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await picponyRequest('get_dictionary', {
+    token,
+    query: { page: 1, limit: 50, keyword: enTag, _t: Date.now() },
+  });
   const data = await readJson(res);
   if (res.ok && data.success && Array.isArray(data.tags)) {
     return data.tags.some((t: { en: string }) => t.en.toLowerCase() === enTag.toLowerCase());

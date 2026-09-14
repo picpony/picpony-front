@@ -285,11 +285,14 @@ function glossaryFixture(options = {}) {
       checkTagExists: options.exists ?? (async () => false),
       getTagFeedback: async () => ({ success: true, feedbacks: [] }),
     },
-    '@/lib/api': { api: {
+    '@/lib/api/picpony': {
       getDictionary: async () => { dictionaryReads++; return { success: true, tags: [], total_matches: 0 }; },
-      getDerpiPopularTags: async () => ({ tags: [{ name: 'pony' }, { name: 'safe' }] }),
       saveDictionaryTag: async () => { saves++; return options.save ? options.save() : { ok: false, status: 403, json: async () => ({ success: false, error: 'denied' }) }; },
-    } },
+    },
+    '@/lib/api/derpi': {
+      getDerpiPopularTags: async () => ({ tags: [{ name: 'pony' }, { name: 'safe' }] }),
+    },
+    '@/lib/resources': { dictionaryTag: { invalidate() {} } },
   }, { localStorage: { getItem: () => null }, window: {}, setTimeout: (fn) => setTimeout(fn, 0) });
   return { hooks, toasts, confirms, component: glossaryModule.default, saves: () => saves, reads: () => dictionaryReads };
 }

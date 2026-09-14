@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { SKIP, useResource } from '@/lib/resource';
 import { useScreenState } from '@/lib/screenState';
 import { browsingHistory } from '@/lib/resources';
@@ -9,7 +9,7 @@ import { MdHistory, MdDelete, MdDeleteSweep, MdImage, MdPerson } from 'react-ico
 import FadeInImage from '@/components/FadeInImage';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
-import Modal from '@/components/Modal';
+import { useConfirm } from '@/components/ConfirmDialog';
 import Pagination from '@/components/Pagination';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
@@ -20,7 +20,7 @@ import { useAuthModal } from '@/components/AuthModal';
 import PageHeader from '@/components/PageHeader';
 import { ICON } from '@/lib/icons';
 import { formatDateTime } from '@/lib/format';
-import { readToken, readUserInfo, useSession } from '@/lib/hooks';
+import { readToken, useSession } from '@/lib/hooks';
 
 export default function HistoryPage() {
   const { openAuth } = useAuthModal();
@@ -28,30 +28,30 @@ export default function HistoryPage() {
   /* The page number survives a remount: leaving page 3 for a picture and coming back
      lands on page 3 — see `lib/screenState.ts`. */
   const [page, setPage] = useScreenState('history:page', 1);
-  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const { confirm, confirmDialog } = useConfirm();
 
   const read = useResource(browsingHistory, token ? { token, page } : SKIP, { keepPrevious: true });
   const history = read.data?.history ?? [];
   const totalPages = read.data?.totalPages ?? 1;
   const isLoading = !ready || (Boolean(token) && read.data === undefined && read.error === undefined);
-  const error = read.error ? ((read.error as Error).message ?? '网络请求失败') : null;
+  const error = read.error instanceof Error ? read.error.message : read.error ? '网络请求失败' : null;
 
   useEffect(() => {
     if (ready && !token) openAuth('login');
   }, [token, ready, openAuth]);
 
   const handleClear = async () => {
-    setIsClearModalOpen(true);
-  };
-
-  const handleClearConfirm = async () => {
-    setIsClearModalOpen(false);
+    if (!token || readToken() !== token) return;
+    if (!(await confirm({
+      title: '确认清空',
+      message: '确定要清空所有浏览历史吗？此操作不可撤销。',
+      confirmLabel: '确认清空',
+    }))) return;
+    if (readToken() !== token) return;
     try {
-      const user = readUserInfo();
-      if (!user || user.token !== token) return;
-      const res = await api.clearBrowsingHistory(user.token);
+      const res = await api.clearBrowsingHistory(token);
       const data = await res.json();
-      if (readToken() !== user.token) return;
+      if (readToken() !== token) return;
       if (data.success) {
         showToast('浏览历史已清空', 'success');
         /* Drop every cached page, then publish the mutation's authoritative empty answer.
@@ -59,8 +59,8 @@ export default function HistoryPage() {
            The current page also needs the empty answer before keepPrevious can retain it. */
         browsingHistory.invalidate();
         const empty = { history: [], totalPages: 1 };
-        browsingHistory.write({ token: user.token, page }, empty);
-        if (page !== 1) browsingHistory.write({ token: user.token, page: 1 }, empty);
+        browsingHistory.write({ token, page }, empty);
+        if (page !== 1) browsingHistory.write({ token, page: 1 }, empty);
         setPage(1);
       } else {
         showToast(data.error || '清空失败', 'error');
@@ -71,26 +71,21 @@ export default function HistoryPage() {
   };
 
   const handleDeleteItem = async (imageId: number) => {
+    if (!token) {
+      showToast('请先登录', 'error');
+      return;
+    }
+    if (readToken() !== token) return;
     try {
-      const user = readUserInfo();
-      if (!user) {
-        showToast('请先登录', 'error');
-        return;
-      }
-      if (!user.token) {
-        showToast('登录已过期，请重新登录', 'error');
-        return;
-      }
-      if (user.token !== token) return;
-      const res = await api.deleteBrowsingHistoryItem(user.token, imageId);
+      const res = await api.deleteBrowsingHistoryItem(token, imageId);
       const data = await res.json();
-      if (readToken() !== user.token) return;
+      if (readToken() !== token) return;
       if (data.success) {
         /* Written through rather than re-read: the row is gone from the server and the
            screen should say so in the same frame — a refetch would blank the list and
            bring back an identical one a round trip later. The write leaves the entry's
            age alone, so the next revalidation still confirms it (see `resource.write`). */
-        browsingHistory.write({ token: user.token, page }, (previous) => ({
+        browsingHistory.write({ token, page }, (previous) => ({
           history: (previous?.history ?? []).filter((item) => item.id !== imageId),
           totalPages: previous?.totalPages ?? 1,
         }));
@@ -142,7 +137,7 @@ export default function HistoryPage() {
               <Button
                 variant="danger-text"
                 onClick={handleClear}
-                icon={<MdDeleteSweep size={ICON.dense} />}
+                icon={<MdDeleteSweep />}
                 responsiveLabel
               >
                 清空记录
@@ -247,23 +242,7 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
-      <Modal
-        isOpen={isClearModalOpen}
-        onClose={() => setIsClearModalOpen(false)}
-        title="清空浏览历史"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setIsClearModalOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleClearConfirm}>
-              确认清空
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">确定要清空所有浏览历史吗？此操作不可撤销。</p>
-      </Modal>
+      {confirmDialog}
     </>
   );
 }

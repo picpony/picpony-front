@@ -10,6 +10,7 @@ import Spinner from '@/components/Spinner';
 import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
 import { ICON } from '@/lib/icons';
+import { clamp } from '@/lib/utils';
 
 export type CropShape = 'circle' | 'rect';
 
@@ -136,7 +137,7 @@ export default function ImageCropper({
   const effH = natural ? (quarterTurned ? natural.w : natural.h) : 0;
   const base = effW && effH && cropBox.w ? Math.max(cropBox.w / effW, cropBox.h / effH) : 1;
 
-  const clamp = useCallback(
+  const constrainView = useCallback(
     (next: View): View => {
       if (!effW || !effH || !cropBox.w) return next;
       const turned = next.rotation % 180 !== 0;
@@ -146,8 +147,8 @@ export default function ImageCropper({
       const maxY = Math.max(0, (h - cropBox.h) / 2);
       return {
         ...next,
-        x: Math.min(maxX, Math.max(-maxX, next.x)),
-        y: Math.min(maxY, Math.max(-maxY, next.y)),
+        x: clamp(next.x, -maxX, maxX),
+        y: clamp(next.y, -maxY, maxY),
       };
     },
     [effW, effH, cropBox.w, cropBox.h, base, natural],
@@ -156,11 +157,12 @@ export default function ImageCropper({
   // Rotation changes `base`, so a pan that was legal a moment ago may not be.
   // Clamping on read rather than in an effect means the displayed value is
   // always in range without a reconciliation pass that could paint out of it.
-  const v = clamp(view);
+  const v = constrainView(view);
   const scale = base * v.zoom;
 
-  const nudgeZoom = (delta: number) =>
-    setView((prev) => clamp({ ...prev, zoom: Math.min(MAX_ZOOM, Math.max(1, prev.zoom + delta)) }));
+  const nudgeZoom = useCallback((delta: number) => {
+    setView((prev) => constrainView({ ...prev, zoom: clamp(prev.zoom + delta, 1, MAX_ZOOM) }));
+  }, [constrainView]);
 
   /* ---- pointer: pan + pinch -------------------------------------------- */
   const onPointerDown = (e: React.PointerEvent) => {
@@ -184,9 +186,9 @@ export default function ImageCropper({
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
       const ratio = pinchFrom.current.dist > 0 ? dist / pinchFrom.current.dist : 1;
       setView((prev) =>
-        clamp({
+        constrainView({
           ...prev,
-          zoom: Math.min(MAX_ZOOM, Math.max(1, pinchFrom.current!.zoom * ratio)),
+          zoom: clamp(pinchFrom.current!.zoom * ratio, 1, MAX_ZOOM),
         }),
       );
       return;
@@ -195,7 +197,7 @@ export default function ImageCropper({
     const from = panFrom.current;
     if (!from) return;
     setView((prev) =>
-      clamp({ ...prev, x: from.x + (e.clientX - from.px), y: from.y + (e.clientY - from.py) }),
+      constrainView({ ...prev, x: from.x + (e.clientX - from.px), y: from.y + (e.clientY - from.py) }),
     );
   };
 
@@ -221,8 +223,7 @@ export default function ImageCropper({
     };
     stage.addEventListener('wheel', onWheel, { passive: false });
     return () => stage.removeEventListener('wheel', onWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, src, clamp]);
+  }, [stage, src, nudgeZoom]);
 
   /* ---- export ---------------------------------------------------------- */
   const confirm = async () => {
@@ -279,8 +280,7 @@ export default function ImageCropper({
           <Button variant="text" onClick={onClose} disabled={working}>
             取消
           </Button>
-          <Button variant="filled" onClick={confirm} disabled={!ready || working}>
-            {working ? <Spinner size="sm" tone="on-primary" /> : null}
+          <Button variant="filled" onClick={confirm} disabled={!ready} loading={working}>
             {working ? '处理中…' : '确认'}
           </Button>
         </>
@@ -381,7 +381,7 @@ export default function ImageCropper({
             disabled={!ready}
             aria-label="缩放"
             valueText={(z) => `缩放 ${z.toFixed(2)} 倍`}
-            onValueChange={(zoom) => setView((prev) => clamp({ ...prev, zoom }))}
+            onValueChange={(zoom) => setView((prev) => constrainView({ ...prev, zoom }))}
             className="min-w-32 flex-1 sm:w-40"
           />
           <IconButton
@@ -396,10 +396,10 @@ export default function ImageCropper({
           <Button
             variant="text"
             size="xs"
-            icon={<MdRotateRight size={ICON.dense} />}
+            icon={<MdRotateRight />}
             disabled={!ready}
             onClick={() =>
-              setView((prev) => clamp({ ...prev, rotation: (prev.rotation + 90) % 360 }))
+              setView((prev) => constrainView({ ...prev, rotation: (prev.rotation + 90) % 360 }))
             }
           >
             旋转
@@ -407,7 +407,7 @@ export default function ImageCropper({
           <Button
             variant="text"
             size="xs"
-            icon={<MdRestartAlt size={ICON.dense} />}
+            icon={<MdRestartAlt />}
             disabled={!ready}
             onClick={() => setView(INITIAL)}
           >

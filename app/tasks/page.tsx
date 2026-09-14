@@ -17,7 +17,7 @@ import UserBadge from '@/components/UserBadge';
 import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
 import { ICON } from '@/lib/icons';
-import { readToken, readUserInfo, useSession } from '@/lib/hooks';
+import { readToken, useSession } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 
 interface TaskData {
@@ -62,6 +62,49 @@ const tabs: { id: TaskTab; label: string; subtitle: string }[] = [
   { id: 'cumulative', label: '累计任务', subtitle: '' },
 ];
 
+const TASK_DEFINITIONS = {
+  novice: [
+    { id: 'bind_api', name: '首次绑定 API Key', xp: 100, coins: 5, target: 1 },
+    { id: 'verify_api', name: '首次验证 API Key', xp: 100, coins: 10, target: 1 },
+    { id: 'set_bg', name: '首次设置背景图', xp: 30, coins: 2, target: 1 },
+  ],
+  daily: [
+    { id: 'login', name: '每日登录', xp: 5, coins: 1, target: 1 },
+    { id: 'fav', name: '每日收藏超过5张图片', xp: 10, coins: 2, target: 5 },
+    { id: 'share', name: '每日分享5张图片', xp: 10, coins: 3, target: 5 },
+    { id: 'comment', name: '每日5评论', xp: 10, coins: 3, target: 5 },
+  ],
+  weekly: [
+    { id: 'upload', name: '每周通过 picpony 上传新作品5次', xp: 15, coins: 5, target: 5 },
+  ],
+} as const;
+
+/** Keep task labels/rewards separate from the API's three progress shapes. */
+function getTaskItems(data: TaskData | undefined, tab: TaskTab): TaskItem[] {
+  if (!data || tab === 'cumulative') return [];
+  if (tab === 'novice') {
+    return TASK_DEFINITIONS.novice.map((task) => ({
+      ...task,
+      id: `novice_${task.id}`,
+      progress: data.novice_tasks?.[task.id]?.progress ?? 0,
+      claimed: data.novice_tasks?.[task.id]?.claimed ?? 0,
+    }));
+  }
+  if (tab === 'daily') {
+    return TASK_DEFINITIONS.daily.map((task) => ({
+      ...task,
+      progress: data.tasks?.[`${task.id}_progress`] ?? 0,
+      claimed: data.tasks?.[`${task.id}_claimed`] ?? 0,
+    }));
+  }
+  return TASK_DEFINITIONS.weekly.map((task) => ({
+    ...task,
+    id: `weekly_${task.id}`,
+    progress: data.weekly_tasks?.[`${task.id}_progress`] ?? 0,
+    claimed: data.weekly_tasks?.[`${task.id}_claimed`] ?? 0,
+  }));
+}
+
 export default function TasksPage() {
   const { token, ready } = useSession();
   const { openAuth } = useAuthModal();
@@ -96,17 +139,15 @@ export default function TasksPage() {
     claimPending.current = true;
     setClaiming(taskType);
     try {
-      const user = readUserInfo();
-      if (!user) return;
-      const res = await api.claimTask(user.token, taskType);
+      const res = await api.claimTask(token, taskType);
       const result = await res.json();
-      if (readToken() !== user.token) return;
+      if (readToken() !== token) return;
       if (result.success) {
         setClaimReceipt((previous) => ({
           snapshot: data,
           ids: new Set(previous && previous.snapshot === data ? previous.ids : []).add(taskType),
         }));
-        showToast(`领取成功，经验 +${result.experience}，金币 +${result.coins}`, 'success');
+        showToast(`已领取，经验 +${result.experience}，金币 +${result.coins}`, 'success');
         // Refresh in the background; the local claim lock stays held until this
         // handler returns, preventing a double claim from a rapid double click.
         loadTasks();
@@ -119,110 +160,6 @@ export default function TasksPage() {
       claimPending.current = false;
       setClaiming(null);
     }
-  };
-
-  const getTaskItems = (forTab: TaskTab): TaskItem[] => {
-    if (!data) return [];
-    if (forTab === 'novice') {
-      const nt = data.novice_tasks || {};
-      const bindApi = nt['bind_api'];
-      const verifyApi = nt['verify_api'];
-      const setBg = nt['set_bg'];
-      return [
-        {
-          id: 'novice_bind_api',
-          name: '首次绑定 API Key',
-          xp: 100,
-          coins: 5,
-          progress: bindApi?.progress || 0,
-          target: 1,
-          claimed: bindApi?.claimed || 0,
-        },
-        {
-          id: 'novice_verify_api',
-          name: '首次验证 API Key',
-          xp: 100,
-          coins: 10,
-          progress: verifyApi?.progress || 0,
-          target: 1,
-          claimed: verifyApi?.claimed || 0,
-        },
-        {
-          id: 'novice_set_bg',
-          name: '首次设置背景图',
-          xp: 30,
-          coins: 2,
-          progress: setBg?.progress || 0,
-          target: 1,
-          claimed: setBg?.claimed || 0,
-        },
-      ];
-    }
-    if (forTab === 'daily') {
-      const t = data.tasks || {
-        login_progress: 0,
-        login_claimed: 0,
-        fav_progress: 0,
-        fav_claimed: 0,
-        share_progress: 0,
-        share_claimed: 0,
-        comment_progress: 0,
-        comment_claimed: 0,
-      };
-      return [
-        {
-          id: 'login',
-          name: '每日登录',
-          xp: 5,
-          coins: 1,
-          progress: t.login_progress ?? 0,
-          target: 1,
-          claimed: t.login_claimed ?? 0,
-        },
-        {
-          id: 'fav',
-          name: '每日收藏超过5张图片',
-          xp: 10,
-          coins: 2,
-          progress: t.fav_progress ?? 0,
-          target: 5,
-          claimed: t.fav_claimed ?? 0,
-        },
-        {
-          id: 'share',
-          name: '每日分享5张图片',
-          xp: 10,
-          coins: 3,
-          progress: t.share_progress ?? 0,
-          target: 5,
-          claimed: t.share_claimed ?? 0,
-        },
-        {
-          id: 'comment',
-          name: '每日5评论',
-          xp: 10,
-          coins: 3,
-          progress: t.comment_progress ?? 0,
-          target: 5,
-          claimed: t.comment_claimed ?? 0,
-        },
-      ];
-    }
-    if (forTab === 'weekly') {
-      const wt = data.weekly_tasks || { upload_progress: 0, upload_claimed: 0 };
-      return [
-        {
-          id: 'weekly_upload',
-          name: '每周通过 picpony 上传新作品5次',
-          xp: 15,
-          coins: 5,
-          progress: wt.upload_progress ?? 0,
-          target: 5,
-          claimed: wt.upload_claimed ?? 0,
-        },
-      ];
-    }
-    return [];
   };
 
   /* One tab's worth of rows. Takes the tab rather than reading `activeTab`: every pane
@@ -239,7 +176,7 @@ export default function TasksPage() {
       );
     }
 
-    const items = getTaskItems(forTab);
+    const items = getTaskItems(data, forTab);
     return (
       <div>
         {items.map((item) => {
@@ -275,7 +212,7 @@ export default function TasksPage() {
                     assigns. */}
                 <ProgressBar
                   value={pct}
-                  tone={item.claimed ? 'success' : canClaim ? 'warning' : 'secondary'}
+                  tone={isClaimed ? 'success' : canClaim ? 'warning' : 'secondary'}
                   label={`${item.name} 进度`}
                   className="mt-2"
                 />
@@ -294,7 +231,7 @@ export default function TasksPage() {
                     fullWidth
                     variant={canClaim ? 'filled' : 'text'}
                     onClick={() => handleClaim(item.id)}
-                    disabled={!canClaim || claiming !== null || claimedPending.has(item.id)}
+                    disabled={!canClaim || claiming !== null}
                     loading={claiming === item.id}
                     /* No colour override on the disabled branch: the added background
                        and boundary ink fought the `text` variant's own (`cn` is a plain

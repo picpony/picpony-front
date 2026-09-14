@@ -76,7 +76,7 @@ try {
   assert.equal(calls.length, 1);
   assert.match(calls[0].url, /action=user_claim_badge$/);
   assert.equal(calls[0].init.method, 'POST');
-  assert.equal(calls[0].init.headers.Authorization, 'Bearer session-token');
+  assert.equal(new Headers(calls[0].init.headers).get('Authorization'), 'Bearer session-token');
   assert.deepEqual(JSON.parse(calls[0].init.body), { token: 'link-token&value' });
   globalThis.fetch = async () => Response.json({ success: true }, { status: 403 });
   assert.equal((await claimBadge('session-token', 'expired')).success, false);

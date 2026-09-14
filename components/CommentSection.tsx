@@ -150,7 +150,7 @@ export default function CommentSection({
                   <Button
                     variant="text"
                     onClick={() => handleReply(comment)}
-                    icon={<MdReply size={ICON.dense} />}
+                    icon={<MdReply />}
                   >
                     回复
                   </Button>

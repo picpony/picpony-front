@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { showToast } from '@/components/Toast';
-import { default as StatusBadge } from '@/components/Badge';
+import StatusBadge from '@/components/Badge';
 import Checkbox from '@/components/Checkbox';
 import RoleBadge from '@/components/RoleBadge';
 import Select from '@/components/Select';
@@ -16,13 +16,8 @@ import { Input, Textarea } from '@/components/Input';
 import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
 import SectionHeading from '@/components/SectionHeading';
 import { ICON } from '@/lib/icons';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
 import { adminData, defineAdminQuery, useAdminQuery } from './queries';
-import { readToken } from '@/lib/hooks';
 import { useAdminMutation } from './useAdminMutation';
 
 interface Badge {
@@ -89,7 +84,8 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
   const [searchKw, setSearchKw] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isInlineEditorClosing, setIsInlineEditorClosing] = useState(false);
-  const [isSavingUser, setIsSavingUser] = useState(false);
+  const saveMutation = useAdminMutation(token);
+  const isSavingUser = saveMutation.busy;
   const [editForm, setEditForm] = useState<UserEditForm>({
     username: '',
     email: '',
@@ -100,70 +96,50 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
     birthday: '',
     is_banned: 0,
   });
-  const refreshAfterInlineCloseRef = useRef(false);
-  const savingRef = useRef(false);
 
   const handleSaveUser = async () => {
-    if (!editingUser || savingRef.current || readToken() !== token) return;
-    savingRef.current = true;
-    setIsSavingUser(true);
-    try {
-      const payload: Record<string, unknown> = { target_id: editingUser.id };
-
-      if (editForm.username !== editingUser.username) {
-        payload.username = editForm.username;
-      }
-      if (editForm.email !== editingUser.email) {
-        payload.email = editForm.email;
-      }
-      if (editForm.password) {
-        payload.password = editForm.password;
-      }
-      if (editForm.role !== editingUser.role) {
-        payload.role = editForm.role;
-      }
-      if (editForm.is_banned !== editingUser.is_banned) {
-        payload.is_banned = editForm.is_banned;
-      }
-      payload.bio = editForm.bio || '';
-      payload.gender = editForm.gender || '';
-      payload.birthday = editForm.birthday || '';
-
-      const res = await adminApi.adminUpdateUser(token, payload);
-      const data = await res.json();
-
-      if (readToken() !== token) return;
-
-      if (data.success) {
-        showToast('用户信息已更新', 'success');
-        refreshAfterInlineCloseRef.current = true;
-        closeInlineEditor();
-      } else {
-        showToast(data.error || '保存失败', 'error');
-      }
-    } catch {
-      showToast('网络错误，请稍后再试', 'error');
-    } finally {
-      savingRef.current = false;
-      setIsSavingUser(false);
+    if (!editingUser || saveMutation.isPending() || mutation.isPending()) return;
+    const payload: Record<string, unknown> = {
+      target_id: editingUser.id,
+      bio: editForm.bio,
+      gender: editForm.gender,
+      birthday: editForm.birthday,
+    };
+    for (const key of ['username', 'email', 'role', 'is_banned'] as const) {
+      if (editForm[key] !== editingUser[key]) payload[key] = editForm[key];
     }
+    if (editForm.password) payload.password = editForm.password;
+
+    await saveMutation.run(
+      () => adminApi.adminUpdateUser(token, payload),
+      () => {
+        showToast('用户信息已更新', 'success');
+        setIsInlineEditorClosing(true);
+      },
+      '保存失败',
+      { onCommitted: loadUsers },
+    );
   };
 
   const { confirmThen, confirmDialog } = useConfirm();
 
+  // A refreshed rename may stop matching the search. Keep its row mounted
+  // until the editor finishes closing and releases its state.
+  const closingUserId = isInlineEditorClosing ? editingUser?.id : null;
   const filteredUsers = useMemo(() => {
     if (!searchKw) return users;
     const kw = searchKw.toLowerCase();
     return users.filter(
       (u) =>
+        u.id === closingUserId ||
         String(u.id) === kw ||
         u.username?.toLowerCase().includes(kw) ||
         u.email?.toLowerCase().includes(kw),
     );
-  }, [searchKw, users]);
+  }, [searchKw, users, closingUserId]);
 
   const openInlineEditor = (user: User) => {
-    if (savingRef.current) return;
+    if (saveMutation.isPending() || mutation.isPending()) return;
     setEditingUser(user);
     setIsInlineEditorClosing(false);
     setEditForm({
@@ -179,43 +155,49 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
   };
 
   const closeInlineEditor = () => {
-    if (!editingUser) return;
+    if (!editingUser || saveMutation.isPending()) return;
     setIsInlineEditorClosing(true);
   };
 
   const finishInlineEditorClose = () => {
     setEditingUser(null);
     setIsInlineEditorClosing(false);
-
-    if (!refreshAfterInlineCloseRef.current) return;
-    refreshAfterInlineCloseRef.current = false;
-    loadUsers();
   };
 
-  const handleBan = async (userId: number, isBanned: number) => {
+  const handleBan = (userId: number, isBanned: number) => {
     confirmThen(
       isBanned ? '确认封禁' : '确认解封',
       isBanned ? '确定要封禁该用户吗？' : '确定要解封该用户吗？',
       async () => {
-        await mutation.run(() => adminApi.adminUpdateUser(token, { target_id: userId, is_banned: isBanned }), () => {
+        if (saveMutation.isPending()) return;
+        await mutation.run(
+          () => adminApi.adminUpdateUser(token, { target_id: userId, is_banned: isBanned }),
+          () => showToast(isBanned ? '已封禁' : '已解封', 'success'),
+          '操作失败',
+          { onCommitted: () => {
             usersQuery.write(token, (previous) => previous?.map((user) => user.id === userId ? { ...user, is_banned: isBanned } : user) ?? []);
-            showToast(isBanned ? '已封禁' : '已解封', 'success');
             loadUsers();
-          }, '操作失败');
+          } },
+        );
       },
     );
   };
 
-  const handleDelete = async (userId: number) => {
+  const handleDelete = (userId: number) => {
     confirmThen(
       '确认彻底删除账号',
       '确定要彻底抹除此账号及所有相关数据吗？此操作无法恢复。',
       async () => {
-        await mutation.run(() => adminApi.adminDeleteUser(token, userId), () => {
+        if (saveMutation.isPending()) return;
+        await mutation.run(
+          () => adminApi.adminDeleteUser(token, userId),
+          () => showToast('已删除', 'success'),
+          '删除失败',
+          { onCommitted: () => {
             usersQuery.write(token, (previous) => previous?.filter((user) => user.id !== userId) ?? []);
-            showToast('已删除', 'success');
             loadUsers();
-          }, '删除失败');
+          } },
+        );
       },
     );
   };
@@ -269,6 +251,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                   <Input
                     id={`${idPrefix}-username`}
                     value={editForm.username}
+                    disabled={isSavingUser}
                     onChange={(event) =>
                       setEditForm((form) => ({ ...form, username: event.target.value }))
                     }
@@ -286,6 +269,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                     id={`${idPrefix}-email`}
                     type="email"
                     value={editForm.email}
+                    disabled={isSavingUser}
                     onChange={(event) =>
                       setEditForm((form) => ({ ...form, email: event.target.value }))
                     }
@@ -304,6 +288,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                     id={`${idPrefix}-password`}
                     type="password"
                     value={editForm.password}
+                    disabled={isSavingUser}
                     onChange={(event) =>
                       setEditForm((form) => ({ ...form, password: event.target.value }))
                     }
@@ -323,6 +308,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                 <td className="min-w-48 px-3 py-3">
                   <Select
                     value={editForm.role}
+                    disabled={isSavingUser}
                     onChange={(value) => setEditForm((form) => ({ ...form, role: value }))}
                     className="w-full"
                     aria-label="用户角色"
@@ -340,6 +326,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                   <Textarea
                     id={`${idPrefix}-bio`}
                     value={editForm.bio}
+                    disabled={isSavingUser}
                     onChange={(event) =>
                       setEditForm((form) => ({ ...form, bio: event.target.value }))
                     }
@@ -355,6 +342,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                 <td className="min-w-48 px-3 py-3">
                   <Select
                     value={editForm.gender}
+                    disabled={isSavingUser}
                     onChange={(value) => setEditForm((form) => ({ ...form, gender: value }))}
                     className="w-full"
                     aria-label="用户性别"
@@ -373,6 +361,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                     id={`${idPrefix}-birthday`}
                     type="date"
                     value={editForm.birthday}
+                    disabled={isSavingUser}
                     onChange={(event) =>
                       setEditForm((form) => ({ ...form, birthday: event.target.value }))
                     }
@@ -390,6 +379,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
                         differently-worded `aria-label`. */}
                     <Checkbox
                       checked={editForm.is_banned === 1}
+                      disabled={isSavingUser}
                       onChange={(checked) =>
                         setEditForm((form) => ({ ...form, is_banned: checked ? 1 : 0 }))
                       }
@@ -417,7 +407,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
           <Button variant="text" onClick={closeInlineEditor} disabled={isSavingUser}>
             取消
           </Button>
-          <Button variant="filled" onClick={handleSaveUser} loading={isSavingUser}>
+          <Button variant="filled" onClick={handleSaveUser} loading={isSavingUser} disabled={mutation.busy}>
             保存修改
           </Button>
         </div>
@@ -468,6 +458,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
             type="button"
             size="sm"
             icon={<MdEdit />}
+            disabled={mutation.busy || isSavingUser}
             onClick={(event) => {
               if (editingUser?.id === u.id && !isInlineEditorClosing) {
                 closeInlineEditor();

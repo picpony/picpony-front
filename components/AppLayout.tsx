@@ -2,7 +2,7 @@
 
 import {
   useState,
-  FormEvent,
+  type FormEvent,
   Suspense,
   useEffect,
   useRef,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdEmojiEvents, MdAdd, MdEdit, MdDelete, MdContentCopy, MdLink } from 'react-icons/md';
@@ -19,11 +19,6 @@ import Radio from '@/components/Radio';
 import { copyText } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { readToken } from '@/lib/hooks';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
 import { adminData, defineAdminQuery, useAdminQuery } from './queries';
 import { useAdminMutation } from './useAdminMutation';
@@ -44,13 +39,14 @@ interface BadgeLink {
   link_expires_at: string | null;
 }
 
+const emptyBadges: Badge[] = [];
+
 const linksQuery = defineAdminQuery<BadgeLink[]>('badge-links', async (token, signal) => {
   const data = await adminApi.adminGetBadgeLinks(token, signal);
   return adminData(data, data.data?.links || data.links || []);
 });
 
 export default function BadgesTab({ token }: { token: string }) {
-  const [badges] = useState<Badge[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'grant' | 'links'>('grant');
   const mutation = useAdminMutation(token);
   const read = useAdminQuery(linksQuery, activeSubTab === 'links' ? token : '');
@@ -66,8 +62,8 @@ export default function BadgesTab({ token }: { token: string }) {
   const [endDate, setEndDate] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [isPermanent, setIsPermanent] = useState(true);
-  const [granting, setGranting] = useState(false);
-  const grantingRef = useRef(false);
+  const grantMutation = useAdminMutation(token);
+  const granting = grantMutation.busy;
 
   // Badge edit
   const [editingBadge, setEditingBadge] = useState<Badge | null>(null);
@@ -80,17 +76,13 @@ export default function BadgesTab({ token }: { token: string }) {
   const [linkBadgeColor, setLinkBadgeColor] = useState('#e74c3c');
   const [linkBadgeExpiresAt, setLinkBadgeExpiresAt] = useState('');
   const [linkExpiresAt, setLinkExpiresAt] = useState('');
-  const [creatingLink, setCreatingLink] = useState(false);
-  const creatingLinkRef = useRef(false);
+  const createLinkMutation = useAdminMutation(token);
+  const creatingLink = createLinkMutation.busy;
 
-  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
-     converted to the shared dialog and five — this among them — kept their own,
-     which is also why their copy drifted: every hand-rolled body dropped the
-     sentence-final 吗 that every converted one kept. */
   const { confirmThen, confirmDialog } = useConfirm();
 
   const handleGrantBadge = async () => {
-    if (grantingRef.current || readToken() !== token) return;
+    if (grantMutation.isPending()) return;
     if (!badgeName.trim()) {
       showToast('请填写徽章名称', 'warning');
       return;
@@ -112,39 +104,28 @@ export default function BadgesTab({ token }: { token: string }) {
       showToast('结束日期不能早于开始日期', 'warning');
       return;
     }
-    // Block a second activation before React commits the disabled button.
-    grantingRef.current = true;
-    setGranting(true);
-    try {
-      const payload: Record<string, unknown> = {
-        badge_name: badgeName.trim(),
-        badge_color: badgeColor,
-      };
-      if (userIds) payload.user_ids = [...new Set(userIds)];
-      if (startDate) payload.start_date = startDate;
-      if (endDate) payload.end_date = endDate;
-      if (!isPermanent && expiresAt) payload.expires_at = expiresAt;
+    const payload: Record<string, unknown> = {
+      badge_name: badgeName.trim(),
+      badge_color: badgeColor,
+    };
+    if (userIds) payload.user_ids = [...new Set(userIds)];
+    if (startDate) payload.start_date = startDate;
+    if (endDate) payload.end_date = endDate;
+    if (!isPermanent && expiresAt) payload.expires_at = expiresAt;
 
-      const res = await adminApi.adminGrantBadge(token, payload);
-      const data = await res.json();
-      if (readToken() !== token) return;
-      if (data.success) {
-        showToast('徽章授予成功', 'success');
+    await grantMutation.run(
+      () => adminApi.adminGrantBadge(token, payload),
+      () => {
+        showToast('已授予徽章', 'success');
         setBadgeName('');
         setTargetUserIds('');
         setStartDate('');
         setEndDate('');
         setExpiresAt('');
-        loadData();
-      } else {
-        showToast(data.error || '授予失败', 'error');
-      }
-    } catch {
-      if (readToken() === token) showToast('授予失败', 'error');
-    } finally {
-      grantingRef.current = false;
-      setGranting(false);
-    }
+      },
+      '授予失败',
+      { onCommitted: loadData },
+    );
   };
 
   const handleEditBadge = (badge: Badge) => {
@@ -167,21 +148,19 @@ export default function BadgesTab({ token }: { token: string }) {
       }), () => {
         showToast('徽章已更新', 'success');
         setEditModalOpen(false);
-        loadData();
-      }, '更新失败');
+      }, '更新失败', { onCommitted: loadData });
   };
 
   const handleDeleteBadge = (badgeId: number) => {
     confirmThen('确认删除', '确定要删除此徽章吗？', async () => {
       await mutation.run(() => adminApi.adminDeleteBadge(token, badgeId), () => {
           showToast('已删除', 'success');
-          loadData();
-        }, '删除失败');
+        }, '删除失败', { onCommitted: loadData });
     });
   };
 
   const handleCreateBadgeLink = async () => {
-    if (creatingLinkRef.current || readToken() !== token) return;
+    if (createLinkMutation.isPending()) return;
     if (!linkBadgeName.trim()) {
       showToast('请填写徽章名称', 'warning');
       return;
@@ -190,44 +169,38 @@ export default function BadgesTab({ token }: { token: string }) {
       showToast('请输入有效的六位十六进制颜色', 'warning');
       return;
     }
-    creatingLinkRef.current = true;
-    setCreatingLink(true);
-    try {
-      const payload: Record<string, unknown> = {
-        badge_name: linkBadgeName.trim(),
-        badge_color: linkBadgeColor,
-      };
-      if (linkBadgeExpiresAt) payload.badge_expires_at = linkBadgeExpiresAt;
-      if (linkExpiresAt) payload.link_expires_at = linkExpiresAt;
+    const payload: Record<string, unknown> = {
+      badge_name: linkBadgeName.trim(),
+      badge_color: linkBadgeColor,
+    };
+    if (linkBadgeExpiresAt) payload.badge_expires_at = linkBadgeExpiresAt;
+    if (linkExpiresAt) payload.link_expires_at = linkExpiresAt;
 
-      const res = await adminApi.adminCreateBadgeLink(token, payload);
-      const data = await res.json();
-      if (readToken() !== token) return;
-      if (data.success) {
+    await createLinkMutation.run(
+      () => adminApi.adminCreateBadgeLink(token, payload),
+      () => {
         showToast('领取链接已生成', 'success');
         setLinkBadgeName('');
         setLinkBadgeColor('#e74c3c');
         setLinkBadgeExpiresAt('');
         setLinkExpiresAt('');
-        loadData();
-      } else {
-        showToast(data.error || '创建失败', 'error');
-      }
-    } catch {
-      if (readToken() === token) showToast('创建失败', 'error');
-    } finally {
-      creatingLinkRef.current = false;
-      setCreatingLink(false);
-    }
+      },
+      '创建失败',
+      { onCommitted: loadData },
+    );
   };
 
   const handleToggleBadgeLink = async (id: number, isActive: number) => {
-    await mutation.run(() => adminApi.adminToggleBadgeLink(token, id, isActive ? 0 : 1), () => {
+    await mutation.run(
+      () => adminApi.adminToggleBadgeLink(token, id, isActive ? 0 : 1),
+      () => showToast(isActive ? '已停用' : '已启用', 'success'),
+      '操作失败',
+      { onCommitted: () => {
         linksQuery.write(token, (previous) => previous?.map((link) =>
           link.id === id ? { ...link, is_active: isActive ? 0 : 1 } : link) ?? []);
-        showToast(isActive ? '已停用' : '已启用', 'success');
         loadData();
-      }, '操作失败');
+      } },
+    );
   };
 
   const copyBadgeLink = async (link: BadgeLink) => {
@@ -329,7 +302,6 @@ export default function BadgesTab({ token }: { token: string }) {
   ];
   return (
     <div className="space-y-6">
-      {' '}
       <SectionHeader
         icon={<MdEmojiEvents size={ICON.standard} />}
         title="徽章管理"
@@ -346,27 +318,23 @@ export default function BadgesTab({ token }: { token: string }) {
       />
       <TabPanes value={activeSubTab}>
         <TabPane value="grant">
-          {' '}
           <Card variant="transparent" className="space-y-4">
-            {' '}
             <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
-              {' '}
               您可以向特定用户
               ID，或在某日期区间注册的用户批量授予专属徽章。徽章将在用户的发言、个人主页等多处显示。{' '}
             </Card>
             <div>
-              {' '}
               <Input
                 label="徽章名称"
                 id="badgestab-f1"
                 type="text"
                 value={badgeName}
+                disabled={granting}
                 onChange={(e) => setBadgeName(e.target.value)}
                 placeholder="例如：元老、贡献者"
               />
             </div>
             <div>
-              {' '}
               <p className="block text-label-l text-on-surface-variant mb-1">
                 徽章颜色
               </p>
@@ -374,23 +342,25 @@ export default function BadgesTab({ token }: { token: string }) {
                 <ColorSwatch
                   aria-label="选择徽章颜色"
                   value={badgeColor}
+                  disabled={granting}
                   onChange={(e) => setBadgeColor(e.target.value)}
                 />
                 <Input
                   type="text"
                   aria-label="徽章颜色值"
                   value={badgeColor}
+                  disabled={granting}
                   onChange={(e) => setBadgeColor(e.target.value)}
                   fieldClassName="flex-1"
                 />
               </div>
             </div>
             <div>
-              {' '}
               <Input
                 label="授予指定用户（输入用户 ID，多个用逗号隔开，留空则使用下方日期区间）"
                 type="text"
                 value={targetUserIds}
+                disabled={granting}
                 onChange={(e) => setTargetUserIds(e.target.value)}
                 placeholder="例如：1, 2, 5"
               />
@@ -404,6 +374,7 @@ export default function BadgesTab({ token }: { token: string }) {
                   id="badgestab-f2"
                   type="date"
                   value={startDate}
+                  disabled={granting}
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
@@ -414,6 +385,7 @@ export default function BadgesTab({ token }: { token: string }) {
                   id="badgestab-f3"
                   type="date"
                   value={endDate}
+                  disabled={granting}
                   onChange={(e) => setEndDate(e.target.value)}
                 />
               </div>
@@ -431,6 +403,7 @@ export default function BadgesTab({ token }: { token: string }) {
                     name="badge-duration"
                     value="permanent"
                     checked={isPermanent}
+                    disabled={granting}
                     onChange={() => setIsPermanent(true)}
                     label="永久徽章"
                   />
@@ -438,6 +411,7 @@ export default function BadgesTab({ token }: { token: string }) {
                     name="badge-duration"
                     value="expiring"
                     checked={!isPermanent}
+                    disabled={granting}
                     onChange={() => setIsPermanent(false)}
                     label="设定有效期至"
                   />
@@ -446,6 +420,7 @@ export default function BadgesTab({ token }: { token: string }) {
                       type="date"
                       aria-label="徽章有效期至"
                       value={expiresAt}
+                      disabled={granting}
                       onChange={(e) => setExpiresAt(e.target.value)}
                     />
                   )}
@@ -456,7 +431,7 @@ export default function BadgesTab({ token }: { token: string }) {
               onClick={handleGrantBadge}
               variant="filled"
               loading={granting}
-              icon={<MdAdd size={ICON.dense} />}
+              icon={<MdAdd />}
             >
               {granting ? '授予中…' : '立即授予徽章'}
             </Button>
@@ -465,7 +440,7 @@ export default function BadgesTab({ token }: { token: string }) {
             <SectionHeading as="h3" className="mb-4">
               已有徽章列表
             </SectionHeading>
-            {/* `badges` has no setter and there is no endpoint to fill it —
+            {/* There is no endpoint to fill the badge list —
                 `lib/api/admin.ts` has `adminGrantBadge`, `adminEditBadge` and
                 `adminDeleteBadge` but no `admin_list_badges`, so the rows below
                 cannot arrive until the backend grows one. The edit and delete paths
@@ -474,18 +449,15 @@ export default function BadgesTab({ token }: { token: string }) {
                 no badges, which is what it used to say. */}
             <DataTable<Badge>
               columns={badgeColumns}
-              rows={badges}
+              rows={emptyBadges}
               rowKey={(b) => b.id}
               empty="徽章列表接口尚未开放"
             />
           </Card>
         </TabPane>
         <TabPane value="links">
-          {' '}
           <Card variant="transparent" className="space-y-4">
-            {' '}
             <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
-              {' '}
               生成徽章领取链接，用户打开链接并登录后即可领取指定的徽章。{' '}
             </Card>
             <div className="flex gap-4">
@@ -496,6 +468,7 @@ export default function BadgesTab({ token }: { token: string }) {
                   label="徽章名称"
                   type="text"
                   value={linkBadgeName}
+                  disabled={creatingLink}
                   onChange={(e) => setLinkBadgeName(e.target.value)}
                   placeholder="输入徽章名称"
                 />
@@ -509,12 +482,14 @@ export default function BadgesTab({ token }: { token: string }) {
                   <ColorSwatch
                     aria-label="选择领取链接徽章颜色"
                     value={linkBadgeColor}
+                    disabled={creatingLink}
                     onChange={(e) => setLinkBadgeColor(e.target.value)}
                   />
                   <Input
                     type="text"
                     aria-label="领取链接徽章颜色值"
                     value={linkBadgeColor}
+                    disabled={creatingLink}
                     onChange={(e) => setLinkBadgeColor(e.target.value)}
                     fieldClassName="flex-1"
                   />
@@ -529,6 +504,7 @@ export default function BadgesTab({ token }: { token: string }) {
                   label="徽章有效期至（留空为永久）"
                   type="date"
                   value={linkBadgeExpiresAt}
+                  disabled={creatingLink}
                   onChange={(e) => setLinkBadgeExpiresAt(e.target.value)}
                 />
               </div>
@@ -539,12 +515,13 @@ export default function BadgesTab({ token }: { token: string }) {
                   id="badgestab-f4"
                   type="date"
                   value={linkExpiresAt}
+                  disabled={creatingLink}
                   onChange={(e) => setLinkExpiresAt(e.target.value)}
                 />
               </div>
             </div>
             <Button
-              icon={<MdLink size={ICON.dense} />}
+              icon={<MdLink />}
               variant="warning"
               onClick={handleCreateBadgeLink}
               loading={creatingLink}
@@ -554,7 +531,7 @@ export default function BadgesTab({ token }: { token: string }) {
           </Card>
           {/* Existing badge links */}
           <Card variant="transparent">
-            <h3 className="text-label-l text-on-surface mb-4">已生成的链接</h3>
+            <SectionHeading as="h3" className="mb-4">已生成的链接</SectionHeading>
             <DataTable<BadgeLink>
               columns={badgeLinkColumns}
               rows={badgeLinks}
@@ -586,13 +563,9 @@ export default function BadgesTab({ token }: { token: string }) {
       >
         <div className="space-y-4">
           <div>
-            <label
-              htmlFor="badge-edit-name"
-              className="block text-label-l text-on-surface-variant mb-1"
-            >
-              名称
-            </label>
             <Input
+              label="名称"
+              disabled={mutation.busy}
               id="badge-edit-name"
               type="text"
               value={editName}
@@ -600,22 +573,20 @@ export default function BadgesTab({ token }: { token: string }) {
             />
           </div>
           <div>
-            <label
-              htmlFor="badge-edit-color"
-              className="block text-label-l text-on-surface-variant mb-1"
-            >
-              颜色
-            </label>
+            <p className="mb-1 text-label-l text-on-surface-variant">颜色</p>
             <div className="flex items-center gap-3">
               <ColorSwatch
                 aria-label="选择徽章颜色"
                 value={editColor}
+                disabled={mutation.busy}
                 onChange={(e) => setEditColor(e.target.value)}
               />
               <Input
                 id="badge-edit-color"
+                aria-label="徽章颜色值"
                 type="text"
                 value={editColor}
+                disabled={mutation.busy}
                 onChange={(e) => setEditColor(e.target.value)}
                 fieldClassName="flex-1"
               />

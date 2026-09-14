@@ -22,7 +22,7 @@ import {
   usePalette,
   useScheme,
 } from '@/lib/appearance';
-import { cn } from '@/lib/utils';
+import { clamp, cn } from '@/lib/utils';
 
 /**
  * The /about plate — a flowing field seen through fluted glass.
@@ -163,7 +163,7 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     if (!host) return;
     const measure = () => {
       const rect = host.getBoundingClientRect();
-      const raw = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+      const raw = clamp(window.devicePixelRatio || 1, 1, 2);
       const dpr = Math.min(raw, MAX_DEVICE_WIDTH / Math.max(rect.width, 1));
       setBox((prev) => {
         const w = Math.max(1, Math.round(rect.width * dpr));

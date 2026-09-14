@@ -5,7 +5,7 @@ import Link from 'next/link';
 import FadeInImage from './FadeInImage';
 import ImageCardVideo from './ImageCardVideo';
 import { MdThumbUp, MdComment, MdVisibility } from 'react-icons/md';
-import { PonyImage } from '@/lib/api';
+import { type PonyImage } from '@/lib/api';
 import { useHeroLink } from '@/lib/useHero';
 import { ICON } from '@/lib/icons';
 import Badge from './Badge';
@@ -22,7 +22,7 @@ let spoilerTags = new Set<string>();
 function getActiveSpoilerTags() {
   if (typeof window === 'undefined') return spoilerTags;
   try {
-    const nextRaw = localStorage.getItem(LS_KEYS.spoilerTags) || '[]';
+    const nextRaw = localStorage.getItem(LS_KEYS.activeSpoileredTags) || '[]';
     if (nextRaw === spoilerTagsRaw) return spoilerTags;
     spoilerTagsRaw = nextRaw;
     const values: unknown = JSON.parse(nextRaw);

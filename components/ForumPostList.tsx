@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import { MdComment, MdVisibility, MdThumbUp, MdForum } from 'react-icons/md';
-import { ForumPost } from '@/lib/api';
+import { type ForumPost } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import Pagination from '@/components/Pagination';
 import ErrorRetry from '@/components/ErrorRetry';

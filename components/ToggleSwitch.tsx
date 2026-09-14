@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { spawnRipple } from '@/lib/ripple';
 import { cn } from '@/lib/utils';
 

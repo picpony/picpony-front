@@ -293,7 +293,6 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
             </span>
           ) : (
             <MdRefresh
-              size={ICON.control}
               className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
             />
           )

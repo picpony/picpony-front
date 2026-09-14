@@ -1,3 +1,5 @@
+import type { PonyImage } from './image';
+
 export interface DerpiProfileAward {
   image_url?: string;
   badge_url?: string;
@@ -51,4 +53,11 @@ export interface UserPostsResponse {
   success: boolean;
   posts: UserPost[];
   total_pages: number;
+}
+
+export type UserUpload = Pick<PonyImage, 'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'>;
+
+export interface UserUploadsResponse {
+  uploads: UserUpload[];
+  totalPages: number;
 }

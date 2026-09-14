@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 
 import { Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { api, Announcement, Notification } from '@/lib/api';
+import { api, type Announcement, type Contact, type Message, type Notification } from '@/lib/api';
 import { SKIP, useResource } from '@/lib/resource';
 import { unreadCounts as unreadCountsResource } from '@/lib/resources';
 import {
@@ -27,7 +27,6 @@ import PageHeader from '@/components/PageHeader';
 import { showToast } from '@/components/Toast';
 import { ICON } from '@/lib/icons';
 
-import { Contact, Message } from '@/lib/api';
 import Image from 'next/image';
 import RichTextRenderer from '@/components/RichTextRenderer';
 import Pagination from '@/components/Pagination';
@@ -112,17 +111,18 @@ function NotificationPane({
   /** Pagination, if the list has any. */
   children?: React.ReactNode;
 }) {
-  if (loading) {
+  if (loading && items.length === 0) {
     return <MessageRowsSkeleton />;
   }
-  if (error) {
+  if (error && items.length === 0) {
     return <ErrorRetry size="pane" title="消息加载失败" message={error} onRetry={onRetry} />;
   }
   if (items.length === 0) {
     return <EmptyState size="pane" icon={<MdNotificationsNone size={ICON.display} />} title={emptyTitle} />;
   }
   return (
-    <div data-pagination-anchor>
+    <div data-pagination-anchor aria-busy={loading}>
+      {error && <ErrorRetry size="inline" title="消息加载失败" message={error} onRetry={onRetry} />}
       {items.map((item) => (
         <div
           key={item.id}
@@ -375,6 +375,7 @@ function MessagesContent({ token }: { token: string | null }) {
   const [interactionNotificationsPage, setInteractionNotificationsPage] = useState(
     snapshot?.value.interactionsPage ?? 1,
   );
+  const lastInteractionPage = useRef(snapshot?.value.interactionsPage ?? 1);
   const [interactionNotificationsTotalPages, setInteractionNotificationsTotalPages] = useState(
     snapshot?.value.interactionsTotalPages ?? 1,
   );
@@ -529,124 +530,83 @@ function MessagesContent({ token }: { token: string | null }) {
       return !open;
     });
 
-  /* `silent` on every loader, not just `fetchContacts`: the refresh on arrival with a
-     snapshot already showing must not blank the list back to skeletons, nor replace
-     something correct with an error banner if the network is down. Each loader writes
-     only its own tab's state — see `paneState`. */
-  const fetchAnnouncements = useCallback(
-    async (silent = false) => {
-      const isCurrent = beginRequest('announcement');
+  /* Every list uses the same session/generation guard and silent-refresh policy.
+     A stale response cannot update its rows, error or loading flag. */
+  const fetchPane = useCallback(
+    async <T extends { success: boolean },>(
+      tab: MessagesTab,
+      load: (currentToken: string) => Promise<T>,
+      commit: (data: T) => void,
+      failureMessage: string,
+      silent: boolean,
+    ) => {
+      const isCurrent = beginRequest(tab);
       if (!isCurrent()) return;
-      if (!silent) setPane('announcement', { loading: true, error: null });
+      if (!silent) setPane(tab, { loading: true, error: null });
       try {
-        const data = await api.getAnnouncementHistory();
-        if (!isCurrent()) return;
-        if (data.success) {
-          shown.current.add('announcement');
-          setAnnouncements(data.announcements);
-        } else if (!silent) {
-          setPane('announcement', { error: '获取公告失败' });
-        }
-      } catch (err) {
-        if (!isCurrent()) return;
-        if (!silent) setPane('announcement', { error: '网络请求失败' });
-        console.error(err);
-      } finally {
-        if (isCurrent()) setPane('announcement', { loading: false });
-      }
-    },
-    [beginRequest, setPane],
-  );
-
-  const fetchNotifications = useCallback(
-    async (silent = false) => {
-      const isCurrent = beginRequest('notification');
-      if (!isCurrent()) return;
-      if (!silent) setPane('notification', { loading: true, error: null });
-      try {
-        if (!token) {
-          if (!silent) setPane('notification', { error: '请先登录' });
+        if (tab !== 'announcement' && !token) {
+          if (!silent) setPane(tab, { error: '请先登录' });
           return;
         }
-        const data = await api.getNotifications(token);
+        const data = await load(token ?? '');
         if (!isCurrent()) return;
         if (data.success) {
-          shown.current.add('notification');
-          setNotifications(data.notifications);
-          fetchUnreadCounts();
+          commit(data);
+          shown.current.add(tab);
+          setPane(tab, { error: null });
         } else if (!silent) {
-          setPane('notification', { error: '获取通知失败' });
+          setPane(tab, { error: failureMessage });
         }
       } catch (err) {
         if (!isCurrent()) return;
-        if (!silent) setPane('notification', { error: '网络请求失败' });
+        if (!silent) setPane(tab, { error: '网络请求失败' });
         console.error(err);
       } finally {
-        if (isCurrent()) setPane('notification', { loading: false });
-      }
-    },
-    [token, beginRequest, fetchUnreadCounts, setPane],
-  );
-
-  const fetchInteractionNotifications = useCallback(
-    async (page: number = 1, silent = false) => {
-      const isCurrent = beginRequest('interaction');
-      if (!isCurrent()) return;
-      if (!silent) setPane('interaction', { loading: true, error: null });
-      try {
-        if (!token) {
-          if (!silent) setPane('interaction', { error: '请先登录' });
-          return;
-        }
-        const data = await api.getInteractionNotifications(token, page);
-        if (!isCurrent()) return;
-        if (data.success) {
-          shown.current.add('interaction');
-          setInteractionNotifications(data.notifications);
-          setInteractionNotificationsTotalPages(data.total_pages);
-          setInteractionNotificationsPage(page);
-          fetchUnreadCounts();
-        } else if (!silent) {
-          setPane('interaction', { error: '获取互动通知失败' });
-        }
-      } catch (err) {
-        if (!isCurrent()) return;
-        if (!silent) setPane('interaction', { error: '网络请求失败' });
-        console.error(err);
-      } finally {
-        if (isCurrent()) setPane('interaction', { loading: false });
-      }
-    },
-    [token, beginRequest, fetchUnreadCounts, setPane],
-  );
-
-  const fetchContacts = useCallback(
-    async (silent = false) => {
-      const isCurrent = beginRequest('chat');
-      if (!isCurrent()) return;
-      if (!silent) setPane('chat', { loading: true, error: null });
-      try {
-        if (!token) {
-          if (!silent) setPane('chat', { error: '请先登录' });
-          return;
-        }
-        const data = await api.getRecentContacts(token);
-        if (!isCurrent()) return;
-        if (data.success) {
-          shown.current.add('chat');
-          setContacts(data.contacts);
-        } else if (!silent) {
-          setPane('chat', { error: '获取联系人失败' });
-        }
-      } catch (err) {
-        if (!isCurrent()) return;
-        if (!silent) setPane('chat', { error: '网络请求失败' });
-        console.error(err);
-      } finally {
-        if (isCurrent()) setPane('chat', { loading: false });
+        if (isCurrent()) setPane(tab, { loading: false });
       }
     },
     [token, beginRequest, setPane],
+  );
+
+  const fetchAnnouncements = useCallback(
+    (silent = false) => fetchPane(
+      'announcement', api.getAnnouncementHistory,
+      (data) => setAnnouncements(data.announcements), '公告加载失败', silent,
+    ),
+    [fetchPane],
+  );
+
+  const fetchNotifications = useCallback(
+    (silent = false) => fetchPane(
+      'notification', api.getNotifications,
+      (data) => {
+        setNotifications(data.notifications);
+        void fetchUnreadCounts();
+      }, '通知加载失败', silent,
+    ),
+    [fetchPane, fetchUnreadCounts],
+  );
+
+  const fetchInteractionNotifications = useCallback(
+    (page = 1, silent = false) => fetchPane(
+      'interaction', (currentToken) => api.getInteractionNotifications(currentToken, page),
+      (data) => {
+        setInteractionNotifications(data.notifications);
+        setInteractionNotificationsTotalPages(data.total_pages);
+        setInteractionNotificationsPage(page);
+        lastInteractionPage.current = page;
+        void fetchUnreadCounts();
+      }, '互动通知加载失败', silent,
+    ),
+    [fetchPane, fetchUnreadCounts],
+  );
+
+  const fetchContacts = useCallback(
+    (silent = false) => fetchPane(
+      'chat', api.getRecentContacts,
+      (data) => setContacts(data.contacts), '联系人加载失败', silent,
+    ),
+    [fetchPane],
   );
 
   const fetchMessages = useCallback(
@@ -696,7 +656,7 @@ function MessagesContent({ token }: { token: string | null }) {
       } else if (activeTab === 'notification') {
         void fetchNotifications(silent);
       } else if (activeTab === 'interaction') {
-        void fetchInteractionNotifications(1, silent);
+        void fetchInteractionNotifications(lastInteractionPage.current, silent);
       } else {
         void fetchContacts(silent);
       }

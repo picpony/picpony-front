@@ -66,8 +66,6 @@ export const LS_KEYS = {
   useApiAccel: 'picpony_api_accel',
   useHongKongRelay: 'picpony_hk_relay',
   homeSort: 'picpony_default_home_sort',
-  /** The tag list whose pictures wear a cover. */
-  spoilerTags: 'trixie_active_spoilered_tags',
   searchSort: 'picpony_default_search_sort',
   devBannerDismissed: 'picpony_dev_banner_dismissed',
   darkMode: 'darkMode',
@@ -86,6 +84,7 @@ export const LS_KEYS = {
   emailNotifMessage: 'picpony_email_notif_message',
   emailNotifReply: 'picpony_email_notif_reply',
   activeHiddenTags: 'trixie_active_hidden_tags',
+  /** The tag list whose pictures wear a cover. */
   activeSpoileredTags: 'trixie_active_spoilered_tags',
   palette: 'picpony_palette',
   /**

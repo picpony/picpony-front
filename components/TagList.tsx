@@ -40,7 +40,6 @@ interface TagListProps {
   tagCounts: Record<string, number | null>;
   /** 词库中文翻译，key 为剥离前缀后的小写标签名；null = 未收录（见 lib/tagTranslations）。 */
   tagTranslations?: Record<string, string | null>;
-  imageId: number;
   onTagClick: (tag: string) => void;
   onShowMore: (limits: VisibleTagLimits) => void;
 }
@@ -56,9 +55,20 @@ export default function TagList({
 }: TagListProps) {
   const router = useRouter();
   const { artists, ocs, regularTags } = groupTags(tags);
-  const visibleArtists = artists.slice(0, visibleTagLimits.artists);
-  const visibleOcs = ocs.slice(0, visibleTagLimits.ocs);
-  const visibleRegularTags = regularTags.slice(0, visibleTagLimits.regular);
+  const sections = [
+    {
+      key: 'artists', title: '艺术家', tags: artists, prefix: 'artist:',
+      colors: tagCategoryChip('artist'), more: '显示更多艺术家标签', batch: RELATION_TAG_BATCH_SIZE,
+    },
+    {
+      key: 'ocs', title: '图中包含的 OC', tags: ocs, prefix: 'oc:',
+      colors: tagCategoryChip('oc'), more: '显示更多 OC 标签', batch: RELATION_TAG_BATCH_SIZE,
+    },
+    {
+      key: 'regular', title: '标签 (Tag)', tags: regularTags, prefix: '',
+      colors: undefined, more: '显示更多标签', batch: TAG_BATCH_SIZE,
+    },
+  ] as const;
   /** 有翻译显示中文，否则回退英文。 */
   const display = (name: string) => {
     const translation = tagTranslations?.[tagTranslationKey(name)];
@@ -67,128 +77,55 @@ export default function TagList({
 
   return (
     <div className="space-y-6">
-      {/* Artists */}
-      {artists.length > 0 && (
-        <div>
-          <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
-            艺术家
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {visibleArtists.map((artist) => (
-              <Chip
-                key={artist}
-                colors={tagCategoryChip('artist')}
-                onClick={() =>
-                  router.push(`/search?q=${encodeURIComponent(`artist:${artist}`)}`, {
-                    scroll: false,
-                  })
-                }
-              >
-                {display(artist)}
-              </Chip>
-            ))}
-          </div>{' '}
-          {visibleArtists.length < artists.length && (
-            <Button
-              variant="text"
-              size="xs"
-              className="mt-3"
-              onClick={() =>
-                onShowMore({
+      {sections.map((section) => {
+        if (section.tags.length === 0) return null;
+        const visible = section.tags.slice(0, visibleTagLimits[section.key]);
+        const remaining = section.tags.length - visible.length;
+        return (
+          <div key={section.key}>
+            <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
+              {section.title}
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {visible.map((tag) => (
+                <Chip
+                  key={tag}
+                  colors={section.colors}
+                  onClick={() => section.prefix
+                    ? router.push(`/search?q=${encodeURIComponent(section.prefix + tag)}`, { scroll: false })
+                    : onTagClick(tag)}
+                >
+                  {display(tag)}
+                  {/* Reserve the count's space while it loads so the chip stays put. */}
+                  {section.key === 'regular' && showTagCounts &&
+                    (typeof tagCounts[tag] === 'number' ? (
+                      <span className="ml-1 text-label-s text-on-surface-variant tabular-nums">
+                        {tagCounts[tag].toLocaleString()}
+                      </span>
+                    ) : tagCounts[tag] === undefined ? (
+                      <span className="ml-1 text-label-s">
+                        <Skeleton className="inline-block h-3 w-6 align-baseline" />
+                      </span>
+                    ) : null)}
+                </Chip>
+              ))}
+            </div>
+            {remaining > 0 && (
+              <Button
+                variant="text"
+                size="xs"
+                className="mt-3"
+                onClick={() => onShowMore({
                   ...visibleTagLimits,
-                  artists: visibleTagLimits.artists + RELATION_TAG_BATCH_SIZE,
-                })
-              }
-            >
-              显示更多艺术家标签（剩余 {(artists.length - visibleArtists.length).toLocaleString()}）
-            </Button>
-          )}{' '}
-        </div>
-      )}{' '}
-      {/* OCs */}{' '}
-      {ocs.length > 0 && (
-        <div>
-          {' '}
-          <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
-            图中包含的 OC
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            
-            {visibleOcs.map((oc) => (
-              <Chip
-                key={oc}
-                colors={tagCategoryChip('oc')}
-                onClick={() =>
-                  router.push(`/search?q=${encodeURIComponent(`oc:${oc}`)}`, { scroll: false })
-                }
+                  [section.key]: visibleTagLimits[section.key] + section.batch,
+                })}
               >
-                {display(oc)}
-              </Chip>
-            ))}
-          </div>{' '}
-          {visibleOcs.length < ocs.length && (
-            <Button
-              variant="text"
-              size="xs"
-              className="mt-3"
-              onClick={() =>
-                onShowMore({
-                  ...visibleTagLimits,
-                  ocs: visibleTagLimits.ocs + RELATION_TAG_BATCH_SIZE,
-                })
-              }
-            >
-              显示更多 OC 标签（剩余 {(ocs.length - visibleOcs.length).toLocaleString()}）
-            </Button>
-          )}{' '}
-        </div>
-      )}{' '}
-      {/* Regular Tags */}{' '}
-      {regularTags.length > 0 && (
-        <div>
-          {' '}
-          <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
-            标签 (Tag)
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {visibleRegularTags.map((tag) => (
-              <Chip key={tag} onClick={() => onTagClick(tag)}>
-                {display(tag)}
-                {/* `on-surface-variant`, not `outline`: a count is supporting
-                    *text*, and `outline` is the boundary role — 4.3:1 on the
-                    light surface, under the AA floor. The placeholder keeps the
-                    chip from growing when the number lands. */}
-                {showTagCounts &&
-                  (typeof tagCounts[tag] === 'number' ? (
-                    <span className="ml-1 text-label-s text-on-surface-variant tabular-nums">
-                      {tagCounts[tag].toLocaleString()}
-                    </span>
-                  ) : tagCounts[tag] === undefined ? (
-                    <span className="ml-1 text-label-s">
-                      <Skeleton className="inline-block h-3 w-6 align-baseline" />
-                    </span>
-                  ) : null)}
-              </Chip>
-            ))}
+                {section.more}（剩余 {remaining.toLocaleString()}）
+              </Button>
+            )}
           </div>
-          {visibleRegularTags.length < regularTags.length && (
-            <Button
-              variant="text"
-              size="xs"
-              className="mt-3"
-              onClick={() =>
-                onShowMore({
-                  ...visibleTagLimits,
-                  regular: visibleTagLimits.regular + TAG_BATCH_SIZE,
-                })
-              }
-            >
-              显示更多标签（剩余{' '}
-              {(regularTags.length - visibleRegularTags.length).toLocaleString()}）
-            </Button>
-          )}
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }

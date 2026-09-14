@@ -1,25 +1,23 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { showToast } from '@/components/Toast';
 import Select from '@/components/Select';
 import { MdNotifications, MdSend, MdDelete } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
 import IconButton from '@/components/IconButton';
 import { SectionHeader } from './';
+import SectionHeading from '@/components/SectionHeading';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { Input, Textarea } from '@/components/Input';
 import { ICON } from '@/lib/icons';
 import { useConfirm } from '@/components/ConfirmDialog';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
 import { defineResource, SKIP, useResource } from '@/lib/resource';
 import { readToken } from '@/lib/hooks';
 import { adminData } from './queries';
+import { useAdminMutation } from './useAdminMutation';
 
 interface NotificationItem {
   id: number;
@@ -48,13 +46,10 @@ export default function NotificationsTab({ token }: { token: string }) {
   const notifications = read.data ?? [];
   const loading = read.data === undefined && !read.error;
   const loadNotifications = read.refresh;
-  const [sending, setSending] = useState(false);
-  const sendingRef = useRef(false);
+  const sendMutation = useAdminMutation(token);
+  const deleteMutation = useAdminMutation(token);
+  const sending = sendMutation.busy;
 
-  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
-     converted to the shared dialog and five — this among them — kept their own,
-     which is also why their copy drifted: every hand-rolled body dropped the
-     sentence-final 吗 that every converted one kept. */
   const { confirmThen, confirmDialog } = useConfirm();
 
   // Form fields
@@ -63,7 +58,7 @@ export default function NotificationsTab({ token }: { token: string }) {
   const [content, setContent] = useState('');
 
   const handleSend = async () => {
-    if (sendingRef.current || readToken() !== token) return;
+    if (sendMutation.isPending()) return;
     const userId = Number(targetUserId);
     if (!targetUserId.trim() || !Number.isSafeInteger(userId) || userId < 0) {
       showToast('请输入有效的接收用户 ID，0 代表全站广播', 'warning');
@@ -73,49 +68,31 @@ export default function NotificationsTab({ token }: { token: string }) {
       showToast('请填写标题和内容', 'warning');
       return;
     }
-    sendingRef.current = true;
-    setSending(true);
-    try {
-      const res = await adminApi.adminSendNotification(token, {
+    await sendMutation.run(
+      () => adminApi.adminSendNotification(token, {
         user_id: userId,
         title: title.trim(),
         content: content.trim(),
-      });
-      const data = await res.json();
-      if (readToken() !== token) return;
-      if (data.success) {
-        showToast('通知发送成功', 'success');
+      }),
+      () => {
+        showToast('已发送通知', 'success');
         setTitle('');
         setContent('');
         setTargetUserId('0');
-        notificationsQuery.invalidate();
-      } else {
-        showToast(data.error || '发送失败', 'error');
-      }
-    } catch {
-      showToast('发送失败', 'error');
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
-    }
+      },
+      '发送失败',
+      { onCommitted: () => notificationsQuery.invalidate() },
+    );
   };
 
   const handleDelete = (id: number) => {
     confirmThen('确认删除', '确定要删除此通知吗？', async () => {
-      if (readToken() !== token) return;
-      try {
-        const res = await adminApi.adminDeleteNotification(token, id);
-        const data = await res.json();
-        if (readToken() !== token) return;
-        if (data.success) {
-          showToast('已删除', 'success');
-          notificationsQuery.invalidate();
-        } else {
-          showToast(data.error || '删除失败', 'error');
-        }
-      } catch {
-        showToast('删除失败', 'error');
-      }
+      await deleteMutation.run(
+        () => adminApi.adminDeleteNotification(token, id),
+        () => showToast('已删除', 'success'),
+        '删除失败',
+        { onCommitted: () => notificationsQuery.invalidate() },
+      );
     });
   };
 
@@ -141,6 +118,7 @@ export default function NotificationsTab({ token }: { token: string }) {
       render: (n) => (
         <IconButton
           size="sm"
+          disabled={deleteMutation.busy}
           onClick={() => handleDelete(n.id)}
           icon={<MdDelete size={ICON.dense} />}
           aria-label={`删除通知「${n.title}」`}
@@ -151,21 +129,17 @@ export default function NotificationsTab({ token }: { token: string }) {
   ];
   return (
     <div className="space-y-6">
-      {' '}
       <SectionHeader
         icon={<MdNotifications size={ICON.standard} />}
         title="系统通知发送"
         onRefresh={loadNotifications}
       />
       <Card variant="transparent" className="space-y-4">
-        {' '}
         <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
-          {' '}
-          使用系统通知可以向特定用户或全站用户发送消息（信箱红点提醒）。用户 ID填 0
+          使用系统通知可以向特定用户或全站用户发送消息（信箱红点提醒）。用户 ID 填 0
           代表全站广播。{' '}
         </Card>
         <div>
-          {' '}
           <Input
             label="接收用户 ID（0=全站广播）"
             id="notificationstab-f1"
@@ -177,7 +151,6 @@ export default function NotificationsTab({ token }: { token: string }) {
           />
         </div>
         <div>
-          {' '}
           <Input
             label="通知标题"
             id="notificationstab-f2"
@@ -189,11 +162,8 @@ export default function NotificationsTab({ token }: { token: string }) {
           />
         </div>
         <div>
-          {' '}
-          <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="notificationstab-f3">
-            通知正文
-          </label>
           <Textarea
+            label="通知正文"
             id="notificationstab-f3"
             rows={4}
             value={content}
@@ -207,14 +177,14 @@ export default function NotificationsTab({ token }: { token: string }) {
           variant="filled"
           loading={sending}
           className="self-start"
-          icon={<MdSend size={ICON.dense} />}
+          icon={<MdSend />}
         >
           发送通知
         </Button>
       </Card>
       <Card variant="transparent">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-label-l text-on-surface">历史通知记录</h3>
+          <SectionHeading as="h3" className="mb-0">历史通知记录</SectionHeading>
           {/* A card header, not a form column — so the small step, beside the
               heading rather than towering over it. */}
           <Select

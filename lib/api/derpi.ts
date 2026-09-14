@@ -5,9 +5,9 @@ import {
   proxyFetch,
   fetchDerpiImages,
   handleDerpiError,
-  readJson,
   applyImageLine,
 } from './client';
+import { readJson } from './http';
 
 /** Map an `{ total, images }` envelope onto the current image line. */
 function withImageLine(data: ApiResponse): ApiResponse {
@@ -81,15 +81,19 @@ export async function searchDerpiImages(
   query: string,
   page: number = 1,
   perPage: number = 24,
+  signal?: AbortSignal,
+  contentFilter?: string,
 ): Promise<ApiResponse | null> {
   try {
     const res = await proxyFetch(
       `${DERPIBOORU_API_BASE}/search/images?q=${encodeURIComponent(query)}&page=${page}&per_page=${perPage}&sf=created_at&sd=desc`,
-      { headers: { 'User-Agent': 'PicPony/1.0' } },
+      { headers: { 'User-Agent': 'PicPony/1.0' }, signal },
+      contentFilter,
     );
     if (!res.ok) return null;
     return withImageLine(await readJson(res));
   } catch {
+    signal?.throwIfAborted();
     return null;
   }
 }
@@ -177,14 +181,17 @@ export async function getDerpiTagCounts(tags: string[]): Promise<Record<string, 
 
 export async function getDerpiProfile(
   userId: string | number,
+  signal?: AbortSignal,
 ): Promise<DerpiProfileResponse | null> {
   try {
     const res = await proxyFetch(`${DERPIBOORU_API_BASE}/profiles/${encodeURIComponent(userId)}`, {
       headers: { 'User-Agent': 'PicPony/1.0' },
+      signal,
     });
     if (!res.ok) return null;
     return readJson(res);
   } catch {
+    signal?.throwIfAborted();
     return null;
   }
 }

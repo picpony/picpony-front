@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useMemo } from 'react';
-import { api, ForumPostDetail } from '@/lib/api';
+import { api, type ForumPostDetail } from '@/lib/api';
 import {
   MdErrorOutline,
   MdThumbUp,
@@ -499,7 +499,7 @@ export default function ForumPostPage() {
                         <div className="-ms-2">
                           <Button
                             variant="text"
-                            icon={<MdReply size={ICON.dense} />}
+                            icon={<MdReply />}
                             onClick={() =>
                               handleReplyTo(
                                 comment.user_id,
@@ -603,7 +603,7 @@ export default function ForumPostPage() {
                   variant="filled"
                   loading={isSubmitting}
                   disabled={!newComment.trim()}
-                  icon={<MdSend size={ICON.dense} />}
+                  icon={<MdSend />}
                 >
                   发送回复
                 </Button>

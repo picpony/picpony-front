@@ -1,4 +1,4 @@
-import { Metadata } from 'next';
+import { type Metadata } from 'next';
 import { readUserProfile } from '@/lib/profile.server';
 
 type Props = {

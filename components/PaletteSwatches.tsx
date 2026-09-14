@@ -282,7 +282,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <Button
             variant="text"
-            icon={<MdImage size={ICON.control} />}
+            icon={<MdImage />}
             onClick={() => openPicker('image')}
           >
             从图片取色
@@ -290,7 +290,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
           <Button
             ref={trigger}
             variant="tonal"
-            icon={<MdColorize size={ICON.control} />}
+            icon={<MdColorize />}
             onClick={() => openPicker('hex')}
           >
             选择颜色

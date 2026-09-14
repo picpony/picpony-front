@@ -780,7 +780,7 @@ function ResetForm({ onSwitch, isCurrentFlow }: { onSwitch: (view: AuthView) => 
             fullWidth
             loading={isLoading}
             disabled={!email.trim()}
-            icon={<MdSend size={ICON.dense} />}
+            icon={<MdSend />}
           >
             发送验证码
           </Button>

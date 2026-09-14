@@ -127,7 +127,9 @@ def admin_actions(context):
         page.get_by_role('button', name='添加商品', exact=True).evaluate('(button) => {button.click(); button.click()}')
         page.wait_for_timeout(100)
         assert len(pending) == 1, 'An in-flight create must not create a second item'
-        page.get_by_role('button', name='编辑 Fixture item', exact=True).click()
+        edit = page.get_by_role('button', name='编辑 Fixture item', exact=True)
+        expect(edit).to_be_disabled()
+        edit.evaluate('(button) => button.click()')
         expect(field).to_have_value('New fixture item')
         fulfill_json(pending[0], {'success': False, 'error': 'Fixture save denied'})
         expect(page.get_by_text('Fixture save denied', exact=True)).to_be_visible()

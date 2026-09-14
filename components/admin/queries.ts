@@ -20,9 +20,9 @@ export function defineAdminQuery<T>(name: string, fetcher: (token: string, signa
 
 /** A failed envelope is never an empty collection. */
 export function adminData<T>(envelope: { success?: unknown; error?: unknown; message?: unknown }, value: T): T {
-  if (!envelope.success) {
-    const message = envelope.error || envelope.message;
-    throw new Error(typeof message === 'string' && message ? message : '加载失败，请稍后重试');
+  if (envelope.success !== true) {
+    const message = [envelope.error, envelope.message].find((value) => typeof value === 'string' && value);
+    throw new Error(typeof message === 'string' ? message : '加载失败，请稍后重试');
   }
   return value;
 }

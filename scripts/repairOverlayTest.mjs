@@ -110,7 +110,7 @@ const server = createServer((req,res)=>{
   if(req.url==='/app.js')return void res.writeHead(200,{'content-type':'text/javascript'}).end(js);
   if(req.url==='/editor.js')return void res.writeHead(200,{'content-type':'text/javascript'}).end(readFileSync(path.join(root,'node_modules/@wangeditor/editor/dist/index.js')));
   res.writeHead(200,{'content-type':'text/html; charset=utf-8'}).end(`<!doctype html><html><body><style>
-    :root{--z-dialog:100;--z-popover:200}body{font-family:sans-serif}button{padding:10px;margin:3px}.fixed{position:fixed}.inset-0{inset:0}.z-dialog{z-index:100}.z-popover{z-index:200}.bg-scrim-veil{background:#8888}[role=dialog]{background:white;padding:20px;max-width:500px;margin:20px}[role=slider]{width:50px;height:40px;border:1px solid;position:relative}.max-w-78{width:310px}img{width:310px;height:155px}.relative{position:relative}
+    :root{--z-dialog:100;--z-popover:200}body{font-family:sans-serif}button{padding:10px;margin:3px}.fixed{position:fixed}.inset-0{inset:0}.z-dialog{z-index:100}.z-popover{z-index:200}.bg-scrim-veil{background:#8888}[role=dialog]{background:white;padding:20px;max-width:500px;margin:20px}.cursor-grab,.cursor-grabbing{width:50px;height:40px;border:1px solid;position:relative}.max-w-78{width:310px}img{width:310px;height:155px}.relative{position:relative}
     </style><div id="root"></div><script src="/app.js"></script></body></html>`);
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -200,45 +200,52 @@ with sync_playwright() as p:
         expect(page.get_by_role('button',name='Open '+label.lower(),exact=True)).to_be_focused()
         assert not page.locator('main').evaluate('(el)=>el.inert')
     page.get_by_role('button',name='Open captcha',exact=True).click()
-    expect(page.get_by_role('alert')).to_contain_text('网络错误')
+    captcha=page.get_by_role('dialog',name='安全验证')
+    expect(captcha).to_contain_text('网络错误，请稍后再试')
     expect(page.get_by_role('button',name='取消',exact=True)).to_be_visible()
     page.evaluate('window.failGet=false')
     page.get_by_role('button',name='重新获取验证码').click()
-    slider=page.get_by_role('slider',name='拼图位置')
-    expect(slider).to_have_attribute('aria-valuenow','0')
-    slider.focus()
-    for i in range(12): page.keyboard.press('Shift+ArrowRight')
-    page.keyboard.press('ArrowLeft')
-    expect(slider).to_have_attribute('aria-valuenow','119')
-    page.keyboard.press('Enter')
+    slider=captcha.locator('.cursor-grab')
+    expect(slider).to_be_visible()
+    assert slider.get_attribute('tabindex') is None
+    assert captcha.get_by_role('slider').count()==0
+    assert captcha.get_by_role('link').count()==0
+    assert '方向键' not in captcha.inner_text()
+    slider.dispatch_event('keydown',{'key':'End'})
+    slider.dispatch_event('keydown',{'key':'Enter'})
+    assert page.evaluate('window.calls.length')==0
+    def drag_captcha():
+        handle=captcha.locator('.cursor-grab')
+        expect(handle).to_be_visible()
+        box=handle.bounding_box()
+        assert box
+        page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2)
+        page.mouse.down()
+        page.mouse.move(box['x']+box['width']/2+80,box['y']+box['height']/2+3,steps=10)
+        page.mouse.up()
+    drag_captcha()
     page.wait_for_function('window.verified === "fixture-token"')
     calls=page.evaluate('window.calls')
-    assert len(calls)==1 and calls[0]['x']==119
+    assert len(calls)==1 and calls[0]['x']>0
     track=json.loads(bytes(b^90 for b in base64.b64decode(calls[0]['track'])))
-    assert track[0]==[0,0,0] and track[-1][0]==119 and len(track)<=150
-    assert all(sample[1]==0 for sample in track)
+    assert track[0]==[0,0,0] and track[-1][0]==round(calls[0]['x']) and len(track)<=150
+    assert track[-1][1]==3
     assert all(a[2]<=b[2] for a,b in zip(track,track[1:]))
     expect(page.get_by_role('dialog',name='安全验证')).not_to_be_visible()
     page.wait_for_timeout(300)
     page.evaluate('window.verifySuccess=false;window.verified=null')
     page.get_by_role('button',name='Open captcha',exact=True).click()
-    slider=page.get_by_role('slider',name='拼图位置')
-    slider.focus()
-    page.keyboard.press('End')
-    page.keyboard.press('Enter')
-    expect(page.get_by_role('alert')).to_contain_text('校验未通过')
+    drag_captcha()
+    expect(captcha).to_contain_text('校验未通过')
     assert page.evaluate('window.verified') is None
     page.get_by_role('button',name='重新获取验证码').click()
-    expect(slider).to_have_attribute('aria-valuenow','0')
+    expect(slider).to_have_css('left','0px')
     page.get_by_role('button',name='取消',exact=True).click()
     expect(page.get_by_role('dialog',name='安全验证')).not_to_be_visible()
     page.wait_for_timeout(300)
     page.evaluate('window.verifySuccess=true;window.pendingVerify=true')
     page.get_by_role('button',name='Open captcha',exact=True).click()
-    slider=page.get_by_role('slider',name='拼图位置')
-    slider.focus()
-    page.keyboard.press('Shift+ArrowRight')
-    page.keyboard.press('Enter')
+    drag_captcha()
     page.wait_for_function('!!window.resolveVerify')
     page.get_by_role('button',name='取消',exact=True).click()
     page.evaluate('window.resolveVerify()')
@@ -246,20 +253,25 @@ with sync_playwright() as p:
     assert page.evaluate('window.verified') is None, 'Cancelled verification must not log in during modal exit'
     page.evaluate('window.pendingVerify=false')
     page.get_by_role('button',name='Open captcha',exact=True).click()
-    slider=page.get_by_role('slider',name='拼图位置')
-    box=slider.bounding_box()
-    assert box
-    page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2)
-    page.mouse.down()
-    page.mouse.move(box['x']+box['width']/2+80,box['y']+box['height']/2+3,steps=10)
-    page.mouse.up()
+    slider=captcha.locator('.cursor-grab')
+    expect(slider).to_be_visible()
+    slider.evaluate('''el=>{
+      const rect=el.getBoundingClientRect(), x=rect.left+rect.width/2, y=rect.top+rect.height/2;
+      const touch=(dx,dy)=>new Touch({identifier:1,target:el,clientX:x+dx,clientY:y+dy});
+      el.dispatchEvent(new TouchEvent('touchstart',{bubbles:true,cancelable:true,touches:[touch(0,0)],changedTouches:[touch(0,0)]}));
+      for(let step=1;step<=10;step++){
+        const point=touch(step*8,step*0.3);
+        document.dispatchEvent(new TouchEvent('touchmove',{bubbles:true,cancelable:true,touches:[point],changedTouches:[point]}));
+      }
+      document.dispatchEvent(new TouchEvent('touchend',{bubbles:true,cancelable:true,touches:[],changedTouches:[touch(80,3)]}));
+    }''')
     page.wait_for_function('window.verified === "fixture-token"')
     pointer=page.evaluate('window.calls.at(-1)')
     pointer_track=json.loads(bytes(b^90 for b in base64.b64decode(pointer['track'])))
     assert pointer_track[0]==[0,0,0] and pointer_track[-1][0]==round(pointer['x'])
     assert pointer_track[-1][1]==3 and len(pointer_track)>2
     assert not errors, errors
-    print('PASS: modal Tab boundaries, portal focus, topmost Escape, simultaneous nesting and paint order, real editor Tab, menu Tab exits, callback updates, disabled Escape, nested restoration, drawer/detail isolation, captcha failure/retry/cancel, pointer and keyboard protocol, cancellation during exit')
+    print('PASS: modal Tab boundaries, portal focus, topmost Escape, simultaneous nesting and paint order, real editor Tab, menu Tab exits, callback updates, disabled Escape, nested restoration, drawer/detail isolation, captcha failure/retry/cancel, mouse and touch protocol, no keyboard/contact entry, cancellation during exit')
     browser.close()
 `;
 try {

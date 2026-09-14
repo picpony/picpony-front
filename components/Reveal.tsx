@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useLayoutEffect, useRef } from 'react';
+import { type ReactNode, useLayoutEffect, useRef } from 'react';
 import { DURATION, EASE } from '@/lib/motionTokens';
 import { entranceMotion, motionTier, scaledMs } from '@/lib/appearance';
 

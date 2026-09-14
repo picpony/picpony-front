@@ -37,8 +37,8 @@ import { getBrowsingSettings, readJson } from '@/lib/api/client';
 import { defineResource } from '@/lib/resource';
 import type { ApiResponse, PonyImage } from '@/lib/types/image';
 import type { ForumPost, ForumPostDetailResponse } from '@/lib/types/forum';
-import type { UserComment, UserPost } from '@/lib/types/user';
-import { COOKIE_KEYS, LS_KEYS, PICPONY_API_BASE } from '@/lib/constants';
+import type { DerpiProfileUser, UserComment, UserPost, UserUpload, UserUploadsResponse } from '@/lib/types/user';
+import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
 import { currentBlockFilters, withBlockFiltersFingerprint } from '@/lib/blockFilters';
 
 /** Minutes, spelled out so the numbers below read as durations rather than as magic. */
@@ -288,6 +288,34 @@ export const forumThread = defineResource<{ id: string; page: number }, ForumPos
 // Profiles
 // ---------------------------------------------------------------------------
 
+export const derpiUserProfile = defineResource<{ id: string }, DerpiProfileUser>({
+  name: 'derpi-user-profile',
+  key: ({ id }) => id,
+  ttl: 5 * MINUTES,
+  maxEntries: 12,
+  fetch: async ({ id }, signal) => {
+    const result = await derpi.getDerpiProfile(id, signal);
+    if (!result?.user) throw new Error('用户资料加载失败，或该用户不存在');
+    return result.user;
+  },
+});
+
+/** The uploader query still follows the backend's content-filter preset. */
+export const derpiUserUploads = defineResource<
+  { id: number; page: number; perPage: number; contentFilter: string },
+  ApiResponse
+>({
+  name: 'derpi-user-uploads',
+  key: ({ id, page, perPage, contentFilter }) => `${id}:${page}/${perPage}:${contentFilter}`,
+  ttl: 2 * MINUTES,
+  maxEntries: 8,
+  fetch: async ({ id, page, perPage, contentFilter }, signal) => {
+    const result = await derpi.searchDerpiImages(`uploader_id:${id}`, page, perPage, signal, contentFilter);
+    if (!result || !Array.isArray(result.images)) throw new Error('上传记录加载失败');
+    return result;
+  },
+});
+
 export interface ProfileUser {
   id: number;
   username: string;
@@ -356,41 +384,49 @@ export const userComments = defineResource<
   },
 });
 
-export interface UploadItem {
-  id: number;
-  name: string;
-  representations: PonyImage['representations'];
-  view_url: string;
-  width: number;
-  height: number;
-}
+export type UploadItem = UserUpload;
 
 /**
  * A profile's uploads.
  *
- * The one read that builds its own URL (no `lib/api` function exists). It goes through the
- * relative `PICPONY_API_BASE` because the route handler is what rewrites the backend's `Secure`
- * session cookie. The token is in the key, not merely the header, because the answer depends on
- * it — a signed-in owner sees uploads a visitor does not. Stays client-side: the token lives in
- * `localStorage`, which the server cannot read.
+ * The token is in the key because a signed-in owner sees uploads a visitor does not.
+ * Request encoding and response validation belong to the API adapter, as for other reads.
  */
 export const userUploads = defineResource<
   { id: string; page: number; perPage: number; token: string | null },
-  { uploads: UploadItem[]; totalPages: number }
+  UserUploadsResponse
 >({
   name: 'user-uploads',
   key: ({ id, page, perPage, token }) => `${id}:${page}/${perPage}:${token ?? 'anon'}`,
   ttl: 2 * MINUTES,
   maxEntries: 12,
-  fetch: async ({ id, page, perPage, token }, signal) => {
-    const res = await fetch(
-      `${PICPONY_API_BASE}?action=get_user_uploads&user_id=${encodeURIComponent(id)}` +
-        `&page=${page}&per_page=${perPage}${token ? `&token=${encodeURIComponent(token)}` : ''}`,
-      { signal },
-    );
-    const data = await readJson(res);
-    if (!res.ok || !data?.success) throw new Error(data?.message || '获取用户上传记录失败');
-    return { uploads: data.uploads ?? [], totalPages: Math.max(1, data.total_pages || 1) };
+  fetch: ({ id, page, perPage, token }, signal) =>
+    picpony.getUserUploads(id, page, perPage, token, signal),
+});
+
+export interface DictionaryEntry {
+  id: number;
+  en: string;
+  cn: string;
+  cat: string;
+  count: number;
+  description: string;
+  aliases: string[];
+}
+
+/** A modal's selected tag is its own key, so a late answer cannot replace another tag. */
+export const dictionaryTag = defineResource<{ tag: string; token: string }, DictionaryEntry | null>({
+  name: 'dictionary-tag',
+  key: ({ tag, token }) => JSON.stringify([token, tag.toLowerCase()]),
+  ttl: 5 * MINUTES,
+  maxEntries: 24,
+  fetch: async ({ tag, token }, signal) => {
+    const result = await picpony.getDictionary(token, { keyword: tag, limit: 5 }, signal);
+    if (!result?.success || !Array.isArray(result.tags)) {
+      throw new Error(result?.message || result?.error || '词库查询失败');
+    }
+    return result.tags.find((entry: DictionaryEntry) =>
+      typeof entry?.en === 'string' && entry.en.toLowerCase() === tag.toLowerCase()) ?? null;
   },
 });
 

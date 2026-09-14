@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useRef } from 'react';
-import { PonyImage } from '@/lib/api';
+import { type PonyImage } from '@/lib/api';
 import { distributeToMasonryColumns } from '@/lib/utils';
 import { useMasonryColumns } from '@/lib/hooks';
 import { StaggerGrid } from '@/lib/motionLazy';
