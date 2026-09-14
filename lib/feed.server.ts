@@ -1,5 +1,5 @@
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
-import { buildSearchQueryFrom, parseBrowsingFingerprint, parseSortField } from '@/lib/searchQuery';
+import { buildSearchQueryFrom, parseBrowsingFingerprint, parseSortField, withDerpiContentFilter } from '@/lib/searchQuery';
 import type { ApiResponse } from '@/lib/types/image';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 import { readBlockFilters } from '@/lib/blockFilters.server';
@@ -9,9 +9,9 @@ import { withBlockFiltersFingerprint, type BlockFilters } from '@/lib/blockFilte
  * The first page of the home feed, read on the server so `/` arrives with pictures in it; the
  * island takes it as `initial` and seeds it into `homeFeed` via `resource.seed()`.
  *
- * Safe to share across visitors: the feed is anonymous (`derpi.getImages(undefined, page)` — the
- * first argument is the API key), and the browsing settings that do vary are in the URL (`q=`
- * filters and toggles, `sf=` the sort), so Next's URL-keyed Data Cache is fingerprint-partitioned
+ * Safe to share across visitors: the feed is anonymous (`derpi.getImages(undefined, page)` sends
+ * no API key), and the browsing settings that do vary are in the URL (`q=` filters and toggles,
+ * `filter_id=` the upstream preset, `sf=` the sort), so Next's Data Cache is fingerprint-partitioned
  * by construction. Island and server compute the same key because the fingerprint is mirrored
  * into a cookie (`syncBrowsingCookie`); the server never reads the `localStorage` it cannot see.
  * The counter-example is `getFeatured`, which puts the user's own Derpibooru key in the query
@@ -62,12 +62,16 @@ const read = createServerMemo({
     `${sort}:1:${withBlockFiltersFingerprint(fp, filters)}`,
   load: async (fp: string, sort: string, filters: BlockFilters): Promise<FeedSeed | null> => {
     const key = `${sort}:1:${fp}`;
-    const q = buildSearchQueryFrom(parseBrowsingFingerprint(fp), undefined, filters);
+    const settings = parseBrowsingFingerprint(fp);
+    const q = buildSearchQueryFrom(settings, undefined, filters);
     /* Re-validated here, not just at the call site: this string goes into a server-side URL and
        into two cache keys, and one validator at one call site is one edit from being bypassed. */
     const field = parseSortField(sort);
     const dir = field === 'random' ? '' : '&sd=desc';
-    const url = `${UPSTREAM}/search/images?q=${q}&page=1&per_page=${PER_PAGE}&sf=${field}${dir}`;
+    const url = withDerpiContentFilter(
+      `${UPSTREAM}/search/images?q=${q}&page=1&per_page=${PER_PAGE}&sf=${field}${dir}`,
+      settings.contentFilter,
+    );
 
     try {
       const res = await fetch(url, {

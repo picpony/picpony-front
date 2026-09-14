@@ -231,7 +231,7 @@ export const searchFeed = defineResource<
  */
 export const featuredImage = defineResource<{ apiKey?: string }, PonyImage | null>({
   name: 'featured',
-  /* The content filter is in here because `getFeatured` adds `filter_id` in developer mode. */
+  /* The upstream image filter changes in developer mode, including for the featured read. */
   key: ({ apiKey }) => `${apiKey ?? ''}:${getBrowsingSettings().contentFilter}`,
   ttl: 10 * MINUTES,
   maxEntries: 2,
@@ -241,9 +241,10 @@ export const featuredImage = defineResource<{ apiKey?: string }, PonyImage | nul
 /** Images by id, for a favourites list — one page's worth. */
 export const imagesByIds = defineResource<{ ids: number[]; page: number; perPage: number }, ApiResponse>({
   name: 'images-by-ids',
-  /* The ids are the query, so they are the key. Joined rather than hashed: a fave list is tens of
-     ids, and a readable key is worth more than the bytes. */
-  key: ({ ids, page, perPage }) => `${ids.join(',')}\n${page}/${perPage}`,
+  /* The upstream filter also affects id searches: selecting developer mode must not reuse
+     an empty safe-mode result for the same favourites. */
+  key: ({ ids, page, perPage }) =>
+    `${ids.join(',')}\n${page}/${perPage}:${getBrowsingSettings().contentFilter}`,
   ttl: 5 * MINUTES,
   maxEntries: 8,
   fetch: ({ ids, page, perPage }, signal) => derpi.searchImagesByIds(ids, page, perPage, signal),

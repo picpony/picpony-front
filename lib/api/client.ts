@@ -1,5 +1,5 @@
 import { LS_KEYS } from '@/lib/constants';
-import { buildSearchQueryFrom, parseContentFilter, parseSortField } from '@/lib/searchQuery';
+import { buildSearchQueryFrom, parseContentFilter, parseSortField, withDerpiContentFilter } from '@/lib/searchQuery';
 import { searchSort } from '@/lib/searchState';
 import { currentBlockFilters } from '@/lib/blockFilters';
 import { toCurrentImageLine } from '@/lib/imageLoader';
@@ -177,6 +177,7 @@ export async function proxyFetch(url: string, options?: RequestInit): Promise<Re
     return fetch(applyApiLineToWrite(url), options);
   }
 
+  url = withDerpiContentFilter(url, getBrowsingSettings().contentFilter);
   const carriesKey = /[?&]key=/.test(url);
 
   let attempts = 0;

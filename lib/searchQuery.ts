@@ -23,6 +23,19 @@ export function parseContentFilter(raw: unknown): 'safe' | 'spoilers' | 'develop
   return raw === 'spoilers' || raw === 'developer' ? raw : 'safe';
 }
 
+/**
+ * Removing the local exclusions does not disable Derpibooru's default filter.
+ * Developer image reads use its Everything preset (56027), as the original frontend does.
+ * Shared by SSR and the client, before a proxy wraps the URL; other endpoints are unchanged.
+ */
+export function withDerpiContentFilter(url: string, contentFilter: unknown): string {
+  if (parseContentFilter(contentFilter) !== 'developer') return url;
+  const target = new URL(url);
+  if (!/\/(?:search\/images|images(?:\/(?:\d+|featured))?)$/.test(target.pathname)) return url;
+  target.searchParams.set('filter_id', '56027');
+  return target.toString();
+}
+
 /** Escape a backend/admin tag before embedding it in Philomena's query grammar. */
 function escapeTag(tag: string): string {
   return tag.replace(/([+\-=&|><!(){}[\]^"~*?:\\/\s])/g, '\\$1');

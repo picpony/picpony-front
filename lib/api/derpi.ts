@@ -5,7 +5,6 @@ import {
   proxyFetch,
   fetchDerpiImages,
   handleDerpiError,
-  getBrowsingSettings,
   readJson,
   applyImageLine,
 } from './client';
@@ -57,8 +56,6 @@ export async function getFeatured(key?: string, signal?: AbortSignal): Promise<F
     let url = `${DERPIBOORU_API_BASE}/images/featured`;
     const params: string[] = [];
     if (key) params.push(`key=${encodeURIComponent(key)}`);
-    const s = getBrowsingSettings();
-    if (s.contentFilter === 'developer') params.push('filter_id=56027');
     if (params.length > 0) url += '?' + params.join('&');
 
     const res = await proxyFetch(url, {

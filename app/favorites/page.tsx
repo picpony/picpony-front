@@ -15,7 +15,7 @@ import { LoadMoreButton } from '@/components/Pagination';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { useRouter } from 'next/navigation';
-import { applyImageLine, proxyFetch, readJson } from '@/lib/api/client';
+import { applyImageLine, buildSearchQuery, proxyFetch, readJson } from '@/lib/api/client';
 import { faveIds as faveIdsResource, imagesByIds, sessionUser } from '@/lib/resources';
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import PageHeader from '@/components/PageHeader';
@@ -24,8 +24,6 @@ import { clamp } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
 const DERPI_SEARCH = `${DERPIBOORU_API_BASE}/search/images`;
-const DERPI_FAVES_QUERY =
-  '(my:faves), -explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, -anthro, -humanized, pony';
 
 type FaveSource = 'picpony' | 'derpibooru';
 
@@ -80,7 +78,7 @@ function FavoritesPane({ source, token }: { source: FaveSource; token: string | 
   const searchDerpi = useCallback(
     async (query: string, targetPage: number, key: string | null, signal: AbortSignal) => {
       const params = new URLSearchParams({
-        q: query,
+        q: decodeURIComponent(buildSearchQuery(query)),
         page: String(targetPage),
         per_page: String(PAGE_SIZE),
       });
@@ -119,7 +117,7 @@ function FavoritesPane({ source, token }: { source: FaveSource; token: string | 
   const loadDerpibooruFaves = useCallback(
     async (key: string, targetPage: number, run: number, signal: AbortSignal) => {
       try {
-        const data = await searchDerpi(DERPI_FAVES_QUERY, targetPage, key, signal);
+        const data = await searchDerpi('my:faves', targetPage, key, signal);
         if (isStale(run)) return;
         commit(data.images, targetPage);
         setPage(targetPage);
