@@ -12,11 +12,12 @@ import {
 
 /** Map an `{ total, images }` envelope onto the current image line. */
 function withImageLine(data: ApiResponse): ApiResponse {
-  return Array.isArray(data?.images) ? { ...data, images: data.images.map(applyImageLine) } : data;
+  if (!Array.isArray(data?.images)) throw new Error('图片列表响应无效');
+  return { ...data, images: data.images.map(applyImageLine) };
 }
 
 export async function getImage(id: string, signal?: AbortSignal): Promise<{ image: PonyImage }> {
-  const res = await proxyFetch(`${DERPIBOORU_API_BASE}/images/${id}`, {
+  const res = await proxyFetch(`${DERPIBOORU_API_BASE}/images/${encodeURIComponent(id)}`, {
     cache: 'no-store',
     headers: { 'User-Agent': 'PicPony/1.0' },
     signal,
@@ -27,7 +28,8 @@ export async function getImage(id: string, signal?: AbortSignal): Promise<{ imag
      screens, whose featured banner, opened picture and profile grids render URLs directly.
      `applyImageLine` is idempotent, so screens that still map are no-ops. */
   const data: { image: PonyImage } = await readJson(res);
-  return data?.image ? { ...data, image: applyImageLine(data.image) } : data;
+  if (!data?.image) throw new Error('图片响应无效');
+  return { ...data, image: applyImageLine(data.image) };
 }
 
 export async function getImages(
@@ -35,6 +37,7 @@ export async function getImages(
   page: number = 1,
   sortField?: string,
   sortDir: 'desc' | 'asc' = 'desc',
+  signal?: AbortSignal,
 ): Promise<ApiResponse> {
   const res = await fetchDerpiImages(DERPIBOORU_API_BASE, {
     query: search || '',
@@ -43,17 +46,17 @@ export async function getImages(
     sortField,
     sortDir,
     isSearch: !!search,
-  });
+  }, signal);
 
   if (!res.ok) await handleDerpiError(res);
   return withImageLine(await readJson(res));
 }
 
-export async function getFeatured(key?: string): Promise<FeaturedImage | null> {
+export async function getFeatured(key?: string, signal?: AbortSignal): Promise<FeaturedImage | null> {
   try {
     let url = `${DERPIBOORU_API_BASE}/images/featured`;
     const params: string[] = [];
-    if (key) params.push(`key=${key}`);
+    if (key) params.push(`key=${encodeURIComponent(key)}`);
     const s = getBrowsingSettings();
     if (s.contentFilter === 'developer') params.push('filter_id=56027');
     if (params.length > 0) url += '?' + params.join('&');
@@ -61,6 +64,7 @@ export async function getFeatured(key?: string): Promise<FeaturedImage | null> {
     const res = await proxyFetch(url, {
       cache: 'no-store',
       headers: { 'User-Agent': 'PicPony/1.0' },
+      signal,
     });
 
     if (!res.ok) {
@@ -68,8 +72,9 @@ export async function getFeatured(key?: string): Promise<FeaturedImage | null> {
       return null;
     }
     const data: FeaturedImage = await readJson(res);
-    return data?.image ? { ...data, image: applyImageLine(data.image) } : data;
+    return data?.image ? { ...data, image: applyImageLine(data.image) } : null;
   } catch (err) {
+    signal?.throwIfAborted();
     console.error('Failed to fetch featured image', err);
     return null;
   }
@@ -96,6 +101,7 @@ export async function searchImagesByIds(
   ids: number[],
   page: number = 1,
   perPage: number = 12,
+  signal?: AbortSignal,
 ): Promise<ApiResponse> {
   if (ids.length === 0) {
     return { total: 0, images: [] };
@@ -106,6 +112,7 @@ export async function searchImagesByIds(
     {
       cache: 'no-store',
       headers: { 'User-Agent': 'PicPony/1.0' },
+      signal,
     },
   );
   if (!res.ok) await handleDerpiError(res);
@@ -175,7 +182,7 @@ export async function getDerpiProfile(
   userId: string | number,
 ): Promise<DerpiProfileResponse | null> {
   try {
-    const res = await proxyFetch(`${DERPIBOORU_API_BASE}/profiles/${userId}`, {
+    const res = await proxyFetch(`${DERPIBOORU_API_BASE}/profiles/${encodeURIComponent(userId)}`, {
       headers: { 'User-Agent': 'PicPony/1.0' },
     });
     if (!res.ok) return null;

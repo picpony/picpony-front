@@ -1,10 +1,12 @@
 import { PICPONY_API_BASE } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
+import type { AuditMessagesResponse } from '@/lib/types/message';
 import { readJson } from './client';
 
-export async function adminGetUsers(token: string) {
+export async function adminGetUsers(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_users&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -25,9 +27,10 @@ export async function adminDeleteUser(token: string, targetId: number) {
   });
 }
 
-export async function adminGetWealth(token: string) {
+export async function adminGetWealth(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_users&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -40,9 +43,10 @@ export async function adminUpdateWealth(token: string, data: Record<string, unkn
   });
 }
 
-export async function adminGetShopItems(token: string) {
+export async function adminGetShopItems(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_shop_items&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -63,9 +67,10 @@ export async function adminDeleteShopItem(token: string, id: number) {
   });
 }
 
-export async function adminGetReports(token: string) {
+export async function adminGetReports(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_reports&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -78,9 +83,10 @@ export async function adminHandleReport(token: string, reportId: number, status:
   });
 }
 
-export async function adminGetBlacklist(token: string) {
+export async function adminGetBlacklist(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_blacklist&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -120,7 +126,7 @@ export async function adminDeleteAnnouncement(token: string, id: number) {
   });
 }
 
-export async function adminGetAllMessages(token: string, userId?: number) {
+export async function adminGetAllMessages(token: string, userId?: number): Promise<AuditMessagesResponse> {
   let url = `${PICPONY_API_BASE}?action=admin_get_all_messages&_t=${Date.now()}`;
   if (userId) url += `&user_id=${userId}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -138,11 +144,12 @@ export async function adminSendNotification(
   });
 }
 
-export async function adminGetNotifications(token: string, filter: string = 'all') {
+export async function adminGetNotifications(token: string, filter: string = 'all', signal?: AbortSignal) {
   const res = await fetch(
-    `${PICPONY_API_BASE}?action=admin_get_notifications&filter=${filter}&_t=${Date.now()}`,
+    `${PICPONY_API_BASE}?action=admin_get_notifications&filter=${encodeURIComponent(filter)}&_t=${Date.now()}`,
     {
       headers: { Authorization: `Bearer ${token}` },
+      signal,
     },
   );
   return readJson(res);
@@ -164,9 +171,10 @@ export async function adminGrantBadge(token: string, data: Record<string, unknow
   });
 }
 
-export async function adminGetBadgeLinks(token: string) {
+export async function adminGetBadgeLinks(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_list_badge_links&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -214,8 +222,8 @@ export async function adminEditBadge(
  * runtime spread, so an import here would pull all 48 admin calls into a gallery bundle).
  * `SiteStatusResponse` is the shared shape, so the two cannot drift on it.
  */
-export async function getMaintenanceStatus(): Promise<SiteStatusResponse> {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`);
+export async function getMaintenanceStatus(signal?: AbortSignal): Promise<SiteStatusResponse> {
+  const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`, { signal });
   return readJson(res);
 }
 
@@ -238,8 +246,8 @@ export async function adminToggleTranslate(token: string, data: { translate_enab
   });
 }
 
-export async function getSiteStats() {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_site_stats&_t=${Date.now()}`);
+export async function getSiteStats(signal?: AbortSignal) {
+  const res = await fetch(`${PICPONY_API_BASE}?action=get_site_stats&_t=${Date.now()}`, { signal });
   return readJson(res);
 }
 
@@ -289,9 +297,10 @@ export async function adminDeleteMascotImage(token: string) {
   });
 }
 
-export async function getBlockTags(token: string) {
+export async function getBlockTags(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_block_tags&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -315,11 +324,12 @@ export async function adminRemoveBlockTag(token: string, id: number) {
   });
 }
 
-export async function adminGetDeveloperPassword(token: string) {
+export async function adminGetDeveloperPassword(token: string, signal?: AbortSignal) {
   const res = await fetch(
     `${PICPONY_API_BASE}?action=admin_get_developer_password&_t=${Date.now()}`,
     {
       headers: { Authorization: `Bearer ${token}` },
+      signal,
     },
   );
   return readJson(res);
@@ -332,9 +342,10 @@ export async function adminRefreshDeveloperPassword(token: string) {
   });
 }
 
-export async function adminGetDeveloperUsers(token: string) {
+export async function adminGetDeveloperUsers(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=admin_get_developer_users&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -417,8 +428,8 @@ export async function checkTagExists(token: string, enTag: string) {
   const url = `${PICPONY_API_BASE}?action=get_dictionary&page=1&limit=50&keyword=${encodeURIComponent(enTag)}&_t=${Date.now()}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   const data = await readJson(res);
-  if (data.success && data.tags) {
+  if (res.ok && data.success && Array.isArray(data.tags)) {
     return data.tags.some((t: { en: string }) => t.en.toLowerCase() === enTag.toLowerCase());
   }
-  return false;
+  throw new Error(data.error || data.message || '标签查询失败');
 }

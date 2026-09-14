@@ -1,10 +1,10 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { MdAdd } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import { getBrowsingSettings } from '@/lib/api';
-import { useResource } from '@/lib/resource';
+import { SKIP, useResource } from '@/lib/resource';
 import { useScreenState } from '@/lib/screenState';
 import { DEFAULT_BROWSING_FINGERPRINT } from '@/lib/searchQuery';
 import { browsingFingerprint, forumPosts, homeFeed, syncBrowsingCookie } from '@/lib/resources';
@@ -46,23 +46,37 @@ function ImageList({ onRetry, seed }: { onRetry?: () => void; seed: FeedSeed | n
      content request twice. The default is what a device with no stored settings produces. */
   const [fp, setFp] = useState(seed?.fp ?? DEFAULT_BROWSING_FINGERPRINT);
   const [sort, setSort] = useState(seed?.sort ?? 'created_at');
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const lastPreferences = useRef<{ fp: string; sort: string } | null>(null);
   useEffect(() => {
-    const ownFp = browsingFingerprint();
-    const ownSort = getBrowsingSettings().homeSort;
-    /* Out of the effect body: `react-hooks/set-state-in-effect` rejects a synchronous
-       setState here — same reason `AppLayout`'s drawer-restore effect defers. */
-    queueMicrotask(() => {
+    let active = true;
+    const update = () => {
+      if (!active) return;
+      const ownFp = browsingFingerprint();
+      const ownSort = getBrowsingSettings().homeSort;
+      const previous = lastPreferences.current;
+      if (previous && (previous.fp !== ownFp || previous.sort !== ownSort)) setPage(1);
+      lastPreferences.current = { fp: ownFp, sort: ownSort };
       syncBrowsingCookie();
       setFp(ownFp);
       setSort(ownSort);
-    });
-  }, []);
+      setPreferencesReady(true);
+    };
+    queueMicrotask(update);
+    window.addEventListener('settings_updated', update);
+    window.addEventListener('storage', update);
+    return () => {
+      active = false;
+      window.removeEventListener('settings_updated', update);
+      window.removeEventListener('storage', update);
+    };
+  }, [setPage]);
 
   /* `keepPrevious`: turning a page must not unmount the grid — the scroller collapses,
      the browser clamps `scrollTop`, and the page snaps to the very top. */
   const read = useResource(
     homeFeed,
-    { page, sort, fp },
+    seed || preferencesReady ? { page, sort, fp } : SKIP,
     /* The seed is only ever offered for page 1 — it is what the server rendered. Page 2
        has no seed and `initial.key` would not match anyway; `undefined` says so directly. */
     { keepPrevious: true, initial: page === 1 ? (seed ?? undefined) : undefined },
@@ -114,7 +128,6 @@ function ImageList({ onRetry, seed }: { onRetry?: () => void; seed: FeedSeed | n
         title="图片加载失败"
         message={
           status == 429 ||
-          error.message === 'Failed to fetch' ||
           error.message === 'Too Many Requests'
             ? '您的请求次数过快，超出原站限制'
             : `${status ? `HTTP Error ${status}: ` : ''}${error.message}`

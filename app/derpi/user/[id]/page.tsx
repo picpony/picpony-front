@@ -34,12 +34,15 @@ export default function DerpiUserPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<DerpiProfileUser | null>(null);
+  const [profileRetry, setProfileRetry] = useState(0);
 
   // Uploads tab
   const [uploads, setUploads] = useState<PonyImage[]>([]);
   const [uploadsPage, setUploadsPage] = useState(1);
   const [uploadsTotal, setUploadsTotal] = useState(0);
   const [isUploadsLoading, setIsUploadsLoading] = useState(false);
+  const [uploadsError, setUploadsError] = useState<string | null>(null);
+  const [uploadsRetry, setUploadsRetry] = useState(0);
 
   // Fetch profile
   useEffect(() => {
@@ -51,45 +54,53 @@ export default function DerpiUserPage() {
     });
 
     (async () => {
-      const data = await api.getDerpiProfile(userId);
-      if (!isMounted) return;
-      if (data?.user) {
+      try {
+        const data = await api.getDerpiProfile(userId);
+        if (!isMounted) return;
+        if (!data?.user) throw new Error('用户资料加载失败，或该用户不存在');
         setProfile(data.user);
-        setIsLoading(false);
-      } else {
-        setError('未找到该 Derpibooru 用户');
-        setIsLoading(false);
+      } catch (err) {
+        if (isMounted) setError(err instanceof Error ? err.message : '用户资料加载失败');
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     })();
 
     return () => {
       isMounted = false;
     };
-  }, [userId]);
+  }, [userId, profileRetry]);
 
   // Fetch uploads
   useEffect(() => {
     if (!profile) return;
     let isMounted = true;
     queueMicrotask(() => {
-      if (isMounted) setIsUploadsLoading(true);
+      if (isMounted) {
+        setIsUploadsLoading(true);
+        setUploadsError(null);
+      }
     });
 
     (async () => {
-      const query = `uploader_id:${profile.id}`;
-      const data = await api.searchDerpiImages(query, uploadsPage, PER_PAGE);
-      if (!isMounted) return;
-      if (data) {
-        setUploads(data.images || []);
+      try {
+        const query = `uploader_id:${profile.id}`;
+        const data = await api.searchDerpiImages(query, uploadsPage, PER_PAGE);
+        if (!isMounted) return;
+        if (!data || !Array.isArray(data.images)) throw new Error('上传记录加载失败');
+        setUploads(data.images);
         setUploadsTotal(data.total || 0);
+      } catch {
+        if (isMounted) setUploadsError('上传记录加载失败，请稍后重试');
+      } finally {
+        if (isMounted) setIsUploadsLoading(false);
       }
-      setIsUploadsLoading(false);
     })();
 
     return () => {
       isMounted = false;
     };
-  }, [profile, uploadsPage]);
+  }, [profile, uploadsPage, uploadsRetry]);
 
   const totalPages = Math.ceil(uploadsTotal / PER_PAGE);
 
@@ -153,6 +164,7 @@ export default function DerpiUserPage() {
       <ErrorRetry
         fill
         message={error || '用户可能不存在'}
+        onRetry={() => setProfileRetry((value) => value + 1)}
         action={
           userId && (
             <a
@@ -299,16 +311,17 @@ export default function DerpiUserPage() {
               最近上传
             </SectionHeading>
 
-            {isUploadsLoading ? (
+            {uploadsError && <ErrorRetry size="inline" title={uploadsError} onRetry={() => setUploadsRetry((value) => value + 1)} />}
+            {isUploadsLoading && uploads.length === 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                {Array.from({ length: 8 }).map((_, i) => (
+                {Array.from({ length: PER_PAGE }).map((_, i) => (
                   <Skeleton key={i} className="aspect-square rounded-lg" />
                 ))}
               </div>
             ) : uploads.length > 0 ? (
               /* The anchor wraps the grid *and* its pager: `Pagination` reaches it with
                  `closest()`, so one that sits beside the pager is one it cannot see. */
-              <div data-pagination-anchor>
+              <div data-pagination-anchor aria-busy={isUploadsLoading}>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                   {uploads.map((img) => {
                     const thumbUrl =
@@ -375,14 +388,14 @@ export default function DerpiUserPage() {
                   />
                 )}
               </div>
-            ) : (
+            ) : !uploadsError ? (
               <EmptyState
                 size="pane"
                 icon={<MdImage size={ICON.display} />}
                 title="暂无上传"
                 description="该用户尚未上传任何图片"
               />
-            )}
+            ) : null}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { showToast } from '@/components/Toast';
 import { MdShield, MdAdd } from 'react-icons/md';
 import { SectionHeader } from './';
@@ -9,6 +9,7 @@ import Card from '@/components/Card';
 import Chip from '@/components/Chip';
 import Skeleton from '@/components/Skeleton';
 import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
 import { Input } from '@/components/Input';
 import { ICON } from '@/lib/icons';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -17,10 +18,14 @@ import { useConfirm } from '@/components/ConfirmDialog';
    every gallery route shipped all 48 of these. Only the eleven admin tabs
    import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { useAdminMutation } from './useAdminMutation';
+import { installBlockFilters, parseBlockFilters } from '@/lib/blockFilters';
 
 interface BlockTag {
   id: number;
   tag_name: string;
+  filter_key?: string;
 }
 
 interface BlockTagsGroup {
@@ -37,9 +42,31 @@ const filterLabels: Record<string, string> = {
   onlyPony: '只看小马 (onlyPony) — 可选物种范围 (OR 关系)',
 };
 
+const blockTagsQuery = defineAdminQuery<BlockTagsGroup>('block-tags', async (token, signal) => {
+  const data = await adminApi.getBlockTags(token, signal);
+  adminData(data, undefined);
+  const filters = parseBlockFilters(data);
+  if (!filters) throw new Error('屏蔽标签响应无效');
+  installBlockFilters(filters);
+  const grouped: BlockTagsGroup = {};
+  if (Array.isArray(data.tags)) {
+    for (const tag of data.tags as BlockTag[]) {
+      if (tag.filter_key && filterKeys.includes(tag.filter_key)) {
+        (grouped[tag.filter_key] ??= []).push(tag);
+      }
+    }
+  } else if (data.grouped && typeof data.grouped === 'object') {
+    for (const key of filterKeys) grouped[key] = Array.isArray(data.grouped[key]) ? data.grouped[key] : [];
+  }
+  return grouped;
+});
+
 export default function BlockTagsTab({ token }: { token: string }) {
-  const [blockTags, setBlockTags] = useState<BlockTagsGroup>({});
-  const [loading, setLoading] = useState(false);
+  const read = useAdminQuery(blockTagsQuery, token);
+  const blockTags = read.data ?? {};
+  const loading = read.loading;
+  const loadBlockTags = read.refresh;
+  const mutation = useAdminMutation(token);
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState('');
 
@@ -49,76 +76,25 @@ export default function BlockTagsTab({ token }: { token: string }) {
      sentence-final 吗 that every converted one kept. */
   const { confirmThen, confirmDialog } = useConfirm();
 
-  const loadBlockTags = async () => {
-    setLoading(true);
-    try {
-      const data = await adminApi.getBlockTags(token);
-      if (data.success) {
-        setBlockTags(data.tags || {});
-      }
-    } catch {
-      showToast('加载失败', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await adminApi.getBlockTags(token);
-        if (!cancelled && data.success) {
-          setBlockTags(data.tags || {});
-        }
-      } catch {
-        if (!cancelled) showToast('加载失败', 'error');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
-
   const handleAddTag = async (key: string) => {
-    if (!newTagName.trim()) return;
-    try {
-      const res = await adminApi.adminAddBlockTag(token, {
+    if (!read.data || !newTagName.trim()) return;
+    await mutation.run(() => adminApi.adminAddBlockTag(token, {
         filter_key: key,
         tag_name: newTagName.trim(),
-      });
-      const data = await res.json();
-      if (data.success) {
+      }), () => {
         showToast('已添加', 'success');
         setNewTagName('');
         setAddingKey(null);
         loadBlockTags();
-      } else {
-        showToast(data.error || '添加失败', 'error');
-      }
-    } catch {
-      showToast('添加失败', 'error');
-    }
+      }, '添加失败');
   };
 
   const handleRemoveTag = (_key: string, tagId: number) => {
     confirmThen('确认删除', '确定要删除此标签吗？', async () => {
-      try {
-        const res = await adminApi.adminRemoveBlockTag(token, tagId);
-        const data = await res.json();
-        if (data.success) {
+      await mutation.run(() => adminApi.adminRemoveBlockTag(token, tagId), () => {
           showToast('已删除', 'success');
           loadBlockTags();
-        } else {
-          showToast(data.error || '移除失败', 'error');
-        }
-      } catch {
-        showToast('移除失败', 'error');
-      }
+        }, '移除失败');
     });
   };
   return (
@@ -134,7 +110,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
         中的标签会作为排除项（-标签）加入搜索。 <b>onlyPony</b> 中的标签会作为可选物种范围（OR
         关系）。
       </Card>
-      {loading ? (
+      {read.error ? <ErrorRetry size="pane" message={read.error} onRetry={loadBlockTags} /> : loading ? (
         /* The destination's own shape — section cards with heading rows and tag
            chips — not a spinner, which reflowed three cards' worth of layout in
            when the list landed. */
@@ -170,6 +146,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
                     icon={<MdAdd size={ICON.dense} />}
                     variant="accent"
                     size="xs"
+                    disabled={mutation.busy}
                     onClick={() => setAddingKey(addingKey === key ? null : key)}
                   >
                     添加
@@ -181,12 +158,13 @@ export default function BlockTagsTab({ token }: { token: string }) {
                     <Input
                       type="text"
                       value={newTagName}
+                      disabled={mutation.busy}
                       onChange={(e) => setNewTagName(e.target.value)}
                       placeholder="输入标签名…"
                       fieldClassName="flex-1"
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag(key)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleAddTag(key)}
                     />
-                    <Button onClick={() => handleAddTag(key)} variant="filled" size="xs">
+                    <Button onClick={() => handleAddTag(key)} variant="filled" size="xs" loading={mutation.busy} disabled={!newTagName.trim()}>
                       确认
                     </Button>
                   </div>
@@ -201,6 +179,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
                          unlabelled button was read out as "times". */
                       <Chip
                         key={tag.id}
+                        disabled={mutation.busy}
                         onRemove={() => handleRemoveTag(key, tag.id)}
                         removeLabel={`移除标签 ${tag.tag_name}`}
                       >

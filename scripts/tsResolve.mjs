@@ -36,7 +36,7 @@ export function requireTypeStripping(commandName) {
 const ROOT = path.resolve(import.meta.dirname, '..');
 
 function withExtension(filePath) {
-  if (path.extname(filePath)) return filePath;
+  if (path.extname(filePath) && existsSync(filePath)) return filePath;
   for (const candidate of ['.ts', '.tsx', '.mjs', '.js', '/index.ts', '/index.tsx']) {
     if (existsSync(filePath + candidate)) return filePath + candidate;
   }

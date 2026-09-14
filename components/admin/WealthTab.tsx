@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
@@ -14,6 +14,7 @@ import { readToken } from '@/lib/hooks';
 /* Namespace import, deliberately: `api` is a runtime spread and
    un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
 
 interface User {
   id: number;
@@ -22,9 +23,17 @@ interface User {
   coins: number;
 }
 
+const emptyUsers: User[] = [];
+const usersQuery = defineAdminQuery<User[]>('wealth', async (token, signal) => {
+  const data = await adminApi.adminGetWealth(token, signal);
+  return adminData(data, data.users || []);
+});
+
 export default function WealthTab({ token }: { token: string }) {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const read = useAdminQuery(usersQuery, token);
+  const users = read.data ?? emptyUsers;
+  const isLoading = read.loading;
+  const loadUsers = read.refresh;
   const [searchKw, setSearchKw] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -36,42 +45,6 @@ export default function WealthTab({ token }: { token: string }) {
     coinsValue: '',
     reason: '',
   });
-
-  const loadUsers = useCallback(async () => {
-    if (readToken() !== token) return;
-    setIsLoading(true);
-    try {
-      const data = await adminApi.adminGetWealth(token);
-      if (readToken() !== token) return;
-      if (data.success) {
-        setUsers(data.users || []);
-      }
-    } catch {
-      if (readToken() === token) showToast('用户加载失败', 'error');
-    } finally {
-      if (readToken() === token) setIsLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token || readToken() !== token) return;
-    let cancelled = false;
-    adminApi
-      .adminGetWealth(token)
-      .then((data) => {
-        if (cancelled || readToken() !== token) return;
-        if (data.success) {
-          setUsers(data.users || []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled && readToken() === token) showToast('用户加载失败', 'error');
-      })
-      .finally(() => {
-        if (!cancelled && readToken() === token) setIsLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [token]);
 
   const filteredUsers = useMemo(() => {
     if (!searchKw) return users;
@@ -171,6 +144,8 @@ export default function WealthTab({ token }: { token: string }) {
         rows={filteredUsers}
         rowKey={(u) => u.id}
         loading={isLoading}
+        error={read.error}
+        onRetry={loadUsers}
         empty="没有找到匹配的用户"
       />
       <Modal

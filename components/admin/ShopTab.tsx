@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useRef, useState } from 'react';
 import { showToast } from '@/components/Toast';
 import FadeInImage from '@/components/FadeInImage';
 import Checkbox from '@/components/Checkbox';
@@ -17,6 +17,9 @@ import { ICON } from '@/lib/icons';
 /* Namespace import, deliberately: `api` is a runtime spread and
    un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { readToken } from '@/lib/hooks';
+import { useAdminMutation } from './useAdminMutation';
 
 interface ShopItem {
   id: number;
@@ -28,9 +31,19 @@ interface ShopItem {
   active: number;
 }
 
+const itemsQuery = defineAdminQuery<ShopItem[]>('shop', async (token, signal) => {
+  const data = await adminApi.adminGetShopItems(token, signal);
+  return adminData(data, data.items || []);
+});
+
 export default function ShopTab({ token }: { token: string }) {
-  const [items, setItems] = useState<ShopItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const mutation = useAdminMutation(token);
+  const read = useAdminQuery(itemsQuery, token);
+  const items = read.data ?? [];
+  const isLoading = read.loading;
+  const loadItems = read.refresh;
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
   const [form, setForm] = useState({
@@ -44,33 +57,6 @@ export default function ShopTab({ token }: { token: string }) {
   });
 
   const { confirmThen, confirmDialog } = useConfirm();
-
-  const loadItems = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await adminApi.adminGetShopItems(token);
-      if (data.success) {
-        setItems(data.items || []);
-      }
-    } catch {
-      showToast('商品加载失败', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    adminApi
-      .adminGetShopItems(token)
-      .then((data) => {
-        if (data.success) {
-          setItems(data.items || []);
-        }
-      })
-      .catch(() => showToast('商品加载失败', 'error'))
-      .finally(() => setIsLoading(false));
-  }, [token]);
 
   const resetForm = () => {
     setForm({
@@ -87,6 +73,7 @@ export default function ShopTab({ token }: { token: string }) {
   };
 
   const startEdit = (item: ShopItem) => {
+    if (savingRef.current) return;
     setEditingItem(item);
     setForm({
       id: item.id,
@@ -101,16 +88,24 @@ export default function ShopTab({ token }: { token: string }) {
   };
 
   const saveItem = async () => {
+    if (savingRef.current || readToken() !== token) return;
     if (!form.name.trim()) {
       showToast('请输入商品名称', 'error');
       return;
     }
+    if (!Number.isSafeInteger(form.price) || form.price < 0 || !Number.isSafeInteger(form.stock) || form.stock < 0) {
+      showToast('价格和库存必须是非负整数', 'error');
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
     try {
       const res = await adminApi.adminSaveShopItem(token, {
         ...form,
         active: form.active ? 1 : 0,
       });
       const data = await res.json();
+      if (readToken() !== token) return;
       if (data.success) {
         showToast(editingItem ? '已更新' : '已添加', 'success');
         resetForm();
@@ -120,23 +115,19 @@ export default function ShopTab({ token }: { token: string }) {
       }
     } catch {
       showToast('保存失败', 'error');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
   const deleteItem = async (id: number) => {
     confirmThen('确认删除', '确定要删除此商品吗？', async () => {
-      try {
-        const res = await adminApi.adminDeleteShopItem(token, id);
-        const data = await res.json();
-        if (data.success) {
+      await mutation.run(() => adminApi.adminDeleteShopItem(token, id), () => {
+          itemsQuery.write(token, (previous) => previous?.filter((item) => item.id !== id) ?? []);
           showToast('已删除', 'success');
           loadItems();
-        } else {
-          showToast(data.error || '删除失败', 'error');
-        }
-      } catch {
-        showToast('删除失败', 'error');
-      }
+        }, '删除失败');
     });
   };
 
@@ -195,6 +186,7 @@ export default function ShopTab({ token }: { token: string }) {
           <IconButton
             size="sm"
             onClick={() => deleteItem(item.id)}
+            disabled={mutation.busy || saving}
             icon={<MdDelete size={ICON.dense} />}
             aria-label={`删除 ${item.name}`} className="text-error"
           />
@@ -286,12 +278,12 @@ export default function ShopTab({ token }: { token: string }) {
         <div className="flex gap-3">
           
           {isEditing && (
-            <Button variant="text" onClick={resetForm}>
+            <Button variant="text" onClick={resetForm} disabled={saving}>
               {' '}
               取消
             </Button>
           )}
-          <Button variant="filled" onClick={saveItem}>
+          <Button variant="filled" onClick={saveItem} loading={saving}>
             {' '}
             {isEditing ? '保存修改' : '添加商品'}
           </Button>
@@ -303,6 +295,8 @@ export default function ShopTab({ token }: { token: string }) {
         rows={items}
         rowKey={(item) => item.id}
         loading={isLoading}
+        error={read.error}
+        onRetry={loadItems}
         empty="暂无商品"
       />
 

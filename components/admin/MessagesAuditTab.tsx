@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { showToast } from '@/components/Toast';
 import Badge from '@/components/Badge';
 import { MdMessage, MdSearch, MdRefresh } from 'react-icons/md';
@@ -13,17 +13,8 @@ import { ICON } from '@/lib/icons';
 /* Namespace import, deliberately: `api` is a runtime spread and
    un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
-
-interface AuditMessage {
-  id: number;
-  sender_id: number;
-  sender_name: string;
-  receiver_id: number;
-  receiver_name: string;
-  content: string;
-  is_read: number;
-  created_at: string;
-}
+import { readToken } from '@/lib/hooks';
+import type { AuditMessage } from '@/lib/types/message';
 
 /* The message body leads the card — the only column an auditor is actually
    reading; ids and timestamps around it are context. Clamped so one long
@@ -57,21 +48,35 @@ export default function MessagesAuditTab({ token }: { token: string }) {
   const [messages, setMessages] = useState<AuditMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchUserId, setSearchUserId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [lastQuery, setLastQuery] = useState<number | undefined>(undefined);
+  const requestRef = useRef(0);
+
+  useEffect(() => () => { requestRef.current += 1; }, [token]);
 
   const loadMessages = async (userId?: number) => {
+    if (readToken() !== token) return;
+    if (userId !== undefined && (!Number.isSafeInteger(userId) || userId < 1)) {
+      showToast('请输入有效的用户 ID', 'warning');
+      return;
+    }
+    const request = ++requestRef.current;
+    setLastQuery(userId);
     setLoading(true);
+    setError(null);
     try {
-      const res = await adminApi.adminGetAllMessages(token, userId);
-      const data = await res.json();
+      // Read helpers return the parsed envelope; only mutation helpers return Response.
+      const data = await adminApi.adminGetAllMessages(token, userId);
+      if (request !== requestRef.current || readToken() !== token) return;
       if (data.success) {
         setMessages(data.messages || []);
       } else {
-        showToast(data.error || '获取失败', 'error');
+        setError(data.error || '获取失败');
       }
     } catch {
-      showToast('加载失败', 'error');
+      if (request === requestRef.current && readToken() === token) setError('加载失败');
     } finally {
-      setLoading(false);
+      if (request === requestRef.current && readToken() === token) setLoading(false);
     }
   };
   return (
@@ -80,7 +85,8 @@ export default function MessagesAuditTab({ token }: { token: string }) {
       <SectionHeader
         icon={<MdMessage size={ICON.standard} />}
         title="私信安全审计查阅"
-        onRefresh={() => loadMessages()}
+        onRefresh={() => loadMessages(lastQuery)}
+        isLoading={loading}
       />
       <Card variant="transparent">
         {' '}
@@ -101,7 +107,7 @@ export default function MessagesAuditTab({ token }: { token: string }) {
           <div className="flex items-center gap-3">
             
             <Button
-              onClick={() => loadMessages(searchUserId ? parseInt(searchUserId) : undefined)}
+              onClick={() => loadMessages(searchUserId ? Number(searchUserId) : undefined)}
               variant="filled"
               className="flex-1 sm:flex-none"
               icon={<MdSearch size={ICON.dense} />}
@@ -126,6 +132,8 @@ export default function MessagesAuditTab({ token }: { token: string }) {
           rows={messages}
           rowKey={(m) => m.id}
           loading={loading}
+          error={error ?? undefined}
+          onRetry={() => loadMessages(lastQuery)}
           empty="暂无消息记录"
         />
       </Card>

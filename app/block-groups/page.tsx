@@ -6,6 +6,8 @@ import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import Skeleton from '@/components/Skeleton';
 import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
+import { useConfirm } from '@/components/ConfirmDialog';
 import {
   MdAdd,
   MdShield,
@@ -25,9 +27,10 @@ import Radio from '@/components/Radio';
 import Chip from '@/components/Chip';
 import Popover from '@/components/Popover';
 import { ICON } from '@/lib/icons';
-import { useSession } from '@/lib/hooks';
+import { readToken, useSession } from '@/lib/hooks';
+import { LS_KEYS } from '@/lib/constants';
 import { useResource, SKIP } from '@/lib/resource';
-import { blockGroups, type BlockGroup } from '@/lib/resources';
+import { blockGroups, syncBrowsingCookie, type BlockGroup } from '@/lib/resources';
 
 const MAX_GROUPS = 50;
 const MAX_TAGS_PER_GROUP = 100;
@@ -38,6 +41,16 @@ const MAX_TAGS_PER_GROUP = 100;
 export default function BlockGroupsPage() {
   const { openAuth } = useAuthModal();
   const { user: userInfo, ready } = useSession();
+  const { confirm, confirmDialog } = useConfirm();
+  const [saving, setSaving] = useState(false);
+  const savePending = useRef(false);
+  const mutationPending = useRef(new Set<number>());
+  const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
+  const markPending = useCallback((id: number, pending: boolean) => {
+    if (pending) mutationPending.current.add(id);
+    else mutationPending.current.delete(id);
+    setPendingIds(new Set(mutationPending.current));
+  }, []);
 
   /* The list comes from the resource layer rather than its own `useState` + effect — that
      is what makes the sidebar's hover prefetch (`lib/prefetchRoute.ts`) worth anything:
@@ -84,10 +97,6 @@ export default function BlockGroupsPage() {
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Confirm delete
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const deleteTargetRef = useRef<number | null>(null);
-
   useEffect(() => {
     if (ready && !userInfo) {
       openAuth('login');
@@ -103,14 +112,6 @@ export default function BlockGroupsPage() {
   /* The localStorage mirror that `lib/api/client.ts`'s browsing settings read from. It has
      to follow whatever the list currently is — server or optimistic write — so it keys off
      the rendered value rather than off the fetch. */
-  useEffect(() => {
-    if (read.data?.groups) updateLocalStorageCache(read.data.groups);
-  }, [read.data]);
-
-  useEffect(() => {
-    if (read.error) showToast('网络错误，请稍后再试', 'error');
-  }, [read.error]);
-
   function updateLocalStorageCache(groups: BlockGroup[]) {
     const hidden = new Set<string>();
     const spoilered = new Set<string>();
@@ -124,16 +125,26 @@ export default function BlockGroupsPage() {
         });
       }
     });
-    localStorage.setItem('trixie_active_hidden_tags', JSON.stringify(Array.from(hidden)));
-    localStorage.setItem('trixie_active_spoilered_tags', JSON.stringify(Array.from(spoilered)));
+    try {
+      localStorage.setItem(LS_KEYS.activeHiddenTags, JSON.stringify(Array.from(hidden)));
+      localStorage.setItem(LS_KEYS.activeSpoileredTags, JSON.stringify(Array.from(spoilered)));
+      syncBrowsingCookie();
+      window.dispatchEvent(new Event('settings_updated'));
+    } catch {
+      // The cloud list remains usable when this browser blocks local storage.
+    }
   }
+  useEffect(() => {
+    if (read.data?.groups) updateLocalStorageCache(read.data.groups);
+  }, [read.data]);
 
   // ================= Tag Autocomplete =================
   useEffect(() => {
+    let current = true;
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(
       async () => {
-        if (searchQuery.length < 2) {
+        if (!editModalOpen || searchQuery.length < 2) {
           setShowSuggestions(false);
           return;
         }
@@ -146,6 +157,7 @@ export default function BlockGroupsPage() {
              Philomena expression and returned nothing. It asks for 30 rows where
              this list shows 10, hence the slice. */
           const data = await api.searchDerpiTags(searchQuery);
+          if (!current) return;
           const tags = (data?.tags ?? []) as { name: string; images: number }[];
           if (tags.length > 0) {
             setSuggestions(tags.slice(0, 10).map((t) => ({ name: t.name, images: t.images })));
@@ -154,15 +166,16 @@ export default function BlockGroupsPage() {
             setShowSuggestions(false);
           }
         } catch {
-          /* ignore */
+          if (current) setShowSuggestions(false);
         }
       },
       searchQuery.length < 2 ? 0 : 300,
     );
     return () => {
+      current = false;
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
-  }, [searchQuery]);
+  }, [searchQuery, editModalOpen]);
 
   /* The outside-click listener that used to live here is `Popover`'s now — it
      already knows both the panel and the anchor, which is what this had to be
@@ -171,7 +184,7 @@ export default function BlockGroupsPage() {
   const addTag = useCallback(
     (tagName: string) => {
       const currentTotal = hiddenTags.length + spoileredTags.length;
-      if (currentTotal >= MAX_TAGS_PER_GROUP) {
+      if (currentTotal >= MAX_TAGS_PER_GROUP && !hiddenTags.includes(tagName) && !spoileredTags.includes(tagName)) {
         showToast(`每个屏蔽组最多只能添加 ${MAX_TAGS_PER_GROUP} 个标签`, 'warning');
         return;
       }
@@ -189,7 +202,7 @@ export default function BlockGroupsPage() {
       setSearchQuery('');
       setShowSuggestions(false);
     },
-    [hiddenTags.length, spoileredTags.length, tagActionType],
+    [hiddenTags, spoileredTags, tagActionType],
   );
 
   const removeTag = useCallback((tagName: string, type: 'hide' | 'spoiler') => {
@@ -216,6 +229,7 @@ export default function BlockGroupsPage() {
   );
 
   const handleSaveGroup = useCallback(async () => {
+    if (savePending.current) return;
     if (!groupName.trim()) {
       showToast('请输入屏蔽组名称', 'warning');
       return;
@@ -224,7 +238,9 @@ export default function BlockGroupsPage() {
       showToast('请至少添加一个标签', 'warning');
       return;
     }
-    if (!userInfo?.token) return;
+    if (!userInfo?.token || readToken() !== userInfo.token) return;
+    savePending.current = true;
+    setSaving(true);
 
     try {
       const payload = {
@@ -236,6 +252,7 @@ export default function BlockGroupsPage() {
       };
       const res = await api.saveBlockGroup(userInfo.token, payload);
       const data = await res.json();
+      if (readToken() !== userInfo.token) return;
       if (data.success) {
         showToast(editGroupId ? '已更新' : '已创建', 'success');
         setEditModalOpen(false);
@@ -244,46 +261,50 @@ export default function BlockGroupsPage() {
         showToast(data.error || '保存失败', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (readToken() === userInfo.token) showToast('网络错误，请稍后再试', 'error');
+    } finally {
+      savePending.current = false;
+      setSaving(false);
     }
-  }, [editGroupId, groupName, hiddenTags, spoileredTags, userInfo?.token, loadGroups]);
+  }, [editGroupId, groupName, hiddenTags, spoileredTags, userInfo, loadGroups]);
 
   const handleToggleGroup = useCallback(
     async (id: number, isActive: boolean) => {
-      if (!userInfo?.token) return;
+      if (!userInfo?.token || readToken() !== userInfo.token || mutationPending.current.has(id)) return;
+      markPending(id, true);
       // Optimistic update
       setGroups((prev) => {
         const updated = prev.map((g) => (g.id === id ? { ...g, is_active: isActive ? 1 : 0 } : g));
-        updateLocalStorageCache(updated);
         return updated;
       });
       try {
         const res = await api.toggleBlockGroup(userInfo.token, id, isActive ? 1 : 0);
         const data = await res.json();
+        if (readToken() !== userInfo.token) return;
         if (!data.success) {
           showToast(data.error || '切换失败', 'error');
           loadGroups();
         }
       } catch {
+        if (readToken() !== userInfo.token) return;
         showToast('网络错误，请稍后再试', 'error');
         loadGroups();
+      } finally {
+        markPending(id, false);
       }
     },
-    [userInfo?.token, loadGroups, setGroups],
+    [userInfo, loadGroups, setGroups, markPending],
   );
 
-  const confirmDeleteGroup = useCallback((id: number) => {
-    deleteTargetRef.current = id;
-    setDeleteConfirmOpen(true);
-  }, []);
-
-  const handleDeleteGroup = useCallback(async () => {
-    const id = deleteTargetRef.current;
-    if (!id || !userInfo?.token) return;
-    setDeleteConfirmOpen(false);
+  const confirmDeleteGroup = useCallback(async (id: number) => {
+    if (!userInfo?.token || readToken() !== userInfo.token || mutationPending.current.has(id)) return;
+    markPending(id, true);
     try {
+      if (!(await confirm({ title: '确认删除', message: '确定要删除此屏蔽组吗？' }))) return;
+      if (readToken() !== userInfo.token) return;
       const res = await api.deleteBlockGroup(userInfo.token, id);
       const data = await res.json();
+      if (readToken() !== userInfo.token) return;
       if (data.success) {
         showToast('已删除', 'success');
         loadGroups();
@@ -291,10 +312,12 @@ export default function BlockGroupsPage() {
         showToast(data.error || '删除失败', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (readToken() === userInfo.token) showToast('网络错误，请稍后再试', 'error');
+    } finally {
+      markPending(id, false);
     }
-  }, [userInfo?.token, loadGroups]);
-  if (!userInfo) return null;
+  }, [userInfo, loadGroups, markPending, confirm]);
+  if (!userInfo && ready) return <EmptyState title="需要登录" description="登录后即可管理屏蔽组" action={<Button onClick={() => openAuth('login')}>前往登录</Button>} />;
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
@@ -335,6 +358,8 @@ export default function BlockGroupsPage() {
             </div>
           ))}
         </div>
+      ) : read.error ? (
+        <ErrorRetry title="屏蔽组加载失败" message="网络错误，请稍后再试" onRetry={loadGroups} />
       ) : groups.length === 0 ? (
         /* The shared empty state. This was the sixteenth hand-rolled one — a
            64px glyph at 30% opacity over two untyped paragraphs — and the only
@@ -399,6 +424,7 @@ export default function BlockGroupsPage() {
                         `text-error`, and the hidden-tag line under it is error
                         too. One signal per meaning. */}
                     <ToggleSwitch
+                      disabled={pendingIds.has(group.id)}
                       checked={isActive}
                       onChange={(v) => handleToggleGroup(group.id, v)}
                       aria-label={`启用屏蔽组 ${group.name}`}
@@ -409,12 +435,14 @@ export default function BlockGroupsPage() {
                         `rounded-full`, and a hit-area shim standing in for a box
                         the primitive already gives. */}
                     <IconButton
+                      disabled={pendingIds.has(group.id)}
                       size="sm"
                       onClick={() => openEditModal(group)}
                       aria-label={`编辑屏蔽组 ${group.name}`}
                       icon={<MdEdit size={ICON.dense} />}
                     />
                     <IconButton
+                      disabled={pendingIds.has(group.id)}
                       size="sm"
                       onClick={() => confirmDeleteGroup(group.id)}
                       aria-label={`删除屏蔽组 ${group.name}`}
@@ -447,7 +475,7 @@ export default function BlockGroupsPage() {
       {/* ================= Edit / Create Modal ================= */}
       <Modal
         isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
+        onClose={() => { if (!savePending.current) setEditModalOpen(false); }}
         title={editGroupId ? '编辑屏蔽组' : '创建新屏蔽组'}
         maxWidth="lg"
         /* The action row goes through `footer`, which is what the app's other nineteen
@@ -463,17 +491,17 @@ export default function BlockGroupsPage() {
            tag wells. */
         footer={
           <>
-            <Button variant="text" onClick={() => setEditModalOpen(false)}>
+            <Button variant="text" disabled={saving} onClick={() => setEditModalOpen(false)}>
               取消
             </Button>
-            <Button variant="danger" onClick={handleSaveGroup}>
+            <Button variant="danger" loading={saving} onClick={handleSaveGroup}>
               保存屏蔽组
             </Button>
           </>
         }
       >
         {' '}
-        <div className="space-y-4">
+        <div className="space-y-4" inert={saving}>
           {' '}
           <div>
             {' '}
@@ -587,25 +615,7 @@ export default function BlockGroupsPage() {
           </div>
         </div>
       </Modal>
-      {/* ================= Delete Confirm Modal ================= */}
-      <Modal
-        isOpen={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
-        title="确认删除"
-        maxWidth="sm"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setDeleteConfirmOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleDeleteGroup}>
-              确认删除
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">确定要删除这个屏蔽组吗？</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

@@ -14,6 +14,9 @@ const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID ?? Date.now().toString(36);
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Dependencies and source live in this checkout; unrelated parent lockfiles must
+  // not change Turbopack's resolution or its file-watching boundary.
+  turbopack: { root: __dirname },
   /**
    * Automatic memoisation. Enabled last on purpose, so anything it breaks is attributable to it.
    *

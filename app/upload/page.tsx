@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { readToken, useSession } from '@/lib/hooks';
 import { useAuthModal } from '@/components/AuthModal';
 import { MdCloudUpload, MdClose, MdInfoOutline, MdOpenInNew } from 'react-icons/md';
-import Button, { buttonClasses } from '@/components/Button';
+import Button from '@/components/Button';
+import Skeleton from '@/components/Skeleton';
 import { Input, Textarea } from '@/components/Input';
 import DropZone from '@/components/DropZone';
 import IconButton from '@/components/IconButton';
@@ -17,7 +18,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { ICON } from '@/lib/icons';
 
 export default function UploadPage() {
-  const { user } = useSession();
+  const { user, ready } = useSession();
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { confirm, confirmDialog } = useConfirm();
@@ -36,11 +37,17 @@ export default function UploadPage() {
 
   /* One object URL per file, revoked when it is replaced — the video branch used to
      mint a fresh URL, leaking the previous one, on every render. */
-  const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  const [filePreview, setFilePreview] = useState<{ file: File | null; url: string | null } | null>(null);
+  const objectUrl = filePreview?.file === file ? filePreview.url : null;
   useEffect(() => {
-    if (!objectUrl) return;
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [objectUrl]);
+    const url = file ? URL.createObjectURL(file) : null;
+    let current = true;
+    queueMicrotask(() => { if (current) setFilePreview({ file, url }); });
+    return () => {
+      current = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [file]);
 
   const isVideoFile = Boolean(file?.type.startsWith('video/'));
   const preview = !isVideoFile ? objectUrl : null;
@@ -61,7 +68,7 @@ export default function UploadPage() {
       'video/webm',
       'video/mp4',
     ];
-    if (!validTypes.includes(f.type) && !f.type.startsWith('image/')) {
+    if (!validTypes.includes(f.type)) {
       showToast('不支持的文件格式，请选择图片或 WebM/MP4 视频', 'error');
       return;
     }
@@ -168,6 +175,7 @@ export default function UploadPage() {
   };
 
   // 未登录 → 引导
+  if (!ready) return <div className="max-w-2xl mx-auto space-y-5"><PageHeader title="发布图片" /><Skeleton className="h-56 w-full" /><Skeleton className="h-14 w-full" /><Skeleton className="h-14 w-full" /></div>;
   if (!user || !user.token) {
     return (
       <EmptyState
@@ -232,7 +240,7 @@ export default function UploadPage() {
           </div>
           <h2 className="text-title-l mb-2">发布成功</h2>
           <p className="text-body-m mb-6">
-            图片 ID: <span className="text-body-m-emphasized font-mono">{uploadResult.id}</span>
+            图片 ID：<span className="text-body-m-emphasized font-mono">{uploadResult.id}</span>
           </p>
           <div className="flex items-center justify-center gap-3">
             <Button
@@ -242,9 +250,9 @@ export default function UploadPage() {
             >
               查看图片
             </Button>
-            <button onClick={resetForm} className={buttonClasses({ variant: 'tonal' })}>
+            <Button onClick={resetForm} variant="tonal">
               继续发布
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -255,6 +263,7 @@ export default function UploadPage() {
               tone and elevation change already read as "let go here". */}
           <DropZone
             size="lg"
+            disabled={isUploading}
             accept="image/*,video/webm,video/mp4"
             onFile={handleFileSelect}
             filled={Boolean(file)}
@@ -282,6 +291,7 @@ export default function UploadPage() {
                     rotation alone. */}
                 <IconButton
                   size="sm"
+                  disabled={isUploading}
                   onClick={(e) => {
                     e.stopPropagation();
                     removeFile();
@@ -305,6 +315,7 @@ export default function UploadPage() {
                   controls
                 />
                 <Button
+                  disabled={isUploading}
                   icon={<MdClose size={ICON.dense} />}
                   variant="danger-text"
                   size="xs"
@@ -334,12 +345,13 @@ export default function UploadPage() {
           </DropZone>
 
           {/* ──── 表单 ──── */}
-          <div className="space-y-5">
+          <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); void handleUpload(); }}>
             <Input
               id="upload-f1"
               type="text"
               label="标签"
               required
+              disabled={isUploading}
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="以逗号分隔，如 safe, pony, cute"
@@ -349,6 +361,7 @@ export default function UploadPage() {
             <Input
               id="upload-f2"
               type="url"
+              disabled={isUploading}
               label="来源链接"
               value={source}
               onChange={(e) => setSource(e.target.value)}
@@ -358,6 +371,7 @@ export default function UploadPage() {
             <Textarea
               id="upload-f3"
               label="作品描述"
+              disabled={isUploading}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
@@ -367,7 +381,7 @@ export default function UploadPage() {
 
             {/* 上传按钮 */}
             <Button
-              onClick={handleUpload}
+              type="submit"
               variant="filled"
               size="lg"
               fullWidth
@@ -377,7 +391,7 @@ export default function UploadPage() {
             >
               {isUploading ? '上传中…' : '确认发布'}
             </Button>
-          </div>
+          </form>
         </>
       )}
       {confirmDialog}

@@ -4,6 +4,7 @@ import { Fragment, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import Skeleton from './Skeleton';
 import EmptyState from './EmptyState';
+import ErrorRetry from './ErrorRetry';
 
 export interface Column<T> {
   key: string;
@@ -25,6 +26,8 @@ interface DataTableProps<T> {
   rows: T[];
   rowKey: (row: T, index: number) => string | number;
   loading?: boolean;
+  error?: string;
+  onRetry?: () => void;
   /**
    * Shown when `rows` is empty and not loading. A `string` is the common case
    * and is wrapped in `EmptyState` — it is not rendered raw. Pass a node only
@@ -61,6 +64,8 @@ export default function DataTable<T>({
   rows,
   rowKey,
   loading = false,
+  error,
+  onRetry,
   empty,
   skeletonRows = 6,
   className = '',
@@ -71,7 +76,7 @@ export default function DataTable<T>({
   const details = columns.filter((c) => !c.primary && !c.actions && !c.hideOnMobile);
   const actions = columns.filter((c) => c.actions);
 
-  const isEmpty = !loading && rows.length === 0;
+  const isEmpty = !loading && !error && rows.length === 0;
 
   return (
     <div className={cn('w-full', className)}>
@@ -114,6 +119,12 @@ export default function DataTable<T>({
             <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
           </div>
         ))}
+
+      {error && (
+        <div className="m3-row bg-surface-container-low">
+          <ErrorRetry size="inline" title={error} onRetry={onRetry} />
+        </div>
+      )}
 
       {/* ---- Empty: `EmptyState`, like every other "nothing here" in the app.
            `inline` because it sits in a table body that already has a header row

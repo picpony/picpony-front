@@ -1,129 +1,97 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { showToast } from '@/components/Toast';
 import ToggleSwitch from '@/components/ToggleSwitch';
-import { MdBuild, MdWarning, MdTranslate, MdBarChart, MdSync } from 'react-icons/md';
+import { MdBuild, MdWarning, MdTranslate, MdBarChart, MdRefresh, MdSave } from 'react-icons/md';
 import Button from '@/components/Button';
 import { useConfirm } from '@/components/ConfirmDialog';
 import Card from '@/components/Card';
 import { Textarea } from '@/components/Input';
 import { ICON } from '@/lib/icons';
+import ErrorRetry from '@/components/ErrorRetry';
+import Skeleton from '@/components/Skeleton';
+import SectionHeading from '@/components/SectionHeading';
 /* Namespace import, deliberately: `api` is a runtime spread and
    un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { useAdminMutation } from './useAdminMutation';
+
+const statusQuery = defineAdminQuery('site-status', async (_token, signal) => {
+  const data = await adminApi.getMaintenanceStatus(signal);
+  return adminData(data, {
+    maintenanceMode: data.maintenance_mode === true,
+    maintenanceMessage: typeof data.maintenance_message === 'string' ? data.maintenance_message : '',
+    translateEnabled: data.translate_enabled !== false,
+  });
+});
+interface SiteStats { images: number; tags: number; comments: number; updated_at: string }
+const statsQuery = defineAdminQuery<SiteStats>('site-stats', async (_token, signal) => {
+  const data = await adminApi.getSiteStats(signal);
+  adminData(data, undefined);
+  if (!data.stats || typeof data.stats !== 'object') throw new Error('统计数据响应无效');
+  return data.stats as SiteStats;
+});
 
 export default function OtherTab({ token }: { token: string }) {
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [maintenanceMessage, setMaintenanceMessage] = useState('');
-  const [translateEnabled, setTranslateEnabled] = useState(true);
-  const [stats, setStats] = useState({ images: 0, tags: 0, comments: 0, updated_at: '-' });
-  const [isLoading, setIsLoading] = useState(false);
+  const status = useAdminQuery(statusQuery, token);
+  const statistics = useAdminQuery(statsQuery, token);
+  const mutation = useAdminMutation(token);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null);
 
   const { confirmThen, confirmDialog } = useConfirm();
 
-  useEffect(() => {
-    const doLoad = async () => {
-      try {
-        const [dataResult, statsResult] = await Promise.all([
-          adminApi.getMaintenanceStatus().catch(() => null),
-          adminApi.getSiteStats().catch(() => null),
-        ]);
+  const maintenanceMode = status.data?.maintenanceMode ?? false;
+  const translateEnabled = status.data?.translateEnabled ?? false;
+  const stats = statistics.data ?? { images: 0, tags: 0, comments: 0, updated_at: '-' };
+  const loaded = Boolean(status.data && !status.error);
+  const message = maintenanceMessage ?? status.data?.maintenanceMessage ?? '';
 
-        if (dataResult?.success) {
-          setMaintenanceMode(dataResult.maintenance_mode === true);
-          setMaintenanceMessage(dataResult.maintenance_message || '');
-          setTranslateEnabled(dataResult.translate_enabled !== false);
-        } else {
-          showToast('设置加载失败', 'error');
-        }
-
-        if (statsResult?.success && statsResult.stats) {
-          setStats(statsResult.stats);
-        }
-      } catch {
-        showToast('设置加载失败', 'error');
-      }
-    };
-    doLoad();
-  }, []);
+  const commitMaintenance = async (newValue: boolean) => {
+    if (!loaded || !status.data) return;
+    const current = status.data;
+    await mutation.run(() => adminApi.adminToggleMaintenance(token, {
+      maintenance_mode: newValue,
+      maintenance_message: message,
+    }), () => {
+      statusQuery.write(token, { ...current, maintenanceMode: newValue, maintenanceMessage: message });
+      setMaintenanceMessage(null);
+      showToast(newValue === current.maintenanceMode ? '维护提示已保存' : newValue ? '维护模式已开启' : '维护模式已关闭', 'success');
+      status.refresh();
+    });
+  };
 
   const toggleMaintenance = async () => {
+    if (!loaded) return;
     const newValue = !maintenanceMode;
     if (newValue) {
       confirmThen(
         '确认开启维护模式',
         '开启维护模式后，所有非管理员用户将无法访问网站，确定要开启吗？',
-        async () => {
-          try {
-            const res = await adminApi.adminToggleMaintenance(token, {
-              maintenance_mode: newValue,
-              maintenance_message: maintenanceMessage,
-            });
-            const data = await res.json();
-            if (data.success) {
-              setMaintenanceMode(newValue);
-              showToast(newValue ? '维护模式已开启' : '维护模式已关闭', 'success');
-            } else {
-              showToast(data.error || '操作失败', 'error');
-            }
-          } catch {
-            showToast('操作失败', 'error');
-          }
-        },
+        () => commitMaintenance(newValue),
       );
     } else {
-      try {
-        const res = await adminApi.adminToggleMaintenance(token, {
-          maintenance_mode: newValue,
-          maintenance_message: maintenanceMessage,
-        });
-        const data = await res.json();
-        if (data.success) {
-          setMaintenanceMode(newValue);
-          showToast(newValue ? '维护模式已开启' : '维护模式已关闭', 'success');
-        } else {
-          showToast(data.error || '操作失败', 'error');
-        }
-      } catch {
-        showToast('操作失败', 'error');
-      }
+      await commitMaintenance(newValue);
     }
   };
 
   const toggleTranslate = async () => {
+    if (!loaded || !status.data) return;
+    const current = status.data;
     const newValue = !translateEnabled;
-    try {
-      const res = await adminApi.adminToggleTranslate(token, { translate_enabled: newValue });
-      const data = await res.json();
-      if (data.success) {
-        setTranslateEnabled(newValue);
+    await mutation.run(() => adminApi.adminToggleTranslate(token, { translate_enabled: newValue }),
+      () => {
+        statusQuery.write(token, { ...current, translateEnabled: newValue });
         showToast(newValue ? '翻译功能已开启' : '翻译功能已关闭', 'success');
-      } else {
-        showToast(data.error || '操作失败', 'error');
-      }
-    } catch {
-      showToast('操作失败', 'error');
-    }
-  };
-
-  const syncStats = async () => {
-    confirmThen('确认同步', '确定要从原站同步最新的数据统计吗？', async () => {
-      setIsLoading(true);
-      try {
-        showToast('同步功能需要后端支持', 'warning');
-      } finally {
-        setIsLoading(false);
-      }
-    });
+        status.refresh();
+      });
   };
   return (
     <div className="space-y-6">
-      {' '}
-      <h2 className="text-title-l text-on-surface flex items-center gap-2">
-        
-        <MdBuild size={ICON.standard} /> 其他功能
-      </h2>
+      <SectionHeading icon={<MdBuild size={ICON.standard} />}>其他功能</SectionHeading>
+      {status.error && <ErrorRetry size="inline" message={status.error} onRetry={status.refresh} />}
+      {status.loading && <Skeleton className="h-20 w-full" />}
       <Card variant="filled">
         {/* `layout="row"` rather than a hand-built justify-between pair: same
             reading order, and the whole row is the label element, so clicking
@@ -132,6 +100,7 @@ export default function OtherTab({ token }: { token: string }) {
           layout="row"
           checked={maintenanceMode}
           onChange={toggleMaintenance}
+          disabled={!loaded || mutation.busy}
           label={
             <span className="flex items-center gap-2">
               <MdWarning size={ICON.control} /> 维护模式
@@ -139,19 +108,22 @@ export default function OtherTab({ token }: { token: string }) {
           }
           description="开启后，所有非管理员用户访问前台将看到全屏维护提示"
         />
-        {maintenanceMode && (
-          <div className="mt-4">
-            <label className="block text-label-l text-on-surface-variant mb-1" htmlFor="othertab-f1">
-              维护提示文字
-            </label>
+        {loaded && (
+          <div className="mt-4 space-y-3">
             <Textarea
               id="othertab-f1"
-              value={maintenanceMessage}
+              label="维护提示文字"
+              value={message}
               onChange={(e) => setMaintenanceMessage(e.target.value)}
+              disabled={!loaded || mutation.busy}
               placeholder="例如：服务器正在升级维护…"
               rows={2}
               className="resize-none"
             />
+            <Button variant="tonal" icon={<MdSave />} onClick={() => commitMaintenance(maintenanceMode)}
+              loading={mutation.busy} disabled={message === status.data?.maintenanceMessage}>
+              保存提示文字
+            </Button>
           </div>
         )}
       </Card>
@@ -160,6 +132,7 @@ export default function OtherTab({ token }: { token: string }) {
           layout="row"
           checked={translateEnabled}
           onChange={toggleTranslate}
+          disabled={!loaded || mutation.busy}
           label={
             <span className="flex items-center gap-2">
               <MdTranslate size={ICON.control} /> 图片翻译功能
@@ -169,50 +142,47 @@ export default function OtherTab({ token }: { token: string }) {
         />
       </Card>
       <Card variant="transparent">
-        {' '}
-        <h3 className="text-label-l text-on-surface mb-4 flex items-center gap-2">
-          
-          <MdBarChart size={ICON.control} /> 全站数据统计
-        </h3>
+        <SectionHeading as="h3" icon={<MdBarChart size={ICON.control} />}>全站数据统计</SectionHeading>
+        {statistics.error ? <ErrorRetry size="inline" message={statistics.error} onRetry={statistics.refresh} /> : <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
           
           <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">图片总数</div>
             <div className="text-title-l-emphasized text-primary-ink">
-              {stats.images?.toLocaleString() || 0}
+              {statistics.loading ? <Skeleton className="mx-auto h-8 w-20" /> : stats.images?.toLocaleString() || 0}
             </div>
           </div>
           <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">标签总数</div>
             <div className="text-title-l-emphasized text-primary-ink">
-              {stats.tags?.toLocaleString() || 0}
+              {statistics.loading ? <Skeleton className="mx-auto h-8 w-20" /> : stats.tags?.toLocaleString() || 0}
             </div>
           </div>
           <div className="text-center p-3 rounded-md">
             {' '}
             <div className="text-body-s text-on-surface-variant mb-1">评论总数</div>
             <div className="text-title-l-emphasized text-primary-ink">
-              {stats.comments?.toLocaleString() || 0}
+              {statistics.loading ? <Skeleton className="mx-auto h-8 w-20" /> : stats.comments?.toLocaleString() || 0}
             </div>
           </div>
         </div>
         <div className="flex items-center justify-between">
           
           <span className="text-body-m text-on-surface-variant">
-            {' '}
-            上次同步：<span className="">{stats.updated_at || '未同步'}</span>
+            上次更新：{stats.updated_at || '暂无记录'}
           </span>
           <Button
             variant="accent"
-            onClick={syncStats}
-            loading={isLoading}
-            icon={<MdSync size={ICON.dense} />}
+            onClick={statistics.refresh}
+            loading={statistics.loading}
+            icon={<MdRefresh />}
           >
-            立即同步
+            刷新统计
           </Button>
         </div>
+        </>}
       </Card>
       {confirmDialog}
     </div>

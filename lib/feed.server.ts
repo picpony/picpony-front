@@ -2,6 +2,8 @@ import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import { buildSearchQueryFrom, parseBrowsingFingerprint, parseSortField } from '@/lib/searchQuery';
 import type { ApiResponse } from '@/lib/types/image';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
+import { readBlockFilters } from '@/lib/blockFilters.server';
+import { withBlockFiltersFingerprint, type BlockFilters } from '@/lib/blockFilters';
 
 /**
  * The first page of the home feed, read on the server so `/` arrives with pictures in it; the
@@ -49,17 +51,18 @@ export interface FeedSeed {
 /**
  * A process-local memo, because every visible `<Link>` to `/` has its RSC payload prefetched and
  * rendering that payload re-runs this read — without a cache, browsing anywhere in the app
- * re-fetches the feed (see `lib/serverMemo.ts`). `next: { revalidate }` is a request, not a
- * promise: upstream `Cache-Control: no-store` can veto it. Keyed on fingerprint and sort,
- * matching the URL.
+ * reads the feed again (see `lib/serverMemo.ts`). Explicit `next: { revalidate }` retains
+ * responses despite upstream `no-store`; this memo also coalesces in-flight reads and keeps
+ * the seed's original timestamp. Keyed on fingerprint and sort, matching the URL.
  */
-export const readHomeFeed = createServerMemo({
+const read = createServerMemo({
   ttlMs: REVALIDATE_S * 1000,
   max: 8,
-  keyOf: (fp: string, sort: string) => `${sort}:1:${fp}`,
-  load: async (fp: string, sort: string): Promise<FeedSeed | null> => {
+  keyOf: (fp: string, sort: string, filters: BlockFilters) =>
+    `${sort}:1:${withBlockFiltersFingerprint(fp, filters)}`,
+  load: async (fp: string, sort: string, filters: BlockFilters): Promise<FeedSeed | null> => {
     const key = `${sort}:1:${fp}`;
-    const q = buildSearchQueryFrom(parseBrowsingFingerprint(fp));
+    const q = buildSearchQueryFrom(parseBrowsingFingerprint(fp), undefined, filters);
     /* Re-validated here, not just at the call site: this string goes into a server-side URL and
        into two cache keys, and one validator at one call site is one edit from being bypassed. */
     const field = parseSortField(sort);
@@ -83,3 +86,8 @@ export const readHomeFeed = createServerMemo({
     }
   },
 });
+
+export async function readHomeFeed(fp: string, sort: string): Promise<FeedSeed | null> {
+  const filters = await readBlockFilters();
+  return read(withBlockFiltersFingerprint(fp, filters), sort, filters);
+}

@@ -23,6 +23,7 @@ import {
   PROXY_API_BASE,
 } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
+import { installBlockFilters, parseBlockFilters, type BlockFilters } from '@/lib/blockFilters';
 
 // --- The catalogue ----------------------------------------------------------
 
@@ -68,15 +69,13 @@ interface LinePrefs {
 }
 
 function readLinePrefs(): LinePrefs {
-  if (typeof localStorage === 'undefined') {
-    return {
-      useCdn: false,
-      usePicponyProxy: true,
-      useApiAccel: true,
-      useHongKongRelay: true,
-    };
-  }
-  const ls = (k: string, def: string) => localStorage.getItem(k) ?? def;
+  const ls = (k: string, def: string) => {
+    try {
+      return typeof localStorage === 'undefined' ? def : localStorage.getItem(k) ?? def;
+    } catch {
+      return def;
+    }
+  };
   return {
     useCdn: ls(LS_KEYS.useCdn, 'false') === 'true',
     usePicponyProxy: ls(LS_KEYS.usePicponyProxy, 'true') !== 'false',
@@ -126,7 +125,11 @@ const listeners = new Set<() => void>();
 function mirrorImageLineCookie() {
   if (typeof document === 'undefined') return;
   const line = resolveImageLine();
-  document.cookie = `${COOKIE_KEYS.imageLine}=${line};path=/;max-age=${IMAGE_LINE_COOKIE_MAX_AGE};samesite=lax`;
+  try {
+    document.cookie = `${COOKIE_KEYS.imageLine}=${line};path=/;max-age=${IMAGE_LINE_COOKIE_MAX_AGE};samesite=lax`;
+  } catch {
+    /* A blocked cookie must not prevent the request policy from becoming ready. */
+  }
 }
 
 /** A year, matching the appearance cookies. */
@@ -208,6 +211,7 @@ function applyRoutePolicy(status: SiteStatusResponse) {
 }
 
 let ready: Promise<void> | null = null;
+let policyReadGeneration = 0;
 
 /** Where the server left the policy, if the server read one. Inlined by `app/layout.tsx` as a
  *  head script, so it is in force before the first effect in the tree runs. */
@@ -218,6 +222,7 @@ declare global {
       image?: string;
       thirdPartyUrl?: string;
       thirdPartyPassApiKey?: boolean;
+      blockFilters?: BlockFilters;
     };
   }
 }
@@ -245,6 +250,8 @@ function adoptInlinePolicy(): Promise<void> | null {
   if (typeof window === 'undefined') return null;
   const inline = window.__picponyRoutePolicy;
   if (!inline) return null;
+  if (inline.blockFilters) installBlockFilters(inline.blockFilters);
+  if (!inline.api) return null;
   applyRoutePolicy({
     success: true,
     global_api_route_policy: inline.api,
@@ -266,21 +273,29 @@ export function refreshRoutePolicy(): Promise<void> {
 
 async function loadRoutePolicy(): Promise<void> {
   if (typeof window === 'undefined') return;
+  const generation = ++policyReadGeneration;
   try {
     /* No `Authorization` header: the four route fields are served to anyone, and sending one
        would mean reaching into `lib/hooks.ts` — a `'use client'` module — from the request layer. */
-    const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`, {
-      cache: 'no-store',
-    });
-    const data = JSON.parse(await res.text()) as SiteStatusResponse;
-    if (data?.success) applyRoutePolicy(data);
+    const inlineFilters = window.__picponyRoutePolicy?.blockFilters;
+    const [data, filters] = await Promise.all([
+      fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`, {
+        cache: 'no-store', signal: AbortSignal.timeout(10_000),
+      }).then(async (response) => response.ok ? await response.json() as SiteStatusResponse : null).catch(() => null),
+      inlineFilters ? Promise.resolve(inlineFilters) :
+        fetch(`${PICPONY_API_BASE}?action=get_block_tags`, {
+          cache: 'no-store', signal: AbortSignal.timeout(10_000),
+        }).then(async (response) => response.ok ? parseBlockFilters(await response.json()) : null).catch(() => null),
+    ]);
+    if (filters && generation === policyReadGeneration) installBlockFilters(filters);
+    if (data?.success && generation === policyReadGeneration) applyRoutePolicy(data);
   } catch {
     /* Offline, an HTML error page, a renamed action — all mean "no policy", which is what the
        defaults already say. Swallowed rather than logged loudly; this runs on every cold load. */
   }
   /* Unconditional, so the failure path still brings the runtime line into step with what the
      device has stored; the emit also wakes /settings. */
-  syncLinePrefs();
+  if (generation === policyReadGeneration) syncLinePrefs();
 }
 
 // --- Resolution -------------------------------------------------------------
@@ -361,8 +376,8 @@ export function currentLineLabels() {
 
 /** Read inline rather than through `readUserInfo`, to keep `lib/hooks.ts` out of here. */
 function currentUsername(): string {
-  if (typeof localStorage === 'undefined') return '';
   try {
+    if (typeof localStorage === 'undefined') return '';
     const raw = localStorage.getItem(LS_KEYS.userInfo);
     if (!raw) return '';
     const info = JSON.parse(raw) as { username?: string };

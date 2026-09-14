@@ -22,12 +22,14 @@ import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import IconButton from '@/components/IconButton';
 import Chip from '@/components/Chip';
-import { readToken, useEscapeBack } from '@/lib/hooks';
+import { readToken, useEscapeBack, useSession } from '@/lib/hooks';
 import SectionHeading from '@/components/SectionHeading';
 import Popover from '@/components/Popover';
 import { ICON } from '@/lib/icons';
 import { useResource, SKIP } from '@/lib/resource';
-import { searchFeed } from '@/lib/resources';
+import { browsingFingerprint, searchFeed, syncBrowsingCookie } from '@/lib/resources';
+import { LS_KEYS } from '@/lib/constants';
+import { searchHref, searchPage, searchSort } from '@/lib/searchState';
 
 interface DictionaryEntry {
   id: number;
@@ -82,17 +84,58 @@ function SearchPageContent() {
   const q = searchParams.get('q') || '';
   const sortParam = searchParams.get('sort') || '';
   const dirParam = searchParams.get('dir') || '';
-  const defaultSort =
-    typeof window !== 'undefined'
-      ? window.localStorage.getItem('picpony_default_search_sort') || 'created_at'
-      : 'created_at';
-
+  const { token } = useSession();
+  const [defaultSort, setDefaultSort] = useState('created_at');
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const [, updatePreferences] = useState(0);
+  const lastPreferences = useRef<{ fp: string; sort: string } | null>(null);
   const [inputValue, setInputValue] = useState(q);
-  const [page, setPage] = useState(1);
+  const page = searchPage(searchParams.get('page'));
   const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
   const [customResults, setCustomResults] = useState<PonyImage[] | null>(null);
-  const [sortBy, setSortBy] = useState(sortParam || defaultSort);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>((dirParam as 'asc' | 'desc') || 'desc');
+  const sortBy = searchSort(sortParam, defaultSort);
+  const sortDir: 'asc' | 'desc' = dirParam === 'asc' ? 'asc' : 'desc';
+  useEffect(() => {
+    let current = true;
+    const update = () => {
+      if (!current) return;
+      let nextSort = 'created_at';
+      try {
+        nextSort = searchSort(localStorage.getItem(LS_KEYS.searchSort));
+      } catch {
+        // Storage can be disabled; searching still works with the default order.
+      }
+      const nextFp = browsingFingerprint();
+      const previous = lastPreferences.current;
+      const changed = previous !== null && (previous.fp !== nextFp || previous.sort !== nextSort);
+      lastPreferences.current = { fp: nextFp, sort: nextSort };
+      if (changed) {
+        updatePreferences((version) => version + 1);
+        // A background search cannot rewrite an open picture's history entry.
+        if (window.location.pathname === '/search') {
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('page')) {
+            params.delete('page');
+            window.history.replaceState(null, '', `/search?${params.toString()}`);
+          }
+        }
+      }
+      setDefaultSort(nextSort);
+      syncBrowsingCookie();
+      setPreferencesReady(true);
+    };
+    queueMicrotask(update);
+    window.addEventListener('settings_updated', update);
+    window.addEventListener('storage', update);
+    return () => {
+      current = false;
+      window.removeEventListener('settings_updated', update);
+      window.removeEventListener('storage', update);
+    };
+  }, []);
+  const commitSearch = useCallback((query: string, sort: string, direction: 'asc' | 'desc', nextPage = 1) => {
+    window.history.pushState(null, '', searchHref(query, sort, direction, nextPage));
+  }, []);
 
   /* `SKIP` covers the two states with nothing to ask for: an empty query, and a 以图搜图
      result already on screen (from a different endpoint entirely, held in
@@ -104,8 +147,8 @@ function SearchPageContent() {
      position to the collapsed height. */
   const read = useResource(
     searchFeed,
-    q && !customResults
-      ? { query: q, page, sortField: sortBy === 'random' ? undefined : sortBy, sortDir }
+    preferencesReady && q && !customResults
+      ? { query: q, page, sortField: sortBy, sortDir }
       : SKIP,
     { keepPrevious: true },
   );
@@ -154,8 +197,7 @@ function SearchPageContent() {
     }
     setInputValue(newQuery);
     setCustomResults(null);
-    setPage(1);
-    router.push(`/search?q=${encodeURIComponent(newQuery)}`, { scroll: false });
+    commitSearch(newQuery, sortBy, sortDir);
   }, [
     advUpvoteOp,
     advUpvoteVal,
@@ -165,10 +207,12 @@ function SearchPageContent() {
     advMedia,
     advTime,
     inputValue,
-    router,
+    commitSearch,
+    sortBy,
+    sortDir,
+    setInputValue,
+    setCustomResults,
   ]);
-
-  const tokenRef = useRef<string | null>(null);
   const [tagInfo, setTagInfo] = useState<{ data: DictionaryEntry | null; loading: boolean }>({
     data: null,
     loading: false,
@@ -193,10 +237,21 @@ function SearchPageContent() {
   });
   const acTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const acReqIdRef = useRef(0);
+  const closeSuggestions = useCallback(() => {
+    clearTimeout(acTimerRef.current);
+    acReqIdRef.current += 1;
+    setShowSuggestions(false);
+  }, []);
+  useEffect(() => () => {
+    clearTimeout(acTimerRef.current);
+    acReqIdRef.current += 1;
+  }, []);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInputValue(val);
+    closeSuggestions();
+    const reqId = acReqIdRef.current;
 
     const cursorPos = e.target.selectionStart || 0;
     const separators = /(?:,|，| OR | AND |\|\||&&|\n)/gi;
@@ -222,17 +277,14 @@ function SearchPageContent() {
       return;
     }
 
-    clearTimeout(acTimerRef.current);
     acTimerRef.current = setTimeout(async () => {
-      const reqId = Date.now();
-      acReqIdRef.current = reqId;
       const cleanTag = currentTag.replace(/["()[\]{}*]/g, '');
-      const token = tokenRef.current;
+      const token = readToken();
       if (!token) return;
 
       try {
         const res = await api.getDictionary(token, { keyword: cleanTag, limit: 10 });
-        if (reqId !== acReqIdRef.current) return;
+        if (reqId !== acReqIdRef.current || readToken() !== token) return;
         if (res.success && res.tags) {
           setSuggestions(res.tags);
           setShowSuggestions(res.tags.length > 0);
@@ -244,7 +296,7 @@ function SearchPageContent() {
         if (reqId === acReqIdRef.current) setShowSuggestions(false);
       }
     }, 300);
-  }, []);
+  }, [closeSuggestions, setInputValue]);
 
   const selectSuggestion = useCallback(
     (tag: DictionaryEntry) => {
@@ -255,22 +307,10 @@ function SearchPageContent() {
       const insertComma = after.trim() === '' ? ',' : '';
       const newVal = before + replacement + insertComma + after;
       setInputValue(newVal);
-      setShowSuggestions(false);
+      closeSuggestions();
     },
-    [inputValue],
+    [inputValue, closeSuggestions, setInputValue],
   );
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (inputWrapRef.current && !inputWrapRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   /* Back leaves for the gallery, not for whatever page happened to be before this one.
      `history.back()` contradicts the space the transitions describe: /search sits
@@ -286,12 +326,11 @@ function SearchPageContent() {
     }
     if (q || inputValue) {
       setInputValue('');
-      setPage(1);
       router.push('/search', { scroll: false });
       return;
     }
     router.push('/', { scroll: false });
-  }, [customResults, inputValue, q, router]);
+  }, [customResults, inputValue, q, router, setCustomResults, setInputValue]);
 
   /* Escape leaves the page — but only once nothing nearer owns the key. The suggestion
      list closes on Escape first (below), and the image-search dialog handles its own,
@@ -306,13 +345,14 @@ function SearchPageContent() {
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.nativeEvent.isComposing) return;
       if (!showSuggestions || suggestions.length === 0) return;
       if (e.key === 'Escape') {
         /* The list owns Escape while it is open. Moved here from a document listener so
            the ordering against `useEscapeBack` is structural rather than a matter of
            which listener registered first. */
         e.preventDefault();
-        setShowSuggestions(false);
+        closeSuggestions();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         setAcCursor((prev) => Math.min(prev + 1, suggestions.length - 1));
@@ -326,18 +366,16 @@ function SearchPageContent() {
         }
       }
     },
-    [showSuggestions, suggestions, acCursor, selectSuggestion],
+    [showSuggestions, suggestions, acCursor, selectSuggestion, closeSuggestions],
   );
 
   useEffect(() => {
     queueMicrotask(() => {
       setInputValue(q);
+      setCustomResults(null);
+      closeSuggestions();
     });
-  }, [q]);
-
-  useEffect(() => {
-    tokenRef.current = readToken();
-  }, []);
+  }, [q, closeSuggestions]);
 
   /* The fetch, the `isMounted` flag and the four `setState`s that used to live here are
      `useResource`'s now — see `read` above. Wiring `searchFeed` (previously unreferenced)
@@ -355,7 +393,6 @@ function SearchPageContent() {
 
     queueMicrotask(() => setTagInfo({ data: null, loading: true }));
 
-    const token = tokenRef.current;
     if (!token) {
       queueMicrotask(() => setTagInfo({ data: null, loading: false }));
       return;
@@ -383,7 +420,7 @@ function SearchPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [q]);
+  }, [q, token]);
 
   const handleSearch = useCallback(
     (e: React.FormEvent) => {
@@ -394,25 +431,23 @@ function SearchPageContent() {
           .replace(/，/g, ',')
           .replace(/[,，]+$/g, '');
         setCustomResults(null);
-        setPage(1);
-        const sortParam =
-          sortBy !== 'created_at' || sortDir !== 'desc' ? `&sort=${sortBy}&dir=${sortDir}` : '';
-        router.push(`/search?q=${encodeURIComponent(formattedQuery)}${sortParam}`, { scroll: false });
+        closeSuggestions();
+        commitSearch(formattedQuery, sortBy, sortDir);
       } else {
         router.push('/', { scroll: false });
       }
     },
-    [inputValue, router, sortBy, sortDir],
+    [inputValue, router, sortBy, sortDir, closeSuggestions, commitSearch, setCustomResults],
   );
 
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1) {
       /* Only the page number: changing it changes the key, which is the signal
          `useResource` reads — the loading/error clearing is the resource's now. */
-      setPage(newPage);
+      commitSearch(q, sortBy, sortDir, newPage);
       // <Pagination> scrolls the shell's real scroll container back to the top.
     }
-  }, []);
+  }, [q, sortBy, sortDir, commitSearch]);
 
   const handleImageSearchSuccess = (results: PonyImage[]) => {
     setCustomResults(results);
@@ -493,7 +528,7 @@ function SearchPageContent() {
                   by portalling rather than relying on this wrapper. */}
               <Popover
                 open={acOpen}
-                onClose={() => setShowSuggestions(false)}
+                 onClose={closeSuggestions}
                 anchorRef={inputWrapRef}
                 id={acListboxId}
                 role="listbox"
@@ -503,12 +538,13 @@ function SearchPageContent() {
                 {suggestions.map((tag, i) => (
                       <button
                         key={tag.id}
-                        type="button"
+                         type="button"
+                         tabIndex={-1}
                         id={acOptionId(i)}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          selectSuggestion(tag);
-                        }}
+                         onMouseDown={(e) => {
+                           e.preventDefault();
+                         }}
+                         onClick={() => selectSuggestion(tag)}
                         onMouseEnter={() => setAcCursor(i)}
                         role="option"
                         aria-selected={i === acCursor}
@@ -635,7 +671,6 @@ function SearchPageContent() {
             title="搜索失败"
             message={
               (error as { status?: number }).status == 429 ||
-              error.message === 'Failed to fetch' ||
               error.message === 'Too Many Requests'
                 ? '您的请求次数过快，超出原站限制'
                 : `${(error as { status?: number }).status ? `HTTP Error ${(error as { status?: number }).status}: ` : ''}${error.message}`
@@ -666,7 +701,7 @@ function SearchPageContent() {
                   searchFeed.prefetch({
                     query: q,
                     page: next,
-                    sortField: sortBy === 'random' ? undefined : sortBy,
+                    sortField: sortBy,
                     sortDir,
                   })
                 }
@@ -678,13 +713,13 @@ function SearchPageContent() {
                 <Select
                   value={sortBy}
                   onChange={(v) => {
-                    setSortBy(v);
-                    setPage(1);
+                    commitSearch(q, v, sortDir);
                   }}
                   size="sm"
                   aria-label="排序方式"
                   options={[
-                    { value: 'created_at', label: '上传时间' },
+                     { value: 'created_at', label: '上传时间' },
+                     { value: 'updated_at', label: '更新时间' },
                     { value: 'score', label: '评分高低' },
                     { value: 'relevance', label: '相关性' },
                     { value: 'wilson_score', label: 'Wilson 评分' },
@@ -696,7 +731,7 @@ function SearchPageContent() {
                   ]}
                 />
                 {sortBy !== 'random' && (
-                  <Button variant="tonal" size="xs" onClick={() => setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'))} data-ripple>
+                  <Button variant="tonal" size="xs" onClick={() => commitSearch(q, sortBy, sortDir === 'desc' ? 'asc' : 'desc')} data-ripple>
                     {/* A fade, not a glyph spin-in: that keyframe (90° rotation, 0.6
                         scale on the expressive spring) is built for a *glyph*, and text
                         tumbling into place reads as a rendering fault. The arrow already
@@ -711,7 +746,7 @@ function SearchPageContent() {
                     enter without one, so a third entrance here had the row arriving in
                     instalments. */}
                 {(sortParam || sortBy !== defaultSort || sortDir !== 'desc') && (
-                  <Button variant="tonal" size="xs" onClick={() => { setSortBy(defaultSort); setSortDir('desc'); setPage(1); }} data-ripple>
+                  <Button variant="tonal" size="xs" onClick={() => commitSearch(q, defaultSort, 'desc')} data-ripple>
                     重置排序
                   </Button>
                 )}
@@ -735,6 +770,7 @@ function SearchPageContent() {
             {/* Advanced search panel */}
             {q && (
               <div
+                inert={!showAdvanced}
                 /* The drawer's springs, per direction — `DefaultSpatial` opening,
                    `FastEffects` closing, per `NavigationDrawer.kt`. The last of the app's
                    collapsible panels still on a one-sided 200/300ms curve, which dropped
@@ -772,6 +808,8 @@ function SearchPageContent() {
                           />
                           <Input
                             type="number"
+                            aria-label="点赞数"
+                            size="sm"
                             value={advUpvoteVal}
                             onChange={(e) => setAdvUpvoteVal(e.target.value)}
                             placeholder="例如 100"
@@ -797,6 +835,8 @@ function SearchPageContent() {
                           />
                           <Input
                             type="number"
+                            aria-label="净得分"
+                            size="sm"
                             value={advScoreVal}
                             onChange={(e) => setAdvScoreVal(e.target.value)}
                             placeholder="例如 50"

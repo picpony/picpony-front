@@ -7,52 +7,43 @@
  * supplies `getBrowsingSettings()`): one copy of the rules, two input sources.
  */
 
+import { DEFAULT_BLOCK_FILTERS, withBlockFiltersFingerprint, type BlockFilters } from '@/lib/blockFilters';
+
 export interface QuerySettings {
   contentFilter: string;
   banAnthro: boolean;
+  banDiscomfort?: boolean;
   onlyPony: boolean;
   /** Already trimmed and lower-cased by the caller. */
   hiddenTags: string[];
 }
 
-/**
- * Note what is *not* an input: `banDiscomfort` — part of the browsing fingerprint
- * (so it still partitions the cache) but never part of the query; it is applied
- * elsewhere.
- */
-export function buildSearchQueryFrom(s: QuerySettings, search?: string): string {
-  let tags = '';
+/** Damaged preferences and unrecognised cookie values must keep the safe filter. */
+export function parseContentFilter(raw: unknown): 'safe' | 'spoilers' | 'developer' {
+  return raw === 'spoilers' || raw === 'developer' ? raw : 'safe';
+}
 
-  if (s.contentFilter !== 'developer') {
-    switch (s.contentFilter) {
-      case 'safe':
-        tags = '-suggestive, -explicit, -questionable, -grotesque, -grimdark';
-        break;
-      case 'spoilers':
-        tags = '-explicit, -questionable, -grotesque, -grimdark';
-        break;
-    }
-  }
+/** Escape a backend/admin tag before embedding it in Philomena's query grammar. */
+function escapeTag(tag: string): string {
+  return tag.replace(/([+\-=&|><!(){}[\]^"~*?:\\/\s])/g, '\\$1');
+}
 
-  if (s.banAnthro) {
-    tags = tags ? `${tags}, -anthro, -humanized` : '-anthro, -humanized';
+export function buildSearchQueryFrom(s: QuerySettings, search?: string, filters: BlockFilters = DEFAULT_BLOCK_FILTERS): string {
+  const contentFilter = parseContentFilter(s.contentFilter);
+  const excluded = new Set<string>(contentFilter === 'developer' ? [] : filters[contentFilter]);
+  if (s.banAnthro) for (const tag of filters.banAnthro) excluded.add(tag);
+  if (s.banDiscomfort !== false) for (const tag of filters.banDiscomfort) excluded.add(tag);
+  for (const tag of s.hiddenTags) if (tag) excluded.add(tag);
+  const constraints = [...excluded].map((tag) => `-${escapeTag(tag)}`);
+  if (s.onlyPony && filters.onlyPony.length) {
+    constraints.push(`(${filters.onlyPony.map(escapeTag).join(' OR ')})`);
   }
-
-  if (s.onlyPony) {
-    tags = tags ? `${tags}, pony` : 'pony';
-  }
-
-  const blockNegations = s.hiddenTags.filter(Boolean).map((t) => `-${t}`);
-  if (blockNegations.length > 0) {
-    tags = tags ? `${tags}, ${blockNegations.join(', ')}` : blockNegations.join(', ');
-  }
-
-  if (!tags && s.contentFilter !== 'developer') {
-    tags = '-suggestive, -explicit, -questionable, -grotesque, -grimdark, pony';
-  }
+  let tags = constraints.join(', ');
 
   if (search) {
-    tags = tags ? `${search}, ${tags}` : search;
+    /* OR belongs to the user's query, while the device filters apply to the whole query.
+       Without grouping, `a OR b, -explicit` only constrains the right-hand branch. */
+    tags = tags ? `(${search}), ${tags}` : search;
   }
 
   /* Developer mode with no extra filter leaves an empty keyword, which Derpibooru
@@ -70,7 +61,7 @@ export function buildSearchQueryFrom(s: QuerySettings, search?: string): string 
  * server keys a first-time visitor's feed on `''` while their browser keys the identical query
  * on `safe|-|d|-|` and the seed does not apply.
  */
-export const DEFAULT_BROWSING_FINGERPRINT = 'safe|-|d|-|';
+export const DEFAULT_BROWSING_FINGERPRINT = withBlockFiltersFingerprint('safe|-|d|-|', DEFAULT_BLOCK_FILTERS);
 
 /**
  * The six sort fields the UI offers, and the only ones allowed to reach an upstream
@@ -113,10 +104,11 @@ export function parseFingerprintCookie(raw: string | undefined): string {
  * defaults — what a visitor who has never opened /settings has anyway.
  */
 export function parseBrowsingFingerprint(raw: string | undefined): QuerySettings {
-  const [contentFilter = 'safe', anthro = '-', , pony = '-', hidden = ''] = (raw ?? '').split('|');
+  const [contentFilter = 'safe', anthro = '-', discomfort = 'd', pony = '-', hidden = ''] = (raw ?? '').split('|');
   return {
-    contentFilter,
+    contentFilter: parseContentFilter(contentFilter),
     banAnthro: anthro === 'a',
+    banDiscomfort: discomfort === 'd',
     onlyPony: pony === 'p',
     hiddenTags: hidden ? hidden.split(',').filter(Boolean) : [],
   };

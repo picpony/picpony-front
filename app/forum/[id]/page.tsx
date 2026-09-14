@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { api, ForumPostDetail } from '@/lib/api';
 import {
   MdErrorOutline,
@@ -32,7 +32,8 @@ import RoleBadge from '@/components/RoleBadge';
 import Avatar from '@/components/Avatar';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import { readUserInfo, useEscapeBack } from '@/lib/hooks';
+import { readToken, readUserInfo, useEscapeBack, useSession } from '@/lib/hooks';
+import { searchPage } from '@/lib/searchState';
 import { useAuthModal } from '@/components/AuthModal';
 import { readForumOrigin, playForumContainerTransform } from '@/lib/forumTransition';
 import { scrollAppToElement } from '@/lib/scrollTo';
@@ -49,9 +50,7 @@ export default function ForumPostPage() {
   const { openAuth } = useAuthModal();
   const id = params.id as string;
   const pageParam = searchParams.get('page');
-  const initialPage = pageParam ? parseInt(pageParam, 10) : 1;
-
-  const [page, setPage] = useState(initialPage);
+  const page = searchPage(pageParam);
 
   /* The thread comes from the resource layer, which is what makes the hover prefetch in
      `lib/prefetchRoute.ts` worth anything: it warmed `forumThread` while this screen fetched
@@ -73,7 +72,10 @@ export default function ForumPostPage() {
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { token, ready } = useSession();
+  const isLoggedIn = Boolean(token);
+  const likePending = useRef(false);
+  const submitPending = useRef(false);
   /* The like is read from the cached thread and written back to it, so it survives a
      remount and cannot disagree with the list the resource is holding. */
   const isLiked = post?.is_liked === 1;
@@ -99,34 +101,32 @@ export default function ForumPostPage() {
     text: string;
   } | null>(null);
 
-  useEffect(() => {
-    const checkLoginStatus = () => setIsLoggedIn(Boolean(readUserInfo()));
-
-    checkLoginStatus();
-    window.addEventListener('user_info_updated', checkLoginStatus);
-    return () => window.removeEventListener('user_info_updated', checkLoginStatus);
-  }, []);
-
   /* The fetch, the `isMounted` flag, the `retryCount` and the four `setState`s that used to
      live here are all `useResource`'s now — including cancellation on unmount and dedup
      against the hover prefetch that may already have this exact key in flight. */
 
   const handleToggleLike = useCallback(async () => {
+    if (likePending.current) return;
     const userInfo = readUserInfo();
     if (!userInfo) {
       setSubmitError('请先登录');
       return;
     }
+    likePending.current = true;
     setIsLikeLoading(true);
     try {
       const res = await api.toggleForumPostLike(userInfo.token, parseInt(id));
       const data = await res.json();
+      if (readToken() !== userInfo.token) return;
       if (data.success) {
         patchPost({ is_liked: data.is_liked, like_count: data.like_count });
+      } else {
+        showToast(data.error || data.message || '点赞失败', 'error');
       }
     } catch (err) {
       console.error('Toggle like error:', err);
     } finally {
+      likePending.current = false;
       setIsLikeLoading(false);
     }
   }, [id, patchPost]);
@@ -212,15 +212,14 @@ export default function ForumPostPage() {
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (newPage >= 1 && newPage <= totalPages) {
-        setPage(newPage);
-        router.push(`/forum/${id}?page=${newPage}`, { scroll: false });
+        window.history.pushState(null, '', `/forum/${id}?page=${newPage}`);
       }
     },
-    [id, totalPages, router],
+    [id, totalPages],
   );
 
   const handleSubmitComment = useCallback(async () => {
-    if (!newComment.trim() || isSubmitting) return;
+    if (!newComment.trim() || submitPending.current) return;
 
     const userInfo = readUserInfo();
     if (!userInfo) {
@@ -229,6 +228,7 @@ export default function ForumPostPage() {
     }
 
     try {
+      submitPending.current = true;
       setIsSubmitting(true);
       setSubmitError(null);
 
@@ -251,6 +251,7 @@ export default function ForumPostPage() {
         replyTo?.commentId,
       );
       const data = await res.json();
+      if (readToken() !== userInfo.token) return;
 
       if (data.success) {
         setNewComment('');
@@ -260,12 +261,14 @@ export default function ForumPostPage() {
         setSubmitError(data.message || '发送评论失败');
       }
     } catch (err) {
+      if (readToken() !== userInfo.token) return;
       setSubmitError('发送评论失败，请稍后重试');
       console.error('Failed to submit comment:', err);
     } finally {
+      submitPending.current = false;
       setIsSubmitting(false);
     }
-  }, [id, newComment, isSubmitting, replyTo, read]);
+  }, [id, newComment, replyTo, read]);
 
   /* The loading state is the destination's own layout, not a separate page:
      same wrapper, same back button, same card, so React reuses those DOM nodes
@@ -331,7 +334,7 @@ export default function ForumPostPage() {
             characters — wraps one character per line. */}
             <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-outline-variant pb-4">
               <div className="flex min-w-0 items-center gap-3">
-                <Link scroll={false} href={`/user/${post.user_id}`} className="shrink-0">
+                <Link scroll={false} href={`/user/${post.user_id}`} aria-label={`查看 ${post.username} 的个人资料`} className="shrink-0">
                   {/* `Avatar`. Every avatar in the forum section fell back to
                       `/img/default-avatar.png`, and that file does not exist —
                       `public/img/` holds only the emoji folder and the two
@@ -539,7 +542,7 @@ export default function ForumPostPage() {
         {/* Comment Input */}
         <Card id="comment-input-area" variant="filled" padding="lg" className="mb-8">
           <SectionHeading as="h3">发表回复</SectionHeading>
-          {!isLoggedIn ? (
+          {!ready ? <Skeleton className="h-28 w-full" /> : !isLoggedIn ? (
             /* `EmptyState`, which takes an action for exactly this. The
                hand-rolled block was a centred paragraph in a bordered div — the
                sixteenth silhouette for "there is nothing here for you", in a

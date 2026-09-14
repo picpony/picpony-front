@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { showToast } from '@/components/Toast';
 import DataTable, { type Column } from '@/components/DataTable';
 import { MdBlock, MdAdd, MdOpenInNew } from 'react-icons/md';
@@ -12,6 +12,9 @@ import { ICON } from '@/lib/icons';
 /* Namespace import, deliberately: `api` is a runtime spread and
    un-tree-shakeable, so only these admin tabs may import `lib/api/admin`. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { readToken } from '@/lib/hooks';
+import { useAdminMutation } from './useAdminMutation';
 
 interface BlacklistItem {
   image_id: number;
@@ -21,41 +24,25 @@ interface BlacklistItem {
 
 /** Built per render — the array is five literals and `DataTable` doesn't memoise. */
 
+const emptyBlacklist: BlacklistItem[] = [];
+const blacklistQuery = defineAdminQuery<BlacklistItem[]>('blacklist', async (token, signal) => {
+  const data = await adminApi.adminGetBlacklist(token, signal);
+  return adminData(data, data.blacklist || []);
+});
+
 export default function BlacklistTab({ token }: { token: string }) {
-  const [blacklist, setBlacklist] = useState<BlacklistItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const mutation = useAdminMutation(token);
+  const read = useAdminQuery(blacklistQuery, token);
+  const blacklist = read.data ?? emptyBlacklist;
+  const isLoading = read.loading;
+  const loadBlacklist = read.refresh;
+  const addingRef = useRef(false);
+  const [adding, setAdding] = useState(false);
   const [searchKw, setSearchKw] = useState('');
   const [imageId, setImageId] = useState('');
   const [reason, setReason] = useState('');
 
   const { confirmThen, confirmDialog } = useConfirm();
-
-  const loadBlacklist = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await adminApi.adminGetBlacklist(token);
-      if (data.success) {
-        setBlacklist(data.blacklist || []);
-      }
-    } catch {
-      showToast('黑名单加载失败', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    adminApi
-      .adminGetBlacklist(token)
-      .then((data) => {
-        if (data.success) {
-          setBlacklist(data.blacklist || []);
-        }
-      })
-      .catch(() => showToast('黑名单加载失败', 'error'))
-      .finally(() => setIsLoading(false));
-  }, [token]);
 
   const filteredBlacklist = useMemo(() => {
     if (!searchKw) return blacklist;
@@ -66,13 +53,18 @@ export default function BlacklistTab({ token }: { token: string }) {
   }, [searchKw, blacklist]);
 
   const addBlacklist = async () => {
-    if (!imageId) {
-      showToast('请输入图片 ID', 'error');
+    if (addingRef.current || readToken() !== token) return;
+    const id = Number(imageId);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      showToast('请输入有效的图片 ID', 'error');
       return;
     }
+    addingRef.current = true;
+    setAdding(true);
     try {
-      const res = await adminApi.adminAddBlacklist(token, parseInt(imageId), reason);
+      const res = await adminApi.adminAddBlacklist(token, id, reason);
       const data = await res.json();
+      if (readToken() !== token) return;
       if (data.success) {
         showToast('已添加屏蔽', 'success');
         setImageId('');
@@ -83,23 +75,19 @@ export default function BlacklistTab({ token }: { token: string }) {
       }
     } catch {
       showToast('添加失败', 'error');
+    } finally {
+      addingRef.current = false;
+      setAdding(false);
     }
   };
 
   const removeBlacklist = async (id: number) => {
     confirmThen('确认解除屏蔽', `确定要解除对图片 #${id} 的屏蔽吗？`, async () => {
-      try {
-        const res = await adminApi.adminRemoveBlacklist(token, id);
-        const data = await res.json();
-        if (data.success) {
+      await mutation.run(() => adminApi.adminRemoveBlacklist(token, id), () => {
+          blacklistQuery.write(token, (previous) => previous?.filter((item) => item.image_id !== id) ?? []);
           showToast('已解除屏蔽', 'success');
           loadBlacklist();
-        } else {
-          showToast(data.error || '解除失败', 'error');
-        }
-      } catch {
-        showToast('解除失败', 'error');
-      }
+        }, '解除失败');
     });
   };
 
@@ -135,7 +123,7 @@ export default function BlacklistTab({ token }: { token: string }) {
       header: '操作',
       actions: true,
       render: (item) => (
-        <Button variant="success" size="xs" onClick={() => removeBlacklist(item.image_id)} data-ripple>
+        <Button variant="success" size="xs" disabled={mutation.busy || adding} onClick={() => removeBlacklist(item.image_id)} data-ripple>
           解除屏蔽
         </Button>
       ),
@@ -173,7 +161,7 @@ export default function BlacklistTab({ token }: { token: string }) {
             />
           </div>
           <div className="flex items-end">
-            <Button icon={<MdAdd size={ICON.dense} />} variant="danger" onClick={addBlacklist}>
+            <Button icon={<MdAdd size={ICON.dense} />} variant="danger" onClick={addBlacklist} loading={adding}>
               强制屏蔽
             </Button>
           </div>
@@ -187,6 +175,8 @@ export default function BlacklistTab({ token }: { token: string }) {
         rows={filteredBlacklist}
         rowKey={(item) => item.image_id}
         loading={isLoading}
+        error={read.error}
+        onRetry={loadBlacklist}
         empty="暂无屏蔽记录"
       />
 

@@ -12,6 +12,24 @@
 
 const ORIGIN = 'https://derpicdn.net/img/2024/1/1';
 
+/** Public get_block_tags wire shape verified 2026-09-12: flat rows plus grouped rows.
+ * Keep this fixture independent of the implementation so reading `tags` as a dictionary fails. */
+export function blockFiltersEnvelope() {
+  const rules = {
+    safe: ['explicit', 'questionable', 'suggestive', 'grotesque', 'grimdark', 'spoiler', 'islamic state', 'politics', 'semi-grimdark'],
+    spoilers: ['explicit', 'questionable', 'grotesque', 'grimdark', 'islamic state'],
+    banAnthro: ['anthro', 'humanized', 'morbidly obese'],
+    banDiscomfort: ['overweight', 'obese', 'obesity', 'nightmare fuel', 'politics', 'watersports', 'poofy diaper'],
+    onlyPony: ['pony', 'kirin', 'griffon', 'hippogriff', 'changeling', 'zebra'],
+  };
+  let id = 0;
+  const tags = Object.entries(rules).flatMap(([filter_key, names]) => names.map((tag_name) => ({
+    id: ++id, filter_key, tag_name, created_at: '2026-09-12 00:00:00',
+  })));
+  const grouped = Object.fromEntries(Object.keys(rules).map((key) => [key, tags.filter((tag) => tag.filter_key === key)]));
+  return { success: true, tags, grouped };
+}
+
 /** One plausible Derpibooru image. Wide by default, so the masonry grid lays out as it would. */
 export function image(id, { width = 1600, height = 1200 } = {}) {
   const stem = `${ORIGIN}/${id}`;
@@ -105,6 +123,7 @@ const user = (id) => ({
  * non-error shape keeps a new screen's request visible in the ledger.
  */
 const PICPONY = {
+  get_block_tags: blockFiltersEnvelope,
   /* `auto` on both axes — what an administrator who has pinned nothing leaves. */
   get_maintenance_status: () => ({
     success: true,

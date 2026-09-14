@@ -1,4 +1,6 @@
 import type { NextRequest } from 'next/server';
+import { revalidateTag } from 'next/cache';
+import { BLOCK_FILTERS_CACHE_TAG, clearBlockFiltersMemo } from '@/lib/blockFilters.server';
 
 /**
  * Reverse proxy for the PicPony PHP backend.
@@ -55,8 +57,14 @@ const SKIP_RESPONSE_HEADERS = new Set([
   'keep-alive',
   'transfer-encoding',
   'upgrade',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
   'content-encoding',
   'content-length',
+  'cdn-cache-control',
+  'vercel-cdn-cache-control',
 ]);
 
 /** True when the *browser* spoke HTTPS, honouring a proxy in front of us. */
@@ -84,28 +92,40 @@ async function proxy(
   context: { params: Promise<{ path?: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params;
+  /* A decoded catch-all segment must stay a segment. URL normalisation removes dots and
+     upstream servers may decode escaped separators again, escaping the /api.php namespace. */
+  if (path?.some((part) => part === '.' || part === '..' || /[/\\%\u0000-\u001f\u007f]/.test(part))) {
+    return Response.json({ success: false, message: '接口路径无效' }, { status: 400 });
+  }
   const suffix = path?.length ? `/${path.map(encodeURIComponent).join('/')}` : '';
   const target = new URL(`${UPSTREAM_PATH}${suffix}`, UPSTREAM_ORIGIN);
   target.search = request.nextUrl.search;
 
   const headers = new Headers();
+  const connectionHeaders = new Set(
+    request.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
+  );
   request.headers.forEach((value, key) => {
-    if (!SKIP_REQUEST_HEADERS.has(key)) headers.set(key, value);
+    if (!SKIP_REQUEST_HEADERS.has(key) && !connectionHeaders.has(key)) headers.set(key, value);
   });
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
   let upstream: Response;
   try {
-    upstream = await fetch(target, {
+    const init: RequestInit & { duplex: 'half' } = {
       method: request.method,
       headers,
-      body: hasBody ? await request.arrayBuffer() : undefined,
+      /* Stream uploads with backpressure instead of buffering an unauthenticated request of
+         unbounded size in Node. The timeout now also bounds the incoming body transfer. */
+      body: hasBody ? request.body : undefined,
+      duplex: 'half',
       redirect: 'manual',
       cache: 'no-store',
       /* Bounded: without this the handler inherits the platform's socket timeout, so a
          hung upstream hangs this route with it, holding a Node connection open. */
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    });
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
+    };
+    upstream = await fetch(target, init);
   } catch {
     /* Same shape `app/relay/route.ts` returns for the same condition: `proxyFetch`
        (lib/api/client.ts) treats 502 as a failover trigger, which is exactly what it
@@ -117,18 +137,39 @@ async function proxy(
     );
   }
 
+  /* Only a write the backend has actually authorised and accepted may invalidate the public
+     search definitions. Expire immediately: showing old filters after a successful edit can
+     expose a picture the newly saved rules exclude. */
+  const action = request.nextUrl.searchParams.get('action');
+  if (request.method === 'POST' && !suffix && upstream.ok &&
+      (action === 'admin_add_block_tag' || action === 'admin_remove_block_tag')) {
+    const result: unknown = await upstream.clone().json().catch(() => null);
+    if (result && typeof result === 'object' && 'success' in result && result.success === true) {
+      revalidateTag(BLOCK_FILTERS_CACHE_TAG, { expire: 0 });
+      clearBlockFiltersMemo();
+    }
+  }
+
   const secure = isSecureRequest(request);
   const responseHeaders = new Headers();
+  const upstreamConnectionHeaders = new Set(
+    upstream.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
+  );
   upstream.headers.forEach((value, key) => {
     // Set-Cookie can repeat, so it is copied separately via getSetCookie().
     if (key === 'set-cookie') return;
-    if (!SKIP_RESPONSE_HEADERS.has(key)) responseHeaders.set(key, value);
+    if (!SKIP_RESPONSE_HEADERS.has(key) && !upstreamConnectionHeaders.has(key)) responseHeaders.set(key, value);
   });
   for (const cookie of upstream.headers.getSetCookie()) {
     responseHeaders.append('set-cookie', secure ? cookie : downgradeCookie(cookie));
   }
+  /* Responses can contain an account or a PHP session. Next's internal no-store does not
+     control browser/CDN caches; make the same boundary explicit on the outgoing response. */
+  responseHeaders.set('Cache-Control', 'private, no-store');
+  responseHeaders.set('X-Content-Type-Options', 'nosniff');
+  responseHeaders.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");
 
-  return new Response(upstream.body, {
+  return new Response(request.method === 'HEAD' ? null : upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: responseHeaders,

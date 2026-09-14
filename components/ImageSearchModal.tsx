@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useLayoutEffect, useRef } from 'react';
 import { MdCloudUpload } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import { showToast } from './Toast';
@@ -29,25 +29,56 @@ export default function ImageSearchModal({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [distance, setDistance] = useState<number>(0.1);
   const [isUploading, setIsUploading] = useState(false);
+  const [isReading, setIsReading] = useState(false);
+  const generation = useRef(0);
+  const fileRead = useRef(0);
+  const submitting = useRef(false);
+  const active = useRef(false);
   const router = useRouter();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    active.current = isOpen;
+    const current = ++generation.current;
+    submitting.current = false;
+    fileRead.current += 1;
     if (isOpen) {
       queueMicrotask(() => {
+        if (generation.current !== current) return;
         setSelectedImage(null);
         setSelectedFile(null);
         setDistance(0.1);
+        setIsUploading(false);
+        setIsReading(false);
       });
     }
+    return () => { active.current = false; generation.current += 1; };
   }, [isOpen]);
 
+  const close = () => {
+    active.current = false;
+    generation.current += 1;
+    fileRead.current += 1;
+    onClose();
+  };
+
   const handleFileSelect = async (file: File) => {
+    if (!active.current || submitting.current) return;
+    const request = ++fileRead.current;
+    const current = generation.current;
+    setIsReading(true);
+    setSelectedFile(null);
+    setSelectedImage(null);
     try {
       const dataUrl = await processImageFile(file);
+      if (!active.current || current !== generation.current || request !== fileRead.current) return;
       setSelectedFile(file);
       setSelectedImage(dataUrl);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '文件处理失败', 'error');
+      if (active.current && current === generation.current && request === fileRead.current) {
+        showToast(err instanceof Error ? err.message : '文件处理失败', 'error');
+      }
+    } finally {
+      if (active.current && current === generation.current && request === fileRead.current) setIsReading(false);
     }
   };
 
@@ -55,49 +86,56 @@ export default function ImageSearchModal({
 
 
   const handleSubmit = async () => {
+    if (!active.current || submitting.current || isReading) return;
     if (!selectedFile) {
       showToast('请先选择一张图片', 'warning');
       return;
     }
 
+    const current = generation.current;
+    submitting.current = true;
     setIsUploading(true);
 
     try {
       const data = await api.searchImage(selectedFile, distance);
+      if (!active.current || current !== generation.current) return;
 
       if (data && data.images && data.total > 0) {
         if (onSearchSuccess) {
           onSearchSuccess(data.images);
         }
         showToast(`找到 ${data.total} 张相似图片`, 'success');
-        onClose();
+        close();
       } else if (data && data.searchQuery) {
         router.push(`/search?q=${encodeURIComponent(data.searchQuery)}`, { scroll: false });
-        onClose();
+        close();
       } else {
         showToast('未能找到相似图片', 'info');
-        onClose();
+        close();
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '以图搜图失败', 'error');
+      if (active.current && current === generation.current) showToast(err instanceof Error ? err.message : '以图搜图失败', 'error');
     } finally {
-      setIsUploading(false);
+      if (active.current && current === generation.current) {
+        submitting.current = false;
+        setIsUploading(false);
+      }
     }
   };
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       title="以图搜图"
       footer={
         <>
-          <Button variant="text" type="button" onClick={onClose} disabled={isUploading}>
+          <Button variant="text" type="button" onClick={close}>
             取消
           </Button>
           <Button
             variant="filled"
             onClick={handleSubmit}
-            disabled={!selectedFile}
+            disabled={!selectedFile || isReading}
             loading={isUploading}
           >
             开始搜索
@@ -108,6 +146,7 @@ export default function ImageSearchModal({
       {/* `DropZone` owns the three states; the zone previously gave no
           feedback at all while a file was held over it. */}
       <DropZone
+        disabled={isUploading}
         accept="image/*"
         onFile={handleFileSelect}
         filled={Boolean(selectedImage)}

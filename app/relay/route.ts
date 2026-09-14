@@ -38,8 +38,14 @@ const SKIP_RESPONSE_HEADERS = new Set([
   'keep-alive',
   'transfer-encoding',
   'upgrade',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
   'content-encoding',
   'content-length',
+  'cdn-cache-control',
+  'vercel-cdn-cache-control',
   /* Our server's Origin echoed back by the relay; re-emitting it would describe a
      cross-origin exchange the browser is not making. */
   'access-control-allow-origin',
@@ -92,13 +98,13 @@ async function relay(request: NextRequest): Promise<Response> {
          is the *default* line, a forced or defaulted policy has no failover, and
          `proxyFetch` retries it three times in place, so a wedged upstream holds three
          Node connections per client request for the platform's socket lifetime. */
-      signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(RELAY_TIMEOUT_MS)]),
       method: request.method,
       headers: {
         /* The allowlist the relay checks. Also the reason this handler exists. */
         Origin: PICPONY_API_ORIGIN,
         Referer: `${PICPONY_API_ORIGIN}/`,
-        Accept: request.headers.get('accept') ?? 'application/json',
+        Accept: 'application/json',
         'User-Agent': request.headers.get('user-agent') ?? 'PicPony/1.0',
       },
       redirect: 'manual',
@@ -116,16 +122,33 @@ async function relay(request: NextRequest): Promise<Response> {
      Reported as a bad upstream instead, which `proxyFetch` knows how to fail over
      from. */
   if (response.status >= 300 && response.status < 400) {
+    void response.body?.cancel().catch(() => {});
     return Response.json({ success: false, message: 'PicPony API 线路返回了重定向' }, { status: 502 });
   }
 
+  /* Even /api/ can answer an HTML error or challenge page. Serving that document from our
+     origin would grant upstream scripts access to localStorage. Only JSON is a relay answer;
+     the body-less HEAD/204 cases do not carry executable content. */
+  const mediaType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+  if (request.method !== 'HEAD' && response.status !== 204 && response.status !== 205 &&
+      mediaType !== 'application/json' && !/^application\/[\w.+-]+\+json$/.test(mediaType ?? '')) {
+    void response.body?.cancel().catch(() => {});
+    return Response.json({ success: false, message: 'PicPony API 线路返回了非 JSON 内容' }, { status: 502 });
+  }
+
   const headers = new Headers();
+  const connectionHeaders = new Set(
+    response.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
+  );
   response.headers.forEach((value, key) => {
     if (key === 'set-cookie') return;
-    if (!SKIP_RESPONSE_HEADERS.has(key)) headers.set(key, value);
+    if (!SKIP_RESPONSE_HEADERS.has(key) && !connectionHeaders.has(key)) headers.set(key, value);
   });
+  headers.set('Cache-Control', 'private, no-store');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");
 
-  return new Response(response.body, {
+  return new Response(request.method === 'HEAD' ? null : response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,

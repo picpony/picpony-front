@@ -761,6 +761,13 @@ try {
          asserted. */
       serverReads.length = 0;
       const result = await runStep(cdp, step, origin, LIVE ? null : serverReads);
+      if (!LIVE) {
+        const filterReads = serverReads.filter((name) => name === 'get_block_tags').length;
+        if (filterReads > 1) fail(journey.name, `${result.label} duplicated the public filter-definition read`);
+        if (step.navigate && filterReads === 0) {
+          fail(journey.name, `${result.label} did not read the public filter definitions`);
+        }
+      }
       steps.push(result);
       console.log(
         `  ${result.label.padEnd(20)} ${String(result.api).padStart(3)}  ${String(result.serverApi).padStart(3)}  ${String(result.media).padStart(5)}  ` +

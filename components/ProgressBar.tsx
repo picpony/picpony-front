@@ -1,6 +1,6 @@
 'use client';
 
-import { cn } from '@/lib/utils';
+import { clamp, cn } from '@/lib/utils';
 
 export type ProgressTone = 'secondary' | 'success' | 'warning';
 export type ProgressSurface = 'default' | 'media';
@@ -83,8 +83,8 @@ export default function ProgressBar({
   label?: string;
   className?: string;
 }) {
-  const determinate = typeof value === 'number';
-  const pct = determinate ? Math.min(100, Math.max(0, value)) : 0;
+  const determinate = typeof value === 'number' && Number.isFinite(value);
+  const pct = determinate ? clamp(value, 0, 100) : 0;
   const fill = FILLS[tone];
 
   return (

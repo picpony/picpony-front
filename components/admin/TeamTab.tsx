@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/Toast';
 import Select from '@/components/Select';
@@ -18,6 +18,9 @@ import { useConfirm } from '@/components/ConfirmDialog';
    every gallery route shipped all 48 of these. Only the eleven admin tabs
    import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { readToken } from '@/lib/hooks';
+import { teamMembers } from '@/lib/resources';
 
 interface TeamMember {
   id: number;
@@ -36,9 +39,16 @@ const categoryOptions = [
   { value: 'special', label: '特别鸣谢' },
 ];
 
+const membersQuery = defineAdminQuery<TeamMember[]>('team', async (_token, signal) => {
+  const data = await api.getTeamMembers(signal);
+  return adminData(data, data.members || []);
+});
+
 export default function TeamTab({ token }: { token: string }) {
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(false);
+  const read = useAdminQuery(membersQuery, token);
+  const members = read.data ?? [];
+  const loading = read.loading;
+  const loadMembers = read.refresh;
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -49,43 +59,14 @@ export default function TeamTab({ token }: { token: string }) {
     order_num: 0,
   });
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importPendingRef = useRef(false);
+  const savingRef = useRef(false);
+  const importRef = useRef(0);
   const [importUserId, setImportUserId] = useState('');
 
-  const loadMembers = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getTeamMembers();
-      if (data.success) {
-        setMembers(data.members || []);
-      }
-    } catch {
-      showToast('加载失败', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await api.getTeamMembers();
-        if (!cancelled && data.success) {
-          setMembers(data.members || []);
-        }
-      } catch {
-        if (!cancelled) showToast('加载失败', 'error');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const resetForm = () => {
+    importRef.current += 1;
     setForm({
       name: '',
       role: '',
@@ -104,6 +85,8 @@ export default function TeamTab({ token }: { token: string }) {
   const { confirmThen, confirmDialog } = useConfirm();
 
   const handleEdit = (member: TeamMember) => {
+    if (savingRef.current) return;
+    importRef.current += 1;
     setEditingMember(member);
     setForm({
       name: member.name,
@@ -116,10 +99,13 @@ export default function TeamTab({ token }: { token: string }) {
   };
 
   const handleSave = async () => {
+    if (savingRef.current || readToken() !== token) return;
     if (!form.name.trim()) {
       showToast('姓名不能为空', 'warning');
       return;
     }
+    savingRef.current = true;
+    importRef.current += 1;
     setSaving(true);
     try {
       const payload = {
@@ -138,28 +124,34 @@ export default function TeamTab({ token }: { token: string }) {
         res = await adminApi.addTeamMember(token, payload);
       }
       const data = await res.json();
+      if (readToken() !== token) return;
       if (data.success) {
         showToast(editingMember ? '已更新' : '已添加', 'success');
         resetForm();
         loadMembers();
+        teamMembers.invalidate();
       } else {
         showToast(data.error || '保存失败', 'error');
       }
     } catch {
       showToast('保存失败', 'error');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
   const handleDelete = (id: number) => {
     confirmThen('确认删除', '确定要删除此成员吗？', async () => {
+      if (readToken() !== token) return;
       try {
         const res = await adminApi.deleteTeamMember(token, id);
         const data = await res.json();
+        if (readToken() !== token) return;
         if (data.success) {
           showToast('已删除', 'success');
           loadMembers();
+          teamMembers.invalidate();
         } else {
           showToast(data.error || '删除失败', 'error');
         }
@@ -170,13 +162,18 @@ export default function TeamTab({ token }: { token: string }) {
   };
 
   const handleImportUser = async () => {
-    const uid = parseInt(importUserId);
-    if (isNaN(uid)) {
+    if (savingRef.current || importPendingRef.current || readToken() !== token) return;
+    const uid = Number(importUserId);
+    if (!Number.isSafeInteger(uid) || uid < 1) {
       showToast('请输入有效的用户 ID', 'warning');
       return;
     }
+    const request = ++importRef.current;
+    importPendingRef.current = true;
+    setImporting(true);
     try {
       const data = await adminApi.adminGetUsers(token);
+      if (request !== importRef.current || readToken() !== token) return;
       if (data.success) {
         const user = (data.users || []).find((u: { id: number }) => u.id === uid);
         if (user) {
@@ -189,6 +186,9 @@ export default function TeamTab({ token }: { token: string }) {
       }
     } catch {
       showToast('导入失败', 'error');
+    } finally {
+      importPendingRef.current = false;
+      setImporting(false);
     }
   };
 
@@ -269,7 +269,7 @@ export default function TeamTab({ token }: { token: string }) {
               placeholder="输入用户 ID"
             />
           </div>
-          <Button onClick={handleImportUser} variant="filled">
+          <Button onClick={handleImportUser} variant="filled" loading={importing} disabled={saving}>
             导入信息
           </Button>
         </div>
@@ -282,7 +282,10 @@ export default function TeamTab({ token }: { token: string }) {
             id="teamtab-f2"
             type="text"
             value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            onChange={(e) => {
+              importRef.current += 1;
+              setForm((f) => ({ ...f, name: e.target.value }));
+            }}
             placeholder="如：小明"
           />
         </div>
@@ -355,7 +358,7 @@ export default function TeamTab({ token }: { token: string }) {
         <div className="flex gap-3">
           
           {editingMember && (
-            <Button variant="tonal" onClick={resetForm}>
+            <Button variant="tonal" onClick={resetForm} disabled={saving}>
               {' '}
               取消编辑
             </Button>
@@ -373,6 +376,8 @@ export default function TeamTab({ token }: { token: string }) {
           rows={members}
           rowKey={(m) => m.id}
           loading={loading}
+          error={read.error}
+          onRetry={loadMembers}
           empty="暂无成员"
         />
       </Card>

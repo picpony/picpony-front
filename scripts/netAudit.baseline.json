@@ -4,7 +4,7 @@
       "label": "GET /",
       "api": 3,
       "media": 31,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 0
     }
   ],
@@ -13,14 +13,14 @@
       "label": "GET /",
       "api": 3,
       "media": 29,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 0
     },
     {
       "label": "tap 论坛",
       "api": 0,
       "media": 0,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": null
     }
   ],
@@ -29,7 +29,7 @@
       "label": "GET /",
       "api": 3,
       "media": 29,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 0
     },
     {
@@ -52,7 +52,7 @@
       "label": "GET /user/1",
       "api": 2,
       "media": 12,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 1
     }
   ],
@@ -61,14 +61,14 @@
       "label": "GET /user/1",
       "api": 2,
       "media": 12,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 1
     },
     {
       "label": "→ /",
       "api": 2,
       "media": 28,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 0
     },
     {
@@ -84,7 +84,7 @@
       "label": "GET /about",
       "api": 1,
       "media": 0,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 0
     }
   ],
@@ -93,7 +93,7 @@
       "label": "GET /policy",
       "api": 1,
       "media": 0,
-      "serverApi": 0,
+      "serverApi": 1,
       "contentRound": null
     }
   ],
@@ -102,7 +102,7 @@
       "label": "GET /favorites",
       "api": 5,
       "media": 33,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 2
     }
   ],
@@ -111,14 +111,14 @@
       "label": "GET /favorites",
       "api": 5,
       "media": 33,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 2
     },
     {
       "label": "→ /",
       "api": 2,
       "media": 18,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 0
     },
     {
@@ -141,7 +141,7 @@
       "label": "GET /history",
       "api": 4,
       "media": 0,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 1
     }
   ],
@@ -150,7 +150,7 @@
       "label": "GET /tasks",
       "api": 4,
       "media": 0,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 1
     }
   ],
@@ -159,7 +159,7 @@
       "label": "GET /messages",
       "api": 4,
       "media": 0,
-      "serverApi": 1,
+      "serverApi": 2,
       "contentRound": 1
     }
   ]

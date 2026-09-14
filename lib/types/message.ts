@@ -27,6 +27,24 @@ export interface MessagesResponse {
   messages: Message[];
 }
 
+export interface AuditMessage {
+  id: number;
+  sender_id: number;
+  sender_name: string;
+  receiver_id: number;
+  receiver_name: string;
+  content: string;
+  is_read: number;
+  created_at: string;
+}
+
+export interface AuditMessagesResponse {
+  success: boolean;
+  messages?: AuditMessage[];
+  error?: string;
+  message?: string;
+}
+
 export interface Notification {
   id: number;
   title: string;

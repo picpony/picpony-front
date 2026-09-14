@@ -222,6 +222,8 @@ type Entry<T> = {
   value?: T;
   error?: unknown;
   fetchedAt: number;
+  /** The last SSR payload adopted by this key, preserved through retries and writes. */
+  seededAt?: number;
   priority: Priority;
   promise: Promise<T>;
   settle: { resolve: (value: T) => void; reject: (error: unknown) => void };
@@ -404,7 +406,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       if (store.size <= maxEntries) break;
       /* Never evict a key a mounted component is reading, nor an entry with no answer yet —
          dropping an in-flight one would restart it on the next render. */
-      if (key === preserve || entry.listeners.size > 0 || entry.value === undefined) continue;
+      if (key === preserve || entry.listeners.size > 0 ||
+          (!entry.placeholder && (entry.status === 'queued' || entry.status === 'loading'))) continue;
       discard(key, entry);
     }
   }
@@ -466,6 +469,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
           if (store.get(key) === entry) {
             entry.status = 'error';
             entry.error = error;
+            touch(key, entry);
+            trim(key);
             /* The last good value is kept: a failed refresh of something already on screen must
                not empty the screen — the caller decides how to show the error. */
             publish(entry);
@@ -496,6 +501,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
           store.delete(key);
           const promoted = create(key, args, 'immediate');
           promoted.listeners = existing.listeners;
+          promoted.seededAt = existing.seededAt;
           existing.promise.catch(() => {});
           return promoted.promise;
         }
@@ -516,7 +522,11 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       discard(key, existing);
       const retried = create(key, args, priority);
       retried.value = previous;
+      retried.fetchedAt = existing.fetchedAt;
+      retried.seededAt = existing.seededAt;
       retried.listeners = existing.listeners;
+      retried.snapshot = buildSnapshot(retried);
+      publish(retried);
       return retried.promise;
     }
 
@@ -526,7 +536,14 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     const entry = create(key, args, priority);
     /* Carried over from whatever was there, placeholder or not. Losing them is how a component
        that already subscribed never hears that its own request landed. */
-    if (stored) entry.listeners = stored.listeners;
+    if (stored) {
+      entry.listeners = stored.listeners;
+      entry.value = stored.value;
+      entry.fetchedAt = stored.fetchedAt;
+      entry.seededAt = stored.seededAt;
+      entry.snapshot = buildSnapshot(entry);
+      publish(entry);
+    }
     return entry.promise;
   }
 
@@ -609,6 +626,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       return () => {
         const current = store.get(key);
         current?.listeners.delete(listener);
+        if (current?.placeholder && current.listeners.size === 0) discard(key, current);
       };
     },
     invalidate(args) {
@@ -616,6 +634,12 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     },
     expire(args) {
       const mark = (entry: Entry<T>) => {
+        /* A cold read that failed offline has no resolved value to expire. The reconnect
+           event must retry mounted failures too, or that screen stays broken indefinitely. */
+        if (entry.status === 'error' && entry.listeners.size > 0 && entry.args !== undefined) {
+          void read(entry.args as Args, { force: true }).catch(() => {});
+          return;
+        }
         if (entry.status !== 'resolved') return;
         /* Two different things, depending on whether anyone is looking.
            **On screen** — re-read now, underneath, with no loading state. `revalidate` moves
@@ -644,13 +668,16 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
 
       const key = keyOf(args);
       const stored = store.get(key);
+      /* A component passes the same initial prop on every render. Re-adopting it while a
+         manual refresh is pending would cancel that refresh and restore the old payload. */
+      if (stored?.seededAt !== undefined && stored.seededAt >= fetchedAt) return;
 
       /* Never clobber a client value that is at least as fresh: makes a remount from the router
          cache harmless, and stops a stale RSC payload overwriting a refreshed value. */
       if (
         stored &&
         !stored.placeholder &&
-        stored.status === 'resolved' &&
+        stored.value !== undefined &&
         stored.fetchedAt >= fetchedAt
       ) {
         return;
@@ -679,6 +706,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
            clock ahead clamps to now (safe); a clock behind makes the entry immediately stale — one
            silent background revalidation. It can only ever err toward stale. */
         fetchedAt: Math.min(fetchedAt, Date.now()),
+        seededAt: fetchedAt,
         priority: 'immediate',
         promise,
         settle: { resolve, reject },
@@ -723,6 +751,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
         status: 'resolved',
         value: next,
         fetchedAt: entry?.fetchedAt ?? Date.now(),
+        seededAt: entry?.seededAt,
         priority: entry?.priority ?? 'immediate',
         promise: Promise.resolve(next),
         settle: { resolve: () => {}, reject: () => {} },

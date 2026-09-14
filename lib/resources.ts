@@ -39,6 +39,7 @@ import type { ApiResponse, PonyImage } from '@/lib/types/image';
 import type { ForumPost, ForumPostDetailResponse } from '@/lib/types/forum';
 import type { UserComment, UserPost } from '@/lib/types/user';
 import { COOKIE_KEYS, LS_KEYS, PICPONY_API_BASE } from '@/lib/constants';
+import { currentBlockFilters, withBlockFiltersFingerprint } from '@/lib/blockFilters';
 
 /** Minutes, spelled out so the numbers below read as durations rather than as magic. */
 const SECONDS = 1000;
@@ -72,13 +73,14 @@ export function browsingFingerprint(): string {
   } catch {
     /* A corrupt list is an empty one, which is what `buildSearchQuery` does with it too. */
   }
-  return [
+  const preferences = [
     s.contentFilter,
     s.banAnthro ? 'a' : '-',
     s.banDiscomfort ? 'd' : '-',
     s.onlyPony ? 'p' : '-',
     hidden,
   ].join('|');
+  return withBlockFiltersFingerprint(preferences, currentBlockFilters());
 }
 
 /**
@@ -100,10 +102,15 @@ export function syncBrowsingCookie() {
   const write = (name: string, value: string) => {
     /* Compared **encoded**: a fingerprint always contains a `|`, which serialises as `%7C`, so
        comparing the raw value could never match and the cookie was re-serialised on every call. */
-    if (document.cookie.includes(`${name}=${encodeURIComponent(value)}`)) return;
-    document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+    const cookie = `${name}=${encodeURIComponent(value)}`;
+    try {
+      if (document.cookie.split(';').some((part) => part.trim() === cookie)) return;
+      document.cookie = `${cookie};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+    } catch {
+      /* SSR may use its default feed when cookies are blocked; browsing must still work. */
+    }
   };
-  write(COOKIE_KEYS.browsing, browsingFingerprint());
+  write(COOKIE_KEYS.browsing, browsingFingerprint().split('|').slice(0, 5).join('|'));
   write(COOKIE_KEYS.homeSort, getBrowsingSettings().homeSort);
 }
 
@@ -159,9 +166,9 @@ export const unreadCounts = defineResource<{ token: string }, UnreadBreakdown>({
   key: ({ token }) => token,
   ttl: 1 * MINUTES,
   maxEntries: 2,
-  fetch: async ({ token }) => {
-    const data = await picpony.getUnreadCounts(token);
-    if (!data.success) return { total: 0, messages: 0, notifications: 0, interactions: 0 };
+  fetch: async ({ token }, signal) => {
+    const data = await picpony.getUnreadCounts(token, signal);
+    if (!data.success) throw new Error('未读计数加载失败');
     return {
       total: data.total_unread ?? 0,
       messages: data.unread_messages ?? 0,
@@ -193,7 +200,7 @@ export const homeFeed = defineResource<{ page: number; sort: string; fp: string 
   /* A page of 50 images is a large object, so fewer keys than the default: eight pages is more
      back-and-forth than a paged gallery sees in one session. */
   maxEntries: 8,
-  fetch: ({ page }) => derpi.getImages(undefined, page),
+  fetch: ({ page, sort }, signal) => derpi.getImages(undefined, page, sort, 'desc', signal),
 });
 
 /**
@@ -210,8 +217,8 @@ export const searchFeed = defineResource<
     `${query}\n${sortField ?? 'random'}:${sortDir}:${page}:${browsingFingerprint()}`,
   ttl: 2 * MINUTES,
   maxEntries: 8,
-  fetch: ({ query, page, sortField, sortDir }) =>
-    derpi.getImages(query, page, sortField, sortDir),
+  fetch: ({ query, page, sortField, sortDir }, signal) =>
+    derpi.getImages(query, page, sortField, sortDir, signal),
 });
 
 /**
@@ -225,10 +232,10 @@ export const searchFeed = defineResource<
 export const featuredImage = defineResource<{ apiKey?: string }, PonyImage | null>({
   name: 'featured',
   /* The content filter is in here because `getFeatured` adds `filter_id` in developer mode. */
-  key: ({ apiKey }) => `${apiKey ? 'keyed' : 'anon'}:${getBrowsingSettings().contentFilter}`,
+  key: ({ apiKey }) => `${apiKey ?? ''}:${getBrowsingSettings().contentFilter}`,
   ttl: 10 * MINUTES,
   maxEntries: 2,
-  fetch: async ({ apiKey }) => (await derpi.getFeatured(apiKey))?.image ?? null,
+  fetch: async ({ apiKey }, signal) => (await derpi.getFeatured(apiKey, signal))?.image ?? null,
 });
 
 /** Images by id, for a favourites list — one page's worth. */
@@ -239,7 +246,7 @@ export const imagesByIds = defineResource<{ ids: number[]; page: number; perPage
   key: ({ ids, page, perPage }) => `${ids.join(',')}\n${page}/${perPage}`,
   ttl: 5 * MINUTES,
   maxEntries: 8,
-  fetch: ({ ids, page, perPage }) => derpi.searchImagesByIds(ids, page, perPage),
+  fetch: ({ ids, page, perPage }, signal) => derpi.searchImagesByIds(ids, page, perPage, signal),
 });
 
 // ---------------------------------------------------------------------------
@@ -251,8 +258,9 @@ export const forumPosts = defineResource<{ page: number }, { posts: ForumPost[];
   key: ({ page }) => String(page),
   ttl: 1 * MINUTES,
   maxEntries: 8,
-  fetch: async ({ page }) => {
-    const res = await picpony.getForumPosts(page);
+  fetch: async ({ page }, signal) => {
+    const res = await picpony.getForumPosts(page, signal);
+    if (!res?.success) throw new Error('获取论坛帖子失败');
     return { posts: res.posts ?? [], totalPages: res.total_pages ?? 1 };
   },
 });
@@ -272,7 +280,7 @@ export const forumThread = defineResource<{ id: string; page: number }, ForumPos
   key: ({ id, page }) => `${id}:${page}`,
   ttl: 30 * SECONDS,
   maxEntries: 12,
-  fetch: ({ id, page }) => picpony.getForumPostDetail(id, page),
+  fetch: ({ id, page }, signal) => picpony.getForumPostDetail(id, page, signal),
 });
 
 // ---------------------------------------------------------------------------
@@ -290,8 +298,8 @@ export const userProfile = defineResource<{ id: string }, ProfileUser | null>({
   key: ({ id }) => id,
   ttl: 5 * MINUTES,
   maxEntries: 12,
-  fetch: async ({ id }) => {
-    const res = await picpony.getUserProfile(id);
+  fetch: async ({ id }, signal) => {
+    const res = await picpony.getUserProfile(id, signal);
     if (!res?.success || !res.user) throw new Error(res?.message || '获取用户资料失败');
     return res.user as ProfileUser;
   },
@@ -310,8 +318,8 @@ export const sharedFaveIds = defineResource<{ username: string }, number[]>({
   key: ({ username }) => username,
   ttl: 2 * MINUTES,
   maxEntries: 8,
-  fetch: async ({ username }) => {
-    const res = await picpony.getSharedFaves(username);
+  fetch: async ({ username }, signal) => {
+    const res = await picpony.getSharedFaves(username, signal);
     if (!res.success) throw new Error('收藏夹加载失败');
     return res.faves ?? [];
   },
@@ -325,8 +333,8 @@ export const userPosts = defineResource<
   key: ({ id, page }) => `${id}:${page}`,
   ttl: 2 * MINUTES,
   maxEntries: 12,
-  fetch: async ({ id, page }) => {
-    const res = await picpony.getUserPosts(id, page);
+  fetch: async ({ id, page }, signal) => {
+    const res = await picpony.getUserPosts(id, page, signal);
     if (!res.success) throw new Error('获取用户帖子失败');
     return { posts: res.posts ?? [], totalPages: res.total_pages ?? 1 };
   },
@@ -340,8 +348,8 @@ export const userComments = defineResource<
   key: ({ id, page }) => `${id}:${page}`,
   ttl: 2 * MINUTES,
   maxEntries: 12,
-  fetch: async ({ id, page }) => {
-    const res = await picpony.getUserComments(id, page);
+  fetch: async ({ id, page }, signal) => {
+    const res = await picpony.getUserComments(id, page, signal);
     if (!res.success) throw new Error('获取用户评论失败');
     return { comments: res.comments ?? [], totalPages: res.total_pages ?? 1 };
   },
@@ -396,8 +404,8 @@ export const faveIds = defineResource<{ token: string }, number[]>({
   key: ({ token }) => token,
   ttl: 1 * MINUTES,
   maxEntries: 2,
-  fetch: async ({ token }) => {
-    const res = await picpony.getFaves(token);
+  fetch: async ({ token }, signal) => {
+    const res = await picpony.getFaves(token, signal);
     /* Thrown, not flattened to `[]`: a failed read and an empty list are different answers, and
        the empty one for both would render a server error as 暂无收藏 with no way to retry. */
     if (!res.success || !res.faves) throw new Error(res.message || '收藏列表读取失败');
@@ -420,8 +428,8 @@ export const browsingHistory = defineResource<
   key: ({ token, page }) => `${token}:${page}`,
   ttl: 1 * MINUTES,
   maxEntries: 8,
-  fetch: async ({ token, page }) => {
-    const data = (await picpony.getBrowsingHistory(token, page)) as {
+  fetch: async ({ token, page }, signal) => {
+    const data = (await picpony.getBrowsingHistory(token, page, signal)) as {
       success?: boolean;
       history?: HistoryItem[];
       total_pages?: number;
@@ -438,7 +446,7 @@ export const tasks = defineResource<{ token: string }, unknown>({
      `tasks.write(...)`, and this TTL is the backstop for a claim made in another tab. */
   ttl: 30 * SECONDS,
   maxEntries: 2,
-  fetch: ({ token }) => picpony.getTasks(token),
+  fetch: ({ token }, signal) => picpony.getTasks(token, signal),
 });
 
 export interface BlockGroup {
@@ -468,7 +476,7 @@ export const blockGroups = defineResource<{ token: string }, BlockGroupsResult>(
   key: ({ token }) => token,
   ttl: 5 * MINUTES,
   maxEntries: 2,
-  fetch: ({ token }) => picpony.getBlockGroups(token),
+  fetch: ({ token }, signal) => picpony.getBlockGroups(token, signal),
 });
 
 export interface TeamMember {
@@ -489,8 +497,8 @@ export const teamMembers = defineResource<Record<string, never>, TeamMember[]>({
      changes when somebody joins the team. */
   ttl: 30 * MINUTES,
   maxEntries: 1,
-  fetch: async () => {
-    const data = (await picpony.getTeamMembers()) as {
+  fetch: async (_, signal) => {
+    const data = (await picpony.getTeamMembers(signal)) as {
       success?: boolean;
       members?: TeamMember[];
     };

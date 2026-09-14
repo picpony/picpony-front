@@ -7,6 +7,7 @@ import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import Slider from '@/components/Slider';
 import Spinner from '@/components/Spinner';
+import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
 import { ICON } from '@/lib/icons';
 
@@ -72,6 +73,7 @@ export default function ImageCropper({
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [view, setView] = useState<View>(INITIAL);
   const [exporting, setExporting] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // Callback ref, not `useRef`: the stage is rendered through Modal's portal,
   // which mounts a tick after `file` is set. A plain ref meant the measuring
@@ -106,6 +108,7 @@ export default function ImageCropper({
     setLastFile(file);
     setView(INITIAL);
     setNatural(null);
+    setImageError(false);
   }
 
   /* ---- crop window size ------------------------------------------------ */
@@ -224,7 +227,7 @@ export default function ImageCropper({
   /* ---- export ---------------------------------------------------------- */
   const confirm = async () => {
     const img = imgRef.current;
-    if (!img || !natural || !cropBox.w) return;
+    if (!img || !natural || !cropBox.w || imageError || exporting || busy) return;
     setExporting(true);
     try {
       const canvas = document.createElement('canvas');
@@ -259,7 +262,7 @@ export default function ImageCropper({
     }
   };
 
-  const ready = Boolean(src && natural && cropBox.w > 0);
+  const ready = Boolean(src && natural && cropBox.w > 0 && !imageError);
   const working = exporting || busy;
 
   return (
@@ -299,12 +302,15 @@ export default function ImageCropper({
             src={src}
             alt=""
             draggable={false}
-            onLoad={(e) =>
-              setNatural({
-                w: e.currentTarget.naturalWidth,
-                h: e.currentTarget.naturalHeight,
-              })
-            }
+            onLoad={(e) => {
+              const { naturalWidth, naturalHeight } = e.currentTarget;
+              if (!naturalWidth || !naturalHeight) {
+                setImageError(true);
+                return;
+              }
+              setNatural({ w: naturalWidth, h: naturalHeight });
+            }}
+            onError={() => setImageError(true)}
             className="pointer-events-none absolute top-1/2 left-1/2 max-w-none origin-center"
             style={{
               width: natural?.w,
@@ -315,7 +321,11 @@ export default function ImageCropper({
           />
         )}
 
-        {!ready && (
+        {imageError ? (
+          <div className="absolute inset-0 grid place-items-center bg-surface-container-low">
+            <ErrorRetry size="inline" title="图片无法读取，请选择其他图片" onRetry={onClose} retryLabel="重新选择" />
+          </div>
+        ) : !ready && (
           <div className="absolute inset-0 grid place-items-center">
             <Spinner size="lg" tone="on-primary" />
           </div>

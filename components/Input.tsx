@@ -93,7 +93,8 @@ export function Field({
   count,
   className = '',
   children,
-}: Pick<FieldProps, 'helper' | 'error' | 'count' | 'className'> & { children: ReactNode }) {
+  supportId,
+}: Pick<FieldProps, 'helper' | 'error' | 'count' | 'className'> & { children: ReactNode; supportId?: string }) {
   const overLimit = count ? count.value > count.max : false;
 
   return (
@@ -101,7 +102,7 @@ export function Field({
       {children}
 
       {(error || helper || count) && (
-        <div className="flex items-start justify-between gap-3 px-4">
+        <div id={supportId} className="flex items-start justify-between gap-3 px-4">
           <p
             className={cn('text-body-s min-w-0', error ? 'text-error' : 'text-on-surface-variant')}
             // Errors announce themselves; helper text is static and must not.
@@ -238,12 +239,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     fieldClassName = '',
     id,
     placeholder,
+    'aria-describedby': describedBy,
     ...rest
   },
   ref,
 ) {
   const autoId = useId();
   const inputId = id ?? autoId;
+  const supportId = helper || error || count ? `${autoId}-support` : undefined;
   const labelled = hasLabel(label);
   const hero = !labelled && size === 'lg';
   /* Both size branches are gated on `!labelled` rather than trusting the call site,
@@ -252,7 +255,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const dense = !labelled && size === 'sm';
 
   return (
-    <Field helper={helper} error={error} count={count} className={fieldClassName}>
+    <Field helper={helper} error={error} count={count} className={fieldClassName} supportId={supportId}>
       <div
         {...shellProps({
           labelled,
@@ -274,6 +277,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           id={inputId}
+          aria-describedby={[describedBy, supportId].filter(Boolean).join(' ') || undefined}
           aria-invalid={error ? true : undefined}
           required={required}
           /* `:placeholder-shown` is what tells the label whether the field is
@@ -323,17 +327,19 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     placeholder,
     rows = 4,
     size = 'md',
+    'aria-describedby': describedBy,
     ...rest
   },
   ref,
 ) {
   const autoId = useId();
   const areaId = id ?? autoId;
+  const supportId = helper || error || count ? `${autoId}-support` : undefined;
   const labelled = hasLabel(label);
   const dense = !labelled && size === 'sm';
 
   return (
-    <Field helper={helper} error={error} count={count} className={fieldClassName}>
+    <Field helper={helper} error={error} count={count} className={fieldClassName} supportId={supportId}>
       <div
         {...shellProps({
           labelled,
@@ -346,6 +352,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         <textarea
           ref={ref}
           id={areaId}
+          aria-describedby={[describedBy, supportId].filter(Boolean).join(' ') || undefined}
           rows={rows}
           aria-invalid={error ? true : undefined}
           required={required}

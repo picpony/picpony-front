@@ -1,6 +1,8 @@
 import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
 import { cacheSeconds } from '@/lib/serverMemo';
+import { readBlockFilters } from '@/lib/blockFilters.server';
+import type { BlockFilters } from '@/lib/blockFilters';
 
 /**
  * The route policy, read on the server so a cold load's first request does not wait for it:
@@ -31,6 +33,7 @@ export interface InlineRoutePolicy {
   image: string;
   thirdPartyUrl: string;
   thirdPartyPassApiKey: boolean;
+  blockFilters?: BlockFilters;
 }
 
 /**
@@ -51,6 +54,13 @@ export function inlineRoutePolicyScript(policy: InlineRoutePolicy): string {
 const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
 
 export async function readRoutePolicy(): Promise<InlineRoutePolicy | null> {
+  const filters = readBlockFilters();
+  const fallback = async (): Promise<InlineRoutePolicy> => ({
+    /* An empty API policy asks the browser to retry policy loading; it can still use the
+       server's public filter definitions for the very first resource key. */
+    api: '', image: 'auto', thirdPartyUrl: '', thirdPartyPassApiKey: false,
+    blockFilters: await filters,
+  });
   try {
     /* The absolute origin, not `PICPONY_API_BASE` alone: that constant is relative (for the
        browser's request path) and Node's `fetch` rejects a relative URL outright. */
@@ -61,19 +71,20 @@ export async function readRoutePolicy(): Promise<InlineRoutePolicy | null> {
       next: { revalidate: cacheSeconds(SERVER_POLICY_REVALIDATE_S) },
       signal: AbortSignal.timeout(SERVER_POLICY_TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return fallback();
     const data = (await res.json()) as SiteStatusResponse;
-    if (!data?.success) return null;
+    if (!data?.success) return fallback();
     return {
       api: data.global_api_route_policy ?? 'auto',
       image: data.global_image_route_policy ?? 'auto',
       thirdPartyUrl: data.global_api_third_party_url ?? '',
       thirdPartyPassApiKey: data.global_api_third_party_pass_api_key === true,
+      blockFilters: await filters,
     };
   } catch {
     /* A timeout, an offline upstream, an HTML error page — all mean "no policy", which the
        client already treats as "fetch it yourself". Swallowed rather than logged: this runs on
        every cold load of a site whose backend is briefly unhappy. */
-    return null;
+    return fallback();
   }
 }

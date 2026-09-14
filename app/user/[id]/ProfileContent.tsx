@@ -95,7 +95,8 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   const id = params.id as string;
 
   const { user, token, ready } = useSession();
-  const currentUserId = typeof user?.id === 'number' ? user.id : null;
+  const sessionUserId = Number(user?.id);
+  const currentUserId = Number.isSafeInteger(sessionUserId) && sessionUserId > 0 ? sessionUserId : null;
 
   /* Every page number survives a remount, so coming back to a profile lands on the page you left
      rather than on page 1. Scoped per profile id: two profiles are two screens that happen to
@@ -245,10 +246,15 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
   let badges: BadgeItem[] = [];
   if (profile.equipped_badges) {
     try {
-      badges =
+      const parsed: unknown =
         typeof profile.equipped_badges === 'string'
           ? JSON.parse(profile.equipped_badges)
           : profile.equipped_badges;
+      if (Array.isArray(parsed)) {
+        badges = parsed.filter((value): value is BadgeItem =>
+          value !== null && typeof value === 'object' &&
+          typeof value.badge_name === 'string' && typeof value.badge_color === 'string');
+      }
     } catch {}
   }
 
@@ -528,7 +534,7 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                           className="object-cover"
                           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         />
-                        <div className="media-caption-gradient absolute inset-x-0 bottom-0 p-2 opacity-0 transition-opacity duration-composite ease-[var(--ease-standard)] group-hover:opacity-100">
+                        <div className="media-caption-gradient absolute inset-x-0 bottom-0 p-2 opacity-100 transition-opacity duration-composite ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100">
                           <p className="text-on-media text-body-s truncate">
                             {item.name || `#${item.id}`}
                           </p>

@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 
-import { createContext, useCallback, useContext, useState, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
 import { MdClose, MdEmail, MdLock, MdSend, MdArrowBack } from 'react-icons/md';
 import IconButton from './IconButton';
 import Modal from './Modal';
@@ -26,6 +26,7 @@ import { api } from '@/lib/api';
 import { sessionUser } from '@/lib/resources';
 import { readToken, updateUserInfo, writeUserInfo } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
+import { LS_KEYS } from '@/lib/constants';
 
 export type AuthView = 'login' | 'register' | 'reset';
 
@@ -51,15 +52,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [view, setView] = useState<AuthView>('login');
   // 验证码弹窗打开时禁用外层 Esc，避免误关整窗
   const [innerModalOpen, setInnerModalOpen] = useState(false);
+  const [flow, setFlow] = useState(0);
+  const flowRef = useRef(0);
+  const openRef = useRef(false);
 
   const openAuth = useCallback((v: AuthView = 'login') => {
+    openRef.current = true;
+    setFlow(++flowRef.current);
+    setInnerModalOpen(false);
     setView(v);
     setIsOpen(true);
   }, []);
 
-  const closeAuth = useCallback(() => setIsOpen(false), []);
+  const closeAuth = useCallback(() => {
+    openRef.current = false;
+    flowRef.current += 1;
+    setInnerModalOpen(false);
+    setIsOpen(false);
+  }, []);
 
-  const switchView = useCallback((v: AuthView) => setView(v), []);
+  const switchView = useCallback((v: AuthView) => {
+    setFlow(++flowRef.current);
+    setInnerModalOpen(false);
+    setView(v);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ isOpen, view, openAuth, closeAuth, switchView }}>
@@ -72,6 +88,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         closeOnEscape={!innerModalOpen}
         innerModalOpen={innerModalOpen}
         onInnerModalChange={setInnerModalOpen}
+        flow={flow}
+        isCurrentFlow={() => openRef.current && flowRef.current === flow}
       />
     </AuthContext.Provider>
   );
@@ -85,6 +103,8 @@ function AuthModal({
   closeOnEscape,
   innerModalOpen,
   onInnerModalChange,
+  flow,
+  isCurrentFlow,
 }: {
   isOpen: boolean;
   view: AuthView;
@@ -93,6 +113,8 @@ function AuthModal({
   closeOnEscape: boolean;
   innerModalOpen: boolean;
   onInnerModalChange: (open: boolean) => void;
+  flow: number;
+  isCurrentFlow: () => boolean;
 }) {
   return (
     <Modal
@@ -138,12 +160,13 @@ function AuthModal({
             className="absolute right-1 top-5 z-10 hover:text-on-surface"
             icon={<MdClose size={ICON.standard} />}
           />
-          <div key={view} className="my-auto animate-page-transition">
+          <div key={`${view}:${flow}`} className="my-auto animate-page-transition">
             {view === 'login' && (
               <LoginForm
                 onSwitch={onSwitchView}
                 onCaptchaChange={onInnerModalChange}
                 onSuccess={onClose}
+                isCurrentFlow={isCurrentFlow}
               />
             )}
             {view === 'register' && (
@@ -151,9 +174,10 @@ function AuthModal({
                 onSwitch={onSwitchView}
                 onCaptchaChange={onInnerModalChange}
                 onSuccess={onClose}
+                isCurrentFlow={isCurrentFlow}
               />
             )}
-            {view === 'reset' && <ResetForm onSwitch={onSwitchView} />}
+            {view === 'reset' && <ResetForm onSwitch={onSwitchView} isCurrentFlow={isCurrentFlow} />}
           </div>
         </div>
       </div>
@@ -177,15 +201,69 @@ function BackToLogin({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
   );
 }
 
+interface AuthOperation {
+  expectedToken: string | null;
+  cancelled: boolean;
+}
+
+/** A closed/replaced form no longer owns its response, including while Modal
+ * keeps it mounted for its exit. The ref lock also closes the same-frame double
+ * submit gap; React's loading state alone cannot do that. */
+function useAuthOperation(isCurrentFlow: () => boolean) {
+  const operation = useRef<AuthOperation | null>(null);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    const sessionChanged = () => {
+      const pending = operation.current;
+      if (pending && readToken() !== pending.expectedToken) pending.cancelled = true;
+    };
+    const storageChanged = (event: StorageEvent) => {
+      if (event.key === null || event.key === LS_KEYS.userInfo) sessionChanged();
+    };
+    window.addEventListener('user_info_updated', sessionChanged);
+    window.addEventListener('storage', storageChanged);
+    return () => {
+      mounted.current = false;
+      if (operation.current) operation.current.cancelled = true;
+      window.removeEventListener('user_info_updated', sessionChanged);
+      window.removeEventListener('storage', storageChanged);
+    };
+  }, []);
+
+  return {
+    begin() {
+      if (!isCurrentFlow() || operation.current) return null;
+      const next = { expectedToken: readToken(), cancelled: false };
+      operation.current = next;
+      return next;
+    },
+    current(pending: AuthOperation) {
+      return mounted.current && isCurrentFlow() && operation.current === pending &&
+        !pending.cancelled && readToken() === pending.expectedToken;
+    },
+    finish(pending: AuthOperation) {
+      if (operation.current !== pending) return false;
+      operation.current = null;
+      return mounted.current && isCurrentFlow();
+    },
+    busy() { return operation.current !== null; },
+  };
+}
+
 function LoginForm({
   onSwitch,
   onCaptchaChange,
   onSuccess,
+  isCurrentFlow,
 }: {
   onSwitch: (view: AuthView) => void;
   onCaptchaChange: (open: boolean) => void;
   onSuccess: () => void;
+  isCurrentFlow: () => boolean;
 }) {
+  const operation = useAuthOperation(isCurrentFlow);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -203,6 +281,7 @@ function LoginForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isCurrentFlow() || operation.busy()) return;
     if (!username || !password) {
       showToast('请输入用户名和密码', 'error');
       return;
@@ -211,13 +290,14 @@ function LoginForm({
   };
 
   const onCaptchaVerify = async (token: string) => {
-    const previousToken = readToken();
+    const pending = operation.begin();
+    if (!pending) return;
     setCaptcha(false);
     setIsLoading(true);
     try {
       const res = await api.login({ username, password, cf_token: token });
       const data = await res.json();
-      if (readToken() !== previousToken) return;
+      if (!operation.current(pending)) return;
       if (res.ok && data.success) {
         const baseUserInfo = {
           token: data.token,
@@ -228,13 +308,14 @@ function LoginForm({
           derpi_user_id: data.derpi_user_id,
           derpi_username: data.derpi_username,
         };
+        pending.expectedToken = data.token;
         writeUserInfo(baseUserInfo);
         try {
           /* Through the shared resource, so the shell does not immediately ask
              the same question again: this fills the cache entry for the new
              token, so `AppLayout` joins the same in-flight read. */
           const result = await sessionUser.read({ token: data.token });
-          if (readToken() !== data.token) return;
+          if (!operation.current(pending)) return;
           if (result.kind === 'ok') {
             updateUserInfo(data.token, {
               ...baseUserInfo,
@@ -248,16 +329,16 @@ function LoginForm({
         } catch (err) {
           console.error('Failed to fetch user info after login', err);
         }
-        if (readToken() !== data.token) return;
+        if (!operation.current(pending)) return;
         showToast('登录成功', 'success');
         onSuccess();
       } else {
         showToast(data.message || '登录失败，请检查用户名和密码', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (operation.current(pending)) showToast('网络错误，请稍后再试', 'error');
     } finally {
-      setIsLoading(false);
+      if (operation.finish(pending)) setIsLoading(false);
     }
   };
 
@@ -325,11 +406,14 @@ function RegisterForm({
   onSwitch,
   onCaptchaChange,
   onSuccess,
+  isCurrentFlow,
 }: {
   onSwitch: (view: AuthView) => void;
   onCaptchaChange: (open: boolean) => void;
   onSuccess: () => void;
+  isCurrentFlow: () => boolean;
 }) {
+  const operation = useAuthOperation(isCurrentFlow);
   const [step, setStep] = useState<RegisterStep>('form');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -374,6 +458,7 @@ function RegisterForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isCurrentFlow() || operation.busy()) return;
     const error = validateForm();
     if (error) {
       showToast(error, 'error');
@@ -384,6 +469,8 @@ function RegisterForm({
 
   const onCaptchaVerify = async (token: string) => {
     setCaptcha(false);
+    const pending = operation.begin();
+    if (!pending) return;
     setIsLoading(true);
     try {
       const res = await api.register({
@@ -393,6 +480,7 @@ function RegisterForm({
         cf_token: token,
       });
       const data = await res.json();
+      if (!operation.current(pending)) return;
       if (res.ok && data.success) {
         registeredUserId.current = data.user_id;
         registeredUsername.current = data.username;
@@ -402,9 +490,9 @@ function RegisterForm({
         showToast(data.error || data.message || '注册失败，请检查输入', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (operation.current(pending)) showToast('网络错误，请稍后再试', 'error');
     } finally {
-      setIsLoading(false);
+      if (operation.finish(pending)) setIsLoading(false);
     }
   };
 
@@ -413,13 +501,15 @@ function RegisterForm({
       showToast('请输入完整的 6 位验证码', 'error');
       return;
     }
-    const previousToken = readToken();
+    const pending = operation.begin();
+    if (!pending) return;
     setIsVerifying(true);
     try {
       const res = await api.verifyEmailById(registeredUserId.current, code);
       const data = await res.json();
-      if (readToken() !== previousToken) return;
+      if (!operation.current(pending)) return;
       if (data.success) {
+        pending.expectedToken = data.token;
         writeUserInfo({
           token: data.token,
           username: data.username,
@@ -435,26 +525,29 @@ function RegisterForm({
         showToast(data.error || data.message || '验证失败', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (operation.current(pending)) showToast('网络错误，请稍后再试', 'error');
     } finally {
-      setIsVerifying(false);
+      if (operation.finish(pending)) setIsVerifying(false);
     }
   };
 
   const handleResend = async () => {
+    const pending = operation.begin();
+    if (!pending) return;
     setIsResending(true);
     try {
       const res = await api.resendVerifyCodeById(registeredUserId.current);
       const data = await res.json();
+      if (!operation.current(pending)) return;
       if (data.success) {
         showToast('新验证码已发送，请查收', 'success');
       } else {
         showToast(data.error || data.message || '发送失败', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (operation.current(pending)) showToast('网络错误，请稍后再试', 'error');
     } finally {
-      setIsResending(false);
+      if (operation.finish(pending)) setIsResending(false);
     }
   };
 
@@ -574,7 +667,8 @@ function RegisterForm({
   );
 }
 
-function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
+function ResetForm({ onSwitch, isCurrentFlow }: { onSwitch: (view: AuthView) => void; isCurrentFlow: () => boolean }) {
+  const operation = useAuthOperation(isCurrentFlow);
   const [step, setStep] = useState<'request' | 'reset'>('request');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -584,6 +678,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
 
   const handleRequestCode = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isCurrentFlow() || operation.busy()) return;
     if (!email.trim()) {
       showToast('请输入邮箱', 'error');
       return;
@@ -594,10 +689,13 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
       return;
     }
 
+    const pending = operation.begin();
+    if (!pending) return;
     setIsLoading(true);
     try {
       const res = await api.resetPasswordRequest(email);
       const data = await res.json();
+      if (!operation.current(pending)) return;
       if (data.success) {
         showToast('验证码已发送至邮箱', 'success');
         setStep('reset');
@@ -605,14 +703,15 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
         showToast(data.message || '发送失败', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (operation.current(pending)) showToast('网络错误，请稍后再试', 'error');
     } finally {
-      setIsLoading(false);
+      if (operation.finish(pending)) setIsLoading(false);
     }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isCurrentFlow() || operation.busy()) return;
     if (!code.trim()) {
       showToast('请输入验证码', 'error');
       return;
@@ -630,6 +729,8 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
       return;
     }
 
+    const pending = operation.begin();
+    if (!pending) return;
     setIsLoading(true);
     try {
       const res = await api.resetPassword({
@@ -638,6 +739,7 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
         new_password: newPassword,
       });
       const data = await res.json();
+      if (!operation.current(pending)) return;
       if (data.success) {
         showToast('密码重置成功，请登录', 'success');
         onSwitch('login');
@@ -645,9 +747,9 @@ function ResetForm({ onSwitch }: { onSwitch: (view: AuthView) => void }) {
         showToast(data.message || '重置失败', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (operation.current(pending)) showToast('网络错误，请稍后再试', 'error');
     } finally {
-      setIsLoading(false);
+      if (operation.finish(pending)) setIsLoading(false);
     }
   };
 

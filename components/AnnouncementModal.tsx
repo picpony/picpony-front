@@ -15,16 +15,19 @@ export default function AnnouncementModal() {
   /* On idle, not on mount: this request must not race the feed the visitor came for,
    * and it cannot be gated on the stored version — the version to compare against is
    * what this request returns. */
-  useEffect(
-    () =>
-      runWhenIdle(() => {
+  useEffect(() => {
+      let cancelled = false;
+      const cancelIdle = runWhenIdle(() => {
         void (async () => {
           try {
             const data = await api.getAnnouncement();
             if (data.success && data.announcement) {
-              const savedVersion = localStorage.getItem(LS_KEYS.readAnnouncementVersion);
+              let savedVersion: string | null = null;
+              try { savedVersion = localStorage.getItem(LS_KEYS.readAnnouncementVersion); } catch { /* Storage can be disabled. */ }
               if (savedVersion !== data.announcement.version) {
-                setAnnouncement(data.announcement);
+                const { sanitizeHtml } = await import('@/lib/sanitizeHtml');
+                if (cancelled) return;
+                setAnnouncement({ ...data.announcement, content: sanitizeHtml(data.announcement.content) });
                 setIsVisible(true);
               }
             }
@@ -32,13 +35,13 @@ export default function AnnouncementModal() {
             console.error('获取公告失败', error);
           }
         })();
-      }),
-    [],
-  );
+      });
+      return () => { cancelled = true; cancelIdle(); };
+  }, []);
 
   const handleClose = () => {
     if (announcement) {
-      localStorage.setItem(LS_KEYS.readAnnouncementVersion, announcement.version);
+      try { localStorage.setItem(LS_KEYS.readAnnouncementVersion, announcement.version); } catch { /* Dismiss still works without persistence. */ }
     }
     setIsVisible(false);
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import { Textarea } from './Input';
@@ -38,6 +38,11 @@ export function useConfirm() {
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const resolveRef = useRef<((confirmed: boolean) => void) | null>(null);
+
+  useEffect(() => () => {
+    resolveRef.current?.(false);
+    resolveRef.current = null;
+  }, []);
 
   const confirm = useCallback((next: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => {
@@ -114,6 +119,11 @@ export function usePrompt() {
   const [isOpen, setIsOpen] = useState(false);
   const [value, setValue] = useState('');
   const resolveRef = useRef<((value: string | null) => void) | null>(null);
+
+  useEffect(() => () => {
+    resolveRef.current?.(null);
+    resolveRef.current = null;
+  }, []);
 
   const prompt = useCallback((next: PromptOptions) => {
     return new Promise<string | null>((resolve) => {

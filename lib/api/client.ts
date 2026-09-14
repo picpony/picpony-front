@@ -1,5 +1,7 @@
 import { LS_KEYS } from '@/lib/constants';
-import { buildSearchQueryFrom } from '@/lib/searchQuery';
+import { buildSearchQueryFrom, parseContentFilter, parseSortField } from '@/lib/searchQuery';
+import { searchSort } from '@/lib/searchState';
+import { currentBlockFilters } from '@/lib/blockFilters';
 import { toCurrentImageLine } from '@/lib/imageLoader';
 import type { PonyImage } from '@/lib/types/image';
 import {
@@ -9,7 +11,6 @@ import {
   ensureRoutePolicy,
   isApiForced,
   resolveApiLine,
-  resolveImageLine,
   stepApiFailover,
 } from '@/lib/route';
 
@@ -34,15 +35,20 @@ export interface BrowsingSettings {
  * there took whole routes into client-only rendering. The server has no device to ask.
  */
 export function getBrowsingSettings(): BrowsingSettings {
-  const ls = (k: string, def: string) =>
-    typeof window === 'undefined' ? def : (localStorage.getItem(k) ?? def);
+  const ls = (k: string, def: string) => {
+    try {
+      return typeof window === 'undefined' ? def : (localStorage.getItem(k) ?? def);
+    } catch {
+      return def;
+    }
+  };
   return {
-    contentFilter: ls(LS_KEYS.contentFilter, 'safe') as 'safe' | 'spoilers' | 'developer',
+    contentFilter: parseContentFilter(ls(LS_KEYS.contentFilter, 'safe')),
     banAnthro: ls(LS_KEYS.banAnthro, 'false') === 'true',
     banDiscomfort: ls(LS_KEYS.banDiscomfort, 'true') !== 'false',
     onlyPony: ls(LS_KEYS.onlyPony, 'false') === 'true',
-    homeSort: ls(LS_KEYS.homeSort, 'created_at'),
-    searchSort: ls(LS_KEYS.searchSort, 'created_at'),
+    homeSort: parseSortField(ls(LS_KEYS.homeSort, 'created_at')),
+    searchSort: searchSort(ls(LS_KEYS.searchSort, 'created_at')),
   };
 }
 
@@ -55,7 +61,6 @@ export function getBrowsingSettings(): BrowsingSettings {
  * also map are no-ops.
  */
 export function applyImageLine<T extends PonyImage>(image: T): T {
-  if (resolveImageLine() === 'direct') return image;
   return {
     ...image,
     representations: Object.fromEntries(
@@ -83,10 +88,12 @@ export function buildSearchQuery(search?: string): string {
     {
       contentFilter: s.contentFilter,
       banAnthro: s.banAnthro,
+      banDiscomfort: s.banDiscomfort,
       onlyPony: s.onlyPony,
       hiddenTags,
     },
     search,
+    currentBlockFilters(),
   );
 }
 
@@ -101,7 +108,44 @@ function getSortParams(isSearch: boolean): string {
 const MAX_ATTEMPTS = 3;
 const MAX_SWITCHES = 3;
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', cancel);
+      resolve();
+    }, ms);
+    const cancel = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+  });
+}
+
+/** One caller leaving must stop waiting without aborting the shared policy read for others. */
+function waitForRoutePolicy(signal?: AbortSignal | null): Promise<void> {
+  const ready = ensureRoutePolicy();
+  if (!signal) return ready;
+  return new Promise((resolve, reject) => {
+    const cancel = () => reject(signal.reason);
+    if (signal.aborted) {
+      cancel();
+      return;
+    }
+    signal.addEventListener('abort', cancel, { once: true });
+    ready.then(() => {
+      signal.removeEventListener('abort', cancel);
+      resolve();
+    }, (error) => {
+      signal.removeEventListener('abort', cancel);
+      reject(error);
+    });
+  });
+}
 
 /**
  * Send a Derpibooru request on whichever line is in force, after awaiting the route policy —
@@ -122,7 +166,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * decision is made on `res.ok` and the status here.
  */
 export async function proxyFetch(url: string, options?: RequestInit): Promise<Response> {
-  await ensureRoutePolicy();
+  options?.signal?.throwIfAborted();
+  await waitForRoutePolicy(options?.signal);
+  options?.signal?.throwIfAborted();
 
   const method = (options?.method ?? 'GET').toUpperCase();
   if (method !== 'GET' && method !== 'HEAD') {
@@ -151,6 +197,9 @@ export async function proxyFetch(url: string, options?: RequestInit): Promise<Re
       const httpError = new Error(`HTTP ${res.status}`) as Error & { status?: number };
       httpError.status = res.status;
       lastError = httpError;
+      /* An unused failure body still owns its upstream connection until it is consumed or
+         cancelled. A retry must release it before opening another connection. */
+      void res.body?.cancel().catch(() => {});
     } catch (err) {
       lastError = err as Error;
     }
@@ -176,13 +225,13 @@ export async function proxyFetch(url: string, options?: RequestInit): Promise<Re
             : 'PicPony API 线路已重试多次仍不可用',
         );
       }
-      await sleep(300 * attempts);
+      await sleep(300 * attempts, options?.signal);
       continue;
     }
 
     if (line === 'direct' && !directRetried) {
       directRetried = true;
-      await sleep(300);
+      await sleep(300, options?.signal);
       continue;
     }
 
@@ -193,7 +242,7 @@ export async function proxyFetch(url: string, options?: RequestInit): Promise<Re
     }
 
     if (attempts >= MAX_ATTEMPTS) throw lastError;
-    await sleep(300 * attempts);
+    await sleep(300 * attempts, options?.signal);
   }
 }
 
@@ -209,11 +258,13 @@ export interface DerpiSearchParams {
 export async function fetchDerpiImages(
   baseUrl: string,
   params: DerpiSearchParams,
+  signal?: AbortSignal,
 ): Promise<Response> {
+  await waitForRoutePolicy(signal);
   const query = buildSearchQuery(params.query || undefined);
   let sortStr;
   if (params.sortField) {
-    sortStr = `sf=${params.sortField}&sd=${params.sortDir || 'desc'}`;
+    sortStr = `sf=${searchSort(params.sortField)}&sd=${params.sortDir === 'asc' ? 'asc' : 'desc'}`;
   } else {
     sortStr = getSortParams(!!params.query || (params.isSearch ?? false));
   }
@@ -223,6 +274,7 @@ export async function fetchDerpiImages(
     {
       cache: 'no-store',
       headers: { 'User-Agent': 'PicPony/1.0' },
+      signal,
     },
   );
 }
@@ -253,7 +305,9 @@ export async function readJson<T = any>(res: Response): Promise<T> {
     return { success: false, message: res.statusText || '空响应' } as T;
   }
   try {
-    return JSON.parse(text) as T;
+    const data: unknown = JSON.parse(text);
+    if (data !== null && typeof data === 'object' && !Array.isArray(data)) return data as T;
+    return { success: false, message: `响应不是合法 API 数据 (HTTP ${res.status})` } as T;
   } catch {
     return {
       success: false,

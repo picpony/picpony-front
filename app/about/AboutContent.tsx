@@ -32,6 +32,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
      turning the preference on mid-session left the animation running until something
      else re-rendered the page. */
   const reduced = useMotionTier() !== 'standard';
+  const [traceUnavailable, setTraceUnavailable] = useState(false);
 
   // 已登录状态下快速连点 10 次（点击间隔超 1.5s 重置）触发开发者向导
   const handleClick = () => {
@@ -63,6 +64,8 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
         autoplay: true,
         animationData: data as object,
       });
+    }).catch(() => {
+      if (!cancelled) setTraceUnavailable(true);
     });
     return () => {
       cancelled = true;
@@ -74,7 +77,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
      loading anything, leaving a labelled 176px hole where the wordmark belongs. The
      static mark is the honest fallback — reduced motion asks for less movement, not
      less content. */
-  if (reduced) {
+  if (reduced || traceUnavailable) {
     /* The static mark takes the same handler — without it the developer guide would be
        unreachable for anyone with the preference on. `Logo` renders the mark, not a
        box, so the handlers go on a wrapper rather than through it.

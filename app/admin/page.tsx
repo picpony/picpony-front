@@ -1,7 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useRef } from 'react';
 import {
   MdBook,
   MdDashboard,
@@ -157,21 +156,10 @@ const TABS: TabConfig[] = [
  *  the home tabs use for 图库. */
 const DEFAULT_TAB: TabId = 'welcome';
 
-/**
- * Long enough to sit past the pane's own 400ms fade (`animate-fade-in`), for the same
- * reason the home tab bar defers: an RSC navigation lands as a commit, and mid-swap
- * that is a dropped frame. Nothing waits for the URL — `pendingTab` owns what is on
- * screen — so the only cost of deferring is how soon the address bar agrees. Also
- * swallows a run down the sidebar into a single push rather than one history entry
- * per tab passed through.
- *
- * Scaled by the *slowest* speed: the fade's clock goes through `--motion-scale`, so at
- * 缓慢 it runs 560ms and an unscaled figure would push inside it.
- */
+/** Rapid changes replace the latest tab entry; the first change remains undoable. */
 const TAB_PUSH_COALESCE_MS = Math.round(400 * MOTION_SPEED_SCALE.slow);
 
 function AdminPanel() {
-  const router = useRouter();
   const searchParams = useBackgroundSearchParams();
   const { user, token: sessionToken, ready } = useSession();
   const userRole = typeof user?.role === 'string' ? user.role : 'user';
@@ -194,53 +182,27 @@ function AdminPanel() {
   const urlTab: TabId =
     visibleTabs.find((tab) => tab.id === tabParam)?.id ?? visibleTabs[0]?.id ?? DEFAULT_TAB;
 
-  /* Optimistic tab, so a click paints immediately. `router.push` only changes the search
-     params, but that is still an RSC navigation, and waiting for it would leave the
-     sidebar highlighting the tab you just left for as long as the round trip takes —
-     made worse by the coalescing window below. */
-  const [pendingTab, setPendingTab] = useState<TabId | null>(null);
-  const [isNavigating, startNavigation] = useTransition();
-  const activeTab = pendingTab ?? urlTab;
-
-  /* Adjust-during-render: hand control back to the URL once it has *finished* catching
-     up. `isNavigating` distinguishes that from the URL merely passing through this tab
-     on its way to a later one in the same burst. */
-  if (pendingTab && pendingTab === urlTab && !isNavigating) setPendingTab(null);
-
-  const pushTimer = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
-    },
-    [],
-  );
+  const activeTab = urlTab;
+  const lastTabWrite = useRef<{ at: number; href: string } | null>(null);
 
   const handleTabChange = (tabId: TabId) => {
     if (tabId === activeTab) return;
-    setPendingTab(tabId);
-
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(window.location.search);
     if (tabId === DEFAULT_TAB) params.delete('tab');
     else params.set('tab', tabId);
     const qs = params.toString();
     const href = qs ? `/admin?${qs}` : '/admin';
 
-    if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
-    pushTimer.current = null;
-    /* A burst that comes back to the tab the URL already names needs no push — and has to
-       cancel the one it queued on the way out, or that lands as a second history entry
-       for the page we never left. Only while nothing is in flight: a push that has
-       already started moves the URL off this tab, and then it is exactly the push that
-       has to put it back. */
-    if (tabId === urlTab && !isNavigating) return;
-
-    pushTimer.current = window.setTimeout(() => {
-      pushTimer.current = null;
-      /* `scroll: false`: the panel is one screen with a sidebar beside it, so there is
-         no new segment to scroll to — only the reading position of whatever list you
-         were in to lose. */
-      startNavigation(() => router.push(href, { scroll: false }));
-    }, TAB_PUSH_COALESCE_MS);
+    const currentHref = `${window.location.pathname}${window.location.search}`;
+    if (href === currentHref) return;
+    const now = performance.now();
+    const previous = lastTabWrite.current;
+    const withinBurst = previous !== null && previous.href === currentHref &&
+      now - previous.at < TAB_PUSH_COALESCE_MS;
+    // Native history is synchronous and does not start an RSC request that can
+    // overtake a route the user opens immediately after selecting a tab.
+    window.history[withinBurst ? 'replaceState' : 'pushState'](null, '', href);
+    lastTabWrite.current = { at: now, href };
   };
 
   if (!ready) {

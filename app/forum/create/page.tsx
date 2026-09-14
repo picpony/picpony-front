@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MdArrowBack, MdSend, MdImage, MdClose } from 'react-icons/md';
@@ -18,7 +18,7 @@ import Chip from '@/components/Chip';
 import { ICON } from '@/lib/icons';
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 import PageHeader from '@/components/PageHeader';
-import { readUserInfo, useSession } from '@/lib/hooks';
+import { readToken, readUserInfo, useSession } from '@/lib/hooks';
 import { processImageFile } from '@/lib/utils';
 
 const categories = [
@@ -35,6 +35,13 @@ export default function CreateForumPostPage() {
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [selectedCoverFile, setSelectedCoverFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitting = useRef(false);
+  const coverRead = useRef(0);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; coverRead.current += 1; };
+  }, []);
   const { token, ready } = useSession();
   const isLoggedIn = Boolean(token);
   const [error, setError] = useState<string | null>(null);
@@ -46,20 +53,20 @@ export default function CreateForumPostPage() {
   }, [ready, isLoggedIn, openAuth]);
 
   const handleCoverFile = useCallback(async (file: File) => {
+    const request = ++coverRead.current;
     try {
-      await processImageFile(file, 5);
+      const preview = await processImageFile(file, 5);
+      if (!alive.current || request !== coverRead.current) return;
+      setSelectedCoverFile(file);
+      setCoverPreview(preview);
     } catch (err) {
+      if (!alive.current || request !== coverRead.current) return;
       showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
-      return;
     }
-
-    setSelectedCoverFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setCoverPreview(reader.result as string);
-    reader.readAsDataURL(file);
   }, []);
 
   const removeCover = useCallback(() => {
+    coverRead.current += 1;
     setCoverPreview(null);
     setSelectedCoverFile(null);
   }, []);
@@ -67,6 +74,7 @@ export default function CreateForumPostPage() {
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      if (submitting.current || !token || readToken() !== token) return;
 
       if (!title.trim()) {
         showToast('请输入标题', 'error');
@@ -77,6 +85,7 @@ export default function CreateForumPostPage() {
         return;
       }
 
+      submitting.current = true;
       setIsSubmitting(true);
       setError(null);
 
@@ -88,9 +97,9 @@ export default function CreateForumPostPage() {
         if (selectedCoverFile) {
           const res = await api.uploadForumImage(user.token, selectedCoverFile);
           const data = await res.json();
-          if (data.success && data.image_url) {
-            coverImagePath = data.image_url;
-          }
+          if (!alive.current || readToken() !== user.token) return;
+          if (!res.ok || !data.success || !data.image_url) throw new Error(data.error || data.message || '封面上传失败，请重试');
+          coverImagePath = data.image_url;
         }
 
         const res = await api.createForumPost(user.token, {
@@ -101,22 +110,26 @@ export default function CreateForumPostPage() {
         });
 
         const data = await res.json();
-
+        if (!alive.current || readToken() !== user.token) return;
         if (data.success) {
+          const postId = Number(data.post_id);
+          if (!Number.isSafeInteger(postId) || postId <= 0) throw new Error('服务器未返回有效帖子 ID，请检查帖子是否已发布');
           showToast('发帖成功', 'success');
-          router.push(`/forum/${data.post_id}`, { scroll: false });
+          router.push(`/forum/${postId}`, { scroll: false });
         } else {
           setError(data.error || '发帖失败');
           showToast(data.error || '发帖失败', 'error');
         }
       } catch (err) {
+        if (!alive.current || readToken() !== token) return;
         setError(err instanceof Error ? err.message : '网络错误，请稍后再试');
         showToast('发帖失败，请稍后重试', 'error');
       } finally {
+        submitting.current = false;
         setIsSubmitting(false);
       }
     },
-    [title, content, category, selectedCoverFile, router],
+    [title, content, category, selectedCoverFile, router, token],
   );
   if (!isLoggedIn) return null;
   return (
@@ -158,11 +171,9 @@ export default function CreateForumPostPage() {
           </div>
         </div>
         <div>
-          <label htmlFor="title" className="block text-label-l text-on-surface mb-2">
-            标题
-          </label>
           <Input
             id="title"
+            label="标题"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}

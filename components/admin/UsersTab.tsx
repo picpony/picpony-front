@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { showToast } from '@/components/Toast';
 import { default as StatusBadge } from '@/components/Badge';
 import Checkbox from '@/components/Checkbox';
@@ -21,6 +21,9 @@ import { ICON } from '@/lib/icons';
    every gallery route shipped all 48 of these. Only the eleven admin tabs
    import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { readToken } from '@/lib/hooks';
+import { useAdminMutation } from './useAdminMutation';
 
 interface Badge {
   id: number;
@@ -71,9 +74,18 @@ const USER_GENDER_OPTIONS = [
   { value: 'secret', label: '保密' },
 ];
 
+const emptyUsers: User[] = [];
+const usersQuery = defineAdminQuery<User[]>('users', async (token, signal) => {
+  const data = await adminApi.adminGetUsers(token, signal);
+  return adminData(data, data.users || []);
+});
+
 export default function UsersTab({ token, myRole }: { token: string; myRole: string }) {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const mutation = useAdminMutation(token);
+  const read = useAdminQuery(usersQuery, token);
+  const users = read.data ?? emptyUsers;
+  const isLoading = read.loading;
+  const loadUsers = read.refresh;
   const [searchKw, setSearchKw] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isInlineEditorClosing, setIsInlineEditorClosing] = useState(false);
@@ -89,9 +101,11 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
     is_banned: 0,
   });
   const refreshAfterInlineCloseRef = useRef(false);
+  const savingRef = useRef(false);
 
   const handleSaveUser = async () => {
-    if (!editingUser) return;
+    if (!editingUser || savingRef.current || readToken() !== token) return;
+    savingRef.current = true;
     setIsSavingUser(true);
     try {
       const payload: Record<string, unknown> = { target_id: editingUser.id };
@@ -118,6 +132,8 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       const res = await adminApi.adminUpdateUser(token, payload);
       const data = await res.json();
 
+      if (readToken() !== token) return;
+
       if (data.success) {
         showToast('用户信息已更新', 'success');
         refreshAfterInlineCloseRef.current = true;
@@ -128,38 +144,12 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
     } catch {
       showToast('网络错误，请稍后再试', 'error');
     } finally {
+      savingRef.current = false;
       setIsSavingUser(false);
     }
   };
 
   const { confirmThen, confirmDialog } = useConfirm();
-
-  const loadUsers = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await adminApi.adminGetUsers(token);
-      if (data.success) {
-        setUsers(data.users || []);
-      }
-    } catch {
-      showToast('用户加载失败', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    adminApi
-      .adminGetUsers(token)
-      .then((data) => {
-        if (data.success) {
-          setUsers(data.users || []);
-        }
-      })
-      .catch(() => showToast('用户加载失败', 'error'))
-      .finally(() => setIsLoading(false));
-  }, [token]);
 
   const filteredUsers = useMemo(() => {
     if (!searchKw) return users;
@@ -173,6 +163,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
   }, [searchKw, users]);
 
   const openInlineEditor = (user: User) => {
+    if (savingRef.current) return;
     setEditingUser(user);
     setIsInlineEditorClosing(false);
     setEditForm({
@@ -206,18 +197,11 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       isBanned ? '确认封禁' : '确认解封',
       isBanned ? '确定要封禁该用户吗？' : '确定要解封该用户吗？',
       async () => {
-        try {
-          const res = await adminApi.adminUpdateUser(token, { target_id: userId, is_banned: isBanned });
-          const data = await res.json();
-          if (data.success) {
+        await mutation.run(() => adminApi.adminUpdateUser(token, { target_id: userId, is_banned: isBanned }), () => {
+            usersQuery.write(token, (previous) => previous?.map((user) => user.id === userId ? { ...user, is_banned: isBanned } : user) ?? []);
             showToast(isBanned ? '已封禁' : '已解封', 'success');
             loadUsers();
-          } else {
-            showToast(data.error || '操作失败', 'error');
-          }
-        } catch {
-          showToast('操作失败', 'error');
-        }
+          }, '操作失败');
       },
     );
   };
@@ -227,18 +211,11 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
       '确认彻底删除账号',
       '确定要彻底抹除此账号及所有相关数据吗？此操作无法恢复。',
       async () => {
-        try {
-          const res = await adminApi.adminDeleteUser(token, userId);
-          const data = await res.json();
-          if (data.success) {
+        await mutation.run(() => adminApi.adminDeleteUser(token, userId), () => {
+            usersQuery.write(token, (previous) => previous?.filter((user) => user.id !== userId) ?? []);
             showToast('已删除', 'success');
             loadUsers();
-          } else {
-            showToast(data.error || '删除失败', 'error');
-          }
-        } catch {
-          showToast('删除失败', 'error');
-        }
+          }, '删除失败');
       },
     );
   };
@@ -509,6 +486,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
             size="sm"
             icon={u.is_banned ? <MdCheckCircle /> : <MdBlock />}
             onClick={() => handleBan(u.id, u.is_banned ? 0 : 1)}
+            disabled={mutation.busy || isSavingUser}
             className={u.is_banned ? 'text-success' : 'text-error'}
             aria-label={`${u.is_banned ? '解封' : '封禁'}用户 ${u.username}`}
           />
@@ -517,6 +495,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
             size="sm"
             icon={<MdDelete />}
             onClick={() => handleDelete(u.id)}
+            disabled={mutation.busy || isSavingUser}
             className="text-error"
             aria-label={`删除用户 ${u.username}`}
           />
@@ -545,6 +524,8 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
         rowKey={(u) => u.id}
         expandedRow={renderInlineEditor}
         loading={isLoading}
+        error={read.error}
+        onRetry={loadUsers}
         empty="没有找到匹配的用户"
       />
 

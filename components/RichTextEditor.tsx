@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
 import { useAuth } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
@@ -8,7 +8,7 @@ import { getAssetUrl } from '@/lib/utils';
 import { isImageHeroTransitionRunning, waitForImageHeroTransition } from '@/lib/hero';
 import '@wangeditor/editor/dist/css/style.css';
 
-import type { IDomEditor, Toolbar, IEditorConfig, IToolbarConfig } from '@wangeditor/editor';
+import type { IDomEditor, Toolbar, IEditorConfig } from '@wangeditor/editor';
 
 interface RichTextEditorProps {
   value: string;
@@ -34,208 +34,198 @@ export default function RichTextEditor({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const toolbarContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingRef = useRef(false);
-  const initializedRef = useRef(false);
-
+  const generationRef = useRef(0);
+  const uploadsRef = useRef(new Set<AbortController>());
   const { getToken: getTokenFromAuth } = useAuth();
+  const latest = useRef({ value, onChange, placeholder, disabled, enableImageUpload, imageUploadUrl, getToken });
 
-  const destroyEditor = useCallback(() => {
+  useLayoutEffect(() => {
+    latest.current = { value, onChange, placeholder, disabled, enableImageUpload, imageUploadUrl, getToken };
+  });
+
+  const writeValue = useCallback((editor: IDomEditor, next: string) => {
+    isUpdatingRef.current = true;
     try {
-      if (editorRef.current) {
-        editorRef.current.destroy();
-        editorRef.current = null;
-      }
-      if (toolbarRef.current) {
-        toolbarRef.current.destroy();
-        toolbarRef.current = null;
-      }
-    } catch (err) {
-      console.error('销毁编辑器失败:', err);
+      const focused = editor.isFocused();
+      // setHtml restores the previous Slate selection, even when its offset is
+      // beyond the new text. Clear it first so a controlled reset cannot throw
+      // later in the editor's asynchronous DOM-selection synchronization.
+      editor.deselect();
+      editor.blur();
+      editor.setHtml(bbcodeToHtml(next));
+      if (focused) queueMicrotask(() => {
+        if (editorRef.current === editor && !editor.isDestroyed) editor.focus(true);
+      });
+    } finally {
+      isUpdatingRef.current = false;
     }
-    initializedRef.current = false;
   }, []);
 
-  const initEditor = useCallback(async () => {
-    if (initializedRef.current) return;
-    if (!toolbarContainerRef.current || !editorContainerRef.current) return;
+  useEffect(() => {
+    const generation = ++generationRef.current;
+    const uploads = uploadsRef.current;
+    let semantics: MutationObserver | null = null;
+    let cancelSelection = () => {};
+    const isCurrent = () => generationRef.current === generation;
 
-    const wangEditor = await import('@wangeditor/editor');
-
-    // Guard: after async import, re-check since StrictMode double-mount may
-    // have already initialized the editor while we were awaiting
-    if (initializedRef.current) return;
-    if (!toolbarContainerRef.current || !editorContainerRef.current) return;
-
-    const { createEditor, createToolbar } = wangEditor;
-
-    const editorConfig: Partial<IEditorConfig> = {
-      autoFocus: false,
-      placeholder,
-      MENU_CONF: {},
-      onChange(editor: IDomEditor) {
-        if (isUpdatingRef.current) return;
-        const html = editor.getHtml();
-        const bbcode = htmlToBBCode(html);
-        onChange(bbcode);
-      },
-    };
-
-    if (enableImageUpload) {
-      const menuConf = editorConfig.MENU_CONF || {};
-      menuConf.uploadImage = {
-        async customUpload(file: File, insertFn: (url: string, alt: string, href: string) => void) {
-          const formData = new FormData();
-          formData.append('image', file);
-
-          const uploadUrl = imageUploadUrl || '/api.php?action=upload_forum_image';
-          const token = getToken ? getToken() : getTokenFromAuth();
-
-          try {
-            const res = await fetch(uploadUrl, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token || ''}`,
-              },
-              body: formData,
-            });
-            const data = await res.json();
-            if (data.success) {
-              if (!editorRef.current) {
-                showToast('编辑器已关闭，图片无法插入', 'warning');
-                return;
-              }
-              const imageUrl = getAssetUrl(data.url);
-              insertFn(imageUrl, '', imageUrl);
-            } else {
-              console.error('上传图片失败:', data.error);
-              showToast(data.error || '上传图片失败', 'error');
-            }
-          } catch (err) {
-            console.error('上传图片异常:', err);
-            showToast('上传图片失败', 'error');
-          }
+    const init = async () => {
+      const { createEditor, createToolbar, DomEditor } = await import('@wangeditor/editor');
+      if (!isCurrent() || !editorContainerRef.current || !toolbarContainerRef.current) return;
+      const config = latest.current;
+      const editorConfig: Partial<IEditorConfig> = {
+        autoFocus: false,
+        placeholder: config.placeholder,
+        MENU_CONF: {},
+        onChange(editor: IDomEditor) {
+          if (!isCurrent() || isUpdatingRef.current) return;
+          latest.current.onChange(htmlToBBCode(editor.getHtml()));
         },
-        maxFileSize: 5 * 1024 * 1024,
       };
-    }
-
-    const toolbarConfig: Partial<IToolbarConfig> = {
-      excludeKeys: [
-        'headerSelect',
-        'blockquote',
-        'group-more-style',
-        'insertVideo',
-        'insertTable',
-        'codeBlock',
-        'todo',
-        'fullScreen',
-      ],
-    };
-
-    destroyEditor();
-
-    try {
-      const editor = createEditor({
-        selector: editorContainerRef.current,
-        config: editorConfig,
-        mode: 'simple',
-      });
-
-      const toolbar = createToolbar({
+      if (config.enableImageUpload) {
+        editorConfig.MENU_CONF!.uploadImage = {
+          async customUpload(file: File, insertFn: (url: string, alt: string, href: string) => void) {
+            const owner = editorRef.current;
+            if (!owner || !isCurrent() || latest.current.disabled) return;
+            const readCredential = latest.current.getToken ?? getTokenFromAuth;
+            const token = readCredential();
+            const controller = new AbortController();
+            uploads.add(controller);
+            try {
+              const formData = new FormData();
+              formData.append('image', file);
+              const res = await fetch(latest.current.imageUploadUrl || '/api.php?action=upload_forum_image', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token || ''}` },
+                body: formData,
+                signal: controller.signal,
+              });
+              const data = await res.json();
+              if (!isCurrent() || controller.signal.aborted || editorRef.current !== owner ||
+                readCredential() !== token || latest.current.disabled) return;
+              if (res.ok && data.success) {
+                const imageUrl = getAssetUrl(data.url);
+                insertFn(imageUrl, '', imageUrl);
+              } else {
+                showToast(data.error || '上传图片失败', 'error');
+              }
+            } catch (err) {
+              if (!isCurrent() || controller.signal.aborted || readCredential() !== token) return;
+              console.error('上传图片异常:', err);
+              showToast('上传图片失败', 'error');
+            } finally {
+              uploads.delete(controller);
+            }
+          },
+          maxFileSize: 5 * 1024 * 1024,
+        };
+      }
+      const editor = createEditor({ selector: editorContainerRef.current, config: editorConfig, mode: 'simple' });
+      editorRef.current = editor;
+      // WangEditor 5 removes its selectionchange listener on destroy but does
+      // not cancel lodash.throttle's trailing invocation. That callback reads
+      // a WeakMap entry which destroy has deleted and throws after unmount.
+      const textarea = DomEditor.getTextarea(editor) as unknown as {
+        onDOMSelectionChange?: { cancel?: () => void };
+      };
+      cancelSelection = () => textarea.onDOMSelectionChange?.cancel?.();
+      toolbarRef.current = createToolbar({
         editor,
         selector: toolbarContainerRef.current,
-        config: toolbarConfig,
+        config: { excludeKeys: [
+          'headerSelect', 'blockquote', 'group-more-style', 'insertVideo',
+          'insertTable', 'codeBlock', 'todo', 'fullScreen',
+        ] },
         mode: 'simple',
       });
+      writeValue(editor, latest.current.value);
+      if (latest.current.disabled) editor.disable();
 
-      editorRef.current = editor;
-      toolbarRef.current = toolbar;
-      initializedRef.current = true;
-
-      if (value) {
-        isUpdatingRef.current = true;
-        try {
-          editor.setHtml(bbcodeToHtml(value));
-        } catch {
-          editor.clear();
-          try {
-            editor.dangerouslyInsertHtml(bbcodeToHtml(value));
-          } catch (e) {
-            console.error('设置编辑器内容失败:', e);
-          }
+      // WangEditor uses a non-ARIA role and CSS-only tooltip labels. Bridge its
+      // real DOM, including controls added when a toolbar group opens.
+      const menuLabels: Record<string, string> = {
+        'group-image': '插入图片',
+        bold: '加粗',
+        italic: '斜体',
+        underline: '下划线',
+        through: '删除线',
+        color: '文字颜色',
+        bgColor: '背景颜色',
+        bulletedList: '无序列表',
+        numberedList: '有序列表',
+        justifyLeft: '左对齐',
+        justifyCenter: '居中对齐',
+        justifyRight: '右对齐',
+        insertLink: '插入链接',
+        undo: '撤销',
+        redo: '重做',
+      };
+      const nameControls = () => {
+        const editable = editorContainerRef.current?.querySelector<HTMLElement>('[data-slate-editor]');
+        if (editable) {
+          editable.setAttribute('role', 'textbox');
+          editable.setAttribute('aria-multiline', 'true');
+          editable.setAttribute('aria-label', latest.current.placeholder);
         }
-        isUpdatingRef.current = false;
-      }
-    } catch (err) {
-      console.error('初始化编辑器失败:', err);
-    }
-  }, [
-    placeholder,
-    onChange,
-    enableImageUpload,
-    imageUploadUrl,
-    getToken,
-    getTokenFromAuth,
-    destroyEditor,
-    value,
-  ]);
-
-  // Mount once: re-running on initEditor/value changes would tear down the editor mid-edit
-  useEffect(() => {
-    initEditor().catch((err) => console.error('编辑器初始化异常:', err));
+        toolbarContainerRef.current?.querySelectorAll<HTMLButtonElement>('button[data-tooltip]').forEach((button) => {
+          const label = button.dataset.tooltip?.trim();
+          if (label) button.setAttribute('aria-label', label);
+        });
+        toolbarContainerRef.current?.querySelectorAll<HTMLButtonElement>('button[data-menu-key]').forEach((button) => {
+          if (button.getAttribute('aria-label')) return;
+          const key = button.dataset.menuKey ?? '';
+          const label = menuLabels[key] ?? button.textContent?.trim();
+          // A generic name is preferable to an unnamed toolbar command if a
+          // future WangEditor plugin introduces a new key before its wording is
+          // added above; the key itself is an implementation detail.
+          button.setAttribute('aria-label', label || '编辑器工具栏操作');
+        });
+      };
+      nameControls();
+      semantics = new MutationObserver(nameControls);
+      semantics.observe(toolbarContainerRef.current, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-tooltip'] });
+    };
+    void init().catch((err) => {
+      if (isCurrent()) console.error('编辑器初始化异常:', err);
+    });
 
     return () => {
-      if (!isImageHeroTransitionRunning()) {
-        destroyEditor();
-        return;
-      }
-      void waitForImageHeroTransition().then(destroyEditor);
+      generationRef.current += 1;
+      semantics?.disconnect();
+      for (const controller of uploads) controller.abort();
+      uploads.clear();
+      // Capture these instances now. A deferred teardown must never destroy the
+      // new editor installed by a remount/StrictMode replay in the meantime.
+      const editor = editorRef.current;
+      const toolbar = toolbarRef.current;
+      editorRef.current = null;
+      toolbarRef.current = null;
+      const destroy = () => {
+        cancelSelection();
+        try { toolbar?.destroy(); } catch (err) { console.error('销毁工具栏失败:', err); }
+        try { editor?.destroy(); } catch (err) { console.error('销毁编辑器失败:', err); }
+      };
+      if (isImageHeroTransitionRunning()) void waitForImageHeroTransition().then(destroy, destroy);
+      else queueMicrotask(destroy);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount/unmount lifecycle only
-  }, []);
+  }, [getTokenFromAuth, writeValue]);
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || !value) return;
-    if (isUpdatingRef.current) return;
-
-    let currentHtml: string;
+    if (!editor || isUpdatingRef.current) return;
+    // A controlled reset to '' is still a value. Compare the serialized value
+    // rather than normalized HTML so ordinary typing keeps its selection.
     try {
-      currentHtml = editor.getHtml();
-    } catch {
-      // Editor instance was destroyed (WeakMap entry cleared); skip update
-      return;
-    }
-    const expectedHtml = bbcodeToHtml(value);
-    if (currentHtml !== expectedHtml) {
-      isUpdatingRef.current = true;
-      try {
-        editor.setHtml(expectedHtml);
-      } catch {
-        editor.clear();
-        try {
-          editor.dangerouslyInsertHtml(expectedHtml);
-        } catch (e) {
-          console.error('更新编辑器内容失败:', e);
-        }
-      }
-      isUpdatingRef.current = false;
-    }
-  }, [value]);
+      if (htmlToBBCode(editor.getHtml()) !== value) writeValue(editor, value);
+    } catch (err) { console.error('更新编辑器内容失败:', err); }
+  }, [value, writeValue]);
 
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
-
-    try {
-      if (disabled) {
-        editor.disable();
-      } else {
-        editor.enable();
-      }
-    } catch {
-      // Editor instance was destroyed; ignore
-    }
-  }, [disabled]);
+    if (disabled) editor.disable();
+    else editor.enable();
+    editorContainerRef.current?.querySelector('[data-slate-editor]')?.setAttribute('aria-label', placeholder);
+  }, [disabled, placeholder]);
 
   return (
     /* outline, not outline-variant: this is the boundary of a control you

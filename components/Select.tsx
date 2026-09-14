@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { MdCheck, MdExpandMore } from 'react-icons/md';
+import { MdExpandMore } from 'react-icons/md';
+import CheckGlyph from './CheckGlyph';
 import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';
 import { ICON } from '@/lib/icons';
 
@@ -63,10 +64,18 @@ export default function Select<T extends string = string>({
 
   const selected = options.find((o) => o.value === value);
   const selectedIndex = options.findIndex((o) => o.value === value);
+  const firstEnabled = options.findIndex((option) => !option.disabled);
+  const cursorIndex = options[activeIndex] && !options[activeIndex].disabled ? activeIndex : firstEnabled;
+
+  // A route-policy update can disable a setting while its menu is open. Close
+  // declaratively after commit; commit() also checks disabled for the tiny gap.
+  useEffect(() => {
+    if (disabled && open) queueMicrotask(() => setOpen(false));
+  }, [disabled, open]);
 
   const openMenu = () => {
     if (disabled) return;
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    setActiveIndex(selectedIndex >= 0 && !options[selectedIndex].disabled ? selectedIndex : firstEnabled);
     setOpen(true);
   };
 
@@ -78,18 +87,18 @@ export default function Select<T extends string = string>({
   }, []);
 
   const commit = (option: SelectOption<T>) => {
-    if (option.disabled) return;
+    if (disabled || option.disabled) return;
     if (option.value !== value) onChange(option.value);
     close();
   };
 
   // Keep the active option in view during keyboard traversal.
   useEffect(() => {
-    if (!open || activeIndex < 0) return;
+    if (!open || cursorIndex < 0) return;
     popoverRef.current?.element
       ?.querySelectorAll<HTMLElement>('[data-option]')
-      [activeIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [open, activeIndex]);
+      [cursorIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [open, cursorIndex]);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     const step = (delta: number) => {
@@ -98,14 +107,14 @@ export default function Select<T extends string = string>({
         openMenu();
         return;
       }
-      setActiveIndex((prev) => {
+      setActiveIndex(() => {
         const total = options.length;
-        let next = prev;
+        let next = cursorIndex;
         for (let i = 0; i < total; i++) {
           next = (next + delta + total) % total;
           if (!options[next].disabled) return next;
         }
-        return prev;
+        return cursorIndex;
       });
     };
 
@@ -119,12 +128,14 @@ export default function Select<T extends string = string>({
       case 'Home':
       case 'End':
         event.preventDefault();
-        if (open) setActiveIndex(event.key === 'Home' ? 0 : options.length - 1);
+        if (open) setActiveIndex(event.key === 'Home'
+          ? firstEnabled
+          : options.findLastIndex((option) => !option.disabled));
         break;
       case 'Enter':
       case ' ':
         event.preventDefault();
-        if (open && options[activeIndex]) commit(options[activeIndex]);
+        if (open && options[cursorIndex]) commit(options[cursorIndex]);
         else openMenu();
         break;
       case 'Escape':
@@ -176,7 +187,7 @@ export default function Select<T extends string = string>({
               ? 'cursor-not-allowed text-on-surface disabled-content'
               : isSelected
                 ? 'bg-secondary-container text-on-secondary-container'
-                : index === activeIndex
+                : index === cursorIndex
                   /* The keyboard cursor. `state-layer` paints nothing until a
                      pointer arrives, so arrowing through this list used to show
                      no cursor at all — the scroll moved and the row was
@@ -199,10 +210,8 @@ export default function Select<T extends string = string>({
           </span>
           {/* 18dp trailing check — M3 uses a trailing element, not a colour
               change, to say which item is current. */}
-          <MdCheck
-            size={ICON.dense}
-            aria-hidden="true"
-            className={`shrink-0 transition-ui ${
+          <CheckGlyph
+            className={`size-4 shrink-0 transition-ui ${
               isSelected ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
             }`}
           />
@@ -228,7 +237,7 @@ export default function Select<T extends string = string>({
            reader was listening to, so arrowing through the list moved the scroll,
            painted the cursor and announced nothing. */
         aria-activedescendant={
-          open && activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined
+          open && cursorIndex >= 0 ? `${listboxId}-${cursorIndex}` : undefined
         }
         onClick={() => (open ? close() : openMenu())}
         onKeyDown={handleKeyDown}

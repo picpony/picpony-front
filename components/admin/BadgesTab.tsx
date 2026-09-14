@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { MdEmojiEvents, MdAdd, MdEdit, MdDelete, MdContentCopy, MdLink } from 'react-icons/md';
@@ -11,6 +11,7 @@ import SectionHeading from '@/components/SectionHeading';
 import UserBadge from '@/components/UserBadge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
+import Chip from '@/components/Chip';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { Input, ColorSwatch } from '@/components/Input';
@@ -24,6 +25,8 @@ import { readToken } from '@/lib/hooks';
    every gallery route shipped all 48 of these. Only the eleven admin tabs
    import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { useAdminMutation } from './useAdminMutation';
 
 interface Badge {
   id: number;
@@ -41,11 +44,19 @@ interface BadgeLink {
   link_expires_at: string | null;
 }
 
+const linksQuery = defineAdminQuery<BadgeLink[]>('badge-links', async (token, signal) => {
+  const data = await adminApi.adminGetBadgeLinks(token, signal);
+  return adminData(data, data.data?.links || data.links || []);
+});
+
 export default function BadgesTab({ token }: { token: string }) {
   const [badges] = useState<Badge[]>([]);
-  const [badgeLinks, setBadgeLinks] = useState<BadgeLink[]>([]);
-  const [loading, setLoading] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'grant' | 'links'>('grant');
+  const mutation = useAdminMutation(token);
+  const read = useAdminQuery(linksQuery, activeSubTab === 'links' ? token : '');
+  const badgeLinks = read.data ?? [];
+  const loading = read.loading;
+  const loadData = read.refresh;
 
   // Badge grant form
   const [badgeName, setBadgeName] = useState('');
@@ -72,40 +83,6 @@ export default function BadgesTab({ token }: { token: string }) {
   const [creatingLink, setCreatingLink] = useState(false);
   const creatingLinkRef = useRef(false);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      // Load badge links
-      const linksRes = await adminApi.adminGetBadgeLinks(token);
-      setBadgeLinks(linksRes.data?.links || linksRes.links || []);
-    } catch {
-      showToast('数据加载失败', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const linksRes = await adminApi.adminGetBadgeLinks(token);
-        if (!cancelled) {
-          setBadgeLinks(linksRes.data?.links || linksRes.links || []);
-        }
-      } catch {
-        if (!cancelled) showToast('数据加载失败', 'error');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
-
   /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
      converted to the shared dialog and five — this among them — kept their own,
      which is also why their copy drifted: every hand-rolled body dropped the
@@ -118,6 +95,23 @@ export default function BadgesTab({ token }: { token: string }) {
       showToast('请填写徽章名称', 'warning');
       return;
     }
+    const userIds = targetUserIds.trim() ? targetUserIds.split(/[,，]/).map((id) => Number(id.trim())) : undefined;
+    if (userIds?.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+      showToast('用户 ID 必须是用逗号分隔的正整数', 'warning');
+      return;
+    }
+    if (!/^#[\da-f]{6}$/i.test(badgeColor)) {
+      showToast('请输入有效的六位十六进制颜色', 'warning');
+      return;
+    }
+    if (!isPermanent && !expiresAt) {
+      showToast('请填写徽章到期时间', 'warning');
+      return;
+    }
+    if (startDate && endDate && startDate > endDate) {
+      showToast('结束日期不能早于开始日期', 'warning');
+      return;
+    }
     // Block a second activation before React commits the disabled button.
     grantingRef.current = true;
     setGranting(true);
@@ -126,12 +120,7 @@ export default function BadgesTab({ token }: { token: string }) {
         badge_name: badgeName.trim(),
         badge_color: badgeColor,
       };
-      if (targetUserIds.trim()) {
-        payload.user_ids = targetUserIds
-          .split(',')
-          .map((s: string) => parseInt(s.trim()))
-          .filter((n: number) => !isNaN(n));
-      }
+      if (userIds) payload.user_ids = [...new Set(userIds)];
       if (startDate) payload.start_date = startDate;
       if (endDate) payload.end_date = endDate;
       if (!isPermanent && expiresAt) payload.expires_at = expiresAt;
@@ -167,39 +156,27 @@ export default function BadgesTab({ token }: { token: string }) {
 
   const handleSaveEdit = async () => {
     if (!editingBadge) return;
-    try {
-      const res = await adminApi.adminEditBadge(token, {
+    if (!editName.trim() || !/^#[\da-f]{6}$/i.test(editColor)) {
+      showToast('请填写徽章名称和有效的六位十六进制颜色', 'warning');
+      return;
+    }
+    await mutation.run(() => adminApi.adminEditBadge(token, {
         badge_id: editingBadge.id,
         badge_name: editName.trim(),
         badge_color: editColor,
-      });
-      const data = await res.json();
-      if (data.success) {
+      }), () => {
         showToast('徽章已更新', 'success');
         setEditModalOpen(false);
         loadData();
-      } else {
-        showToast(data.error || '更新失败', 'error');
-      }
-    } catch {
-      showToast('更新失败', 'error');
-    }
+      }, '更新失败');
   };
 
   const handleDeleteBadge = (badgeId: number) => {
     confirmThen('确认删除', '确定要删除此徽章吗？', async () => {
-      try {
-        const res = await adminApi.adminDeleteBadge(token, badgeId);
-        const data = await res.json();
-        if (data.success) {
+      await mutation.run(() => adminApi.adminDeleteBadge(token, badgeId), () => {
           showToast('已删除', 'success');
           loadData();
-        } else {
-          showToast(data.error || '删除失败', 'error');
-        }
-      } catch {
-        showToast('删除失败', 'error');
-      }
+        }, '删除失败');
     });
   };
 
@@ -207,6 +184,10 @@ export default function BadgesTab({ token }: { token: string }) {
     if (creatingLinkRef.current || readToken() !== token) return;
     if (!linkBadgeName.trim()) {
       showToast('请填写徽章名称', 'warning');
+      return;
+    }
+    if (!/^#[\da-f]{6}$/i.test(linkBadgeColor)) {
+      showToast('请输入有效的六位十六进制颜色', 'warning');
       return;
     }
     creatingLinkRef.current = true;
@@ -241,16 +222,12 @@ export default function BadgesTab({ token }: { token: string }) {
   };
 
   const handleToggleBadgeLink = async (id: number, isActive: number) => {
-    try {
-      const res = await adminApi.adminToggleBadgeLink(token, id, isActive ? 0 : 1);
-      const data = await res.json();
-      if (data.success) {
+    await mutation.run(() => adminApi.adminToggleBadgeLink(token, id, isActive ? 0 : 1), () => {
+        linksQuery.write(token, (previous) => previous?.map((link) =>
+          link.id === id ? { ...link, is_active: isActive ? 0 : 1 } : link) ?? []);
         showToast(isActive ? '已停用' : '已启用', 'success');
         loadData();
-      }
-    } catch {
-      showToast('操作失败', 'error');
-    }
+      }, '操作失败');
   };
 
   const copyBadgeLink = async (link: BadgeLink) => {
@@ -314,16 +291,15 @@ export default function BadgesTab({ token }: { token: string }) {
       key: 'state',
       header: '状态',
       render: (l) => (
-        <button
+        <Chip
+          variant="filter"
+          tone={l.is_active ? 'success' : 'error'}
+          selected={Boolean(l.is_active)}
+          disabled={mutation.busy}
           onClick={() => handleToggleBadgeLink(l.id, l.is_active)}
-          className={`state-layer rounded-sm px-2 py-1 text-label-m transition-ui outline-none focus-visible:ring-2 focus-ring ${
-            l.is_active
-              ? 'bg-success-container text-on-success-container'
-              : 'bg-error-container text-on-error-container'
-          }`}
         >
           {l.is_active ? '已启用' : '已停用'}
-        </button>
+        </Chip>
       ),
     },
     {
@@ -402,6 +378,7 @@ export default function BadgesTab({ token }: { token: string }) {
                 />
                 <Input
                   type="text"
+                  aria-label="徽章颜色值"
                   value={badgeColor}
                   onChange={(e) => setBadgeColor(e.target.value)}
                   fieldClassName="flex-1"
@@ -499,7 +476,6 @@ export default function BadgesTab({ token }: { token: string }) {
               columns={badgeColumns}
               rows={badges}
               rowKey={(b) => b.id}
-              loading={loading}
               empty="徽章列表接口尚未开放"
             />
           </Card>
@@ -537,6 +513,7 @@ export default function BadgesTab({ token }: { token: string }) {
                   />
                   <Input
                     type="text"
+                    aria-label="领取链接徽章颜色值"
                     value={linkBadgeColor}
                     onChange={(e) => setLinkBadgeColor(e.target.value)}
                     fieldClassName="flex-1"
@@ -582,6 +559,9 @@ export default function BadgesTab({ token }: { token: string }) {
               columns={badgeLinkColumns}
               rows={badgeLinks}
               rowKey={(l) => l.id}
+              loading={loading}
+              error={read.error}
+              onRetry={loadData}
               empty="暂无领取链接"
             />
           </Card>
@@ -590,15 +570,15 @@ export default function BadgesTab({ token }: { token: string }) {
       {/* Edit badge modal */}
       <Modal
         isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
+        onClose={() => { if (!mutation.busy) setEditModalOpen(false); }}
         title="编辑徽章"
         maxWidth="md"
         footer={
           <>
-            <Button variant="text" onClick={() => setEditModalOpen(false)}>
+            <Button variant="text" onClick={() => setEditModalOpen(false)} disabled={mutation.busy}>
               取消
             </Button>
-            <Button onClick={handleSaveEdit} variant="filled">
+            <Button onClick={handleSaveEdit} variant="filled" loading={mutation.busy}>
               保存
             </Button>
           </>

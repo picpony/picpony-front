@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { api } from '@/lib/api';
 import { SKIP, useResource } from '@/lib/resource';
 import { useScreenState } from '@/lib/screenState';
@@ -17,7 +17,8 @@ import UserBadge from '@/components/UserBadge';
 import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
 import { ICON } from '@/lib/icons';
-import { readUserInfo, useSession } from '@/lib/hooks';
+import { readToken, readUserInfo, useSession } from '@/lib/hooks';
+import { useAuthModal } from '@/components/AuthModal';
 
 interface TaskData {
   success: boolean;
@@ -62,18 +63,26 @@ const tabs: { id: TaskTab; label: string; subtitle: string }[] = [
 ];
 
 export default function TasksPage() {
-  const { token } = useSession();
+  const { token, ready } = useSession();
+  const { openAuth } = useAuthModal();
   const [activeTab, setActiveTab] = useScreenState<TaskTab>('tasks:tab', 'novice');
   const [claiming, setClaiming] = useState<string | null>(null);
+  const claimPending = useRef(false);
+  const [claimReceipt, setClaimReceipt] = useState<{ snapshot: TaskData | undefined; ids: Set<string> } | null>(null);
 
   const read = useResource(tasks, token ? { token } : SKIP);
   const data = read.data as TaskData | undefined;
+  // Receipts cover the interval before the authoritative refresh arrives. A new
+  // task snapshot (including the next day's reset) must be allowed to replace them.
+  const claimedPending = claimReceipt && claimReceipt.snapshot === data ? claimReceipt.ids : new Set<string>();
+  const experience = Number.isFinite(data?.experience) ? Math.max(0, data!.experience) : 0;
+  const level = Number.isFinite(data?.level) ? Math.max(1, data!.level) : Math.floor(experience / 100) + 1;
 
   /* Nothing to draw only while there is genuinely nothing — a cached screen refreshing
      underneath has `data` and `isLoading` at once, and drawing the skeleton then is the
      flash this layer exists to remove. */
-  const loading = Boolean(token) && data === undefined && read.error === undefined;
-  const error = !token
+  const loading = !ready || (Boolean(token) && data === undefined && read.error === undefined);
+  const error = !ready ? null : !token
     ? '请先登录'
     : read.error
       ? '网络错误，请稍后再试'
@@ -83,21 +92,31 @@ export default function TasksPage() {
   const loadTasks = read.refresh;
 
   const handleClaim = async (taskType: string) => {
+    if (claimPending.current || !token || readToken() !== token) return;
+    claimPending.current = true;
     setClaiming(taskType);
     try {
       const user = readUserInfo();
       if (!user) return;
       const res = await api.claimTask(user.token, taskType);
       const result = await res.json();
+      if (readToken() !== user.token) return;
       if (result.success) {
+        setClaimReceipt((previous) => ({
+          snapshot: data,
+          ids: new Set(previous && previous.snapshot === data ? previous.ids : []).add(taskType),
+        }));
         showToast(`领取成功，经验 +${result.experience}，金币 +${result.coins}`, 'success');
+        // Refresh in the background; the local claim lock stays held until this
+        // handler returns, preventing a double claim from a rapid double click.
         loadTasks();
       } else {
         showToast(result.error || '领取失败', 'error');
       }
     } catch {
-      showToast('网络错误，请稍后再试', 'error');
+      if (readToken() === token) showToast('网络错误，请稍后再试', 'error');
     } finally {
+      claimPending.current = false;
       setClaiming(null);
     }
   };
@@ -226,7 +245,8 @@ export default function TasksPage() {
         {items.map((item) => {
           const pct =
             item.target > 0 ? (Math.min(item.progress, item.target) / item.target) * 100 : 0;
-          const canClaim = item.progress >= item.target && !item.claimed;
+          const isClaimed = Boolean(item.claimed || claimedPending.has(item.id));
+          const canClaim = item.progress >= item.target && !isClaimed;
           return (
             <div
               key={item.id}
@@ -263,7 +283,7 @@ export default function TasksPage() {
               {/* Fixed footprint: 领取 / 去完成 / 已领取 / loading all occupy the same box, so claiming never reflows the row. */}
               <div className="flex w-20 shrink-0 justify-end">
                 
-                {item.claimed ? (
+                {isClaimed ? (
                   <span className="flex h-8 items-center gap-1 text-label-m text-success">
                     
                     <MdCheckCircle size={ICON.dense} /> 已领取
@@ -274,7 +294,7 @@ export default function TasksPage() {
                     fullWidth
                     variant={canClaim ? 'filled' : 'text'}
                     onClick={() => handleClaim(item.id)}
-                    disabled={!canClaim}
+                    disabled={!canClaim || claiming !== null || claimedPending.has(item.id)}
                     loading={claiming === item.id}
                     /* No colour override on the disabled branch: the added background
                        and boundary ink fought the `text` variant's own (`cn` is a plain
@@ -312,7 +332,7 @@ export default function TasksPage() {
             
             <div className="text-headline-s-emphasized">
               {' '}
-              Lv.{data.level}{' '}
+              Lv.{level}{' '}
               {data.equipped_badges?.map((b) => (
                 <UserBadge
                   key={b.badge_name}
@@ -333,14 +353,14 @@ export default function TasksPage() {
           <div>
             <div className="flex justify-between text-label-m mb-1">
               <span>当前经验进度</span>
-              <span>当前经验：{data.experience % 100} / 100</span>
+              <span>当前经验：{experience % 100} / 100</span>
             </div>
             {/* Through the primitive: the hand-rolled meter was a 10dp track in a
                 non-track role with a gradient whose far end was `tertiary`, which
                 inverts between schemes — the right-hand side of the bar swapped shade
                 with the theme. Flat, on the token. */}
             <ProgressBar
-              value={data.experience % 100}
+              value={experience % 100}
               tone="warning"
               label="当前等级经验进度"
             />
@@ -364,7 +384,7 @@ export default function TasksPage() {
           ))}
         </div>
       )}{' '}
-      {error && <ErrorRetry title="任务加载失败" message={error} onRetry={loadTasks} />}{' '}
+      {error && <ErrorRetry title="任务加载失败" message={error} onRetry={token ? loadTasks : () => openAuth('login')} />}{' '}
       {!loading && !error && data && (
         <>
           {' '}

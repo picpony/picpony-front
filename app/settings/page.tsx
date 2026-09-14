@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { queueSettingsUpdate } from '@/lib/settingsUpdates';
 import {
   MdEdit,
   MdPerson,
@@ -41,7 +42,7 @@ import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { ICON } from '@/lib/icons';
 import { clearUserInfo, readToken, readUserInfo, resolveDerpiCredentials, updateUserInfo, useSession } from '@/lib/hooks';
-import { sessionUser } from '@/lib/resources';
+import { sessionUser, syncBrowsingCookie } from '@/lib/resources';
 import { DERPIBOORU_API_BASE, LS_KEYS } from '@/lib/constants';
 import { changeScheme } from '@/lib/motionLazy';
 import {
@@ -106,17 +107,18 @@ function calcAge(birthday: string): number {
 
 function lsGet(key: string, def: string): string {
   if (typeof window === 'undefined') return def;
-  return localStorage.getItem(key) ?? def;
+  try { return localStorage.getItem(key) ?? def; } catch { return def; }
 }
 function lsBool(key: string, def: boolean): boolean {
   if (typeof window === 'undefined') return def;
-  const v = localStorage.getItem(key);
-  if (v === null) return def;
-  return v === 'true';
+  return lsGet(key, String(def)) === 'true';
 }
 function lsSet(key: string, val: string | boolean) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(key, String(val));
+  try {
+    localStorage.setItem(key, String(val));
+    syncBrowsingCookie();
+  } catch { /* Storage can be disabled. */ }
 }
 
 /**
@@ -294,6 +296,18 @@ function updateAccountFields(token: string, fields: Record<string, unknown>): bo
 export default function SettingsPage() {
   const { openAuth } = useAuthModal();
   const { token: userToken, ready: sessionReady } = useSession();
+  const activePage = useRef(true);
+  useEffect(() => {
+    activePage.current = true;
+    return () => { activePage.current = false; };
+  }, []);
+  const isCurrentAccount = () => activePage.current && Boolean(userToken) && readToken() === userToken;
+  const pendingAccountOperations = useRef(new Set<string>());
+  const beginAccountOperation = (operation: string) => {
+    if (!isCurrentAccount() || pendingAccountOperations.current.has(operation)) return false;
+    pendingAccountOperations.current.add(operation);
+    return true;
+  };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newUsername, setNewUsername] = useState('');
@@ -392,6 +406,7 @@ export default function SettingsPage() {
 
   // 云端配置获取完成前禁用整页交互（防止默认值误写 localStorage/云端）
   const [settingsReady, setSettingsReady] = useState(false);
+  const apiKeyMutation = useRef(false);
 
   /** 设置 / 个性化. Local state — see the note above `<Tabs>`. */
   const [tab, setTab] = useState<SettingsTab>('general');
@@ -455,11 +470,17 @@ export default function SettingsPage() {
         defaultSearchSort,
       };
       try {
-        await api.updateSettings(userToken, { settings });
+        await queueSettingsUpdate(userToken, async () => {
+          if (readToken() !== userToken) return;
+          const response = await api.updateSettings(userToken, { settings });
+          const result = await readJson(response);
+          if (!response.ok || !result.success) throw new Error(result.message || '云端同步设置失败');
+        });
       } catch (err) {
         console.warn('云端同步设置失败:', err);
+        if (readToken() === userToken) showToast('设置已保留在本机，云端同步失败', 'warning');
       }
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && readToken() === userToken) {
         window.dispatchEvent(new Event('settings_updated'));
       }
     },
@@ -559,7 +580,7 @@ export default function SettingsPage() {
         setCurrentUsername(String(user.username ?? ''));
         setCurrentAvatar(String(user.avatar ?? ''));
 
-        const dev = localStorage.getItem(LS_KEYS.developer) === 'true';
+        const dev = lsBool(LS_KEYS.developer, false);
         setIsDeveloper(dev);
       });
 
@@ -572,6 +593,7 @@ export default function SettingsPage() {
           if (!current()) return;
           if (data.success && data.user) {
             const u = data.user;
+            setCurrentUsername(String(u.username ?? user.username ?? ''));
             const credentials = resolveDerpiCredentials(u, readUserInfo());
             setCurrentApiKey(credentials.api_key);
             setDerpiUserId(credentials.derpi_user_id);
@@ -643,12 +665,13 @@ export default function SettingsPage() {
 
   // 开发者模式激活/关闭后（关于页向导广播）即时刷新，让下拉框选项跟上
   useEffect(() => {
-    const read = () => setIsDeveloper(localStorage.getItem(LS_KEYS.developer) === 'true');
+    const read = () => setIsDeveloper(lsBool(LS_KEYS.developer, false));
     window.addEventListener('developer_mode_changed', read);
     return () => window.removeEventListener('developer_mode_changed', read);
   }, []);
 
   useEffect(() => {
+    if (!settingsReady) return;
     const storedFilter = lsGet(LS_KEYS.contentFilter, 'safe');
     let validFilter = storedFilter;
     if (!['safe', 'spoilers', 'developer'].includes(storedFilter)) {
@@ -666,7 +689,7 @@ export default function SettingsPage() {
       lsSet(LS_KEYS.contentFilter, 'safe');
     }
     queueMicrotask(() => setContentFilter(validFilter));
-  }, [userToken, profileBirthday, isDeveloper]);
+  }, [userToken, profileBirthday, isDeveloper, settingsReady]);
 
   const handleAvatarPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -676,7 +699,7 @@ export default function SettingsPage() {
     try {
       await processImageFile(file, 5);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
       return;
     }
     setAvatarPick(file);
@@ -686,6 +709,7 @@ export default function SettingsPage() {
   };
 
   const handleAvatarCropped = async (blob: Blob) => {
+    if (!beginAccountOperation('avatar')) return;
     setIsAvatarUploading(true);
     try {
       const user = readUserInfo();
@@ -695,6 +719,7 @@ export default function SettingsPage() {
       });
       const res = await api.uploadAvatar(user.token, file);
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         showToast('头像上传成功', 'success');
         setAvatarPick(null);
@@ -707,8 +732,9 @@ export default function SettingsPage() {
         showToast(data.message || '上传失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
+      pendingAccountOperations.current.delete('avatar');
       setIsAvatarUploading(false);
     }
   };
@@ -719,7 +745,7 @@ export default function SettingsPage() {
     try {
       await processImageFile(file, 10);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '请选择有效的图片文件', 'error');
       return;
     }
     setBannerPick(file);
@@ -727,6 +753,7 @@ export default function SettingsPage() {
   };
 
   const handleBannerCropped = async (blob: Blob) => {
+    if (!beginAccountOperation('banner')) return;
     setIsBannerUploading(true);
     try {
       const user = readUserInfo();
@@ -736,6 +763,7 @@ export default function SettingsPage() {
       });
       const res = await api.uploadBanner(user.token, file);
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         showToast('Banner 上传成功', 'success');
         setBannerPick(null);
@@ -748,14 +776,16 @@ export default function SettingsPage() {
         showToast(data.message || '上传失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
+      pendingAccountOperations.current.delete('banner');
       setIsBannerUploading(false);
     }
   };
 
   const handleApiKeySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (apiKeyMutation.current || !userToken || readToken() !== userToken) return;
     const key = newApiKey.trim();
     if (key) {
       const keyRegex = /^\S{20}$/;
@@ -767,31 +797,37 @@ export default function SettingsPage() {
         return;
       }
     }
+    apiKeyMutation.current = true;
     setApiKeyLoading(true);
+    const nextDerpiUserId = key === currentApiKey ? derpiUserId : '';
+    const nextDerpiUsername = key === currentApiKey ? derpiUsername : '';
     try {
       const user = readUserInfo();
       if (!user) throw new Error('未登录');
       const res = await api.saveApikey(user.token, {
         api_key: key,
-        derpi_user_id: derpiUserId,
-        derpi_username: derpiUsername,
+        derpi_user_id: nextDerpiUserId,
+        derpi_username: nextDerpiUsername,
       });
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         if (!updateAccountFields(user.token, {
-          api_key: key, derpi_user_id: derpiUserId, derpi_username: derpiUsername,
+          api_key: key, derpi_user_id: nextDerpiUserId, derpi_username: nextDerpiUsername,
         })) return;
         showToast('Derpibooru API Key 已保存', 'success');
         setCurrentApiKey(key);
-        localStorage.setItem(LS_KEYS.derpiApiKey, key);
+        setDerpiUserId(nextDerpiUserId);
+        setDerpiUsername(nextDerpiUsername);
         setIsApiKeyModalOpen(false);
         setNewApiKey('');
       } else {
         showToast(data.message || '配置失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
+      apiKeyMutation.current = false;
       setApiKeyLoading(false);
     }
   };
@@ -837,9 +873,10 @@ export default function SettingsPage() {
   }, []);
 
   const handleVerifyIdentity = async () => {
-    if (!currentApiKey) return;
+    if (!currentApiKey || apiKeyMutation.current) return;
     const requestedToken = readToken();
-    if (!requestedToken) return;
+    if (!requestedToken || !isCurrentAccount()) return;
+    apiKeyMutation.current = true;
     setIsVerifyLoading(true);
     try {
       const identity = await detectRealIdentity(currentApiKey);
@@ -848,8 +885,6 @@ export default function SettingsPage() {
         showToast('身份核验失败：无法通过该 API Key 找到您的身份，请确认 Key 是否正确', 'error');
         return;
       }
-      setDerpiUserId(identity.id);
-      setDerpiUsername(identity.name);
       const user = readUserInfo();
       if (user) {
         const res = await api.saveApikey(user.token, {
@@ -862,12 +897,14 @@ export default function SettingsPage() {
         if (!updateAccountFields(requestedToken, {
           api_key: currentApiKey, derpi_user_id: identity.id, derpi_username: identity.name,
         })) return;
-        localStorage.setItem(LS_KEYS.derpiApiKey, currentApiKey);
+        setDerpiUserId(String(identity.id));
+        setDerpiUsername(identity.name);
       }
       showToast(`核验成功，已确认您的身份：${identity.name}`, 'success');
     } catch {
-      showToast('核验请求失败（API 限流/网络问题），请稍后再试', 'error');
+      if (isCurrentAccount()) showToast('核验请求失败（API 限流/网络问题），请稍后再试', 'error');
     } finally {
+      apiKeyMutation.current = false;
       setIsVerifyLoading(false);
     }
   };
@@ -878,6 +915,8 @@ export default function SettingsPage() {
   };
 
   const handleClearApiKeyConfirm = async () => {
+    if (apiKeyMutation.current || !userToken || readToken() !== userToken) return;
+    apiKeyMutation.current = true;
     setIsClearApiKeyModalOpen(false);
     try {
       const user = readUserInfo();
@@ -893,10 +932,11 @@ export default function SettingsPage() {
       setCurrentApiKey('');
       setDerpiUserId('');
       setDerpiUsername('');
-      localStorage.removeItem(LS_KEYS.derpiApiKey);
       showToast('API Key 已解除绑定', 'success');
     } catch {
-      showToast('操作失败', 'error');
+      if (isCurrentAccount()) showToast('操作失败', 'error');
+    } finally {
+      apiKeyMutation.current = false;
     }
   };
 
@@ -906,6 +946,7 @@ export default function SettingsPage() {
       showToast('密码不能为空', 'error');
       return;
     }
+    if (!beginAccountOperation('password')) return;
     setPasswordLoading(true);
     try {
       const user = readUserInfo();
@@ -915,6 +956,7 @@ export default function SettingsPage() {
         new_password: newPassword,
       });
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         showToast('密码修改成功，即将重新登录', 'success');
         setIsPasswordModalOpen(false);
@@ -927,8 +969,9 @@ export default function SettingsPage() {
         showToast(data.message || '修改失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
+      pendingAccountOperations.current.delete('password');
       setPasswordLoading(false);
     }
   };
@@ -939,12 +982,14 @@ export default function SettingsPage() {
       showToast('用户名不能为空', 'error');
       return;
     }
+    if (!beginAccountOperation('username')) return;
     setIsLoading(true);
     try {
       const user = readUserInfo();
       if (!user) throw new Error('未登录');
       const res = await api.changeUsername(user.token, newUsername.trim());
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         showToast('用户名已更新', 'success');
         setCurrentUsername(newUsername.trim());
@@ -955,8 +1000,9 @@ export default function SettingsPage() {
         showToast(data.message || '修改失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
+      pendingAccountOperations.current.delete('username');
       setIsLoading(false);
     }
   };
@@ -973,12 +1019,14 @@ export default function SettingsPage() {
       return;
     }
 
+    if (!beginAccountOperation('email')) return;
     setEmailLoading(true);
     try {
       const user = readUserInfo();
       if (!user) throw new Error('未登录');
       const res = await api.updateEmail(user.token, newEmail.trim());
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         setCurrentEmail(newEmail.trim());
         setIsEmailVerified(false);
@@ -988,8 +1036,9 @@ export default function SettingsPage() {
         showToast(data.message || '更新失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
+      pendingAccountOperations.current.delete('email');
       setEmailLoading(false);
     }
   };
@@ -999,12 +1048,14 @@ export default function SettingsPage() {
       showToast('请输入验证码', 'error');
       return;
     }
+    if (!beginAccountOperation('email')) return;
     setEmailLoading(true);
     try {
       const user = readUserInfo();
       if (!user) return;
       const res = await api.verifyEmail(user.token, verifyCode.trim());
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         setIsEmailVerified(true);
         setShowVerifyInput(false);
@@ -1016,32 +1067,37 @@ export default function SettingsPage() {
         showToast(data.message || '验证失败', 'error');
       }
     } catch {
-      showToast('验证失败', 'error');
+      if (isCurrentAccount()) showToast('验证失败', 'error');
     } finally {
+      pendingAccountOperations.current.delete('email');
       setEmailLoading(false);
     }
   };
 
   const handleResendCode = async () => {
+    if (!beginAccountOperation('resend')) return;
     setIsResending(true);
     try {
       const user = readUserInfo();
       if (!user) return;
       const res = await api.resendVerifyCode(user.token);
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         showToast('验证码已重新发送', 'success');
       } else {
         showToast(data.message || '发送失败', 'error');
       }
     } catch {
-      showToast('发送失败', 'error');
+      if (isCurrentAccount()) showToast('发送失败', 'error');
     } finally {
+      pendingAccountOperations.current.delete('resend');
       setIsResending(false);
     }
   };
 
   const handleProfileSubmit = async () => {
+    if (!beginAccountOperation('profile')) return;
     setProfileLoading(true);
     try {
       const user = readUserInfo();
@@ -1053,6 +1109,7 @@ export default function SettingsPage() {
         race: profileRace,
       });
       const data = await res.json();
+      if (!isCurrentAccount()) return;
       if (data.success) {
         showToast('个人资料已更新', 'success');
         updateAccountFields(user.token, {
@@ -1063,8 +1120,9 @@ export default function SettingsPage() {
         showToast(data.message || '保存失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      if (isCurrentAccount()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
+      pendingAccountOperations.current.delete('profile');
       setProfileLoading(false);
     }
   };

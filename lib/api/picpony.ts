@@ -40,8 +40,8 @@ export async function getUser(token: string, signal?: AbortSignal) {
   });
 }
 
-export async function getUserProfile(userId: string) {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_user_profile&user_id=${userId}`);
+export async function getUserProfile(userId: string, signal?: AbortSignal) {
+  const res = await fetch(`${PICPONY_API_BASE}?action=get_user_profile&user_id=${encodeURIComponent(userId)}`, { signal });
   return readJson(res);
 }
 
@@ -97,9 +97,10 @@ export async function uploadBanner(token: string, file: File) {
   });
 }
 
-export async function getFaves(token: string): Promise<FavesResponse> {
+export async function getFaves(token: string, signal?: AbortSignal): Promise<FavesResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_faves`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -112,9 +113,10 @@ export async function toggleFave(token: string, imageId: number) {
   });
 }
 
-export async function getSharedFaves(username: string): Promise<SharedFavesResponse> {
+export async function getSharedFaves(username: string, signal?: AbortSignal): Promise<SharedFavesResponse> {
   const res = await fetch(
     `${PICPONY_API_BASE}?action=get_shared_faves&username=${encodeURIComponent(username)}`,
+    { signal },
   );
   if (!res.ok) throw new Error('获取收藏夹失败');
   return readJson(res);
@@ -136,92 +138,76 @@ export async function postComment(token: string, imageId: number, body: string) 
   });
 }
 
-export async function getComments(imageId: string): Promise<CommentsResponse> {
-  try {
-    const [picponyRes, trixieRes] = await Promise.all([
-      fetch(`${PICPONY_API_BASE}?action=get_comments&image_id=${imageId}`).catch(() => null),
-      proxyFetch(
-        `${DERPIBOORU_API_BASE}/search/comments?q=image_id:${imageId}&page=1&per_page=25`,
-      ).catch(() => null),
-    ]);
-
-    let comments: Comment[] = [];
-
-    if (picponyRes && picponyRes.ok) {
-      const picponyData = await picponyRes.json();
-      if (picponyData.success && picponyData.comments) {
-        comments = comments.concat(
-          picponyData.comments.map((c: Comment) => ({
-            ...c,
-            source: 'picpony' as const,
-          })),
-        );
-      }
-    }
-
-    if (trixieRes && trixieRes.ok) {
-      const trixieData = await trixieRes.json();
-      if (trixieData.comments) {
-        comments = comments.concat(
-          trixieData.comments.map(
-            (c: {
-              id: number;
-              body: string;
-              created_at: string;
-              user_id: number;
-              author: string;
-              avatar: string | null;
-            }) => ({
-              id: c.id,
-              body: c.body,
-              created_at: c.created_at,
-              user_id: c.user_id,
-              username: c.author,
-              avatar: c.avatar,
-              source: 'trixiebooru' as const,
-            }),
-          ),
-        );
-      }
-    }
-
-    comments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-    return { success: true, comments };
-  } catch (err) {
-    console.error('Failed to fetch comments', err);
-    return { success: false, comments: [] };
-  }
+export async function getComments(imageId: string, signal?: AbortSignal): Promise<CommentsResponse> {
+  /* Settle the whole read, including JSON decoding, independently for each source. An HTML
+     error page from one host must not discard the other host's successfully loaded comments. */
+  const sources = await Promise.allSettled([
+    (async (): Promise<Comment[]> => {
+      const res = await fetch(
+        `${PICPONY_API_BASE}?action=get_comments&image_id=${encodeURIComponent(imageId)}`,
+        { signal },
+      );
+      const data = await readJson(res);
+      if (!res.ok || !data.success || !Array.isArray(data.comments)) throw new Error('评论读取失败');
+      return data.comments.map((comment: Comment) => ({ ...comment, source: 'picpony' as const }));
+    })(),
+    (async (): Promise<Comment[]> => {
+      const res = await proxyFetch(
+        `${DERPIBOORU_API_BASE}/search/comments?q=${encodeURIComponent(`image_id:${imageId}`)}&page=1&per_page=25`,
+        { signal },
+      );
+      const data = await readJson(res);
+      if (!res.ok || !Array.isArray(data.comments)) throw new Error('评论读取失败');
+      return data.comments.map((comment: {
+        id: number; body: string; created_at: string; user_id: number;
+        author: string; avatar: string | null;
+      }) => ({
+        id: comment.id, body: comment.body, created_at: comment.created_at,
+        user_id: comment.user_id, username: comment.author, avatar: comment.avatar,
+        source: 'trixiebooru' as const,
+      }));
+    })(),
+  ]);
+  signal?.throwIfAborted();
+  const available = sources.filter((result): result is PromiseFulfilledResult<Comment[]> => result.status === 'fulfilled');
+  if (available.length === 0) return { success: false, comments: [] };
+  const comments = available.flatMap((result) => result.value);
+  comments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  return { success: true, comments };
 }
 
 export async function getUserComments(
   userId: string,
   page: number = 1,
+  signal?: AbortSignal,
 ): Promise<UserCommentsResponse> {
   const res = await fetch(
-    `${PICPONY_API_BASE}?action=get_user_comments&user_id=${userId}&page=${page}`,
+    `${PICPONY_API_BASE}?action=get_user_comments&user_id=${encodeURIComponent(userId)}&page=${page}`,
     {
       cache: 'no-store',
+      signal,
     },
   );
   if (!res.ok) throw new Error('获取用户评论失败');
   return readJson(res);
 }
 
-export async function getUserPosts(userId: string, page: number = 1): Promise<UserPostsResponse> {
+export async function getUserPosts(userId: string, page: number = 1, signal?: AbortSignal): Promise<UserPostsResponse> {
   const res = await fetch(
-    `${PICPONY_API_BASE}?action=get_user_posts&user_id=${userId}&page=${page}`,
+    `${PICPONY_API_BASE}?action=get_user_posts&user_id=${encodeURIComponent(userId)}&page=${page}`,
     {
       cache: 'no-store',
+      signal,
     },
   );
   if (!res.ok) throw new Error('获取用户帖子失败');
   return readJson(res);
 }
 
-export async function getForumPosts(page: number = 1): Promise<ForumPostsResponse> {
+export async function getForumPosts(page: number = 1, signal?: AbortSignal): Promise<ForumPostsResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_forum_posts&page=${page}`, {
     cache: 'no-store',
+    signal,
   });
   if (!res.ok) throw new Error('Failed to fetch forum posts');
   return readJson(res);
@@ -230,11 +216,13 @@ export async function getForumPosts(page: number = 1): Promise<ForumPostsRespons
 export async function getForumPostDetail(
   id: string,
   page: number = 1,
+  signal?: AbortSignal,
 ): Promise<ForumPostDetailResponse> {
   const res = await fetch(
-    `${PICPONY_API_BASE}?action=get_forum_post_detail&id=${id}&page=${page}`,
+    `${PICPONY_API_BASE}?action=get_forum_post_detail&id=${encodeURIComponent(id)}&page=${page}`,
     {
       cache: 'no-store',
+      signal,
     },
   );
   if (!res.ok) throw new Error('Failed to fetch forum post detail');
@@ -325,9 +313,10 @@ export async function getMessages(token: string, withUserId: number): Promise<Me
   return readJson(res);
 }
 
-export async function getUnreadCounts(token: string): Promise<UnreadCountsResponse> {
+export async function getUnreadCounts(token: string, signal?: AbortSignal): Promise<UnreadCountsResponse> {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_unread_counts`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -469,11 +458,12 @@ export async function searchImage(imageFile: File, distance: number) {
   return readJson(response);
 }
 
-export async function getBrowsingHistory(token: string, page: number = 1) {
+export async function getBrowsingHistory(token: string, page: number = 1, signal?: AbortSignal) {
   const res = await fetch(
     `${PICPONY_API_BASE}?action=get_browsing_history&page=${page}&_t=${Date.now()}`,
     {
       headers: { Authorization: `Bearer ${token}` },
+      signal,
     },
   );
   return readJson(res);
@@ -582,9 +572,10 @@ export async function equipBadge(token: string, badgeName: string | null) {
   });
 }
 
-export async function getTasks(token: string) {
+export async function getTasks(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_tasks&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -607,9 +598,10 @@ export async function getCoinTransactions(token: string, page: number = 1) {
   return readJson(res);
 }
 
-export async function getBlockGroups(token: string) {
+export async function getBlockGroups(token: string, signal?: AbortSignal) {
   const res = await fetch(`${PICPONY_API_BASE}?action=get_block_groups&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   return readJson(res);
 }
@@ -827,7 +819,7 @@ export async function deleteTagGroup(token: string, id: number) {
 
 /** The运营团队 list for /about — a public, tokenless read kept out of the admin module so
  *  /about need not import the un-tree-shakeable admin surface. */
-export async function getTeamMembers() {
-  const res = await fetch(`${PICPONY_API_BASE}?action=get_team_members&_t=${Date.now()}`);
+export async function getTeamMembers(signal?: AbortSignal) {
+  const res = await fetch(`${PICPONY_API_BASE}?action=get_team_members&_t=${Date.now()}`, { signal });
   return readJson(res);
 }

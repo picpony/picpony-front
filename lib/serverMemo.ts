@@ -8,9 +8,9 @@
  *
  * It sits in front of Next's Data Cache rather than replacing it. A server read is reached by
  * `<Link>` prefetching too — the footer links to /about from every route, and rendering that RSC
- * payload runs the read — and `next: { revalidate }` is only a request (upstream
- * `Cache-Control: no-store` can veto it), so without a process-local cache one page view anywhere
- * becomes one upstream fetch.
+ * payload runs the read. Explicit `next: { revalidate }` overrides upstream `no-store`;
+ * this memo additionally coalesces in-flight work (including fetches with an AbortSignal,
+ * which opt out of React's fetch memoization) and carries the original seed timestamp.
  *
  * `null` is never retained: a failed read must not pin a failure for the length of the TTL, and a
  * rejection drops the slot for the same reason. Both checks re-read the slot first, so a retry
@@ -57,12 +57,12 @@ export function createServerMemo<A extends unknown[], T>(options: {
   max?: number;
   keyOf: (...args: A) => string;
   load: (...args: A) => Promise<T | null>;
-}): (...args: A) => Promise<T | null> {
+}): ((...args: A) => Promise<T | null>) & { clear: () => void } {
   const { max = 1, keyOf, load } = options;
   const ttlMs = cacheSeconds(options.ttlMs / 1000) * 1000;
   const slots = new Map<string, Slot<T>>();
 
-  return (...args: A) => {
+  const read = (...args: A) => {
     const key = keyOf(...args);
     const hit = slots.get(key);
     /* An **unsettled** slot is joined whatever the TTL says — that is why the slot carries a
@@ -93,4 +93,5 @@ export function createServerMemo<A extends unknown[], T>(options: {
     slots.set(key, { at: Date.now(), settled: false, promise });
     return promise;
   };
+  return Object.assign(read, { clear: () => slots.clear() });
 }

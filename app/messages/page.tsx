@@ -308,7 +308,9 @@ function MessagesContent({ token }: { token: string | null }) {
   /* Session state, not a stored preference: the rail is a "give the thread more room
      for a minute" control, and a collapsed sidebar that survives a reload is a sidebar
      people forget they collapsed. */
-  const [contactsCollapsed, setContactsCollapsed] = useState(false);
+  const [savedContactsCollapsed, setContactsCollapsed] = useState(false);
+  const contactsCanCollapse = useMediaQuery(MEDIA.md);
+  const contactsCollapsed = savedContactsCollapsed && contactsCanCollapse;
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const selectedContactId = useRef<number | null>(null);
   const lifetime = useRef(0);
@@ -324,6 +326,7 @@ function MessagesContent({ token }: { token: string | null }) {
   }, [token]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [threadError, setThreadError] = useState<string | null>(null);
   /* One `loading` and one `error` per tab, not one for the page. A shared pair, with the
      panes marked rather than unmounted, meant a failure in any one pane put an error
      into every one of them — during a switch, both panes on screen at once, each under
@@ -360,6 +363,7 @@ function MessagesContent({ token }: { token: string | null }) {
     sendPending.current = false;
     setSelectedContact(contact);
     setMessages([]);
+    setThreadError(null);
     setLoadingMessages(Boolean(contact));
     setSending(false);
     setNewMessage('');
@@ -650,6 +654,7 @@ function MessagesContent({ token }: { token: string | null }) {
       if (!token || selectedContactId.current !== contactId || readToken() !== token) return;
       const requestIsCurrent = beginRequest('thread');
       const isCurrent = () => requestIsCurrent() && selectedContactId.current === contactId;
+      setThreadError(null);
       if (!silent) setLoadingMessages(true);
       try {
         const data = await api.getMessages(token, contactId);
@@ -662,14 +667,12 @@ function MessagesContent({ token }: { token: string | null }) {
           /* A failure with no `else` left the *previous* contact's bubbles on screen under
              the new contact's name and avatar — the worst failure mode for a private
              thread. Clearing is the honest state, and the toast is the only signal. */
-          setMessages([]);
-          showToast('聊天记录加载失败', 'error');
+          setThreadError('聊天记录加载失败');
         }
       } catch (err) {
         if (!isCurrent()) return;
         console.error('获取聊天记录失败', err);
-        setMessages([]);
-        showToast('网络错误，请稍后再试', 'error');
+        setThreadError('网络错误，请稍后再试');
       } finally {
         if (isCurrent()) setLoadingMessages(false);
       }
@@ -1356,6 +1359,8 @@ function MessagesContent({ token }: { token: string | null }) {
                     >
                       {loadingMessages ? (
                         <ThreadSkeleton />
+                      ) : threadError ? (
+                        <ErrorRetry size="pane" title="聊天记录加载失败" message={threadError} onRetry={() => { void fetchMessages(selectedContact.id); }} />
                       ) : messages.length === 0 ? (
                         <EmptyState
                           size="inline"

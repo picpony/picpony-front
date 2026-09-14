@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { showToast } from '@/components/Toast';
 import { MdBuild, MdRefresh, MdPersonAdd, MdRemoveCircle } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -8,6 +8,8 @@ import IconButton from '@/components/IconButton';
 import { SectionHeader } from './';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
+import ErrorRetry from '@/components/ErrorRetry';
+import Skeleton from '@/components/Skeleton';
 import { Input } from '@/components/Input';
 import { ICON } from '@/lib/icons';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -16,6 +18,8 @@ import { useConfirm } from '@/components/ConfirmDialog';
    every gallery route shipped all 48 of these. Only the eleven admin tabs
    import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { useAdminMutation } from './useAdminMutation';
 
 interface DeveloperUser {
   id: number;
@@ -26,11 +30,23 @@ interface DeveloperUser {
   created_at: string;
 }
 
+const passwordQuery = defineAdminQuery('developer-password', async (token, signal) => {
+  const data = await adminApi.adminGetDeveloperPassword(token, signal);
+  adminData(data, undefined);
+  if (typeof data.password !== 'string') throw new Error('维护密码响应无效');
+  return { password: data.password, updatedAt: typeof data.updated_at === 'string' ? data.updated_at : '' };
+});
+const usersQuery = defineAdminQuery<DeveloperUser[]>('developer-users', async (token, signal) => {
+  const data = await adminApi.adminGetDeveloperUsers(token, signal);
+  return adminData(data, data.users ?? []);
+});
+
 export default function DeveloperTab({ token }: { token: string }) {
-  const [devPassword, setDevPassword] = useState('');
-  const [passwordUpdatedAt, setPasswordUpdatedAt] = useState('');
-  const [devUsers, setDevUsers] = useState<DeveloperUser[]>([]);
-  const [loading, setLoading] = useState(false);
+  const passwordRead = useAdminQuery(passwordQuery, token);
+  const usersRead = useAdminQuery(usersQuery, token);
+  const devPassword = passwordRead.data?.password;
+  const passwordUpdatedAt = passwordRead.data?.updatedAt;
+  const mutation = useAdminMutation(token);
   const [addDevUserId, setAddDevUserId] = useState('');
 
   /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
@@ -39,101 +55,39 @@ export default function DeveloperTab({ token }: { token: string }) {
      sentence-final 吗 that every converted one kept. */
   const { confirmThen, confirmDialog } = useConfirm();
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const passRes = await adminApi.adminGetDeveloperPassword(token);
-      if (passRes.success) {
-        setDevPassword(passRes.password || '');
-        setPasswordUpdatedAt(passRes.updated_at || '');
-      }
-      const usersRes = await adminApi.adminGetDeveloperUsers(token);
-      if (usersRes.success) {
-        setDevUsers(usersRes.users || []);
-      }
-    } catch {
-      showToast('数据加载失败', 'error');
-    } finally {
-      setLoading(false);
-    }
+  const loadData = () => {
+    passwordRead.refresh();
+    usersRead.refresh();
   };
 
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const passRes = await adminApi.adminGetDeveloperPassword(token);
-        if (!cancelled && passRes.success) {
-          setDevPassword(passRes.password || '');
-          setPasswordUpdatedAt(passRes.updated_at || '');
-        }
-        const usersRes = await adminApi.adminGetDeveloperUsers(token);
-        if (!cancelled && usersRes.success) {
-          setDevUsers(usersRes.users || []);
-        }
-      } catch {
-        if (!cancelled) showToast('数据加载失败', 'error');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
-
   const handleRefreshPassword = async () => {
-    try {
-      const res = await adminApi.adminRefreshDeveloperPassword(token);
-      const data = await res.json();
-      if (data.success) {
+    if (!passwordRead.data) return;
+    await mutation.run(() => adminApi.adminRefreshDeveloperPassword(token), () => {
         showToast('密码已更新', 'success');
-        loadData();
-      } else {
-        showToast(data.error || '更新失败', 'error');
-      }
-    } catch {
-      showToast('操作失败', 'error');
-    }
+        passwordRead.refresh();
+      });
   };
 
   const handleEnableDeveloper = async () => {
-    const id = parseInt(addDevUserId);
-    if (isNaN(id)) {
+    if (!usersRead.data) return;
+    const id = Number(addDevUserId);
+    if (!Number.isSafeInteger(id) || id <= 0) {
       showToast('请输入有效的用户 ID', 'warning');
       return;
     }
-    try {
-      const res = await adminApi.adminEnableDeveloper(token, id);
-      const data = await res.json();
-      if (data.success) {
+    await mutation.run(() => adminApi.adminEnableDeveloper(token, id), () => {
         showToast('已开启开发者模式', 'success');
         setAddDevUserId('');
-        loadData();
-      } else {
-        showToast(data.error || '操作失败', 'error');
-      }
-    } catch {
-      showToast('操作失败', 'error');
-    }
+        usersRead.refresh();
+      });
   };
 
   const handleRevokeDeveloper = (targetId: number) => {
     confirmThen('确认关闭', '确定要关闭该用户的开发者模式吗？', async () => {
-      try {
-        const res = await adminApi.adminRevokeDeveloper(token, targetId);
-        const data = await res.json();
-        if (data.success) {
+      await mutation.run(() => adminApi.adminRevokeDeveloper(token, targetId), () => {
           showToast('已关闭开发者模式', 'success');
-          loadData();
-        } else {
-          showToast(data.error || '操作失败', 'error');
-        }
-      } catch {
-        showToast('操作失败', 'error');
-      }
+          usersRead.refresh();
+        });
     });
   };
 
@@ -167,6 +121,7 @@ export default function DeveloperTab({ token }: { token: string }) {
       render: (u) => (
         <IconButton
             size="sm"
+            disabled={mutation.busy}
             onClick={() => handleRevokeDeveloper(u.id)}
             icon={<MdRemoveCircle size={ICON.dense} />}
             aria-label={`关闭 ${u.username} 的开发者模式`} className="text-error"
@@ -190,12 +145,13 @@ export default function DeveloperTab({ token }: { token: string }) {
           此密码为系统随机生成的8位纯数字，每3天自动更新一次。用户开启开发者模式需输入此密码。
         </div>
 
-        <div className="flex items-center gap-4">
+        {passwordRead.error ? <ErrorRetry size="inline" message={passwordRead.error} onRetry={passwordRead.refresh} /> :
+          passwordRead.loading ? <Skeleton className="h-12 w-48" /> : <div className="flex items-center gap-4">
           <span className="text-body-m text-on-surface-variant">当前密码：</span>
           <code className="text-title-l-emphasized tracking-widest px-4 py-2 bg-surface-container-high rounded-xs text-primary-ink">
             {devPassword || '----'}
           </code>
-        </div>
+        </div>}
 
         {passwordUpdatedAt && (
           <p className="text-body-s text-on-surface-variant">上次更新：{passwordUpdatedAt}</p>
@@ -203,6 +159,8 @@ export default function DeveloperTab({ token }: { token: string }) {
 
         <Button
           onClick={handleRefreshPassword}
+          disabled={!passwordRead.data || Boolean(passwordRead.error)}
+          loading={mutation.busy}
           variant="filled"
           className="self-start"
           icon={<MdRefresh size={ICON.dense} />}
@@ -221,21 +179,27 @@ export default function DeveloperTab({ token }: { token: string }) {
         <div className="flex items-center gap-3">
           <Input
             type="number"
+            min={1}
+            step={1}
+            disabled={!usersRead.data || mutation.busy}
             value={addDevUserId}
             onChange={(e) => setAddDevUserId(e.target.value)}
             placeholder="输入用户 ID"
             fieldClassName="w-32"
           />
-          <Button onClick={handleEnableDeveloper} variant="filled" icon={<MdPersonAdd size={ICON.dense} />}>
+          <Button onClick={handleEnableDeveloper} variant="filled" icon={<MdPersonAdd />}
+            loading={mutation.busy} disabled={!usersRead.data || !addDevUserId || Boolean(usersRead.error)}>
             强制开启
           </Button>
         </div>
 
         <DataTable<DeveloperUser>
           columns={devColumns}
-          rows={devUsers}
+          rows={usersRead.data ?? []}
           rowKey={(u) => u.id}
-          loading={loading}
+          loading={usersRead.loading}
+          error={usersRead.error}
+          onRetry={usersRead.refresh}
           empty="暂无开发者用户"
         />
       </Card>

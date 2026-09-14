@@ -42,8 +42,9 @@ import SectionHeading from '@/components/SectionHeading';
 import Popover from '@/components/Popover';
 import { ICON } from '@/lib/icons';
 import { clamp } from '@/lib/utils';
-import { readUserInfo } from '@/lib/hooks';
+import { readToken, useSession } from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
+import { requireAdminSuccess } from '@/lib/adminMutations';
 /* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
    spread and therefore un-tree-shakeable — only the admin tabs import this, and
    each is already its own `dynamic` chunk. */
@@ -126,32 +127,44 @@ const TAG_CATEGORY_OPTIONS = [
   { value: 'error', label: '错误 (error)' },
 ];
 
+const requireDictionarySuccess = requireAdminSuccess;
+
 export default function GlossaryTab() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const initFromStorage = () => {
-    const user = readUserInfo();
-    const token = user?.token || '';
-    const role = (user?.role as string) || 'user';
-    const admin = ['super_admin', 'admin', 'editor'].includes(role);
-    const savedItemsPerPage =
-      typeof window !== 'undefined' ? localStorage.getItem(LS_KEYS.itemsPerPage) : null;
-    const itemsPerPage = savedItemsPerPage ? parseInt(savedItemsPerPage, 10) : 100;
-    return {
-      token,
-      userRole: role,
-      isAdmin: admin,
-      itemsPerPage,
-      initError: user ? null : '请先登录',
-    };
-  };
-
-  const initial = initFromStorage();
-  const [isAdmin] = useState(initial.isAdmin);
-  const [token] = useState<string>(initial.token);
-  const [error, setError] = useState<string | null>(initial.initError);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(initial.itemsPerPage);
+  const { user, token: sessionToken, ready } = useSession();
+  const token = sessionToken ?? '';
+  const isAdmin = ['super_admin', 'admin', 'editor'].includes(String(user?.role ?? 'user'));
+  const [error, setError] = useState<string | null>(null);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const alive = useRef(true);
+  const lifetime = useRef(0);
+  const requests = useRef<Record<string, number>>({});
+  const bulkPending = useRef(false);
+  const savePending = useRef(false);
+  const syncRun = useRef(0);
+  const feedbackPending = useRef(new Set<number>());
+  const isActive = useCallback(() => alive.current && readToken() === token && Boolean(token), [token]);
+  const beginRead = useCallback((kind: string) => {
+    const request = (requests.current[kind] ?? 0) + 1;
+    requests.current[kind] = request;
+    const epoch = lifetime.current;
+    return () => isActive() && lifetime.current === epoch && requests.current[kind] === request;
+  }, [isActive]);
+  useEffect(() => {
+    alive.current = true;
+    queueMicrotask(() => {
+      if (!alive.current) return;
+      try {
+        const saved = Number(localStorage.getItem(LS_KEYS.itemsPerPage));
+        if (Number.isSafeInteger(saved) && saved > 0) setItemsPerPage(clamp(saved, 1, 150));
+      } catch { /* Local preferences are optional. */ }
+      setPreferencesReady(true);
+    });
+    return () => { alive.current = false; lifetime.current += 1; syncRun.current += 1; };
+  }, []);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalMatches, setTotalMatches] = useState(0);
@@ -186,6 +199,7 @@ export default function GlossaryTab() {
   const [syncStartPage, setSyncStartPage] = useState(1);
   const [syncEndPage, setSyncEndPage] = useState(20);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStopping, setSyncStopping] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, message: '' });
 
   const [isDuplicateMode, setIsDuplicateMode] = useState(false);
@@ -195,6 +209,7 @@ export default function GlossaryTab() {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackKeyword, setFeedbackKeyword] = useState('');
   const [feedbackStatus, setFeedbackStatus] = useState<'all' | 'pending' | 'processed' | 'rejected'>('pending');
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary>({
@@ -255,7 +270,8 @@ export default function GlossaryTab() {
 
   // 打开编辑历史弹窗并拉取该标签的历史记录
   const openTagHistory = async (tag: Tag) => {
-    if (!token) return;
+    if (!isActive()) return;
+    const current = beginRead('history');
 
     setHistoryTag(tag);
     setHistoryRecords([]);
@@ -266,6 +282,7 @@ export default function GlossaryTab() {
 
     try {
       const data = await api.getDictionaryTagHistory(token, tag.id);
+      if (!current()) return;
       if (data.success) {
         const list: TagHistory[] = data.history || [];
         setHistoryRecords(list);
@@ -274,20 +291,20 @@ export default function GlossaryTab() {
         setHistoryError(data.error || '加载失败');
       }
     } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : '网络错误，请稍后再试');
+      if (current()) setHistoryError(err instanceof Error ? err.message : '网络错误，请稍后再试');
     } finally {
-      setIsHistoryLoading(false);
+      if (current()) setIsHistoryLoading(false);
     }
   };
 
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   /* Anchors the Derpibooru suggestion popover. */
   const enFieldRef = useRef<HTMLDivElement>(null);
   const refreshAfterInlineCloseRef = useRef(false);
 
   const loadTags = useCallback(
     async (page = 1) => {
-      if (!token) return;
+      if (!isActive()) return;
+      const current = beginRead('tags');
 
       setIsLoading(true);
       setError(null);
@@ -301,7 +318,7 @@ export default function GlossaryTab() {
           category: categoryFilter,
           untranslated: showUntranslatedOnly ? 1 : 0,
         });
-
+        if (!current()) return;
         if (data.success) {
           setTags(data.tags || []);
           setTotalMatches(data.total_matches || 0);
@@ -314,69 +331,24 @@ export default function GlossaryTab() {
           setError(data.error || '加载失败');
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : '网络错误，请稍后再试');
+        if (current()) setError(err instanceof Error ? err.message : '网络错误，请稍后再试');
       } finally {
-        setIsLoading(false);
+        if (current()) setIsLoading(false);
       }
     },
-    [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly],
+    [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly, isActive, beginRead],
   );
-
-  useEffect(() => {
-    if (!token) return;
-    api
-      .getDictionary(token, {
-        page: 1,
-        limit: itemsPerPage,
-        keyword: searchKeyword,
-        sort: sortMode,
-        category: categoryFilter,
-        untranslated: showUntranslatedOnly ? 1 : 0,
-      })
-      .then((data) => {
-        if (data.success) {
-          setTags(data.tags || []);
-          setTotalMatches(data.total_matches || 0);
-          setTotalPages(Math.ceil((data.total_matches || 0) / itemsPerPage) || 1);
-          setCurrentPage(1);
-          if (data.stats) {
-            setStats(data.stats);
-          }
-        } else {
-          setError(data.error || '加载失败');
-        }
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : '网络错误，请稍后再试');
-      })
-      .finally(() => setIsLoading(false));
-  }, [token, itemsPerPage, searchKeyword, sortMode, categoryFilter, showUntranslatedOnly]);
-
-  useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    searchTimeoutRef.current = setTimeout(() => {
-      if (!isDuplicateMode) {
-        loadTags(1);
-      }
-    }, 400);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchKeyword, sortMode, categoryFilter, showUntranslatedOnly, loadTags, isDuplicateMode]);
 
   /* Outside-click dismissal is `Popover`'s. */
 
-  const loadDuplicates = async () => {
-    if (!token || !isAdmin) return;
+  const loadDuplicates = useCallback(async () => {
+    if (!isActive() || !isAdmin) return;
+    const current = beginRead('tags');
 
     setIsLoading(true);
     try {
       const data = await api.getDictionaryDuplicates(token);
+      if (!current()) return;
       if (data.success && data.tags) {
         setDuplicateTags(data.tags);
         setTotalMatches(data.tags.length);
@@ -385,11 +357,24 @@ export default function GlossaryTab() {
         setTotalMatches(0);
       }
     } catch (err) {
-      showToast('查重失败：' + (err instanceof Error ? err.message : '未知错误'), 'error');
+      if (current()) showToast('查重失败：' + (err instanceof Error ? err.message : '未知错误'), 'error');
     } finally {
-      setIsLoading(false);
+      if (current()) setIsLoading(false);
     }
-  };
+  }, [token, isAdmin, isActive, beginRead]);
+
+  useEffect(() => {
+    if (!ready || !preferencesReady) return;
+    const requestState = requests.current;
+    let current = true;
+    queueMicrotask(() => {
+      if (!current) return;
+      if (!token) { setError('请先登录'); setIsLoading(false); return; }
+      if (isDuplicateMode) void loadDuplicates();
+      else void loadTags(1);
+    });
+    return () => { current = false; requestState.tags = (requestState.tags ?? 0) + 1; };
+  }, [ready, preferencesReady, token, loadTags, loadDuplicates, isDuplicateMode]);
 
   const toggleDuplicateMode = () => {
     if (!isAdmin) {
@@ -401,11 +386,6 @@ export default function GlossaryTab() {
     setIsDuplicateMode(newMode);
     setSelectedIds(new Set());
 
-    if (newMode) {
-      loadDuplicates();
-    } else {
-      loadTags(1);
-    }
   };
 
   const openInlineEditor = (tag: Tag) => {
@@ -453,9 +433,7 @@ export default function GlossaryTab() {
   };
 
   const closeCreateModal = () => {
-    setTimeout(() => {
-      setIsEditModalOpen(false);
-    }, 200);
+    if (!savePending.current) setIsEditModalOpen(false);
   };
 
   const closeInlineEditor = () => {
@@ -479,6 +457,7 @@ export default function GlossaryTab() {
   };
 
   const searchDerpiSuggestions = async (query: string) => {
+    const current = beginRead('suggestions');
     if (query.length < 2) {
       setDerpiSuggestions([]);
       setShowSuggestions(false);
@@ -487,6 +466,7 @@ export default function GlossaryTab() {
 
     try {
       const data = await api.searchDerpiTags(query);
+      if (!current()) return;
       if (data.tags && data.tags.length > 0) {
         setDerpiSuggestions(data.tags);
         setShowSuggestions(true);
@@ -500,6 +480,7 @@ export default function GlossaryTab() {
   };
 
   const selectSuggestion = (tag: DerpiTag) => {
+    requests.current.suggestions = (requests.current.suggestions ?? 0) + 1;
     setEditForm((prev) => ({
       ...prev,
       en: tag.name,
@@ -510,7 +491,7 @@ export default function GlossaryTab() {
   };
 
   const saveTag = async () => {
-    if (!isAdmin || !token) return;
+    if (!isAdmin || !isActive() || savePending.current) return;
 
     const { en, cn, cat, count, description, id } = editForm;
 
@@ -519,11 +500,13 @@ export default function GlossaryTab() {
       return;
     }
 
+    savePending.current = true;
     setIsSaving(true);
 
     try {
       if (!id) {
         const exists = await adminApi.checkTagExists(token, en);
+        if (!isActive()) return;
         if (exists) {
           showToast('词库中已存在此标签', 'error');
           setIsSaving(false);
@@ -557,22 +540,25 @@ export default function GlossaryTab() {
       });
 
       const data = await res.json();
+      if (!isActive()) return;
 
-      if (data.success) {
+      if (res.ok && data.success) {
         showToast(id ? '已更新' : '已添加', 'success');
         // 若有挂起的用户工单，保存成功后自动标记为已处理（与 ciku.html 行为一致）
         if (activeFeedbackWorkOrder) {
           const workOrder = activeFeedbackWorkOrder;
           try {
-            await adminApi.handleTagFeedback(
+            const feedbackResponse = await adminApi.handleTagFeedback(
               token,
               workOrder.id,
               'processed',
               '已采纳并写入词库',
-              'pending',
+              workOrder.status,
             );
+            await requireDictionarySuccess(feedbackResponse);
+            if (!isActive()) return;
           } catch {
-            showToast('标签已保存，但工单仍保持待处理', 'warning');
+            if (isActive()) showToast('标签已保存，但工单仍保持待处理', 'warning');
           }
           setActiveFeedbackWorkOrder(null);
         }
@@ -580,7 +566,7 @@ export default function GlossaryTab() {
           refreshAfterInlineCloseRef.current = true;
           closeInlineEditor();
         } else {
-          closeCreateModal();
+          setIsEditModalOpen(false);
           if (isDuplicateMode) {
             loadDuplicates();
           } else {
@@ -591,74 +577,70 @@ export default function GlossaryTab() {
         showToast(data.error || '保存失败', 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      if (isActive()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
     } finally {
+      savePending.current = false;
       setIsSaving(false);
     }
   };
 
   const deleteTag = async (id: number) => {
-    if (!isAdmin || !token) return;
+    if (!isAdmin || !isActive() || feedbackPending.current.has(id)) return;
 
     confirmThen('确认删除', '确定要永久删除此词条吗？', async () => {
+      if (!isActive() || feedbackPending.current.has(id)) return;
+      feedbackPending.current.add(id);
       try {
         const res = await api.deleteDictionaryTag(token, id);
-        const data = await res.json();
+        await requireDictionarySuccess(res);
+        if (!isActive()) return;
 
-        if (data.success) {
-          showToast('已删除', 'success');
-          setSelectedIds((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
-          if (isDuplicateMode) {
-            loadDuplicates();
-          } else {
-            loadTags(currentPage);
-          }
-        } else {
-          showToast(data.error || '删除失败', 'error');
-        }
+        showToast('已删除', 'success');
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        if (isDuplicateMode) void loadDuplicates();
+        else void loadTags(currentPage);
       } catch (err) {
-        showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+        if (isActive()) showToast(err instanceof Error ? err.message : '网络错误，请稍后再试', 'error');
+      } finally {
+        feedbackPending.current.delete(id);
       }
     });
   };
 
   const batchDelete = async () => {
-    if (!isAdmin || !token || selectedIds.size === 0) return;
-
-    confirmThen(
-      '确认批量删除',
-      `确定要永久删除选中的 ${selectedIds.size} 个标签吗？`,
-      async () => {
-        const idsArray = Array.from(selectedIds);
-        let success = 0;
-        let fail = 0;
-
-        for (let i = 0; i < idsArray.length; i++) {
+    if (!isAdmin || !isActive() || selectedIds.size === 0 || bulkPending.current) return;
+    confirmThen('确认批量删除', `确定要永久删除选中的 ${selectedIds.size} 个标签吗？`, async () => {
+      if (!isActive() || bulkPending.current) return;
+      bulkPending.current = true;
+      const current = beginRead('bulk');
+      const removed = new Set<number>();
+      let failed = 0;
+      try {
+        for (const id of selectedIds) {
+          if (!current()) return;
           try {
-            const res = await api.deleteDictionaryTag(token, idsArray[i]);
-            const data = await res.json();
-            if (data.success) success++;
-            else fail++;
+            await requireDictionarySuccess(await api.deleteDictionaryTag(token, id));
+            if (!current()) return;
+            removed.add(id);
           } catch {
-            fail++;
+            if (!current()) return;
+            failed++;
           }
-          await new Promise((r) => setTimeout(r, 60));
+          await new Promise((resolve) => setTimeout(resolve, 60));
         }
-
-        showToast(`批量删除完成：${success}成功, ${fail}失败`, 'success');
-
-        setSelectedIds(new Set());
-        if (isDuplicateMode) {
-          loadDuplicates();
-        } else {
-          loadTags(currentPage);
-        }
-      },
-    );
+        if (!current()) return;
+        setSelectedIds((previous) => new Set([...previous].filter((id) => !removed.has(id))));
+        showToast(`批量删除完成：${removed.size} 成功，${failed} 失败`, failed ? 'warning' : 'success');
+        if (isDuplicateMode) void loadDuplicates();
+        else void loadTags(currentPage);
+      } finally {
+        bulkPending.current = false;
+      }
+    });
   };
 
   const toggleSelectAll = () => {
@@ -687,7 +669,7 @@ export default function GlossaryTab() {
   };
 
   const executeBatchImport = async () => {
-    if (!isAdmin || !token) return;
+    if (!isAdmin || !isActive() || bulkPending.current) return;
 
     const lines = batchInput.split('\n');
     const tasks: {
@@ -704,9 +686,9 @@ export default function GlossaryTab() {
       const trimmedLine = line.trim();
       if (!trimmedLine || trimmedLine.startsWith('#') || !trimmedLine.includes('=')) continue;
 
-      const parts = trimmedLine.split('=');
-      const en = parts[0].trim().toLowerCase();
-      const cnRaw = parts[1]?.trim() || '';
+      const splitAt = trimmedLine.indexOf('=');
+      const en = trimmedLine.slice(0, splitAt).trim().toLowerCase();
+      const cnRaw = trimmedLine.slice(splitAt + 1).trim();
 
       const cnParts = cnRaw
         .replace(/，/g, ',')
@@ -734,100 +716,112 @@ export default function GlossaryTab() {
       return;
     }
 
-    confirmThen(
-      '确认批量导入',
-      `成功解析到 ${tasks.length} 个新标签，开始导入？`,
-      async () => {
-        setIsBatchImporting(true);
-        let success = 0;
-        let fail = 0;
-        let skipped = 0;
-
-        for (let i = 0; i < tasks.length; i++) {
-          const task = tasks[i];
+    confirmThen('确认批量导入', `确定要导入这 ${tasks.length} 个标签吗？`, async () => {
+      if (!isActive() || bulkPending.current) return;
+      bulkPending.current = true;
+      const current = beginRead('bulk');
+      setIsBatchImporting(true);
+      let success = 0;
+      let failed = 0;
+      let skipped = 0;
+      try {
+        for (const task of tasks) {
+          if (!current()) return;
           try {
             const exists = await adminApi.checkTagExists(token, task.en);
-            if (exists) {
-              skipped++;
-              continue;
-            }
-
-            const res = await api.saveDictionaryTag(token, task);
-            const data = await res.json();
-            if (data.success) success++;
-            else fail++;
+            if (!current()) return;
+            if (exists) { skipped++; continue; }
+            await requireDictionarySuccess(await api.saveDictionaryTag(token, task));
+            if (!current()) return;
+            success++;
           } catch {
-            fail++;
+            if (!current()) return;
+            failed++;
           }
-          await new Promise((r) => setTimeout(r, 60));
+          await new Promise((resolve) => setTimeout(resolve, 60));
         }
-
-        showToast(`批量导入完成：${success}成功, ${skipped}跳过, ${fail}失败`, 'success');
-
-        setIsBatchImporting(false);
-        setIsBatchModalOpen(false);
-        setBatchInput('');
-        loadTags(1);
-      },
-    );
+        if (!current()) return;
+        showToast(`批量导入完成：${success} 成功，${skipped} 跳过，${failed} 失败`, failed ? 'warning' : 'success');
+        if (!failed) { setIsBatchModalOpen(false); setBatchInput(''); }
+        void loadTags(1);
+      } finally {
+        bulkPending.current = false;
+        if (isActive()) setIsBatchImporting(false);
+      }
+    });
   };
 
   const executeSync = async () => {
-    if (!isAdmin || !token) return;
-
+    if (!isAdmin || !isActive() || bulkPending.current) return;
+    if (!Number.isSafeInteger(syncStartPage) || !Number.isSafeInteger(syncEndPage) ||
+      syncStartPage < 1 || syncEndPage < syncStartPage) {
+      showToast('起止页必须是正整数，且结束页不能小于起始页', 'error');
+      return;
+    }
     const totalPagesToFetch = syncEndPage - syncStartPage + 1;
     if (totalPagesToFetch > 100) {
       showToast('一次最多允许拉取 100 页', 'error');
       return;
     }
-
+    bulkPending.current = true;
+    const run = ++syncRun.current;
+    const scopeCurrent = beginRead('bulk');
+    const current = () => scopeCurrent() && syncRun.current === run;
     setIsSyncing(true);
+    setSyncStopping(false);
     setSyncProgress({ current: 0, total: totalPagesToFetch, message: '开始同步…' });
-
-    let newTagsCount = 0;
-    let skippedCount = 0;
-
-    for (let p = syncStartPage; p <= syncEndPage; p++) {
-      setSyncProgress({
-        current: p - syncStartPage + 1,
-        total: totalPagesToFetch,
-        message: `正在拉取第 ${p} 页…`,
-      });
-
-      try {
-        const data = await api.getDerpiPopularTags(p);
-        if (!data.tags || data.tags.length === 0) break;
-
-        for (const tag of data.tags) {
-          const exists = await adminApi.checkTagExists(token, tag.name);
-          if (exists) {
-            skippedCount++;
-            continue;
+    let added = 0;
+    let skipped = 0;
+    let failedTags = 0;
+    let failedPages = 0;
+    try {
+      for (let page = syncStartPage; page <= syncEndPage && current(); page++) {
+        setSyncProgress({ current: page - syncStartPage + 1, total: totalPagesToFetch, message: `正在拉取第 ${page} 页…` });
+        try {
+          const data = await api.getDerpiPopularTags(page);
+          if (!current()) break;
+          if (!Array.isArray(data.tags)) throw new Error('原站标签响应无效');
+          if (!data.tags.length) break;
+          for (const tag of data.tags) {
+            if (!current()) break;
+            try {
+              const exists = await adminApi.checkTagExists(token, tag.name);
+              if (!current()) break;
+              if (exists) { skipped++; continue; }
+              await requireDictionarySuccess(await api.saveDictionaryTag(token, {
+                en: tag.name, cn: '未翻译', aliases: [], cat: tag.category || 'general',
+                count: tag.images || 0, description: '',
+              }));
+              if (!scopeCurrent()) break;
+              added++;
+              if (!current()) break;
+            } catch {
+              if (!scopeCurrent()) break;
+              failedTags++;
+              if (!current()) break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 40));
           }
-
-          await api.saveDictionaryTag(token, {
-            en: tag.name,
-            cn: '未翻译',
-            aliases: [],
-            cat: tag.category || 'general',
-            count: tag.images || 0,
-            description: '',
-          });
-
-          newTagsCount++;
-          await new Promise((r) => setTimeout(r, 40));
+        } catch {
+          if (!current()) break;
+          failedPages++;
         }
-      } catch (err) {
-        console.error(`Sync page ${p} failed:`, err);
+        if (page < syncEndPage && current()) await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-
-      await new Promise((r) => setTimeout(r, 1000));
+      const stopped = syncRun.current !== run;
+      if (!isActive()) return;
+      showToast(`${stopped ? '同步已停止' : '同步完成'}：${added} 新增，${skipped} 跳过，${failedTags} 标签失败，${failedPages} 页面失败`, stopped || failedTags || failedPages ? 'warning' : 'success');
+      if (!stopped && !failedTags && !failedPages) setIsSyncModalOpen(false);
+      void loadTags(1);
+    } finally {
+      bulkPending.current = false;
+      if (isActive()) { setIsSyncing(false); setSyncStopping(false); }
     }
+  };
 
-    setIsSyncing(false);
-    showToast(`同步完成：${newTagsCount}新增, ${skippedCount}跳过`, 'success');
-    setIsSyncModalOpen(false);
-    loadTags(1);
+  const stopSync = () => {
+    syncRun.current += 1;
+    setSyncStopping(true);
   };
 
   const executeDerpiSearch = async () => {
@@ -854,9 +848,10 @@ export default function GlossaryTab() {
     page: number = feedbackPage,
     keyword: string = feedbackKeyword,
   ) => {
-    if (!token || !isAdmin) return;
-
+    if (!isActive() || !isAdmin) return;
+    const current = beginRead('feedbacks');
     setIsLoadingFeedback(true);
+    setFeedbackError(null);
     try {
       const data = await adminApi.getTagFeedback(token, {
         status: status === 'all' ? undefined : status,
@@ -864,6 +859,7 @@ export default function GlossaryTab() {
         page,
         limit: 40,
       });
+      if (!current()) return;
       if (data.success) {
         setFeedbacks(data.feedbacks || []);
         setFeedbackSummary(data.summary || { pending: 0, processed: 0, rejected: 0 });
@@ -872,39 +868,47 @@ export default function GlossaryTab() {
           setFeedbackTotalPages(pg.pages || 1);
           setFeedbackPage(pg.page || 1);
         }
+      } else {
+        setFeedbackError(data.error || data.message || '反馈加载失败');
       }
     } catch {
-      showToast('反馈加载失败', 'error');
+      if (current()) setFeedbackError('反馈加载失败');
     } finally {
-      setIsLoadingFeedback(false);
+      if (current()) setIsLoadingFeedback(false);
     }
   };
 
   // 打开弹窗时按当前筛选加载
   useEffect(() => {
+    let current = true;
+    const requestState = requests.current;
     if (isFeedbackModalOpen) {
       queueMicrotask(() => {
-        void loadFeedbacks();
+        if (current) void loadFeedbacks();
       });
     }
+    return () => { current = false; requestState.feedbacks = (requestState.feedbacks ?? 0) + 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 打开时按当前筛选加载一次
   }, [isFeedbackModalOpen]);
 
   // 直接处理工单状态（忽略 / 恢复待处理等，note 为处理备注）
-  const handleFeedback = async (id: number, status: string, note?: string) => {
-    if (!token) return;
-
+  const handleFeedback = async (id: number, status: string, note?: string, expectedStatus = 'pending') => {
+    if (!isActive() || feedbackPending.current.has(id)) return;
+    feedbackPending.current.add(id);
     try {
-      await adminApi.handleTagFeedback(token, id, status, note || undefined, 'pending');
-      void loadFeedbacks();
-    } catch {
-      showToast('操作失败', 'error');
+      await requireDictionarySuccess(await adminApi.handleTagFeedback(token, id, status, note || undefined, expectedStatus));
+      if (isActive()) void loadFeedbacks();
+    } catch (err) {
+      if (isActive()) showToast(err instanceof Error ? err.message : '操作失败', 'error');
+    } finally {
+      feedbackPending.current.delete(id);
     }
   };
 
   // 处理并编辑标签：挂起工单 → 关反馈弹窗 → 展开词库列表内对应词语的编辑行（找不到则新建）
   const handleFeedbackAndEdit = async (item: Feedback) => {
-    if (!token) return;
+    if (!isActive()) return;
+    const current = beginRead('feedback-edit');
 
     setActiveFeedbackWorkOrder(item);
     setIsFeedbackModalOpen(false);
@@ -919,6 +923,8 @@ export default function GlossaryTab() {
           page: 1,
           limit: 100,
         });
+        if (!current()) return;
+        if (!data.success) throw new Error(data.error || '标签查询失败');
         if (data.success && Array.isArray(data.tags)) {
           target = data.tags.find(
             (t: Tag) => t.en.toLowerCase() === (item.tag_name || '').toLowerCase(),
@@ -939,7 +945,10 @@ export default function GlossaryTab() {
         openCreateModal({ name: item.tag_name, category: 'general', images: 0 });
       }
     } catch {
-      openCreateModal({ name: item.tag_name, category: 'general', images: 0 });
+      if (!current()) return;
+      setActiveFeedbackWorkOrder(null);
+      setIsFeedbackModalOpen(true);
+      showToast('标签查询失败，请重试处理此工单', 'error');
     }
   };
 
@@ -1275,14 +1284,12 @@ export default function GlossaryTab() {
 
   const translationPercentage =
     stats.total > 0 ? ((stats.translated / stats.total) * 100).toFixed(2) : '0.00';
+  if (!ready || !preferencesReady) {
+    return <div className="space-y-3"><Skeleton className="h-10 w-1/3" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>;
+  }
   if (error && !tags.length) {
     return (
-      <div className="text-center py-12">
-        <p className="text-body-m text-on-surface-variant mb-4">{error}</p>
-        <Button variant="filled" onClick={() => loadTags(1)}>
-          重试
-        </Button>
-      </div>
+      <ErrorRetry title="词库加载失败" message={error} onRetry={() => void loadTags(1)} />
     );
   }
   return (
@@ -1456,6 +1463,7 @@ export default function GlossaryTab() {
               <span className="text-body-m text-on-surface-variant">每页：</span>
               <Input
                 type="number"
+                aria-label="每页词条数"
                 min={1}
                 max={150}
                 value={itemsPerPage}
@@ -1463,9 +1471,8 @@ export default function GlossaryTab() {
                   const val = parseInt(e.target.value) || 100;
                   const clamped = clamp(val, 1, 150);
                   setItemsPerPage(clamped);
-                  localStorage.setItem('picpony_items_per_page', clamped.toString());
+                  try { localStorage.setItem(LS_KEYS.itemsPerPage, clamped.toString()); } catch { /* Optional preference. */ }
                 }}
-                onBlur={() => loadTags(1)}
                 fieldClassName="w-16"
               />
               <span className="text-body-m text-on-surface-variant">条</span>
@@ -1643,9 +1650,10 @@ export default function GlossaryTab() {
             )}
             <Button
               variant={isSyncing ? 'danger' : 'success'}
-              onClick={isSyncing ? () => setIsSyncing(false) : executeSync}
+              onClick={isSyncing ? stopSync : executeSync}
+              disabled={syncStopping}
             >
-              {isSyncing ? '停止同步' : '开始同步'}
+              {syncStopping ? '正在停止…' : isSyncing ? '停止同步' : '开始同步'}
             </Button>
           </>
         }
@@ -1682,7 +1690,7 @@ export default function GlossaryTab() {
                   type="number"
                   min={1}
                   value={syncStartPage}
-                  onChange={(e) => setSyncStartPage(parseInt(e.target.value) || 1)}
+                  onChange={(e) => setSyncStartPage(Number(e.target.value))}
                 />
               </div>
               <div className="flex-1">
@@ -1693,7 +1701,7 @@ export default function GlossaryTab() {
                   type="number"
                   min={1}
                   value={syncEndPage}
-                  onChange={(e) => setSyncEndPage(parseInt(e.target.value) || 1)}
+                  onChange={(e) => setSyncEndPage(Number(e.target.value))}
                 />
               </div>
             </div>
@@ -1819,6 +1827,8 @@ export default function GlossaryTab() {
                 </Card>
               ))}
             </div>
+          ) : feedbackError ? (
+            <ErrorRetry size="inline" title={feedbackError} onRetry={() => { void loadFeedbacks(); }} />
           ) : feedbacks.length === 0 ? (
             <EmptyState size="inline" title="暂无任何反馈申请" />
           ) : (
@@ -1893,7 +1903,7 @@ export default function GlossaryTab() {
                           </Button>
                         </>
                       ) : (
-                        <Button variant="text" size="xs" onClick={() => void handleFeedback(feedback.id, 'pending')}>
+                        <Button variant="text" size="xs" onClick={() => void handleFeedback(feedback.id, 'pending', undefined, feedback.status)}>
                           标记为未处理
                         </Button>
                       )}

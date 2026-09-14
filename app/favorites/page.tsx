@@ -127,7 +127,7 @@ function FavoritesPane({ source, token }: { source: FaveSource; token: string | 
       } catch (err) {
         if (signal.aborted || isStale(run)) return;
         console.error('Failed to load Derpibooru favorites:', err);
-        if (targetPage === 1) setError(err as Error);
+        setError(err as Error);
       } finally {
         if (!isStale(run)) {
           setIsLoading(false);
@@ -170,7 +170,7 @@ function FavoritesPane({ source, token }: { source: FaveSource; token: string | 
       } catch (err) {
         if (signal.aborted || isStale(run)) return;
         console.error('Failed to load image details:', err);
-        if (replace || targetPage === 1) setError(err as Error);
+        setError(err as Error);
       } finally {
         if (!isStale(run)) {
           setIsLoading(false);

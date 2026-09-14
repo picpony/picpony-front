@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { showToast } from '@/components/Toast';
 import { MdReport, MdOpenInNew } from 'react-icons/md';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -13,6 +13,8 @@ import { ICON } from '@/lib/icons';
    every gallery route shipped all 48 of these. Only the eleven admin tabs
    import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
+import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import { readToken } from '@/lib/hooks';
 
 interface Report {
   id: number;
@@ -31,37 +33,20 @@ const STATUS: Record<Report['status'], { label: string; tone: 'warning' | 'succe
     rejected: { label: '已驳回', tone: 'neutral' },
   };
 
+const emptyReports: Report[] = [];
+const reportsQuery = defineAdminQuery<Report[]>('reports', async (token, signal) => {
+  const data = await adminApi.adminGetReports(token, signal);
+  return adminData(data, data.reports || []);
+});
+
 export default function ReportsTab({ token }: { token: string }) {
-  const [reports, setReports] = useState<Report[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const read = useAdminQuery(reportsQuery, token);
+  const reports = read.data ?? emptyReports;
+  const isLoading = read.loading;
+  const loadReports = read.refresh;
   const [searchKw, setSearchKw] = useState('');
-
-  const loadReports = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await adminApi.adminGetReports(token);
-      if (data.success) {
-        setReports(data.reports || []);
-      }
-    } catch {
-      showToast('举报加载失败', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    adminApi
-      .adminGetReports(token)
-      .then((data) => {
-        if (data.success) {
-          setReports(data.reports || []);
-        }
-      })
-      .catch(() => showToast('举报加载失败', 'error'))
-      .finally(() => setIsLoading(false));
-  }, [token]);
+  const pendingRef = useRef(new Set<number>());
+  const [pendingIds, setPendingIds] = useState(new Set<number>());
 
   const filteredReports = useMemo(() => {
     if (!searchKw) return reports;
@@ -73,17 +58,26 @@ export default function ReportsTab({ token }: { token: string }) {
   }, [searchKw, reports]);
 
   const handleReport = async (id: number, status: string) => {
+    if (pendingRef.current.has(id) || readToken() !== token) return;
+    pendingRef.current.add(id);
+    setPendingIds(new Set(pendingRef.current));
     try {
       const res = await adminApi.adminHandleReport(token, id, status);
       const data = await res.json();
+      if (readToken() !== token) return;
       if (data.success) {
+        reportsQuery.write(token, (previous) => previous?.map((report) =>
+          report.id === id ? { ...report, status: status as Report['status'] } : report) ?? []);
         showToast('处理成功', 'success');
         loadReports();
       } else {
         showToast(data.error || '处理失败', 'error');
       }
     } catch {
-      showToast('处理失败', 'error');
+      if (readToken() === token) showToast('处理失败', 'error');
+    } finally {
+      pendingRef.current.delete(id);
+      setPendingIds(new Set(pendingRef.current));
     }
   };
 
@@ -117,8 +111,8 @@ export default function ReportsTab({ token }: { token: string }) {
         /* A `Badge`, not a `Chip`: no click handler and no dismiss cross, so it
            is a mark — and a chip's taller box made these rows taller than every
            sibling tab's. */
-        <Badge tone={STATUS[r.status].tone} size="md">
-          {STATUS[r.status].label}
+        <Badge tone={STATUS[r.status]?.tone ?? 'neutral'} size="md">
+          {STATUS[r.status]?.label ?? '未知状态'}
         </Badge>
       ),
     },
@@ -129,10 +123,10 @@ export default function ReportsTab({ token }: { token: string }) {
       render: (r) =>
         r.status === 'pending' ? (
           <>
-            <Button variant="success" size="xs" onClick={() => handleReport(r.id, 'processed')} data-ripple>
+            <Button variant="success" size="xs" disabled={pendingIds.has(r.id)} onClick={() => handleReport(r.id, 'processed')} data-ripple>
               完结
             </Button>
-            <Button variant="tonal" size="xs" onClick={() => handleReport(r.id, 'rejected')} data-ripple>
+            <Button variant="tonal" size="xs" disabled={pendingIds.has(r.id)} onClick={() => handleReport(r.id, 'rejected')} data-ripple>
               驳回
             </Button>
           </>
@@ -161,6 +155,8 @@ export default function ReportsTab({ token }: { token: string }) {
         rows={filteredReports}
         rowKey={(r) => r.id}
         loading={isLoading}
+        error={read.error}
+        onRetry={loadReports}
         empty="暂无举报记录"
       />
     </div>
