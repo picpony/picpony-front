@@ -471,8 +471,8 @@ export default function DetailImage({
           the press the media box below it is listening for. */}
       <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />
       {/* The zoom affordance is a real control on the media plate, in the corner
-          rather than over the picture, present by default and hover-revealed from
-          `sm` up — the same rule the gallery tiles' captions follow. The box click
+          rather than over the picture, present on compact and touch screens and
+          hover-revealed on desktop — the same rule the gallery captions follow. The box click
           stays as a pointer convenience; this button is what makes the action
           reachable from a keyboard (and present on touch, where there is no
           hover). */}
@@ -486,12 +486,12 @@ export default function DetailImage({
           e.stopPropagation();
           onOpen();
         }}
-        /* Hidden for the length of a hero flight — see the rule in globals.css. Below `sm`
-           this control is `opacity-100` rather than hover-revealed, and `HeroStage`'s
+        /* Hidden for the length of a hero flight — see the rule in globals.css. On touch
+           this control stays visible, and `HeroStage`'s
            landing target renders no children at all, so on a phone the handoff frame was
            conjuring a 40dp button into the picture's corner out of nothing. */
         data-image-detail-zoom
-        className="absolute right-3 bottom-3 z-30 cursor-zoom-in opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+        className="hover-reveal absolute right-3 bottom-3 z-30 cursor-zoom-in"
       />
     </div>
   );

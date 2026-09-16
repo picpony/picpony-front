@@ -1,7 +1,7 @@
 'use client';
 
 import { gsap, playSharedAxis } from '@/lib/motion';
-import { DURATION } from '@/lib/motionTokens';
+import { DURATION, PAGE_FADE_TIMING } from '@/lib/motionTokens';
 import { motionTier } from '@/lib/appearance';
 import { beginPageTransit } from '@/lib/pageTransit';
 import { arm, cancelRouteCrossFade, routeMove, settleEntryAnimations } from '@/lib/routeCrossFade';
@@ -96,16 +96,21 @@ export function playRouteCrossFade(
       { autoAlpha: 0 },
       {
         autoAlpha: 1,
-        duration: DURATION.long,
+        duration: PAGE_FADE_TIMING.duration,
         ease: 'decelerate',
         clearProps: 'opacity,visibility',
       },
-      0.08,
+      PAGE_FADE_TIMING.delay,
     );
   }
 
   arm(layer, () => {
     timeline.kill();
+    /* A theme wipe or hero press can cancel before the incoming leg completes.
+       Its clearProps callback never runs after kill(), leaving the live page
+       dimmed — or hidden during the overlap delay. Land it on the same clean
+       state as a completed fade before releasing the transition. */
+    if (page) gsap.set(page, { clearProps: 'opacity,visibility' });
     endTransit();
   });
 }

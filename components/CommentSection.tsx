@@ -7,6 +7,7 @@ import RichTextRenderer from '@/components/RichTextRenderer';
 import Skeleton, { SkeletonText, SkeletonCircle } from '@/components/Skeleton';
 import CommentComposer from '@/components/CommentComposer';
 import Button from '@/components/Button';
+import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import type { Comment } from '@/lib/api';
 import SectionHeading from '@/components/SectionHeading';
@@ -97,11 +98,15 @@ export default function CommentSection({
            section to one line and then snapped the full list in. */
         <div>
           {Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="m3-row bg-surface-container-low flex gap-4 p-4">
+            <div key={i} className="m3-row bg-surface-container-low flex gap-3 p-3 sm:gap-4 sm:p-4">
               <SkeletonCircle size={40} delay={i * 120} />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-3.5 w-28" delay={i * 120 + 60} />
-                <SkeletonText lines={2} delay={i * 120 + 120} />
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1">
+                  <Skeleton className="h-3.5 w-28" delay={i * 120 + 60} />
+                  <Skeleton className="ms-auto h-3.5 w-20" delay={i * 120 + 90} />
+                </div>
+                <SkeletonText lines={2} className="py-1.5" delay={i * 120 + 120} />
+                <Skeleton className="touch-size mt-2 h-10 w-20 rounded-full" delay={i * 120 + 180} />
               </div>
             </div>
           ))}
@@ -129,9 +134,9 @@ export default function CommentSection({
                     {comment.username}
                   </span>
                   {comment.source === 'trixiebooru' && (
-                    <span className="text-label-s bg-accent-blue text-on-accent-blue rounded-xs px-1.5 py-0.5">
+                    <Badge colors="bg-accent-blue text-on-accent-blue">
                       Derpibooru
-                    </span>
+                    </Badge>
                   )}
                   <time
                     dateTime={comment.created_at}

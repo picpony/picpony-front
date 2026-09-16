@@ -13,8 +13,9 @@ import {
 import { createPortal } from 'react-dom';
 import { cn, clamp } from '@/lib/utils';
 import { MEDIA } from '@/lib/constants';
-import { motionTier, scaledMs } from '@/lib/appearance';
-import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
+import { motionTier } from '@/lib/appearance';
+import { SPRING_MS } from '@/lib/spring';
+import { springTiming } from '@/lib/springTiming';
 import { OverlayLayerContext, useOverlayLayer, useExitAnimation, useMounted } from '@/lib/overlay';
 
 const MENU_MARGIN = 8;
@@ -44,16 +45,10 @@ export function estimateMenuHeight(rows: number): number {
  * The exit is the same `FastEffects` spring, not a curve: component motion, not a
  * screen transition, and ζ=1 guarantees no bounce back into view.
  *
- * Spelled out as literals rather than CSS tokens because they are handed to Web
- * Animations as `easing:` strings, where a failed `var()` silently falls back to
- * `ease`. `lib/spring.ts` generates them from the same closed form as the CSS
- * tables, so the two cannot drift. */
-const ENTER_MS = SPRING_MS.fastSpatial;
-const ENTER_EASING = springToLinear(SPRINGS.fastSpatial);
-const ROW_MS = SPRING_MS.fastEffects;
-const ROW_EASING = springToLinear(SPRINGS.fastEffects);
+ * `springTiming` pairs the easing and duration, scales their clock and substitutes
+ * the critically damped geometry under reduced motion. The exit hold uses the
+ * unscaled duration because useExitAnimation applies the maximum speed itself. */
 const EXIT_MS = SPRING_MS.fastEffects;
-const EXIT_EASING = springToLinear(SPRINGS.fastEffects);
 
 export interface PopoverHandle {
   /** The panel element, for callers that need to measure or scroll it. */
@@ -122,7 +117,8 @@ export default function Popover({
      shared hook rather than a hand-rolled flag; `Modal` and `Sheet` hold
      themselves open the same way. */
   const rendering = useExitAnimation(open, EXIT_MS);
-  const closingRef = useRef(false);
+  const placedPanel = useRef<HTMLDivElement | null>(null);
+  const restingRows = useRef(new Map<Element, { inlineOpacity: string; opacity: string }>());
   const [placement, setPlacement] = useState({
     top: 0,
     left: 0,
@@ -169,7 +165,6 @@ export default function Popover({
      frame. */
   useLayoutEffect(() => {
     if (!open) return;
-    closingRef.current = false;
     measure();
   }, [open, measure]);
 
@@ -191,113 +186,102 @@ export default function Popover({
     }
   }, [open, rendering, placement.left]);
 
-  /* Exit: the reverse container transform, shrinking back into the anchor rather
-     than blinking out. `closingRef` guards it — Escape, an outside press and a
-     commit can all land in one gesture. */
-  useEffect(() => {
-    if (open || !rendering || closingRef.current) return;
-    const panel = panelRef.current;
-    const anchor = anchorRef.current;
-    if (!panel || !anchor || motionTier() === 'off') return;
+  /* One layout effect owns both directions, including the rows. Cancelling the
+     entrance in a layout cleanup and starting the exit in a passive effect
+     exposed the full-sized panel for a frame. Commit the current pose before
+     cancellation so an interrupted morph and its content keep their place.
 
-    const anchorRect = anchor.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    if (panelRect.width === 0 || panelRect.height === 0) return;
-
-    closingRef.current = true;
-    /* `useExitAnimation` already holds the panel and drops it, so this only has to
-       draw those milliseconds.
-
-       It does have to be cancellable — that is what the cleanup is for. `fill:
-       'forwards'` keeps the last keyframe applied after the animation ends, and
-       `useExitAnimation` reuses the same node when the panel reopens inside the hold:
-       without the cancel, the still-live forwards fill would reassert hidden state on
-       a panel that is now open, so a fast close-then-open left an invisible menu
-       holding the focus trap.
-
-       The reduced tier collapses into the anchor like the standard one. It briefly
-       faded instead, but the shape change *is* the menu — one composited scale on one
-       small panel — and what the tier removes is distance, overshoot and cascade,
-       none of which are here. */
-    const exit = panel.animate(
-      [
-        {},
-        {
-          transform: `scale(${Math.min(1, anchorRect.width / panelRect.width)}, ${Math.min(
-            1,
-            anchorRect.height / panelRect.height,
-          )})`,
-          opacity: 0,
-        },
-      ],
-      { duration: scaledMs(EXIT_MS), easing: EXIT_EASING, fill: 'forwards' },
-    );
-    return () => exit.cancel();
-  }, [open, rendering, anchorRef]);
-
-  /* Enter: an M3 container transform. The panel starts at the anchor's own box
-     — scaled down to it and transparent — and grows into place, while its rows
-     stay invisible for the first third and then fade in behind the morph. That
-     "container morphs, then content arrives" split is the character of an MD3
-     menu opening; a plain fade throws it away.
-
-     Web Animations rather than GSAP: this starts from a measured box, and the
-     backwards fill guarantees the first painted frame is already the scaled one.
-     A tween beginning on the next rAF tick flashes the panel at full size. */
+     Geometry uses FastSpatial, opacity uses FastEffects; the latter cannot
+     overshoot and clip. The standard tier's first opening keeps its delayed row
+     fade, while reduced motion presents the rows on the container's own clock. */
   useLayoutEffect(() => {
+    const restoreRows = () => {
+      for (const [row, rest] of restingRows.current) {
+        (row as HTMLElement).style.opacity = rest.inlineOpacity;
+      }
+      restingRows.current.clear();
+    };
+    if (!mounted || !rendering) {
+      placedPanel.current = null;
+      restoreRows();
+      return;
+    }
     const panel = panelRef.current;
     const anchor = anchorRef.current;
-    if (!open || !rendering || !panel || !anchor) return;
-    const tier = motionTier();
-    if (tier === 'off') return;
+    if (!panel || !anchor) return;
 
     const anchorRect = anchor.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    if (panelRect.width === 0 || panelRect.height === 0) return;
-
-    // Never scale up — the panel is at least as wide as its anchor.
-    const sx = Math.min(1, anchorRect.width / panelRect.width);
-    const sy = Math.min(1, anchorRect.height / panelRect.height);
-
-    // Already anchored to the trigger's edge, so scaling about that edge
-    // reproduces the translate half of the reference for free.
+    /* offset dimensions are the resting box. A bounding rect read mid-morph is
+       already scaled, which would change the exit's destination on every reversal. */
+    const width = panel.offsetWidth;
+    const height = panel.offsetHeight;
+    if (width === 0 || height === 0) return;
+    const collapsed = `scale(${Math.min(1, anchorRect.width / width)}, ${Math.min(1, anchorRect.height / height)})`;
+    const firstPlacement = placedPanel.current !== panel;
+    placedPanel.current = panel;
+    const panelStyle = getComputedStyle(panel);
+    const fromTransform = firstPlacement && open ? collapsed : panelStyle.transform;
+    const fromOpacity = firstPlacement && open ? '0' : panelStyle.opacity;
+    const rows = [...panel.children].map((row) => {
+      const opacity = getComputedStyle(row).opacity;
+      if (!restingRows.current.has(row)) {
+        restingRows.current.set(row, { inlineOpacity: (row as HTMLElement).style.opacity, opacity });
+      }
+      return { row: row as HTMLElement, opacity, rest: restingRows.current.get(row)! };
+    });
     panel.style.transformOrigin = placement.up ? 'bottom left' : 'top left';
+    const transform = open ? 'none' : collapsed;
+    const opacity = open ? '1' : '0';
+    panel.style.transform = transform;
+    panel.style.opacity = opacity;
 
-    /* Reduced keeps the morph and drops the rows' own leg: the stagger is the
-       flourish, and with rows on the same clock as the plate there is one
-       entrance rather than two — what this tier wants. */
-    const reduced = tier === 'reduced';
-    const container = panel.animate(
-      [{ transform: `scale(${sx}, ${sy})`, opacity: 0 }, { transform: 'none', opacity: 1 }],
-      {
-        duration: scaledMs(ENTER_MS),
-        easing: ENTER_EASING,
-        fill: 'backwards',
-      },
-    );
+    const tier = motionTier();
+    if (tier === 'off') {
+      restoreRows();
+      return;
+    }
 
-    /* The rows wait out the container's morph and then fade on their **own**
-       clock (the effects spring's settle time) rather than being stretched over a
-       doubled span. A spring's shape and duration are one object: replayed longer,
-       the same ζ=1 curve is not a slower fade, it is a different one. The wait is
-       a `delay` because that is what a delay is for. */
-    const rows =
-      animateChildren && !reduced
-        ? [...panel.children].map((row) =>
-            row.animate([{ opacity: 0 }, { opacity: 1 }], {
-              duration: scaledMs(ROW_MS),
-              delay: scaledMs(ENTER_MS * 0.5),
-              easing: ROW_EASING,
-              fill: 'backwards',
-            }),
-          )
-        : [];
+    const effects = springTiming('fastEffects');
+    const geometry = open ? springTiming('fastSpatial') : effects;
+    const running = [
+      panel.animate([{ transform: fromTransform }, { transform }], { ...geometry, fill: 'both' }),
+      panel.animate([{ opacity: fromOpacity }, { opacity }], { ...effects, fill: 'both' }),
+    ];
+    const delayedRows = firstPlacement && animateChildren && tier === 'standard';
+    if (open) {
+      for (const { row, opacity: current, rest } of rows) {
+        row.style.opacity = rest.inlineOpacity;
+        /* A reversal resumes visible rows immediately. A fresh reduced opening
+           has no separate row entrance; only the panel fades in that tier. */
+        if (!delayedRows && current === rest.opacity) continue;
+        running.push(row.animate(
+          [{ opacity: delayedRows ? '0' : current }, { opacity: rest.opacity }],
+          { ...effects, delay: delayedRows ? geometry.duration * 0.5 : 0, fill: 'both' },
+        ));
+      }
+    }
+
+    let active = true;
+    Promise.all(running.map((animation) => animation.finished)).then(() => {
+      if (!active) return;
+      running.forEach((animation) => animation.cancel());
+      restoreRows();
+    }, () => {});
 
     return () => {
-      container.cancel();
-      rows.forEach((row) => row.cancel());
+      active = false;
+      for (const animation of running) {
+        if (animation.playState !== 'idle') {
+          try {
+            animation.commitStyles();
+          } catch {
+            // A detached panel or replaced option row has no pose to preserve.
+          }
+        }
+        animation.cancel();
+      }
     };
-  }, [open, rendering, placement.up, anchorRef, animateChildren]);
+  }, [open, mounted, rendering, placement.up, anchorRef, animateChildren]);
 
   /* Reposition against scroll and resize rather than trapping the page: a
      popover is not modal, the page behind it stays live.

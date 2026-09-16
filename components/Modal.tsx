@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useId } from 'react';
+import { useCallback, useRef, useId, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose } from 'react-icons/md';
 import IconButton from './IconButton';
@@ -13,6 +13,8 @@ import {
   OverlayLayerContext,
 } from '@/lib/overlay';
 import { ICON } from '@/lib/icons';
+import { DURATION, EASE } from '@/lib/motionTokens';
+import { motionTier, scaledMs } from '@/lib/appearance';
 
 interface ModalProps {
   isOpen: boolean;
@@ -47,7 +49,7 @@ interface ModalProps {
   panelClassName?: string;
 }
 
-const CLOSE_ANIM_DURATION = 200;
+const CLOSE_ANIM_DURATION = DURATION.short * 1000;
 
 /**
  * The centred dialog.
@@ -55,7 +57,7 @@ const CLOSE_ANIM_DURATION = 200;
  * Focus trapping, the refcounted scroll lock, Esc handling and the exit-animation
  * hold live in `lib/overlay.ts` (shared with `Sheet`). What is left here is what
  * makes a dialog a dialog rather than a sheet: centred, `rounded-2xl` on all four
- * corners, growing from 93% scale rather than rising from the bottom edge.
+ * corners, with a short rise and a restrained scale change.
  */
 /* Spelled per key rather than interpolated, because Tailwind scans source text and
    a template literal would compile to nothing. */
@@ -85,7 +87,9 @@ export default function Modal({
 }: ModalProps) {
   const mounted = useMounted();
   const rendering = useExitAnimation(isOpen, CLOSE_ANIM_DURATION);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const placedPanel = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
 
   useScrollLock(isOpen);
@@ -93,11 +97,75 @@ export default function Modal({
 
   const handleClose = useCallback(() => onClose(), [onClose]);
 
+  /* A dialog can reverse while it is arriving or leaving. Independent CSS
+     keyframes restarted from their full endpoint; commit the current pose before
+     retargeting so closing a half-open surface never makes it grow first.
+
+     The wrapper owns the one fade, and the panel owns only its transform. Fading
+     both multiplies their opacity and gives the content a different clock from
+     its scrim. WAAPI also leaves AuthModal's independent CSS scale free to settle
+     when a nested dialog opens. */
+  useLayoutEffect(() => {
+    const overlay = overlayRef.current;
+    const panel = panelRef.current;
+    if (!mounted || !rendering) {
+      placedPanel.current = null;
+      return;
+    }
+    if (!overlay || !panel) return;
+
+    const firstPlacement = placedPanel.current !== panel;
+    placedPanel.current = panel;
+    const tier = motionTier();
+    const reduced = tier === 'reduced';
+    const entryTransform = reduced
+      ? 'translateY(8px) scale(0.98)'
+      : 'translateY(16px) scale(0.95)';
+    const exitTransform = 'translateY(8px) scale(0.98)';
+    const fromOpacity = firstPlacement && isOpen ? '0' : getComputedStyle(overlay).opacity;
+    const fromTransform = firstPlacement && isOpen
+      ? entryTransform
+      : getComputedStyle(panel).transform;
+    const opacity = isOpen ? '1' : '0';
+    const transform = isOpen ? 'none' : exitTransform;
+
+    overlay.style.opacity = opacity;
+    panel.style.transform = transform;
+    if (tier === 'off') return;
+
+    const timing = {
+      duration: scaledMs((isOpen ? DURATION.long : DURATION.short) * 1000),
+      easing: isOpen ? EASE.decelerate : EASE.accelerate,
+      fill: 'both' as const,
+    };
+    const running = [
+      overlay.animate([{ opacity: fromOpacity }, { opacity }], timing),
+      panel.animate([{ transform: fromTransform }, { transform }], timing),
+    ];
+    for (const animation of running) {
+      animation.finished.then(() => animation.cancel(), () => {});
+    }
+
+    return () => {
+      for (const animation of running) {
+        if (animation.playState !== 'idle') {
+          try {
+            animation.commitStyles();
+          } catch {
+            // A detached portal has no rendered style to preserve.
+          }
+        }
+        animation.cancel();
+      }
+    };
+  }, [isOpen, mounted, rendering]);
+
   if (!mounted || !rendering) return null;
 
   return createPortal(
     <OverlayLayerContext.Provider value={layer}>
     <div
+      ref={overlayRef}
       // Portals can mount child-first, so DOM insertion order cannot decide
       // which of two nested dialogs paints above the other.
       style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
@@ -107,7 +175,6 @@ export default function Modal({
         /* The shared dialog layer, unless the caller names one — see the
            stacking-order block in globals.css. */
         'z-dialog',
-        isOpen ? 'animate-modal-overlay' : 'animate-modal-overlay-out',
       )}
       onClick={closeOnOverlayClick ? handleClose : undefined}
       /* `inert` while leaving, not `pointer-events: none`. The dialog is held in
@@ -131,7 +198,6 @@ export default function Modal({
              shadow second is the whole M3 depth recipe. */
           'bg-surface-container-high text-on-surface rounded-2xl shadow-e3',
           MAX_WIDTHS[maxWidth],
-          isOpen ? 'animate-modal-content' : 'animate-modal-content-out',
           panelClassName,
         )}
         onClick={(e) => e.stopPropagation()}

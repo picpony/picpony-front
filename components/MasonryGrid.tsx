@@ -1,17 +1,19 @@
 'use client';
 
 import { memo, useRef } from 'react';
-import { type PonyImage } from '@/lib/api';
+import type { ImagePreview } from '@/lib/types/image';
 import { distributeToMasonryColumns } from '@/lib/utils';
 import { useMasonryColumns } from '@/lib/hooks';
 import { StaggerGrid } from '@/lib/motionLazy';
 import ImageCard from './ImageCard';
 
 interface MasonryGridProps {
-  images: PonyImage[];
+  images: ImagePreview[];
+  /** A swapping tab pane already owns the entrance of its contents. */
+  entrance?: boolean;
 }
 
-export default memo(function MasonryGrid({ images }: MasonryGridProps) {
+export default memo(function MasonryGrid({ images, entrance = true }: MasonryGridProps) {
   const columns = useMasonryColumns();
   const columnData = distributeToMasonryColumns(images, columns);
 
@@ -40,11 +42,13 @@ export default memo(function MasonryGrid({ images }: MasonryGridProps) {
           the entrance silently never ran. The cascade lives behind a dynamic
           import, so the gallery chunk does not carry GSAP; with the engine absent
           the cards are simply there. */}
-      <StaggerGrid
-        gridRef={gridRef}
-        selector=".image-card"
-        deps={[columns, images.length, images[0]?.id]}
-      />
+      {entrance && (
+        <StaggerGrid
+          gridRef={gridRef}
+          selector=".image-card"
+          deps={[columns, images.length, images[0]?.id]}
+        />
+      )}
     </>
   );
 });

@@ -213,7 +213,7 @@ export default function HistoryPage() {
                       touch device the only way to remove a record sat permanently at 40%
                       (`outline` composites to roughly 1.5:1 there, under the 3:1 bar for a
                       non-text control); the 34px box was under the 44px touch rule; and it
-                      had no focus ring. Visible by default, hover-revealed from `sm` up —
+                      had no focus ring. Visible on touch, hover-revealed on desktop —
                       the rule the gallery tiles and detail zoom already follow. */}
                   <IconButton
                     onClick={() => handleDeleteItem(item.id)}
@@ -223,7 +223,7 @@ export default function HistoryPage() {
                        `删除浏览记录`, so arrowing down a page announced the same string
                        with nothing to tell them apart. */
                     aria-label={`删除浏览记录 #${item.id}`}
-                    className="text-on-surface-variant hover:text-error opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                    className="hover-reveal text-on-surface-variant hover:text-error"
                   />
                 </div>
               ))}

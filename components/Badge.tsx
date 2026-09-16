@@ -127,6 +127,26 @@ export default function Badge({
   );
 }
 
+type MediaBadgeCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+/* An 8dp inset inside a 16dp thumbnail leaves an 8dp corner next to the frame.
+   The other corners retain Badge's 4dp shape. Keep placement with shape so
+   profile thumbnails and gallery thumbnails cannot pick different recipes. */
+const MEDIA_CORNERS: Record<MediaBadgeCorner, string> = {
+  'top-left': 'top-2 left-2 rounded-tl-sm',
+  'top-right': 'top-2 right-2 rounded-tr-sm',
+  'bottom-left': 'bottom-2 left-2 rounded-bl-sm',
+  'bottom-right': 'bottom-2 right-2 rounded-br-sm',
+};
+
+/** A thumbnail's corner mark: one size, plate, inset and concentric corner. */
+export function MediaBadge({
+  corner,
+  ...props
+}: Pick<BadgeProps, 'children' | 'icon'> & { corner: MediaBadgeCorner }) {
+  return <Badge {...props} tone="media" size="sm" className={cn('absolute', MEDIA_CORNERS[corner])} />;
+}
+
 /**
  * The unread count pill.
  *

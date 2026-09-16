@@ -79,6 +79,7 @@ export default function Sheet({
   const mounted = useMounted();
   const rendering = useExitAnimation(isOpen, EXIT_MS);
   const panelRef = useRef<HTMLDivElement>(null);
+  const placedPanel = useRef<HTMLDivElement | null>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -108,9 +109,23 @@ export default function Sheet({
     () => {
       const panel = panelRef.current;
       const scrim = scrimRef.current;
-      if (!panel || !rendering) return;
+      if (!rendering) {
+        placedPanel.current = null;
+        return;
+      }
+      if (!panel) return;
+
+      /* Seed only a newly mounted surface. Reopening during its exit keeps the
+         current pose; a fromTo here sent it back to the bottom edge first. */
+      if (placedPanel.current !== panel) {
+        placedPanel.current = panel;
+        gsap.set(panel, { y: '100%' });
+        if (scrim) gsap.set(scrim, { opacity: 0 });
+      }
 
       if (motionTier() === 'off') {
+        gsap.killTweensOf(panel);
+        if (scrim) gsap.killTweensOf(scrim);
         gsap.set(panel, { y: isOpen ? 0 : '100%' });
         if (scrim) gsap.set(scrim, { opacity: isOpen ? 1 : 0 });
         return;
@@ -120,22 +135,10 @@ export default function Sheet({
          critically damped (no overshoot to remove), and a panel that appears in
          the middle of the screen without arriving from anywhere reads as a
          dialog — the travel *is* what says which edge it belongs to. */
-      if (isOpen) {
-        gsap.fromTo(panel, { y: '100%' }, { y: 0, ...spring('defaultEffects'), overwrite: true });
-        if (scrim)
-          gsap.fromTo(
-            scrim,
-            { opacity: 0 },
-            /* The panel's clock, not a shorter one of its own: the scrim is the
-               other half of the sheet arriving, so finishing first left the sheet
-               still rising over an already-settled dim. */
-            { opacity: 1, ...spring('defaultEffects'), overwrite: true },
-          );
-      } else {
-        gsap.to(panel, { y: '100%', ...spring('defaultEffects'), overwrite: true });
-        if (scrim)
-          gsap.to(scrim, { opacity: 0, ...spring('defaultEffects'), overwrite: true });
-      }
+      gsap.to(panel, { y: isOpen ? 0 : '100%', ...spring('defaultEffects'), overwrite: true });
+      /* The panel's clock: the scrim is the other half of this same movement. */
+      if (scrim)
+        gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...spring('defaultEffects'), overwrite: true });
     },
     { dependencies: [isOpen, rendering] },
   );
@@ -156,6 +159,7 @@ export default function Sheet({
       if (!panel || !rendering) return;
 
       let height = 0;
+      let originY = 0;
       let active = false;
       let pending = false;
 
@@ -222,13 +226,14 @@ export default function Sheet({
         lockAxis: true,
         tolerance: 4,
         ignore: '[data-no-sheet-drag]',
-        onDragStart: () => {
+        onDragStart: (self) => {
           /* A sheet whose body is scrolled is being read, not dragged. Only once
              it has nothing left to scroll does a downward pull belong to the
              sheet. Anything outside the scroller — the handle, the header — can
              always start a drag. */
           const body = bodyRef.current;
-          pending = !body || body.scrollTop <= 0;
+          const fromBody = self.event.target instanceof Node && body?.contains(self.event.target);
+          pending = !fromBody || !body || body.scrollTop <= 0;
         },
         onDrag: (self) => {
           if (pending) {
@@ -236,6 +241,12 @@ export default function Sheet({
             if (self.axis === 'y') {
               height = panel.offsetHeight;
               if (height <= 0) return;
+              /* The finger takes over from an entrance or a previous release.
+                 Stop those clocks before writing positions, and preserve the
+                 current offset so grabbing a moving sheet does not snap it home. */
+              originY = Number(gsap.getProperty(panel, 'y')) || 0;
+              gsap.killTweensOf(panel);
+              if (scrimRef.current) gsap.killTweensOf(scrimRef.current);
               active = true;
               pending = false;
             } else if (self.axis === 'x') {
@@ -248,7 +259,7 @@ export default function Sheet({
           if (!active) return;
           // Downward only. Clamped at 0 so an upward drag does not lift the
           // sheet off its dock and expose the page beneath it.
-          place(gsap.utils.clamp(0, height, (self.y ?? 0) - (self.startY ?? 0)));
+          place(gsap.utils.clamp(0, height, originY + (self.y ?? 0) - (self.startY ?? 0)));
         },
         onDragEnd: (self) => {
           pending = false;

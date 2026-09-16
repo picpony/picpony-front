@@ -1,9 +1,8 @@
 'use client';
 
-import { useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { use, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  MdStar,
   MdImage,
   MdSearch,
   MdOpenInNew,
@@ -17,7 +16,9 @@ import { useScreenStateFor } from '@/lib/screenState';
 import Pagination from '@/components/Pagination';
 import Skeleton from '@/components/Skeleton';
 import Avatar from '@/components/Avatar';
-import Badge from '@/components/Badge';
+import MasonryGrid from '@/components/MasonryGrid';
+import ImageGridSkeleton from '@/components/ImageGridSkeleton';
+import Card from '@/components/Card';
 import ErrorRetry from '@/components/ErrorRetry';
 import PageBack from '@/components/PageBack';
 import { useEscapeBack, useStoredValue } from '@/lib/hooks';
@@ -30,8 +31,43 @@ import { ICON } from '@/lib/icons';
 
 const PER_PAGE = 24;
 
-export default function DerpiUserPage() {
-  const { id: userId } = useParams<{ id: string }>();
+function ProfileStats({
+  loading = false,
+  uploads = 0,
+  comments = 0,
+  posts = 0,
+}: {
+  loading?: boolean;
+  uploads?: number;
+  comments?: number;
+  posts?: number;
+}) {
+  const stats = [
+    { label: '上传', icon: MdUpload, value: uploads },
+    { label: '评论', icon: MdChatBubbleOutline, value: comments },
+    { label: '发帖', icon: MdEdit, value: posts },
+  ];
+
+  return (
+    <Card padding="sm" className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-body-m">
+      {stats.map(({ label, icon: Icon, value }) => (
+        <div key={label} className="flex items-center gap-1.5 text-on-surface-variant">
+          <Icon size={ICON.dense} />
+          {loading ? (
+            <Skeleton className="h-6 w-[1ch] text-title-m" />
+          ) : (
+            <span className="text-title-m text-on-surface">{value.toLocaleString()}</span>
+          )}
+          <span>{label}</span>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+export default function DerpiUserPage({ params }: { params: Promise<{ id: string }> }) {
+  // Page params belong to this segment even while an image overlays it.
+  const { id: userId } = use(params);
   const contentFilter = parseContentFilter(useStoredValue(LS_KEYS.contentFilter, 'safe'));
   const scope = `${userId}:${contentFilter}`;
 
@@ -59,13 +95,6 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
   const uploadsError = uploadsRead.error instanceof Error ? uploadsRead.error.message : '上传记录加载失败';
   const totalPages = Math.ceil(uploadsTotal / PER_PAGE);
 
-  const handleUploadClick = useCallback(
-    (id: number) => {
-      router.push(`/pic/${id}`, { scroll: false });
-    },
-    [router],
-  );
-
   // --- Loading skeleton ---
   /* Not a sidebar destination, so it carries the shared back affordance — see
      the rule in AGENTS.md. Drawn in all three states, which is what makes the
@@ -81,18 +110,24 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
       <>
       <PageBack onClick={handleBack} title="返回 (Esc)" />
       <div>
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-4 pb-6">
-            <Skeleton className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface shrink-0" />
-            <div className="flex-1 min-w-0">
-              <Skeleton className="h-8 w-1/3 mb-4" />
-              <Skeleton className="h-4 w-1/4" />
+        <div className="@container max-w-5xl mx-auto">
+          <div className="pb-8 pt-6 sm:pt-8">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface shrink-0" />
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-8 w-1/3 sm:h-9" />
+                <p className="mt-1 text-body-m text-on-surface-variant">Derpibooru 用户</p>
+              </div>
             </div>
-          </div>
-          <div className="space-y-4">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-            <Skeleton className="h-4 w-4/6" />
+            <ProfileStats loading />
+            <div className="mt-6 flex flex-col gap-3 @lg:flex-row">
+              <Skeleton className="h-14 @lg:flex-1 rounded-full" />
+              <Skeleton className="h-14 @lg:flex-1 rounded-full" />
+            </div>
+            <div className="mt-10">
+              <SectionHeading icon={<MdImage size={ICON.control} />}>最近上传</SectionHeading>
+              <ImageGridSkeleton count={PER_PAGE} />
+            </div>
           </div>
         </div>
       </div>
@@ -149,7 +184,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
           on two clocks. Only two routes in the app did this. */}
       <div>
       {/* ===== Main Content ===== */}
-      <div className="max-w-5xl mx-auto">
+      <div className="@container max-w-5xl mx-auto">
         <div className="pb-8 pt-6 sm:pt-8">
           {/* Avatar + Username row */}
           <div className="flex items-center gap-4">
@@ -200,47 +235,30 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
           )}
 
           {/* Stats row */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-6 bg-surface-container-low rounded-md px-5 py-3 text-body-m">
-            <div className="flex items-center gap-1.5 text-on-surface-variant">
-              <MdUpload size={ICON.dense} />
-              <span className="text-title-m text-on-surface">
-                {(profile.uploads_count ?? 0).toLocaleString()}
-              </span>
-              <span className="text-on-surface-variant">上传</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-on-surface-variant">
-              <MdChatBubbleOutline size={ICON.dense} />
-              <span className="text-title-m text-on-surface">
-                {(profile.comments_count ?? 0).toLocaleString()}
-              </span>
-              <span className="text-on-surface-variant">评论</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-on-surface-variant">
-              <MdEdit size={ICON.dense} />
-              <span className="text-title-m text-on-surface">
-                {(profile.posts_count ?? 0).toLocaleString()}
-              </span>
-              <span className="text-on-surface-variant">发帖</span>
-            </div>
-          </div>
+          <ProfileStats
+            uploads={profile.uploads_count}
+            comments={profile.comments_count}
+            posts={profile.posts_count}
+          />
 
           {/* Description */}
           {profile.description && (
             <div className="mt-6">
-              <h3 className="text-label-l-emphasized text-on-surface mb-2">个人简介</h3>
-              <div className="text-body-m text-on-surface-variant bg-surface-container-low p-4 rounded-md whitespace-pre-wrap popover-scrollbar max-h-40 overflow-y-auto">
+              <SectionHeading as="h3" className="mb-2">个人简介</SectionHeading>
+              <Card className="text-body-m text-on-surface-variant whitespace-pre-wrap popover-scrollbar max-h-40 overflow-y-auto">
                 {profile.description}
-              </div>
+              </Card>
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
+          {/* The sidebar can leave less than half a tablet's width for this page.
+              Pair the actions only once their own container can hold both labels. */}
+          <div className="flex flex-col @lg:flex-row gap-3 mt-6">
             <Button
               onClick={() => router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`, { scroll: false })}
               variant="filled"
               size="lg"
-              className="flex-1"
+              className="@lg:flex-1"
               icon={<MdSearch />}
             >
               搜搜 TA 的所有作品
@@ -249,7 +267,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
               href={`https://derpibooru.org/profiles/${encodeURIComponent(profile.name)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className={buttonClasses({ variant: 'tonal', className: 'flex-1' })}
+              className={buttonClasses({ variant: 'tonal', size: 'lg', className: '@lg:flex-1' })}
             >
               <MdOpenInNew size={ICON.dense} />在 Derpibooru 查看主页
             </a>
@@ -268,69 +286,12 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
 
             {Boolean(uploadsRead.error) && <ErrorRetry size="inline" title={uploadsError} onRetry={uploadsRead.refresh} />}
             {uploadsRead.data === undefined && uploadsRead.error === undefined ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                {Array.from({ length: PER_PAGE }).map((_, i) => (
-                  <Skeleton key={i} className="aspect-square rounded-lg" />
-                ))}
-              </div>
+              <ImageGridSkeleton count={PER_PAGE} />
             ) : uploads.length > 0 ? (
               /* The anchor wraps the grid *and* its pager: `Pagination` reaches it with
                  `closest()`, so one that sits beside the pager is one it cannot see. */
               <div data-pagination-anchor aria-busy={uploadsRead.isLoading}>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                  {uploads.map((img) => {
-                    const thumbUrl =
-                      img.representations?.small || img.representations?.thumb || img.view_url;
-                    return (
-                      /* A `<button>`, not a `<div onClick>`: an image grid is
-                         navigation, and this one could not be reached by keyboard
-                         at all. (`/user/[id]` uses a `<Link>` for the same grid;
-                         here the handler resolves the target id first, so a button
-                         is the honest element.)
-
-                         `rounded-lg` (16dp) is the grid-tile step from the shape
-                         table — and the one pinned to `HERO_TARGET_RADIUS_PX`, so a
-                         tile at 12dp did not match the corner the flight lands on.
-
-                         The caption and score reveal on `sm` and up only. They were
-                         `opacity-0 group-hover:opacity-100`, and there is no hover
-                         on a touch device — so on the majority viewport the image id
-                         and score never appeared at all. */
-                      <button
-                        type="button"
-                        key={img.id}
-                        onClick={() => handleUploadClick(img.id)}
-                        aria-label={img.name || `图片 #${img.id}`}
-                        className="group relative aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-surface-container-high outline-none focus-visible:ring-2 focus-ring"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic derpi thumbnail */}
-                        <img
-                          src={thumbUrl}
-                          alt=""
-                          className="w-full h-full object-cover transition-transform duration-composite ease-[var(--ease-standard)] group-hover:scale-105 no-motion:group-hover:scale-100"
-                          loading="lazy"
-                        />
-                        <div className="media-hover-scrim absolute inset-0" />
-                        <div className="media-caption-gradient absolute bottom-0 left-0 right-0 p-2 opacity-100 transition-opacity duration-composite ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100">
-                          <span className="text-on-media text-label-m">#{img.id}</span>
-                        </div>
-                        {img.score !== undefined && (
-                          /* `Badge tone="media"`, not an inline span naming the
-                             plate/ink pair by hand — the same object as every
-                             other mark in the app, in the one tone that is
-                             legible on a photograph. */
-                          <Badge
-                            tone="media"
-                            icon={<MdStar />}
-                            className="absolute top-2 right-2 opacity-100 transition-opacity duration-composite ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100"
-                          >
-                            {img.score}
-                          </Badge>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                <MasonryGrid images={uploads} />
 
                 {totalPages > 1 && (
                   <Pagination

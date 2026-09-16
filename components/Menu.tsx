@@ -171,7 +171,7 @@ export default function Menu({
           onClick={() => run(item)}
           onKeyDown={onKeyDown}
           onPointerEnter={() => !item.disabled && setChosenIndex(index)}
-          data-ripple={item.disabled ? undefined : ''}
+          data-ripple=""
           /* M3 menu item: 16dp inline / 4dp block padding, label-large, and NO
              corner radius — rows are full-bleed, which is what makes a menu read
              as a menu rather than as a stack of chips. 40dp under a pointer,

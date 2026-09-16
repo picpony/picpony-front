@@ -23,6 +23,34 @@ function load(file, dependencies = {}, globals = {}) {
 
 const constants = { PICPONY_API_ORIGIN: 'https://picpony.top', LS_KEYS: {}, MEDIA: {} };
 
+test('hero return targets the active profile pane and preserves the flight-hidden source', () => {
+  let candidates = [];
+  const { findImageHeroThumbnail } = load('lib/hero/dom.ts', {
+    './constants': { HERO_BACKGROUND_VISUAL_SELECTOR: '[data-image-detail-background]' },
+  }, {
+    document: { querySelectorAll: () => candidates },
+    CSS: { escape: (value) => value },
+  });
+  const thumbnail = (active, hasLayout, sourceKey = 'card:42') => ({
+    dataset: { imageHeroSourceKey: sourceKey },
+    closest: () => active === null ? null : { hasAttribute: () => active },
+    getClientRects: () => hasLayout ? [{}] : [],
+    // Visibility may be leased by the flight; it must not decide the target.
+    style: { visibility: 'hidden' },
+  });
+  const uploads = thumbnail(false, true);
+  const favourites = thumbnail(true, true);
+  candidates = [uploads, favourites];
+  assert.equal(findImageHeroThumbnail(42, 'card:42'), favourites);
+  candidates = [thumbnail(true, false), favourites];
+  assert.equal(findImageHeroThumbnail(42, 'card:42'), favourites);
+  const featured = thumbnail(null, true, 'featured:42');
+  candidates = [favourites, featured];
+  assert.equal(findImageHeroThumbnail(42, 'featured:42'), featured);
+  candidates = [uploads];
+  assert.equal(findImageHeroThumbnail(42, 'card:42'), null);
+});
+
 test('stored preferences use stable SSR defaults and react to both settings and storage events', () => {
   const listeners = new Map();
   const values = new Map();
@@ -249,6 +277,7 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
   let safeTotal = 10;
   let activeHarness;
   const react = {
+    use: (value) => value,
     useState: (...args) => activeHarness.react.useState(...args),
     useCallback: (...args) => activeHarness.react.useCallback(...args),
   };
@@ -279,8 +308,11 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     } },
     '@/components/Pagination': { default: 'Pagination' },
     '@/components/Skeleton': { default: 'Skeleton' },
+    '@/components/MasonryGrid': { default: 'MasonryGrid' },
+    '@/components/ImageGridSkeleton': { default: 'ImageGridSkeleton' },
     '@/components/Avatar': { default: 'Avatar' },
-    '@/components/Badge': { default: 'Badge' },
+    '@/components/Badge': { default: 'Badge', MediaBadge: 'MediaBadge' },
+    '@/components/Card': { default: 'Card' },
     '@/components/ErrorRetry': { default: 'ErrorRetry' },
     '@/components/PageBack': { default: 'PageBack' },
     '@/components/EmptyState': { default: 'EmptyState' },
@@ -290,7 +322,7 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
   });
   let instance;
   const render = () => {
-    const element = Page();
+    const element = Page({ params: { id: userId } });
     if (!instance || instance.key !== element.key || instance.type !== element.type) {
       instance?.hooks.dispose();
       instance = { key: element.key, type: element.type, hooks: stateHarness() };

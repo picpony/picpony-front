@@ -126,7 +126,7 @@ function AuthModal({
       closeOnEscape={closeOnEscape}
       hideCloseButton
       // 整个窗口组件在验证码弹窗打开时缩小让位，带动画
-      // 用独立 scale 属性（Tailwind v4），避开 modalContent 动画 forwards 对 transform/opacity 的填充锁定
+      // 独立 scale 属性与 Modal 的 WAAPI transform 分开，保留嵌套弹层的层级反馈
       panelClassName={cn(
         'transition-[scale] spring-default-spatial',
         innerModalOpen ? 'scale-95' : 'scale-100',

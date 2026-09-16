@@ -149,9 +149,12 @@ export default function ToggleSwitch({
           onPointerCancel={release}
           onPointerLeave={release}
           onPointerDown={(e) => {
-            if (!disabled && e.button === 0) setPressed(true);
+            // A fieldset can disable this input without setting the component prop.
+            // Match the native state, as the delegated RippleLayer does.
+            if (e.currentTarget.matches(':disabled') || e.button !== 0) return;
+            setPressed(true);
             const host = stateLayerRef.current;
-            if (!host || e.button !== 0) return;
+            if (!host) return;
             // Always from the middle of the circle: the switch's wave reads as
             // the handle pulsing, wherever along the track you pressed.
             const rect = host.getBoundingClientRect();
@@ -179,7 +182,7 @@ export default function ToggleSwitch({
                 gives it `position: relative` + `overflow: hidden`. */}
             <span
               ref={stateLayerRef}
-              data-ripple={disabled ? undefined : ''}
+              data-ripple=""
               className={`grid h-10 w-10 place-items-center rounded-full ${
                 checked ? 'text-primary-ink' : 'text-on-surface'
               }`}
@@ -215,7 +218,8 @@ export default function ToggleSwitch({
                     : checked
                       ? 'size-6'
                       : 'size-4',
-                  checked ? 'bg-on-primary' : 'bg-outline group-hover/switch:bg-on-surface-variant',
+                  checked ? 'bg-on-primary' : 'bg-outline',
+                  !checked && !disabled && 'group-hover/switch:bg-on-surface-variant',
                 )}
               >
                 {/* Only the selected state carries a mark. */}

@@ -31,6 +31,12 @@ export interface PonyImage {
   downvotes: number;
 }
 
+/** A list can provide media geometry before the detail endpoint supplies metadata. */
+export type ImagePreview = Pick<
+  PonyImage,
+  'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'
+> & Partial<Omit<PonyImage, 'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'>>;
+
 export interface FeaturedImage {
   image: PonyImage;
   interactions: [];

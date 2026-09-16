@@ -375,22 +375,23 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     markImageHeroRouteResolvedWithoutMedia(surfaceId);
   }, [resolvedWithoutMedia, surfaceId]);
 
-  // 浏览历史：登录用户打开详情时同步到云端（与旧前端 add_browsing_history 一致），
-  // fire-and-forget；依赖 image?.id，同一张图只记一次，prefetch 不算浏览。
+  // Wait for the detail record: a profile preview has no uploader metadata yet.
+  // The effect belongs to the mounted detail, so prefetch alone never records a visit.
+  const historyImage = prefetchedDetail?.image;
   useEffect(() => {
     const token = readToken();
-    if (!token || !image) return;
-    const reps = image.representations ?? {};
-    const previewUrl = reps.thumb || reps.small || reps.large || image.view_url;
+    if (!token || !historyImage) return;
+    const reps = historyImage.representations ?? {};
+    const previewUrl = reps.thumb || reps.small || reps.large || historyImage.view_url;
     void api
       .addBrowsingHistory(token, {
-        image_id: image.id,
+        image_id: historyImage.id,
         preview_url: previewUrl,
-        uploader: image.uploader || '匿名',
+        uploader: historyImage.uploader || '匿名',
       })
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只需跟随 image.id
-  }, [image?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one visit per resolved image id
+  }, [historyImage?.id]);
 
   const showTagCounts = useStoredBoolean(LS_KEYS.showTagCounts);
   const showChineseTags = useStoredBoolean(LS_KEYS.showChineseTags, true);

@@ -1,9 +1,10 @@
 'use client';
 
 import { forwardRef, type ReactNode, type ButtonHTMLAttributes } from 'react';
-import { MdClose, MdCheck } from 'react-icons/md';
+import { MdClose } from 'react-icons/md';
 import { cn } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
+import CheckGlyph from './CheckGlyph';
 
 export type ChipVariant = 'assist' | 'filter' | 'input';
 export type ChipTone = 'neutral' | 'primary' | 'success' | 'warning' | 'error';
@@ -170,10 +171,10 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
         {showsCheck ? (
           /* 18dp, M3's chip icon size. It was 14 at `sm` and 16 at `md` — two
              values, neither on the icon scale, for one glyph. */
-          <MdCheck size={ICON.dense} className="shrink-0" aria-hidden="true" />
+          <CheckGlyph className="size-4.5 shrink-0" />
         ) : (
           icon && (
-            <span className="shrink-0 [&>svg]:block" aria-hidden="true">
+            <span className="shrink-0 [&>svg]:block [&>svg]:size-4.5" aria-hidden="true">
               {icon}
             </span>
           )

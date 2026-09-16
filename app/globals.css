@@ -1211,21 +1211,6 @@
      small utility entrance — the standard set's medium-1 pairing. */
   --animate-pop-in: popIn calc(0.25s * var(--motion-scale)) var(--ease-standard-decelerate)
     forwards;
-  /* Durations on the M3 scale, paired as the spec prescribes: entering = medium-4 (400ms)
-     with emphasized-decelerate, leaving = short-4 (200ms) with emphasized-accelerate.
-
-     **The scrim is on the panel's clock, not its own** — it is the other half of the panel
-     arriving, not a component fading in place; a dialog that dims for 300ms and keeps growing
-     for another 100 arrives in two instalments. */
-  --animate-modal-overlay: modalOverlay var(--transition-duration-enter) var(--ease-decelerate)
-    forwards;
-  --animate-modal-content: modalContent var(--transition-duration-enter) var(--ease-decelerate)
-    forwards;
-  --animate-modal-overlay-out: modalOverlayOut var(--transition-duration-exit)
-    var(--ease-accelerate) forwards;
-  --animate-modal-content-out: modalContentOut var(--transition-duration-exit)
-    var(--ease-accelerate) forwards;
-
   /* ── Micro-interactions, as named animations ────────────────────────────
    *
    * Named here so the duration and the curve travel with the animation (hand-assembled
@@ -1298,45 +1283,6 @@
     }
   }
 
-  @keyframes modalOverlay {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes modalContent {
-    from {
-      opacity: 0;
-      transform: translateY(14px) scale(0.93);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
-
-  @keyframes modalOverlayOut {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
-  }
-
-  @keyframes modalContentOut {
-    from {
-      opacity: 1;
-      transform: none;
-    }
-    to {
-      opacity: 0;
-      transform: translateY(6px) scale(0.97);
-    }
-  }
 }
 
 /* --- The animation preference --------------------------------------------
@@ -1690,6 +1636,7 @@ html[data-motion='off'] {
      escaped selectors.
      All four named utilities are listed, in use or not, so they behave identically. */
   & .transition-ui,
+  & .transition-icon-button,
   & .m3-field > label,
   & .m3-field > fieldset > legend,
   & [class*='transition-['],
@@ -1747,20 +1694,47 @@ html[data-motion='off'] :is(.page-chrome, [data-page-transit] .page-chrome) {
  * also why the state-layer utility cannot be used here.
  */
 .media-hover-scrim {
+  /* One targeted tone for pointer hover and keyboard focus. The hover token plus two
+     points gives a photograph the same readable feedback as a flat surface. */
+  --media-targeted-scrim: color-mix(
+    in oklab,
+    var(--md-sys-color-scrim) calc(var(--md-sys-state-hover-opacity) * 100% + 2%),
+    transparent
+  );
   background-color: transparent;
   /* 300ms, not 200: the veil shares its hover with the tile's own scale and caption fade,
      and at 200 the darkening finished before the picture stopped moving. */
   transition: background-color var(--transition-duration-composite) var(--ease-standard);
 }
 
-.group:hover .media-hover-scrim {
-  /* The hover token plus a documented two points, rather than a flat 10: the base follows
-     the state hover opacity if it ever moves, and the delta stays visible as a delta. */
-  background-color: color-mix(
-    in oklab,
-    var(--md-sys-color-scrim) calc(var(--md-sys-state-hover-opacity) * 100% + 2%),
-    transparent
-  );
+.group:is(:focus-visible, :has(:focus-visible)) .media-hover-scrim {
+  background-color: var(--media-targeted-scrim);
+}
+
+/* Touch browsers can keep :hover after a tap. Match Tailwind's hover variants so the
+   scrim, caption and image respond to the same gesture and release together. */
+@media (hover: hover) {
+  .group:hover .media-hover-scrim {
+    background-color: var(--media-targeted-scrim);
+  }
+}
+
+/* Captions and secondary controls can wait for hover only when the device has
+   hover. A wide touch screen still needs them immediately; keyboard focus on
+   the target or a control inside it reveals the same content. */
+@utility hover-reveal {
+  opacity: 1;
+
+  @variant sm {
+    @media (hover: hover) and (pointer: fine) {
+      opacity: 0;
+
+      &:focus-visible,
+      .group:is(:hover, :focus-visible, :has(:focus-visible)) & {
+        opacity: 1;
+      }
+    }
+  }
 }
 
 /* Caption gradient over a thumbnail, through the scrim token. */
@@ -2592,6 +2566,29 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   transition-duration: var(--transition-duration-standard);
 }
 
+/* Icon-button selection changes both material and shape. Effects stop without overshoot;
+   the selected corner and dismiss rotation use FastSpatial, like a switch handle. Keeping
+   the clocks with their properties prevents a colour fade from inheriting spatial easing. */
+@utility transition-icon-button {
+  transition:
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    rotate var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial),
+    border-radius var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial);
+}
+
+/* A newly portalled tooltip has no previous style for a transition to start from.
+   Supply only that first frame; subsequent open/close changes reverse the same FastEffects
+   transition from its current opacity, including when a pointer returns during dismissal. */
+@starting-style {
+  .m3-tooltip[data-open='true'] {
+    opacity: 0;
+  }
+}
+
 /* The nine M3 motion-scheme springs, each as one class carrying its shape and its settle
  * time together — handing a call site two knobs is how they come apart. Pair with a
  * transition-property utility (the arbitrary-property form), which decides *what* moves and
@@ -2843,8 +2840,8 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * A **labelled** field is a form slot (the outlined language above). An **unlabelled** one
  * — search box, admin filter, chat composer — is not a form slot: its placeholder is its
  * whole identity, and dressed as an outlined field it read as a form control with a missing
- * label. So it is *filled*: a tone step, no border, no shadow. Same 12dp corner and same
- * 44dp box, so the two languages are still one family.
+ * label. So it is *filled*: a tone step, no border, no shadow. Same 4dp corner and same
+ * 56dp box, so the two languages are still one family.
  *
  * Two mechanical notes. The inset goes back to 0 — the negative top inset above exists
  * only to cancel the UA drawing the top border through the legend's centre, and there is no
@@ -2869,12 +2866,14 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * The container is named *first* in the mix, and that ordering is load-bearing: the
  * automatic fallback for engines without color-mix support is the first colour — written the
  * other way round, the fallback was a near-black fill over the whole field on hover. */
-.m3-field:not([data-labelled]):hover:not(:focus-within) > fieldset {
-  background-color: color-mix(
-    in srgb,
-    var(--md-sys-color-surface-container-highest) calc(100% - var(--md-sys-state-hover-opacity) * 100%),
-    var(--md-sys-color-on-surface)
-  );
+@media (hover: hover) {
+  .m3-field:not([data-labelled]):hover:not(:focus-within):not(:has(> :is(input, textarea):disabled)) > fieldset {
+    background-color: color-mix(
+      in srgb,
+      var(--md-sys-color-surface-container-highest) calc(100% - var(--md-sys-state-hover-opacity) * 100%),
+      var(--md-sys-color-on-surface)
+    );
+  }
 }
 
 .m3-field:not([data-labelled])[data-invalid] > fieldset {
@@ -3037,8 +3036,10 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 /* M3 darkens the outline on hover and thickens it to 2px on focus; the focused outline *is*
    this control's focus indicator (see `Input.tsx`). Scoped to the labelled variant — these
    three rules *are* the outlined language, and an unlabelled field no longer speaks it. */
-.m3-field[data-labelled]:hover:not(:focus-within):not([data-invalid]) > fieldset {
-  border-color: var(--md-sys-color-on-surface);
+@media (hover: hover) {
+  .m3-field[data-labelled]:hover:not(:focus-within):not([data-invalid]):not(:has(> :is(input, textarea):disabled)) > fieldset {
+    border-color: var(--md-sys-color-on-surface);
+  }
 }
 
 .m3-field[data-labelled]:focus-within > fieldset {
@@ -3246,8 +3247,10 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
     z-index: -1;
   }
 
-  &:hover::before {
-    opacity: var(--md-sys-state-hover-opacity);
+  @media (hover: hover) {
+    &:hover::before {
+      opacity: var(--md-sys-state-hover-opacity);
+    }
   }
 
   &:focus-visible::before {

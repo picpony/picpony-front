@@ -3,20 +3,21 @@
 import Link from 'next/link';
 import { MdAccessTime, MdImage, MdPerson, MdSdStorage, MdStar } from 'react-icons/md';
 import type { ReactNode } from 'react';
-import type { PonyImage } from '@/lib/types/image';
+import type { ImagePreview } from '@/lib/types/image';
 import Skeleton from '@/components/Skeleton';
+import Badge from '@/components/Badge';
 import { ICON } from '@/lib/icons';
 import { formatDateTime, formatMonthDay } from '@/lib/format';
 import { useTooltip } from '@/components/Tooltip';
 
 type DetailHeaderProps = {
-  image: PonyImage;
+  image: ImagePreview;
   layout?: 'page' | 'overlay' | 'stage';
   metadataReady?: boolean;
 };
 
-function getImageFormat(image: PonyImage) {
-  const source = image.format || image.representations?.full || image.view_url || '';
+function getImageFormat(image: ImagePreview) {
+  const source = image.format || (image.representations?.full || image.view_url || '').split(/[?#]/)[0];
   return source.split('.').pop()?.toUpperCase() || 'UNKNOWN';
 }
 
@@ -99,9 +100,7 @@ export default function DetailHeader({
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <span className="sr-only">格式</span>
-          <span className="rounded-xs bg-surface-container-high px-1.5 py-0.5 text-label-m text-on-surface-variant">
-            {getImageFormat(image)}
-          </span>
+          <Badge>{getImageFormat(image)}</Badge>
         </div>
         <Link
           href={
@@ -120,9 +119,11 @@ export default function DetailHeader({
           className="relative flex shrink-0 items-center gap-1.5 transition-ui hover:text-primary-ink"
         >
           <MdPerson size={ICON.dense} className="text-outline" aria-hidden="true" />
-          <span className="max-w-32 truncate underline decoration-dotted underline-offset-2 sm:max-w-38">
-            {image.uploader || '匿名用户'}
-          </span>
+          <MetaValue ready={image.uploader != null} width="w-20">
+            <span className="max-w-32 truncate underline decoration-dotted underline-offset-2 sm:max-w-38">
+              {image.uploader || '匿名用户'}
+            </span>
+          </MetaValue>
           {uploaderTooltip}
         </Link>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -138,12 +139,14 @@ export default function DetailHeader({
           {/* The date is the widest field by far. Below `sm` it drops the year
               and the clock — enough to keep the row count at two — and the full
               value stays available on the wrapper's `title`. */}
-          <span className="tabular-nums sm:hidden">
-            {formatMonthDay(image.created_at)}
-          </span>
-          <span className="hidden tabular-nums sm:inline">
-            {formatDateTime(image.created_at)}
-          </span>
+          <MetaValue ready={Boolean(image.created_at)} width="w-24">
+            <span className="tabular-nums sm:hidden">
+              {image.created_at ? formatMonthDay(image.created_at) : ''}
+            </span>
+            <span className="hidden tabular-nums sm:inline">
+              {image.created_at ? formatDateTime(image.created_at) : ''}
+            </span>
+          </MetaValue>
         </div>
       </div>
     </div>

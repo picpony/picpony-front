@@ -1,4 +1,4 @@
-import type { PonyImage } from './image';
+import type { ImagePreview } from './image';
 
 export interface DerpiProfileAward {
   image_url?: string;
@@ -55,7 +55,7 @@ export interface UserPostsResponse {
   total_pages: number;
 }
 
-export type UserUpload = Pick<PonyImage, 'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'>;
+export type UserUpload = ImagePreview;
 
 export interface UserUploadsResponse {
   uploads: UserUpload[];

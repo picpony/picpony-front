@@ -18,7 +18,9 @@ export default function RippleLayer() {
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       const target = (event.target as Element | null)?.closest<HTMLElement>('[data-ripple]');
-      if (!target || target.hasAttribute('disabled')) return;
+      // Native fieldsets can disable a control without adding its own attribute; menu
+      // options express the same state through ARIA. Neither should paint a press wave.
+      if (!target || target.matches(':disabled, [aria-disabled="true"]')) return;
 
       const rect = target.getBoundingClientRect();
       spawnRipple(target, event.clientX - rect.left, event.clientY - rect.top);

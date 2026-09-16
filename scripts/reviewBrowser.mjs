@@ -101,7 +101,9 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
   if (!ready) throw new Error(`Production server did not start: ${serverError}`);
-  python = spawn('python', [path.join(root, 'scripts/reviewBrowser.py'), base, fixtureUrl, ...process.argv.slice(2)], {
+  const args = process.argv.slice(2);
+  const browserScript = args.includes('--profile-gallery') ? 'testProfileGallery.py' : 'reviewBrowser.py';
+  python = spawn('python', [path.join(root, 'scripts', browserScript), base, fixtureUrl, ...args], {
     cwd: root, windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
   });
   const [code] = await once(python, 'exit');

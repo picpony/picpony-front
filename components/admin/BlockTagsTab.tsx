@@ -105,7 +105,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
             <Card key={key} variant="filled">
               <div className="mb-3 flex items-center justify-between">
                 <Skeleton className="h-5 w-24" delay={i * 90} />
-                <Skeleton className="h-8 w-16 rounded-full" delay={i * 90 + 40} />
+                <Skeleton className="touch-size h-8 w-16 rounded-full" delay={i * 90 + 40} />
               </div>
               <div className="flex flex-wrap gap-2">
                 {[64, 88, 72, 96, 56].map((w, j) => (
@@ -143,6 +143,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
                     
                     <Input
                       type="text"
+                      size="sm"
                       value={newTagName}
                       disabled={mutation.busy}
                       onChange={(e) => setNewTagName(e.target.value)}
@@ -150,7 +151,7 @@ export default function BlockTagsTab({ token }: { token: string }) {
                       fieldClassName="flex-1"
                       onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleAddTag(key)}
                     />
-                    <Button onClick={() => handleAddTag(key)} variant="filled" size="xs" loading={mutation.busy} disabled={!newTagName.trim()}>
+                    <Button onClick={() => handleAddTag(key)} variant="filled" loading={mutation.busy} disabled={!newTagName.trim()}>
                       确认
                     </Button>
                   </div>

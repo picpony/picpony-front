@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 import CheckGlyph from './CheckGlyph';
 
@@ -57,7 +58,11 @@ export default function Checkbox({
        area without changing the box (keeping the row heights it sits in
        unchanged) — safe here because there is no `data-ripple` to clip it. */
     <label
-      className={`group ${label ? 'inline-flex items-center gap-2' : ''} cursor-pointer ${disabled ? 'cursor-not-allowed' : ''} ${className}`}
+      className={cn(
+        'group/checkbox inline-flex items-center gap-2 select-none',
+        disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
+        className,
+      )}
     >
       <span className="touch-target relative flex size-4.5 shrink-0 items-center justify-center">
       <input
@@ -76,12 +81,12 @@ export default function Checkbox({
           a list row all respond by the same amount. */}
       <span
         aria-hidden="true"
-        className={`spring-fast-effects pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity ${
+        className={`pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity duration-state ease-[var(--ease-standard)] ${
           checked ? 'text-primary-ink' : 'text-on-surface'
         } ${
           disabled
             ? ''
-            : 'group-hover:opacity-[var(--md-sys-state-hover-opacity)] group-active:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]'
+            : 'group-hover/checkbox:opacity-[var(--md-sys-state-hover-opacity)] group-active/checkbox:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]'
         }`}
       />
 
@@ -111,11 +116,12 @@ export default function Checkbox({
           strokeDashoffset: checked ? 0 : 10.5,
           /* An *effects* spring, not a spatial one: this is a mark being drawn,
              so it must not overshoot — a dash offset that overshoots draws past
-             the end of the path and then retracts. The 80ms delay holds the
-             stroke until the container's pop has finished, so the two read as one
-             gesture rather than as a race. */
+             the end of the path and then retracts. The press step lets the box
+             establish itself before the stroke starts; both finish within the
+             container's expressive settle. Reading the token also keeps this
+             delay in step with the user's motion speed and off preference. */
           className: 'spring-fast-effects transition-[stroke-dashoffset]',
-          style: { transitionDelay: checked ? '80ms' : '0ms' },
+          style: { transitionDelay: checked ? 'var(--transition-duration-press)' : '0ms' },
         }}
       />
       </span>

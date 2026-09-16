@@ -11,7 +11,7 @@ import {
 } from 'react';
 import type Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { PonyImage } from '@/lib/types/image';
+import type { ImagePreview } from '@/lib/types/image';
 import { cancelImageDetailPrefetch } from '@/lib/detail';
 import {
   canAnimateImageHero,
@@ -38,7 +38,7 @@ export function useHeroLink<T extends HTMLElement>({
   canAnimate,
   kind,
 }: {
-  image: PonyImage | null;
+  image: ImagePreview | null;
   sourceRef: RefObject<T | null>;
   previewSrc: string;
   canAnimate: boolean;

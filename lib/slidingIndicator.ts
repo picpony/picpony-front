@@ -39,12 +39,13 @@ export function useSlidingIndicator<
   useLayoutEffect(
     () => {
       const indicator = indicatorRef.current;
+      const container = containerRef.current;
       /* `CSS.escape`, because `active` is a caller's value: a tab key containing a quote or
          a bracket would otherwise throw and take the indicator down with it. */
-      const target = containerRef.current?.querySelector<HTMLElement>(
+      const target = container?.querySelector<HTMLElement>(
         `[data-tab="${CSS.escape(active)}"]`,
       );
-      if (!indicator || !target) return;
+      if (!indicator || !container || !target) return;
 
       const to = { transform: `translateX(${target.offsetLeft}px)`, width: `${target.offsetWidth}px` };
 
@@ -66,36 +67,59 @@ export function useSlidingIndicator<
       if (!placed.current || motionTier() === 'off') {
         placed.current = true;
         Object.assign(indicator.style, to);
-        return;
+      } else {
+        const style = getComputedStyle(indicator);
+        const from = { transform: style.transform, width: style.width };
+        const animation = indicator.animate([from, to], {
+          ...springTiming('defaultSpatial'),
+          fill: 'forwards',
+        });
+        running.current = animation;
+        /* Drop the fill after settling so no composited layer stays alive for
+           the life of every tab row. */
+        animation.finished
+          .then(() => {
+            if (running.current !== animation) return;
+            Object.assign(indicator.style, to);
+            animation.cancel();
+            running.current = null;
+          })
+          .catch(() => {
+            /* Cancelled by the next glide, which has already taken over. */
+          });
       }
 
-      const from = {
-        transform: getComputedStyle(indicator).transform,
-        width: getComputedStyle(indicator).width,
-      };
-      const animation = indicator.animate([from, to], {
-        ...springTiming('defaultSpatial'),
-        fill: 'forwards',
-      });
-      running.current = animation;
-      /* The final position is written to the element and `fill: 'forwards'` dropped, so the
-         indicator is not left holding an animation's fill for the life of the page — which
-         would make the next `getComputedStyle` read the fill rather than the style, and
-         would keep a composited layer alive on every tab row in the app. */
-      animation.finished
-        .then(() => {
-          if (running.current !== animation) return;
-          Object.assign(indicator.style, to);
-          animation.cancel();
-          running.current = null;
-        })
-        .catch(() => {
-          /* Cancelled by the next glide, which has already taken over. */
+      /* Font loading, badge counts and viewport changes can move a tab without
+         changing its value. Keep the mark under its label in those cases, too.
+         Geometry changes place it immediately: reflow is not a tab selection.
+         Observing all tabs also catches a preceding label getting wider. */
+      let left = target.offsetLeft;
+      let width = target.offsetWidth;
+      const observer = new ResizeObserver(() => {
+        const nextLeft = target.offsetLeft;
+        const nextWidth = target.offsetWidth;
+        if (nextLeft === left && nextWidth === width) return;
+        left = nextLeft;
+        width = nextWidth;
+        running.current?.cancel();
+        running.current = null;
+        Object.assign(indicator.style, {
+          transform: `translateX(${left}px)`,
+          width: `${width}px`,
         });
+      });
+      observer.observe(container);
+      container.querySelectorAll<HTMLElement>('[data-tab]').forEach((tab) => observer.observe(tab));
+      return () => observer.disconnect();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `extraDeps` is the caller's list.
     [active, ...extraDeps],
   );
+
+  useLayoutEffect(() => () => {
+    running.current?.cancel();
+    running.current = null;
+  }, []);
 
   return { containerRef, indicatorRef };
 }

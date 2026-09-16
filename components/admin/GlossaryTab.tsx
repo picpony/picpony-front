@@ -1311,6 +1311,8 @@ export default function GlossaryTab() {
         
         <Input
           type="text"
+          size="sm"
+          aria-label="搜索标签"
           icon={<MdSearch size={ICON.control} />}
           value={searchDraft}
           onChange={(e) => setSearchDraft(e.target.value)}
@@ -1326,8 +1328,7 @@ export default function GlossaryTab() {
           placeholder="搜索标签"
           fieldClassName="flex-1 min-w-[200px]"
         />
-        {/* Both of these are `size="sm"`, matching the `SearchInput` they sit beside:
-            this is a filter bar, so 40dp is the step and the field's 56 is not. */}
+        {/* The field and both selectors share the filter bar's 40dp step. */}
         <Select
           size="sm"
           value={sortMode}
@@ -1463,6 +1464,7 @@ export default function GlossaryTab() {
               <span className="text-body-m text-on-surface-variant">每页：</span>
               <Input
                 type="number"
+                size="sm"
                 aria-label="每页词条数"
                 min={1}
                 max={150}
@@ -1716,6 +1718,8 @@ export default function GlossaryTab() {
             
             <Input
               type="text"
+              size="sm"
+              aria-label="原站标签搜索"
               value={derpiSearchQuery}
               onChange={(e) => setDerpiSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && executeDerpiSearch()}
@@ -1763,6 +1767,8 @@ export default function GlossaryTab() {
         <div className="mb-4">
           <Input
             type="text"
+            size="sm"
+            aria-label="筛选反馈"
             value={feedbackKeyword}
             onChange={(e) => setFeedbackKeyword(e.target.value)}
             onKeyDown={(e) => {
@@ -1814,13 +1820,21 @@ export default function GlossaryTab() {
                collapsed the box to nothing and then snapped the cards back. */
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (
-                <Card key={i} variant="filled" className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Skeleton className="h-4 w-2/5" delay={i * 90} />
-                    <Skeleton className="h-5 w-14 rounded-full" delay={i * 90 + 40} />
+                <Card key={i} variant="transparent">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <Skeleton className="h-6 w-2/5" delay={i * 90} />
+                    <Skeleton className="h-5 w-14 shrink-0 rounded-xs" delay={i * 90 + 40} />
                   </div>
-                  <Skeleton className="h-4 w-24" delay={i * 90 + 80} />
-                  <Skeleton className="h-9 w-full rounded-md" delay={i * 90 + 120} />
+                  <Skeleton className="mb-2 h-5 w-24" delay={i * 90 + 80} />
+                  <Card padding="sm" className="mb-3">
+                    <Skeleton className="h-6 w-full" delay={i * 90 + 120} />
+                  </Card>
+                  <div className="flex justify-end gap-2">
+                    <Skeleton className="touch-size h-8 w-36 rounded-full" delay={i * 90 + 160} />
+                    {(feedbackStatus === 'all' || feedbackStatus === 'pending') && (
+                      <Skeleton className="touch-size h-8 w-16 rounded-full" delay={i * 90 + 200} />
+                    )}
+                  </div>
                 </Card>
               ))}
             </div>
@@ -1832,7 +1846,7 @@ export default function GlossaryTab() {
             <div data-pagination-anchor>
               <div className="space-y-3">
                 {feedbacks.map((feedback) => (
-                  <div key={feedback.id} className="p-4 rounded-md">
+                  <Card key={feedback.id} variant="transparent">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-body-m text-on-surface-variant">
                         来自：{feedback.username} | {feedback.created_at}
@@ -1905,7 +1919,7 @@ export default function GlossaryTab() {
                         </Button>
                       )}
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
               {feedbackTotalPages > 1 && (

@@ -1,6 +1,6 @@
 'use client';
 
-import type { PonyImage } from '@/lib/types/image';
+import type { ImagePreview } from '@/lib/types/image';
 import {
   cancelOtherBackgroundImageDetailPrefetch,
   prefetchImageDetail,
@@ -60,7 +60,7 @@ const MAX_WARMED_DETAIL_FRAMES = 4;
  * about to request rather than a second, redundant download. Kept in step by hand; if that ladder
  * moves, this must move with it.
  */
-function detailSourceFor(image: PonyImage): string {
+function detailSourceFor(image: ImagePreview): string {
   const preferMedium =
     (image.size || 0) > 16 * 1024 * 1024 || (image.width || 0) * (image.height || 0) > 40_000_000;
   return (
@@ -84,7 +84,7 @@ function detailSourceFor(image: PonyImage): string {
  * detail's preview layer paints it too — one fetch, two consumers. For a picture whose
  * original is under 800px this *is* the detail's source and the warm is a pure prefetch.
  */
-function flightSourceFor(image: PonyImage): string {
+function flightSourceFor(image: ImagePreview): string {
   return image.representations?.medium || detailSourceFor(image);
 }
 
@@ -95,8 +95,9 @@ function flightSourceFor(image: PonyImage): string {
  * `Accept: image/*` request for a file that can never yield a frame, recorded nothing, and
  * repeated on every hover and press of every video card.
  */
-function isVideoRecord(image: PonyImage): boolean {
-  const format = (image.format || '').toUpperCase();
+function isVideoRecord(image: ImagePreview): boolean {
+  const source = image.representations?.full || image.view_url || '';
+  const format = (image.format || source.split(/[?#]/)[0].split('.').pop() || '').toUpperCase();
   return format === 'WEBM' || format === 'MP4';
 }
 
@@ -110,7 +111,7 @@ const warmingDetail = new Set<number>();
  * raw host while the visitor is on a proxy line downloads the bytes twice and still hands the
  * flyer something the browser has to fetch again.
  */
-export function warmImageHeroSource(image: PonyImage | null | undefined) {
+export function warmImageHeroSource(image: ImagePreview | null | undefined) {
   if (!image || typeof window === 'undefined') return;
   if (warmedDetailFrames.has(image.id) || warmingDetail.has(image.id)) return;
   /* Nothing to warm for a tier that cannot fly: no snapshot is registered, so the preview
@@ -159,7 +160,7 @@ export function warmImageHero(imageId?: number, priority: DetailRequestPriority 
 }
 
 export function prepareImageHero(
-  image: PonyImage,
+  image: ImagePreview,
   source: HTMLElement | null,
   canAnimate: boolean,
   previewSrcOverride?: string,

@@ -170,7 +170,7 @@ export default function Select<T extends string = string>({
           key={option.value}
           id={`${listboxId}-${index}`}
           data-option
-          data-ripple={option.disabled ? undefined : ''}
+          data-ripple=""
           role="option"
           aria-selected={isSelected}
           aria-disabled={option.disabled}
@@ -211,7 +211,7 @@ export default function Select<T extends string = string>({
           {/* 18dp trailing check — M3 uses a trailing element, not a colour
               change, to say which item is current. */}
           <CheckGlyph
-            className={`size-4 shrink-0 transition-ui ${
+            className={`size-4.5 shrink-0 transition-ui ${
               isSelected ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
             }`}
           />
@@ -230,6 +230,7 @@ export default function Select<T extends string = string>({
         aria-haspopup="listbox"
         aria-label={ariaLabel}
         disabled={disabled}
+        data-ripple=""
         /* On the **trigger**, not on the listbox. `aria-activedescendant` names
            the current item to whichever element holds DOM focus, and focus never
            leaves this button — the listbox is a portalled panel that is never
@@ -272,7 +273,7 @@ export default function Select<T extends string = string>({
         {/* `on-surface-variant`, which is `FilledTextFieldTokens.TrailingIconColor`. */}
         <MdExpandMore
           size={ICON.control}
-          className={`shrink-0 text-on-surface-variant transition-ui ${open ? 'rotate-180' : ''}`}
+          className={`shrink-0 text-on-surface-variant spring-fast-spatial transition-[rotate] ${open ? 'rotate-180' : ''}`}
         />
       </button>
 

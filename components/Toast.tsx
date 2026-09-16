@@ -164,9 +164,10 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
        * go through `scaledMs`, the dwell does not. */
       const enterMs = scaledMs(DURATION.long * 1000);
       const exitMs = scaledMs(DURATION.short * 1000);
+      const exitDelay = enterMs + toast.duration;
       /* The gap starts closing 80ms after the card starts leaving, so the queue
          reads as emptying rather than as jumping. */
-      const collapseDelay = toast.duration + scaledMs(80);
+      const collapseDelay = exitDelay + scaledMs(80);
 
       /* The height has to be a number for WAAPI to interpolate it — `auto` is not
          a value it can animate from. Read once, before anything is written. */
@@ -190,7 +191,7 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
            creation order — so this one's 0% keyframe replaced `enter`'s animated
            values from the first frame and the entrance never appeared. Same
            mechanism `lib/ripple.ts` documents from the other side. */
-        { duration: exitMs, delay: toast.duration, easing: EASE.accelerate, fill: 'forwards' },
+        { duration: exitMs, delay: exitDelay, easing: EASE.accelerate, fill: 'forwards' },
       );
 
       const collapse = wrap.animate(

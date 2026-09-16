@@ -47,12 +47,15 @@ radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | A close / dismiss control | `IconButton` `dismiss` | hand-writing the quarter-turn hover |
 | A hover/focus label | it is automatic — `IconButton` shows its own | `title=` on an icon-only control |
 | A label on anything else | `useTooltip` (`components/Tooltip.tsx`) | `title=` where a real description is meant |
+| A caption or secondary control revealed on hover | `hover-reveal` under its `group` target | `sm:opacity-0` — wide touch screens have no hover |
 | An icon's size | `ICON` (`lib/icons.ts`) — `size={ICON.standard}` | a number picked against the glyph beside it |
 | An icon inside a Button | nothing — the primitive sizes its own slot | a `size` on the icon; author CSS beats the svg's `width` attribute, so it is inert |
 | An icon inside a Badge | nothing — `Badge` sizes it at 14 (`sm`) / 16 (`md`) | `ICON.dense`; 18 makes the badge 2px taller than one without an icon |
 | Heading above a card or list | `components/SectionHeading.tsx` | an `<h2 class="text-title-m-…">` written out |
 | Tag / status pill | `components/Chip.tsx` | — |
 | Mark beside a name | `components/Badge.tsx` — `tone="media"` on a photo | an inline `<span>` with a container pair |
+| A thumbnail's corner mark | `MediaBadge` (`components/Badge.tsx`) — `corner` owns inset and concentric shape | a `Badge` with a hand-written corner recipe |
+| An image collection, including profile uploads and favourites | `MasonryGrid` / `ImageGridSkeleton` | square thumbnail grids with their own links or click handlers |
 | Unread count | `CountBadge` (`components/Badge.tsx`) | a hand-clamped `99+` pill |
 | Role beside a username | `components/RoleBadge.tsx` | `roleInfo(x).chip` on your own `<span>` |
 | Nothing here / it failed | `EmptyState` / `ErrorRetry` | a centred `<p>` in a `<div>` |
@@ -72,9 +75,15 @@ radii, five scrollbar appearances and 29 hand-copied primary buttons.
 
 `useTooltip` is a hook rather than a wrapper component on purpose: a wrapper must either clone its child — which breaks on any component that does not forward a ref — or introduce a box of its own, which changes layout. A control already owns its element and ref, so handing it props is simpler and layout-neutral.
 
+The tooltip's first portal mount uses `@starting-style` for opacity zero. Its ordinary FastEffects transition then handles both directions from the current opacity; a transition without an initial style would animate dismissal but hard-cut every first appearance.
+
 `title` is still right for one thing: a hint on content that *already shows its text* — a truncated tag name, a relative timestamp's absolute value — where the attribute supplements rather than names.
 
 **`Modal`'s `footer` is one flex row, and it takes a leading member through `mr-auto`.** The row is `flex flex-wrap justify-end gap-3`, so the ordinary case is "spell the buttons in order and they land at the trailing edge". A member that belongs at the *leading* edge — /settings' 重新发送 beside 取消 and 验证邮箱 — takes `mr-auto`, not a nested flex wrapper: an auto margin in a `justify-end` row absorbs the free space to its right. The row wraps as a guard — a fourth action or a longer label then takes a second line instead of being clipped by the panel, which is how the /block-groups row failed. A dialog with two branches gives `footer` a conditional rather than moving the row back into the body.
+
+**Equal-width actions only grow on the row axis.** In a `flex-col sm:flex-row` action group, use `sm:flex-1` on the buttons and their skeletons. Unqualified `flex-1` changes the column's height basis to zero: Derpi's 56dp buttons collapsed to their 24px text line, while the empty skeletons collapsed to 0px. The column's default stretch already supplies full width. Derpi's actual pair uses `@lg:flex-row` / `@lg:flex-1` inside a query container: its two labels need 32rem of content width, and the tablet sidebar means viewport width cannot promise that.
+
+**An overlay reverses from its current pose.** `Modal` commits its in-flight WAAPI pose before changing direction; `Sheet` initializes below the viewport only on its first placement, and a drag cancels the settling tween before taking over. Separate entrance/exit keyframes restarted a half-open panel from its full endpoint. A modal's wrapper owns the one opacity and its panel owns the transform: fading both multiplies opacity and makes the content lag behind its scrim. Standard travel is 16px, reduced travel 8px; the existing 400ms enter / 200ms exit pairing still scales with the user's speed.
 
 **`Card interactive` renders a `<button>`.** A `<div>` with a cursor, a state layer and a ripple is a control no keyboard can reach and no screen reader can name — a prop that produces an inaccessible control is worse than an absent one.
 
@@ -125,13 +134,17 @@ And it has to be **assigned, not raised**: the check runs on every change of the
 
 **Loading is the destination's own shape, not a spinner.** A list loads as `Skeleton` rows in the row's own geometry, a grid as `ImageGridSkeleton`, a card as a card. A `Spinner` is for an action in flight — a submit button, an upload, an inline "querying…" — not for a page: a centred dot says "something is happening somewhere" and then reflows the whole screen when the content lands. The test is whether there is a destination shape *yet*, and the shape has to actually match: a placeholder whose spacing or thumbnail differs from the card it stands in re-spaces and shifts the list the moment content lands — the one thing a skeleton exists to prevent.
 
+**A profile's pictures are the same gallery.** `MasonryGrid` owns the natural aspect ratios, column distribution, gaps and `ImageCard` hero links. Local uploads/favourites and Derpibooru uploads use it directly. In a swapping profile tab, pass `entrance={false}` to the grid and its `ImageGridSkeleton`; the pane already moves, and this does not disable opening an image. The skeleton's `count` is the request's page size. Upload endpoints may provide only media geometry: `ImagePreview` carries that contract without invented vote counts, and missing metadata waits for the detail response.
+
+**A background profile owns its route parameters.** Both the profile and the intercepted image route use `[id]`; `useParams()` follows the foreground and briefly turned `/user/1` into a read for user 3012 while `/pic/3012` opened. The replacement skeleton clamped the gallery's scroll before the flight finished. The local server page passes `id` to `ProfileContent`; the Derpi client page reads its own `params` prop with React `use`. Returning also selects a thumbnail in the active tab, since uploads and favourites may retain the same image in two mounted panes.
+
 `Badge` is a *mark* and `Chip` is a *control*. If it has no click handler and no dismiss cross, it is a `Badge`.
 
-**There are two text fields, and the label decides which.** They are one family — same 12dp corner, same tone vocabulary, same `.m3-field` shell — and they differ in exactly one thing, the boundary.
+**There are two text fields, and the label decides which.** They are one family — same 4dp corner, same tone vocabulary, same `.m3-field` shell — and they differ in exactly one thing, the boundary.
 
 A **labelled** field is a slot in a form: it has a name that has to survive being filled, and it gets M3's *outlined* field with the label floating into the outline. That is the whole point of the pattern: an empty field and a filled one stop being different objects — with a stacked label, a form of six empty fields is six blank boxes with captions floating between them, the caption belonging to the box below as close as the one above.
 
-An **unlabelled** field is not a form slot — a search box, an admin filter, a chat composer, a thing you type into and act on immediately, whose placeholder is its whole identity. It gets the *filled* treatment: `surface-container-high`, no border, no shadow; dressed as an outlined field it read as a form control whose label had failed to load, and it put the heaviest boundary around the least ceremonial thing on screen. The tone step is the same one the unselected filter chip takes and the same one `Select`'s trigger already had, so a filter bar is one material.
+An **unlabelled** field is not a form slot — a search box, an admin filter, a chat composer, a thing you type into and act on immediately, whose placeholder is its whole identity. It gets the *filled* treatment: `surface-container-highest`, no border, no shadow; dressed as an outlined field it read as a form control whose label had failed to load, and it put the heaviest boundary around the least ceremonial thing on screen. The tone matches `Select`'s trigger and the component container table below. An unselected filter chip takes `surface-container-high`; it is a different control role, not an alternative field tone.
 
 The notch is a real `<fieldset>`/`<legend>` pair, not a label painted over the border with a matching background: an M3 outlined field has no fill, so there is no colour to paint with, and a `<legend>` is the only thing in CSS that removes a section of a border. Two elements therefore carry the same words — the `<label>` the user reads and an invisible copy inside the `<legend>` whose only job is to be the right width. They stay in step because the legend's font-size is exactly 0.75x the label's and the label scales to 0.75 as it floats, 0.75 of `body-l` being `body-s`. All of that lives in `.m3-field` in globals.css, because it turns on `:focus-within` and `:placeholder-shown` matching against a *sibling*.
 
@@ -158,6 +171,8 @@ Both `Badge` and `Chip` are easy to write out by hand without noticing, because 
 **There is no outlined button**, and M3 does specify one. All four of its uses were a secondary action beside a filled primary one (取消 next to 保存, 重置 next to 检索), and at that job a 1dp keyline reads as a button that lost its fill rather than as a quieter button; `tonal` is the step M3 puts directly below `filled` for exactly this pairing, and it separates from the surface the way everything else here does, by a container tone rather than by an edge. Removed rather than left unused, because a variant that exists gets reached for. The same reasoning retired the filled field's border and the filter chip's: this app separates by tone.
 
 `IconButton` keeps its `outlined` variant, and that is not an inconsistency — it is the one "switch that is currently off", which is what M3's outlined icon button means. It also owns the shape axis: `shape="square"` is the back affordance's 12dp corner.
+
+Its selected circle-to-square change uses `transition-icon-button`: FastSpatial for the corner and dismiss rotation, FastEffects for the material. The circular endpoint is 50%, rather than an oversized length whose radius stays visually clamped through most of the interpolation. This is selection feedback, not a press morph; the fixed square shape stays fixed. `Select`'s arrow uses the same FastSpatial as its menu.
 
 ## Colour
 
@@ -594,7 +609,7 @@ Still name the curve at every call site — a bare `transition-opacity` cannot k
 
 A raw `cubic-bezier()` is a bug wherever the tokens can reach. Two exceptions, both commented:
 
-- The hero's `REVEAL_EASING`/`HIDE_EASING` and `Popover`'s `EASE_*` spell out their curves because they are handed to a Web Animations `easing:` string, where a failed `var()` would silently fall back to `ease` — same for the top loader's `easing` prop in `app/layout.tsx`. The values _are_ the token values; keep them in sync. `Popover` additionally builds its spring easings through `springToLinear`, so those cannot drift by construction.
+- Web Animations takes an `easing:` string, where a CSS `var()` is not resolved. New callers use `EASE` from `lib/motionTokens.ts` or `springTiming()` from `lib/springTiming.ts`; `Modal` and `Popover` use these shared values. The hero's `REVEAL_EASING`/`HIDE_EASING` and the top loader's `easing` prop in `app/layout.tsx` remain literal token values; keep them in sync. `springTiming()` also applies the reduced tier's shape substitution, which a component's own cached spring string would miss.
 - The theme wipe is genuinely off-scale, for the same reason `.m3-progress-arc` *was*: it animates a **radius**, and what the eye reads is the area swept, which goes as the square. Every M3 curve is one-sided and spends its travel up front, so squaring it finishes the wipe before it registers as one — measured as the fraction of screen flipped 150ms into 550: symmetric ease-in-out 3%, `emphasized` 65%, `decelerate` 87%. A radius wants a curve that is slow at both ends: `--ease-loop` is that curve and `.m3-progress-arc` uses it now; the wipe still spells it out, for the `var()` reason above.
 
 `linear` is correct only for a spinner's rotation and for a keyframe track that has already been sampled along a curve (the hero flight, the sink).
@@ -806,7 +821,7 @@ And nothing may leave a residual `transform` on an ancestor of a gallery card: t
 
 **The gallery has no blurs to stand down any more, and that is the fix rather than the workaround.** `Badge tone="media"` carried a small backdrop blur and three of those ride every gallery thumbnail, so a 50-card grid held on the order of 150 backdrop-filter regions — each re-sampling what is behind it on every frame the grid moved, and the grid moves in the hero flight, the tab shared axis and every route cross-fade. Measured on presented compositor frames: 28fps with them live, 31fps without. Three CSS rules used to suppress `backdrop-filter` inside the moving subtree per transition; the blur is gone from the tone instead, so the cost is gone everywhere rather than suppressed in three places, and the legibility figure that justifies the plate (4.8:1 for a pure-white subject under black at 55%) never included the blur anyway. The tombstone is in globals.css where the rules were.
 
-**Chrome that appears only on one side of the handoff is chrome that jumps.** The detail's zoom control is `opacity-100` below `sm` and hover-revealed above it, while `HeroStage`'s landing target renders no children at all — so on a phone the frame that hands the picture over conjured a 40dp button into its corner, and the frame that starts a close took it away. `html[data-image-hero-transition] [data-image-detail-zoom]` stands it down for the length of a flight. Anything else added inside the media box needs the same treatment or a twin on the Stage.
+**Chrome that appears only on one side of the handoff is chrome that jumps.** The detail's zoom control uses `hover-reveal`: visible on compact and touch screens, hidden at rest only from `sm` on a device with a fine pointer and hover, and revealed by hover or keyboard focus. `HeroStage`'s landing target renders no children at all — so on touch the frame that hands the picture over conjured a 40dp button into its corner, and the frame that starts a close took it away. `html[data-image-hero-transition] [data-image-detail-zoom]` stands it down for the length of a flight. Anything else added inside the media box needs the same treatment or a twin on the Stage.
 
 **A viewport change mid-flight has to re-aim the container, not just the flyer.** `rebuild()` did only the flyer for a long time, and the window is a pose expressed against the *host's* box — so when the host resized, the same numbers landed somewhere else and the keyframes were still aimed at the old box. On a phone the trigger is the address bar collapsing. Measured at 400px wide with the flight 90ms in and the height changed by 60px: the flyer moved 19px in that frame while the mask jumped **682 → 784**, then converged on the pre-resize host and finished 8px short of the new one; `rebuildContainer` rebases it from wherever it is toward a freshly measured host, and after the fix the same test converges on 791 against a host of 792. Re-reading the host is safe because the overlay is the one node in that chain that never carries a transform — which is also why `createPlane` takes it as the plane's origin rather than the scroller, whose rect *is* the scaled box once a leg is running. A one-frame jump of a full-screen mask is the artefact that reads worse the lower the refresh rate, because it *is* the difference between two adjacent frames — do not reach for the frame rate when that is the complaint.
 
@@ -821,6 +836,8 @@ One caveat on the harness: a headless *and* a headed Chromium on this machine bo
 ## State layers
 
 Hover/focus/press are the `state-layer` utility — a tinted overlay at the M3 alpha, painted from the element's own `color`. Not `hover:bg-primary/90`, which must be written twice (light + dark) and drifts.
+
+Hover requires `(hover: hover)`, matching Tailwind's variants; a touch tap must not leave a permanent hover tint. Keyboard focus remains independent of that query, including the gallery's media scrim. Selection controls use named groups so a surrounding card's hover cannot light up an untouched checkbox or radio. Ripple hosts stay mounted when disabled so an existing wave retains its clipping; the delegated press gate checks native `:disabled` (including fieldsets) and `aria-disabled` instead.
 
 The four alphas are M3's, from `StateTokens`: **hover .08, focus .10, pressed .10, dragged .16**. Focus and pressed are deliberately *equal* — the focus ring is what distinguishes them, not the tint weight.
 

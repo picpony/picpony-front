@@ -10,7 +10,7 @@ import {
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { cn } from '@/lib/utils';
+import { clamp, cn } from '@/lib/utils';
 import { SPRING_MS } from '@/lib/spring';
 import { useExitAnimation, useMounted } from '@/lib/overlay';
 
@@ -87,10 +87,7 @@ export function Tooltip({
        so it does not cover the thing you are pointing at. */
     const flip = below + height + VIEWPORT_PADDING > window.innerHeight && a.top > height + OFFSET;
     const centred = a.left + a.width / 2 - width / 2;
-    const left = Math.max(
-      VIEWPORT_PADDING,
-      Math.min(centred, window.innerWidth - VIEWPORT_PADDING - width),
-    );
+    const left = clamp(centred, VIEWPORT_PADDING, window.innerWidth - VIEWPORT_PADDING - width);
     const next = { top: flip ? above : below, left, above: flip };
     setPlace((prev) =>
       Math.abs(prev.top - next.top) < 0.5 &&
@@ -130,6 +127,8 @@ export function Tooltip({
       ref={bubbleRef}
       id={id}
       role="tooltip"
+      data-open={open ? 'true' : 'false'}
+      inert={!open}
       style={{
         position: 'fixed',
         left: place.left,
@@ -139,7 +138,7 @@ export function Tooltip({
       className={cn(
         /* 4dp corner, 8dp/4dp padding and a 24dp floor — M3's plain tooltip. No
            shadow: the inverse container is the whole separation. */
-        'bg-inverse-surface text-inverse-on-surface text-body-s z-tooltip',
+        'm3-tooltip bg-inverse-surface text-inverse-on-surface text-body-s z-tooltip',
         'pointer-events-none flex min-h-6 items-center rounded-xs px-2 py-1',
         /* `FastEffects` in **both** directions, which is what `Tooltip.kt` does.
            One spring both ways means the bubble cannot arrive and leave on two

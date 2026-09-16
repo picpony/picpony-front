@@ -3,7 +3,7 @@
 import { useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { type UserComment } from '@/lib/api';
 import { SKIP, useResource } from '@/lib/resource';
 import { useScreenStateFor } from '@/lib/screenState';
@@ -17,6 +17,8 @@ import {
   userUploads,
 } from '@/lib/resources';
 import FadeInImage from '@/components/FadeInImage';
+import MasonryGrid from '@/components/MasonryGrid';
+import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import RichTextRenderer from '@/components/RichTextRenderer';
 import Card from '@/components/Card';
 import {
@@ -89,10 +91,10 @@ interface UserProfile {
 const PER_PAGE = 12;
 
 
-export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSeed | null }) {
-  const params = useParams();
+export default function ProfileContent({ id, profileSeed }: { id: string; profileSeed: ProfileSeed | null }) {
+  // The intercepted image route also has an `id`. Keep this background page
+  // bound to its own route props while the foreground changes global params.
   const router = useRouter();
-  const id = params.id as string;
 
   const { user, token, ready } = useSession();
   const sessionUserId = Number(user?.id);
@@ -411,13 +413,15 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                   profile, so it is a link and always was — a plain div cannot be tabbed
                   to, middle-clicked, copied, or previewed, and `window.open` is what a
                   popup blocker stops. The trailing glyph promises the same thing. */}
-              <a
+              <Card
+                as="a"
+                variant="outlined"
+                interactive
                 href={`https://derpibooru.org/profiles/${encodeURIComponent(
                   profile.derpi_user_id ? String(profile.derpi_user_id) : profile.derpi_username,
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="state-layer transition-ui block rounded-md border border-outline-variant bg-surface-container-low p-4 outline-none focus-visible:ring-2 focus-ring"
                 aria-label="在 Derpibooru 查看个人主页"
               >
                 <div className="flex items-center gap-2 mb-2">
@@ -459,7 +463,7 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                   </div>
                   <MdOpenInNew size={ICON.dense} className="text-outline shrink-0" />
                 </div>
-              </a>
+              </Card>
             </div>
           ) : null}
           {profile.derpi_username && (
@@ -503,45 +507,11 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
               {uploadsRead.error ? (
                 <ErrorRetry size="pane" title="上传记录加载失败" onRetry={uploadsRead.refresh} />
               ) : isUploadsLoading ? (
-                /* `PER_PAGE`, the number the request actually asks for: a full page is
-                   12, so an 8-row placeholder left the pane growing by one row after the
-                   tab switch had visibly finished. */
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Array.from({ length: PER_PAGE }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-square rounded-lg" />
-                  ))}
-                </div>
+                <ImageGridSkeleton count={PER_PAGE} entrance={false} />
               ) : uploads.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {uploads.map((item) => (
-                      <Link
-                        scroll={false}
-                        key={item.id}
-                        href={`/pic/${item.id}`}
-                        className="block relative aspect-square rounded-lg overflow-hidden bg-surface-container-high transition-ui group"
-                      >
-                        <FadeInImage
-                          src={
-                            item.representations?.small ||
-                            item.representations?.thumb ||
-                            item.representations?.thumb_small ||
-                            item.view_url
-                          }
-                          alt={item.name || `图片 #${item.id}`}
-                          fill
-                          quality={82}
-                          className="object-cover"
-                          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
-                        />
-                        <div className="media-caption-gradient absolute inset-x-0 bottom-0 p-2 opacity-100 transition-opacity duration-composite ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100">
-                          <p className="text-on-media text-body-s truncate">
-                            {item.name || `#${item.id}`}
-                          </p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+                <div data-pagination-anchor>
+                  {/* The pane already owns its entrance; the card still owns opening the image. */}
+                  <MasonryGrid images={uploads} entrance={false} />
                   {totalUploadPages > 1 && (
                     <Pagination
                       currentPage={uploadsPage}
@@ -553,7 +523,7 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                       className="mt-8 mb-4"
                     />
                   )}
-                </>
+                </div>
               ) : (
                 <EmptyState
                   size="pane"
@@ -572,37 +542,10 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                   onRetry={faveIdsRead.error ? faveIdsRead.refresh : faveImagesRead.refresh}
                 />
               ) : isFavesLoading && faveImages.length === 0 ? (
-                /* Same page size as the request — see the uploads pane. */
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Array.from({ length: PER_PAGE }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-square rounded-lg" />
-                  ))}
-                </div>
+                <ImageGridSkeleton count={PER_PAGE} entrance={false} />
               ) : faveImages.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {faveImages.map((img) => (
-                      <Link
-                        scroll={false}
-                        key={img.id}
-                        href={`/pic/${img.id}`}
-                        className="block relative aspect-square rounded-lg overflow-hidden bg-surface-container-high transition-ui group"
-                      >
-                        <FadeInImage
-                          src={
-                            img.representations.small ||
-                            img.representations.thumb ||
-                            img.representations.thumb_small
-                          }
-                          alt={img.name || `图片 #${img.id}`}
-                          fill
-                          quality={82}
-                          className="object-cover"
-                          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
-                        />
-                      </Link>
-                    ))}
-                  </div>
+                <div data-pagination-anchor>
+                  <MasonryGrid images={faveImages} entrance={false} />
                   {totalFavePages > 1 && (
                     <Pagination
                       currentPage={favesPage}
@@ -615,7 +558,7 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                       className="mt-8 mb-4"
                     />
                   )}
-                </>
+                </div>
               ) : (
                 <EmptyState
                   size="pane"
@@ -631,13 +574,11 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
               {postsRead.error ? (
                 <ErrorRetry size="pane" title="帖子加载失败" onRetry={postsRead.refresh} />
               ) : isPostsLoading ? (
-                /* The card these stand in for: 12px rhythm, 56px cover thumbnail,
-                   two-line title. The placeholder must match the real card's geometry or
-                   the list re-spaces the moment the posts land — the one thing a skeleton
-                   exists to prevent. */
-                <div className="space-y-3">
+                /* These are the same grouped rows as the forum and history lists.
+                   The skeleton shares the row's material, seam and thumbnail size. */
+                <div>
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <Card key={i} variant="transparent" className="rounded-md bg-surface-container-low p-4">
+                    <div key={i} className="m3-row bg-surface-container-low p-4">
                       <div className="flex items-start gap-3">
                         <Skeleton className="size-14 shrink-0 rounded-sm" delay={i * 80} />
                         <div className="min-w-0 flex-1">
@@ -645,23 +586,21 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                           <Skeleton className="h-3.5 w-2/5" delay={i * 80 + 80} />
                         </div>
                       </div>
-                    </Card>
+                    </div>
                   ))}
                 </div>
               ) : posts.length > 0 ? (
                 <>
                   {' '}
-                  <div className="space-y-3">
+                  <div>
                     {' '}
                     {posts.map((post) => (
                       <Link
                         scroll={false}
                         key={post.id}
                         href={`/forum/${post.id}`}
-                        /* A card-shaped link: `Card` could render only a `div` or a
-                           `button`, so this recipe appeared twice in this file before the
-                           primitive could render an anchor. */
-                        className="state-layer block rounded-md bg-surface-container-low p-4 transition-ui"
+                        data-ripple
+                        className="m3-row state-layer block bg-surface-container-low p-4 transition-ui outline-none focus-visible:ring-2 focus-ring"
                       >
                         {' '}
                         <div className="flex items-start gap-3">
@@ -685,7 +624,7 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                               {' '}
                               {post.title}{' '}
                             </h3>
-                            <div className="flex items-center gap-4 text-label-m text-on-surface-variant">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-label-m text-on-surface-variant">
                               
                               <span>
                                 {formatDateTime(post.created_at)}
@@ -729,36 +668,34 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
               {commentsRead.error ? (
                 <ErrorRetry size="pane" title="评论加载失败" onRetry={commentsRead.refresh} />
               ) : isCommentsLoading ? (
-                /* The card these stand in for: 12px rhythm, 56px cover thumbnail,
-                   two-line title. The placeholder must match the real card's geometry or
-                   the list re-spaces the moment the posts land — the one thing a skeleton
-                   exists to prevent. */
-                <div className="space-y-3">
+                /* The metadata link has the same touch floor before and after loading. */
+                <div>
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <Card key={i} variant="filled">
+                    <div key={i} className="m3-row bg-surface-container-low p-4">
                       <div className="flex items-start gap-3">
                         <Skeleton className="size-14 shrink-0 rounded-sm" delay={i * 80} />
                         <div className="min-w-0 flex-1">
-                          <Skeleton className="mb-2 h-5 w-3/5" delay={i * 80 + 40} />
-                          <Skeleton className="h-3.5 w-2/5" delay={i * 80 + 80} />
+                          <div className="touch-size mb-1.5 flex items-center gap-2">
+                            <Skeleton className="h-5 w-16 rounded-xs" delay={i * 80 + 40} />
+                            <Skeleton className="h-3.5 w-20" delay={i * 80 + 80} />
+                          </div>
+                          <Skeleton className="h-6 w-3/5" delay={i * 80 + 120} />
                         </div>
                       </div>
-                    </Card>
+                    </div>
                   ))}
                 </div>
               ) : comments.length > 0 ? (
                 <>
                   {' '}
-                  <div className="space-y-3">
+                  <div>
                     {' '}
                     {comments.map((comment, index) => {
                       const typeInfo = getCommentTypeLabel(comment.type);
                       return (
-                        <Link
-                          scroll={false}
+                        <article
                           key={`${comment.type}-${comment.id}-${index}`}
-                          href={getCommentTargetLink(comment)}
-                          className="state-layer block rounded-md bg-surface-container-low p-4 transition-ui"
+                          className="m3-row bg-surface-container-low p-4"
                         >
                           {' '}
                           <div className="flex items-start gap-3">
@@ -778,8 +715,13 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                             ) : null}
                             <div className="flex-1 min-w-0">
                               
-                              <div className="flex items-center gap-2 mb-1.5">
-                                
+                              <Link
+                                scroll={false}
+                                href={getCommentTargetLink(comment)}
+                                aria-label={`查看原${typeInfo.label}：${formatDateTime(comment.created_at)}`}
+                                data-ripple
+                                className="touch-size state-layer mb-1.5 flex w-fit max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xs text-on-surface transition-ui outline-none focus-visible:ring-2 focus-ring"
+                              >
                                 <Badge tone="primary">
                                   {' '}
                                   {typeInfo.icon} {typeInfo.label}{' '}
@@ -788,13 +730,13 @@ export default function ProfileContent({ profileSeed }: { profileSeed: ProfileSe
                                   {' '}
                                   {formatDateTime(comment.created_at)}
                                 </span>
-                              </div>
+                              </Link>
                               <div className="text-body-m text-on-surface line-clamp-3">
                                 <RichTextRenderer content={comment.body} />
                               </div>
                             </div>
                           </div>
-                        </Link>
+                        </article>
                       );
                     })}
                   </div>

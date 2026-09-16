@@ -22,6 +22,17 @@ export const DURATION = {
 } as const;
 
 /**
+ * The page fade is one enter duration, including its overlap delay. Keep this
+ * split in step with the page-transition token in globals.css: adding the delay
+ * to a full enter leg made client navigation take 480ms while a cold mount took
+ * 400ms. Values are seconds, like DURATION.
+ */
+export const PAGE_FADE_TIMING = {
+  delay: 0.08,
+  duration: DURATION.long - 0.08,
+} as const;
+
+/**
  * The M3 curves as literal cubic-bezier() strings, for the Web Animations API.
  *
  * A WAAPI easing is a string the engine parses, not a CSS property — a failed var() would

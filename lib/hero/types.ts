@@ -1,6 +1,6 @@
 'use client';
 
-import type { PonyImage } from '@/lib/types/image';
+import type { ImagePreview } from '@/lib/types/image';
 import type { FrameAsset } from './frameCache';
 
 export type HeroDirection = 'forward' | 'back';
@@ -27,7 +27,7 @@ export type ImageHeroBackgroundLocation = {
 
 /** Everything captured at activation, before any network work. */
 export type ImageHeroSnapshot = {
-  image: PonyImage;
+  image: ImagePreview;
   previewSrc: string;
   previewFrame: FrameAsset;
   sourceKey: string | null;

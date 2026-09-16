@@ -5,15 +5,15 @@ import Link from 'next/link';
 import FadeInImage from './FadeInImage';
 import ImageCardVideo from './ImageCardVideo';
 import { MdThumbUp, MdComment, MdVisibility } from 'react-icons/md';
-import { type PonyImage } from '@/lib/api';
+import type { ImagePreview } from '@/lib/types/image';
 import { useHeroLink } from '@/lib/useHero';
 import { ICON } from '@/lib/icons';
-import Badge from './Badge';
+import { MediaBadge } from './Badge';
 import { useSsrSpoilerTags } from './ImageLineProvider';
 import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
 
 interface ImageCardProps {
-  image: PonyImage;
+  image: ImagePreview;
 }
 
 let spoilerTagsRaw: string | null = null;
@@ -163,34 +163,24 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           aria-hidden="true"
         >
           <div className="media-hover-scrim absolute inset-0 rounded-lg" />
-          {/* `Badge tone="media"`, which owns the plate, the `on-media` ink,
-              the blur, the 4dp corner and the glyph size — these three marks
-              wrote all of that out by hand and dropped the blur, so a score
-              over a pale photograph lost its plate.
-
-              The one corner that cannot come from the primitive is the one
-              hugging the card's: concentric means `outer - gap`, so at a 16dp
-              card corner with an 8px inset that corner is 8dp. */}
-          <Badge tone="media" className="absolute top-2 right-2 rounded-tr-sm">
+          {/* Same corner marks on profile thumbnails: MediaBadge owns their
+              plate, type size, inset and the corner concentric with the tile. */}
+          <MediaBadge corner="top-right">
             {format}
-          </Badge>
+          </MediaBadge>
           {/* No `title` on either count. This whole chrome layer is
               `pointer-events-none aria-hidden`, so a native tooltip could never be
               hovered and the name could never be read — two dead attributes. */}
-          <Badge
-            tone="media"
-            icon={<MdThumbUp />}
-            className="absolute bottom-2 left-2 rounded-bl-sm"
-          >
-            {image.score}
-          </Badge>
-          <Badge
-            tone="media"
-            icon={<MdComment />}
-            className="absolute bottom-2 right-2 rounded-br-sm"
-          >
-            {image.comment_count}
-          </Badge>
+          {typeof image.score === 'number' && (
+            <MediaBadge corner="bottom-left" icon={<MdThumbUp />}>
+              {image.score}
+            </MediaBadge>
+          )}
+          {typeof image.comment_count === 'number' && (
+            <MediaBadge corner="bottom-right" icon={<MdComment />}>
+              {image.comment_count}
+            </MediaBadge>
+          )}
         </div>
       </Link>
 

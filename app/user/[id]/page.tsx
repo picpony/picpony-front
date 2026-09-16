@@ -14,5 +14,5 @@ import { readUserProfile } from '@/lib/profile.server';
 export default async function UserProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const profileSeed = await readUserProfile(id);
-  return <ProfileContent profileSeed={profileSeed} />;
+  return <ProfileContent id={id} profileSeed={profileSeed} />;
 }

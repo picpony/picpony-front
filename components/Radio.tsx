@@ -52,7 +52,7 @@ export default function Radio({
   return (
     <label
       className={cn(
-        'group flex items-center gap-2 select-none',
+        'group/radio flex items-center gap-2 select-none',
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
         className,
       )}
@@ -82,7 +82,7 @@ export default function Radio({
             'pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity duration-state ease-[var(--ease-standard)]',
             checked ? 'text-primary-ink' : 'text-on-surface',
             !disabled &&
-              'group-hover:opacity-[var(--md-sys-state-hover-opacity)] group-active:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]',
+              'group-hover/radio:opacity-[var(--md-sys-state-hover-opacity)] group-active/radio:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]',
           )}
         />
         <span

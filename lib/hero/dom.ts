@@ -126,16 +126,17 @@ export function getHeroRectWithoutAncestorTransform(
 
 export function findImageHeroThumbnail(imageId: number, sourceKey?: string | null) {
   const id = escapeSelector(String(imageId));
-  if (sourceKey) {
-    const exact = document.querySelector<HTMLElement>(
-      `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]` +
-        `[data-image-hero-source-key="${escapeSelector(sourceKey)}"]`,
-    );
-    if (exact) return exact;
-  }
-  return document.querySelector<HTMLElement>(
+  /* Profile uploads and favourites can contain the same image, and TabPanes
+     keeps both trees. Land in the active pane rather than the first DOM match.
+     Check layout, not visibility: the flight itself hides the real thumbnail
+     while its captured frame is on screen. */
+  const candidates = [...document.querySelectorAll<HTMLElement>(
     `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]`,
-  );
+  )].filter((candidate) => {
+    const pane = candidate.closest('[data-tab-pane]');
+    return (!pane || pane.hasAttribute('data-tab-pane-active')) && candidate.getClientRects().length > 0;
+  });
+  return candidates.find((candidate) => candidate.dataset.imageHeroSourceKey === sourceKey) ?? candidates[0] ?? null;
 }
 
 let backgroundVisual: HTMLElement | null = null;

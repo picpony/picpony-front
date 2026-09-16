@@ -138,7 +138,9 @@ const ICON_SIZES: Record<IconButtonSize, string> = {
    a plain join: emitting both radii would leave the stylesheet's order to pick
    the corner. Same reason `Chip` writes out every horizontal step. */
 const SHAPES: Record<IconButtonShape, string> = {
-  round: 'rounded-full',
+  // A percentage reaches the same circle without an oversized radius that
+  // would visually clamp most of the interpolation to a selected square.
+  round: 'rounded-[50%]',
   square: 'rounded-md',
 };
 
@@ -222,7 +224,7 @@ export function iconButtonClasses({
 }: IconButtonClassOptions = {}): string {
   return cn(
     'inline-flex shrink-0 cursor-pointer items-center justify-center outline-none',
-    'transition-[background-color,box-shadow,border-color,color,opacity,rotate] duration-standard ease-[var(--ease-standard)]',
+    'transition-icon-button',
     /* One indicator, and the width has to agree with the colour: `media` sets
        `--tw-inset-ring-color`, so pairing it with the outset `ring-2` would leave
        that ring at `currentcolor` and draw two. `selected` replaces the variant
