@@ -17,8 +17,9 @@ import { cn } from '@/lib/utils';
  * outline — an empty field and a filled one stop being different objects. An
  * *unlabelled* field is not a form slot (search box, admin filter, composer); its
  * placeholder is its whole identity, so it gets the filled treatment: a tone
- * step, no border, no shadow. Same 4dp corner, same 56dp box — one family, two
- * boundary treatments. Geometry, notch and float live in `.m3-field`
+ * step, no border, no shadow. Outlined fields keep 4dp corners; filled fields
+ * use 8dp, matching the default Select shape. Their ordinary 56dp box stays
+ * shared. Geometry, notch and float live in `.m3-field`
  * (globals.css), which turns on `:focus-within`/`:placeholder-shown` against a
  * *sibling* and a real `<legend>` to cut the notch.
  *
@@ -26,8 +27,8 @@ import { cn } from '@/lib/utils';
  * not an overlay, so any number of controls fit with no hand-typed width reserve.
  *
  * **One height for a form slot, 56dp** (`OutlinedTextFieldTokens.ContainerHeight`
- * is 56 and M3 gives no other). The two variants differ in exactly one thing: the
- * boundary. `Textarea` follows through block padding, since it grows.
+ * is 56 and M3 gives no other). Boundary and corner follow the field's role;
+ * `Textarea` follows the height through block padding, since it grows.
  *
  * **One height for chrome, 40dp** — `size="sm"`, the app's own step (M3 offers
  * no 40dp field), matching `Select size="sm"` and the dense row it sits in. Two
@@ -45,25 +46,24 @@ const LABELLED_HEIGHT = 'h-14';
 const BARE_HEIGHT = 'h-14';
 /**
  * `size="sm"` — the dense step, and the one height in this file M3 does not name.
- * 40dp matches `Select size="sm"`'s box, with `body-m` ink to match; a field and a
- * dropdown in one filter bar are the same height *and* the same size of type. See
- * the docblock above for the two fences: unlabelled only, and no `trailing`.
+ * 40dp matches `Select size="sm"`'s box. Both use 14px type and a 16dp inset;
+ * typed text is body-m, while the dropdown's chosen label is label-l. See the
+ * docblock above for the two fences: unlabelled only, and no `trailing`.
  */
 const DENSE_HEIGHT = 'h-10';
 /**
  * `size="lg"` — M3's *search bar* (`SearchBarTokens`): the same 56dp, but fully
- * rounded rather than the field's 4dp. Exists for the one field on /search, which
- * is the page — cornered like a filter it read as a filter. The 4dp corner stays
- * the default precisely so this cannot spread. The pill is also what makes the
+ * rounded rather than the ordinary filled field's 8dp. Exists for the one field
+ * on /search that is the point of the page. The pill also makes the
  * buttons inside it work: a centred pill inside a pill is concentric for free at
  * any size (40dp button, 56dp box, 8px gap ⇒ half the button's height), where a
- * 4dp enclosure would need a remembered corner value.
+ * small-cornered enclosure would need a remembered corner value.
  */
 const HERO_HEIGHT = 'h-14';
 
 /** The control's own ink and placeholder, shared by both primitives. */
 const CONTROL = 'text-body-l placeholder:text-on-surface-variant';
-/** The dense field's ink — `body-m`, matching `Select size="sm"`'s trigger exactly. */
+/** Dense typed text uses body-m; Select's same-size value uses the label-l role. */
 const DENSE_CONTROL = 'text-body-m placeholder:text-on-surface-variant';
 
 /* Same guard as `Skeleton`'s conditional radius: `cn` is a plain join, so a
@@ -82,6 +82,9 @@ interface FieldProps {
   className?: string;
 }
 
+/** Only an unconditional width replaces the default; `sm:w-*` keeps mobile full width. */
+const HAS_WIDTH = /(?:^|\s)w-\S+/;
+
 /**
  * The supporting row under a control — helper text or an error, and a counter.
  * Renders no label (the label lives inside the control now). Inset 16dp, where
@@ -98,7 +101,7 @@ export function Field({
   const overLimit = count ? count.value > count.max : false;
 
   return (
-    <div className={cn('flex w-full min-w-0 flex-col gap-1.5', className)}>
+    <div className={cn('flex min-w-0 flex-col gap-1.5', !HAS_WIDTH.test(className) && 'w-full', className)}>
       {children}
 
       {(error || helper || count) && (
@@ -174,16 +177,14 @@ function FieldLabel({
 }
 
 /**
- * Focus, on both fields, is the app's one indicator — painted twice, in the two
- * places the two boundaries leave room for it.
+ * Focus follows the boundary each field already has.
  *
- * An *outlined* field has no focus ring: the focused outline is `primary` at 2px
- * — the ring's colour at the ring's weight, drawn as the control's boundary
- * rather than as a second boundary 2px outside the first. A field whose entire
+ * An *outlined* field has no outer ring: its outline becomes `primary-ink` at
+ * 2px, rather than drawing a second boundary outside the first. A field whose entire
  * identity *is* a 1px outline cannot wear a ring around it without reading as
  * two nested boxes; M3 specifies the thickened outline for that reason.
  *
- * A *filled* field takes the ordinary ring — no outline to nest inside. Both key
+ * A *filled* field takes the ordinary focus ring — no outline to nest inside. Both key
  * off `:focus-within` (not `:focus-visible`): the element wearing the indicator
  * is the container, reporting on the control inside it.
  */
@@ -416,9 +417,8 @@ export const ColorSwatch = forwardRef<HTMLInputElement, ColorSwatchProps>(functi
       type="color"
       aria-label={ariaLabel}
       className={cn(
-        /* 4dp and 56dp, matching the unlabelled text field it stands beside in the
-           admin console — same kind of object, same box (the field token's shape
-           and the only height M3 gives a field). */
+        /* The native colour swatch keeps its 4dp corner and the form family's
+           56dp height; the ordinary filled text field has the softer 8dp corner. */
         'h-14 w-14 shrink-0 cursor-pointer rounded-xs border border-outline p-0.5',
         'outline-none transition-ui focus-visible:ring-2 focus-ring',
         'disabled:cursor-not-allowed disabled:disabled-content',

@@ -616,6 +616,52 @@ test('SSR reads have bounded anonymous requests and keys partition public profil
   assert.equal(upstreamFeed.searchParams.getAll('q').length, 1);
 });
 
+test('home SSR seeds bypass stale persistent responses while retaining bounded request coalescing', async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
+  const reads = [];
+  let pending = deferred();
+  globalThis.fetch = async (url, init) => {
+    const parsed = new URL(String(url));
+    if (parsed.searchParams.get('action') === 'get_block_tags') return json(blockFiltersEnvelope());
+    reads.push({ parsed, init });
+    // Next's stale-while-revalidate path returns an old payload immediately.
+    // Only an uncached network read can truthfully receive a fresh seed timestamp.
+    if (init.cache !== 'no-store') return json({ total: 1, images: [{ id: 1 }] });
+    return pending.promise;
+  };
+
+  for (const [index, contentFilter] of ['safe', 'developer'].entries()) {
+    const fp = `${contentFilter}|-|-|-|feed-freshness-regression`;
+    const expectedId = 100 + index * 10;
+    pending = deferred();
+    const a = readHomeFeed(fp, 'created_at');
+    const b = readHomeFeed(fp, 'created_at');
+    await tick();
+    pending.resolve(json({ total: 1, images: [{ id: expectedId }] }));
+    const first = await a;
+    assert.deepEqual(first.data.images.map((image) => image.id), [expectedId],
+      'an expired persistent answer must never become a newly dated SSR seed');
+    assert.equal(await b, first, 'concurrent renders share one network read');
+    assert.equal(reads.length, index * 2 + 1);
+    assert.equal(reads.at(-1).init.next?.revalidate, undefined);
+    assert.equal(reads.at(-1).parsed.searchParams.get('filter_id'), contentFilter === 'developer' ? '56027' : null);
+
+    now += 60_000;
+    assert.equal(await readHomeFeed(fp, 'created_at'), first, 'prefetches reuse the bounded memo');
+    assert.equal(reads.length, index * 2 + 1);
+    now += 60_001;
+    pending = deferred();
+    const refresh = readHomeFeed(fp, 'created_at');
+    await tick();
+    pending.resolve(json({ total: 1, images: [{ id: expectedId + 1 }] }));
+    const next = await refresh;
+    assert.deepEqual(next.data.images.map((image) => image.id), [expectedId + 1]);
+    assert.ok(next.generatedAt > first.generatedAt);
+    assert.equal(reads.length, index * 2 + 2);
+  }
+});
+
 test('resource SSR seeding is isolated and inline route policy escapes script terminators', () => {
   const resource = defineResource({ name: 'SSR-isolated', key: () => 'one', fetch: async () => 'client' });
   const browser = globalThis.window;

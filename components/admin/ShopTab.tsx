@@ -171,7 +171,7 @@ export default function ShopTab({ token }: { token: string }) {
             onClick={() => deleteItem(item.id)}
             disabled={mutation.busy || saving}
             icon={<MdDelete size={ICON.dense} />}
-            aria-label={`删除 ${item.name}`} className="text-error"
+            aria-label={`删除 ${item.name}`} variant="danger-text"
           />
         </>
       ),

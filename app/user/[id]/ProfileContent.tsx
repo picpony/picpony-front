@@ -316,7 +316,7 @@ export default function ProfileContent({ id, profileSeed }: { id: string; profil
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 mt-2 sm:mt-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-1 flex-wrap">
-                <h1 className="text-headline-s sm:text-headline-m text-on-surface break-words">
+                <h1 className="text-headline-s sm:text-headline-m min-w-0 max-w-full wrap-anywhere text-on-surface">
                   {profile.username}
                 </h1>
                 {/* One `Badge` silhouette for all three marks — the role, 已核验 and the
@@ -385,7 +385,7 @@ export default function ProfileContent({ id, profileSeed }: { id: string; profil
               <div className="mt-4">
                 {' '}
                 {profile.bio ? (
-                  <p className="text-on-surface-variant whitespace-pre-wrap text-body-m">
+                  <p className="text-on-surface-variant whitespace-pre-wrap wrap-anywhere text-body-m">
                     {' '}
                     {profile.bio}{' '}
                   </p>

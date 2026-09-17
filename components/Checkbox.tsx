@@ -98,7 +98,7 @@ export default function Checkbox({
           emits nothing, and the 2px ring falls back to `currentColor`. */}
       <span
         aria-hidden="true"
-        className={`peer-focus-visible:focus-ring transition-ui pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
+        className={`peer-focus-visible:focus-ring spring-fast-effects transition-[background-color,border-color] pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
           checked
             ? 'bg-primary-ink border-primary-ink animate-control-pop'
             : /* Transparent, which is `Checkbox.kt`'s own `uncheckedBoxColor` —

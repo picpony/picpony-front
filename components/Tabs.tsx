@@ -2,6 +2,8 @@
 
 import { useRef, type ReactNode } from 'react';
 import { useSlidingIndicator } from '@/lib/slidingIndicator';
+import { useMediaQuery } from '@/lib/hooks';
+import { MEDIA } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { CountBadge } from './Badge';
 import { tabId, tabPanelId } from './TabPanes';
@@ -32,6 +34,8 @@ interface TabsProps<T extends string = string> {
    * `rail` — a vertical list of pills for a side navigation. The admin console.
    */
   variant?: TabsVariant;
+  /** Rail layout when its enclosure, rather than the viewport, decides the axis. */
+  orientation?: 'horizontal' | 'vertical';
   /** Tints the indicator and the active label. `/tasks` runs on the warning role. */
   tone?: TabsTone;
   className?: string;
@@ -71,6 +75,7 @@ export default function Tabs<T extends string = string>({
   value,
   onChange,
   variant = 'underline',
+  orientation,
   tone = 'primary',
   className = '',
   deps = [],
@@ -84,7 +89,8 @@ export default function Tabs<T extends string = string>({
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   /* The rail's active state is its own container fill, so it has nothing to
      slide; the other two glide a bar or a pill between the labels. */
-  const vertical = variant === 'rail';
+  const atLeastMd = useMediaQuery(MEDIA.md);
+  const vertical = variant === 'rail' && (orientation ? orientation === 'vertical' : atLeastMd);
 
   const select = (index: number) => {
     const next = tabs[index];
@@ -162,14 +168,19 @@ export default function Tabs<T extends string = string>({
         onClick={() => onChange(tab.value)}
         onKeyDown={onKeyDown}
         className={cn(
-          'relative flex shrink-0 cursor-pointer items-center gap-2 outline-none transition-ui',
-          'focus-visible:ring-2 focus-ring',
+          'relative flex shrink-0 cursor-pointer items-center gap-2 outline-none spring-fast-effects transition-[color,background-color,box-shadow]',
+          /* A scrolling tab row clips an outside ring. Keep the indicator inside
+             its own target, as menu rows do inside the same kind of enclosure. */
+          variant === 'pill'
+            ? 'focus-visible:ring-2 focus-ring'
+            : 'focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
           /* 48dp, M3's tab height. The pill's own rows are 40dp because they sit
              inside a 48dp container carrying 4dp of padding, which is what makes
              the pill concentric. */
           variant === 'underline' && 'h-12 px-4',
           variant === 'pill' && 'z-10 h-10 rounded-full px-5',
-          variant === 'rail' && 'h-12 w-full rounded-full px-4 text-left whitespace-nowrap',
+          variant === 'rail' && 'h-12 rounded-full px-4 text-left whitespace-nowrap',
+          variant === 'rail' && (orientation ? vertical && 'w-full' : 'md:w-full'),
           /* `title-small`, both tab token sets' `LabelTextFont` — in M3 `TitleSmall`
              and `LabelLarge` are the same four values, so the pixels do not move;
              the role now matches the one the spec names for a tab.
@@ -193,8 +204,13 @@ export default function Tabs<T extends string = string>({
             {tab.icon}
           </span>
         )}
-        <span className={variant === 'rail' ? 'min-w-0 flex-1 truncate' : undefined}>
-          {tab.label}
+        <span className={cn('grid min-w-0', variant === 'rail' && 'flex-1')}>
+          {/* Reserve the emphasized label's width in both states, so selecting
+              a tab cannot shove its neighbours or the moving indicator. */}
+          <span aria-hidden="true" className="invisible col-start-1 row-start-1 truncate text-title-s-emphasized">
+            {tab.label}
+          </span>
+          <span className="col-start-1 row-start-1 truncate">{tab.label}</span>
         </span>
         {/* `CountBadge`, not a fourth copy of the `99+` clamp. */}
         <CountBadge count={tab.badge ?? 0} />
@@ -208,8 +224,8 @@ export default function Tabs<T extends string = string>({
         ref={containerRef}
         role="tablist"
         aria-label={label}
-        aria-orientation="vertical"
-        className={cn('flex gap-1 overflow-x-auto md:flex-col', 'scrollbar-hide', className)}
+        aria-orientation={vertical ? 'vertical' : 'horizontal'}
+        className={cn('flex gap-1 overflow-x-auto scrollbar-hide', orientation ? vertical && 'flex-col' : 'md:flex-col', className)}
       >
         {tabButtons}
       </div>

@@ -154,9 +154,11 @@ export default function CodeInput({
              the only indicator. No container fill — an outlined field has none,
              and a fill here shows as six pale plates on any darker surface. */
           className={cn(
-            'text-title-m-emphasized h-14 w-10 rounded-xs border border-outline text-center sm:w-11',
+            // Native fields have an intrinsic width floor; release it so all
+            // six boxes still fit inside a narrow dialog's content column.
+            'text-title-m-emphasized h-14 w-10 min-w-0 rounded-xs border border-outline text-center tabular-nums sm:w-11',
             'text-on-surface outline-none',
-            'transition-[border-color,border-width] duration-standard ease-[var(--ease-standard)]',
+            'spring-fast-effects transition-[border-color]',
             'focus:border-2 focus:border-primary-ink',
             'disabled:cursor-not-allowed disabled:disabled-content',
           )}

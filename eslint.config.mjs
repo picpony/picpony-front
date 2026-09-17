@@ -22,6 +22,8 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // Git-ignored screenshots, measurement harnesses and generated browser bundles.
+    '.workbuddy/**',
     // One-off local probes / e2e scripts, not part of the app runtime.
     'scripts/**',
   ]),

@@ -84,9 +84,9 @@ export default function Slider({
           /* On top and transparent: this is the control, everything below is
              the picture of it. The focus ring goes here — this is what takes
              focus. */
-          'peer focus-ring absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none rounded-full bg-transparent outline-none',
+          'peer focus-ring absolute inset-0 z-10 h-full w-full appearance-none rounded-full bg-transparent outline-none',
           'focus-visible:ring-2',
-          disabled && 'cursor-not-allowed',
+          disabled ? 'cursor-not-allowed' : 'cursor-pointer',
           '[&::-webkit-slider-thumb]:size-11 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:opacity-0',
           '[&::-moz-range-thumb]:size-11 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:opacity-0',
         )}

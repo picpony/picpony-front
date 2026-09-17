@@ -1,6 +1,8 @@
 'use client';
 
 import type { DerivedTheme } from '@/lib/paletteRule';
+import { cn } from '@/lib/utils';
+import Skeleton from '@/components/Skeleton';
 
 /**
  * What a colour *becomes*: the bar with its own ink, the mark colour, and the
@@ -12,32 +14,41 @@ import type { DerivedTheme } from '@/lib/paletteRule';
  * Colours are inline `style` rather than tokens on purpose: every colour token
  * is the *active* theme's, and this panel shows a theme not yet in force.
  */
-export default function PalettePreview({ derived, caption }: { derived: DerivedTheme; caption: string }) {
+export default function PalettePreview({ derived, caption }: { derived?: DerivedTheme; caption: string }) {
+  // A cold picker has the same rows before its colour recipe loads. Hiding the
+  // ink preserves the wrapping geometry; one shimmer marks the whole preview.
+  const loading = !derived;
   return (
     <div
-      className="border-outline-variant overflow-hidden rounded-md border"
-      style={{ background: derived.light.surface }}
+      aria-hidden={loading || undefined}
+      className="border-outline-variant relative overflow-hidden rounded-md border"
+      style={derived ? { background: derived.light.surface } : undefined}
     >
+      {loading && (
+        <div className="absolute inset-0">
+          <Skeleton className="h-full rounded-none" />
+        </div>
+      )}
       <div
-        className="flex h-12 items-center justify-between px-4"
-        style={{ background: derived.light.primary, color: derived.light['on-primary'] }}
+        className={cn('flex h-12 items-center justify-between px-4', loading && 'invisible')}
+        style={derived ? { background: derived.light.primary, color: derived.light['on-primary'] } : undefined}
       >
         <span className="text-title-s">PicPony</span>
-        <span className="text-label-m">{caption}</span>
+        <span className="text-label-m font-mono tabular-nums">{caption}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3', loading && 'invisible')}>
         <span
           className="size-4 shrink-0 rounded-full"
-          style={{ background: derived.light['primary-ink'] }}
+          style={derived ? { background: derived.light['primary-ink'] } : undefined}
         />
-        <span className="text-body-s" style={{ color: derived.light['on-surface-variant'] }}>
-          图标与标记 {derived.light['primary-ink']}
+        <span className="text-body-s" style={derived ? { color: derived.light['on-surface-variant'] } : undefined}>
+          图标与标记 <span className="font-mono tabular-nums">{derived?.light['primary-ink'] ?? caption}</span>
         </span>
         <span
           className="text-label-s ml-auto rounded-full px-3 py-1"
-          style={{ background: derived.dark.primary, color: derived.dark['on-primary'] }}
+          style={derived ? { background: derived.dark.primary, color: derived.dark['on-primary'] } : undefined}
         >
-          深色方案 {derived.dark.primary}
+          深色方案 <span className="font-mono tabular-nums">{derived?.dark.primary ?? caption}</span>
         </span>
       </div>
     </div>

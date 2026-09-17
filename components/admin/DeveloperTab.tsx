@@ -114,7 +114,7 @@ export default function DeveloperTab({ token }: { token: string }) {
             disabled={mutation.busy}
             onClick={() => handleRevokeDeveloper(u.id)}
             icon={<MdRemoveCircle size={ICON.dense} />}
-            aria-label={`关闭 ${u.username} 的开发者模式`} className="text-error"
+            aria-label={`关闭 ${u.username} 的开发者模式`} variant="danger-text"
           />
       ),
     },

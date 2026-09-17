@@ -1,13 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AnimationItem } from 'lottie-web';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Card from '@/components/Card';
 import FlutedGlass from '@/components/FlutedGlass';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import DeveloperGuideModal from '@/components/DeveloperGuideModal';
-import { useMotionTier } from '@/lib/appearance';
+import {
+  entranceMotion,
+  motionScale,
+  motionTier,
+  useEntranceMotion,
+  useMotionSpeed,
+  useMotionTier,
+} from '@/lib/appearance';
+import { loadLottiePlayer } from '@/lib/lottieAssets';
 import ErrorRetry from '@/components/ErrorRetry';
 import Logo from '@/components/Logo';
 import { useResource } from '@/lib/resource';
@@ -27,11 +36,15 @@ const MARK_WIDTH = 'w-48 sm:w-64';
 
 function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const animationRef = useRef<AnimationItem | null>(null);
   const clicksRef = useRef({ count: 0, last: 0 });
   /* Reactive, not one-shot: with the one-shot the branch below was decided at mount, so
      turning the preference on mid-session left the animation running until something
      else re-rendered the page. */
-  const reduced = useMotionTier() !== 'standard';
+  const tier = useMotionTier();
+  const speed = useMotionSpeed();
+  const entrance = useEntranceMotion();
+  const staticMark = tier !== 'standard' || !entrance;
   const [traceUnavailable, setTraceUnavailable] = useState(false);
 
   // 已登录状态下快速连点 10 次（点击间隔超 1.5s 重置）触发开发者向导
@@ -49,14 +62,16 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   };
 
   useEffect(() => {
-    if (reduced) return;
-    let animation: { destroy: () => void } | null = null;
+    if (staticMark) return;
+    let animation: AnimationItem | null = null;
     let cancelled = false;
     Promise.all([
-      import('lottie-web/build/player/esm/lottie_light.min.js'),
+      loadLottiePlayer(),
       import('@/lib/lottie/logoNonParallel.json').then((m) => m.default),
     ]).then(([player, data]) => {
-      if (cancelled || !hostRef.current) return;
+      if (
+        cancelled || !hostRef.current || motionTier() !== 'standard' || !entranceMotion()
+      ) return;
       animation = player.default.loadAnimation({
         container: hostRef.current,
         renderer: 'svg',
@@ -64,20 +79,27 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
         autoplay: true,
         animationData: data as object,
       });
+      animationRef.current = animation;
+      animation.setSpeed(1 / motionScale());
     }).catch(() => {
       if (!cancelled) setTraceUnavailable(true);
     });
     return () => {
       cancelled = true;
       animation?.destroy();
+      if (animationRef.current === animation) animationRef.current = null;
     };
-  }, [reduced]);
+  }, [staticMark]);
+
+  useEffect(() => {
+    if (motionTier() === 'standard') animationRef.current?.setSpeed(1 / motionScale());
+  }, [speed]);
 
   /* Under the preference an *empty* box used to render: the effect returned before
      loading anything, leaving a labelled 176px hole where the wordmark belongs. The
      static mark is the honest fallback — reduced motion asks for less movement, not
      less content. */
-  if (reduced || traceUnavailable) {
+  if (staticMark || traceUnavailable) {
     /* The static mark takes the same handler — without it the developer guide would be
        unreachable for anyone with the preference on. `Logo` renders the mark, not a
        box, so the handlers go on a wrapper rather than through it.

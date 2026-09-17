@@ -5,6 +5,7 @@ import { MdImage } from 'react-icons/md';
 
 import Button from '@/components/Button';
 import DropZone from '@/components/DropZone';
+import EmptyState from '@/components/EmptyState';
 import Modal from '@/components/Modal';
 import PaletteChipFace from '@/components/PaletteChipFace';
 import PalettePreview from '@/components/PalettePreview';
@@ -82,7 +83,28 @@ export default function ImagePalettePicker({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="从图片取色" maxWidth="md">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="从图片取色"
+      maxWidth="md"
+      footer={
+        <>
+          <Button variant="text" onClick={onClose}>取消</Button>
+          <Button
+            variant="filled"
+            disabled={!picked}
+            onClick={() => {
+              if (!picked) return;
+              onPick(picked.seed);
+              onClose();
+            }}
+          >
+            使用此颜色
+          </Button>
+        </>
+      }
+    >
       <div className="flex flex-col gap-5">
         <DropZone
           accept="image/*"
@@ -143,9 +165,7 @@ export default function ImagePalettePicker({
               </div>
             </div>
           ) : (
-            <p className="text-body-s text-on-surface-variant">
-              这张图里没有能撑起主题的颜色，换一张试试。
-            </p>
+            <EmptyState size="inline" title="这张图里没有能撑起主题的颜色，换一张试试。" />
           ))}
 
         {/* The consequence of whichever chip is selected. Absent until there is one, because
@@ -154,22 +174,6 @@ export default function ImagePalettePicker({
           <PalettePreview derived={tools.deriveTheme(picked.seed)} caption={picked.seed} />
         )}
 
-        <div className="flex flex-wrap justify-end gap-3 pt-1">
-          <Button variant="text" onClick={onClose}>
-            取消
-          </Button>
-          <Button
-            variant="filled"
-            disabled={!picked}
-            onClick={() => {
-              if (!picked) return;
-              onPick(picked.seed);
-              onClose();
-            }}
-          >
-            使用此颜色
-          </Button>
-        </div>
       </div>
     </Modal>
   );

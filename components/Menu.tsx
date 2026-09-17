@@ -148,15 +148,10 @@ export default function Menu({
       /* A menu is as wide as its longest label, not as wide as the icon button
          that opened it — unlike `Select`, whose trigger states the value. */
       matchAnchorWidth={false}
-      className={cn('min-w-40 py-2', className)}
+      className={cn('min-w-40 p-2', className)}
     >
-      {/* No wrapper element. `Popover`'s entrance fades the panel's *direct
-          children* in behind the container morph, so a wrapper here would be the
-          only child and the per-row cascade would collapse into one block — and
-          a `display: contents` wrapper is worse still, because it generates no
-          box and `opacity` therefore does not apply to it at all. The keydown
-          handler lives on each row instead, which is where the event originates
-          anyway: focus is always on an item. */}
+      {/* The panel and its rows enter together. Keyboard handling remains on
+          each row, where focus and the key event both originate. */}
       {items.map((item, index) => (
         <button
           key={item.value}
@@ -172,21 +167,17 @@ export default function Menu({
           onKeyDown={onKeyDown}
           onPointerEnter={() => !item.disabled && setChosenIndex(index)}
           data-ripple=""
-          /* M3 menu item: 16dp inline / 4dp block padding, label-large, and NO
-             corner radius — rows are full-bleed, which is what makes a menu read
-             as a menu rather than as a stack of chips. 40dp under a pointer,
-             growing to the 48dp touch floor via `touch-size` (a real box, since
-             `data-ripple` clips a hit-area pseudo-element). */
+          /* An 8dp row corner inside the panel's 16dp corner and 8dp inset.
+             The explicit pointer variant keeps the 40dp / 48dp density without
+             two min-height utilities competing in the generated stylesheet. */
           className={cn(
-            'flex min-h-10 touch-size w-full cursor-pointer items-center gap-3 px-4 py-1 text-left text-label-l outline-none',
+            'flex min-h-10 pointer-coarse:min-h-12 w-full items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l outline-none',
             /* The *inset* ring. The panel scrolls, and `overflow-y-auto` clips a
-               box-shadow — a full-bleed row's outset ring would be cut off on
-               both sides and at the ends of the scroll area. Same form as the
-               gallery card's, which clips for the same reason. */
-            'transition-ui focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
+               row's outset ring at the ends of its scroll area. */
+            'spring-fast-effects transition-[color,box-shadow,opacity] focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
             item.disabled
               ? 'cursor-not-allowed disabled-content'
-              : cn('state-layer', item.destructive ? 'text-error' : 'text-on-surface'),
+              : cn('cursor-pointer state-layer', item.destructive ? 'text-error' : 'text-on-surface'),
           )}
         >
           {item.icon && (

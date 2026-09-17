@@ -24,6 +24,8 @@ interface SelectProps<T extends string = string> {
   className?: string;
   /** Compact trigger padding/text — for dense toolbars. */
   size?: 'sm' | 'md';
+  /** Toolbar choices share the pill silhouette of their neighbouring actions. */
+  shape?: 'field' | 'pill';
   'aria-label'?: string;
 }
 
@@ -34,7 +36,7 @@ interface SelectProps<T extends string = string> {
 /**
  * Listbox with an animated popover, replacing the unstylable native <select>.
  *
- * The surface, its placement and its container transform now come from
+ * The surface, its placement and its entrance now come from
  * `Popover`; what is left here is what makes this a *listbox* rather than a
  * menu — a current value, `aria-selected` rows, a trailing check, and a
  * keyboard contract that commits a value instead of running a command.
@@ -54,6 +56,7 @@ export default function Select<T extends string = string>({
   disabled,
   className = '',
   size = 'md',
+  shape = 'field',
   'aria-label': ariaLabel,
 }: SelectProps<T>) {
   const [open, setOpen] = useState(false);
@@ -92,12 +95,25 @@ export default function Select<T extends string = string>({
     close();
   };
 
-  // Keep the active option in view during keyboard traversal.
+  // The portal mounts after `open` commits. Wait for its row, then scroll only
+  // the list using layout offsets, which stay stable during the scale entrance.
   useEffect(() => {
     if (!open || cursorIndex < 0) return;
-    popoverRef.current?.element
-      ?.querySelectorAll<HTMLElement>('[data-option]')
-      [cursorIndex]?.scrollIntoView({ block: 'nearest' });
+    const frame = requestAnimationFrame(() => {
+      const panel = popoverRef.current?.element;
+      const option = panel?.querySelectorAll<HTMLElement>('[data-option]')[cursorIndex];
+      if (!panel || !option) return;
+      const style = getComputedStyle(panel);
+      const start = parseFloat(style.paddingTop);
+      const end = parseFloat(style.paddingBottom);
+      const top = option.offsetTop;
+      const bottom = top + option.offsetHeight;
+      if (top < panel.scrollTop + start) panel.scrollTop = top - start;
+      else if (bottom > panel.scrollTop + panel.clientHeight - end) {
+        panel.scrollTop = bottom - panel.clientHeight + end;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [open, cursorIndex]);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -150,18 +166,15 @@ export default function Select<T extends string = string>({
     }
   };
 
-  /* **The trigger's step is decided by its enclosure, not by its type.** The two
-     values are the field's box (56dp with the field's 4dp corner and `body-l`
-     ink — a form slot) and the small control step (40dp, `body-m` — a filter
-     bar, toolbar, card header or `.m3-row`, where the neighbours are a 32dp
-     switch and a 32dp chip and matching them is what "coordinated" means). */
-  const pad = size === 'sm' ? 'h-10 px-3 text-body-m' : 'h-14 px-4 text-body-l';
+  /* The enclosure chooses the height and type: 56dp with body-l in a form,
+     or 40dp with label-l beside toolbar commands. Both use a 16dp text inset.
+     The default field shape is 8dp, matching filled Input; toolbar choices can
+     take the pill shape of their neighbouring buttons. */
+  const pad = size === 'sm' ? 'h-10 px-4 text-label-l' : 'h-14 px-4 text-body-l';
 
-  /* **A menu row is 40dp under a pointer and 48 under a finger**, which is
-     `touch-size` — the row carries `data-ripple`, so `touch-target`'s
-     pseudo-element would be clipped away. 48 is M3's minimum *target*; the
-     item's own height is 40, so writing 48 unconditionally imports a touch
-     figure into the desktop layout. */
+  /* A row is 40dp under a fine pointer and 48dp under a finger. Express the
+     two sizes on the pointer axis: two base min-height utilities would leave
+     Tailwind's emission order to decide whether the touch floor applies. */
   const optionRows = () =>
     options.map((option, index) => {
       const isSelected = option.value === value;
@@ -176,24 +189,24 @@ export default function Select<T extends string = string>({
           aria-disabled={option.disabled}
           onPointerEnter={() => !option.disabled && setActiveIndex(index)}
           onClick={() => commit(option)}
-          /* M3 menu item: 16dp inline / 4dp block padding, label-large, and NO
-             corner radius — rows are full-bleed. The current value takes the
+          /* Rows sit 8dp inside the panel's 16dp corner, with an 8dp corner of
+             their own. The two 8dp insets align text with the trigger's 16dp. The value takes the
              `secondary-container` pair, the app's "selected" pair everywhere.
              The keyboard cursor is `state-layer-active`: `state-layer` paints
              nothing until a pointer arrives, so arrowing through the list used
              to show no cursor at all. */
-          className={`flex min-h-10 touch-size cursor-pointer items-center gap-3 px-4 py-1 text-label-l transition-ui ${
+          className={`flex min-h-10 pointer-coarse:min-h-12 items-center gap-2 rounded-sm px-2 py-1 text-label-l spring-fast-effects transition-[color,background-color,opacity] ${
             option.disabled
               ? 'cursor-not-allowed text-on-surface disabled-content'
               : isSelected
-                ? 'bg-secondary-container text-on-secondary-container'
+                ? 'cursor-pointer bg-secondary-container text-on-secondary-container'
                 : index === cursorIndex
                   /* The keyboard cursor. `state-layer` paints nothing until a
                      pointer arrives, so arrowing through this list used to show
                      no cursor at all — the scroll moved and the row was
                      announced, and nothing on screen said which one it was. */
-                  ? 'state-layer-active text-on-surface'
-                  : 'state-layer text-on-surface'
+                  ? 'cursor-pointer state-layer-active text-on-surface'
+                  : 'cursor-pointer state-layer text-on-surface'
           }`}
         >
           <span className="min-w-0 flex-1">
@@ -208,13 +221,14 @@ export default function Select<T extends string = string>({
               </span>
             )}
           </span>
-          {/* 18dp trailing check — M3 uses a trailing element, not a colour
-              change, to say which item is current. */}
-          <CheckGlyph
-            className={`size-4.5 shrink-0 transition-ui ${
-              isSelected ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
-            }`}
-          />
+          {/* Same 20dp trailing slot as the trigger's arrow, so equal-width
+              fields and lists leave the same amount of room for their labels. */}
+          <span className="grid size-5 shrink-0 place-items-center" aria-hidden="true">
+            <CheckGlyph
+              weight="light"
+              className={`size-4 spring-fast-effects transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}
+            />
+          </span>
         </div>
       );
     });
@@ -242,7 +256,7 @@ export default function Select<T extends string = string>({
         }
         onClick={() => (open ? close() : openMenu())}
         onKeyDown={handleKeyDown}
-        className={`group inline-flex items-center justify-between gap-2 rounded-xs text-on-surface transition-ui outline-none disabled:disabled-content disabled:cursor-not-allowed focus-visible:ring-2 focus-ring bg-surface-container-highest state-layer ${pad} ${className}`}
+        className={`group inline-flex min-w-0 max-w-full items-center justify-between gap-2 ${shape === 'pill' ? 'rounded-full' : 'rounded-sm'} text-on-surface spring-fast-effects transition-[color,background-color,box-shadow,opacity] outline-none disabled:disabled-content disabled:cursor-not-allowed focus-visible:ring-2 focus-ring bg-surface-container-highest state-layer ${pad} ${className}`}
       >
         {/* **The trigger is as wide as its widest option, not as its current one.**
             A combobox that resizes when you pick a value re-lays-out the row it
@@ -255,7 +269,7 @@ export default function Select<T extends string = string>({
             <span
               key={o.value}
               aria-hidden="true"
-              className="col-start-1 row-start-1 invisible truncate"
+              className="col-start-1 row-start-1 invisible truncate pr-2"
             >
               {o.label}
             </span>
@@ -270,16 +284,17 @@ export default function Select<T extends string = string>({
             {selected?.label ?? placeholder}
           </span>
         </span>
-        {/* `on-surface-variant`, which is `FilledTextFieldTokens.TrailingIconColor`. */}
+        {/* The arrow follows the panel's shared menu clocks: the app's 200ms
+            enter and 150ms exit, scaled by the preference. Vuetify supplies the
+            anchored arrangement, not those duration values. */}
         <MdExpandMore
           size={ICON.control}
-          className={`shrink-0 text-on-surface-variant spring-fast-spatial transition-[rotate] ${open ? 'rotate-180' : ''}`}
+          className={`shrink-0 text-on-surface-variant transition-[rotate] ${open ? 'menu-enter rotate-180' : 'menu-exit rotate-0'}`}
         />
       </button>
 
-      {/* M3 menu container, from `Popover` (which owns corner, tone and
-          elevation — see its note). What stays here is the 8dp block padding
-          with NONE on the inline axis, so rows run edge to edge. */}
+      {/* Popover owns the outer surface; this list owns one 8dp inset on all
+          four sides, keeping its rounded rows concentric with the panel. */}
       <Popover
         open={open}
         onClose={close}
@@ -288,7 +303,7 @@ export default function Select<T extends string = string>({
         id={listboxId}
         role="listbox"
         estimatedHeight={estimateMenuHeight(options.length)}
-        className="py-2"
+        className="p-2"
       >
         {optionRows()}
       </Popover>

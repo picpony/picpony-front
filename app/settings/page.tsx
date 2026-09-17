@@ -88,7 +88,7 @@ const rowLabelClass = 'min-w-0 flex-1';
    as the supporting role in the primary slot, so a row holding a `Select` and a row
    holding a switch announced two different hierarchies inside one card. */
 const labelClass = 'text-label-l text-on-surface mb-0.5';
-const valueClass = 'text-body-m-emphasized text-on-surface';
+const valueClass = 'text-body-m-emphasized wrap-anywhere text-on-surface';
 
 /** The two halves of this screen: what the device remembers, and what the account does. */
 type SettingsTab = 'personalise' | 'general';
@@ -1288,8 +1288,8 @@ export default function SettingsPage() {
                     </div>
                   )}
                   {isAvatarUploading && (
-                    <div className="bg-media-plate absolute inset-0 flex items-center justify-center">
-                      <Spinner tone="on-primary" />
+                    <div className="bg-media-plate text-on-media absolute inset-0 flex items-center justify-center">
+                      <Spinner tone="inherit" />
                     </div>
                   )}
                 </div>
@@ -1347,8 +1347,8 @@ export default function SettingsPage() {
                     </div>
                   )}
                   {isBannerUploading && (
-                    <div className="bg-media-plate absolute inset-0 flex items-center justify-center">
-                      <Spinner tone="on-primary" />
+                    <div className="bg-media-plate text-on-media absolute inset-0 flex items-center justify-center">
+                      <Spinner tone="inherit" />
                     </div>
                   )}
                 </div>
@@ -1482,11 +1482,10 @@ export default function SettingsPage() {
                     <Button
                       onClick={handleClearApiKey}
                       disabled={!currentUsername}
-                      variant="text"
+                      variant="danger-text"
                       icon={<MdLinkOff />}
                       title="解除绑定"
                       responsiveLabel
-                      className="text-error hover:bg-error-container hover:text-on-error-container"
                     >
                       解除绑定
                     </Button>
@@ -1890,11 +1889,9 @@ export default function SettingsPage() {
         }
       >
         <form id="username-form" onSubmit={handleUsernameSubmit}>
-          <label htmlFor="new-username" className="block text-label-l text-on-surface mb-2">
-            新用户名
-          </label>
           <Input
             id="new-username"
+            label="新用户名"
             data-autofocus
             type="text"
             value={newUsername}
@@ -1932,11 +1929,9 @@ export default function SettingsPage() {
       >
         <form id="password-form" onSubmit={handlePasswordSubmit} className="space-y-4">
           <div>
-            <label htmlFor="old-password" className="block text-label-l text-on-surface mb-2">
-              原密码
-            </label>
             <Input
               id="old-password"
+              label="原密码"
               data-autofocus
               type="password"
               value={oldPassword}
@@ -1946,11 +1941,9 @@ export default function SettingsPage() {
             />
           </div>
           <div>
-            <label htmlFor="new-password" className="block text-label-l text-on-surface mb-2">
-              新密码
-            </label>
             <Input
               id="new-password"
+              label="新密码"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -1981,22 +1974,22 @@ export default function SettingsPage() {
         }
       >
         <form id="apikey-form" onSubmit={handleApiKeySubmit}>
-          <label htmlFor="derpi-api-key" className="block text-label-l text-on-surface mb-2">
-            Derpibooru API Key
-          </label>
           <Input
             id="derpi-api-key"
+            label="Derpibooru API Key"
             data-autofocus
             type="text"
             value={newApiKey}
             onChange={(e) => setNewApiKey(e.target.value)}
             placeholder="请输入你的 API Key"
             disabled={apiKeyLoading}
+            helper={
+              <>
+                通过绑定 Derpibooru API Key 可同步黑名单过滤等设置。
+                <br />获取方法：登录 Derpibooru → Account Settings → API Key 区域。
+              </>
+            }
           />
-          <p className="text-body-s text-on-surface-variant mt-2">
-            通过绑定 Derpibooru API Key 可同步黑名单过滤等设置。
-            <br /> 获取方法：登录 Derpibooru → Account Settings → API Key 区域。{' '}
-          </p>
         </form>
       </Modal>
       <Modal
@@ -2036,22 +2029,24 @@ export default function SettingsPage() {
         footer={
           showVerifyInput ? (
             <>
-              <button
+              <Button
+                variant="text"
                 onClick={handleResendCode}
-                disabled={isResending}
-                className="prose-link text-body-m focus-visible:ring-2 focus-ring disabled:disabled-content mr-auto"
+                loading={isResending}
+                className="mr-auto"
               >
-                {isResending ? '发送中…' : '重新发送'}
-              </button>
+                重新发送
+              </Button>
               <Button variant="text" type="button" onClick={closeEmailModal} disabled={emailLoading}>
                 取消
               </Button>
               <Button
                 variant="filled"
                 onClick={handleVerifyEmail}
-                disabled={emailLoading || !verifyCode.trim()}
+                loading={emailLoading}
+                disabled={!verifyCode.trim()}
               >
-                {emailLoading ? '验证中…' : '验证邮箱'}
+                验证邮箱
               </Button>
             </>
           ) : (
@@ -2062,9 +2057,10 @@ export default function SettingsPage() {
               <Button
                 variant="filled"
                 onClick={handleEmailSubmit}
-                disabled={emailLoading || !newEmail.trim()}
+                loading={emailLoading}
+                disabled={!newEmail.trim()}
               >
-                {emailLoading ? '提交中…' : '更新邮箱'}
+                更新邮箱
               </Button>
             </>
           )
@@ -2074,11 +2070,9 @@ export default function SettingsPage() {
           /* No `space-y-*` wrapper: this half is one field now that its action row has
              moved to the footer; the other half keeps one because it holds two blocks. */
           <div>
-            <label htmlFor="new-email" className="block text-label-l text-on-surface mb-2">
-              新邮箱地址
-            </label>
             <Input
               id="new-email"
+              label="新邮箱地址"
               data-autofocus
               type="email"
               value={newEmail}
@@ -2089,15 +2083,13 @@ export default function SettingsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="bg-primary-container text-on-primary-container text-body-m rounded-md p-3">
+            <div className="bg-primary-container text-on-primary-container text-body-m wrap-anywhere rounded-md p-3">
               验证码已发送至 {newEmail}，请查收{' '}
             </div>
             <div>
-              <label htmlFor="email-code" className="block text-label-l text-on-surface mb-2">
-                验证码
-              </label>
               <Input
                 id="email-code"
+                label="验证码"
                 data-autofocus
                 type="text"
                 value={verifyCode}
@@ -2124,28 +2116,26 @@ export default function SettingsPage() {
             >
               取消
             </Button>
-            <Button variant="filled" onClick={handleProfileSubmit} disabled={profileLoading}>
-              {profileLoading ? '保存中…' : '保存资料'}
+            <Button variant="filled" onClick={handleProfileSubmit} loading={profileLoading}>
+              保存资料
             </Button>
           </>
         }
       >
         <div className="space-y-4">
           <div>
-            <label htmlFor="profile-bio" className="block text-label-l text-on-surface mb-2">
-              个人简介 (Bio)
-            </label>
             <Textarea
               id="profile-bio"
+              label="个人简介 (Bio)"
               data-autofocus
               value={profileBio}
               onChange={(e) => setProfileBio(e.target.value)}
               rows={3}
               maxLength={500}
+              count={{ value: profileBio.length, max: 500 }}
               className="resize-none"
               placeholder="介绍一下你自己…"
             />
-            <p className="text-body-s text-on-surface-variant mt-1">{profileBio.length}/500</p>
           </div>
           <div>
             <p className="block text-label-l text-on-surface mb-2">性别</p>
@@ -2163,11 +2153,9 @@ export default function SettingsPage() {
             />
           </div>
           <div>
-            <label htmlFor="profile-birthday" className="block text-label-l text-on-surface mb-2">
-              生日
-            </label>
             <Input
               id="profile-birthday"
+              label="生日"
               type="date"
               value={profileBirthday}
               onChange={(e) => setProfileBirthday(e.target.value)}

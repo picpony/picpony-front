@@ -22,7 +22,7 @@ export default function ClaimBadgeContent({ claimToken }: { claimToken: string }
   // Each account/link pair owns its result, so changing accounts cannot display
   // the previous account's success or apply its delayed response to this one.
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-2xl">
       <PageHeader title="领取徽章" />
       {!claimToken ? (
         <ErrorRetry title="领取链接无效" message="链接中缺少领取凭证，请使用完整的徽章领取链接" />

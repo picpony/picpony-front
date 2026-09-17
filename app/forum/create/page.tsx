@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MdArrowBack, MdSend, MdImage, MdClose } from 'react-icons/md';
 import { showToast } from '@/components/Toast';
-import Spinner from '@/components/Spinner';
 import { api } from '@/lib/api';
 import FadeInImage from '@/components/FadeInImage';
 import dynamic from 'next/dynamic';
@@ -152,7 +151,7 @@ export default function CreateForumPostPage() {
         <div>
           {' '}
           <p className="block text-label-l text-on-surface mb-2"> 分类 </p>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             
             {/* Single-select over a small set: M3 filter chips (`Chip variant="filter"`),
                 which bring the leading check on selection, the container/on-container tone
@@ -198,11 +197,12 @@ export default function CreateForumPostPage() {
                   pseudo-element out of hit-testing. */}
               <IconButton
                 size="sm"
-                variant="filled"
+                variant="danger"
+                dismiss
                 onClick={removeCover}
                 aria-label="移除封面"
 
-                className="bg-error-fill text-on-fill absolute -top-3 -right-3"
+                className="absolute -top-3 -right-3"
                 icon={<MdClose size={ICON.dense} />}
               />
             </div>
@@ -239,18 +239,14 @@ export default function CreateForumPostPage() {
           <Link scroll={false} href="/forum" className={buttonClasses({ variant: 'text' })}>
             取消
           </Link>
-          <Button variant="filled" type="submit" disabled={isSubmitting || !title.trim()}>
-            {isSubmitting ? (
-              <>
-                <Spinner size="sm" tone="on-primary" />
-                发布中…
-              </>
-            ) : (
-              <>
-                <MdSend size={ICON.dense} />
-                发布帖子
-              </>
-            )}
+          <Button
+            variant="filled"
+            type="submit"
+            loading={isSubmitting}
+            disabled={!title.trim()}
+            icon={<MdSend />}
+          >
+            发布帖子
           </Button>
         </div>
       </form>

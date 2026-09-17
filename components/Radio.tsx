@@ -88,7 +88,7 @@ export default function Radio({
         <span
           aria-hidden="true"
           className={cn(
-            'relative h-5 w-5 rounded-full border-2 transition-ui pointer-events-none',
+            'relative h-5 w-5 rounded-full border-2 spring-fast-effects transition-[border-color] pointer-events-none',
             'peer-focus-visible:ring-2 peer-focus-visible:focus-ring',
             checked ? 'border-primary-ink' : 'border-on-surface-variant',
           )}

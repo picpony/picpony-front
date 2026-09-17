@@ -101,6 +101,8 @@ function fixture(file, api = {}, initialData = {}, expose = '') {
   const data = { ...initialData };
   const dependencies = {
     ...hooks.dependencies,
+    // These fixtures exercise data writes; actual popup geometry has browser coverage.
+    '@/components/Popover': { default: '@/components/Popover:default', estimateMenuHeight: () => 0 },
     '@/components/Toast': { showToast: (...args) => toasts.push(args) },
     '@/components/ConfirmDialog': {
       useConfirm: () => ({ confirmThen: (_, __, action) => {

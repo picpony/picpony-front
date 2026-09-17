@@ -26,7 +26,7 @@ import { useAuthModal } from '@/components/AuthModal';
 import PageHeader from '@/components/PageHeader';
 import Radio from '@/components/Radio';
 import Chip from '@/components/Chip';
-import Popover from '@/components/Popover';
+import Popover, { estimateMenuHeight } from '@/components/Popover';
 import { ICON } from '@/lib/icons';
 import { readToken, useSession } from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
@@ -320,14 +320,13 @@ export default function BlockGroupsPage() {
   }, [userInfo, loadGroups, markPending, confirm]);
   if (!userInfo && ready) return <EmptyState title="需要登录" description="登录后即可管理屏蔽组" action={<Button onClick={() => openAuth('login')}>前往登录</Button>} />;
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="@container max-w-4xl mx-auto">
       <PageHeader
         title="屏蔽组"
         subtitle={`已创建屏蔽组 ${groups.length} / ${MAX_GROUPS}`}
         actions={
           <Button
             variant="filled"
-            size="xs"
             onClick={() => openEditModal()}
             icon={<MdAdd />}
           >
@@ -339,7 +338,7 @@ export default function BlockGroupsPage() {
       {loading ? (
         /* Cards in the grid they will land in, rather than one centred spinner
            that then reflows into a three-column layout. */
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <Card
               key={i}
@@ -372,15 +371,18 @@ export default function BlockGroupsPage() {
           }
         />
       ) : (
-        /* Group grid */ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        /* Columns follow the page's available width, including the docked drawer. */
+        <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
           
           {groups.map((group) => {
             const hTags = group.hidden_tags || group.tags || [];
             const sTags = group.spoilered_tags || [];
             const isActive = group.is_active === 1;
             return (
-              <div
+              <Card
                 key={group.id}
+                variant="outlined"
+                outlineTone={isActive ? 'error' : 'neutral'}
                 /* One signal per meaning — the note on the switch below says
                    exactly this, and the card was doing the opposite four times:
                    a soft 40%-alpha error edge, a card-wide 60% opacity, an
@@ -394,14 +396,15 @@ export default function BlockGroupsPage() {
                    force. The tag lines below drop to `on-surface-variant` when
                    it is not, because the red and amber *mean* "being blocked
                    right now"; off, they are just a list of words. */
-                className={`bg-surface flex flex-col gap-3 rounded-md border p-4 transition-ui ${isActive ? 'border-error' : 'border-outline-variant'}`}
+                className="flex flex-col gap-3"
               >
                 
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-dashed border-outline-variant pb-3">
+                <div className="flex min-w-0 items-center justify-between gap-3 border-b border-dashed border-outline-variant pb-3">
                   
                   <span
-                    className={`text-label-l-emphasized truncate ${isActive ? 'text-error' : 'text-on-surface-variant'}`}
+                    className={`text-label-l-emphasized min-w-0 truncate ${isActive ? 'text-error' : 'text-on-surface-variant'}`}
+                    title={group.name}
                   >
                     {group.name}
                   </span>
@@ -449,7 +452,7 @@ export default function BlockGroupsPage() {
                   </div>
                 </div>
                 {/* Tags preview */}
-                <div className="text-body-s space-y-1">
+                <div className="text-body-s space-y-1 wrap-anywhere">
                   {hTags.length > 0 && (
                     <div className={isActive ? 'text-error' : 'text-on-surface-variant'}>
                       <MdBlock size={ICON.dense} className="inline mr-0.5" /> 隐藏：{hTags.join(', ')}
@@ -464,7 +467,7 @@ export default function BlockGroupsPage() {
                     <span className="text-on-surface-variant">空屏蔽组</span>
                   )}
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -561,19 +564,22 @@ export default function BlockGroupsPage() {
               onClose={() => setShowSuggestions(false)}
               anchorRef={searchFieldRef}
               maxHeight={192}
-              estimatedHeight={suggestions.length * 40}
+              estimatedHeight={estimateMenuHeight(suggestions.length)}
+              className="p-2"
             >
                 {suggestions.map((s) => (
                   <button
                     key={s.name}
+                    type="button"
                     onClick={() => addTag(s.name)}
-                    className="w-full text-left px-3 py-2 text-body-m state-layer flex justify-between items-center border-b border-outline-variant last:border-0 outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
+                    data-ripple=""
+                    className="state-layer flex min-h-10 pointer-coarse:min-h-12 w-full cursor-pointer items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l text-on-surface outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
                   >
                     
-                    <span className="text-on-surface">{s.name}</span>
-                    <span className="text-body-s text-on-surface-variant">{s.images}</span>
+                    <span className="min-w-0 flex-1 truncate" title={s.name}>{s.name}</span>
+                    <span className="text-body-s text-on-surface-variant shrink-0 tabular-nums">{s.images}</span>
                   </button>
-                ))}{' '}
+                ))}
             </Popover>
           </div>
           <div>

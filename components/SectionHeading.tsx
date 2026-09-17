@@ -55,24 +55,24 @@ export default function SectionHeading({
   const heading = (
     <Tag
       className={cn(
-        'text-title-m-emphasized text-on-surface flex min-w-0 items-center gap-2',
+        'text-title-m-emphasized text-on-surface flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1',
         !wrapped && spacing,
       )}
       {...(wrapped ? undefined : rest)}
     >
-      {icon && (
-        /* A fixed, centred cell rather than a bare glyph: an inline <svg> sits
-           on the text baseline and lands a fraction low, by a different amount
-           per glyph. */
-        <span
-          className="text-primary-ink grid shrink-0 place-items-center [&>svg]:block"
-          aria-hidden="true"
-        >
-          {icon}
-        </span>
-      )}
-      <span className="min-w-0">{children}</span>
-      {aside && <span className="text-body-m text-on-surface-variant shrink-0">{aside}</span>}
+      <span className="flex min-w-0 max-w-full items-center gap-2">
+        {icon && (
+          /* The glyph stays with its heading when the count wraps below. */
+          <span
+            className="text-primary-ink grid shrink-0 place-items-center [&>svg]:block"
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+        )}
+        <span className="min-w-0 wrap-anywhere">{children}</span>
+      </span>
+      {aside && <span className="text-body-m max-w-full wrap-anywhere text-on-surface-variant">{aside}</span>}
     </Tag>
   );
 
@@ -82,14 +82,14 @@ export default function SectionHeading({
 
   return (
     <div className={spacing} {...rest}>
-      <div className={cn('flex items-center justify-between', actions && 'gap-4')}>
-        <div className="min-w-0">
+      <div className={cn('flex flex-wrap items-center justify-between', actions && 'gap-x-4 gap-y-3')}>
+        <div className="min-w-0 max-w-full">
           {heading}
           {subtitle && (
-            <p className="text-body-m text-on-surface-variant mt-1">{subtitle}</p>
+            <p className="text-body-m wrap-anywhere text-on-surface-variant mt-1">{subtitle}</p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">{actions}</div>}
       </div>
     </div>
   );

@@ -11,6 +11,7 @@
 
 import { readToken, readUserInfo } from '@/lib/hooks';
 import { getBrowsingSettings } from '@/lib/api/client';
+import { warmSearchArtwork } from '@/lib/lottieAssets';
 import {
   blockGroups,
   browsingFingerprint,
@@ -43,6 +44,11 @@ export function prefetchRoute(href: string) {
     path = url.pathname;
     search = url.searchParams;
   } catch {
+    return;
+  }
+
+  if (path === '/search' && !search.get('q')) {
+    warmSearchArtwork();
     return;
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useRef, useCallback, useId, useMemo } from 'react';
-import { MdSearch, MdImageSearch, MdSearchOff, MdArrowBack, MdExpandMore } from 'react-icons/md';
+import { MdSearch, MdImageSearch, MdSearchOff, MdArrowBack, MdExpandMore, MdArrowDownward } from 'react-icons/md';
 import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import Badge from '@/components/Badge';
@@ -14,17 +14,18 @@ import ErrorRetry from '@/components/ErrorRetry';
 import EmptyState from '@/components/EmptyState';
 import ImageSearchModal from '@/components/ImageSearchModal';
 import LottieIcon from '@/components/LottieIcon';
+import { loadSearchArtwork } from '@/lib/lottieAssets';
 import Select from '@/components/Select';
 import { showToast } from '@/components/Toast';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 import { tagCategoryDot } from '@/lib/tagCategories';
 import Button from '@/components/Button';
+import Card from '@/components/Card';
 import { Input } from '@/components/Input';
 import IconButton from '@/components/IconButton';
-import Chip from '@/components/Chip';
 import { readToken, useEscapeBack, useSession } from '@/lib/hooks';
 import SectionHeading from '@/components/SectionHeading';
-import Popover from '@/components/Popover';
+import Popover, { estimateMenuHeight } from '@/components/Popover';
 import { ICON } from '@/lib/icons';
 import { useResource, SKIP } from '@/lib/resource';
 import { browsingFingerprint, searchFeed, syncBrowsingCookie } from '@/lib/resources';
@@ -162,6 +163,7 @@ function SearchPageContent() {
 
   // Advanced search panel state
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const advancedId = useId();
   const [advUpvoteOp, setAdvUpvoteOp] = useState('gte');
   const [advUpvoteVal, setAdvUpvoteVal] = useState('');
   const [advScoreOp, setAdvScoreOp] = useState('gte');
@@ -343,6 +345,19 @@ function SearchPageContent() {
      each of them is how they drift. */
   const acOpen = showSuggestions && suggestions.length > 0;
 
+  useEffect(() => {
+    if (!acOpen) return;
+    const panel = document.getElementById(acListboxId);
+    const option = document.getElementById(`${acId}-option-${acCursor}`);
+    if (!panel || !option) return;
+    // Move only the suggestion viewport. Keyboard navigation must not move
+    // the page or leave the active descendant hidden below the search view.
+    const bounds = panel.getBoundingClientRect();
+    const row = option.getBoundingClientRect();
+    if (row.top < bounds.top + 8) panel.scrollTop += row.top - bounds.top - 8;
+    else if (row.bottom > bounds.bottom - 8) panel.scrollTop += row.bottom - bounds.bottom + 8;
+  }, [acOpen, acCursor, acId, acListboxId]);
+
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.nativeEvent.isComposing) return;
@@ -512,7 +527,7 @@ function SearchPageContent() {
                 trailing={
                   <>
                     <IconButton
-                      variant="tonal"
+                      variant="standard"
                       onClick={() => setIsImageSearchOpen(true)}
                       aria-label="以图搜图"
                       icon={<MdImageSearch size={ICON.control} />}
@@ -528,62 +543,43 @@ function SearchPageContent() {
                   by portalling rather than relying on this wrapper. */}
               <Popover
                 open={acOpen}
-                 onClose={closeSuggestions}
+                onClose={closeSuggestions}
                 anchorRef={inputWrapRef}
+                variant="search"
                 id={acListboxId}
                 role="listbox"
                 aria-label="搜索建议"
-                estimatedHeight={suggestions.length * 40}
+                estimatedHeight={estimateMenuHeight(suggestions.length, 56)}
               >
                 {suggestions.map((tag, i) => (
-                      <button
-                        key={tag.id}
-                         type="button"
-                         tabIndex={-1}
-                        id={acOptionId(i)}
-                         onMouseDown={(e) => {
-                           e.preventDefault();
-                         }}
-                         onClick={() => selectSuggestion(tag)}
-                        onMouseEnter={() => setAcCursor(i)}
-                        role="option"
-                        aria-selected={i === acCursor}
-                        className={`flex items-center justify-between w-full px-3 py-2 text-left transition-ui outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
-                          i === acCursor
-                            /* The keyboard cursor is the state layer at the focus weight,
-                               not a container fill: a container pair means *selected*
-                               everywhere else in this app (sidebar route, chosen `Select`
-                               option, selected chip), and nothing here is selected until
-                               it is committed. Same treatment as `Select`'s listbox. */
-                            ? 'state-layer-active'
-                            : 'state-layer'
-                        }`}
-                      >
-                        
-                        <div className="flex items-center gap-2 min-w-0">
-                          
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${tagCategoryDot(tag.cat)}`}
-                          />
-                          <div className="min-w-0">
-                            {' '}
-                            {tag.cn ? (
-                              <span className="text-body-m text-on-surface">
-                                {' '}
-                                <span className="text-primary-ink ">{tag.cn}</span>
-                                <span className="ml-1.5 text-on-surface-variant">{tag.en}</span>
-                              </span>
-                            ) : (
-                              <span className="text-body-m text-on-surface">{tag.en}</span>
-                            )}{' '}
-                          </div>
-                        </div>
-                        <span className="text-body-s text-on-surface-variant shrink-0 ml-2">
-                          {' '}
-                          {tag.count?.toLocaleString()}
-                        </span>
-                      </button>
-                    ))}{' '}
+                  <button
+                    key={tag.id}
+                    type="button"
+                    tabIndex={-1}
+                    id={acOptionId(i)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectSuggestion(tag)}
+                    onMouseEnter={() => setAcCursor(i)}
+                    role="option"
+                    aria-selected={i === acCursor}
+                    className={`flex min-h-14 w-full items-center gap-4 rounded-xl px-2 py-1 text-left outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
+                      i === acCursor ? 'state-layer-active' : 'state-layer'
+                    }`}
+                  >
+                    {/* 24dp leading slot and a 16dp gap align the label with
+                        the search field. 20dp corners sit 8dp inside its 28dp view. */}
+                    <span className="grid size-6 shrink-0 place-items-center" aria-hidden="true">
+                      <span className={`size-2.5 rounded-full ${tagCategoryDot(tag.cat)}`} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="text-body-l text-on-surface block truncate">{tag.cn || tag.en}</span>
+                      {tag.cn && <span className="text-body-s text-on-surface-variant block truncate">{tag.en}</span>}
+                    </span>
+                    <span className="text-label-m text-on-surface-variant shrink-0 tabular-nums">
+                      {tag.count?.toLocaleString()}
+                    </span>
+                  </button>
+                ))}
               </Popover>
             </div>
           </form>
@@ -646,12 +642,10 @@ function SearchPageContent() {
           <EmptyState
             icon={
               <LottieIcon
-                /* `max-w-full` cannot constrain this: it resolves against `StatusView`'s
-                   icon slot, a shrink-to-fit flex item whose own width comes from this
-                   element — the percentage has no reference, and the 624px composition
-                   ran off the right of a 390px screen. A viewport unit has a reference. */
-                className="w-[min(39rem,88vw)]"
-                load={() => import('@/lib/lottie/search.json').then((m) => m.default)}
+                /* The status slot owns a real content width, including the
+                   space consumed by the app drawer on tablets. */
+                className="w-156 max-w-full"
+                load={loadSearchArtwork}
                 /* 3000×1553, the composition's own box. */
                 aspect={3000 / 1553}
                 /* The reduced-motion fallback: a `null` fallback meant no illustration at
@@ -707,15 +701,18 @@ function SearchPageContent() {
                 }
               />
             </div>
-            {/* Bottom sort controls */}
+            {/* One quiet toolbar: matching materials, silhouettes and heights. */}
             {q && (
-              <div className="flex items-center justify-center gap-2 mt-6 flex-wrap">
+              <div className="@container mx-auto mt-6 max-w-2xl">
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <div className="flex min-w-0 max-w-full items-center gap-2">
                 <Select
                   value={sortBy}
                   onChange={(v) => {
                     commitSearch(q, v, sortDir);
                   }}
                   size="sm"
+                  shape="pill"
                   aria-label="排序方式"
                   options={[
                      { value: 'created_at', label: '上传时间' },
@@ -731,45 +728,48 @@ function SearchPageContent() {
                   ]}
                 />
                 {sortBy !== 'random' && (
-                  <Button variant="tonal" size="xs" onClick={() => commitSearch(q, sortBy, sortDir === 'desc' ? 'asc' : 'desc')} data-ripple>
-                    {/* A fade, not a glyph spin-in: that keyframe (90° rotation, 0.6
-                        scale on the expressive spring) is built for a *glyph*, and text
-                        tumbling into place reads as a rendering fault. The arrow already
-                        carries the meaning, so the swap only has to be noticed: `fade-in`
-                        is 400ms `decelerate` on opacity alone, restarted by the `key`. */}
-                    <span key={sortDir} className="animate-fade-in inline-block">
-                      {sortDir === 'desc' ? '↓ 降序' : '↑ 升序'}
-                    </span>
+                  <Button
+                    variant="surface"
+                    onClick={() => commitSearch(q, sortBy, sortDir === 'desc' ? 'asc' : 'desc')}
+                    aria-label={sortDir === 'desc' ? '当前降序，切换为升序' : '当前升序，切换为降序'}
+                    icon={
+                      <MdArrowDownward
+                        className={`transition-transform spring-fast-spatial ${sortDir === 'asc' ? 'rotate-180' : ''}`}
+                      />
+                    }
+                  >
+                    {sortDir === 'desc' ? '降序' : '升序'}
                   </Button>
                 )}
-                {/* No floating-surface entrance on the button below: its two neighbours
-                    enter without one, so a third entrance here had the row arriving in
-                    instalments. */}
-                {(sortParam || sortBy !== defaultSort || sortDir !== 'desc') && (
-                  <Button variant="tonal" size="xs" onClick={() => commitSearch(q, defaultSort, 'desc')} data-ripple>
+                </div>
+                <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
+                {/* This discloses a panel; it does not select a filter value. */}
+                <Button
+                  variant="surface"
+                  onClick={() => setShowAdvanced((prev) => !prev)}
+                  aria-expanded={showAdvanced}
+                  aria-controls={advancedId}
+                  trailingIcon={
+                    <MdExpandMore
+                      className={`transition-transform ${showAdvanced ? 'spring-default-spatial rotate-180' : 'spring-fast-effects rotate-0'}`}
+                    />
+                  }
+                >
+                  高级筛选
+                </Button>
+                {(sortBy !== defaultSort || sortDir !== 'desc') && (
+                  <Button variant="surface" onClick={() => commitSearch(q, defaultSort, 'desc')}>
                     重置排序
                   </Button>
                 )}
-                {/* `Chip variant="filter"`, not a third hand-rolled pill: this control is
-                    a filter that is on or off, which is the one thing a filter chip is
-                    for, and it was fully rounded while every tag chip beside it wore the
-                    spec's 8dp. */}
-                <Chip
-                  variant="filter"
-                  tone="primary"
-                  selected={showAdvanced}
-                  onClick={() => setShowAdvanced((prev) => !prev)}
-                  aria-expanded={showAdvanced}
-                  icon={<MdExpandMore size={ICON.dense} />}
-                >
-                  高级排序
-                </Chip>
+                </div>
               </div>
-            )}
 
-            {/* Advanced search panel */}
-            {q && (
+              {/* The form expands from the toolbar's own surface. */}
               <div
+                id={advancedId}
+                role="region"
+                aria-label="高级筛选条件"
                 inert={!showAdvanced}
                 /* The drawer's springs, per direction — `DefaultSpatial` opening,
                    `FastEffects` closing, per `NavigationDrawer.kt`. The last of the app's
@@ -788,8 +788,8 @@ function SearchPageContent() {
                 }`}
               >
                 <div className="min-h-0 overflow-hidden">
-                  <div className="mt-4 p-4 border border-outline-variant rounded-md bg-surface max-w-2xl mx-auto">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <Card variant="elevated" className="mt-4">
+                    <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
                       {/* Upvotes */}
                       <div>
                         <p className="block text-body-s text-on-surface-variant mb-1">
@@ -845,6 +845,8 @@ function SearchPageContent() {
                         </div>
                       </div>
                       {/* Aspect ratio */}
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 gap-4 @xl:grid-cols-3">
                       <div>
                         <p className="block text-body-s text-on-surface-variant mb-1">
                           宽高比
@@ -907,21 +909,22 @@ function SearchPageContent() {
                         />
                       </div>
                     </div>
-                    <div className="flex justify-between items-center mt-4 pt-3 border-t border-outline-variant">
-                      <span className="text-label-s text-on-surface-variant">
-                        点击&quot;应用&quot;后，筛选条件会拼接到搜索框并执行搜索。
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-body-s text-on-surface-variant">
+                        组合条件，进一步缩小搜索范围。
                       </span>
-                      <div className="flex gap-2">
-                        <Button variant="tonal" size="xs" onClick={clearAdvancedFilters} data-ripple>
+                      <div className="ml-auto flex flex-wrap gap-2">
+                        <Button variant="surface" onClick={clearAdvancedFilters}>
                           重置
                         </Button>
-                        <Button onClick={applyAdvancedFilters} variant="filled" size="xs">
+                        <Button onClick={applyAdvancedFilters} variant="filled">
                           应用并搜索
                         </Button>
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 </div>
+              </div>
               </div>
             )}
           </>

@@ -3,6 +3,7 @@
 import { type ReactNode, useLayoutEffect, useRef } from 'react';
 import { DURATION, EASE } from '@/lib/motionTokens';
 import { entranceMotion, motionTier, scaledMs } from '@/lib/appearance';
+import { routeTransitActive } from '@/lib/pageTransit';
 
 interface RevealProps {
   children: ReactNode;
@@ -48,7 +49,7 @@ export default function Reveal({
     /* `entranceMotion()` is the harder stop: this component *is* an entrance,
        so with the switch off there is nothing to reduce. Read once at mount —
        that is when the whole animation happens. */
-    if (!root || !entranceMotion()) return;
+    if (!root || !entranceMotion() || routeTransitActive(root)) return;
     const tier = motionTier();
     if (tier === 'off') return;
 

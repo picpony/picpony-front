@@ -456,8 +456,8 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
               />
             )}
             {verifying && (
-              <div className="bg-media-plate animate-fade-in absolute inset-0 z-20 flex items-center justify-center">
-                <Spinner size="lg" tone="on-primary" />
+              <div className="bg-media-plate text-on-media animate-fade-in absolute inset-0 z-20 flex items-center justify-center">
+                <Spinner size="lg" tone="inherit" />
               </div>
             )}
           </div>

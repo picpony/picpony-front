@@ -75,9 +75,15 @@ import { showToast } from '@/components/Toast';
 import { cn, runWhenIdle } from '@/lib/utils';
 import { COOKIE_KEYS, LS_KEYS, MEDIA } from '@/lib/constants';
 import { useOverlayLayer, useScrollLock } from '@/lib/overlay';
+import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
+import { warmSearchArtwork } from '@/lib/lottieAssets';
 
 function SearchBar() {
   const router = useRouter();
+  const intent = useIntentPrefetch(() => {
+    router.prefetch('/search');
+    warmSearchArtwork();
+  });
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -90,6 +96,7 @@ function SearchBar() {
           owns the navigation. `md` + `touch-size` matches the other bar controls, and
           the Suspense fallback must reserve exactly this box. */}
       <IconButton
+        {...intent}
         type="submit"
         variant="on-primary"
         size="md"

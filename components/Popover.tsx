@@ -13,7 +13,8 @@ import {
 import { createPortal } from 'react-dom';
 import { cn, clamp } from '@/lib/utils';
 import { MEDIA } from '@/lib/constants';
-import { motionTier } from '@/lib/appearance';
+import { motionTier, scaledMs } from '@/lib/appearance';
+import { MENU_TRANSITION } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
 import { springTiming } from '@/lib/springTiming';
 import { OverlayLayerContext, useOverlayLayer, useExitAnimation, useMounted } from '@/lib/overlay';
@@ -26,29 +27,25 @@ export const POPOVER_MAX_HEIGHT = 288;
 /**
  * The height a list of `rows` menu rows will come out at, for `estimatedHeight`.
  *
- * A menu row is M3's 40dp item under a pointer and grows to the 48dp touch floor under
- * a finger (`touch-size` on the row), so the estimate has to read the same axis or
+ * A menu row has a 40dp minimum under a fine pointer and 48dp under a coarse one,
+ * so the estimate has to read the same density axis or
  * `Popover` picks its side against the wrong number and flips the panel on the way in.
- * The 8px is the container's own vertical padding. The one place this arithmetic lives.
+ * Include the 2dp row gaps and the 8dp padding at each end of the container.
  */
-export function estimateMenuHeight(rows: number): number {
+export function estimateMenuHeight(rows: number, rowHeight?: number): number {
   const coarse =
     typeof window !== 'undefined' && window.matchMedia(MEDIA.pointerCoarse).matches;
-  return rows * (coarse ? 48 : 40) + 8 * 2;
+  return rows * (rowHeight ?? (coarse ? 48 : 40)) + Math.max(0, rows - 1) * 2 + 8 * 2;
 }
 
-/* Container-transform timings.
+/* The list opens out of its trigger, like Vuetify's VMenu. Its clock remains
+ * the application's shared short/state pair: 200ms enter, 150ms exit, with the
+ * user's speed scale. The arrangement is borrowed; the literal durations are not.
  *
- * The **fast** tier, both halves — what `Menu.kt` reaches for: `FastSpatial` for the
- * container, `FastEffects` for what is inside it. A menu is the fastest floating
- * surface in the system; the default tier opened every menu one step slower.
- * The exit is the same `FastEffects` spring, not a curve: component motion, not a
- * screen transition, and ζ=1 guarantees no bounce back into view.
- *
- * `springTiming` pairs the easing and duration, scales their clock and substitutes
- * the critically damped geometry under reduced motion. The exit hold uses the
+ * Menu duration and easing are one pair; the search view keeps FastEffects.
+ * Reduced motion removes the travel. The exit hold uses the
  * unscaled duration because useExitAnimation applies the maximum speed itself. */
-const EXIT_MS = SPRING_MS.fastEffects;
+const EXIT_MS = MENU_TRANSITION.exit.duration;
 
 export interface PopoverHandle {
   /** The panel element, for callers that need to measure or scroll it. */
@@ -71,13 +68,12 @@ interface PopoverProps {
   estimatedHeight?: number;
   /** Cap on the panel's height. */
   maxHeight?: number;
-  /** Panel takes at least the anchor's width. On by default — a menu hanging
-   *  off a control narrower than itself reads as detached. */
+  /** Match the anchor exactly. Intrinsically sized panels are centred on it. */
   matchAnchorWidth?: boolean;
   /** Extra classes on the panel, for width and inner padding. */
   className?: string;
-  /** Fade the panel's direct children in behind the container morph. */
-  animateChildren?: boolean;
+  /** Search suggestions extend the search bar's material and 28dp silhouette. */
+  variant?: 'menu' | 'search';
   handleRef?: RefObject<PopoverHandle | null>;
   id?: string;
   role?: string;
@@ -87,10 +83,10 @@ interface PopoverProps {
 /**
  * A floating panel anchored to a control.
  *
- * The one recipe for the app's floating surfaces: 4dp corner and `surface-container`
- * (`MenuTokens.ContainerShape` / `ContainerColor`), elevation level 2 (`ContainerElevation`)
- * — the shape-scale and elevation rows "menus" name. No border: the tonal step plus
- * elevation is the whole M3 separation recipe.
+ * Menu surfaces use a 16dp corner, `surface-container` and level 2. The search
+ * variant extends the search bar's 28dp corner and highest container tone,
+ * keeping a restrained level 1 shadow only to explain its overlap with the page.
+ * Both recipes live here so width, material and motion cannot drift at call sites.
  *
  * **What this owns**: the surface, where it goes, how it arrives and leaves, and how
  * it is dismissed. **What it does not own**: the content, or any roving focus inside
@@ -105,7 +101,7 @@ export default function Popover({
   maxHeight = POPOVER_MAX_HEIGHT,
   matchAnchorWidth = true,
   className = '',
-  animateChildren = true,
+  variant = 'menu',
   handleRef,
   id,
   role,
@@ -113,12 +109,15 @@ export default function Popover({
 }: PopoverProps) {
   const mounted = useMounted();
   const panelRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   /* Kept in the tree past `open` so the exit has something to play on. The
      shared hook rather than a hand-rolled flag; `Modal` and `Sheet` hold
      themselves open the same way. */
-  const rendering = useExitAnimation(open, EXIT_MS);
+  const rendering = useExitAnimation(open, variant === 'search' ? SPRING_MS.fastEffects : EXIT_MS);
   const placedPanel = useRef<HTMLDivElement | null>(null);
-  const restingRows = useRef(new Map<Element, { inlineOpacity: string; opacity: string }>());
+  // measure() runs before placement's state update commits. The entrance needs
+  // that freshly chosen side even on the first upward opening.
+  const opensUp = useRef(false);
   const [placement, setPlacement] = useState({
     top: 0,
     left: 0,
@@ -150,14 +149,19 @@ export default function Popover({
        Testing the space below alone left a six-row panel clamped to two rows
        with a scrollbar over an empty upper half. */
     const up = estimate > spaceBelow && spaceAbove > spaceBelow;
+    opensUp.current = up;
+    const panelWidth = panelRef.current?.offsetWidth;
+    const left = !matchAnchorWidth && panelWidth
+      ? rect.left + (rect.width - panelWidth) / 2
+      : rect.left;
     setPlacement({
       top: up ? rect.top - MENU_MARGIN : rect.bottom + MENU_MARGIN,
-      left: rect.left,
+      left,
       width: rect.width,
       up,
       available: clamp(up ? spaceAbove : spaceBelow, 0, maxHeight),
     });
-  }, [anchorRef, estimatedHeight, maxHeight]);
+  }, [anchorRef, estimatedHeight, maxHeight, matchAnchorWidth]);
 
   /* Measure before the first paint of an opening panel, never after. Writing
      layout back as state from a layout effect is the documented React pattern
@@ -177,95 +181,104 @@ export default function Popover({
   useLayoutEffect(() => {
     if (!open || !rendering) return;
     const panel = panelRef.current;
-    if (!panel) return;
+    const anchor = anchorRef.current;
+    if (!panel || !anchor) return;
     const width = panel.offsetWidth;
     const rightLimit = window.innerWidth - VIEWPORT_PADDING - width;
-    const clamped = clamp(placement.left, VIEWPORT_PADDING, rightLimit);
+    const rect = anchor.getBoundingClientRect();
+    const aligned = matchAnchorWidth ? rect.left : rect.left + (rect.width - width) / 2;
+    const clamped = clamp(aligned, VIEWPORT_PADDING, rightLimit);
     if (Math.abs(clamped - placement.left) > 0.5) {
       setPlacement((prev) => ({ ...prev, left: clamped }));
     }
-  }, [open, rendering, placement.left]);
+  }, [open, rendering, placement.left, placement.width, anchorRef, matchAnchorWidth]);
 
-  /* One layout effect owns both directions, including the rows. Cancelling the
+  /* One layout effect owns both directions. Cancelling the
      entrance in a layout cleanup and starting the exit in a passive effect
      exposed the full-sized panel for a frame. Commit the current pose before
      cancellation so an interrupted morph and its content keep their place.
 
-     Geometry uses FastSpatial, opacity uses FastEffects; the latter cannot
-     overshoot and clip. The standard tier's first opening keeps its delayed row
-     fade, while reduced motion presents the rows on the container's own clock. */
+     The transform is resolved from real trigger and panel geometry. Content
+     becomes visible once the expanding surface is nearly full size and finishes
+     on the same clock; it does not trail after the container. Reduced/search
+     keep one fade, with no independent content animation. */
   useLayoutEffect(() => {
-    const restoreRows = () => {
-      for (const [row, rest] of restingRows.current) {
-        (row as HTMLElement).style.opacity = rest.inlineOpacity;
-      }
-      restingRows.current.clear();
-    };
     if (!mounted || !rendering) {
       placedPanel.current = null;
-      restoreRows();
       return;
     }
     const panel = panelRef.current;
+    const content = contentRef.current;
     const anchor = anchorRef.current;
-    if (!panel || !anchor) return;
+    if (!panel || !content || !anchor) return;
+    // Padding gives an unmeasured width: 0 panel a nonzero offsetWidth. Wait
+    // for the anchor width before seeding the first collapsed pose.
+    if (matchAnchorWidth && placement.width <= 0) return;
 
-    const anchorRect = anchor.getBoundingClientRect();
-    /* offset dimensions are the resting box. A bounding rect read mid-morph is
-       already scaled, which would change the exit's destination on every reversal. */
     const width = panel.offsetWidth;
     const height = panel.offsetHeight;
     if (width === 0 || height === 0) return;
-    const collapsed = `scale(${Math.min(1, anchorRect.width / width)}, ${Math.min(1, anchorRect.height / height)})`;
+    const tier = motionTier();
+    const morph = variant === 'menu' && tier === 'standard';
+    let collapsed = 'none';
+    if (morph) {
+      const target = anchor.getBoundingClientRect();
+      const rawX = target.width / width;
+      const rawY = target.height / height;
+      const normalization = Math.max(1, rawX, rawY);
+      const sx = rawX / normalization;
+      const sy = rawY / normalization;
+      const aligned = matchAnchorWidth ? target.left : target.left + (target.width - width) / 2;
+      const left = clamp(aligned, VIEWPORT_PADDING, window.innerWidth - VIEWPORT_PADDING - width);
+      const x = target.left + target.width / 2 - left - width * sx / 2;
+      const y = opensUp.current ? height + MENU_MARGIN - height * sy : -MENU_MARGIN;
+      collapsed = `translate(${x}px, ${y}px) scale(${sx}, ${sy})`;
+    }
     const firstPlacement = placedPanel.current !== panel;
     placedPanel.current = panel;
     const panelStyle = getComputedStyle(panel);
     const fromTransform = firstPlacement && open ? collapsed : panelStyle.transform;
     const fromOpacity = firstPlacement && open ? '0' : panelStyle.opacity;
-    const rows = [...panel.children].map((row) => {
-      const opacity = getComputedStyle(row).opacity;
-      if (!restingRows.current.has(row)) {
-        restingRows.current.set(row, { inlineOpacity: (row as HTMLElement).style.opacity, opacity });
-      }
-      return { row: row as HTMLElement, opacity, rest: restingRows.current.get(row)! };
-    });
-    panel.style.transformOrigin = placement.up ? 'bottom left' : 'top left';
+    const fromContentOpacity = firstPlacement && open && morph ? '0' : getComputedStyle(content).opacity;
     const transform = open ? 'none' : collapsed;
     const opacity = open ? '1' : '0';
     panel.style.transform = transform;
     panel.style.opacity = opacity;
+    // One stable origin also makes an in-flight above/below flip continuous.
+    panel.style.transformOrigin = '0 0';
+    content.style.opacity = morph && !open ? '0' : '1';
 
-    const tier = motionTier();
-    if (tier === 'off') {
-      restoreRows();
-      return;
+    if (tier === 'off') return;
+
+    if (fromOpacity === opacity && fromTransform === transform && fromContentOpacity === content.style.opacity) return;
+    const menu = MENU_TRANSITION[open ? 'enter' : 'exit'];
+    const timing = variant === 'search'
+      ? springTiming('fastEffects')
+      : { duration: scaledMs(menu.duration), easing: menu.easing };
+    const from: Keyframe = { opacity: fromOpacity };
+    const to: Keyframe = { opacity };
+    if (fromTransform !== transform) {
+      from.transform = fromTransform;
+      to.transform = transform;
     }
-
-    const effects = springTiming('fastEffects');
-    const geometry = open ? springTiming('fastSpatial') : effects;
-    const running = [
-      panel.animate([{ transform: fromTransform }, { transform }], { ...geometry, fill: 'both' }),
-      panel.animate([{ opacity: fromOpacity }, { opacity }], { ...effects, fill: 'both' }),
-    ];
-    const delayedRows = firstPlacement && animateChildren && tier === 'standard';
-    if (open) {
-      for (const { row, opacity: current, rest } of rows) {
-        row.style.opacity = rest.inlineOpacity;
-        /* A reversal resumes visible rows immediately. A fresh reduced opening
-           has no separate row entrance; only the panel fades in that tier. */
-        if (!delayedRows && current === rest.opacity) continue;
-        running.push(row.animate(
-          [{ opacity: delayedRows ? '0' : current }, { opacity: rest.opacity }],
-          { ...effects, delay: delayedRows ? geometry.duration * 0.5 : 0, fill: 'both' },
-        ));
-      }
+    const running = [panel.animate([from, to], { ...timing, fill: 'both' })];
+    if (morph) {
+      const effects = springTiming('fastEffects');
+      // Only hidden content waits for the surface to expand. A reversal with
+      // visible text picks up its opacity immediately from the current frame.
+      const delay = open && Number(fromContentOpacity) < 0.05
+        ? Math.max(0, timing.duration - effects.duration)
+        : 0;
+      running.push(content.animate(
+        [{ opacity: fromContentOpacity }, { opacity: content.style.opacity }],
+        { ...effects, delay, fill: 'both' },
+      ));
     }
 
     let active = true;
     Promise.all(running.map((animation) => animation.finished)).then(() => {
       if (!active) return;
       running.forEach((animation) => animation.cancel());
-      restoreRows();
     }, () => {});
 
     return () => {
@@ -275,13 +288,13 @@ export default function Popover({
           try {
             animation.commitStyles();
           } catch {
-            // A detached panel or replaced option row has no pose to preserve.
+            // A detached panel has no pose to preserve.
           }
         }
         animation.cancel();
       }
     };
-  }, [open, mounted, rendering, placement.up, anchorRef, animateChildren]);
+  }, [open, mounted, rendering, placement.up, placement.width, anchorRef, variant, matchAnchorWidth]);
 
   /* Reposition against scroll and resize rather than trapping the page: a
      popover is not modal, the page behind it stays live.
@@ -349,7 +362,7 @@ export default function Popover({
         top: placement.up ? undefined : placement.top,
         bottom: placement.up ? window.innerHeight - placement.top : undefined,
         left: placement.left,
-        minWidth: matchAnchorWidth ? placement.width : undefined,
+        width: matchAnchorWidth ? placement.width : undefined,
         /* A panel wider than the screen has to shrink, not merely be pushed
            inward — the clamp above can only move it. */
         maxWidth: `calc(100vw - ${VIEWPORT_PADDING * 2}px)`,
@@ -364,15 +377,20 @@ export default function Popover({
          few pixels past the estimate was judged to fit and clipped its last row.
          `auto` already means "a scrollbar only when one is needed".
 
-         **4dp**, from `MenuTokens.ContainerShape = CornerExtraSmall` — menus are
-         4dp and so are text fields (read the token file, not the summary table).
-         The tone and elevation are `MenuTokens` and were already right. */
+         Menu rows sit 8dp inside the 16dp outer corner. Both variants lay out
+         at final dimensions before animating. Menu content fades in as its
+         surface expands; search suggestions keep only the single panel fade. */
       className={cn(
-        'popover-scrollbar bg-surface-container text-on-surface z-popover overflow-y-auto rounded-xs shadow-e2',
+        'popover-scrollbar text-on-surface z-popover overflow-y-auto',
+        variant === 'search'
+          ? 'rounded-2xl bg-surface-container-highest p-2 shadow-e1'
+          : 'rounded-lg bg-surface-container shadow-e2',
         className,
       )}
     >
-      {children}
+      <div ref={contentRef} role="presentation" className="space-y-0.5">
+        {children}
+      </div>
     </div>
     </OverlayLayerContext.Provider>,
     document.body,

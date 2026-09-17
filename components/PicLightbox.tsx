@@ -8,6 +8,8 @@ import Download from 'yet-another-react-lightbox/plugins/download';
 import Video from 'yet-another-react-lightbox/plugins/video';
 import type { Slide } from 'yet-another-react-lightbox';
 import Spinner from '@/components/Spinner';
+import { MOTION_SPEED_SCALE, useMotionSpeed, useMotionTier } from '@/lib/appearance';
+import { DURATION, EASE } from '@/lib/motionTokens';
 
 /**
  * The fullscreen lightbox, whole, in one lazily-loaded module.
@@ -39,12 +41,29 @@ export default function PicLightbox({
   close: () => void;
   slides: PicLightboxSlide[];
 }) {
+  const tier = useMotionTier();
+  const speed = useMotionSpeed();
+  const scale = tier === 'off' ? 0 : MOTION_SPEED_SCALE[speed];
+
   return (
     <Lightbox
       open={open}
       close={close}
       slides={slides}
       plugins={[Zoom, Counter, Fullscreen, Download, Video]}
+      /* These numbers also drive the library's JS lifetime and zoom/swipe
+         tracks. A CSS-only fade left slow exits cut off at 250ms and kept an
+         invisible portal blocking input under the off tier. */
+      animation={{
+        fade: DURATION.medium * 1000 * scale,
+        swipe: DURATION.emphasized * 1000 * scale,
+        zoom: DURATION.emphasized * 1000 * scale,
+        easing: {
+          fade: EASE.standard,
+          swipe: EASE.standard,
+          navigation: EASE.standard,
+        },
+      }}
       zoom={{
         maxZoomPixelRatio: 3,
         scrollToZoom: true,

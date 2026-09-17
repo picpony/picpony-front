@@ -478,7 +478,8 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
             icon={u.is_banned ? <MdCheckCircle /> : <MdBlock />}
             onClick={() => handleBan(u.id, u.is_banned ? 0 : 1)}
             disabled={mutation.busy || isSavingUser}
-            className={u.is_banned ? 'text-success' : 'text-error'}
+            variant={u.is_banned ? 'standard' : 'danger-text'}
+            className={u.is_banned ? 'text-success' : undefined}
             aria-label={`${u.is_banned ? '解封' : '封禁'}用户 ${u.username}`}
           />
           <IconButton
@@ -487,7 +488,7 @@ export default function UsersTab({ token, myRole }: { token: string; myRole: str
             icon={<MdDelete />}
             onClick={() => handleDelete(u.id)}
             disabled={mutation.busy || isSavingUser}
-            className="text-error"
+            variant="danger-text"
             aria-label={`删除用户 ${u.username}`}
           />
         </>

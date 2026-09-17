@@ -37,6 +37,10 @@ export default class RouteCrossFade extends Component<Props> {
   componentDidUpdate(prev: Props, _state: unknown, snapshot: RouteSnapshot | null) {
     if (snapshot && this.layerRef.current) {
       playRouteCrossFade(this.layerRef.current, snapshot, prev.pathname, this.props.pathname);
+    } else if (prev.pathname !== this.props.pathname) {
+      // A cut (motion off, an oversized page, or an unavailable engine) still
+      // replaces the old page. Its earlier clone must not linger over the new one.
+      cancelRouteCrossFade();
     }
   }
 

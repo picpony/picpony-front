@@ -16,7 +16,7 @@ import { clamp } from '@/lib/utils';
  * at the wrong one.
  */
 
-/** `cubic-bezier(0.33, 0, 0, 1)` — `eases.scroll` in `lib/motion.ts`. Keep the two in step. */
+/** The distance-law scroll's dedicated curve, `cubic-bezier(0.33, 0, 0, 1)`. */
 const P1X = 0.33;
 const P1Y = 0;
 const P2X = 0;
@@ -43,22 +43,22 @@ function bezier(t: number): number {
   return ((ay * x + by) * x + cy) * x;
 }
 
-/** One tween at a time per scroller, so a second call overwrites rather than fights. */
-const running = new WeakMap<HTMLElement, number>();
+/** One owner per scroller, including its input listeners and scroll-anchor lease. */
+const running = new WeakMap<HTMLElement, () => void>();
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 
 function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
-  const previous = running.get(scroller);
-  if (previous !== undefined) cancelAnimationFrame(previous);
-
-  if (jump) {
-    running.delete(scroller);
-    scroller.style.overflowAnchor = '';
-    scroller.scrollTop = to;
-    return;
-  }
+  running.get(scroller)?.();
 
   const from = scroller.scrollTop;
   const distance = Math.abs(from - to);
+  if (jump) {
+    scroller.scrollTop = to;
+    return;
+  }
+  // Still cancel an older glide, but do not twitch for an already-reached target.
+  if (distance < 4) return;
+
   /* Duration follows the square root of the distance (distance law): perceived travel speed
      scales sub-linearly, so a linear map makes short hops sluggish and long ones frantic —
      a fixed length would instead make the *speed* scale with distance, a whip-pan from the
@@ -70,20 +70,47 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
      viewport; during a deliberate programmatic scroll it fights us — the incoming page
      re-lays out mid-tween, the browser "corrects" scrollTop, and the result is a visible
      lurch. Suspended for the length of the tween only. */
+  const previousAnchor = scroller.style.overflowAnchor;
   scroller.style.overflowAnchor = 'none';
+
+  /* A wheel, finger or scrollbar takes ownership immediately. Continuing to
+     write scrollTop after that input made the glide pull the page back under
+     the user for up to the whole slow-speed duration. The input is never
+     prevented; cancellation just gives the browser its scroller back. */
+  let frame = 0;
+  const stop = () => {
+    cancelAnimationFrame(frame);
+    running.delete(scroller);
+    scroller.style.overflowAnchor = previousAnchor;
+    scroller.removeEventListener('wheel', stop);
+    scroller.removeEventListener('pointerdown', stop);
+    document.removeEventListener('keydown', onKeyDown, true);
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (!SCROLL_KEYS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
+    const target = event.target;
+    /* Editing keys and a range's arrow keys belong to their control, not to
+       scrolling. A keyboard page-scroll outside a field takes over as usual. */
+    if (target instanceof HTMLElement &&
+      (target.isContentEditable || target.closest('input, textarea, select, [role="slider"]'))) return;
+    stop();
+  };
+  running.set(scroller, stop);
+  scroller.addEventListener('wheel', stop, { passive: true });
+  scroller.addEventListener('pointerdown', stop, { passive: true });
+  document.addEventListener('keydown', onKeyDown, true);
 
   const start = performance.now();
   const step = (now: number) => {
     const p = duration <= 0 ? 1 : Math.min(1, (now - start) / duration);
     scroller.scrollTop = from + (to - from) * bezier(p);
     if (p < 1) {
-      running.set(scroller, requestAnimationFrame(step));
+      frame = requestAnimationFrame(step);
       return;
     }
-    running.delete(scroller);
-    scroller.style.overflowAnchor = '';
+    stop();
   };
-  running.set(scroller, requestAnimationFrame(step));
+  frame = requestAnimationFrame(step);
 }
 
 /**
@@ -106,7 +133,6 @@ export function scrollAppToTop({ smooth = true }: { smooth?: boolean } = {}) {
     return;
   }
 
-  if (scroller.scrollTop === 0) return;
   runScroll(scroller, 0, jump);
 }
 
@@ -148,7 +174,5 @@ export function scrollAppToElement(
 
   const delta = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
   const next = Math.max(0, scroller.scrollTop + delta - offset);
-  // Already within a few pixels — moving would read as a twitch.
-  if (Math.abs(next - scroller.scrollTop) < 4) return;
   runScroll(scroller, next, jump);
 }

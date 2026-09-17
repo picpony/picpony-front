@@ -7,6 +7,8 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type HTMLAttributes,
+  type ReactElement,
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -111,10 +113,21 @@ export function Tooltip({
      never calls `preventDefault`. `Popover` solves the same problem. */
   useEffect(() => {
     if (!open || !rendering) return;
-    const onReflow = () => measure();
+    /* Match Popover's one read per frame. Scroll events can arrive faster than
+       paint; measuring the anchor and bubble on each one only blocks that same
+       scroll without producing an extra visible position. */
+    let frame = 0;
+    const onReflow = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        measure();
+      });
+    };
     window.addEventListener('scroll', onReflow, { capture: true, passive: true });
     window.addEventListener('resize', onReflow, { passive: true });
     return () => {
+      if (frame) cancelAnimationFrame(frame);
       window.removeEventListener('scroll', onReflow, { capture: true });
       window.removeEventListener('resize', onReflow);
     };
@@ -139,7 +152,7 @@ export function Tooltip({
         /* 4dp corner, 8dp/4dp padding and a 24dp floor — M3's plain tooltip. No
            shadow: the inverse container is the whole separation. */
         'm3-tooltip bg-inverse-surface text-inverse-on-surface text-body-s z-tooltip',
-        'pointer-events-none flex min-h-6 items-center rounded-xs px-2 py-1',
+        'pointer-events-none flex min-h-6 items-center rounded-xs px-2 py-1 wrap-anywhere',
         /* `FastEffects` in **both** directions, which is what `Tooltip.kt` does.
            One spring both ways means the bubble cannot arrive and leave on two
            different clocks.
@@ -170,14 +183,34 @@ export function Tooltip({
  *     const { anchorRef, anchorProps, tooltip } = useTooltip(label);
  *     return <>{<button ref={anchorRef} {...anchorProps} />}{tooltip}</>;
  *
- * Pass `undefined` to opt out and the hook costs nothing: no element, no
- * listeners, no `aria-describedby`.
+ * An optional external target binds the same behaviour to a third-party-owned
+ * button, such as an editor toolbar. It preserves other description IDs.
+ * Pass `undefined` to opt out: no element, listeners or `aria-describedby`.
  */
-export function useTooltip(label?: string) {
+type TooltipAnchorProps = Pick<
+  HTMLAttributes<HTMLElement>,
+  'aria-describedby' | 'onPointerEnter' | 'onPointerLeave' | 'onPointerDown' | 'onFocus' | 'onBlur'
+>;
+
+export function useTooltip(label?: string, externalTarget?: HTMLElement | null): {
+  anchorRef: RefObject<HTMLElement | null>;
+  anchorProps: TooltipAnchorProps;
+  tooltip: ReactElement | null;
+} {
   const id = useId();
   const anchorRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [lastLabel, setLastLabel] = useState(label);
+  const [lastTarget, setLastTarget] = useState(externalTarget);
   const timer = useRef<number | null>(null);
+
+  // Disabled controls temporarily remove their label and event handlers. A
+  // later re-enable must start a fresh hover, not resurrect the old bubble.
+  if (lastLabel !== label || lastTarget !== externalTarget) {
+    setLastLabel(label);
+    setLastTarget(externalTarget);
+    setOpen(false);
+  }
 
   const cancel = useCallback(() => {
     if (timer.current !== null) window.clearTimeout(timer.current);
@@ -189,7 +222,54 @@ export function useTooltip(label?: string) {
     setOpen(false);
   }, [cancel]);
 
-  useEffect(() => cancel, [cancel]);
+  const showForPointer = useCallback((event: { pointerType: string }) => {
+    if (event.pointerType === 'touch') return;
+    cancel();
+    // Rest delay describes intent, so only the fade reads the motion preference.
+    timer.current = window.setTimeout(() => setOpen(true), HOVER_DELAY_MS);
+  }, [cancel]);
+
+  const showForFocus = useCallback((event: { target: EventTarget | null }) => {
+    if (event.target instanceof HTMLElement && event.target.matches(':focus-visible')) {
+      setOpen(true);
+    }
+  }, []);
+
+  // Third-party toolbars own their buttons. Bind the same behaviour directly
+  // instead of adding another tooltip recipe or a wrapper around their DOM.
+  useLayoutEffect(() => {
+    if (!externalTarget || !label) return;
+    anchorRef.current = externalTarget;
+    externalTarget.addEventListener('pointerenter', showForPointer);
+    externalTarget.addEventListener('pointerleave', hide);
+    externalTarget.addEventListener('pointerdown', hide);
+    externalTarget.addEventListener('focus', showForFocus);
+    externalTarget.addEventListener('blur', hide);
+    return () => {
+      cancel();
+      externalTarget.removeEventListener('pointerenter', showForPointer);
+      externalTarget.removeEventListener('pointerleave', hide);
+      externalTarget.removeEventListener('pointerdown', hide);
+      externalTarget.removeEventListener('focus', showForFocus);
+      externalTarget.removeEventListener('blur', hide);
+      if (anchorRef.current === externalTarget) anchorRef.current = null;
+    };
+  }, [externalTarget, label, showForPointer, showForFocus, hide, cancel]);
+
+  useLayoutEffect(() => {
+    if (!externalTarget || !label || !open) return;
+    const ids = new Set(externalTarget.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean));
+    ids.add(id);
+    externalTarget.setAttribute('aria-describedby', [...ids].join(' '));
+    return () => {
+      const remaining = externalTarget.getAttribute('aria-describedby')?.split(/\s+/)
+        .filter((value) => value && value !== id).join(' ');
+      if (remaining) externalTarget.setAttribute('aria-describedby', remaining);
+      else externalTarget.removeAttribute('aria-describedby');
+    };
+  }, [externalTarget, label, open, id]);
+
+  useEffect(() => cancel, [cancel, label]);
 
   /* Escape dismisses it, which WCAG 1.4.13 requires of any content that appears on
      hover: it has to go away without moving the pointer.
@@ -208,36 +288,17 @@ export function useTooltip(label?: string) {
   }, [open, hide]);
 
   if (!label) {
-    return { anchorRef, anchorProps: {} as Record<string, unknown>, tooltip: null };
+    return { anchorRef, anchorProps: {}, tooltip: null };
   }
 
   return {
     anchorRef,
     anchorProps: {
       'aria-describedby': open ? id : undefined,
-      onPointerEnter: (event: React.PointerEvent) => {
-        /* Touch is a press, not a hover: a finger arriving is the user activating
-           the control, and a bubble on the way in would sit over the thing they
-           just tapped. */
-        if (event.pointerType === 'touch') return;
-        cancel();
-        /* The rest delay is not animation, so it does not read the motion
-           preference. It used to, and zeroing it made every pointer that merely
-           *crossed* a toolbar fire a bubble per icon — which is the flicker the
-           delay exists to prevent, delivered specifically to the users who asked
-           for less movement. M3 specifies the delay as a behaviour of the tooltip,
-           not as part of its animation; only the fade below branches. */
-        timer.current = window.setTimeout(() => setOpen(true), HOVER_DELAY_MS);
-      },
+      onPointerEnter: showForPointer,
       onPointerLeave: hide,
       onPointerDown: hide,
-      onFocus: (event: React.FocusEvent) => {
-        // Keyboard focus only. A click focuses too, and the pointer path has
-        // already decided what to do about that.
-        if (event.target instanceof HTMLElement && event.target.matches(':focus-visible')) {
-          setOpen(true);
-        }
-      },
+      onFocus: showForFocus,
       onBlur: hide,
     },
     tooltip: <Tooltip label={label} anchorRef={anchorRef} open={open} id={id} />,

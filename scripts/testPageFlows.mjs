@@ -59,7 +59,11 @@ function harness() {
   react.useLayoutEffect = react.useEffect;
   const jsx = (type, props) => ({ type, props });
   return {
-    dependencies: { react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' } },
+    dependencies: {
+      react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+      // These fixtures exercise page state; actual popup geometry has browser coverage.
+      '@/components/Popover': { default: '@/components/Popover:default', estimateMenuHeight: () => 0 },
+    },
     render: (component) => { cursor = 0; return component(); },
     effects: async () => { const pending = pendingEffects; pendingEffects = []; pending.forEach((effect) => effect()); await flush(); },
     dispose: () => cleanups.forEach((cleanup) => cleanup?.()),

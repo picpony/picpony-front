@@ -265,6 +265,14 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
   clone.style.width = `${sourceRect.width}px`;
   clone.style.height = `${sourceRect.height}px`;
   clone.style.margin = '0';
+  /* The rect already includes an in-flight route's root transform. Carrying
+     that inline transform into the pinned clone applies the same travel twice
+     on a rapid second navigation. Descendant poses stay intact; only this
+     root's position and dimensions have been baked into the box above. */
+  clone.style.transform = 'none';
+  clone.style.translate = 'none';
+  clone.style.scale = 'none';
+  clone.style.rotate = 'none';
   // Its parent would otherwise shrink it to its content size.
   clone.style.flex = 'none';
 

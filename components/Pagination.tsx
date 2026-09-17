@@ -134,6 +134,10 @@ export default function Pagination({
   if (known) start = Math.min(start, Math.max(1, totalPages - span + 1));
   const count = known ? Math.min(span, totalPages) : span;
   const pages = Array.from({ length: count }, (_, i) => start + i);
+  // Keep a consecutive three-page window when the *container* is narrow.
+  // At either end, centre-on-current alone would leave holes in that window.
+  const compactCount = Math.min(count, 3);
+  const compactStart = Math.max(start, Math.min(currentPage - 1, start + count - compactCount));
 
   const navBtn = cn(
     /* **40dp, with `touch-size` for the floor.** The 40 is the button step; the
@@ -141,7 +145,7 @@ export default function Pagination({
        `touch-size` rather than `touch-target` because `data-ripple` sets
        `overflow: hidden` and would clip a hit-area pseudo-element out of
        hit-testing with it — this control's floor has to be a real box. */
-    'inline-flex h-10 min-w-10 touch-size cursor-pointer items-center justify-center rounded-full px-2',
+    'inline-flex h-10 w-10 touch-size cursor-pointer items-center justify-center rounded-full px-2',
     'text-on-surface-variant state-layer outline-none',
     'transition-ui',
     'focus-visible:ring-2 focus-ring',
@@ -160,7 +164,7 @@ export default function Pagination({
            same guard as `Skeleton`'s radius: `cn` is a plain join, so both would
            be emitted and the stylesheet's order — not the caller — would pick. */
         !HAS_TOP_MARGIN.test(className) && 'mt-12',
-        'flex items-center justify-center gap-1',
+        '@container/pagination flex items-center justify-center gap-1',
         className,
       )}
     >
@@ -170,7 +174,7 @@ export default function Pagination({
           disabled={!canPrev || disabled}
           aria-label="第一页"
           data-ripple
-          className={cn(navBtn, 'max-sm:hidden')}
+          className={cn(navBtn, '@max-xl/pagination:hidden')}
         >
           <MdFirstPage size={ICON.control} />
         </button>
@@ -182,10 +186,10 @@ export default function Pagination({
         disabled={!canPrev || disabled}
         aria-label="上一页"
         data-ripple
-        className={navBtn}
+        className={cn(navBtn, '@xl/pagination:w-auto')}
       >
         <MdChevronLeft size={ICON.control} />
-        <span className="max-sm:hidden text-label-l pr-1">上一页</span>
+        <span className="@max-xl/pagination:hidden text-label-l pr-1">上一页</span>
       </button>
 
       <div className="flex items-center gap-1">
@@ -215,9 +219,12 @@ export default function Pagination({
                 active
                   ? 'bg-primary text-on-primary text-label-l-emphasized state-layer'
                   : 'text-label-l text-on-surface-variant state-layer',
-                // Beyond five numbers the row overflows a 390px viewport, so
-                // the outer two collapse instead of wrapping to a second line.
-                Math.abs(page - currentPage) === siblings && 'max-sm:hidden',
+                // A dialog and a column beside the app drawer can both be
+                // narrow on a wide viewport. The pager owns this breakpoint.
+                (page < compactStart || page >= compactStart + compactCount) && '@max-xl/pagination:hidden',
+                // Three numbers plus two 48dp touch targets need 256px.
+                // Below that, keep the current page between the two arrows.
+                !active && '@max-3xs/pagination:hidden',
               )}
             >
               {page}
@@ -232,9 +239,9 @@ export default function Pagination({
         disabled={!canNext || disabled}
         aria-label="下一页"
         data-ripple
-        className={navBtn}
+        className={cn(navBtn, '@xl/pagination:w-auto')}
       >
-        <span className="max-sm:hidden text-label-l pl-1">下一页</span>
+        <span className="@max-xl/pagination:hidden text-label-l pl-1">下一页</span>
         <MdChevronRight size={ICON.control} />
       </button>
 
@@ -244,7 +251,7 @@ export default function Pagination({
           disabled={!canNext || disabled}
           aria-label="最后一页"
           data-ripple
-          className={cn(navBtn, 'max-sm:hidden')}
+          className={cn(navBtn, '@max-xl/pagination:hidden')}
         >
           <MdLastPage size={ICON.control} />
         </button>

@@ -78,7 +78,7 @@ export default function Spinner({
       width={cfg.width}
       height={cfg.width}
       viewBox="0 0 100 100"
-      className={cn(!determinate && 'm3-progress-spin', determinate && '-rotate-90')}
+      className={cn('shrink-0', !determinate && 'm3-progress-spin', determinate && '-rotate-90')}
       role="progressbar"
       aria-label={label || '加载中'}
       aria-valuenow={determinate ? pct : undefined}
@@ -119,7 +119,7 @@ export default function Spinner({
       <div
         className={cn(
           'flex items-center justify-center gap-2',
-          tone === 'on-primary' ? 'text-on-primary' : 'text-on-surface-variant',
+          tone === 'on-primary' ? 'text-on-primary' : tone === 'primary' && 'text-on-surface-variant',
           className,
         )}
       >

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useRef, type ComponentType, type ReactNode } from 'react';
+import { Suspense, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
   MdBook,
   MdDashboard,
@@ -151,6 +151,9 @@ const DEFAULT_TAB: TabId = 'welcome';
 /** Rapid changes replace the latest tab entry; the first change remains undoable. */
 const TAB_PUSH_COALESCE_MS = Math.round(400 * MOTION_SPEED_SCALE.slow);
 
+/** 12rem navigation, 3rem panel insets and 33rem for the actual admin content. */
+const ADMIN_SPLIT_MIN_REM = 48;
+
 function AdminPanel() {
   const searchParams = useBackgroundSearchParams();
   const { user, token: sessionToken, ready } = useSession();
@@ -160,6 +163,20 @@ function AdminPanel() {
   const isEditor = userRole === 'editor';
   const isAdmin = ['super_admin', 'admin'].includes(userRole);
   const isSuperAdmin = userRole === 'super_admin';
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    if (!column) return;
+    const measure = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      setWide(column.clientWidth >= ADMIN_SPLIT_MIN_REM * rem);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    return () => observer.disconnect();
+  }, [ready, isAdmin, isEditor]);
   const visibleTabs = TABS.filter((tab) =>
     tab.access === 'staff' || (tab.access === 'admin' ? isAdmin : isSuperAdmin));
 
@@ -201,14 +218,14 @@ function AdminPanel() {
     );
   }
   return (
-    <div className="max-w-6xl mx-auto">
+    <div ref={columnRef} className="max-w-6xl mx-auto">
       {/* `surface-container-low`, not `surface`: the app scroller behind this is itself
           `bg-surface`, so a panel painted the same tone was a card the exact colour of
           the page it sits on. Same fault AGENTS.md's layout note records for /settings'
           six invisible section wrappers. */}
-      <div className="bg-surface-container-low rounded-md overflow-hidden flex flex-col md:flex-row">
+      <div className={`bg-surface-container-low rounded-md overflow-hidden flex ${wide ? 'flex-row' : 'flex-col'}`}>
         
-        <div className="md:w-48 shrink-0 border-b md:border-b-0 border-outline-variant">
+        <div className={wide ? 'w-48 shrink-0' : 'min-w-0 border-b border-outline-variant'}>
           {/* `Tabs variant="rail"`, not a hand-rolled pill list: this was one of the app's
               four tab implementations and declared no ARIA roles — fourteen destinations a
               screen reader read as a run of buttons, no arrow keys, no current-tab
@@ -217,6 +234,7 @@ function AdminPanel() {
               item, and the row already says "current" with a container pair. */}
           <Tabs
             variant="rail"
+            orientation={wide ? 'vertical' : 'horizontal'}
             label="管理面板分区"
             className="p-2"
             value={activeTab}
@@ -228,7 +246,7 @@ function AdminPanel() {
             }))}
           />
         </div>
-        <div className="flex-1 p-4 sm:p-6 min-h-96 md:min-h-150 relative">
+        <div className={`flex-1 min-w-0 p-4 sm:p-6 relative ${wide ? 'min-h-150' : 'min-h-96'}`}>
           {/* A fade, deliberately not the tab shared axis: `TabPanes` needs both panes
               alive to slide, and these fourteen are `dynamic(..., { ssr: false })` — keeping
               them mounted would mount fourteen admin tabs, each with its own fetch. The

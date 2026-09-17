@@ -221,7 +221,7 @@ export default function TeamTab({ token }: { token: string }) {
             onClick={() => handleDelete(m.id)}
             disabled={saving || deleteMutation.busy}
             icon={<MdDelete size={ICON.dense} />}
-            aria-label={`删除 ${m.name}`} className="text-error"
+            aria-label={`删除 ${m.name}`} variant="danger-text"
           />
         </>
       ),

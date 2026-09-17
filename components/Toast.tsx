@@ -97,7 +97,7 @@ export function ToastContainer() {
 
   return createPortal(
     <div
-      className="pointer-events-none fixed top-6 left-1/2 z-toast flex -translate-x-1/2 flex-col items-center"
+      className="pointer-events-none fixed top-6 inset-x-4 z-toast mx-auto flex w-fit max-w-140 flex-col items-center"
       role="status"
       aria-live={urgent ? 'assertive' : 'polite'}
       aria-atomic="false"
@@ -113,10 +113,6 @@ export function ToastContainer() {
 function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: number) => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  /* A plain effect, not `useGSAP`: nothing here is a GSAP tween, and that import
-     would pull the engine into the root layout's chunk for three `animate()`
-     calls. Empty deps: `ToastItem` is keyed by `toast.id` at its call site, so a
-     different message is a different component rather than a re-run of this one. */
   /* A **layout** effect, because `enter` carries a backwards fill: created in a
      passive effect the browser paints the card at its CSS resting position first
      and only then snaps it back to the start of the slide — one frame of the
@@ -128,93 +124,65 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
       const card = wrap.firstElementChild as HTMLElement;
 
       const tier = motionTier();
-      if (tier === 'off') {
-        const timer = setTimeout(() => onClose(toast.id), toast.duration);
-        return () => clearTimeout(timer);
+      const enterMs = scaledMs(DURATION.long * 1000);
+      const running: Animation[] = [];
+      let active = true;
+
+      if (tier !== 'off') {
+        /* A short rise from the edge, with the shared 8px travel under reduced
+           motion. Only the arrival owns these frames; a delayed exit with a
+           backwards fill would replace them before that exit even starts. */
+        const enter = card.animate(
+          [
+            { transform: `translateY(${tier === 'reduced' ? -8 : -16}px)`, opacity: 0 },
+            { transform: 'none', opacity: 1 },
+          ],
+          { duration: enterMs, easing: EASE.decelerate, fill: 'backwards' },
+        );
+        running.push(enter);
+        // The ordinary styles are the resting pose; no layer needs to stay
+        // promoted throughout the reading time.
+        enter.finished.then(() => enter.cancel(), () => {});
       }
 
-      /* Reduced halves the slide rather than removing it. A snackbar docked to the
-         top edge that fades in place has nothing to say about where it came from,
-         and 8px is the distance every other entrance takes under this tier. The
-         height collapse is not travel of the *message* — it is the gap under it
-         closing. */
-      const reduced = tier === 'reduced';
-      const slide = reduced ? -8 : -16;
-      const slideOut = reduced ? -4 : -8;
+      /* Dwell is reading time, so only the travel goes through `scaledMs`.
+         Create the exit when it actually starts: a notification can wrap to more
+         lines or the user can change the motion preference while reading it.
+         Scheduling all three tracks at mount captured the old height and old
+         preference for seconds, then clipped the still-visible message. */
+      const timer = setTimeout(() => {
+        if (motionTier() === 'off') {
+          onClose(toast.id);
+          return;
+        }
 
-      /* A snackbar's own motion is a fade plus a short slide from the edge it is
-         docked to. No scale and no overshoot: a spring on scale made a message
-         about a saved form bounce, and the bounce is the loudest thing in the
-         frame for something the user did not ask to see.
+        const wrapHeight = wrap.offsetHeight;
+        const pose = getComputedStyle(card);
+        const from = { transform: pose.transform, opacity: pose.opacity };
+        const exitMs = scaledMs(DURATION.short * 1000);
+        running.forEach((animation) => animation.cancel());
 
-         In on `decelerate` because it is arriving, out on `accelerate` because it
-         is leaving. The height collapse is the *same* leg as the fade — the card
-         going and the gap closing are one dismissal — so it shares the exit's
-         clock and curve. The small negative offset stays: the gap starts closing
-         just before the card is fully gone, so the queue reads as emptying rather
-         than as jumping. */
-
-      /* The dwell is wall-clock and the two legs are not. A snackbar's duration is
-       * how long there is to *read* it, not how long it takes to arrive, so the
-       * speed preference must not touch it — under the GSAP timeline that needed
-       * dividing back out of the global timeScale, and a 3000ms message was on
-       * screen for 1500ms at 快速: the tier a motion-sensitive reader is most likely
-       * to pick was the one that took half the message away. On WAAPI there is no
-       * global scale to fight, so the split is simply stated: the two travel legs
-       * go through `scaledMs`, the dwell does not. */
-      const enterMs = scaledMs(DURATION.long * 1000);
-      const exitMs = scaledMs(DURATION.short * 1000);
-      const exitDelay = enterMs + toast.duration;
-      /* The gap starts closing 80ms after the card starts leaving, so the queue
-         reads as emptying rather than as jumping. */
-      const collapseDelay = exitDelay + scaledMs(80);
-
-      /* The height has to be a number for WAAPI to interpolate it — `auto` is not
-         a value it can animate from. Read once, before anything is written. */
-      const wrapHeight = wrap.offsetHeight;
-
-      const enter = card.animate(
-        [
-          { transform: `translateY(${slide}px)`, opacity: 0 },
-          { transform: 'translateY(0px)', opacity: 1 },
-        ],
-        { duration: enterMs, easing: EASE.decelerate, fill: 'both' },
-      );
-
-      const exit = card.animate(
-        [
-          { transform: 'translateY(0px)', opacity: 1 },
-          { transform: `translateY(${slideOut}px)`, opacity: 0 },
-        ],
-        /* `forwards`, never `both`. A backwards fill puts an animation in effect
-           during its *delay* phase, and script-created animations resolve in
-           creation order — so this one's 0% keyframe replaced `enter`'s animated
-           values from the first frame and the entrance never appeared. Same
-           mechanism `lib/ripple.ts` documents from the other side. */
-        { duration: exitMs, delay: exitDelay, easing: EASE.accelerate, fill: 'forwards' },
-      );
-
-      const collapse = wrap.animate(
-        [{ height: `${wrapHeight}px` }, { height: '0px' }],
-        /* `forwards` for the same reason, and here it costs something extra: a
-           backwards fill would pin the wrapper to its mount-time height for the
-           whole dwell, so a late font swap or a reflow to two lines overflowed
-           the box. */
-        { duration: exitMs, delay: collapseDelay, easing: EASE.accelerate, fill: 'forwards' },
-      );
-
-      /* The collapse is the last thing to finish, so it owns the dismissal.
-         `finished` rejects on `cancel()` — what the cleanup does on unmount — so
-         the rejection handler must be a no-op rather than a second `onClose`. */
-      collapse.finished.then(
-        () => onClose(toast.id),
-        () => {},
-      );
+        const exit = card.animate(
+          [from, { transform: 'translateY(-8px)', opacity: 0 }],
+          { duration: exitMs, easing: EASE.accelerate, fill: 'forwards' },
+        );
+        /* Closing the gap is the same leg as the departing card, on its clock
+           and curve. It begins 80ms into the fade so the queue empties smoothly.
+           `forwards` leaves the wrapper at its natural height until then. */
+        const collapse = wrap.animate(
+          [{ height: `${wrapHeight}px` }, { height: '0px' }],
+          { duration: exitMs, delay: scaledMs(80), easing: EASE.accelerate, fill: 'forwards' },
+        );
+        running.push(exit, collapse);
+        collapse.finished.then(() => {
+          if (active) onClose(toast.id);
+        }, () => {});
+      }, enterMs + toast.duration);
 
       return () => {
-        enter.cancel();
-        exit.cancel();
-        collapse.cancel();
+        active = false;
+        clearTimeout(timer);
+        running.forEach((animation) => animation.cancel());
       };
     },
     /* Mount only, and legitimately: `ToastItem` is keyed by `toast.id`, `toast`
@@ -226,7 +194,7 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
   const style = severityStyles[toast.type];
 
   return (
-    <div ref={wrapRef} className="pointer-events-auto overflow-hidden">
+    <div ref={wrapRef} className="pointer-events-auto max-w-full overflow-hidden">
       <div
         /* M3's snackbar, by its own tokens: extra-small corner (4dp), `body-medium`
            for the message, elevation level 3, and a cap so a long sentence wraps.
@@ -239,7 +207,7 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: (id: numb
         <span className="shrink-0 [&>svg]:block" aria-hidden="true">
           {style.icon}
         </span>
-        <span className="text-body-m">{toast.message}</span>
+        <span className="text-body-m min-w-0 wrap-anywhere">{toast.message}</span>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import Spinner from './Spinner';
 import { buttonClasses, type ButtonSize, type ButtonVariant } from './buttonStyles';
+import { cn } from '@/lib/utils';
 
 export type { ButtonSize, ButtonVariant, ButtonClassOptions } from './buttonStyles';
 /* Re-exported so `import { buttonClasses } from '@/components/Button'` keeps working
@@ -16,6 +17,8 @@ interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
   size?: ButtonSize;
   /** Leading icon; hidden from a11y since the label carries the meaning. */
   icon?: ReactNode;
+  /** Trailing icon, such as a disclosure arrow; uses the same sized slot. */
+  trailingIcon?: ReactNode;
   /** Swaps the icon for a spinner and blocks interaction. */
   loading?: boolean;
   /** Hide the label below `sm`, keeping a square icon-only button. */
@@ -30,6 +33,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
     variant = 'tonal',
     size = 'md',
     icon,
+    trailingIcon,
     loading = false,
     responsiveLabel = false,
     fullWidth = false,
@@ -41,9 +45,10 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   ref,
 ) {
   const isDisabled = disabled || loading;
-  const spinnerTone = variant === 'filled' ? 'on-primary'
-    : variant === 'danger' || variant === 'success' || variant === 'warning' ? 'inherit'
-    : 'primary';
+  const hasIcon = Boolean(icon || trailingIcon);
+  const replaceLabel = loading && !hasIcon && Boolean(children);
+  // A busy action retains its own ink and container; only its glyph changes.
+  const spinner = <Spinner size={size === 'lg' ? 'md' : 'sm'} tone="inherit" />;
 
   /* Below `sm`, `responsiveLabel` puts the label behind `display: none`, which
      removes it from the accessibility tree as well as from layout — so derive an
@@ -72,22 +77,41 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
         responsiveLabel,
         fullWidth,
         disabled: isDisabled,
+        loading,
         className,
       })}
       {...rest}
       aria-label={derivedLabel}
+      aria-busy={loading || rest['aria-busy'] || undefined}
     >
-      {loading ? (
-        <Spinner size="sm" tone={spinnerTone} />
-      ) : (
-        icon && (
-          <span aria-hidden="true" className="shrink-0 [&>svg]:block">
-            {icon}
-          </span>
-        )
+      {icon && (
+        <span aria-hidden="true" className="shrink-0 [&>svg]:block">
+          {loading ? spinner : icon}
+        </span>
+      )}
+      {loading && !hasIcon && (
+        /* A text-only action keeps its own footprint while busy. Adding a new
+           leading slot moves every neighbour in a dialog's action row. */
+        <span
+          aria-hidden="true"
+          className={replaceLabel ? 'pointer-events-none absolute inset-0 grid place-items-center' : 'shrink-0'}
+        >
+          {spinner}
+        </span>
       )}
       {children && (
-        <span className={responsiveLabel ? 'max-sm:hidden' : undefined}>{children}</span>
+        /* Opacity preserves both the measured label and the button's name. */
+        <span className={cn('min-w-0 truncate', responsiveLabel && 'max-sm:hidden', replaceLabel && 'opacity-0')}>
+          {children}
+        </span>
+      )}
+      {trailingIcon && (
+        <span
+          aria-hidden="true"
+          className={cn('shrink-0 [&>svg]:block', responsiveLabel && icon && 'max-sm:hidden')}
+        >
+          {loading && !icon ? spinner : trailingIcon}
+        </span>
       )}
     </button>
   );

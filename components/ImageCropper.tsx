@@ -326,8 +326,8 @@ export default function ImageCropper({
             <ErrorRetry size="inline" title="图片无法读取，请选择其他图片" onRetry={onClose} retryLabel="重新选择" />
           </div>
         ) : !ready && (
-          <div className="absolute inset-0 grid place-items-center">
-            <Spinner size="lg" tone="on-primary" />
+          <div className="text-on-media absolute inset-0 grid place-items-center">
+            <Spinner size="lg" tone="inherit" />
           </div>
         )}
 

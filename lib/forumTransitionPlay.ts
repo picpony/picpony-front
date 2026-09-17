@@ -2,6 +2,7 @@
 
 import { DURATION, gsap, spring } from '@/lib/motion';
 import { motionTier } from '@/lib/appearance';
+import { routeTransitActive } from '@/lib/pageTransit';
 import type { ForumOrigin } from '@/lib/forumTransition';
 
 /**
@@ -18,21 +19,26 @@ export function playForumContainerTransform(
   content: HTMLElement | null,
   origin: ForumOrigin,
 ): () => void {
+  const tier = motionTier();
+  /* In the reduced tier the route already provides this surface's one fade.
+     Starting a nested fade would multiply the opacity and delay the content.
+     A standalone appearance still gets the reduced fallback below. */
+  if (tier === 'off' || (tier === 'reduced' && routeTransitActive(card))) return () => {};
   const to = card.getBoundingClientRect();
   if (to.width === 0 || to.height === 0) return () => {};
 
   /* Reduced: the card fades up in place. Travel and non-uniform scale are the two things the
      tier removes, and a fade is what "the post you pressed is now in front of you" becomes. One
      clock so it cannot read as two events. */
-  if (motionTier() === 'reduced') {
+  if (tier === 'reduced') {
     const fade = gsap.fromTo(
-      [card, content].filter((el): el is HTMLElement => Boolean(el)),
+      card,
       { autoAlpha: 0 },
       { autoAlpha: 1, ...spring('defaultEffects'), clearProps: 'opacity,visibility' },
     );
     return () => {
       fade.kill();
-      gsap.set([card, content].filter(Boolean) as HTMLElement[], {
+      gsap.set(card, {
         clearProps: 'opacity,visibility',
       });
     };

@@ -119,9 +119,10 @@ export default function CommentComposer({
               no state layer and a 16px hit area. */}
           <IconButton
             size="sm"
+            dismiss
             onClick={onCancelReply}
             aria-label="取消回复"
-            className="-me-1.5 ml-auto shrink-0 text-error"
+            className="-me-1.5 ml-auto shrink-0"
             icon={<MdClose size={ICON.dense} />}
           />
         </div>

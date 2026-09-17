@@ -35,7 +35,7 @@ import { getAppScroller, heroOwnsScreen, setHeroBusyCheck } from '@/lib/appScrol
 import { DURATION, EASE } from '@/lib/motionTokens';
 import { SPRINGS, SPRING_DURATION, springEase, type SpringName } from '@/lib/spring';
 import { SPRING_EFFECTS_FOR } from '@/lib/springTiming';
-import { beginPageTransit, notifyThemeWipeStart, setThemeWipeGuard } from '@/lib/pageTransit';
+import { beginPageTransit, notifyThemeWipeStart, routeTransitActive, setThemeWipeGuard } from '@/lib/pageTransit';
 import { setTabIntent, tabIntent } from '@/lib/tabIntent';
 import {
   applyInstantTabScroll,
@@ -332,10 +332,9 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
    * animated *radius* sweeps area growing as its square — squaring the front-loading
    * (at 150ms of 550: this curve 3% flipped, `emphasized` 65%, `decelerate` 87%).
    * The radius wants a curve slow at BOTH ends: `--ease-loop`'s value, spelled out
-   * literally because the rule lands in the view-transition pseudo tree, where an
-   * unresolved `var()` would silently fall back to `ease`. Same documented exception
-   * as the hero's REVEAL_EASING and the top loader; keep the literal in sync with
-   * the token. 550ms goes through `motionScale()`; the reduced tier cross-fades
+   * through EASE because the rule lands in the view-transition pseudo tree, where an
+   * unresolved `var()` would silently fall back to `ease`. 550ms goes through
+   * `motionScale()`; the reduced tier cross-fades
    * instead and never uses this curve — no radius, so one-sided decelerate fits. */
   const wipeMs = Math.round(550 * motionScale());
   style.textContent =
@@ -346,7 +345,7 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
       to { opacity: 1; }
     }
     html:root[data-theme-vt="${id}"]::view-transition-new(root) {
-      animation: ${animationName} ${Math.round(400 * motionScale())}ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+      animation: ${animationName} ${Math.round(DURATION.long * 1000 * motionScale())}ms ${EASE.decelerate} both;
     }
   `
       : `
@@ -355,7 +354,7 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
       to { clip-path: circle(${radiusPercent.toFixed(3)}% ${at}); }
     }
     html:root[data-theme-vt="${id}"]::view-transition-new(root) {
-      animation: ${animationName} ${wipeMs}ms cubic-bezier(0.4, 0, 0.6, 1) both;
+      animation: ${animationName} ${wipeMs}ms ${EASE.loop} both;
     }
   `;
 
@@ -501,7 +500,7 @@ export function useDrawerSwipe({
        *  are invisible to `revert()` and an interrupted drag strands the panel. */
       const place = contextSafe!((x: number) => {
         const d = drawer();
-        if (d) gsap.set(d, { x });
+        if (d) gsap.set(d, { x, xPercent: 0 });
         const s = scrim();
         if (s) gsap.set(s, { opacity: width > 0 ? (x + width) / width : 0 });
       });
@@ -511,11 +510,22 @@ export function useDrawerSwipe({
         if (!d) return false;
         width = d.offsetWidth;
         if (width <= 0) return false;
-        startOffset = openRef.current ? 0 : -width;
+
+        /* Take the pose that is actually on screen, including Tailwind's
+         * individual translate during a tap-driven transition. A new drag can
+         * catch either that transition or a previous GSAP release; using the
+         * boolean endpoint snapped both of them home under the finger. */
+        const pose = getComputedStyle(d);
+        const translate = pose.translate.split(' ')[0];
+        const independentX = (parseFloat(translate) || 0) * (translate.endsWith('%') ? width / 100 : 1);
+        const transformX = pose.transform === 'none' ? 0 : new DOMMatrixReadOnly(pose.transform).m41;
+        startOffset = gsap.utils.clamp(-width, 0, independentX + transformX);
+        gsap.killTweensOf(d);
+        const s = scrim();
+        if (s) gsap.killTweensOf(s);
         active = true;
         // Suppress the class-level transitions for the duration of the drag.
         d.style.transition = 'none';
-        const s = scrim();
         if (s) {
           s.style.transition = 'none';
           // The scrim is `pointer-events-none` while closed; it must not start
@@ -704,6 +714,11 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
       if (items.length === 0) return;
       if (played.current) return;
       played.current = true;
+      /* The route's pre-commit marker is already present when this grid mounts.
+         Its page is entering as one surface; a child cascade here adds a second
+         clock and a transform per card during the most expensive first paint.
+         Latch the skipped entrance too, so a later update cannot replay it. */
+      if (routeTransitActive(root)) return;
 
       const rootTop = root.getBoundingClientRect().top;
       const ordered = items

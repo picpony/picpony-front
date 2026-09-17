@@ -3,7 +3,7 @@
 import { gsap, playSharedAxis } from '@/lib/motion';
 import { DURATION, PAGE_FADE_TIMING } from '@/lib/motionTokens';
 import { motionTier } from '@/lib/appearance';
-import { beginPageTransit } from '@/lib/pageTransit';
+import { setRouteTransit } from '@/lib/pageTransit';
 import { arm, cancelRouteCrossFade, routeMove, settleEntryAnimations } from '@/lib/routeCrossFade';
 import type { RouteSnapshot } from '@/lib/pageSnapshot';
 
@@ -24,6 +24,7 @@ export function playRouteCrossFade(
   /* A second navigation mid-fade drops the older frame rather than stacking two stale layers;
      the snapshot just taken is of whatever was on screen a moment ago, the truer thing to fade. */
   cancelRouteCrossFade();
+  setRouteTransit(true);
 
   /* Before the clone goes in, so this cannot resolve into it — belt and braces beside the
      attribute strip in `pageSnapshot`. */
@@ -36,9 +37,9 @@ export function playRouteCrossFade(
      the picture pasted on top. A detail is a layer above the plane, not a cell in it. */
   const fadeOnly = snapshot.node.dataset.routeFadeOnly !== undefined;
   const move = from === to || fadeOnly ? null : routeMove(from, to);
-  /* Holds the incoming page's footer out until the move settles, so the mark never arrives
-     ahead of the page it belongs to. Both branches below arm it and release it when done. */
-  const endTransit = beginPageTransit();
+  /* The footer is already inside `page`, so it travels and fades on this same
+     clock. Only a tab switch needs to hide it separately: there the moving
+     panes sit above the footer, and their final height changes at settlement. */
   if (move && page) {
     /* The entry keyframe has to go: it is a fade with a 12px rise that outranks inline styles
        while running, so leaving it in place would fight every frame GSAP writes. Never restore
@@ -62,10 +63,7 @@ export function playRouteCrossFade(
        rather than letting cards sit pressable-but-offset; `arm()` covers the rest. No removal:
        `handle.finish` is idempotent and the node is discarded at the next navigation. */
     page.addEventListener('pointerdown', () => handle.finish(), { capture: true });
-    arm(layer, () => {
-      handle.finish();
-      endTransit();
-    });
+    arm(layer, handle.finish);
     return;
   }
 
@@ -111,7 +109,6 @@ export function playRouteCrossFade(
        dimmed — or hidden during the overlap delay. Land it on the same clean
        state as a completed fade before releasing the transition. */
     if (page) gsap.set(page, { clearProps: 'opacity,visibility' });
-    endTransit();
   });
 }
 

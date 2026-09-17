@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
 import { readToken } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
-import { getAssetUrl } from '@/lib/utils';
+import { clamp, getAssetUrl } from '@/lib/utils';
+import { ICON } from '@/lib/icons';
+import { useTooltip } from '@/components/Tooltip';
 import { isImageHeroTransitionRunning, waitForImageHeroTransition } from '@/lib/hero';
 import '@wangeditor/editor/dist/css/style.css';
 
@@ -20,6 +22,15 @@ interface RichTextEditorProps {
   getToken?: () => string | null;
 }
 
+interface EditorHint {
+  target: HTMLButtonElement;
+  label?: string;
+}
+
+function EditorControlTooltip({ target, label }: EditorHint) {
+  return useTooltip(label, target).tooltip;
+}
+
 export default function RichTextEditor({
   value,
   onChange,
@@ -31,11 +42,13 @@ export default function RichTextEditor({
 }: RichTextEditorProps) {
   const editorRef = useRef<IDomEditor | null>(null);
   const toolbarRef = useRef<Toolbar | null>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const toolbarContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingRef = useRef(false);
   const generationRef = useRef(0);
   const uploadsRef = useRef(new Set<AbortController>());
+  const [hints, setHints] = useState<EditorHint[]>([]);
   const latest = useRef({ value, onChange, placeholder, disabled, enableImageUpload, imageUploadUrl, getToken });
 
   useLayoutEffect(() => {
@@ -64,12 +77,14 @@ export default function RichTextEditor({
     const generation = ++generationRef.current;
     const uploads = uploadsRef.current;
     let semantics: MutationObserver | null = null;
+    let resize: ResizeObserver | null = null;
+    let placementFrame = 0;
     let cancelSelection = () => {};
     const isCurrent = () => generationRef.current === generation;
 
     const init = async () => {
       const { createEditor, createToolbar, DomEditor } = await import('@wangeditor/editor');
-      if (!isCurrent() || !editorContainerRef.current || !toolbarContainerRef.current) return;
+      if (!isCurrent() || !editorContainerRef.current || !toolbarContainerRef.current || !shellRef.current) return;
       const config = latest.current;
       const editorConfig: Partial<IEditorConfig> = {
         autoFocus: false,
@@ -165,11 +180,11 @@ export default function RichTextEditor({
           editable.setAttribute('aria-multiline', 'true');
           editable.setAttribute('aria-label', latest.current.placeholder);
         }
-        toolbarContainerRef.current?.querySelectorAll<HTMLButtonElement>('button[data-tooltip]').forEach((button) => {
+        shellRef.current?.querySelectorAll<HTMLButtonElement>('button[data-tooltip]').forEach((button) => {
           const label = button.dataset.tooltip?.trim();
           if (label) button.setAttribute('aria-label', label);
         });
-        toolbarContainerRef.current?.querySelectorAll<HTMLButtonElement>('button[data-menu-key]').forEach((button) => {
+        shellRef.current?.querySelectorAll<HTMLButtonElement>('button[data-menu-key]').forEach((button) => {
           if (button.getAttribute('aria-label')) return;
           const key = button.dataset.menuKey ?? '';
           const label = menuLabels[key] ?? button.textContent?.trim();
@@ -178,10 +193,55 @@ export default function RichTextEditor({
           // added above; the key itself is an implementation detail.
           button.setAttribute('aria-label', label || '编辑器工具栏操作');
         });
+        const nextHints = Array.from(shellRef.current?.querySelectorAll<HTMLButtonElement>('button[data-menu-key]') ?? [])
+          .map((target) => ({
+            target,
+            label: target.matches(':disabled, [aria-disabled="true"], .disabled')
+              ? undefined : target.getAttribute('aria-label') ?? undefined,
+          }));
+        setHints((previous) => previous.length === nextHints.length && nextHints.every((hint, index) =>
+          hint.target === previous[index].target && hint.label === previous[index].label,
+        ) ? previous : nextHints);
+      };
+
+      // The package clamps to the browser, while this editor lives in a narrower
+      // clipped column. Keep its native panels inside that column and its focus
+      // boundary, including when the editor is inside an application dialog.
+      const placePanels = () => {
+        if (placementFrame) return;
+        placementFrame = requestAnimationFrame(() => {
+          placementFrame = 0;
+          const shell = shellRef.current;
+          if (!isCurrent() || !shell) return;
+          const panels = Array.from(shell.querySelectorAll<HTMLElement>('.w-e-drop-panel, .w-e-select-list, .w-e-modal'));
+          const maxWidth = `${Math.max(0, shell.clientWidth - 16)}px`;
+          for (const panel of panels) {
+            if (panel.style.maxWidth !== maxWidth) panel.style.maxWidth = maxWidth;
+          }
+          const bounds = shell.getBoundingClientRect();
+          const left = bounds.left + shell.clientLeft + 8;
+          const right = left + shell.clientWidth - 16;
+          const offsets = panels.filter((panel) => panel.getClientRects().length).map((panel) => {
+            const rect = panel.getBoundingClientRect();
+            const previous = parseFloat(panel.style.translate) || 0;
+            const originalLeft = rect.left - previous;
+            return { panel, offset: clamp(originalLeft, left, right - rect.width) - originalLeft };
+          });
+          for (const { panel, offset } of offsets) {
+            if (Math.abs((parseFloat(panel.style.translate) || 0) - offset) > 0.5) {
+              panel.style.translate = `${offset}px`;
+            }
+          }
+        });
       };
       nameControls();
-      semantics = new MutationObserver(nameControls);
-      semantics.observe(toolbarContainerRef.current, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-tooltip'] });
+      semantics = new MutationObserver(() => { nameControls(); placePanels(); });
+      semantics.observe(shellRef.current, {
+        childList: true, subtree: true, attributes: true,
+        attributeFilter: ['data-tooltip', 'class', 'disabled', 'aria-disabled', 'style'],
+      });
+      resize = new ResizeObserver(placePanels);
+      resize.observe(shellRef.current);
     };
     void init().catch((err) => {
       if (isCurrent()) console.error('编辑器初始化异常:', err);
@@ -190,6 +250,8 @@ export default function RichTextEditor({
     return () => {
       generationRef.current += 1;
       semantics?.disconnect();
+      resize?.disconnect();
+      if (placementFrame) cancelAnimationFrame(placementFrame);
       for (const controller of uploads) controller.abort();
       uploads.clear();
       // Capture these instances now. A deferred teardown must never destroy the
@@ -237,8 +299,23 @@ export default function RichTextEditor({
        primary *is* the indicator — no ring beside it (two nested boxes is the
        defect CodeInput records removing) — and the corner is the text field's
        4dp step, not the chip's 8dp. */
-    <div className="w-full overflow-hidden rounded-xs border border-outline transition-ui focus-within:border-2 focus-within:border-primary-ink">
+    <div ref={shellRef} className="rich-text-editor w-full min-w-0 overflow-hidden rounded-xs border border-outline">
       <style>{`
+        /* Paint the focused 2dp boundary inward. Changing the actual border
+           moved every toolbar target by 1px and rewrapped a nearly full row. */
+        .rich-text-editor {
+          outline: 2px solid transparent;
+          outline-offset: -2px;
+          transition:
+            border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+            outline-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
+        }
+
+        .rich-text-editor:focus-within {
+          border-color: var(--md-sys-color-primary-ink);
+          outline-color: var(--md-sys-color-primary-ink);
+        }
+
         /* wangEditor is themed entirely through its own w-e custom properties.
            Pointing them at the design tokens means the editor follows the
            scheme on its own, and neither branch can drift. */
@@ -248,7 +325,7 @@ export default function RichTextEditor({
         .w-e-select-list,
         .w-e-drop-panel,
         .w-e-bar-item-group .w-e-bar-item-menus-container {
-          --w-e-textarea-bg-color: var(--md-sys-color-surface-container-lowest);
+          --w-e-textarea-bg-color: var(--md-sys-color-surface);
           --w-e-textarea-color: var(--md-sys-color-on-surface);
           --w-e-textarea-border-color: var(--md-sys-color-outline-variant);
           --w-e-textarea-slight-border-color: var(--md-sys-color-outline-variant);
@@ -262,10 +339,10 @@ export default function RichTextEditor({
           --w-e-textarea-selected-border-color: var(--md-sys-color-primary-ink);
           --w-e-textarea-handler-bg-color: var(--md-sys-color-primary-ink);
           --w-e-toolbar-color: var(--md-sys-color-on-surface-variant);
-          --w-e-toolbar-bg-color: var(--md-sys-color-surface-container-low);
+          --w-e-toolbar-bg-color: var(--md-sys-color-surface-container-highest);
           --w-e-toolbar-active-color: var(--md-sys-color-on-surface);
           --w-e-toolbar-active-bg-color: var(--md-sys-color-surface-container-high);
-          --w-e-toolbar-disabled-color: var(--md-sys-color-outline);
+          --w-e-toolbar-disabled-color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
           --w-e-toolbar-border-color: var(--md-sys-color-outline-variant);
           --w-e-modal-button-bg-color: var(--md-sys-color-surface-container-high);
           --w-e-modal-button-border-color: var(--md-sys-color-outline);
@@ -274,6 +351,7 @@ export default function RichTextEditor({
         .w-e-text-container [data-slate-editor] pre > code {
           background-color: var(--md-sys-color-surface-container-high);
           border-color: var(--md-sys-color-outline-variant);
+          text-shadow: none;
         }
 
         .w-e-text-container [data-slate-editor] table th {
@@ -283,6 +361,10 @@ export default function RichTextEditor({
         .w-e-text-container [data-slate-editor] table td,
         .w-e-text-container [data-slate-editor] table th {
           border-color: var(--md-sys-color-outline-variant);
+        }
+
+        .w-e-panel-content-color {
+          max-width: 100%;
         }
 
         .w-e-panel-content-color li {
@@ -299,14 +381,48 @@ export default function RichTextEditor({
         .w-e-text-container {
           min-height: 300px;
           height: auto !important;
-          border-radius: 0 0 calc(0.5rem - 1px) calc(0.5rem - 1px);
+          border-radius: 0 0 calc(var(--radius-xs) - 1px) calc(var(--radius-xs) - 1px);
         }
         .w-e-text-container [data-slate-editor] {
           min-height: 300px;
+          padding: 0.75rem 1rem;
+          font-size: var(--text-body-l);
+          line-height: var(--text-body-l--line-height);
+          letter-spacing: var(--text-body-l--letter-spacing);
+        }
+
+        .w-e-text-container [data-slate-editor] p {
+          margin-block: 0.75em;
+        }
+
+        /* The package gives these descendants a separate 1.5 line-height,
+           overriding the editor's body token unless inheritance is explicit. */
+        .w-e-text-container [data-slate-editor] :is(p, li, blockquote, td, th) {
+          line-height: inherit;
+        }
+
+        .w-e-text-container [data-slate-editor] :is(h1, h2, h3, h4, h5, h6) {
+          margin-block: 1.25em 0.5em;
+        }
+
+        .w-e-text-container [data-slate-editor] > :first-child {
+          margin-top: 0;
+        }
+
+        .w-e-text-container [data-slate-editor] > :last-child {
+          margin-bottom: 0;
+        }
+
+        .w-e-text-placeholder {
+          top: 0.75rem;
+          left: 1rem;
+          font-size: var(--text-body-l);
+          line-height: var(--text-body-l--line-height);
+          font-style: normal;
         }
 
         .w-e-bar {
-          border-radius: calc(0.5rem - 1px) calc(0.5rem - 1px) 0 0;
+          border-radius: calc(var(--radius-xs) - 1px) calc(var(--radius-xs) - 1px) 0 0;
         }
 
         /* ---- Toolbar -------------------------------------------------
@@ -319,6 +435,9 @@ export default function RichTextEditor({
         .w-e-bar {
           padding: 6px;
           font-size: var(--text-label-l);
+          font-weight: var(--text-label-l--font-weight);
+          line-height: var(--text-label-l--line-height);
+          letter-spacing: var(--text-label-l--letter-spacing);
         }
 
         .w-e-bar-show {
@@ -327,8 +446,9 @@ export default function RichTextEditor({
         }
 
         .w-e-bar svg {
-          height: 18px;
-          width: 18px;
+          height: ${ICON.control}px;
+          width: ${ICON.control}px;
+          flex-shrink: 0;
         }
 
         .w-e-bar-item {
@@ -336,26 +456,36 @@ export default function RichTextEditor({
           padding: 0;
         }
 
+        /* The shared Tooltip handles timing, keyboard focus, dismissal and
+           viewport clamping; suppress the package's 600ms pseudo-tooltip. */
+        .rich-text-editor .w-e-menu-tooltip-v5::before,
+        .rich-text-editor .w-e-menu-tooltip-v5::after {
+          display: none;
+        }
+
         .w-e-bar-item button {
-          height: 40px;
-          min-width: 40px;
+          height: max(40px, var(--touch-floor));
+          min-width: max(40px, var(--touch-floor));
           padding: 0 8px;
           border-radius: 9999px;
           transition:
-            background-color var(--transition-duration-standard) var(--ease-standard),
-            color var(--transition-duration-standard) var(--ease-standard);
+            background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+            color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+            border-radius var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial);
         }
 
         /* The three state weights read the tokens rather than repeating numbers.
            The old hand-typed weights had no focus weight at all — the one state
            a keyboard user actually needs to see. */
-        .w-e-bar-item button:hover {
-          background-color: color-mix(
-            in oklab,
-            var(--md-sys-color-on-surface) calc(var(--md-sys-state-hover-opacity) * 100%),
-            transparent
-          );
-          color: var(--md-sys-color-on-surface);
+        @media (hover: hover) {
+          .w-e-bar-item button:hover:not(.disabled):not(:disabled) {
+            background-color: color-mix(
+              in oklab,
+              var(--md-sys-color-on-surface) calc(var(--md-sys-state-hover-opacity) * 100%),
+              transparent
+            );
+            color: var(--md-sys-color-on-surface);
+          }
         }
 
         /* Focus gets the state layer *and* the app's own ring — a ring sits
@@ -372,7 +502,7 @@ export default function RichTextEditor({
           box-shadow: 0 0 0 2px var(--md-sys-color-focus);
         }
 
-        .w-e-bar-item button:active {
+        .w-e-bar-item button:active:not(.disabled):not(:disabled) {
           background-color: color-mix(
             in oklab,
             var(--md-sys-color-on-surface) calc(var(--md-sys-state-pressed-opacity) * 100%),
@@ -382,9 +512,10 @@ export default function RichTextEditor({
 
         /* Selected state — the M3 pairing, not a grey wash. */
         .w-e-bar-item .active,
-        .w-e-bar-item .active:hover {
+        .w-e-bar-item button.active:hover:not(.disabled):not(:disabled) {
           background-color: var(--md-sys-color-secondary-container);
           color: var(--md-sys-color-on-secondary-container);
+          border-radius: var(--radius-md);
         }
 
         .w-e-bar-item .active svg {
@@ -404,16 +535,29 @@ export default function RichTextEditor({
           display: block;
         }
 
+        /* These are third-party DOM panels; adapt them once to Popover's
+           material instead of leaving the package's 3px corners and shadow. */
+        .w-e-select-list,
+        .w-e-drop-panel,
+        .w-e-modal,
+        .w-e-hover-bar,
         .w-e-bar-item-group .w-e-bar-item-menus-container {
-          margin-top: 44px;
-          border-radius: var(--radius-sm);
-          border-color: var(--md-sys-color-outline-variant);
+          --w-e-toolbar-bg-color: var(--md-sys-color-surface-container);
+          border-radius: var(--radius-lg);
+          border: 0;
           box-shadow: var(--md-sys-elevation-2);
-          padding: 4px;
+        }
+
+        .w-e-bar-item-group .w-e-bar-item-menus-container,
+        .w-e-select-list,
+        .w-e-drop-panel {
+          margin-top: calc(max(40px, var(--touch-floor)) + 8px);
+          padding: 8px;
         }
       `}</style>
       <div ref={toolbarContainerRef} className="border-b border-outline-variant" />
       <div ref={editorContainerRef} />
+      {hints.map((hint, index) => <EditorControlTooltip key={index} {...hint} />)}
     </div>
   );
 }

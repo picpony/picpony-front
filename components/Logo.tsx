@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { entranceMotion, motionTier } from '@/lib/appearance';
+import {
+  entranceMotion,
+  motionScale,
+  motionTier,
+  useEntranceMotion,
+  useMotionSpeed,
+  useMotionTier,
+} from '@/lib/appearance';
+import { loadLottiePlayer } from '@/lib/lottieAssets';
 import { isAppPainted } from '@/lib/splash';
 
 interface LogoProps {
@@ -33,9 +41,6 @@ interface LogoProps {
 }
 
 /** Resolved once and shared: the player is 60KB and each artwork is 27KB. */
-let playerPromise: Promise<
-  typeof import('lottie-web/build/player/esm/lottie_light.min.js')
-> | null = null;
 const dataPromises: Partial<Record<TraceKind, Promise<unknown>>> = {};
 
 type TraceKind = 'hover' | 'intro';
@@ -48,12 +53,14 @@ type TraceKind = 'hover' | 'intro';
  * so it reads as the mark being written rather than filled in.
  */
 function loadTrace(kind: TraceKind) {
-  playerPromise ??= import('lottie-web/build/player/esm/lottie_light.min.js');
   dataPromises[kind] ??=
-    kind === 'intro'
+    (kind === 'intro'
       ? import('@/lib/lottie/logoNonParallel.json').then((m) => m.default)
-      : import('@/lib/lottie/logoTrace.json').then((m) => m.default);
-  return Promise.all([playerPromise, dataPromises[kind]!] as const);
+      : import('@/lib/lottie/logoTrace.json').then((m) => m.default)).catch((error) => {
+      delete dataPromises[kind];
+      throw error;
+    });
+  return Promise.all([loadLottiePlayer(), dataPromises[kind]!] as const);
 }
 
 /**
@@ -110,6 +117,11 @@ export default function Logo({
     destroy: () => void;
   } | null>(null);
   const wantedRef = useRef(false);
+  const generationRef = useRef(0);
+  const tier = useMotionTier();
+  const speed = useMotionSpeed();
+  const entrance = useEntranceMotion();
+  const introAllowed = !intro || entrance;
   /* In a ref so the intro effect does not restart when the parent re-renders
      with a new closure — that would replay the animation from frame 0. */
   const settledRef = useRef(onIntroSettled);
@@ -120,11 +132,17 @@ export default function Logo({
   const traced = intro || interactive;
 
   const ensure = useCallback(async () => {
+    if (!traced || motionTier() !== 'standard' || (intro && !entranceMotion())) return null;
     if (animationRef.current || !hostRef.current) return animationRef.current;
+    const generation = generationRef.current;
     const [player, data] = await loadTrace(kind);
     const host = hostRef.current;
     // A second hover may have resolved first, or the node may have gone.
-    if (!host || animationRef.current) return animationRef.current;
+    if (
+      !host || generation !== generationRef.current || motionTier() !== 'standard' ||
+      (intro && !entranceMotion())
+    ) return null;
+    if (animationRef.current) return animationRef.current;
     animationRef.current = player.default.loadAnimation({
       container: host,
       renderer: 'svg',
@@ -132,8 +150,31 @@ export default function Logo({
       autoplay: false,
       animationData: data as object,
     });
+    animationRef.current.setSpeed((intro ? INTRO_SPEED : 1) / motionScale());
     return animationRef.current;
-  }, [kind]);
+  }, [intro, kind, traced]);
+
+  /* Hover and splash own the same lifecycle. Clearing only the hover ref left
+     every keyed footer's player registered after navigation. The generation
+     also invalidates an idle import that resolves after a tier/prop change. */
+  useEffect(() => {
+    const host = hostRef.current;
+    const generation = generationRef.current;
+    return () => {
+      generationRef.current = generation + 1;
+      wantedRef.current = false;
+      animationRef.current?.destroy();
+      animationRef.current = null;
+      host?.removeAttribute('data-shown');
+      host?.removeAttribute('data-settled');
+    };
+  }, [introAllowed, kind, tier, traced]);
+
+  useEffect(() => {
+    if (motionTier() === 'standard') {
+      animationRef.current?.setSpeed((intro ? INTRO_SPEED : 1) / motionScale());
+    }
+  }, [intro, speed, tier]);
 
   useEffect(() => {
     /* Standard only, and this one stays that way while the hover trace below does not.
@@ -170,7 +211,7 @@ export default function Logo({
       }, INTRO_CHUNK_BUDGET_MS);
       void ensure().then((animation) => {
         window.clearTimeout(deadline);
-        if (cancelled || !animation) return;
+        if (cancelled || !animation || animation !== animationRef.current) return;
         hostRef.current?.setAttribute('data-shown', '');
         /* The base steps aside once the mark is written — see `.logo-intro` in
            globals.css for why it has to — and the overlay leaves on the same
@@ -181,8 +222,11 @@ export default function Logo({
           hostRef.current?.setAttribute('data-settled', '');
           settledRef.current?.();
         });
-        animation.setSpeed(INTRO_SPEED);
+        animation.setSpeed(INTRO_SPEED / motionScale());
         animation.goToAndPlay(0, true);
+      }).catch(() => {
+        window.clearTimeout(deadline);
+        if (!cancelled) settledRef.current?.();
       });
     }, INTRO_PROBE_MS);
 
@@ -190,10 +234,8 @@ export default function Logo({
       cancelled = true;
       window.clearTimeout(probe);
       window.clearTimeout(deadline);
-      animationRef.current?.destroy();
-      animationRef.current = null;
     };
-  }, [ensure, intro]);
+  }, [ensure, intro, introAllowed, tier]);
 
   useEffect(() => {
     if (intro || !interactive || motionTier() !== 'standard') return;
@@ -202,15 +244,14 @@ export default function Logo({
        to be instant, because the pointer is already there. */
     const idle =
       typeof window.requestIdleCallback === 'function'
-        ? window.requestIdleCallback(() => void ensure(), { timeout: 4000 })
-        : window.setTimeout(() => void ensure(), 1500);
+        ? window.requestIdleCallback(() => void ensure().catch(() => {}), { timeout: 4000 })
+        : window.setTimeout(() => void ensure().catch(() => {}), 1500);
     return () => {
       if (typeof window.cancelIdleCallback === 'function')
         window.cancelIdleCallback(idle as number);
       else window.clearTimeout(idle as number);
-      animationRef.current = null;
     };
-  }, [ensure, interactive, intro]);
+  }, [ensure, interactive, intro, tier]);
 
   const onEnter = useCallback(() => {
     /* Standard only. The trace needs a 60KB player and six layers of trim paths
@@ -222,7 +263,12 @@ export default function Logo({
     hostRef.current?.setAttribute('data-shown', '');
     void ensure().then((animation) => {
       // The pointer may have left while the chunk was in flight.
-      if (animation && wantedRef.current) animation.goToAndPlay(0, true);
+      if (
+        animation && animation === animationRef.current && wantedRef.current &&
+        motionTier() === 'standard'
+      ) animation.goToAndPlay(0, true);
+    }).catch(() => {
+      hostRef.current?.removeAttribute('data-shown');
     });
   }, [ensure, interactive, intro]);
 

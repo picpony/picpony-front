@@ -54,7 +54,7 @@ interface SidebarNavProps {
    its air. The pill shape is the spec's (`ActiveIndicatorShape = CornerFull`). */
 const ROW = cn(
   'flex h-12 pointer-coarse:h-14 w-full items-center gap-3 rounded-full pl-4 pr-6',
-  'text-label-l outline-none transition-ui',
+  'outline-none transition-ui state-layer',
   'focus-visible:ring-2 focus-ring',
 );
 
@@ -106,8 +106,8 @@ function NavItem({
            previous 10% `bg-primary` tint was nearly invisible composited over
            the dark surface, leaving the ink to carry "you are here" alone; a
            tonal step reads in both schemes. */
-        'bg-secondary-container text-on-secondary-container'
-      : 'text-on-surface-variant state-layer',
+        'bg-secondary-container text-on-secondary-container text-label-l-emphasized'
+      : 'text-on-surface-variant text-label-l',
   );
 
   if (!href) {

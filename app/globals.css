@@ -1160,6 +1160,13 @@
   --transition-duration-enter: calc(400ms * var(--motion-scale));
   --transition-duration-emphasized: calc(500ms * var(--motion-scale));
 
+  /* The menu uses the shared short/state clock. The arrow follows its panel;
+     the anchored expansion pattern is independent of these global rates. */
+  --transition-duration-menu-enter: var(--transition-duration-standard);
+  --transition-duration-menu-exit: var(--transition-duration-state);
+  --ease-menu-enter: var(--ease-standard-decelerate);
+  --ease-menu-exit: var(--ease-standard-accelerate);
+
   --transition-duration-100: var(--transition-duration-press);
   --transition-duration-150: var(--transition-duration-state);
   --transition-duration-200: var(--transition-duration-standard);
@@ -1452,14 +1459,16 @@ html[data-motion='reduced'] {
   height: 100%;
 }
 
-/* Text controls settle into focus rather than snapping. Only properties the utility
-   classes already set are transitioned, so this never fights a component's own styling. */
-input:not([type='checkbox']):not([type='radio']):not([type='range']),
-textarea {
-  transition:
-    border-color var(--transition-duration-standard) var(--ease-standard),
-    box-shadow var(--transition-duration-standard) var(--ease-standard),
-    background-color var(--transition-duration-standard) var(--ease-standard);
+/* Native-control fallback belongs in base. Unlayered transitions overrode the
+   CodeInput's FastEffects utility, leaving its focus feedback on a different clock. */
+@layer base {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea {
+    transition:
+      border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+      box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects),
+      background-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
+  }
 }
 
 /* Press ripple: spawned by the ripple layer component on any element carrying the ripple
@@ -1915,18 +1924,20 @@ html[data-motion='off'] {
   min-height: 48px;
   border-radius: var(--radius-full, 9999px);
   transition:
-    background-color var(--transition-duration-standard) var(--ease-standard),
-    color var(--transition-duration-standard) var(--ease-standard);
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    color var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
 /* The three state weights, from the tokens rather than by hand. Focus and pressed are
    deliberately equal in M3 (.10); the focus ring below is what separates them, not the tint. */
-.yarl__button:hover {
-  background-color: color-mix(
-    in oklab,
-    var(--md-sys-color-on-media) calc(var(--md-sys-state-hover-opacity) * 100%),
-    transparent
-  );
+@media (hover: hover) {
+  .yarl__button:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--md-sys-color-on-media) calc(var(--md-sys-state-hover-opacity) * 100%),
+      transparent
+    );
+  }
 }
 
 /* One rule for one state (the state layer and the ring used to be two blocks 19 lines
@@ -2034,22 +2045,15 @@ html[data-motion='off'] {
   overflow-x: clip;
 }
 
-/* The footer, on every page-to-page move. It lives inside the page-content element, so the
- * outgoing copy is part of the clone and slides away with its page; this governs the live
- * (incoming) one.
- *
- * Asymmetric on purpose: out with no transition, back on 400ms decelerate — a fade-out
- * made the mark appear, dim, and only then float back (three events where the eye wanted
- * one). `beginPageTransit` owns it; both the shared axis and the plain cross-fade arm it. */
+/* The footer belongs to the whole page on a route change. Only a tab switch
+ * holds it out, because its final position depends on which pane remains.
+ * Return the ink on DefaultEffects without a second positional entrance. */
 .page-chrome {
-  transition:
-    opacity var(--transition-duration-enter) var(--ease-decelerate),
-    translate var(--transition-duration-enter) var(--ease-decelerate);
+  transition: opacity var(--duration-spring-default-effects) var(--ease-spring-effects);
 }
 
 [data-page-transit] .page-chrome {
   opacity: 0;
-  translate: 0 8px;
   transition: none;
 }
 
@@ -2656,7 +2660,8 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 
 /* Expands an element's *hit area* to the floor without changing what it looks like or how it
  * lays out: a centred pseudo-element takes the hit (M3's "touch target may extend beyond the
- * component bounds"). Dense chrome genuinely wants a 28px glyph.
+ * component bounds"). Compact controls can keep their painted box while the
+ * hit area follows the pointer's floor.
  *
  * Do not combine with the ripple attribute — its hidden overflow clips the pseudo-element
  * out of hit-testing too; those take the touch-size utility. Do not use on an inline target
@@ -2755,6 +2760,7 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
      height; overridden for a textarea, whose label sits on the first line). */
   --field-rest-y: 1.75rem;
   --field-label-size: var(--text-body-l);
+  --field-outline-width: 1px;
   /* Height of the hole in the border; only has to exceed the border width. Expressed against
      the floated label so the gap grows with the type. */
   --field-notch-h: calc(var(--field-label-size) * 0.75);
@@ -2806,13 +2812,17 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   text-overflow: ellipsis;
   pointer-events: none;
   font-size: var(--field-label-size);
+  font-weight: var(--text-body-l--font-weight);
+  letter-spacing: var(--text-body-l--letter-spacing);
   line-height: 1;
   color: var(--md-sys-color-on-surface-variant);
   transform: translateY(calc(var(--field-rest-y) - 50%));
   transform-origin: left center;
-  transition-property: transform, color;
-  transition-duration: var(--transition-duration-standard);
-  transition-timing-function: var(--ease-standard);
+  /* The label travels like a selection handle; its ink settles like every other
+     control. Separate the two families so recolouring can never overshoot. */
+  transition:
+    transform var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial),
+    color var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
 /* The outline. A min-inline-size floor because a fieldset's UA default is min-content, which
@@ -2824,14 +2834,16 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   inset: calc(var(--field-notch-h) / -2) 0 0;
   margin: 0;
   padding-block: 0;
-  padding-inline: calc(var(--field-lead) - 0.25rem);
+  /* Fieldset padding starts inside its border. Subtract that border too, so
+     the notch has the same 4dp clearance on both sides at rest and on focus. */
+  padding-inline: calc(var(--field-lead) - 0.25rem - var(--field-outline-width));
   min-inline-size: 0;
-  border: 1px solid var(--md-sys-color-outline);
+  border: var(--field-outline-width) solid var(--md-sys-color-outline);
   border-radius: var(--radius-xs);
   pointer-events: none;
   transition-property: border-color;
-  transition-duration: var(--transition-duration-standard);
-  transition-timing-function: var(--ease-standard);
+  transition-duration: var(--duration-spring-fast-effects);
+  transition-timing-function: var(--ease-spring-effects);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2840,8 +2852,8 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * A **labelled** field is a form slot (the outlined language above). An **unlabelled** one
  * — search box, admin filter, chat composer — is not a form slot: its placeholder is its
  * whole identity, and dressed as an outlined field it read as a form control with a missing
- * label. So it is *filled*: a tone step, no border, no shadow. Same 4dp corner and same
- * 56dp box, so the two languages are still one family.
+ * label. So it is *filled*: a tone step, no border, no shadow. Its 8dp corner matches
+ * the default Select; the outlined field keeps 4dp. Their ordinary height stays 56dp.
  *
  * Two mechanical notes. The inset goes back to 0 — the negative top inset above exists
  * only to cancel the UA drawing the top border through the legend's centre, and there is no
@@ -2852,6 +2864,7 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  */
 .m3-field:not([data-labelled]) > fieldset {
   inset: 0;
+  border-radius: var(--radius-sm);
   border-color: transparent;
   background-color: var(--md-sys-color-surface-container-highest);
   transition-property: background-color, box-shadow;
@@ -2874,6 +2887,16 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
       var(--md-sys-color-on-surface)
     );
   }
+}
+
+@utility menu-enter {
+  transition-duration: var(--transition-duration-menu-enter);
+  transition-timing-function: var(--ease-menu-enter);
+}
+
+@utility menu-exit {
+  transition-duration: var(--transition-duration-menu-exit);
+  transition-timing-function: var(--ease-menu-exit);
 }
 
 .m3-field:not([data-labelled])[data-invalid] > fieldset {
@@ -2922,20 +2945,20 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * The small size — the dense field, 40dp: the one height M3 does not name. A field in a
  * filter bar or settings row is chrome; its neighbours are a 40dp select and a 32dp chip,
  * and matching them stops one row running at two heights. Unlabelled only, and no trailing
- * control (which keeps the "one inset for every size" claim true). 12px inline matches the
+ * control (which keeps the "one inset for every size" claim true). 16px inline matches the
  * small select's own padding, so a field and a dropdown put text on the same columns.
  * --------------------------------------------------------------------------- */
 .m3-field[data-size='sm'] {
-  --field-lead: 0.75rem;
-  --field-trail: 0.75rem;
+  --field-lead: 1rem;
+  --field-trail: 1rem;
 }
 
 .m3-field[data-size='sm'][data-lead] {
-  --field-lead: 2.25rem;
+  --field-lead: 2.5rem;
 }
 
 .m3-field[data-size='sm'] > .m3-field-lead {
-  inset-inline-start: 0.5rem;
+  inset-inline-start: 0.75rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2990,13 +3013,17 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   height: var(--field-notch-h);
   padding: 0;
   font-size: calc(var(--field-label-size) * 0.75);
+  /* The invisible notch copy has the same metrics as the transformed label,
+     even when the field is rendered inside emphasized surrounding text. */
+  font-weight: var(--text-body-l--font-weight);
+  letter-spacing: calc(var(--text-body-l--letter-spacing) * 0.75);
   line-height: 1;
   white-space: nowrap;
   /* Hidden but still measured: the legend exists to have a width. */
   visibility: hidden;
   transition-property: max-width;
-  transition-duration: var(--transition-duration-standard);
-  transition-timing-function: var(--ease-standard);
+  transition-duration: var(--duration-spring-fast-spatial);
+  transition-timing-function: var(--ease-spring-standard-spatial);
 }
 
 /* 0.25rem each side, matching the fieldset's own inline padding reduction — together they
@@ -3042,8 +3069,11 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   }
 }
 
+.m3-field[data-labelled]:focus-within {
+  --field-outline-width: 2px;
+}
+
 .m3-field[data-labelled]:focus-within > fieldset {
-  border-width: 2px;
   border-color: var(--md-sys-color-primary-ink);
 }
 

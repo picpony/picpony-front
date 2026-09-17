@@ -150,13 +150,13 @@ function NotificationPane({
                 `on-secondary-container` while unread and `on-surface-variant` once read.
                 Naming a surface role here would paint surface ink on a container
                 background in one of the two states. */}
-            <h3 className="text-title-m-emphasized min-w-0">
+            <h3 className="text-title-m-emphasized min-w-0 wrap-anywhere">
               {item.is_read === 0 && <span className="sr-only">未读：</span>}
               {item.title}
             </h3>
             <time className="text-body-s shrink-0 tabular-nums">{item.created_at}</time>
           </div>
-          <div className="text-body-m">{item.content}</div>
+          <div className="text-body-m wrap-anywhere">{item.content}</div>
         </div>
       ))}
       {children}
@@ -278,6 +278,9 @@ const RUN_BREAK_MS = 5 * 60 * 1000;
 /** Roughly six lines. Past that the composer scrolls instead of eating the thread. */
 const COMPOSER_MAX_HEIGHT_PX = 160;
 
+/** 18rem of contacts plus 24rem for a readable conversation; matches @2xl/chat. */
+const CHAT_SPLIT_MIN_REM = 42;
+
 /* Capturing, so `String.split` keeps the markers as their own segments and
    the message can be reassembled as text / emoji / text. */
 const EMOJI_MARKER = /(\$emoji_[a-zA-Z0-9_]+\$)/g;
@@ -309,7 +312,22 @@ function MessagesContent({ token }: { token: string | null }) {
      for a minute" control, and a collapsed sidebar that survives a reload is a sidebar
      people forget they collapsed. */
   const [savedContactsCollapsed, setContactsCollapsed] = useState(false);
-  const contactsCanCollapse = useMediaQuery(MEDIA.md);
+  // The app drawer shares the viewport: only the actual content column can
+  // promise room for two panes. Keep the saved choice when that column narrows.
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [contactsCanCollapse, setContactsCanCollapse] = useState(false);
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    if (!column) return;
+    const measure = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      setContactsCanCollapse(column.clientWidth >= CHAT_SPLIT_MIN_REM * rem);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    return () => observer.disconnect();
+  }, []);
   const contactsCollapsed = savedContactsCollapsed && contactsCanCollapse;
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const selectedContactId = useRef<number | null>(null);
@@ -394,8 +412,19 @@ function MessagesContent({ token }: { token: string | null }) {
   useLayoutEffect(() => {
     const field = inputRef.current;
     if (!field) return;
-    field.style.height = 'auto';
-    field.style.height = `${Math.min(field.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+    const fit = () => {
+      field.style.height = 'auto';
+      field.style.height = `${Math.min(field.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+    };
+    fit();
+    let width = field.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (field.clientWidth === width) return;
+      width = field.clientWidth;
+      fit();
+    });
+    observer.observe(field);
+    return () => observer.disconnect();
   }, [newMessage, selectedContact]);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -907,7 +936,7 @@ function MessagesContent({ token }: { token: string | null }) {
 
   return (
     <>
-      <div className="mx-auto max-w-4xl">
+      <div ref={columnRef} className="@container/chat mx-auto max-w-4xl">
         <PageHeader title="消息" />
 
         <Tabs
@@ -945,13 +974,13 @@ function MessagesContent({ token }: { token: string | null }) {
                 {announcements.map((item) => (
                   <div key={item.id} className="m3-row bg-surface-container-low p-4">
                     <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                      <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex min-w-0 max-w-full items-start gap-3">
                         {/* Was a hand-rolled primary-tinted pill; a version tag is a
                             mark, so it is a `Badge`. */}
-                        <Badge tone="primary" size="md">
+                        <Badge tone="primary" size="md" className="shrink-0">
                           {item.version}
                         </Badge>
-                        <h3 className="text-title-m-emphasized text-on-surface min-w-0">
+                        <h3 className="text-title-m-emphasized text-on-surface min-w-0 wrap-anywhere">
                           {item.title}
                         </h3>
                       </div>
@@ -1026,7 +1055,7 @@ function MessagesContent({ token }: { token: string | null }) {
               {/* — Contact list — */}
               <div
                 className={cn(
-                  'w-full flex-col transition-[width]',
+                  'w-full shrink-0 flex-col transition-[width]',
                   /* The drawer's springs, per direction, for the drawer's reasons — see
                      the note on the `<aside>` in `AppLayout`. This rail is the same
                      object: a docked panel a press collapses, and every clock in the
@@ -1047,8 +1076,8 @@ function MessagesContent({ token }: { token: string | null }) {
                      72px square wants 12px of padding, so the row is `px-3`); taking the
                      row to 64 under a pointer broke exactly that, so the row is one
                      height again. */
-                  contactsCollapsed ? 'md:w-22' : 'md:w-72',
-                  selectedContact ? 'hidden md:flex' : 'flex',
+                  contactsCollapsed ? '@2xl/chat:w-22' : '@2xl/chat:w-72',
+                  selectedContact ? 'hidden @2xl/chat:flex' : 'flex',
                 )}
               >
                 <div
@@ -1063,7 +1092,7 @@ function MessagesContent({ token }: { token: string | null }) {
                        before it moved. */
                     'transition-[gap]',
                     contactsCollapsed ? 'spring-fast-effects' : 'spring-default-spatial',
-                    contactsCollapsed && 'md:gap-0',
+                    contactsCollapsed && '@2xl/chat:gap-0',
                   )}
                 >
                   {/* This was a fully-styled field with no `value`, no `onChange` and no
@@ -1078,7 +1107,7 @@ function MessagesContent({ token }: { token: string | null }) {
                   <div
                     className={cn(
                       /* `flex-grow` is in the transition list, and that is the whole fix
-                         for the toggle jumping. `md:grow-0` matters as much as `md:w-0`:
+                         for the toggle jumping. `@2xl/chat:grow-0` matters as much as `@2xl/chat:w-0`:
                          `flex-1` is grow *and* basis, so a zero-width box still claimed
                          every spare pixel in the rail and pushed the toggle off centre.
                          But `grow` was being *switched* while `width` was *animated* —
@@ -1090,7 +1119,7 @@ function MessagesContent({ token }: { token: string | null }) {
                       'min-w-0 transition-[width,opacity,flex-grow]',
                       contactsCollapsed ? 'spring-fast-effects' : 'spring-default-spatial',
                       contactsCollapsed
-                        ? 'md:w-0 md:grow-0 md:opacity-0 md:pointer-events-none flex-1'
+                        ? '@2xl/chat:w-0 @2xl/chat:grow-0 @2xl/chat:opacity-0 @2xl/chat:pointer-events-none flex-1'
                         : 'flex-1 opacity-100',
                     )}
                     aria-hidden={contactsCollapsed ? 'true' : undefined}
@@ -1110,7 +1139,7 @@ function MessagesContent({ token }: { token: string | null }) {
                       fieldClassName="min-w-0"
                     />
                   </div>
-                  {/* Below `md` the list and the thread are the same column and swap, so
+                  {/* Below 42rem of content the list and thread share one column and swap, so
                       there is nothing beside this to make room for — collapsing it there
                       would only hide the search. */}
                   <IconButton
@@ -1118,7 +1147,7 @@ function MessagesContent({ token }: { token: string | null }) {
                     aria-label={contactsCollapsed ? '展开联系人列表' : '收起联系人列表'}
                     aria-expanded={!contactsCollapsed}
                     title={contactsCollapsed ? '展开联系人列表' : '收起联系人列表'}
-                    className="max-md:hidden mx-auto"
+                    className="@max-2xl/chat:hidden mx-auto"
                     icon={
                       contactsCollapsed ? (
                         <MdChevronRight size={ICON.standard} />
@@ -1139,7 +1168,7 @@ function MessagesContent({ token }: { token: string | null }) {
                           <div
                             className={cn(
                               'flex min-w-0 flex-1 flex-col gap-2',
-                              contactsCollapsed && 'md:opacity-0',
+                              contactsCollapsed && '@2xl/chat:opacity-0',
                             )}
                           >
                             <Skeleton className="h-4 w-3/4" delay={i * 80 + 40} />
@@ -1154,12 +1183,12 @@ function MessagesContent({ token }: { token: string | null }) {
                        *reachable* there, so it becomes the one control the state is really
                        about: a retry button, in the error colour, message as tooltip. */
                     contactsCollapsed ? (
-                      <div className="hidden justify-center pt-2 md:flex">
+                      <div className="hidden justify-center pt-2 @2xl/chat:flex">
                         <IconButton
                           onClick={() => fetchContacts()}
                           aria-label={`联系人加载失败：${paneState.chat.error}，点击重试`}
                           title={`联系人加载失败：${paneState.chat.error}`}
-                          className="text-error"
+                          variant="danger-text"
                           icon={<MdErrorOutline size={ICON.standard} />}
                         />
                       </div>
@@ -1253,15 +1282,15 @@ function MessagesContent({ token }: { token: string | null }) {
                               />
                             </span>
                           </div>
-                          {/* Faded, never unmounted and never hidden. `md:hidden`
-                              removed it from the row on the first frame, which is
+                          {/* Faded, never unmounted and never hidden. Removing it
+                              from the row on the first frame is
                               what made the row change height the instant the
                               toggle was pressed. */}
                           <div
                             className={cn(
                               'min-w-0 flex-1 transition-opacity',
                               contactsCollapsed ? 'spring-fast-effects' : 'spring-default-spatial',
-                              contactsCollapsed && 'md:opacity-0',
+                              contactsCollapsed && '@2xl/chat:opacity-0',
                             )}
                           >
                             <p className="text-label-l-emphasized truncate">{contact.username}</p>
@@ -1280,7 +1309,7 @@ function MessagesContent({ token }: { token: string | null }) {
               <div
                 className={cn(
                   'bg-surface-container-low min-w-0 flex-1 flex-col',
-                  !selectedContact ? 'hidden md:flex' : 'flex',
+                  !selectedContact ? 'hidden @2xl/chat:flex' : 'flex',
                 )}
               >
                 {selectedContact ? (
@@ -1290,13 +1319,13 @@ function MessagesContent({ token }: { token: string | null }) {
                         onClick={() => selectContact(null)}
                         aria-label="返回联系人列表"
                         icon={<MdArrowBack size={ICON.control} />}
-                        className="md:hidden"
+                        className="@2xl/chat:hidden"
                       />
                       <Avatar
                         src={selectedContact.avatar}
                         name={selectedContact.username}
                         size={40}
-                        className="max-md:hidden"
+                        className="@max-2xl/chat:hidden"
                       />
                       <span className="text-title-m text-on-surface min-w-0 truncate">
                         {selectedContact.username}
@@ -1393,31 +1422,17 @@ function MessagesContent({ token }: { token: string | null }) {
                       )}
                     </div>
 
-                    {/* `p-2` at every width — 8px around the field for a 72px band. It was
-                        12/16px around three 56dp boxes, an 88px strip for one line of text;
-                        the padding is the only term left to spend once the field's own
-                        height is fixed, and the field is the part you type into.
-
-                        The safe-area inset is what every other bottom-docked surface in this
-                        app already does (`Sheet`, the drawer, the tab bar): on a phone this
-                        row sits at the bottom of the viewport, over the home indicator. */}
+                    {/* 8dp surrounds three 48dp targets: a compact 64dp composer.
+                        The safe-area inset keeps its actions above the home indicator. */}
                     <div className="bg-surface-container relative p-2 [--touch-floor:48px] pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                       {/* The two controls stay *outside* the field. Right for a search box
                           (one field, one action, pressed once), wrong here: the composer is
                           the thing you live in while typing, and burying send inside it
                           turned three plain targets into one crowded box. Bottom-aligned
                           (`items-end`) so they stay put as the field grows. */}
-                      {/* **A 40dp field between two 40dp accessories**, 48 each under a
-                          finger, and the row is `p-2` — **56px**, from 88. All three take
-                          40, the step a control beside a field takes from the trailing-slot
-                          arithmetic `(56 − 40) / 2`. The height history (56 → 40 → 56 →
-                          56/40 → 40/40, each step fixing the previous one's side-effect) is
-                          a record of how easy this row is to get wrong: equal 56dp boxes
-                          made the composer an 88px band for one line of text, and dropping
-                          only the buttons to 40 left a 16px gap that read as the buttons
-                          being undersized rather than the field oversized.
-                          `touch-size` on the buttons and `pointer-coarse` padding on the
-                          field carry all three to 48 together where a finger is the pointer.
+                      {/* The dense textarea keeps a 28px prose line with 10px padding
+                          on either side. The row's local touch floor keeps its two
+                          accessories at the same 48dp at every pointer density.
 
                           `shape="square"` on the buttons: a circular icon button *changes
                           shape when selected* (M3 makes a selected icon button a rounded
@@ -1467,7 +1482,6 @@ function MessagesContent({ token }: { token: string | null }) {
                               estimatedHeight={280}
                               /* One wrapper, so the container morph does not
                                  stagger 36 emoji cells individually. */
-                              animateChildren={false}
                               className="w-80 max-w-[calc(100vw-2rem)] p-2"
                             >
                               <div className="p-1">{emojiGrid}</div>
@@ -1478,12 +1492,8 @@ function MessagesContent({ token }: { token: string | null }) {
                         <Textarea
                           ref={inputRef}
                           rows={1}
-                          /* `sm` — 40dp under a pointer, 48 under a finger, which is
-                             exactly what the two `IconButton`s beside it measure. At the
-                             form-slot 56 the field stood 16px taller than them, and the
-                             two accessories read as undersized rather than the field as
-                             oversized. Both are true: the trio has to agree, and 40 is
-                             the step a control beside a field takes. */
+                          /* The dense 48dp composer matches its two accessories;
+                             ordinary form textareas retain the 56dp baseline. */
                           size="sm"
                           value={newMessage}
                           onChange={(e) => setNewMessage(e.target.value)}
@@ -1505,7 +1515,7 @@ function MessagesContent({ token }: { token: string | null }) {
                              emitted *alongside* the primitive's own resize utility with the
                              stylesheet's order picking the survivor. `Textarea` stands its
                              default down when the call site names a resize. */
-                          className="resize-none"
+                          className="popover-scrollbar resize-none"
                           /* Not `disabled={sending}`: disabling a focused input blurs it,
                              which closed the keyboard on every message sent from a phone.
                              Double-submit is already blocked by `loading` on the button

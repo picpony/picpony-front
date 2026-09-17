@@ -53,3 +53,14 @@ export const EASE = {
   /** Symmetric, eases at both ends; for a loop, which has no arrival. */
   loop: 'cubic-bezier(0.4, 0, 0.6, 1)',
 } as const;
+
+/**
+ * Vuetify's VMenu/VDialogTransition supplies the anchored expansion pattern;
+ * its clock uses this app's existing short/state steps and standard curve family.
+ * CSS arrow twins live in globals.css. Durations here are milliseconds for WAAPI.
+ * https://github.com/vuetifyjs/vuetify/blob/01c9e9115898118535865197660dd7399ae1626c/packages/vuetify/src/components/transitions/dialog-transition.tsx
+ */
+export const MENU_TRANSITION = {
+  enter: { duration: DURATION.short * 1000, easing: EASE.standardDecelerate },
+  exit: { duration: DURATION.state * 1000, easing: EASE.standardAccelerate },
+} as const;

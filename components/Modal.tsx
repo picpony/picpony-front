@@ -193,7 +193,7 @@ export default function Modal({
         aria-label={title ? undefined : (ariaLabel ?? '对话框')}
         tabIndex={-1}
         className={cn(
-          'flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden outline-none',
+          'flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden outline-none sm:max-h-[calc(100dvh-3rem)]',
           /* `surface-container-high` is M3's dialog container — tone first,
              shadow second is the whole M3 depth recipe. */
           'bg-surface-container-high text-on-surface rounded-2xl shadow-e3',
@@ -205,7 +205,7 @@ export default function Modal({
         {(title || !hideCloseButton) && (
           <div className="flex shrink-0 items-center justify-between gap-4 p-6 pb-0">
             {title && (
-              <h2 id={titleId} className="text-headline-s text-on-surface">
+              <h2 id={titleId} className="text-headline-s min-w-0 wrap-anywhere text-on-surface">
                 {title}
               </h2>
             )}

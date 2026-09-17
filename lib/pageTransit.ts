@@ -3,18 +3,33 @@
 import { getAppScroller } from '@/lib/appScroller';
 
 /**
- * Two pieces of page-transition bookkeeping that carry no animation at all. Both were in
- * `lib/motion.ts`, which registers GSAP and five plugins at module scope, and both are needed
- * by `lib/routeCrossFade.ts` — the module `AppLayout` mounts on every route. They live here so
- * `lib/motion` is not statically imported (GSAP boundary); `lib/motion.ts` re-exports both.
+ * The route owns its whole incoming page, including any mount-time entrances.
+ * Mark the persistent scroller before React attaches that page, so a gallery
+ * never starts fifty child tweens only to have the route move their parent too.
+ * A dialog portalled outside the scroller is a separate surface and stays free
+ * to run its own entrance.
+ */
+export function setRouteTransit(active: boolean): void {
+  getAppScroller()?.toggleAttribute('data-route-transit', active);
+}
+
+export function routeTransitActive(element: HTMLElement): boolean {
+  const scroller = getAppScroller();
+  return Boolean(scroller?.hasAttribute('data-route-transit') && scroller.contains(element));
+}
+
+/**
+ * Page-transition bookkeeping without an animation engine. The route marker,
+ * tab-footer hold and theme-wipe guard live here so their callers do not need a
+ * static import of `lib/motion.ts` and its module-scope GSAP registration.
  */
 
 /**
- * Holds the incoming page's footer out until a move settles, so the mark never arrives before
- * the page it belongs to; faded in at settle. See `[data-page-transit]` in globals.css.
- * Armed for tab switches and route changes alike — in neither case should the footer arrive
- * ahead of the content. Reference-counted: two moves can be armed in the same tick, and the
- * first to settle must not un-flag the other.
+ * Holds the footer aside during a tab switch, while the panes above it change
+ * their final height. At settle it returns on the 166ms DefaultEffects opacity
+ * response in globals.css. Route changes carry the footer inside the whole page
+ * instead, so they do not use this hold. Reference-counted: two tab moves can be
+ * armed in the same tick, and the first to settle must not un-flag the other.
  */
 let transitDepth = 0;
 

@@ -159,18 +159,15 @@ export default memo(function ForumPostList({
                     <span className="block truncate text-body-s text-on-surface-variant sm:text-body-m">
                       {post.username}
                     </span>
-                    {/* `flex-wrap` and a shrinkable stats group: with a cover
-                        thumbnail the middle column is only ~168px on a 360px
-                        phone, and three icon-plus-number pairs are ~164px — so
-                        the date truncated to nothing and the counts were then
-                        clipped by `data-ripple`'s `overflow: hidden`. The 点赞
-                        count is the one that goes first, as `Pagination` drops its
-                        outer page numbers for the same reason. */}
+                    {/* A cover leaves a narrow middle column on a phone. The date
+                        and counts can move to separate lines, and the count group
+                        itself must wrap too; otherwise three number pairs remain
+                        wider than their column and the ripple host clips them. */}
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1.5 text-body-s text-on-surface-variant sm:text-body-m">
                       <span className="truncate">
                         {formatDate(post.created_at)}
                       </span>
-                      <div className="flex items-center gap-3 sm:gap-4">{stats}</div>
+                      <div className="flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 sm:gap-x-4">{stats}</div>
                     </div>
                   </div>
                   {post.cover_image && (

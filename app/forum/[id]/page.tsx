@@ -327,7 +327,7 @@ export default function ForumPostPage() {
       <div className="max-w-4xl mx-auto pt-14">
         <Card ref={cardRef} variant="filled" padding="lg" className="mb-8">
           <div ref={cardBodyRef}>
-            <h1 className="text-title-l sm:text-headline-s text-on-surface mb-4">{post.title}</h1>
+            <h1 className="text-title-l sm:text-headline-s text-on-surface mb-4 wrap-anywhere">{post.title}</h1>
             {/* `flex-wrap` plus `min-w-0` on the author block: with neither, the
             stats on the right refuse to shrink, the author block is crushed to
             a few px, and a CJK username — which may break between any two
@@ -579,6 +579,7 @@ export default function ForumPostPage() {
                   </div>
                   <IconButton
                     size="sm"
+                    dismiss
                     onClick={handleCancelReply}
                     aria-label="取消回复"
                     className="-me-1.5 shrink-0"

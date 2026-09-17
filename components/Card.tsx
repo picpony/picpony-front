@@ -12,10 +12,13 @@ import { cn } from '@/lib/utils';
 
 export type CardVariant = 'filled' | 'elevated' | 'outlined' | 'transparent';
 export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
+export type CardOutlineTone = 'neutral' | 'error';
 
 interface CardAppearanceProps {
   variant?: CardVariant;
   padding?: CardPadding;
+  /** Semantic boundary for an outlined surface, such as an active blocking rule. */
+  outlineTone?: CardOutlineTone;
   children?: ReactNode;
 }
 
@@ -43,9 +46,8 @@ type CardProps = CardAppearanceProps & (
 /**
  * The one card surface.
  *
- * Depth comes from the surface-container tone scale rather than from shadows —
- * that is what makes the variants survive dark mode, where a mid shadow step is
- * nearly invisible. Use the `shadow-e*` scale, never the raw Tailwind ones.
+ * Separation comes from container tones and boundaries. Ordinary cards do not
+ * cast a decorative shadow; floating overlays own their own elevation.
  *
  * Each variant's container tone is M3's own, not a step chosen by eye; see the
  * container table in AGENTS.md for the whole set.
@@ -55,12 +57,17 @@ const VARIANTS: Record<CardVariant, string> = {
      tone step, which is what lets a card read as a distinct plane with no border
      and no shadow. */
   filled: 'bg-surface-container-highest',
-  // For things that genuinely float above the page. M3: `surface-container-low` + level 1.
-  elevated: 'bg-surface-container-low shadow-e1',
+  // Retain the quieter tonal variant without lifting a card off the page.
+  elevated: 'bg-surface-container-low',
   // For dense lists where filled cards would stack into one grey mass.
-  outlined: 'bg-surface border border-outline-variant',
+  outlined: 'bg-surface border',
   // No surface at all — content lies directly on the page background.
   transparent: 'bg-transparent',
+};
+
+const OUTLINES: Record<CardOutlineTone, string> = {
+  neutral: 'border-outline-variant',
+  error: 'border-error',
 };
 
 const PADDINGS: Record<CardPadding, string> = {
@@ -74,6 +81,7 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
   const {
     variant = 'filled',
     padding = 'md',
+    outlineTone = 'neutral',
     interactive = false,
     as,
     className = '',
@@ -89,8 +97,9 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
   const presentation = {
     // M3 card corner is 12dp.
     className: cn(
-      'rounded-md transition-shadow duration-standard ease-[var(--ease-standard)]',
+      'rounded-md spring-fast-effects transition-[border-color,box-shadow]',
       VARIANTS[variant],
+      variant === 'outlined' && OUTLINES[outlineTone],
       PADDINGS[padding],
       /* A card that is a button still reads as a card: no pill, no label role,
          and the text stays left-aligned — a button centres its content by
@@ -101,7 +110,6 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
          state layer comes off with it. The ripple host stays positioned while
          a wave already in flight finishes, as it does in `Button`. */
       !disabled && interactive && 'state-layer cursor-pointer text-on-surface',
-      !disabled && interactive && variant === 'elevated' && 'hover:shadow-e2',
       disabled && 'disabled-content cursor-not-allowed',
       className,
     ),

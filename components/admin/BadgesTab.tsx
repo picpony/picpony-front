@@ -246,7 +246,7 @@ export default function BadgesTab({ token }: { token: string }) {
             onClick={() => handleDeleteBadge(b.id)}
             icon={<MdDelete size={ICON.dense} />}
             aria-label={`删除徽章 ${b.badge_name}`}
-            className="text-error"
+            variant="danger-text"
           />
         </>
       ),
@@ -318,7 +318,7 @@ export default function BadgesTab({ token }: { token: string }) {
       />
       <TabPanes value={activeSubTab}>
         <TabPane value="grant">
-          <Card variant="transparent" className="space-y-4">
+          <Card variant="transparent" className="@container/badge-grant space-y-4">
             <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
               您可以向特定用户
               ID，或在某日期区间注册的用户批量授予专属徽章。徽章将在用户的发言、个人主页等多处显示。{' '}
@@ -357,7 +357,8 @@ export default function BadgesTab({ token }: { token: string }) {
             </div>
             <div>
               <Input
-                label="授予指定用户（输入用户 ID，多个用逗号隔开，留空则使用下方日期区间）"
+                label="授予用户"
+                helper="输入用户 ID，多个用逗号隔开；留空时使用下方日期范围。"
                 type="text"
                 value={targetUserIds}
                 disabled={granting}
@@ -365,9 +366,9 @@ export default function BadgesTab({ token }: { token: string }) {
                 placeholder="例如：1, 2, 5"
               />
             </div>
-            <div className="flex gap-4">
+            <div className="grid grid-cols-1 gap-4 @md/badge-grant:grid-cols-2">
               
-              <div className="flex-1">
+              <div className="min-w-0">
                 
                 <Input
                   label="注册起始日期"
@@ -378,7 +379,7 @@ export default function BadgesTab({ token }: { token: string }) {
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
-              <div className="flex-1">
+              <div className="min-w-0">
                 
                 <Input
                   label="注册截止日期"

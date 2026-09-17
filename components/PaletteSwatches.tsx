@@ -271,15 +271,15 @@ export default function PaletteSwatches({ className }: { className?: string }) {
       {/* The control, as a row: name at the leading edge, control at the trailing
           edge. The rule above it is structural — it separates the ten colours that
           are given from the one you set — so it is drawn in every state. */}
-      <div className="flex items-center justify-between gap-4 border-t border-outline-variant pt-4">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-outline-variant pt-4">
+        <div className="min-w-0 flex-auto">
           <p className="text-label-l text-on-surface mb-0.5">自定义颜色</p>
           <p className="text-body-m-emphasized text-on-surface">{customSeed ?? '未设置'}</p>
         </div>
         {/* Two ways in, side by side, because they are two different questions:
             name a colour, or find one in a picture. Each opens its own dialog;
             both end at `applyCustom`. */}
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
           <Button
             variant="text"
             icon={<MdImage />}

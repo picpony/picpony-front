@@ -24,8 +24,9 @@ import { cn } from '@/lib/utils';
  *
  * **The portrait is not here.** `ChatRun` owns it, at the head of the turn.
  *
- * **Width.** 85% on a phone, 70% from `sm` — a flat 70% was 252px on a 360px
- * screen, and Chinese does not hyphenate, so long messages became tall ribbons.
+ * **Width.** 85% in a narrow message column, 70% once that column reaches 32rem.
+ * The contact rail and app drawer share the viewport, so the viewport cannot say
+ * how much room a message has. A narrow column needs readable lines either way.
  */
 export interface ChatBubbleProps {
   /** Sent by the current user — decides the side, the tone and the tail corner. */
@@ -65,17 +66,17 @@ export default function ChatBubble({
   className = '',
 }: ChatBubbleProps) {
   return (
-    <div className={cn('flex', own ? 'justify-end' : 'justify-start', className)}>
-      <div className={cn('flex min-w-0 max-w-[85%] flex-col sm:max-w-[70%]', own ? 'items-end' : 'items-start')}>
+    <div className={cn('@container/bubble flex', own ? 'justify-end' : 'justify-start', className)}>
+      <div className={cn('flex min-w-0 max-w-[85%] flex-col @lg/bubble:max-w-[70%]', own ? 'items-end' : 'items-start')}>
         <div
           className={cn(
-            /* `break-words` plus `min-w-0`: a flex item's min-width is its
+            /* Wrapping plus `min-w-0`: a flex item's min-width is its
                min-content width, and the min-content width of an unbroken
                200-character string is 200 characters — one pasted URL made the
                bubble wider than its cap and pushed the chat frame off screen.
                Message text renders into `<span>`s, so the base layer's
                `overflow-wrap` on p/li/td never reached here. */
-            'text-body-m min-w-0 max-w-full rounded-lg px-4 py-2 break-words',
+            'text-body-m min-w-0 max-w-full rounded-lg px-4 py-2 wrap-anywhere',
             /* Two steps of one family rather than a fill and a tint: see the note on
                the component. The ink is the container's own `on-` role either way, so
                it follows the fill in both schemes. */
@@ -102,7 +103,7 @@ export default function ChatBubble({
           /* `on-surface-variant` — the secondary-ink role, not `outline`, which is a
              *boundary* role. At 11px it was under the contrast the ink roles
              guarantee, and every other timestamp on this page uses this role. */
-          <span className="text-label-s text-on-surface-variant mt-1 flex items-center gap-1.5 px-1 tabular-nums">
+          <span className="text-label-s text-on-surface-variant mt-1 flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 tabular-nums">
             {timestamp}
             {status}
           </span>

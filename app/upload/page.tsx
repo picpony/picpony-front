@@ -175,7 +175,18 @@ export default function UploadPage() {
   };
 
   // 未登录 → 引导
-  if (!ready) return <div className="max-w-2xl mx-auto space-y-5"><PageHeader title="发布图片" /><Skeleton className="h-56 w-full" /><Skeleton className="h-14 w-full" /><Skeleton className="h-14 w-full" /></div>;
+  if (!ready) return (
+    <div className="max-w-2xl mx-auto" aria-busy="true" aria-label="正在读取登录状态">
+      <PageHeader title="发布图片" />
+      <div className="space-y-6" aria-hidden="true">
+        <Skeleton className="h-56 w-full rounded-md" />
+        <div className="space-y-5">
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+        </div>
+      </div>
+    </div>
+  );
   if (!user || !user.token) {
     return (
       <EmptyState
@@ -242,7 +253,7 @@ export default function UploadPage() {
           <p className="text-body-m mb-6">
             图片 ID：<span className="text-body-m-emphasized font-mono">{uploadResult.id}</span>
           </p>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <Button
               onClick={() => router.push(`/pic/${uploadResult.id}`, { scroll: false })}
               variant="filled"

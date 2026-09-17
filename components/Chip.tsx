@@ -116,7 +116,7 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center rounded-sm transition-ui',
+        'inline-flex max-w-full items-center rounded-sm spring-fast-effects transition-[color,background-color,opacity]',
         CHIP_HEIGHT,
         /* `label-l` at both sizes. M3's chip label is Label Large regardless of
            the chip's height; `sm` was `label-m`, one step down, so a tag row and
@@ -188,9 +188,9 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
           onClick={onRemove}
           aria-label={removeLabel}
           disabled={disabled}
-          /* `transition-ui`, the app's 200ms — the standard clock, so the cross
-             settles with the chip it sits in. */
-          className="touch-target state-layer focus-ring text-on-surface-variant transition-ui inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5 outline-none focus-visible:ring-2"
+          /* Inherit the chip's on-container ink, including semantic and
+             categorical fills; its state layer follows the same colour. */
+          className="touch-target state-layer focus-ring spring-fast-effects transition-[color,box-shadow] inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full p-0.5 outline-none focus-visible:ring-2"
         >
           {/* 18dp, matching the leading check — M3's chip icon size. */}
           <MdClose size={ICON.dense} />

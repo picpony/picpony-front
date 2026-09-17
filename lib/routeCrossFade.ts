@@ -1,7 +1,7 @@
 'use client';
 
 import { setHeroBusyCheck } from '@/lib/appScroller';
-import { setThemeWipeGuard } from '@/lib/pageTransit';
+import { setRouteTransit, setThemeWipeGuard } from '@/lib/pageTransit';
 import { motionTier } from '@/lib/appearance';
 
 import { getImageHeroRuntime, subscribeImageHeroRuntime } from '@/lib/hero';
@@ -121,6 +121,7 @@ export function playRouteCrossFade(
      calls and a future caller could pair them differently. */
   if (!play) {
     layer.replaceChildren();
+    setRouteTransit(false);
     return;
   }
   play.playRouteCrossFade(layer, snapshot, from, to);
@@ -157,6 +158,10 @@ export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot |
   if (!source) return null;
   const snapshot = captureVisualClone(source, layer);
   if (snapshot && overlay) snapshot.node.dataset.routeFadeOnly = '';
+  /* getSnapshotBeforeUpdate runs before any incoming child's layout effect.
+     The route supplies that page's entrance, so its grid and empty states must
+     know before they seed their own opacity and transforms. */
+  if (snapshot) setRouteTransit(true);
   return snapshot;
 }
 
@@ -170,6 +175,7 @@ export function arm(layer: HTMLElement, stop: () => void) {
 }
 
 export function cancelRouteCrossFade() {
+  setRouteTransit(false);
   if (!active) return;
   const fade = active;
   active = null;

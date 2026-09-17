@@ -25,11 +25,8 @@ interface ToggleSwitchProps {
   'aria-label'?: string;
 }
 
-/* Two motion systems, split the way M3 splits them: the handle's *geometry* is
-   component motion and takes a spring, while its *colour* is a recolour and takes a
-   short curve. A single `transition-[…] duration-…` pair can only carry one clock.
-   `Switch.kt` says `FastSpatial` for the geometry; the recolours take the scale's
-   `short2` (100ms).
+/* The handle's geometry uses FastSpatial; its material uses FastEffects like
+   the other selection controls. A single transition pair cannot express both.
 
    Written as arbitrary properties, these are the one form the reduced-motion
    enumeration missed for months — see the note at the bottom of globals.css. Both
@@ -39,19 +36,19 @@ interface ToggleSwitchProps {
 /** Handle geometry: `FastSpatial`, per `Switch.kt`. Colour is not geometry, so it
  *  keeps its own short clock. */
 const HANDLE_TRANSITION =
-  '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),background-color_var(--transition-duration-press)_var(--ease-standard)]';
+  '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** Press is contact, so it is the scale's shortest step and linear — a curve on a
  *  100ms squash is a shape nobody can see. Applied only while the press is held; the
  *  release falls back to the base spring above, which is the same `FastSpatial` the
  *  travel runs on, so the two land together. */
 const PRESSED_HANDLE_TRANSITION =
-  '[transition:width_var(--transition-duration-press)_linear,height_var(--transition-duration-press)_linear,background-color_var(--transition-duration-press)_var(--ease-standard)]';
+  '[transition:width_var(--transition-duration-press)_linear,height_var(--transition-duration-press)_linear,background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** The check crosses while the handle is still travelling, so it takes the fastest
  *  *effects* spring (ζ1.0 k3800, 108ms) rather than a hand-counted 33ms. */
 const ICON_TRANSITION = '[transition:opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** Track and outline recolour together with the handle, on the same short step. */
 const TRACK_TRANSITION =
-  '[transition:background-color_var(--transition-duration-press)_var(--ease-standard),border-color_var(--transition-duration-press)_var(--ease-standard)]';
+  '[transition:background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 
 /**
  * Material 3 switch, at the spec's own numbers (material-web `md-switch`,
@@ -77,9 +74,9 @@ const TRACK_TRANSITION =
  * `translate` on the shell (the spec animates margin on a handle-sized container;
  * centred in a flex track the two are equivalent, and translate does not relayout).
  *
- * One deliberate divergence, **do not "fix"**: no overshoot. The spec's travel
- * curve's tail *is* the rebound, and it was removed on request; 200ms on the
- * standard curve arrives at the same moment and settles dead.
+ * Travel and release use the same FastSpatial spring, so the handle reaches
+ * its resting size as it reaches its position. Reduced motion substitutes the
+ * critically damped response through the shared spring tokens.
  *
  * And one palette note: the spec paints the selected icon `on-primary-container`,
  * which assumes that token flips with the scheme. This palette deliberately holds
@@ -108,6 +105,7 @@ export default function ToggleSwitch({
    * turns into a scroll leaves the handle swollen.
    */
   const [pressed, setPressed] = useState(false);
+  const isPressed = pressed && !disabled;
   const release = () => setPressed(false);
 
   return (
@@ -212,9 +210,9 @@ export default function ToggleSwitch({
               <span
                 className={cn(
                   'relative z-10 grid place-items-center rounded-full',
-                  HANDLE_TRANSITION,
-                  pressed && !disabled
-                    ? cn(PRESSED_HANDLE_TRANSITION, 'size-7')
+                  isPressed ? PRESSED_HANDLE_TRANSITION : HANDLE_TRANSITION,
+                  isPressed
+                    ? 'size-7'
                     : checked
                       ? 'size-6'
                       : 'size-4',

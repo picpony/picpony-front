@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { Flip, gsap, spring, useGSAP } from '@/lib/motion';
-import { motionTier } from '@/lib/appearance';
+import { useMotionTier } from '@/lib/appearance';
 
 interface InlineEditorPanelProps {
   id: string;
@@ -48,8 +48,12 @@ function getFollowingLayoutState(anchor: Element): Flip.FlipState | null {
   const targets = getFollowingLayoutTargets(anchor);
   if (targets.length === 0) return null;
 
-  Flip.killFlipsOf(targets, true);
-  return Flip.getState(targets, { simple: true });
+  Flip.killFlipsOf(targets, false);
+  // getState also completes old flips by default; capture an interrupted
+  // close exactly where it is instead of resetting the following rows.
+  // The runtime supports `kill`, but the bundled FlipStateVars omits it.
+  const captureOptions: Flip.FlipStateVars & { kill: false } = { simple: true, kill: false };
+  return Flip.getState(targets, captureOptions);
 }
 
 /** Capture table rows before React inserts an inline editor above them. */
@@ -68,53 +72,120 @@ export default function InlineEditorPanel({
 }: InlineEditorPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   const onExitCompleteRef = useRef(onExitComplete);
+  const initializedRef = useRef(false);
+  const layoutTargetsRef = useRef<HTMLElement[]>([]);
+  const layoutStylesRef = useRef(new Map<HTMLElement, {
+    transform: string;
+    transition: string;
+    willChange: string;
+  }>());
+  const tier = useMotionTier();
 
   useEffect(() => {
     onExitCompleteRef.current = onExitComplete;
   }, [onExitComplete]);
 
-  useGSAP(
-    () => {
+  /* Keep one context for unmount cleanup. A direction change only kills its
+     tweens: reverting that context first restores the fully open panel and
+     rows, so a half-open editor flashes before its close can start. */
+  const { contextSafe } = useGSAP(
+    () => () => {
+      // Interrupted tweens remember intermediate start values. Restore the
+      // rows' original inline styles after the context has reverted them all.
+      for (const [target, style] of layoutStylesRef.current) Object.assign(target.style, style);
+      layoutStylesRef.current.clear();
+      initializedRef.current = false;
+      layoutTargetsRef.current = [];
+    },
+    { scope: panelRef },
+  );
+
+  useLayoutEffect(
+    () => contextSafe(() => {
       const panel = panelRef.current;
       if (!panel) return;
 
       const pendingState = pendingLayoutState;
       pendingLayoutState = null;
+      const initial = !initializedRef.current;
+      initializedRef.current = true;
+      const content = Array.from(panel.children);
+      const layoutTargets = Array.from(new Set([
+        ...layoutTargetsRef.current,
+        ...getFollowingLayoutTargets(panel),
+        ...(pendingState?.targets ?? []).filter((target): target is HTMLElement =>
+          target instanceof HTMLElement,
+        ),
+      ])).filter((target) => target !== panel && target.isConnected);
+      layoutTargetsRef.current = layoutTargets;
+      for (const target of layoutTargets) {
+        if (!layoutStylesRef.current.has(target)) layoutStylesRef.current.set(target, {
+          transform: target.style.transform,
+          transition: target.style.transition,
+          willChange: target.style.willChange,
+        });
+      }
+
+      const clearLayoutProps = () => {
+        gsap.set(layoutTargets, { clearProps: 'transform,willChange' });
+        layoutTargets[0]?.getBoundingClientRect();
+        gsap.set(layoutTargets, { clearProps: 'transition' });
+      };
+      const clearSpatialProps = () => {
+        gsap.set(panel, { clearProps: 'clipPath,willChange' });
+        gsap.set(content, { clearProps: 'opacity,visibility,transform,willChange' });
+        clearLayoutProps();
+      };
 
       /* Reduced cross-fades the panel and leaves its box alone: the clip-path
          expand and the `Flip` reflow are a container changing size, which is
          what the tier removes. Off keeps appearing outright. */
-      const tier = motionTier();
+      if (tier !== 'standard') clearSpatialProps();
       if (tier === 'reduced') {
+        if (initial && !isClosing) gsap.set(panel, { autoAlpha: 0 });
         const fade = isClosing
           ? gsap.to(panel, {
               autoAlpha: 0,
               ...spring('fastEffects'),
               onComplete: () => onExitCompleteRef.current(),
             })
-          : gsap.fromTo(
-              panel,
-              { autoAlpha: 0 },
-              { autoAlpha: 1, ...spring('fastEffects'), clearProps: 'opacity,visibility' },
-            );
+          : gsap.to(panel, {
+              autoAlpha: 1,
+              ...spring('fastEffects'),
+              clearProps: 'opacity,visibility',
+            });
         return () => fade.kill();
       }
       if (tier === 'off') {
-        if (isClosing) queueMicrotask(() => onExitCompleteRef.current());
-        return;
+        gsap.set(panel, { clearProps: 'opacity,visibility' });
+        let cancelled = false;
+        if (isClosing) queueMicrotask(() => {
+          if (!cancelled) onExitCompleteRef.current();
+        });
+        return () => { cancelled = true; };
       }
 
-      const content = Array.from(panel.children);
       const clearMotionProps = () => {
-        gsap.set(panel, { clearProps: 'clipPath,willChange' });
-        gsap.set(content, { clearProps: 'opacity,visibility,transform,willChange' });
+        clearSpatialProps();
+        gsap.set(panel, { clearProps: 'opacity,visibility' });
       };
 
+      gsap.set(panel, { clearProps: 'opacity,visibility' });
       gsap.set(panel, { willChange: 'clip-path' });
       gsap.set(content, { willChange: 'opacity,transform' });
+      if (initial && !isClosing) {
+        gsap.set(panel, { clipPath: 'inset(0 0 100% 0)' });
+        gsap.set(content, { autoAlpha: 0, y: -8 });
+      }
+
+      if (layoutTargets.length > 0) {
+        Flip.killFlipsOf(layoutTargets, false);
+        // Prevent CSS's transform transition from trailing the same GSAP move.
+        gsap.set(layoutTargets, { transition: 'none', willChange: 'transform' });
+      }
 
       const layoutAnimation =
-        !isClosing && pendingState
+        initial && !isClosing && pendingState
           ? Flip.from(pendingState, {
               ...spring('defaultSpatial'),
               simple: true,
@@ -122,14 +193,6 @@ export default function InlineEditorPanel({
             })
           : null;
 
-      const closingTargets = isClosing ? getFollowingLayoutTargets(panel) : [];
-      if (closingTargets.length > 0) {
-        Flip.killFlipsOf(closingTargets, true);
-        // DataTable rows use `transition-ui`, which includes transform. Letting
-        // that CSS transition trail GSAP produces a second movement when the
-        // temporary translate is removed at the end of the close animation.
-        gsap.set(closingTargets, { transition: 'none', willChange: 'transform' });
-      }
       const closingDistance =
         panel.getBoundingClientRect().height + (parseFloat(getComputedStyle(panel).marginTop) || 0);
 
@@ -138,8 +201,7 @@ export default function InlineEditorPanel({
         // suppressed, then remove the panel in the same frame. The layout
         // shift replaces the translate exactly, so the rows stay at the
         // coordinates where the tween ended.
-        gsap.set(closingTargets, { clearProps: 'transform,willChange' });
-        closingTargets[0]?.getBoundingClientRect();
+        clearLayoutProps();
         flushSync(() => {
           onExitCompleteRef.current();
         });
@@ -160,39 +222,41 @@ export default function InlineEditorPanel({
             0,
           );
 
-        if (closingTargets.length > 0) {
+        if (layoutTargets.length > 0) {
           /* The rows below close on the panel's own clock and curve — one
              gesture, one clock, or the gap outlives the panel. */
-          animation.to(closingTargets, { y: -closingDistance, ...spring('fastEffects') }, 0);
+          animation.to(layoutTargets, { y: -closingDistance, ...spring('fastEffects') }, 0);
         }
       } else {
         animation = gsap
           .timeline({ onComplete: clearMotionProps })
-          .fromTo(
+          .to(
             panel,
-            { clipPath: 'inset(0 0 100% 0)' },
             { clipPath: 'inset(0 0 0% 0)', ...spring('defaultSpatial') },
             0,
           )
           /* Content arrives on the panel's clock too, offset rather than shortened:
              it was 300ms inside the panel's 400ms, which is a second clock for the
              same arrival. The 40ms offset is what makes the content read as arriving
-             *behind* the opening panel — the same "container first, contents after"
-             split `Popover` uses. */
-          .fromTo(
+             *behind* the opening panel. A reversal resumes immediately from the
+             visible pose rather than putting that initial delay in its way. */
+          .to(
             content,
-            { autoAlpha: 0, y: -8 },
             { autoAlpha: 1, y: 0, ...spring('defaultSpatial') },
-            0.04,
+            initial ? 0.04 : 0,
           );
+
+        if (!initial && layoutTargets.length > 0) {
+          animation.to(layoutTargets, { y: 0, ...spring('defaultSpatial') }, 0);
+        }
       }
 
       return () => {
         animation.kill();
         layoutAnimation?.kill();
       };
-    },
-    { scope: panelRef, dependencies: [isClosing], revertOnUpdate: true },
+    })(),
+    [contextSafe, isClosing, tier],
   );
 
   return (

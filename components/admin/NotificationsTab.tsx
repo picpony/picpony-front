@@ -122,7 +122,7 @@ export default function NotificationsTab({ token }: { token: string }) {
           onClick={() => handleDelete(n.id)}
           icon={<MdDelete size={ICON.dense} />}
           aria-label={`删除通知「${n.title}」`}
-          className="text-error"
+          variant="danger-text"
         />
       ),
     },

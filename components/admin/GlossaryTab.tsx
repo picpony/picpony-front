@@ -46,7 +46,7 @@ import { Input, Textarea } from '@/components/Input';
 import { useConfirm, usePrompt } from '@/components/ConfirmDialog';
 import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
 import SectionHeading from '@/components/SectionHeading';
-import Popover from '@/components/Popover';
+import Popover, { estimateMenuHeight } from '@/components/Popover';
 import { ICON } from '@/lib/icons';
 import { clamp } from '@/lib/utils';
 import { readToken, useSession } from '@/lib/hooks';
@@ -1270,7 +1270,7 @@ export default function GlossaryTab() {
               size="sm"
               icon={<MdDelete />}
               onClick={() => deleteTag(tag.id)}
-              className="text-error"
+              variant="danger-text"
               aria-label={`删除标签 ${tag.en}`}
             />
           </>
@@ -1291,8 +1291,8 @@ export default function GlossaryTab() {
     );
   }
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="@container/glossary space-y-6">
+      <div className="flex flex-col @lg/glossary:flex-row @lg/glossary:items-center justify-between gap-4">
         
         <SectionHeading
           className="mb-0"
@@ -1307,7 +1307,9 @@ export default function GlossaryTab() {
           </Button>
         )}
       </div>
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* The two choices and a useful search field need 32rem of this pane,
+          independent of the app drawer and the admin rail beside it. */}
+      <div className="flex flex-col @lg/glossary:flex-row gap-3">
         
         <Input
           type="text"
@@ -1326,7 +1328,7 @@ export default function GlossaryTab() {
             }
           }}
           placeholder="搜索标签"
-          fieldClassName="flex-1 min-w-[200px]"
+          fieldClassName="@lg/glossary:flex-1 @lg/glossary:min-w-50"
         />
         {/* The field and both selectors share the filter bar's 40dp step. */}
         <Select
@@ -1459,8 +1461,8 @@ export default function GlossaryTab() {
         {/* `mt-6` because this row used to be a direct child of the `space-y-6` above and took
             its 24px gap from it; inside the anchor it has to carry its own. */}
         {!isDuplicateMode && (
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
+          <div className="mt-6 flex flex-col @lg/glossary:flex-row items-center justify-between gap-4">
+            <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               <span className="text-body-m text-on-surface-variant">每页：</span>
               <Input
                 type="number"
@@ -1475,18 +1477,21 @@ export default function GlossaryTab() {
                   setItemsPerPage(clamped);
                   try { localStorage.setItem(LS_KEYS.itemsPerPage, clamped.toString()); } catch { /* Optional preference. */ }
                 }}
-                fieldClassName="w-16"
+                /* Three digits plus the field's 16dp insets and native number stepper. */
+                fieldClassName="w-20 shrink-0"
               />
               <span className="text-body-m text-on-surface-variant">条</span>
             </div>
 
-            <div className="flex flex-col items-center gap-1 sm:items-end">
+            {/* A query container has no intrinsic content width. Give the pager
+                a real column rather than letting the count below size it. */}
+            <div className="flex w-full min-w-0 flex-col items-center gap-1 @lg/glossary:w-auto @lg/glossary:flex-1 @lg/glossary:items-end">
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={loadTags}
                 siblings={1}
-                className="mt-0"
+                className="mt-0 w-full @lg/glossary:justify-end"
               />
               <span className="text-on-surface-variant text-body-s">共 {totalMatches} 条</span>
             </div>
@@ -1544,23 +1549,26 @@ export default function GlossaryTab() {
               onClose={() => setShowSuggestions(false)}
               anchorRef={enFieldRef}
               maxHeight={192}
-              estimatedHeight={derpiSuggestions.length * 40}
+              estimatedHeight={estimateMenuHeight(derpiSuggestions.length)}
+              className="p-2"
             >
                 {derpiSuggestions.map((tag) => (
                   <button
                     key={tag.name}
+                    type="button"
                     onClick={() => selectSuggestion(tag)}
-                    className="w-full px-3 py-2 text-left state-layer flex items-center justify-between outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
+                    data-ripple=""
+                    className="state-layer flex min-h-10 pointer-coarse:min-h-12 w-full cursor-pointer items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l text-on-surface outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
                   >
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                       
                       <span
-                        className={`w-2 h-2 rounded-full ${tagCategoryDot(tag.category)}`}
+                        className={`size-2 shrink-0 rounded-full ${tagCategoryDot(tag.category)}`}
                       />
-                      <span className="text-body-m text-on-surface font-mono">{tag.name}</span>
+                      <span className="min-w-0 truncate font-mono" title={tag.name}>{tag.name}</span>
                     </div>
-                    <span className="text-body-s text-on-surface-variant">{tag.images} 图</span>
+                    <span className="text-body-s text-on-surface-variant shrink-0 tabular-nums">{tag.images} 图</span>
                   </button>
                 ))}{' '}
             </Popover>
@@ -1777,7 +1785,7 @@ export default function GlossaryTab() {
                 void loadFeedbacks(feedbackStatus, 1, feedbackKeyword.trim());
               }
             }}
-            icon={<MdSearch size={ICON.dense} />}
+            icon={<MdSearch size={ICON.control} />}
             placeholder="搜索标签名或用户名，回车搜索"
           />
         </div>

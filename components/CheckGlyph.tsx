@@ -10,16 +10,19 @@ import type { SVGProps } from 'react';
 export default function CheckGlyph({
   className,
   pathProps,
+  weight = 'regular',
 }: {
   className?: string;
   pathProps?: SVGProps<SVGPathElement>;
+  /** A supporting mark beside list text is quieter than the tick inside a control. */
+  weight?: 'regular' | 'light';
 }) {
   return (
     <svg viewBox="0 0 12 12" fill="none" aria-hidden="true" className={className}>
       <path
         d="M2.5 6L5 8.5L9.5 3.5"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={weight === 'light' ? 1.5 : 2}
         strokeLinecap="round"
         strokeLinejoin="round"
         {...pathProps}

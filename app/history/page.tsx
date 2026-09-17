@@ -190,13 +190,14 @@ export default function HistoryPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       
-                      <p className="text-body-m text-on-surface flex items-center gap-2">
+                      <p className="text-body-m text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1">
                         
                         #{item.id}
                         {item.uploader && (
-                          <span className="text-body-s text-on-surface-variant flex items-center gap-1">
+                          <span className="text-body-s text-on-surface-variant flex min-w-0 max-w-full items-center gap-1">
                             
-                            <MdPerson size={ICON.dense} /> {item.uploader}
+                            <MdPerson size={ICON.dense} className="shrink-0" />
+                            <span className="truncate" title={item.uploader}>{item.uploader}</span>
                           </span>
                         )}
                       </p>

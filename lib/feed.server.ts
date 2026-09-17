@@ -1,7 +1,7 @@
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import { buildSearchQueryFrom, parseBrowsingFingerprint, parseSortField, withDerpiContentFilter } from '@/lib/searchQuery';
 import type { ApiResponse } from '@/lib/types/image';
-import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
+import { createServerMemo } from '@/lib/serverMemo';
 import { readBlockFilters } from '@/lib/blockFilters.server';
 import { withBlockFiltersFingerprint, type BlockFilters } from '@/lib/blockFilters';
 
@@ -11,8 +11,8 @@ import { withBlockFiltersFingerprint, type BlockFilters } from '@/lib/blockFilte
  *
  * Safe to share across visitors: the feed is anonymous (`derpi.getImages(undefined, page)` sends
  * no API key), and the browsing settings that do vary are in the URL (`q=` filters and toggles,
- * `filter_id=` the upstream preset, `sf=` the sort), so Next's Data Cache is fingerprint-partitioned
- * by construction. Island and server compute the same key because the fingerprint is mirrored
+ * `filter_id=` the upstream preset, `sf=` the sort), so the memo is fingerprint-partitioned.
+ * Island and server compute the same key because the fingerprint is mirrored
  * into a cookie (`syncBrowsingCookie`); the server never reads the `localStorage` it cannot see.
  * The counter-example is `getFeatured`, which puts the user's own Derpibooru key in the query
  * string: a shared cache of it would leak one visitor's keyed results to another, so the banner
@@ -51,9 +51,11 @@ export interface FeedSeed {
 /**
  * A process-local memo, because every visible `<Link>` to `/` has its RSC payload prefetched and
  * rendering that payload re-runs this read — without a cache, browsing anywhere in the app
- * reads the feed again (see `lib/serverMemo.ts`). Explicit `next: { revalidate }` retains
- * responses despite upstream `no-store`; this memo also coalesces in-flight reads and keeps
- * the seed's original timestamp. Keyed on fingerprint and sort, matching the URL.
+ * reads the feed again (see `lib/serverMemo.ts`). This is the feed's only server cache:
+ * Next's stale-while-revalidate Data Cache could return an old response which would then
+ * receive a new generatedAt, preventing the browser from refreshing those old pictures.
+ * The memo still coalesces concurrent reads and keeps the actual seed timestamp for 120s.
+ * Keyed on fingerprint and sort, matching the URL.
  */
 const read = createServerMemo({
   ttlMs: REVALIDATE_S * 1000,
@@ -75,7 +77,7 @@ const read = createServerMemo({
 
     try {
       const res = await fetch(url, {
-        next: { revalidate: cacheSeconds(REVALIDATE_S) },
+        cache: 'no-store',
         signal: AbortSignal.timeout(TIMEOUT_MS),
         headers: { 'User-Agent': 'PicPony/1.0' },
       });

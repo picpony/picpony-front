@@ -108,7 +108,7 @@ export default function Badge({
       title={title}
       style={style}
       className={cn(
-        'inline-flex items-center rounded-xs align-middle',
+        'inline-flex min-w-0 items-center rounded-xs align-middle',
         !HAS_MAX_WIDTH.test(className) && 'max-w-full',
         SIZES[size],
         // `colors` outranks `tone` so a categorical pair can be passed straight

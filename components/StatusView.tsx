@@ -104,7 +104,7 @@ export default function StatusView({
           so top-heavy that its optical centre sits well below its geometric one —
           a geometrically centred block then reads as sitting high. 24 is the grid
           step that keeps the glyph reading as part of the same object. */}
-      {icon && <span className="text-outline mb-6 [&>svg]:block">{icon}</span>}
+      {icon && <span className="text-outline mb-6 flex w-full min-w-0 justify-center [&>svg]:block">{icon}</span>}
       {inline ? (
         <p className="text-body-m text-on-surface-variant">{title}</p>
       ) : (

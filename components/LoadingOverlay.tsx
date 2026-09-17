@@ -68,7 +68,12 @@ export default function LoadingOverlay() {
     /* `INTRO_CHUNK_BUDGET_MS` is deliberately *not* in this sum: it is the grace
         period `Logo` gives its own chunk, and adding it here meant the screen
         stayed covered while a decoration downloaded. */
-    const ceiling = setTimeout(() => setSettled(true), INTRO_DURATION_MS + FADE_MS);
+    // The player's base rate now follows the speed preference too; this
+    // fallback must outlast its slowest cut, just like the fade's guard above.
+    const ceiling = setTimeout(
+      () => setSettled(true),
+      (INTRO_DURATION_MS + FADE_MS) * MOTION_SPEED_SCALE.slow,
+    );
     return () => clearTimeout(ceiling);
   }, []);
 

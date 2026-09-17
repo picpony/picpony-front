@@ -79,29 +79,29 @@ const TASK_DEFINITIONS = {
   ],
 } as const;
 
-/** Keep task labels/rewards separate from the API's three progress shapes. */
+/** Labels and rewards are known before the API's three progress shapes arrive. */
 function getTaskItems(data: TaskData | undefined, tab: TaskTab): TaskItem[] {
-  if (!data || tab === 'cumulative') return [];
+  if (tab === 'cumulative') return [];
   if (tab === 'novice') {
     return TASK_DEFINITIONS.novice.map((task) => ({
       ...task,
       id: `novice_${task.id}`,
-      progress: data.novice_tasks?.[task.id]?.progress ?? 0,
-      claimed: data.novice_tasks?.[task.id]?.claimed ?? 0,
+      progress: data?.novice_tasks?.[task.id]?.progress ?? 0,
+      claimed: data?.novice_tasks?.[task.id]?.claimed ?? 0,
     }));
   }
   if (tab === 'daily') {
     return TASK_DEFINITIONS.daily.map((task) => ({
       ...task,
-      progress: data.tasks?.[`${task.id}_progress`] ?? 0,
-      claimed: data.tasks?.[`${task.id}_claimed`] ?? 0,
+      progress: data?.tasks?.[`${task.id}_progress`] ?? 0,
+      claimed: data?.tasks?.[`${task.id}_claimed`] ?? 0,
     }));
   }
   return TASK_DEFINITIONS.weekly.map((task) => ({
     ...task,
     id: `weekly_${task.id}`,
-    progress: data.weekly_tasks?.[`${task.id}_progress`] ?? 0,
-    claimed: data.weekly_tasks?.[`${task.id}_claimed`] ?? 0,
+    progress: data?.weekly_tasks?.[`${task.id}_progress`] ?? 0,
+    claimed: data?.weekly_tasks?.[`${task.id}_claimed`] ?? 0,
   }));
 }
 
@@ -179,7 +179,7 @@ export default function TasksPage() {
     const items = getTaskItems(data, forTab);
     return (
       <div>
-        {items.map((item) => {
+        {items.map((item, index) => {
           const pct =
             item.target > 0 ? (Math.min(item.progress, item.target) / item.target) * 100 : 0;
           const isClaimed = Boolean(item.claimed || claimedPending.has(item.id));
@@ -193,34 +193,45 @@ export default function TasksPage() {
               className="m3-row flex items-center gap-4 p-4 bg-surface-container-low"
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-label-l text-on-surface truncate">{item.name}</span>
-                  <span className="text-body-s text-warning whitespace-nowrap">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="text-label-l max-w-full wrap-anywhere text-on-surface">{item.name}</span>
+                  <span className="text-body-s flex flex-wrap items-baseline gap-x-1 text-warning">
+                    <span className="whitespace-nowrap">
                     <MdEmojiEvents size={ICON.dense} className="inline mr-0.5" />
                     经验+{item.xp}
-                    <span className="ml-1 text-warning">金币+{item.coins}</span>
+                    </span>
+                    <span className="whitespace-nowrap">金币+{item.coins}</span>
                   </span>
                   {/* Sits at the bar's right edge; tabular figures stop the digits
                       shifting as progress ticks up. */}
-                  <span className="ml-auto shrink-0 text-body-s tabular-nums text-on-surface-variant">
-                    {Math.min(item.progress, item.target)}/{item.target}
-                  </span>
+                  <div className="relative ml-auto shrink-0 text-body-s tabular-nums text-on-surface-variant">
+                    <span className={loading ? 'invisible' : undefined} aria-hidden={loading || undefined}>
+                      {Math.min(item.progress, item.target)}/{item.target}
+                    </span>
+                    {loading && <Skeleton className="absolute inset-0" delay={index * 80} />}
+                  </div>
                 </div>
                 {/* `ProgressBar`, the primitive — one of six hand-rolled tracks (an 8dp
                     box, an animated `width`, state colours as inline `style`). The tone is
                     now an axis and the curve the spring `ProgressIndicatorDefaults`
                     assigns. */}
-                <ProgressBar
-                  value={pct}
-                  tone={isClaimed ? 'success' : canClaim ? 'warning' : 'secondary'}
-                  label={`${item.name} 进度`}
-                  className="mt-2"
-                />
+                {loading ? (
+                  <Skeleton className="mt-2 h-1 w-full rounded-full" delay={index * 80 + 60} />
+                ) : (
+                  <ProgressBar
+                    value={pct}
+                    tone={isClaimed ? 'success' : canClaim ? 'warning' : 'secondary'}
+                    label={`${item.name} 进度`}
+                    className="mt-2"
+                  />
+                )}
               </div>
               {/* Fixed footprint: 领取 / 去完成 / 已领取 / loading all occupy the same box, so claiming never reflows the row. */}
               <div className="flex w-20 shrink-0 justify-end">
                 
-                {isClaimed ? (
+                {loading ? (
+                  <Skeleton className="h-8 w-full rounded-full" delay={index * 80 + 120} />
+                ) : isClaimed ? (
                   <span className="flex h-8 items-center gap-1 text-label-m text-success">
                     
                     <MdCheckCircle size={ICON.dense} /> 已领取
@@ -255,74 +266,78 @@ export default function TasksPage() {
     );
   };
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto" aria-busy={loading || undefined}>
       <PageHeader title="等级与任务" />
       {/* User card */}{' '}
-      {data && (
+      {(loading || data) && (
         /* `warning-container` with its own `on-` ink, not a 60% wash carrying the
            warning *text* role: the alpha made the panel a different weight in each
            scheme, and on a diluted amber card the heading was low-contrast in one and
            glaring in the other. */
         <div className="bg-warning-container text-on-warning-container mb-6 rounded-md p-4">
           {' '}
-          <div className="flex items-center justify-between mb-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             
-            <div className="text-headline-s-emphasized">
+            <div className="text-headline-s-emphasized min-w-0 wrap-anywhere">
               {' '}
-              Lv.{level}{' '}
-              {data.equipped_badges?.map((b) => (
-                <UserBadge
-                  key={b.badge_name}
-                  name={b.badge_name}
-                  color={b.badge_color}
-                  className="ml-2 align-middle"
-                />
-              ))}{' '}
+              {loading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                <>
+                  Lv.{level}{' '}
+                  {data?.equipped_badges?.map((b) => (
+                    <UserBadge
+                      key={b.badge_name}
+                      name={b.badge_name}
+                      color={b.badge_color}
+                      className="ml-2 align-middle"
+                    />
+                  ))}
+                </>
+              )}
             </div>
-            <div className="text-body-m">
+            <div className="text-body-m shrink-0 tabular-nums">
               {' '}
               <MdEmojiEvents size={ICON.dense} className="inline mr-1" /> 金币：{' '}
-              <span className="text-body-m-emphasized">
-                {data.coins?.toLocaleString() || 0}
-              </span>
+              {loading ? (
+                <Skeleton className="inline-block h-4 w-12 align-middle" delay={60} />
+              ) : (
+                <span className="text-body-m-emphasized">
+                  {data?.coins?.toLocaleString() || 0}
+                </span>
+              )}
             </div>
           </div>
           <div>
             <div className="flex justify-between text-label-m mb-1">
               <span>当前经验进度</span>
-              <span>当前经验：{experience % 100} / 100</span>
+              {loading ? (
+                <Skeleton className="h-4 w-28" delay={80} />
+              ) : (
+                <span>当前经验：{experience % 100} / 100</span>
+              )}
             </div>
             {/* Through the primitive: the hand-rolled meter was a 10dp track in a
                 non-track role with a gradient whose far end was `tertiary`, which
                 inverts between schemes — the right-hand side of the bar swapped shade
                 with the theme. Flat, on the token. */}
-            <ProgressBar
-              value={experience % 100}
-              tone="warning"
-              label="当前等级经验进度"
-            />
+            {loading ? (
+              <Skeleton className="h-1 w-full rounded-full" delay={120} />
+            ) : (
+              <ProgressBar
+                value={experience % 100}
+                tone="warning"
+                label="当前等级经验进度"
+              />
+            )}
           </div>
         </div>
       )}{' '}
-      {/* The destination's own shape, not a spinner: every other list in the app loads
-          as its own rows, and a task row is a name over a bar with a fixed-width action
-          at the end. A centred spinner says "something is happening somewhere" and then
-          reflows the whole screen when the rows arrive. */}
-      {loading && (
-        <div>
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="m3-row flex items-center gap-4 bg-surface-container-low p-4">
-              <div className="min-w-0 flex-1">
-                <Skeleton className="h-4 w-2/5" delay={i * 80} />
-                <Skeleton className="mt-2 h-2 w-full rounded-full" delay={i * 80 + 60} />
-              </div>
-              <Skeleton className="h-8 w-20 shrink-0 rounded-full" delay={i * 80 + 120} />
-            </div>
-          ))}
-        </div>
-      )}{' '}
+      {/* Keep the overview, tabs and pane heading in place during the first read.
+          Task definitions are static, so only the account's progress and actions need
+          placeholders; using the same rows also preserves their narrow-screen wraps. */}
       {error && <ErrorRetry title="任务加载失败" message={error} onRetry={token ? loadTasks : () => openAuth('login')} />}{' '}
-      {!loading && !error && data && (
+      {!error && (loading || data) && (
         <>
           {' '}
           {/* `Tabs`, not a fourth copy of a tab row: this one had a hand-wired sliding

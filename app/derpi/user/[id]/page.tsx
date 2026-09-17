@@ -111,7 +111,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
       <PageBack onClick={handleBack} title="返回 (Esc)" />
       <div>
         <div className="@container max-w-5xl mx-auto">
-          <div className="pb-8 pt-6 sm:pt-8">
+          <div className="pb-8 pt-14">
             <div className="flex items-center gap-4">
               <Skeleton className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface shrink-0" />
               <div className="min-w-0 flex-1">
@@ -163,7 +163,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
               rel="noopener noreferrer"
               className={buttonClasses({ variant: 'filled' })}
             >
-              <MdOpenInNew size={ICON.dense} />在 Derpibooru 查看
+              <MdOpenInNew /><span className="min-w-0 truncate">在 Derpibooru 查看</span>
             </a>
           )
         }
@@ -185,7 +185,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
       <div>
       {/* ===== Main Content ===== */}
       <div className="@container max-w-5xl mx-auto">
-        <div className="pb-8 pt-6 sm:pt-8">
+        <div className="pb-8 pt-14">
           {/* Avatar + Username row */}
           <div className="flex items-center gap-4">
             <div className="shrink-0">
@@ -203,9 +203,9 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
               />
             </div>
 
-            <div className="min-w-0">
-              <h1 className="text-headline-s sm:text-headline-m text-on-surface flex items-center gap-3">
-                {profile.name}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-headline-s sm:text-headline-m text-on-surface flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="min-w-0 max-w-full wrap-anywhere">{profile.name}</span>
                 <span className="text-body-m text-on-surface-variant">#{profile.id}</span>
               </h1>
               <p className="text-body-m text-on-surface-variant mt-1">Derpibooru 用户</p>
@@ -245,7 +245,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
           {profile.description && (
             <div className="mt-6">
               <SectionHeading as="h3" className="mb-2">个人简介</SectionHeading>
-              <Card className="text-body-m text-on-surface-variant whitespace-pre-wrap popover-scrollbar max-h-40 overflow-y-auto">
+              <Card className="text-body-m text-on-surface-variant whitespace-pre-wrap wrap-anywhere popover-scrollbar max-h-40 overflow-y-auto">
                 {profile.description}
               </Card>
             </div>
@@ -269,7 +269,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
               rel="noopener noreferrer"
               className={buttonClasses({ variant: 'tonal', size: 'lg', className: '@lg:flex-1' })}
             >
-              <MdOpenInNew size={ICON.dense} />在 Derpibooru 查看主页
+              <MdOpenInNew /><span className="min-w-0 truncate">在 Derpibooru 查看主页</span>
             </a>
           </div>
 

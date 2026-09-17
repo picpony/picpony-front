@@ -7,6 +7,7 @@ import CheckGlyph from '@/components/CheckGlyph';
 import { Input } from '@/components/Input';
 import Modal from '@/components/Modal';
 import PalettePreview from '@/components/PalettePreview';
+import Skeleton from '@/components/Skeleton';
 import { usePaletteTools, type PaletteTools } from '@/lib/paletteLazy';
 import { cn } from '@/lib/utils';
 
@@ -71,15 +72,7 @@ export interface ColorPickerProps {
 
 export default function ColorPicker({ isOpen, onClose, initial, onPick }: ColorPickerProps) {
   const tools = usePaletteTools(isOpen);
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="自定义主题色" maxWidth="lg">
-      {tools ? (
-        <Body tools={tools} initial={initial} onPick={onPick} onClose={onClose} />
-      ) : (
-        <PickerSkeleton />
-      )}
-    </Modal>
-  );
+  return <PickerDialog tools={tools} isOpen={isOpen} initial={initial} onPick={onPick} onClose={onClose} />;
 }
 
 /**
@@ -88,38 +81,61 @@ export default function ColorPicker({ isOpen, onClose, initial, onPick }: ColorP
  * shape is known loads as that shape. The shape is known to the pixel: the chunk
  * decides the *colours*, not the layout.
  */
-function PickerSkeleton() {
+function PickerSkeleton({ caption }: { caption: string }) {
   return (
-    <div className="flex animate-pulse flex-col gap-5" aria-hidden="true">
-      <div className="bg-surface-container-high h-[6.5rem] rounded-md" />
-      <div className="bg-surface-container-high h-7 rounded-full" />
-      <div className="bg-surface-container-high h-72 rounded-md" />
+    <div className="flex flex-col gap-5" aria-hidden="true">
+      <PalettePreview caption={caption} />
+      <Group label="色相">
+        <div className="flex flex-wrap gap-2 p-1 pointer-coarse:gap-4 pointer-coarse:p-2">
+          {HUE_STOPS.map((hue) => <Skeleton key={hue} className="size-8 rounded-full" />)}
+        </div>
+      </Group>
+      <Group label="明度与彩度">
+        <div className="popover-scrollbar overflow-x-auto">
+          <div className="grid w-max gap-1 p-1 pointer-coarse:gap-2" style={{ gridTemplateColumns: `2rem repeat(${CHROMAS.length}, 2.5rem)` }}>
+            <span />
+            {CHROMAS.map((x) => <span key={x} className="text-label-s text-center">{Math.round(x * 100)}%</span>)}
+            {TONES.map((tone) => (
+              <Row key={tone}>
+                <span className="text-label-s self-center pr-2 text-right">{tone}</span>
+                {CHROMAS.map((x) => <Skeleton key={x} className="h-10 rounded-xs" />)}
+              </Row>
+            ))}
+          </div>
+        </div>
+      </Group>
+      <Group label="十六进制"><Skeleton className="h-10 w-40 rounded-xs" /></Group>
     </div>
   );
 }
 
 /**
- * Split out so the whole model can be `useState(initial)` with no syncing: the parent gives
- * it a fresh `key` on every open, so remounting *is* the reset.
+ * The keyed dialog owns both its draft and footer. It stays mounted while the
+ * palette tools arrive, so loading cannot restart the overlay's entrance.
  */
-function Body({
+function PickerDialog({
   tools,
+  isOpen,
   initial,
   onPick,
   onClose,
 }: {
-  tools: PaletteTools;
+  tools: PaletteTools | null;
+  isOpen: boolean;
   initial: string;
   onPick: (hex: string) => void;
   onClose: () => void;
 }) {
-  const [pick, setPick] = useState(() => pickFrom(tools, initial.toLowerCase(), 0));
+  const [pick, setPick] = useState<Pick | null>(null);
   const [draft, setDraft] = useState(() => initial.toLowerCase());
   const [error, setError] = useState<string | undefined>(undefined);
-  const { hex, hue, cell } = pick;
+  const { hex, hue, cell } = pick ?? (tools
+    ? pickFrom(tools, initial.toLowerCase(), 0)
+    : { hex: initial.toLowerCase(), hue: 0, cell: null });
 
   /** Move the rail. The cell stays where it is, so only the hue changes. */
   const setHue = (nextHue: number) => {
+    if (!tools) return;
     const at = cell ?? cellOf(tools, hex);
     setPick({ hex: cellHex(tools, nextHue, at), hue: nextHue, cell: at });
     setDraft(cellHex(tools, nextHue, at));
@@ -128,6 +144,7 @@ function Body({
 
   /** Choose a cell. The hue stays where it is — which is the whole point for the 0% column. */
   const setCell = (at: Cell) => {
+    if (!tools) return;
     const next = cellHex(tools, hue, at);
     setPick({ hex: next, hue, cell: at });
     setDraft(next);
@@ -135,6 +152,7 @@ function Body({
   };
 
   const commitHex = (raw: string) => {
+    if (!tools) return;
     const value = raw.trim().toLowerCase();
     const withHash = value.startsWith('#') ? value : `#${value}`;
     if (!HEX.test(withHash)) {
@@ -147,133 +165,142 @@ function Body({
   };
 
   return (
-    <div className="flex flex-col gap-5">
-      <PalettePreview derived={tools.deriveTheme(hex)} caption={hex} />
-
-      <Group label="色相">
-        {/* The rail needs 4px of clearance on every side so the selected stop's
-            2px ring at a 2px offset does not clip against the row above once the
-            rail wraps. */}
-        <div className="flex flex-wrap gap-2">
-          {HUE_STOPS.map((h) => {
-            const on = Math.abs(((hue - h + 540) % 360) - 180) < 7.5;
-            return (
-              <button
-                key={h}
-                type="button"
-                aria-label={`色相 ${h} 度`}
-                aria-pressed={on}
-                onClick={() => setHue(h)}
-                className={cn(
-                  'focus-ring transition-ui size-7 cursor-pointer rounded-full outline-none focus-visible:ring-2',
-                  on && 'ring-primary-ink ring-offset-surface ring-2 ring-offset-2',
-                )}
-                style={{ background: tools.hexFromHct(h, tools.maxChroma(h, RAIL_TONE), RAIL_TONE) }}
-              />
-            );
-          })}
-        </div>
-      </Group>
-
-      <Group label="明度与彩度">
-        <div className="overflow-x-auto">
-          {/* `w-max`, not `min-w-max`: a grid is a block, so it fills the scroller
-              and the auto label column absorbs every pixel of slack — which
-              stranded the tone numbers at the far left. */}
-          <div
-            className="grid w-max gap-1"
-            style={{ gridTemplateColumns: `2rem repeat(${CHROMAS.length}, 2.5rem)` }}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="自定义主题色"
+      maxWidth="lg"
+      footer={
+        <>
+          <Button variant="text" onClick={onClose}>取消</Button>
+          <Button
+            variant="filled"
+            disabled={!tools || Boolean(error)}
+            onClick={() => {
+              onPick(hex);
+              onClose();
+            }}
           >
-            <span />
-            {CHROMAS.map((x) => (
-              <span key={x} className="text-label-s text-on-surface-variant text-center">
-                {Math.round(x * 100)}%
-              </span>
-            ))}
-            {TONES.map((t) => {
-              const ceiling = tools.maxChroma(hue, t);
-              return (
-                <Row key={t}>
-                  <span className="text-label-s text-on-surface-variant pr-2 text-right leading-9">
-                    {t}
+            使用此颜色
+          </Button>
+        </>
+      }
+    >
+      {tools ? (
+        <div className="flex flex-col gap-5">
+          <PalettePreview derived={tools.deriveTheme(hex)} caption={hex} />
+
+          <Group label="色相">
+            {/* The rail needs 4px of clearance on every side so the selected stop's
+                2px ring at a 2px offset does not clip against the row above once the
+                rail wraps. */}
+            <div className="flex flex-wrap gap-2 p-1 pointer-coarse:gap-4 pointer-coarse:p-2">
+              {HUE_STOPS.map((h) => {
+                const on = Math.abs(((hue - h + 540) % 360) - 180) < 7.5;
+                return (
+                  <button
+                    key={h}
+                    type="button"
+                    aria-label={`色相 ${h} 度`}
+                    aria-pressed={on}
+                    onClick={() => setHue(h)}
+                    className={cn(
+                      'touch-target focus-ring spring-fast-effects transition-[box-shadow] size-8 cursor-pointer rounded-full outline-none focus-visible:ring-2',
+                      on && 'ring-primary-ink ring-offset-surface ring-2 ring-offset-2',
+                    )}
+                    style={{ background: tools.hexFromHct(h, tools.maxChroma(h, RAIL_TONE), RAIL_TONE) }}
+                  />
+                );
+              })}
+            </div>
+          </Group>
+
+          <Group label="明度与彩度">
+            <div className="popover-scrollbar overflow-x-auto">
+              {/* `w-max`, not `min-w-max`: a grid is a block, so it fills the scroller
+                  and the auto label column absorbs every pixel of slack — which
+                  stranded the tone numbers at the far left. */}
+              <div
+                className="grid w-max gap-1 p-1 pointer-coarse:gap-2"
+                style={{ gridTemplateColumns: `2rem repeat(${CHROMAS.length}, 2.5rem)` }}
+              >
+                <span />
+                {CHROMAS.map((x) => (
+                  <span key={x} className="text-label-s text-on-surface-variant text-center">
+                    {Math.round(x * 100)}%
                   </span>
-                  {CHROMAS.map((x) => {
-                    const swatch = tools.hexFromHct(hue, x * ceiling, t);
-                    /* The tick marks the cell that was *chosen*, read off `cell`
-                       rather than reconstructed by measuring the hex — exactly one
-                       cell can ever wear it, and a typed hex that is not on the
-                       grid correctly wears none. There is no tolerance that fixes
-                       both mis-ticks (nearest-stop, and multi-tick on the pale
-                       rows where adjacent cells sit inside Hct's rounding); the
-                       coordinates have to be state. */
-                    const on = cell?.tone === t && cell?.chroma === x;
-                    return (
-                      <button
-                        key={x}
-                        type="button"
-                        aria-label={`明度 ${t}，彩度 ${Math.round(x * 100)}%，${swatch}`}
-                        aria-pressed={on}
-                        onClick={() => setCell({ tone: t, chroma: x })}
-                        className={cn(
-                          'focus-ring rounded-xs transition-ui grid h-9 cursor-pointer place-items-center outline-none focus-visible:ring-2',
-                          on && 'ring-primary-ink ring-offset-surface ring-2 ring-offset-2',
-                        )}
-                        style={{ background: swatch, color: t > 55 ? '#000' : '#fff' }}
-                      >
-                        {on && <CheckGlyph className="size-4" />}
-                      </button>
-                    );
-                  })}
-                </Row>
-              );
-            })}
-          </div>
+                ))}
+                {TONES.map((t) => {
+                  const ceiling = tools.maxChroma(hue, t);
+                  return (
+                    <Row key={t}>
+                      <span className="text-label-s text-on-surface-variant self-center pr-2 text-right">
+                        {t}
+                      </span>
+                      {CHROMAS.map((x) => {
+                        const swatch = tools.hexFromHct(hue, x * ceiling, t);
+                        /* The tick marks the cell that was *chosen*, read off `cell`
+                           rather than reconstructed by measuring the hex — exactly one
+                           cell can ever wear it, and a typed hex that is not on the
+                           grid correctly wears none. There is no tolerance that fixes
+                           both mis-ticks (nearest-stop, and multi-tick on the pale
+                           rows where adjacent cells sit inside Hct's rounding); the
+                           coordinates have to be state. */
+                        const on = cell?.tone === t && cell?.chroma === x;
+                        return (
+                          <button
+                            key={x}
+                            type="button"
+                            aria-label={`明度 ${t}，彩度 ${Math.round(x * 100)}%，${swatch}`}
+                            aria-pressed={on}
+                            onClick={() => setCell({ tone: t, chroma: x })}
+                            className={cn(
+                              'touch-target focus-ring rounded-xs spring-fast-effects transition-[background-color,box-shadow] grid h-10 cursor-pointer place-items-center outline-none focus-visible:ring-2',
+                              on && 'ring-primary-ink ring-offset-surface ring-2 ring-offset-2',
+                            )}
+                            style={{ background: swatch, color: t > 55 ? '#000' : '#fff' }}
+                          >
+                            {on && <CheckGlyph className="size-4" />}
+                          </button>
+                        );
+                      })}
+                    </Row>
+                  );
+                })}
+              </div>
+            </div>
+          </Group>
+
+          <Group label="十六进制">
+            <Input
+              size="sm"
+              aria-label="十六进制颜色值"
+              placeholder="#e06c9f"
+              spellCheck={false}
+              autoComplete="off"
+              maxLength={7}
+              value={draft}
+              error={error}
+              fieldClassName="max-w-40"
+              onChange={(event) => {
+                setError(undefined);
+                setDraft(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  commitHex(draft);
+                }
+              }}
+              onBlur={() => commitHex(draft)}
+            />
+          </Group>
+
         </div>
-      </Group>
-
-      <Group label="十六进制">
-        <Input
-          size="sm"
-          aria-label="十六进制颜色值"
-          placeholder="#e06c9f"
-          spellCheck={false}
-          autoComplete="off"
-          maxLength={7}
-          value={draft}
-          error={error}
-          fieldClassName="max-w-40"
-          onChange={(event) => {
-            setError(undefined);
-            setDraft(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commitHex(draft);
-            }
-          }}
-          onBlur={() => commitHex(draft)}
-        />
-      </Group>
-
-      {/* The action row is here rather than in `Modal`'s `footer`, because the
-          buttons need `hex`, which is this component's state and not the
-          parent's. */}
-      <div className="flex flex-wrap justify-end gap-3 pt-1">
-        <Button variant="text" onClick={onClose}>
-          取消
-        </Button>
-        <Button
-          variant="filled"
-          onClick={() => {
-            onPick(hex);
-            onClose();
-          }}
-        >
-          使用此颜色
-        </Button>
-      </div>
-    </div>
+      ) : (
+        <PickerSkeleton caption={initial.toLowerCase()} />
+      )}
+    </Modal>
   );
 }
 

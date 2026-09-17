@@ -11,6 +11,7 @@ export type IconButtonVariant =
   | 'tonal'
   | 'outlined'
   | 'danger'
+  | 'danger-text'
   | 'media'
   | 'on-primary';
 export type IconButtonSize = 'sm' | 'md' | 'lg';
@@ -85,6 +86,10 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      scheme-independent `*-fill` pair `Button`'s `danger` does, for the reason
      spelled out in the semantic-fills block in globals.css. */
   danger: 'bg-error-fill text-on-fill focus-ring',
+  /* An unfilled destructive action keeps a secondary control's hierarchy.
+     A caller's `text-error` would compete with standard's neutral ink because
+     `cn` joins utilities without resolving them. */
+  'danger-text': 'bg-transparent text-error focus-ring',
   /* `state-layer` paints from the element's own `color`, so `on-media` gives the
      hover and press their tint without a second hand-picked value.
      The ring is `focus-ring-on-media`, painted inward: `focus-ring` is
@@ -200,6 +205,8 @@ export interface IconButtonClassOptions {
   shape?: IconButtonShape;
   selected?: boolean;
   disabled?: boolean;
+  /** Busy controls keep their ink and container while blocking interaction. */
+  loading?: boolean;
   dismiss?: boolean;
   className?: string;
 }
@@ -219,11 +226,14 @@ export function iconButtonClasses({
   shape = 'round',
   selected = false,
   disabled = false,
+  loading = false,
   dismiss = false,
   className = '',
 }: IconButtonClassOptions = {}): string {
+  const isDisabled = disabled || loading;
   return cn(
-    'inline-flex shrink-0 cursor-pointer items-center justify-center outline-none',
+    'inline-flex shrink-0 items-center justify-center outline-none',
+    loading ? 'cursor-wait' : disabled ? 'cursor-not-allowed' : 'cursor-pointer',
     'transition-icon-button',
     /* One indicator, and the width has to agree with the colour: `media` sets
        `--tw-inset-ring-color`, so pairing it with the outset `ring-2` would leave
@@ -232,9 +242,9 @@ export function iconButtonClasses({
     variant === 'media' && !selected
       ? 'focus-visible:inset-ring-2'
       : 'focus-visible:ring-2',
-    !disabled && 'state-layer',
-    disabled && 'cursor-not-allowed disabled-content',
-    dismiss && !disabled && 'hover:rotate-90 no-motion:hover:rotate-0',
+    !isDisabled && 'state-layer',
+    disabled && !loading && 'disabled-content',
+    dismiss && !isDisabled && 'hover:rotate-90 no-motion:hover:rotate-0',
     /* A selected toggle takes the container/on-container pair rather than a
        tinted border plus a third text colour, which is how the favourite
        button ended up with a 40%-alpha warning border — an alpha on a token, so
@@ -265,6 +275,18 @@ export function iconButtonClasses({
   );
 }
 
+function combineHandlers<Event>(
+  caller: ((event: Event) => void) | undefined,
+  tooltip: ((event: Event) => void) | undefined,
+) {
+  if (!caller) return tooltip;
+  if (!tooltip) return caller;
+  return (event: Event) => {
+    caller(event);
+    tooltip(event);
+  };
+}
+
 const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   {
     icon,
@@ -285,6 +307,12 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
        a future reorder would have silently turned it back into a no-op. */
     type = 'button',
     className = '',
+    onPointerEnter,
+    onPointerLeave,
+    onPointerDown,
+    onFocus,
+    onBlur,
+    'aria-describedby': describedBy,
     ...rest
   },
   ref,
@@ -293,7 +321,7 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
   /* A copy riding along on an animation is `aria-hidden` and must not describe
      itself; nor must a disabled control, which has nothing to offer on hover. */
   const inert = rest['aria-hidden'] === true || rest['aria-hidden'] === 'true';
-  const label = tooltip === false || inert ? undefined : (tooltip ?? title ?? rest['aria-label']);
+  const label = tooltip === false || inert || isDisabled ? undefined : (tooltip ?? title ?? rest['aria-label']);
   const { anchorRef, anchorProps, tooltip: bubble } = useTooltip(label);
 
   return (
@@ -325,13 +353,27 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
           shape,
           selected,
           disabled: isDisabled,
+          loading,
           dismiss,
           className,
         })}
         {...rest}
         {...anchorProps}
+        /* Tooltip behaviour augments the control's own intent/focus handlers.
+           Spreading it over the caller silently erased all five events. */
+        onPointerEnter={combineHandlers(onPointerEnter, anchorProps.onPointerEnter)}
+        onPointerLeave={combineHandlers(onPointerLeave, anchorProps.onPointerLeave)}
+        onPointerDown={combineHandlers(onPointerDown, anchorProps.onPointerDown)}
+        onFocus={combineHandlers(onFocus, anchorProps.onFocus)}
+        onBlur={combineHandlers(onBlur, anchorProps.onBlur)}
+        aria-describedby={[describedBy, anchorProps['aria-describedby']].filter(Boolean).join(' ') || undefined}
+        aria-busy={loading || rest['aria-busy'] || undefined}
       >
-        {loading ? <Spinner size="sm" tone={variant === 'filled' ? 'on-primary' : 'primary'} /> : icon}
+        {loading ? (
+          <span aria-hidden="true">
+            <Spinner size={size === 'sm' ? 'sm' : 'md'} tone="inherit" />
+          </span>
+        ) : icon}
       </button>
       {bubble}
     </>

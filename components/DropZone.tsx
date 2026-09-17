@@ -25,8 +25,8 @@ interface DropZoneProps {
  * Click-or-drag file target. The states are the component's, not the call site's:
  *
  *   idle      dashed `outline`, the M3 state layer for hover.
- *   dragging  `primary` border on the `primary-container` tone, lifted to `e3`.
- *             No scale transform: the border + tone + elevation already reads
+ *   dragging  `primary` border on the `primary-container` tone.
+ *             No scale transform: the border and tone already read
  *             unambiguously as "let go here", and the transform would corrupt
  *             rects of children being measured.
  *   filled    same tone, flat. It is not inviting a drop any more; it is
@@ -57,7 +57,7 @@ export default function DropZone({
   const depth = useRef(0);
   const [dragging, setDragging] = useState(false);
 
-  const state: DropZoneState = dragging ? 'dragging' : filled ? 'filled' : 'idle';
+  const state: DropZoneState = dragging && !disabled ? 'dragging' : filled ? 'filled' : 'idle';
 
   const take = useCallback(
     (file: File | undefined | null) => {
@@ -69,9 +69,10 @@ export default function DropZone({
 
   const onDragEnter = useCallback((e: DragEvent) => {
     e.preventDefault();
+    if (disabled) return;
     depth.current += 1;
     setDragging(true);
-  }, []);
+  }, [disabled]);
 
   const onDragLeave = useCallback((e: DragEvent) => {
     e.preventDefault();
@@ -109,11 +110,12 @@ export default function DropZone({
       onDrop={onDrop}
       className={cn(
         'relative flex flex-col items-center justify-center rounded-md border-2 border-dashed text-center outline-none',
-        'transition-[background-color,border-color,box-shadow] duration-standard ease-[var(--ease-standard)]',
+        'spring-fast-effects transition-[background-color,border-color,box-shadow]',
         'focus-visible:ring-2 focus-ring',
         SIZES[size],
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
-        state === 'idle' && !disabled && 'state-layer border-outline',
+        state === 'idle' && 'border-outline',
+        state === 'idle' && !disabled && 'state-layer',
         state === 'dragging' && 'border-primary-ink bg-primary-container',
         state === 'filled' && 'border-primary-ink bg-primary-container',
         className,
