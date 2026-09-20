@@ -10,6 +10,7 @@ const WHEEL_SOURCE_SUPPRESSION_MS = 240;
 type ScrollListener = {
   element: HTMLElement;
   listener: () => void;
+  inputListener?: (event: Event) => void;
 };
 
 type DeltaListener = ScrollListener & {
@@ -38,6 +39,9 @@ export class HeroScrollContinuity {
   /** Last position this instance wrote, per scroller, to attribute scrolls. */
   private written = new WeakMap<HTMLElement, { left: number; top: number }>();
   private primary: HTMLElement | null = null;
+  private inputTarget: HTMLElement | null = null;
+  private nativeInput = false;
+  private transferListeners = new Set<() => void>();
   private released = false;
   private readonly residualFrameOwner = {};
   private pendingResidualLeft = 0;
@@ -50,6 +54,47 @@ export class HeroScrollContinuity {
     this.replacePeers(primary);
   }
 
+  /** The visible receiver, as distinct from the last peer that happened to scroll. */
+  setInputTarget(element: HTMLElement) {
+    // A final input on the outgoing peer may have removed this pending receiver while
+    // the controller waited for the reveal frame. Reattach before declaring it live.
+    if (!this.peers.has(element)) this.addPeer(element);
+    if (this.inputTarget === element) return;
+    this.inputTarget = element;
+    this.nativeInput = false;
+  }
+
+  get hasNativeInput() {
+    return this.nativeInput;
+  }
+
+  waitForNativeInput(signal: AbortSignal) {
+    if (signal.aborted || this.released) return Promise.resolve(false);
+    if (this.nativeInput) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      const finish = () => {
+        this.transferListeners.delete(finish);
+        signal.removeEventListener('abort', finish);
+        resolve(this.nativeInput && !signal.aborted && !this.released);
+      };
+      this.transferListeners.add(finish);
+      signal.addEventListener('abort', finish, { once: true });
+    });
+  }
+
+  private claimNativeInput(element: HTMLElement) {
+    if (this.released || element !== this.inputTarget || this.nativeInput) return;
+    // Claim on input, BEFORE its first scroll event. A queued residual write can otherwise
+    // cancel the browser's new wheel/touch scroll before there is a foreign scroll to detect.
+    this.nativeInput = true;
+    this.releaseDeltaSources();
+    this.primary = element;
+    for (const peer of this.peers.keys()) {
+      if (peer !== element) this.removePeer(peer);
+    }
+    this.transferListeners.forEach((notify) => notify());
+  }
+
   addPeer(element: HTMLElement) {
     if (this.released || this.peers.has(element)) return;
     this.removeDeltaSource(element);
@@ -57,13 +102,20 @@ export class HeroScrollContinuity {
       // A scroll on the destination that we did not write is the user taking
       // over. That is the signal the transfer is complete: anything still
       // arriving from an outgoing scroller is now stale.
-      if (element === this.primary && this.isForeignScroll(element)) {
-        this.releaseDeltaSources();
+      if (element === this.inputTarget && this.isForeignScroll(element)) {
+        this.claimNativeInput(element);
       }
       this.syncFrom(element);
     };
-    this.peers.set(element, { element, listener });
+    const inputListener = (event: Event) => {
+      if (event instanceof WheelEvent && event.ctrlKey) return;
+      this.claimNativeInput(element);
+    };
+    this.peers.set(element, { element, listener, inputListener });
     element.addEventListener('scroll', listener, { passive: true });
+    element.addEventListener('wheel', inputListener, { passive: true, capture: true });
+    element.addEventListener('pointerdown', inputListener, { passive: true, capture: true });
+    element.addEventListener('touchstart', inputListener, { passive: true, capture: true });
 
     const source = this.primary;
     if (source && source !== element) {
@@ -81,6 +133,8 @@ export class HeroScrollContinuity {
     this.resetWheelResidual();
     this.clearPeers();
     this.primary = element;
+    this.inputTarget = null;
+    this.setInputTarget(element);
     this.addPeer(element);
   }
 
@@ -88,6 +142,11 @@ export class HeroScrollContinuity {
     const state = this.peers.get(element);
     if (!state) return;
     element.removeEventListener('scroll', state.listener);
+    if (state.inputListener) {
+      element.removeEventListener('wheel', state.inputListener, true);
+      element.removeEventListener('pointerdown', state.inputListener, true);
+      element.removeEventListener('touchstart', state.inputListener, true);
+    }
     this.peers.delete(element);
     if (this.primary === element) {
       this.primary = this.peers.keys().next().value ?? null;
@@ -195,13 +254,13 @@ export class HeroScrollContinuity {
     });
     this.deltaSources.clear();
     this.primary = null;
+    this.inputTarget = null;
+    this.transferListeners.forEach((notify) => notify());
+    this.transferListeners.clear();
   };
 
   private clearPeers() {
-    this.peers.forEach(({ element, listener }) => {
-      element.removeEventListener('scroll', listener);
-    });
-    this.peers.clear();
+    for (const element of this.peers.keys()) this.removePeer(element);
   }
 
   private writePosition(element: HTMLElement, left: number, top: number) {

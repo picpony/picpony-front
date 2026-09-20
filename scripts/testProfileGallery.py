@@ -433,17 +433,18 @@ def run_profile(browser, name, width, motion):
         context.close()
 
 
-with sync_playwright() as playwright:
-    browser = playwright.chromium.launch(channel='msedge', headless=True)
-    profiles = [('desktop', 1440, 'standard'), ('mobile', 390, 'standard'),
-                ('reduced', 1440, 'system'), ('off', 390, 'off')]
-    if '--quick' in sys.argv:
-        profiles = profiles[:1]
-    for profile in profiles:
-        run_profile(browser, *profile)
-    browser.close()
+if __name__ == '__main__':
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(channel='msedge', headless=True)
+        profiles = [('desktop', 1440, 'standard'), ('mobile', 390, 'standard'),
+                    ('reduced', 1440, 'system'), ('off', 390, 'off')]
+        if '--quick' in sys.argv:
+            profiles = profiles[:1]
+        for profile in profiles:
+            run_profile(browser, *profile)
+        browser.close()
 
-(OUTPUT / 'results.json').write_text(json.dumps({'results': RESULTS, 'failures': FAILURES},
-                                              ensure_ascii=False, indent=2), encoding='utf-8')
-print(f'{len(RESULTS)} gallery journeys passed, {len(FAILURES)} profiles failed; {OUTPUT / "results.json"}', flush=True)
-sys.exit(1 if FAILURES else 0)
+    (OUTPUT / 'results.json').write_text(json.dumps({'results': RESULTS, 'failures': FAILURES},
+                                                  ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f'{len(RESULTS)} gallery journeys passed, {len(FAILURES)} profiles failed; {OUTPUT / "results.json"}', flush=True)
+    sys.exit(1 if FAILURES else 0)

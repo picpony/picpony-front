@@ -4,6 +4,8 @@ import {
   BACKGROUND_REVEAL_DISTANCE_PX,
   DISMISS_DISTANCE_PX,
   DRAG_RESISTANCE_PX,
+  HERO_REVEAL_SELECTOR,
+  HERO_SURFACE_SELECTOR,
   PULL_RELEASE_DURATION_MS,
   PULL_RELEASE_MIN_DURATION_MS,
   PULL_RELEASE_RESPONSE,
@@ -20,8 +22,7 @@ import { progressAt, relaunch } from './progress';
 import { motionScale, motionTier } from '@/lib/appearance';
 
 const PULL_ATTRIBUTE = 'imageHeroPulling';
-const VAR_OFFSET = '--hero-pull-y';
-const VAR_VEIL = '--hero-veil';
+type PullStyle = { element: HTMLElement; property: 'transform' | 'opacity'; original: string; written: string };
 
 export type HeroPullSample = {
   /** Unresisted finger travel, in px. Drives every derived value. */
@@ -34,16 +35,16 @@ export type HeroPullSample = {
 
 /** The nodes a dismissible detail surface is made of. */
 export type HeroPullNodes = {
-  /** Scoping root for the CSS variables; also owns the reveal subtree. */
+  /** Owns the moving content and fading surface/reveal nodes. */
   overlay: HTMLElement;
-  /** Rendered outside the overlay, so it carries its own copy of the vars. */
+  /** Rendered outside the overlay; participates in the same veil. */
   floatingBack: HTMLElement | null;
 };
 
 export type HeroPullOptions = {
   /** Mirror the drag onto an in-flight flyer's compensator. */
   onOffset?: (distance: number) => void;
-  /** Fired once per gesture, before any variable is written. */
+  /** Fired once per gesture, after the first pose is ready to take over. */
   onSeize?: () => void;
   /** Held for the duration of the gesture (e.g. the destination thumbnail). */
   acquireLease?: () => DomLease | null;
@@ -75,10 +76,10 @@ export const PULL_REST = createPullSample(0);
  * being dragged, so they share this one implementation and are therefore
  * identical by construction rather than by two parallel edits.
  *
- * Per frame it writes at most five values — two CSS variables on the overlay,
- * two on the floating back button, and one transform on the gallery layer —
- * regardless of how many elements react to them. CSS fans the variables out to
- * the whole reveal subtree, so the cost does not grow with page content.
+ * Cache the few nodes that move/fade and write their non-inherited properties.
+ * Inherited custom properties looked like constant work in JS but made the browser
+ * recalculate the whole detail subtree on every frame. A child-list observer only
+ * refreshes this list when asynchronous content actually replaces those nodes.
  */
 export class HeroPullSurface {
   private readonly frameOwner = {};
@@ -89,6 +90,9 @@ export class HeroPullSurface {
   private settling = false;
   private settleResolve: (() => void) | null = null;
   private latest: HeroPullSample = PULL_REST;
+  private styles: PullStyle[] = [];
+  private observer: MutationObserver | null = null;
+  private background: HTMLElement | null = null;
 
   constructor(
     private readonly nodes: HeroPullNodes,
@@ -111,14 +115,19 @@ export class HeroPullSurface {
     });
   }
 
-  /** Write the release pose immediately, bypassing the frame queue. */
-  commit(sample: HeroPullSample) {
+  /** Write a live pose immediately, bypassing the frame queue. */
+  applyImmediate(sample: HeroPullSample) {
     if (this.disposed) return;
     this.begin(sample);
     this.endSettle();
     this.latest = sample;
     heroFrameScheduler.cancel(this.frameOwner);
     this.write(sample);
+  }
+
+  /** Write the release pose immediately, bypassing the frame queue. */
+  commit(sample: HeroPullSample) {
+    this.applyImmediate(sample);
   }
 
   /**
@@ -144,7 +153,7 @@ export class HeroPullSurface {
     }
 
     /* Shorter pulls snap back proportionally faster, and the whole range rides the speed
-       preference — the release is WAAPI, so neither `--motion-scale` nor GSAP's `timeScale`
+       preference — the release is evaluated in JS, so neither `--motion-scale` nor GSAP's `timeScale`
        reaches it and the multiplication has to be here. The floor is scaled with it rather
        than left absolute: it exists to stop a flick from a near-closed position reading as a
        cut, which is a proportion of the gesture rather than a wall-clock minimum. */
@@ -212,14 +221,16 @@ export class HeroPullSurface {
     this.active = false;
 
     const { overlay, floatingBack } = this.nodes;
+    this.observer?.disconnect();
+    this.observer = null;
     delete overlay.dataset[PULL_ATTRIBUTE];
-    overlay.style.removeProperty(VAR_OFFSET);
-    overlay.style.removeProperty(VAR_VEIL);
     if (floatingBack) {
       delete floatingBack.dataset[PULL_ATTRIBUTE];
-      floatingBack.style.removeProperty(VAR_OFFSET);
-      floatingBack.style.removeProperty(VAR_VEIL);
     }
+    this.styles.forEach(({ element, property, original, written }) => {
+      if (element.style[property] === written) element.style[property] = original;
+    });
+    this.styles = [];
 
     const background = restoreBackground ? getHeroBackgroundVisual() : null;
     if (background) {
@@ -227,6 +238,7 @@ export class HeroPullSurface {
       background.style.transformOrigin = '';
       background.style.willChange = '';
     }
+    this.background = null;
     this.options.onOffset?.(0);
 
     this.lease?.release();
@@ -248,7 +260,14 @@ export class HeroPullSurface {
    */
   private begin(sample: HeroPullSample) {
     if (this.active) return;
+    this.background = getHeroBackgroundVisual();
+    const scroller = this.background?.parentElement;
+    // Keep the sink's pivot when taking over from a flight; changing it at s<1
+    // translates the gallery even though the user's hand has only moved vertically.
+    const origin = this.background?.style.transformOrigin ||
+      `center ${scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0}px`;
     this.active = true;
+    this.refreshTargets();
     // Marking the surfaces themselves — rather than the document — keeps the
     // rules from reaching a Stage that happens to be mounted alongside.
     this.nodes.overlay.dataset[PULL_ATTRIBUTE] = '';
@@ -256,25 +275,47 @@ export class HeroPullSurface {
     this.write(sample);
     this.lease = this.options.acquireLease?.() ?? null;
     this.options.onSeize?.();
+    if (this.background) {
+      this.background.style.transformOrigin = origin;
+      this.background.style.willChange = 'transform';
+    }
+    this.observer = new MutationObserver(() => {
+      if (!this.active || this.disposed) return;
+      this.refreshTargets();
+      this.write(this.latest);
+    });
+    this.observer.observe(this.nodes.overlay, { childList: true, subtree: true });
+  }
+
+  private refreshTargets() {
+    const { overlay, floatingBack } = this.nodes;
+    const remember = (element: HTMLElement, property: PullStyle['property']) => {
+      if (this.styles.some((style) => style.element === element && style.property === property)) return;
+      this.styles.push({ element, property, original: element.style[property], written: '' });
+    };
+    const content = overlay.querySelector<HTMLElement>('.image-detail-overlay-content');
+    if (content) remember(content, 'transform');
+    overlay.querySelectorAll<HTMLElement>(`${HERO_SURFACE_SELECTOR}, ${HERO_REVEAL_SELECTOR}`)
+      .forEach((element) => remember(element, 'opacity'));
+    if (floatingBack) remember(floatingBack, 'opacity');
   }
 
   private write(sample: HeroPullSample) {
     if (this.disposed) return;
-    const { overlay, floatingBack } = this.nodes;
-    const offset = `${sample.distance}px`;
+    this.latest = sample;
+    const transform = `translate3d(0px, ${sample.distance}px, 0px)`;
     const veil = String(sample.opacity);
+    this.styles.forEach((style) => {
+      if (!style.element.isConnected) return;
+      const value = style.property === 'transform' ? transform : veil;
+      if (style.written === value) return;
+      style.element.style[style.property] = value;
+      // Read CSSOM serialization (e.g. translate3d's px zero) for ownership-safe restore.
+      style.written = style.element.style[style.property];
+    });
 
-    overlay.style.setProperty(VAR_OFFSET, offset);
-    overlay.style.setProperty(VAR_VEIL, veil);
-    if (floatingBack) {
-      floatingBack.style.setProperty(VAR_OFFSET, offset);
-      floatingBack.style.setProperty(VAR_VEIL, veil);
-    }
-
-    const background = getHeroBackgroundVisual();
+    const background = this.background;
     if (background) {
-      background.style.transformOrigin = 'center top';
-      background.style.willChange = 'transform';
       background.style.transform = getHeroBackgroundSinkTransform(sample.backgroundAmount);
     }
 

@@ -102,8 +102,12 @@ try {
   }
   if (!ready) throw new Error(`Production server did not start: ${serverError}`);
   const args = process.argv.slice(2);
-  const browserScript = args.includes('--profile-gallery') ? 'testProfileGallery.py' : 'reviewBrowser.py';
-  python = spawn('python', [path.join(root, 'scripts', browserScript), base, fixtureUrl, ...args], {
+  const browserScript = args.includes('--hero-visuals') ? 'captureHeroMotion.py'
+    : args.includes('--hero-performance') ? 'probeHeroPerformance.py'
+    : args.includes('--hero') ? 'testHeroInteractions.py'
+    : args.includes('--profile-gallery') ? 'testProfileGallery.py' : 'reviewBrowser.py';
+  python = spawn('python', [path.join(root, 'scripts', browserScript), base, fixtureUrl,
+    ...args.filter((arg) => arg !== '--hero-visuals')], {
     cwd: root, windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
   });
   const [code] = await once(python, 'exit');

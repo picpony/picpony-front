@@ -261,6 +261,7 @@ export function useOverlayLayer(
     frame = requestAnimationFrame(enter);
     return () => {
       cancelAnimationFrame(frame);
+      const departingRoots = rootsOf(layer);
       const index = layers.indexOf(layer);
       // React has already made the departing panel inert by cleanup time, so
       // its former place in the modal stack cannot be read from activeLayers.
@@ -275,6 +276,11 @@ export function useOverlayLayer(
       // focus from a newer dialog opened in the same commit.
       requestAnimationFrame(() => {
         const scope = focusScope();
+        const active = document.activeElement;
+        // A hero return exposes the gallery before its old route unmounts. Preserve a
+        // new focus choice made there (or in a newer overlay) during that interval.
+        if (active instanceof HTMLElement && active !== document.body && available(active) &&
+          !departingRoots.some((root) => root.contains(active))) return;
         const preferred = latest.current.returnFocus?.();
         const target = preferred ?? previous;
         if (target && target !== document.body && available(target) &&

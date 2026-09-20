@@ -44,6 +44,8 @@ export type ImageHeroStageState = {
 
 export type ImageHeroRuntimeState = {
   phase: HeroControllerPhase;
+  /** Actual direction, including a reversal toward either the gallery or the detail. */
+  direction: HeroDirection | null;
   sessionId: number | null;
   imageId: number | null;
   /* No `interactionQuiet` here: it was published and never read, and every quiet↔active

@@ -1,6 +1,7 @@
 'use client';
 
 import { SPRING_MS } from '@/lib/spring';
+import { DURATION, EASE } from '@/lib/motionTokens';
 import type { HeroProgressModel, ProgressCurve } from './progress';
 import type { SpringResponse } from './spring';
 import type { HeroDirection } from './types';
@@ -21,7 +22,7 @@ export const HERO_UNCLIP_SELECTOR = '[data-image-detail-unclip]';
 /**
  * The block the container transform cross-fades — the open child only, one property: opacity.
  * Deliberately not the overlay's content node: that is the pull gesture's transform target
- * (`--hero-pull-y`), and a CSS-variable translate and a WAAPI animation cannot compose on one
+ * (the drag's translate), and that translate and a WAAPI animation cannot compose on one
  * element — the animation wins. The node survived the fit's removal because the cross-fade and
  * the StatusView fill flex chain both still want it.
  */
@@ -130,7 +131,7 @@ export const HERO_MEDIA_MAX_WIDTH_PX = 944;
  * When a transition reads wrong, check what it is doing before changing how long it takes —
  * a duration is the cheapest knob and the least likely to be the fault.
  *
- * Couplings: 48 samples → 5.21ms per segment; the gallery card's 200ms chrome fade must
+ * Couplings: 48 samples → 47 intervals of 5.32ms; the gallery card's FastEffects fade must
  * finish inside the leg; the reveal windows are progress fractions, so they cannot outlive
  * it. The swipe-down dismiss is deliberately not here — see `PULL_RELEASE_DURATION_MS`.
  */
@@ -230,7 +231,7 @@ export const HERO_CONTAINER_SHAPE: Record<HeroDirection, { start: number; end: n
  * 48 because the container's anisotropy is the binding constraint: WAAPI lerps the window's
  * `scale(sx, sy)` and the compensator's `scale(fx, fy)` independently, and that between-sample
  * error goes as the square of the spacing — 0.99% at 32 against 0.441% at 48, measured on the
- * real geometry matrix. 250/48 is 5.21ms per segment, inside a frame at 120Hz.
+ * real geometry matrix. 250/47 is 5.32ms per segment, inside a frame at 120Hz.
  */
 export const HERO_PROGRESS_SAMPLES = 48;
 
@@ -251,10 +252,10 @@ export const HERO_ARC_SOLVE_SAMPLES = 65;
  * Snap step for the container window's corner, in px, **rounded up**. Rounding up is
  * load-bearing, not tidy: the emitted radius is `R / min(sx, sy)`, and rounding down can put
  * the *screen* radius under `R`, leaving a sliver of surface outside the picture's own corner
- * at take-off (`formatHeroContainerRadius` has the containment argument). 4 is a multiple of
- * every step on the shape scale, so the snap is exact at both ends of a leg.
+ * at take-off (`formatHeroContainerRadius` has the containment argument). A 1px step
+ * preserves the shape-scale endpoints without 4px stair-steps along the rounded edge.
  */
-export const HERO_MASK_RADIUS_STEP_PX = 4;
+export const HERO_MASK_RADIUS_STEP_PX = 1;
 export const HERO_ARC_SOLVE_STEPS = 10;
 /**
  * Grid points for the containment solve's scan, before it refines. Scanning rather than
@@ -343,17 +344,17 @@ export const HERO_REVEAL_WINDOW: Record<
  * renders *outside* the overlay, so the container's parameters make no claim on it. 200ms on
  * `standard-decelerate` — the motion table's "small thing entering" row.
  *
- * Spelled as a literal like the file's other easings: it is handed to a Web Animations
- * `easing:` string, where a failed `var()` falls back to `ease` in silence.
+ * The duration follows the shared motion token; the WAAPI curve below is likewise resolved
+ * to a literal because `easing: var(...)` silently falls back to `ease`.
  */
-export const REVEAL_CONTENT_DURATION_MS = 200;
+export const REVEAL_CONTENT_DURATION_MS = DURATION.short * 1000;
 
 /**
  * How long a superseded flyer takes to fade out: a leave, not a transition — the motion
  * table's "leaves the screen" row, 200ms. A base value: `lib/hero/motion.ts` applies
  * `motionScale()` at the point of use, so it still honours the speed tiers.
  */
-export const FLIGHT_RETIRE_MS = 200;
+export const FLIGHT_RETIRE_MS = DURATION.short * 1000;
 
 /**
  * Floor on the leg a mid-flight rebuild produces: a viewport change in the last few frames
@@ -373,10 +374,9 @@ export const REVEAL_DISTANCE_PX = {
   body: 40,
   default: 24,
 } as const;
-/* Spelled literally like every WAAPI easing string here: a failed `var()` falls back to
-   `ease` in silence. The values are the token values — keep them in sync. */
-export const REVEAL_EASING = 'cubic-bezier(0, 0, 0, 1)';
-export const HIDE_EASING = 'cubic-bezier(0.3, 0, 0.8, 0.15)';
+/* Resolved shared motion tokens for WAAPI. Keep the source of truth in `lib/motionTokens.ts`. */
+export const REVEAL_EASING = EASE.standardDecelerate;
+export const HIDE_EASING = EASE.accelerate;
 export const HIDE_DISTANCE_PX = 8;
 
 // ---------------------------------------------------------------------------

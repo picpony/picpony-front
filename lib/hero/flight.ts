@@ -14,7 +14,6 @@ import {
   getHeroBoxTransform,
   getHeroCoverTransform,
   heroRectCenterDistance,
-  lerpHeroRect,
   lerpHeroRectArc,
   solveHeroArcBow,
   type HeroHost,
@@ -36,8 +35,8 @@ import type { HeroDirection } from './types';
 export type HeroFlightRole = 'foreground' | 'retiring';
 
 /**
- * A flight's complete visual state at one instant. Derived analytically from
- * the leg description, never read back from the DOM.
+ * A flight's complete visual state at one instant. Derived from its shared numeric samples
+ * and continuous progress model, never read back from the DOM.
  */
 export type HeroPose = {
   /** Plane-space box produced by the flight keyframes alone. */
@@ -77,6 +76,64 @@ export type HeroLeg = {
   duration: number;
   startedAt: number;
 };
+
+type FlightGeometryFrame = {
+  offset: number;
+  rect: HeroRect;
+  radius: number;
+};
+
+/** Numeric source for both the WAAPI tracks and interruption poses. */
+const geometryFrames = new WeakMap<HeroLeg, readonly FlightGeometryFrame[]>();
+
+function getFlightGeometryFrames(leg: HeroLeg): readonly FlightGeometryFrame[] {
+  const cached = geometryFrames.get(leg);
+  if (cached) return cached;
+  const arc = createHeroRectArc(leg.from, leg.to, leg.bow);
+  const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES).map(
+    ({ offset, progress }) => ({
+      offset,
+      rect: lerpHeroRectArc(arc, progress),
+      radius: interpolate(
+        leg.fromRadius,
+        leg.toRadius,
+        radiusProgress(progress, leg.direction),
+      ),
+    }),
+  );
+  geometryFrames.set(leg, frames);
+  return frames;
+}
+
+/**
+ * The flyer uses matching translate/scale transform lists, so WAAPI interpolates each
+ * component linearly between the emitted offsets. Interpolate those same boxes rather than
+ * re-evaluating the curve: the two differ between samples, especially where a reversal's
+ * negative progress is clamped by the arc. Catching the analytic box there moved an already
+ * visible flyer by several pixels before the replacement animation could start.
+ */
+function flightRectAt(leg: HeroLeg, offset: number): HeroRect {
+  const frames = getFlightGeometryFrames(leg);
+  const last = frames.length - 1;
+  if (offset <= frames[0].offset) return frames[0].rect;
+  if (offset >= frames[last].offset) return frames[last].rect;
+  let low = 0;
+  let high = last;
+  while (high - low > 1) {
+    const mid = (low + high) >>> 1;
+    if (frames[mid].offset <= offset) low = mid;
+    else high = mid;
+  }
+  const from = frames[low];
+  const to = frames[high];
+  const amount = (offset - from.offset) / (to.offset - from.offset);
+  return {
+    left: interpolate(from.rect.left, to.rect.left, amount),
+    top: interpolate(from.rect.top, to.rect.top, amount),
+    width: interpolate(from.rect.width, to.rect.width, amount),
+    height: interpolate(from.rect.height, to.rect.height, amount),
+  };
+}
 
 export type HeroFlight = {
   layer: HTMLElement;
@@ -199,25 +256,26 @@ export function createHeroLeg({
 /**
  * Evaluate a leg at wall-clock `time`.
  *
- * This is the same math that generates the keyframes, so the value it returns
- * is what the compositor is showing — with no forced layout and no precision
- * lost through matrix serialization.
+ * The box comes from the keyframes' numeric table and its between-frame interpolation,
+ * matching the composited flyer without a DOM read. Velocity retains the continuous signed
+ * model: using the table's piecewise-constant secants would inject a speed step every sample
+ * into the spring that takes over an interrupted leg.
  */
 export function evaluateLeg(leg: HeroLeg, time: number): HeroPose {
   const elapsed = Math.min(leg.duration, Math.max(0, time - leg.startedAt));
   const offset = leg.duration > 0 ? elapsed / leg.duration : 1;
   const progress = progressAt(leg.progress, offset);
-  const rect = lerpHeroRect(leg.from, leg.to, progress, leg.bow);
+  const rect = flightRectAt(leg, offset);
 
-  // Chord speed: |Δcenter| · dp/dt. A magnitude only — it exists to seed
-  // `springVelocityFromSpeed` when a leg is interrupted, and the replacement leg
-  // re-derives its own travel from the pose it is caught at.
-  const chord = Math.hypot(
-    leg.to.left + leg.to.width / 2 - (leg.from.left + leg.from.width / 2),
-    leg.to.top + leg.to.height / 2 - (leg.from.top + leg.from.height / 2),
-  );
+  // The same centre + half-size metric createHeroLeg uses to normalize launch speed.
+  // Centre alone loses ALL momentum on a centred zoom and part of it on every resize.
+  const chord = heroRectCenterDistance(leg.from, leg.to);
+  // A filled WAAPI track is stationary after its last keyframe, even though the normalized
+  // spring still has a nonzero derivative there. A later reversal must leave that pose at rest.
   const speed =
-    leg.duration > 0 ? (chord * velocityAt(leg.progress, offset)) / leg.duration : 0;
+    leg.duration > 0 && elapsed < leg.duration
+      ? (chord * velocityAt(leg.progress, offset)) / leg.duration
+      : 0;
 
   return {
     rect,
@@ -243,20 +301,13 @@ export type FlightKeyframes = {
  */
 export function buildFlightKeyframes(flight: HeroFlight, leg: HeroLeg): FlightKeyframes {
   const host = planeHost(flight);
-  const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES);
-  const arc = createHeroRectArc(leg.from, leg.to, leg.bow);
+  const frames = getFlightGeometryFrames(leg);
   const flyer: Keyframe[] = new Array(frames.length);
   const clip: Keyframe[] = new Array(frames.length);
   const image: Keyframe[] = new Array(frames.length);
 
   for (let index = 0; index < frames.length; index += 1) {
-    const { offset, progress } = frames[index];
-    const display = lerpHeroRectArc(arc, progress);
-    const radius = interpolate(
-      leg.fromRadius,
-      leg.toRadius,
-      radiusProgress(progress, leg.direction),
-    );
+    const { offset, rect: display, radius } = frames[index];
 
     flyer[index] = {
       offset,

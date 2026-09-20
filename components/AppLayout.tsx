@@ -311,6 +311,10 @@ export default function AppLayout({
   const bridgeRouteCommit = Boolean(
     activeHeroBackground && browserAtBackground && !reactRouteAtBackground,
   );
+  // A return already exposes the gallery. Leaving it inert until router commit makes
+  // wheel/touch hit the non-scrollable host; a wheel stream then stays latched there even
+  // after the flight lands. Direction also distinguishes a cancelled close reopening detail.
+  const galleryInert = isImageDetailOpen && imageHeroRuntime.direction !== 'back';
   // An intercepted detail also opens without a hero flight (reduced/off motion,
   // or an unavailable source bitmap). Keep that route's real background too:
   // guessing '/' changes the content key and remounts a multi-page favourites
@@ -847,9 +851,9 @@ export default function AppLayout({
               
               <main
                 data-image-detail-background
-                inert={isImageDetailOpen || undefined}
+                inert={galleryInert || undefined}
                 data-image-hero-gallery-scroll
-                data-scroll-hidden={isImageDetailOpen || undefined}
+                data-scroll-hidden={galleryInert || undefined}
                 className="app-scroller main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-surface"
               >
                 {' '}

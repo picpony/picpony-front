@@ -38,6 +38,7 @@ import {
   subscribeHeroViewportInvalidation,
   waitForHeroInputRelease,
   waitForHeroInteractionQuiet,
+  type HeroInteractionQuietResult,
 } from './input';
 import { clearInactiveHeroBackground, HeroMotion } from './motion';
 import { getElementScrollPlane, getGalleryScrollPlane, type HeroScrollPlane } from './plane';
@@ -150,6 +151,7 @@ const EMPTY_STAGE: ImageHeroStageState = {
 
 const INITIAL_RUNTIME: ImageHeroRuntimeState = {
   phase: 'gallery-idle',
+  direction: null,
   sessionId: null,
   imageId: null,
   stage: EMPTY_STAGE,
@@ -593,7 +595,8 @@ export class HeroController {
       scroller: route.scroller,
       canStart: () => this.prepareRouteDismiss(route) && canStart(),
       onPull: (sample) => {
-        if (active()) pull.apply(sample);
+        // The recognizer has already coalesced this into the scheduler's write phase.
+        if (active()) pull.applyImmediate(sample);
       },
       onCancel: ({ sample, velocity }: HeroPullRelease) => pull.settle(sample, velocity),
       onCommit: ({ sample }: HeroPullRelease) => {
@@ -663,7 +666,7 @@ export class HeroController {
       scroller: stage.scroller,
       canStart: () => this.owns(session) && !session.reversing,
       onPull: (sample) => {
-        if (this.owns(session)) pull.apply(sample);
+        if (this.owns(session)) pull.applyImmediate(sample);
       },
       onCancel: async ({ sample, velocity }: HeroPullRelease) => {
         await pull.settle(sample, velocity);
@@ -957,6 +960,7 @@ export class HeroController {
         if (!this.owns(session)) return;
         route.scroller.scrollTop = scrollTop;
         if (!this.routes.reveal(route, session.owner)) return;
+        session.scrollContinuity?.setInputTarget(route.scroller);
         session.handoffRoute = route;
         routeRevealed = true;
         const visual = combineHeroLeases(
@@ -1503,7 +1507,7 @@ export class HeroController {
     const measurement =
       session.motion && routeTarget?.isConnected
         ? {
-            destination: getHeroRect(routeTarget),
+            destination: session.motion.unprojectRect(getHeroRect(routeTarget)),
             pose: session.motion.measurePose(),
           }
         : null;
@@ -2199,29 +2203,60 @@ export class HeroController {
    *
    * **The budget must go *into* the quiet wait, not around it.** A deadline checked at the
    * top of the loop cannot fire while the `await` below is what never returns — precisely
-   * the case being bounded — so the quiet wait takes the remaining budget and the `!quiet`
-   * branch tells expiry from abort via the deadline.
+   * the case being bounded — so the quiet wait takes the remaining budget and reports expiry
+   * explicitly. A browser may truncate its fractional timeout, so the clock cannot distinguish
+   * that completed budget from an abort after the promise resolves.
    */
   private async waitForInputTransfer(session: HeroSession, sync?: () => void) {
+    const lifecycleSignal = this.lifecycleAbort.signal;
     const deadline = performance.now() + HERO_INPUT_TRANSFER_MAX_MS;
     while (this.owns(session)) {
+      if (session.abort.signal.aborted || lifecycleSignal.aborted) return false;
       if (performance.now() >= deadline) return true;
-      const quiet = await waitForHeroInteractionQuiet(
-        session.abort.signal,
-        HERO_INPUT_TRANSFER_QUIET_MS,
-        deadline - performance.now(),
-      );
-      if (!this.owns(session)) return false;
-      if (!quiet) return performance.now() >= deadline;
-      sync?.();
-      if (
-        !(await waitForFrame(
-          [session.abort.signal, this.lifecycleAbort.signal],
-          HERO_ROUTE_TIMEOUT_MS,
-        ))
-      )
+      const continuity = session.scrollContinuity;
+      // Only the OLD receiver needs a quiet window. Fresh input on the visible receiver
+      // proves the browser has retargeted; waiting for that new scroll to stop held a close
+      // open for two full timeout budgets and withheld detail content after an open.
+      const waitAbort = new AbortController();
+      const abortWait = () => waitAbort.abort();
+      const signals = [session.abort.signal, lifecycleSignal];
+      signals.forEach((signal) => signal.addEventListener('abort', abortWait, { once: true }));
+      if (signals.some((signal) => signal.aborted)) abortWait();
+      let outcome: HeroInteractionQuietResult | 'native';
+      try {
+        const quiet = waitForHeroInteractionQuiet(
+          waitAbort.signal,
+          HERO_INPUT_TRANSFER_QUIET_MS,
+          deadline - performance.now(),
+        );
+        outcome = await (continuity
+          ? Promise.race([
+              quiet,
+              continuity.waitForNativeInput(waitAbort.signal).then((transferred) =>
+                // A released receiver did not receive native input. Keep the same quiet
+                // wait: repeatedly racing an already-released receiver would spin here.
+                transferred ? 'native' as const : quiet,
+              ),
+            ])
+          : quiet);
+      } finally {
+        waitAbort.abort();
+        signals.forEach((signal) => signal.removeEventListener('abort', abortWait));
+      }
+      if (!this.owns(session) || session.abort.signal.aborted || lifecycleSignal.aborted || outcome === 'aborted')
         return false;
-      if (isHeroInteractionQuiet() && !hasActiveHeroInput()) return true;
+      if (outcome === 'expired') return true;
+      sync?.();
+      const frameConfirmed = await waitForFrame(
+        [session.abort.signal, lifecycleSignal],
+        HERO_ROUTE_TIMEOUT_MS,
+      );
+      if (!this.owns(session) || session.abort.signal.aborted || lifecycleSignal.aborted) return false;
+      // Hidden documents can suspend rAF after input has already transferred. The frame
+      // timeout is a completed handoff budget too, not permission to abandon a live session.
+      if (!frameConfirmed) return true;
+      if (continuity?.hasNativeInput || (isHeroInteractionQuiet() && !hasActiveHeroInput()))
+        return true;
     }
     return false;
   }
@@ -2260,15 +2295,15 @@ export class HeroController {
     background: ImageHeroBackgroundLocation | null,
     imageId = session?.snapshot.image.id ?? null,
   ) {
-    this.updateRuntime({ phase, sessionId: session?.id ?? null, imageId, background });
+    const direction = phase.startsWith('opening') ? 'forward'
+      : phase === 'closing.flight' ? 'back'
+      : phase === 'reversing' ? (session?.kind === 'closing' ? 'forward' : 'back')
+      : null;
+    this.updateRuntime({ phase, direction, sessionId: session?.id ?? null, imageId, background });
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
-      if (phase.startsWith('opening')) root.dataset.imageHeroTransition = 'forward';
-      else if (phase === 'closing.flight' || phase === 'reversing') {
-        root.dataset.imageHeroTransition = 'back';
-      } else {
-        delete root.dataset.imageHeroTransition;
-      }
+      if (direction) root.dataset.imageHeroTransition = direction;
+      else delete root.dataset.imageHeroTransition;
       root.dataset.imageHeroState = phase;
     }
     this.events.notify();
@@ -2278,6 +2313,7 @@ export class HeroController {
     const next = { ...this.runtime, ...patch };
     if (
       next.phase === this.runtime.phase &&
+      next.direction === this.runtime.direction &&
       next.sessionId === this.runtime.sessionId &&
       next.imageId === this.runtime.imageId &&
       next.stage === this.runtime.stage &&

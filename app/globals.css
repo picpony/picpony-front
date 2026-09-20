@@ -2183,7 +2183,7 @@ html[data-motion='off'] [data-tab-panel] > [data-tab-pane][data-tab-pane-leaving
    The clock has to stay inside the flight's, which both scale together keeps true. */
 .image-hero-card-link [data-image-hero-chrome] {
   opacity: 1;
-  transition: opacity var(--transition-duration-standard) var(--ease-standard);
+  transition: opacity var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
 /*
@@ -2469,22 +2469,18 @@ html[data-image-hero-transition] [data-image-detail-zoom] {
 /*
  * Pull-to-dismiss.
  *
- * The gesture writes only two custom properties on the surface being dragged; CSS
- * fans those two values out over the whole reveal subtree, so the per-frame cost is constant
- * however much detail content is mounted. Scoped to the pulling attribute (set once at
- * drag start, removed at settle) — in particular the overlay-content element must never
- * carry a permanent transform, which would make it a containing block and trap the
- * lightbox's fixed-position layers.
+ * The gesture writes transform/opacity directly to the moving/fading nodes. Inherited
+ * custom properties would invalidate the entire detail tree at pointer frequency.
+ * Promotion is scoped to the active gesture; settle restores the inline styles and
+ * removes this attribute, leaving no resting transform or permanent full-page layer.
  */
 [data-image-hero-pulling] .image-detail-overlay-content {
-  transform: translate3d(0, var(--hero-pull-y, 0px), 0);
   will-change: transform;
 }
 
 [data-image-hero-pulling] [data-image-detail-surface],
 [data-image-hero-pulling] [data-image-detail-reveal],
 [data-image-detail-floating-back][data-image-hero-pulling] {
-  opacity: var(--hero-veil, 1);
   will-change: opacity;
 }
 

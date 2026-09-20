@@ -283,7 +283,7 @@ export function formatHeroContainerCounter(pose: HeroBoxTransform) {
  *
  * Dividing by the smaller scale keeps both screen radii ≥ `R`, so the window's cut provably
  * contains the flyer's circular-`R` cut; dividing by `sx` alone under-cuts and leaves
- * surface slivers outside the picture's corner at take-off. Rounding **up** keeps the 4px
+ * surface slivers outside the picture's corner at take-off. Rounding **up** keeps the 1px
  * quantisation from landing half a step under `R` — same sliver. The cap is the browser's:
  * CSS rescales all radii when adjacent radii exceed a side, so capping here keeps our
  * arithmetic equal to what is painted; `npm run hero:path` asserts the cap never binds.
