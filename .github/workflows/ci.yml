@@ -47,6 +47,9 @@ jobs:
       - name: Install
         run: npm install --no-audit --no-fund
 
+      - name: Production dependency security
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Changed-line whitespace
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}

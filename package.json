@@ -49,7 +49,7 @@
     "@wangeditor/editor": "^5.1.23",
     "gsap": "^3.15.0",
     "lottie-web": "^5.13.0",
-    "next": "16.3.3",
+    "next": "16.3.6",
     "nextjs-toploader": "^3.9.17",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -72,8 +72,12 @@
     "axe-core": "4.13.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.39.5",
-    "eslint-config-next": "16.3.3",
+    "eslint-config-next": "16.3.6",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2"
   }
 }
