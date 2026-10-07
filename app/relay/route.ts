@@ -46,6 +46,9 @@ const SKIP_RESPONSE_HEADERS = new Set([
   'content-length',
   'cdn-cache-control',
   'vercel-cdn-cache-control',
+  /* The upstream's software banner is not ours to advertise. */
+  'x-powered-by',
+  'server',
   /* Our server's Origin echoed back by the relay; re-emitting it would describe a
      cross-origin exchange the browser is not making. */
   'access-control-allow-origin',
@@ -133,6 +136,12 @@ async function relay(request: NextRequest): Promise<Response> {
   if (request.method !== 'HEAD' && response.status !== 204 && response.status !== 205 &&
       mediaType !== 'application/json' && !/^application\/[\w.+-]+\+json$/.test(mediaType ?? '')) {
     void response.body?.cancel().catch(() => {});
+    /* A client error is an answer, not a dead line. Derpibooru answers a deleted picture or a
+       missing account with a plain-text 404, and as a 502 it reached the screen as a failing
+       line offering 重试, never as 不存在. Its status passes through; its body never does. */
+    if (response.status >= 400 && response.status < 500) {
+      return Response.json({ success: false, message: `Derpibooru 返回 ${response.status}` }, { status: response.status });
+    }
     return Response.json({ success: false, message: 'PicPony API 线路返回了非 JSON 内容' }, { status: 502 });
   }
 

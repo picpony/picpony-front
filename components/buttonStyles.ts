@@ -41,13 +41,16 @@ export type ButtonSize = 'xs' | 'md' | 'lg';
  * state layer carries interaction; a hover does not add a decorative shadow.
  */
 const VARIANTS: Record<ButtonVariant, string> = {
-  filled: 'bg-primary text-on-primary focus-ring',
-  tonal: 'bg-secondary-container text-on-secondary-container focus-ring',
+  /* `forced-boundary` on every variant that has a container: forced colors flattens the
+     container to the canvas, and a filled button with no edge is a word. The two text
+     variants have no container to lose. */
+  filled: 'bg-primary text-on-primary focus-ring forced-boundary',
+  tonal: 'bg-secondary-container text-on-secondary-container focus-ring forced-boundary',
   // Neutral commands beside fields and dropdowns share their container material.
-  surface: 'bg-surface-container-highest text-on-surface focus-ring',
-  accent: 'bg-primary-container text-on-primary-container focus-ring',
+  surface: 'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
+  accent: 'bg-primary-container text-on-primary-container focus-ring forced-boundary',
   text: 'bg-transparent text-on-surface-variant focus-ring',
-  danger: 'bg-error-fill text-on-fill focus-ring',
+  danger: 'bg-error-fill text-on-fill focus-ring forced-boundary',
   /* A destructive action that is not the primary one on its screen. A variant,
      not `variant="text"` plus a colour at the call site: `cn` is a plain join
      and would emit two colour utilities, letting Tailwind's output order pick.
@@ -56,14 +59,14 @@ const VARIANTS: Record<ButtonVariant, string> = {
   /* The confirm half of a moderation pair (通过/拒绝, 上架/下架). Takes the
      scheme-independent `*-fill` pair like `danger`: the plain text roles flip
      between schemes, and a filled button wearing them visibly swaps shade. */
-  success: 'bg-success-fill text-on-fill focus-ring',
-  warning: 'bg-warning-fill text-on-fill focus-ring',
+  success: 'bg-success-fill text-on-fill focus-ring forced-boundary',
+  warning: 'bg-warning-fill text-on-fill focus-ring forced-boundary',
 };
 
 /* Heights, padding and the icon gap are M3's per-size values; see `ButtonSize`.
  * `xs` exists for the admin `DataTable` row action (M3 Expressive specs an
- * extra-small size for exactly this). Deliberately below the 48px touch floor —
- * dense chrome may be smaller than the finger target in a desktop-first surface.
+ * extra-small size for exactly this). Its *painted* box is below the 48px touch
+ * floor; its hit area is not — see `touch-target` in the recipe below.
  * The gap is 8dp at every size (`IconLabelSpace` does not vary); horizontal
  * padding is 16 / 16 / 24 (`ButtonXSmallTokens.LeadingSpace` is 16, same as
  * small's — only the medium step widens).
@@ -133,7 +136,19 @@ export function buttonClasses({
     // out shrink-to-fit rather than as a `shrink-0` flex item, a label beside an
     // inline svg breaks between the two and renders the glyph above its text.
     // M3 button labels do not wrap; the button grows or the label truncates.
-    'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full outline-none [&>svg]:shrink-0',
+    'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full [&>svg]:shrink-0',
+    /* The outline goes only while the ring stands in for it, and comes back under forced
+       colors, where a ring (a box shadow) is not painted at all. */
+    'focus-visible:outline-hidden',
+    /* A 40dp or 32dp box with a 48px hit area under a finger (the floor is 24px under a
+       pointer, which a button already clears): the painted size is M3's, the target is
+       the platform's. It needs the control not to clip its own box, which is why `Button`
+       paints its wave in an inner host (`data-ripple="inner"`). A `Link` wearing this
+       recipe has no clip, so it gets the same target. */
+    'touch-target',
+    /* Chrome, not content: a long-press must not select the label and raise the
+       selection callout, and a quick second tap must not zoom the page. */
+    'select-none touch-manipulation',
     !HAS_MAX_WIDTH.test(className) && 'max-w-full',
     loading ? 'cursor-wait' : disabled ? 'cursor-not-allowed' : 'cursor-pointer',
     /* Material changes share FastEffects with the icon button and text field.

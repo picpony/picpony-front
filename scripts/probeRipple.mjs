@@ -64,6 +64,9 @@ const evalIn = async (expr) => {
 };
 await send('Runtime.enable');
 await send('Page.enable');
+/* Measure the code, not the service worker (see the same line in netAudit.mjs). */
+await send('Network.enable');
+await send('Network.setBypassServiceWorker', { bypass: true });
 
 await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/policy` });
 await new Promise((r) => setTimeout(r, 2500));
@@ -92,13 +95,22 @@ const out = await evalIn(`(async () => {
   return { cssOpacityAtStart: css, samples: samples.filter((s, i) => i % 2 === 0) };
 })()`);
 
-if (typeof out === 'string') { console.log(out); }
+/* A check, not only a report: CI runs this as a gate, so a wave above its token — or a press that
+   measured no wave at all — fails the run. */
+let failed = false;
+if (typeof out === 'string') { console.log(`FAIL: ${out}`); failed = true; }
 else {
   console.log('css opacity at spawn:', out.cssOpacityAtStart);
   console.log('ms:opacity  ' + out.samples.map(([t, o]) => t + ':' + o).join('  '));
   const nums = out.samples.map(([, o]) => (o === 'gone' ? null : Number(o))).filter((n) => n !== null);
-  console.log('peak opacity:', Math.max(...nums));
+  const peak = Math.max(...nums);
+  console.log('peak opacity:', peak);
+  if (!nums.length) { console.log('FAIL: no wave was sampled'); failed = true; }
+  else if (peak > Number(out.cssOpacityAtStart) + 0.005) {
+    console.log(`FAIL: the wave peaked at ${peak}, above its token ${out.cssOpacityAtStart}`);
+    failed = true;
+  }
 }
 
 ws.close(); browser.kill(); server.kill(); upstream.close();
-setTimeout(() => { try { rmSync(profile, { recursive: true, force: true }); } catch {} process.exit(0); }, 500);
+setTimeout(() => { try { rmSync(profile, { recursive: true, force: true }); } catch {} process.exit(failed ? 1 : 0); }, 500);

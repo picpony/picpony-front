@@ -1,4 +1,5 @@
 import { TRAIL_DEFAULTS, TRAIL_SIZE, TRAIL_VELOCITY_TAU } from '@/lib/flutedGlass';
+import { clamp, clamp01 } from '@/lib/utils';
 
 /**
  * The cursor's ink: a velocity field and a density field, advected and decayed on the CPU.
@@ -13,6 +14,9 @@ import { TRAIL_DEFAULTS, TRAIL_SIZE, TRAIL_VELOCITY_TAU } from '@/lib/flutedGlas
  * - `dt` is stepped, never clamped: clamping at 30fps runs the flow at half real time and
  *   swallows the motion-speed preference; the stepped total stays bounded for background tabs.
  * - Density is advected along the velocity field rather than merely faded, so trails curl.
+ * - **It rests.** Once the last trail has faded below what eight bits can show and nothing is
+ *   depositing, `step` does no work and reports that the texture is unchanged, so the plate
+ *   neither simulates nor uploads an empty field every frame (R7-033).
  *
  * Touches no DOM, so `scripts/probeFlutedGlass.mjs` drives the same class.
  */
@@ -22,6 +26,13 @@ const CELLS = N * N;
 
 /** Largest step the advection stays stable at. */
 const MAX_STEP = 0.016;
+
+/**
+ * Below these the encoded texels no longer change: half a code value of density (0–255) and of
+ * velocity (127.5 per unit). A field this quiet is at rest.
+ */
+const REST_DENSITY = 0.5 / 255;
+const REST_VELOCITY = 0.5 / 127.5;
 
 /** Sampled by the shader as rg = velocity (0.5-centred), b = density. */
 export class FlutedGlassTrail {
@@ -48,6 +59,15 @@ export class FlutedGlassTrail {
   private seen = false;
   /** Plate width over height, so the deposit is round on screen rather than in the grid. */
   private aspect = 1;
+  /** The fields' largest magnitudes after the last step — what `resting` is decided from. */
+  private peakDensity = 0;
+  private peakVelocity = 0;
+  private quiet = true;
+
+  /** Nothing to show and nothing arriving: a `step` now would leave the texture as it is. */
+  get resting(): boolean {
+    return this.quiet;
+  }
 
   /** Pointer position in 0..1 of the plate, top-left origin. Records only; velocity is sampled in `step`. */
   move(x: number, y: number) {
@@ -73,21 +93,44 @@ export class FlutedGlassTrail {
     this.aspect = aspect > 0 && Number.isFinite(aspect) ? aspect : 1;
   }
 
+  /** Back to an empty field — the still frame of the lower motion tiers carries no ink. */
+  clear() {
+    this.vel.fill(0);
+    this.velNext.fill(0);
+    this.density.fill(0);
+    this.densityNext.fill(0);
+    this.peakDensity = 0;
+    this.peakVelocity = 0;
+    this.quiet = true;
+    this.leave();
+    this.encode();
+  }
+
   /**
    * Advance the field by `seconds` in stable sub-steps, never a clamp, so 30fps frames and the
-   * motion-speed preference run the flow at true rate.
+   * motion-speed preference run the flow at true rate. Returns whether `pixels` changed — at
+   * rest, with the pointer still or away, it does nothing at all.
    */
-  step(seconds: number) {
-    let remaining = Math.min(Math.max(seconds, 0), 0.2);
+  step(seconds: number): boolean {
+    let remaining = clamp(seconds, 0, 0.2);
     /* Once per frame over the whole delta, not per substep: in-loop sampling would read
        movement only in the first 16ms and close the deposit gate for every later substep. */
     this.sampleVelocity(remaining);
+    if (this.quiet && !this.depositing()) return false;
+    if (remaining <= 1e-6) return false;
     while (remaining > 1e-6) {
       const dt = Math.min(remaining, MAX_STEP);
       remaining -= dt;
       this.advance(dt);
     }
     this.encode();
+    this.quiet = !this.depositing() && this.peakDensity < REST_DENSITY && this.peakVelocity < REST_VELOCITY;
+    return true;
+  }
+
+  /** The deposit gate: the pointer is on the plate and moved since the last step. */
+  private depositing(): boolean {
+    return this.seen && Math.abs(this.rawVx) + Math.abs(this.rawVy) > 0.01;
   }
 
   private advance(dt: number) {
@@ -163,7 +206,7 @@ export class FlutedGlassTrail {
     const speed = Math.hypot(this.smoothVx, this.smoothVy);
 
     /* The pointer is the only source, gated on the *instantaneous* reading: a parked cursor stops laying ink. */
-    if (this.seen && Math.abs(this.rawVx) + Math.abs(this.rawVy) > 0.01) {
+    if (this.depositing()) {
       /* Radius on the square of speed, amplitude on speed — flicks lay wide strong trails, slow drags thin faint ones. */
       const radius = cfg.radius * 0.05 * Math.min(speed * speed * 20, 1);
       const gain = Math.min(speed * 10, 1);
@@ -196,11 +239,21 @@ export class FlutedGlassTrail {
       }
     }
 
+    let peakDensity = 0;
+    let peakVelocity = 0;
     for (let i = 0; i < CELLS; i += 1) {
-      vel[i * 2] = clamp(vel[i * 2], -1, 1);
-      vel[i * 2 + 1] = clamp(vel[i * 2 + 1], -1, 1);
-      density[i] = clamp(density[i], 0, 1);
+      const vx = clamp(vel[i * 2], -1, 1);
+      const vy = clamp(vel[i * 2 + 1], -1, 1);
+      const d = clamp01(density[i]);
+      vel[i * 2] = vx;
+      vel[i * 2 + 1] = vy;
+      density[i] = d;
+      if (d > peakDensity) peakDensity = d;
+      const v = Math.max(Math.abs(vx), Math.abs(vy));
+      if (v > peakVelocity) peakVelocity = v;
     }
+    this.peakDensity = peakDensity;
+    this.peakVelocity = peakVelocity;
   }
 
   /**
@@ -213,12 +266,8 @@ export class FlutedGlassTrail {
     for (let i = 0; i < CELLS; i += 1) {
       pixels[i * 4] = Math.round(clamp(vel[i * 2] * 127.5 + 127.5, 0, 255));
       pixels[i * 4 + 1] = Math.round(clamp(vel[i * 2 + 1] * 127.5 + 127.5, 0, 255));
-      pixels[i * 4 + 2] = Math.round(clamp(density[i] * 255, 0, 255));
+      pixels[i * 4 + 2] = Math.round(clamp01(density[i]) * 255);
       pixels[i * 4 + 3] = 255;
     }
   }
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v;
 }

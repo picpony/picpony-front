@@ -26,6 +26,7 @@ export default function RefreshButton({
        one-attribute form is shared with the dismiss icon button and
        `Pagination`. */
     <Button
+      type="button"
       variant="accent"
       className="group"
       onClick={onClick}

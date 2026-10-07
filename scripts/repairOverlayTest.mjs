@@ -52,20 +52,26 @@ function App(){
  const [outer,setOuter]=useState(false),[inner,setInner]=useState(false),[menu,setMenu]=useState(false);
  const [captcha,setCaptcha]=useState(false),[value,setValue]=useState('a'),[rerenders,setRerenders]=useState(0);
  const [drawer,setDrawer]=useState(false),[detail,setDetail]=useState(false),[allowEscape,setAllowEscape]=useState(true);
- const menuAnchor=useRef(null), drawerRef=useRef(null),detailRef=useRef(null),backRef=useRef(null);
+ const [loose,setLoose]=useState(false),[login,setLogin]=useState(false);
+ const menuAnchor=useRef(null), drawerRef=useRef(null),detailRef=useRef(null),backRef=useRef(null),looseRef=useRef(null);
  useOverlayLayer(drawer,drawerRef,{onClose:()=>setDrawer(false)});
  useOverlayLayer(detail,detailRef,{onClose:()=>setDetail(false),additionalRefs:[backRef]});
+ useOverlayLayer(loose,looseRef,{onClose:()=>setLoose(false),containFocus:false});
  window.rerender=()=>flushSync(()=>setRerenders(n=>n+1));
 window.setInnerEscape=value=>flushSync(()=>setAllowEscape(value));
 window.openBoth=()=>flushSync(()=>{setOuter(true);setInner(true)});
  return <>
-  <main inert={drawer||detail}>
+  <header><button onClick={()=>setLogin(true)}>Chrome login</button></header>
+  <main inert={drawer||detail||loose}>
    <button onClick={()=>setOuter(true)}>Open modal</button>
    <button onClick={()=>setCaptcha(true)}>Open captcha</button>
    <button onClick={()=>setDrawer(true)}>Open drawer</button>
    <button onClick={()=>setDetail(true)}>Open detail</button>
+   <button onClick={()=>setLoose(true)}>Open loose</button>
    <button id="outside">Outside</button>
   </main>
+  {loose&&<section ref={looseRef} tabIndex={-1} role="dialog" aria-label="Loose"><button>Loose first</button><button onClick={()=>setLoose(false)}>Loose close</button></section>}
+  <Modal isOpen={login} onClose={()=>setLogin(false)} title="Login" hideCloseButton><button>Login action</button></Modal>
   {drawer&&<aside ref={drawerRef} tabIndex={-1} role="dialog" aria-label="Drawer"><button>Drawer first</button><button onClick={()=>setDrawer(false)}>Drawer close</button></aside>}
   {detail&&<><section ref={detailRef} tabIndex={-1} role="dialog" aria-label="Detail"><button>Detail first</button></section><button ref={backRef} onClick={()=>setDetail(false)}>Detail back</button></>}
   <Modal isOpen={outer} onClose={()=>setOuter(false)} title="Outer" hideCloseButton>
@@ -199,9 +205,41 @@ with sync_playwright() as p:
         expect(panel).not_to_be_visible()
         expect(page.get_by_role('button',name='Open '+label.lower(),exact=True)).to_be_focused()
         assert not page.locator('main').evaluate('(el)=>el.inert')
+    # A modal layer that does not contain focus (the image detail over a list): focus enters and
+    # returns, but Tab leaves for the live chrome, nothing pulls it back, and a dialog opened from
+    # the chrome gives focus back to the chrome.
+    page.get_by_role('button',name='Open loose',exact=True).click()
+    loose=page.get_by_role('dialog',name='Loose',exact=True)
+    expect(loose).to_be_focused()
+    page.keyboard.press('Shift+Tab')
+    chrome=page.get_by_role('button',name='Chrome login',exact=True)
+    expect(chrome).to_be_focused()
+    page.wait_for_timeout(100)
+    expect(chrome).to_be_focused()
+    page.keyboard.press('Enter')
+    login=page.get_by_role('dialog',name='Login',exact=True)
+    expect(login).to_be_visible()
+    page.keyboard.press('Escape')
+    expect(login).not_to_be_visible()
+    expect(chrome).to_be_focused()
+    expect(loose).to_be_visible()
+    page.keyboard.press('Escape')
+    expect(loose).not_to_be_visible()
+    expect(chrome).to_be_focused()
+    page.get_by_role('button',name='Open loose',exact=True).click()
+    expect(loose).to_be_focused()
+    page.keyboard.press('Tab')
+    page.keyboard.press('Tab')
+    expect(page.get_by_role('button',name='Loose close',exact=True)).to_be_focused()
+    page.keyboard.press('Escape')
+    expect(loose).not_to_be_visible()
+    expect(page.get_by_role('button',name='Open loose',exact=True)).to_be_focused()
     page.get_by_role('button',name='Open captcha',exact=True).click()
     captcha=page.get_by_role('dialog',name='安全验证')
-    expect(captcha).to_contain_text('网络错误，请稍后再试')
+    # A failed load: the puzzle box says what failed, the hint line why. The injected plain
+    # Error is not a recognised transport failure, so lib/api/errors.ts gives its generic sentence.
+    expect(captcha).to_contain_text('验证码加载失败')
+    expect(captcha).to_contain_text('请求失败，请稍后再试')
     expect(page.get_by_role('button',name='取消',exact=True)).to_be_visible()
     page.evaluate('window.failGet=false')
     page.get_by_role('button',name='重新获取验证码').click()
@@ -215,6 +253,9 @@ with sync_playwright() as p:
     slider.dispatch_event('keydown',{'key':'Enter'})
     assert page.evaluate('window.calls.length')==0
     def drag_captcha():
+        # The track and knob are drawn from the first frame now (one size in every state); a
+        # drag is only taken once a challenge is on screen.
+        expect(captcha.locator('img[alt="验证码背景"]')).to_be_visible()
         handle=captcha.locator('.cursor-grab')
         expect(handle).to_be_visible()
         box=handle.bounding_box()
@@ -236,10 +277,15 @@ with sync_playwright() as p:
     page.evaluate('window.verifySuccess=false;window.verified=null')
     page.get_by_role('button',name='Open captcha',exact=True).click()
     drag_captcha()
+    gets=page.evaluate('window.getCalls')
     expect(captcha).to_contain_text('校验未通过')
     assert page.evaluate('window.verified') is None
-    page.get_by_role('button',name='重新获取验证码').click()
-    expect(slider).to_have_css('left','0px')
+    # A rejected attempt fetches the next challenge by itself (no retry button to find), the
+    # knob is home, and the reason stays on screen.
+    page.wait_for_function('window.getCalls > %d' % gets)
+    expect(captcha.locator('img[alt="验证码背景"]')).to_be_visible()
+    expect(slider).to_have_css('transform','matrix(1, 0, 0, 1, 0, 0)')
+    expect(captcha).to_contain_text('校验未通过')
     page.get_by_role('button',name='取消',exact=True).click()
     expect(page.get_by_role('dialog',name='安全验证')).not_to_be_visible()
     page.wait_for_timeout(300)
@@ -253,6 +299,7 @@ with sync_playwright() as p:
     assert page.evaluate('window.verified') is None, 'Cancelled verification must not log in during modal exit'
     page.evaluate('window.pendingVerify=false')
     page.get_by_role('button',name='Open captcha',exact=True).click()
+    expect(captcha.locator('img[alt="验证码背景"]')).to_be_visible()
     slider=captcha.locator('.cursor-grab')
     expect(slider).to_be_visible()
     slider.evaluate('''el=>{
@@ -271,7 +318,7 @@ with sync_playwright() as p:
     assert pointer_track[0]==[0,0,0] and pointer_track[-1][0]==round(pointer['x'])
     assert pointer_track[-1][1]==3 and len(pointer_track)>2
     assert not errors, errors
-    print('PASS: modal Tab boundaries, portal focus, topmost Escape, simultaneous nesting and paint order, real editor Tab, menu Tab exits, callback updates, disabled Escape, nested restoration, drawer/detail isolation, captcha failure/retry/cancel, mouse and touch protocol, no keyboard/contact entry, cancellation during exit')
+    print('PASS: modal Tab boundaries, portal focus, topmost Escape, simultaneous nesting and paint order, real editor Tab, menu Tab exits, callback updates, disabled Escape, nested restoration, drawer/detail isolation, uncontained layer beside live chrome, captcha failure/retry/cancel, mouse and touch protocol, no keyboard/contact entry, cancellation during exit')
     browser.close()
 `;
 try {

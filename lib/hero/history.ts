@@ -1,8 +1,17 @@
 'use client';
 
+import {
+  consumeHistoryLayerPop,
+  historyLayerBeneath,
+  setHistoryLayerGate,
+  settleHistoryLayers,
+} from '@/lib/historyLayers';
 import type { ImageHeroBackgroundLocation, ImageHeroSnapshot } from './types';
+import { randomId } from '@/lib/utils';
 
 const HISTORY_STATE_KEY = '__picponyImageHero';
+/** `lib/historyLayers.ts`'s marker, stripped from anything written here. */
+const HISTORY_LAYER_KEY = '__picponyLayer';
 const HISTORY_TIMEOUT_MS = 4000;
 const LATE_POP_TTL_MS = 12000;
 const MAX_MEMORY_RECORDS = 4;
@@ -53,8 +62,33 @@ export type HeroHistoryNavigation = {
 type PopWaiter = {
   accept: (marker: HeroMarker | null, href: string) => boolean;
   ownerToken: string | null;
-  finish: (matched: boolean) => void;
+  /** `afterDispatch`: settle now, resolve once the popstate dispatch has finished. */
+  finish: (matched: boolean, afterDispatch?: boolean) => void;
 };
+
+/**
+ * Run `task` after the event being dispatched has reached **every** listener.
+ *
+ * A browser runs a microtask checkpoint after each listener callback, so a promise resolved
+ * inside our (capture) popstate listener continues before Next's own `onPopState` has run. A
+ * router call made there dispatched `ACTION_NAVIGATE` ahead of the `ACTION_RESTORE` Next was
+ * about to dispatch for the same pop — and the router's queue discards whatever is pending when a
+ * traversal arrives, so the navigation never committed (R10-001: 上一张 ejected the viewer and
+ * parked the app in `recovering` for four seconds). A task posted during the dispatch runs after
+ * it, so whatever the continuation does is ordered after the RESTORE, never under it.
+ */
+function afterDispatch(task: () => void) {
+  if (typeof MessageChannel === 'undefined') {
+    window.setTimeout(task, 0);
+    return;
+  }
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => {
+    channel.port1.close();
+    task();
+  };
+  channel.port2.postMessage(null);
+}
 
 type LatePopWaiter = {
   accept: PopWaiter['accept'];
@@ -116,10 +150,58 @@ export function readHeroHistoryMarker(state: unknown): HeroMarker | null {
   };
 }
 
+/**
+ * A dialog, sheet or lightbox entry (`lib/historyLayers.ts`) is transparent to this
+ * protocol: it stands on a ladder rung and carries that rung's marker aside, so reading
+ * through it gives the rung. Pops between the two never reach this driver (the layer
+ * module consumes them), and every traversal here starts on the rung itself, because
+ * `enqueue` settles the layers first.
+ */
+function markerOf(state: unknown): HeroMarker | null {
+  return readHeroHistoryMarker(state) ?? readHeroHistoryMarker(historyLayerBeneath(state));
+}
+
+function positionOf(state: unknown): HistoryPosition {
+  return markerOf(state)?.role ?? 'background';
+}
+
 function stateWithMarker(marker: HeroMarker) {
   const current = window.history.state;
-  const state = current && typeof current === 'object' ? (current as Record<string, unknown>) : {};
+  const state = current && typeof current === 'object' ? { ...(current as Record<string, unknown>) } : {};
+  // A rung is never a layer entry.
+  delete state[HISTORY_LAYER_KEY];
   return { ...state, [HISTORY_STATE_KEY]: { version: 2, ...marker } };
+}
+
+/**
+ * Write the current entry at another URL **through Next's documented native path**.
+ *
+ * The state handed over carries our marker and nothing of the router's: without `__NA` the App
+ * Router's patched `replaceState` copies its own `__NA` and tree into it and dispatches a restore
+ * for the new URL, so `usePathname` follows while the tree — and so the mounted detail route —
+ * stays exactly where it is (`dist/docs/01-app/01-getting-started/04-linking-and-navigating.md`,
+ * "`window.history.replaceState`"). With `__NA` it would take its internal fast path and never
+ * learn the URL, and the next router commit would write the old one back.
+ *
+ * The router is always mounted in this app, so its patch is always there; the fix-up is for the
+ * one way that could fail (a remount restoring the unpatched pair): an entry without `__NA` makes
+ * Next reload the page when a later Back lands on it.
+ */
+function replaceEntryUrl(marker: HeroMarker, href: string) {
+  const previous = window.history.state as Record<string, unknown> | null;
+  window.history.replaceState({ [HISTORY_STATE_KEY]: { version: 2, ...marker } }, '', href);
+  const written = window.history.state as Record<string, unknown> | null;
+  if (previous && written && !written.__NA && previous.__NA) {
+    window.history.replaceState(
+      {
+        ...written,
+        __NA: previous.__NA,
+        __PRIVATE_NEXTJS_INTERNALS_TREE: previous.__PRIVATE_NEXTJS_INTERNALS_TREE,
+      },
+      '',
+      href,
+    );
+  }
 }
 
 function markerFor(record: HeroHistoryRecord, role: HistoryRole): HeroMarker {
@@ -135,11 +217,7 @@ function markerFor(record: HeroHistoryRecord, role: HistoryRole): HeroMarker {
 }
 
 function createToken(sessionId: number, imageId: number) {
-  const suffix =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-  return `v2:${sessionId}:${imageId}:${suffix}`;
+  return `v2:${sessionId}:${imageId}:${randomId()}`;
 }
 
 /**
@@ -172,13 +250,17 @@ class HeroHistoryDriver {
   private transaction: Promise<unknown> = Promise.resolve();
   private queuedTransactions = 0;
   private stabilityListeners = new Set<() => void>();
+  /** Counts every pop that reaches this driver: a write that waited proves nothing moved since. */
+  private popSerial = 0;
 
   initialize(listener: (navigation: HeroHistoryNavigation) => void) {
     this.listener = listener;
     if (!this.initialized) {
       this.initialized = true;
       window.addEventListener('popstate', this.handlePopState, { capture: true });
-      this.position = this.currentMarker()?.role ?? 'background';
+      this.position = positionOf(window.history.state);
+      // Layer entries are pushed only between this queue's transactions.
+      setHistoryLayerGate(() => this.isStableForWrite());
     }
     return () => {
       if (this.listener === listener) this.listener = null;
@@ -186,7 +268,7 @@ class HeroHistoryDriver {
   }
 
   currentMarker() {
-    return readHeroHistoryMarker(window.history.state);
+    return markerOf(window.history.state);
   }
 
   currentRole() {
@@ -305,7 +387,7 @@ class HeroHistoryDriver {
 
   /** Collapse this record's whole ladder and land back on the gallery. */
   ensureBackground(record: HeroHistoryRecord) {
-    return this.enqueue(async () => {
+    return this.enqueue(false, async () => {
       const expectedHref = normalizeHref(
         `${record.background.pathname}${record.background.search}`,
       );
@@ -351,7 +433,7 @@ class HeroHistoryDriver {
     background: ImageHeroBackgroundLocation,
     ownerToken: string | null = null,
   ) {
-    return this.enqueue(async () => {
+    return this.enqueue(false, async () => {
       const expected = normalizeHref(`${background.pathname}${background.search}`);
       if (normalizeHref(window.location.href) === expected) {
         this.position = 'background';
@@ -370,7 +452,7 @@ class HeroHistoryDriver {
 
   /** Back overshot past the gallery entry; step forward onto it. */
   recoverSkippedBackground(record: HeroHistoryRecord) {
-    return this.enqueue(async () => {
+    return this.enqueue(false, async () => {
       const expected = normalizeHref(`${record.background.pathname}${record.background.search}`);
       if (normalizeHref(window.location.href) === expected && !this.currentMarker()) {
         this.position = 'background';
@@ -389,7 +471,7 @@ class HeroHistoryDriver {
 
   /** Put the guard entry back so this detail view is closable again. */
   restoreGuard(record: HeroHistoryRecord) {
-    return this.enqueue(async () => {
+    return this.enqueue(false, async () => {
       if (this.hasLateTraversal()) return false;
       let marker = this.currentMarker();
 
@@ -447,11 +529,102 @@ class HeroHistoryDriver {
   }
 
   /**
+   * Point this ladder at another picture, **in place** — 上一张 / 下一张:
+   *
+   *     [gallery] [provisional] [base A] [guard A]   →   [gallery] [provisional] [base B] [guard B]
+   *
+   * A step is not a navigation: no entry is added, Back still closes the viewer to the list it
+   * was opened from, and the overlay never unmounts. From the guard, step onto the base (nothing
+   * visible changes: same URL, same tree — Next's restore of it is a no-op), write the base at
+   * the new URL through the router's native path (`replaceEntryUrl`), then push a fresh guard,
+   * which also truncates the stale guard ahead of it. The provisional entry keeps its token, and
+   * the record keeps it too: one ladder, one token, whose picture changed — so a later Forward
+   * onto the provisional replays the picture the ladder now shows.
+   *
+   * Resolves the rewritten record, or `null` when the ladder was not where it should be (the
+   * caller reconciles from the location). The traversal is confirmed only after its dispatch has
+   * finished (`afterDispatch`), so nothing here runs under Next's restore of that pop.
+   *
+   * **The base is written only where this rewrite's own step left the ladder.** A traversal of
+   * the user's can land between that step's popstate and the writes: on a busy main thread the
+   * Back's commit queues up behind the step's own, and Chromium dispatches both popstates before
+   * the continuation posted during the first. Written anyway, the new URL went onto whatever
+   * entry the Back had reached — the list's own: the list on screen under `/pic/<id>`, a guard
+   * pushed over it, and a reload opening the picture again. So no pop may have landed since the
+   * step's, the base must still be current, and the caller must not have abandoned the step
+   * (`signal`: the user's traversal overtook it) — otherwise nothing is written, and the
+   * traversal that got there first decides what comes next.
+   */
+  retarget(
+    record: HeroHistoryRecord,
+    next: Pick<HeroHistoryRecord, 'imageId' | 'detailHref' | 'snapshot'>,
+    signal?: AbortSignal,
+  ): Promise<HeroHistoryRecord | null> {
+    return this.enqueue<HeroHistoryRecord | null>(null, async () => {
+      if (signal?.aborted || !this.isGuard(record)) return null;
+      const onBase = (marker: HeroMarker | null, href: string) =>
+        marker?.token === record.token && marker.role === 'base' && href === record.detailHref;
+      const landedAt = await this.goAndConfirmAt(-1, onBase, record.token);
+      if (
+        landedAt === null ||
+        signal?.aborted ||
+        landedAt !== this.popSerial ||
+        this.hasLateTraversal() ||
+        !onBase(this.currentMarker(), normalizeHref(window.location.href))
+      ) {
+        return null;
+      }
+      this.position = 'base';
+      const updated: HeroHistoryRecord = {
+        ...record,
+        imageId: next.imageId,
+        detailHref: normalizeHref(next.detailHref),
+        snapshot: next.snapshot,
+      };
+      try {
+        replaceEntryUrl(markerFor(updated, 'base'), updated.detailHref);
+        window.history.pushState(
+          stateWithMarker(markerFor(updated, 'guard')),
+          '',
+          window.location.href,
+        );
+      } catch {
+        return null;
+      }
+      this.records.set(updated.token, updated);
+      if (this.activeRecord?.token === updated.token) this.activeRecord = updated;
+      this.position = 'guard';
+      this.trimRecords(updated.token);
+      return updated;
+    });
+  }
+
+  /**
+   * The same step for a detail with no ladder — opened without a flight (the two motion tiers
+   * that do not fly), so its entry is the router's own: rewrite it at the new URL. Only while
+   * that entry is still current (`fromHref`, the picture the step left) and the step still wanted:
+   * a Back that landed first leaves the list's entry current, which is not this write's to take.
+   */
+  replaceUnownedDetail(detailHref: string, fromHref: string, signal?: AbortSignal) {
+    return this.enqueue(false, async () => {
+      if (
+        signal?.aborted ||
+        this.currentMarker() ||
+        normalizeHref(window.location.href) !== normalizeHref(fromHref)
+      ) {
+        return false;
+      }
+      window.history.replaceState(null, '', normalizeHref(detailHref));
+      return true;
+    });
+  }
+
+  /**
    * A marker with no live record — left by a refresh or a BFCache restore.
    * Collapse its ladder as ordinary navigation; never invent an animation.
    */
   collapseOrphanMarker(marker: HeroMarker) {
-    return this.enqueue(async () => {
+    return this.enqueue(false, async () => {
       if (this.hasLateTraversal()) return false;
       const steps =
         marker.role === 'guard'
@@ -468,7 +641,7 @@ class HeroHistoryDriver {
     const marker = this.currentMarker();
     const href = normalizeHref(window.location.href);
     this.consumeLateTraversal(marker, href);
-    this.position = marker?.role ?? 'background';
+    this.position = positionOf(window.history.state);
     if (marker) this.activeRecord = this.records.get(marker.token) ?? this.activeRecord;
     return { marker, position: this.position, href, stable: this.isStableForWrite() };
   }
@@ -497,10 +670,14 @@ class HeroHistoryDriver {
 
   // -------------------------------------------------------------------------
 
-  /** Serialize traversals; two concurrent `history.go` calls are unorderable. */
-  private enqueue(work: () => Promise<boolean>) {
+  /**
+   * Serialize traversals; two concurrent `history.go` calls are unorderable. `fallback` is what
+   * a transaction that threw resolves with.
+   */
+  private enqueue<T>(fallback: T, work: () => Promise<T>): Promise<T> {
     this.queuedTransactions += 1;
-    const run = this.transaction.then(work, work).catch(() => false);
+    // Step counts assume a ladder rung is current: unwind any dialog above it first.
+    const run = this.transaction.then(settleHistoryLayers).then(work, work).catch(() => fallback);
     const observed = run.then(
       (value) => {
         this.queuedTransactions = Math.max(0, this.queuedTransactions - 1);
@@ -510,7 +687,7 @@ class HeroHistoryDriver {
       () => {
         this.queuedTransactions = Math.max(0, this.queuedTransactions - 1);
         this.notifyStability();
-        return false;
+        return fallback;
       },
     );
     this.transaction = observed.then(
@@ -526,18 +703,33 @@ class HeroHistoryDriver {
     accept: (marker: HeroMarker | null, href: string) => boolean,
     ownerToken: string | null,
   ) {
-    return new Promise<boolean>((resolve) => {
+    return this.goAndConfirmAt(delta, accept, ownerToken).then((at) => at !== null);
+  }
+
+  /**
+   * `goAndConfirm`, resolving the pop count at which it landed (`null` if it did not): a caller
+   * that writes after the confirmation compares it with `popSerial` to prove no traversal has
+   * landed in between.
+   */
+  private goAndConfirmAt(
+    delta: number,
+    accept: (marker: HeroMarker | null, href: string) => boolean,
+    ownerToken: string | null,
+  ) {
+    return new Promise<number | null>((resolve) => {
       let timeout = 0;
       let settled = false;
       const waiter: PopWaiter = {
         accept,
         ownerToken,
-        finish: (matched) => {
+        finish: (matched, deferred = false) => {
           if (settled) return;
           settled = true;
           if (timeout) window.clearTimeout(timeout);
           this.waiters.delete(waiter);
-          resolve(matched);
+          const at = matched ? this.popSerial : null;
+          if (deferred) afterDispatch(() => resolve(at));
+          else resolve(at);
         },
       };
       this.waiters.add(waiter);
@@ -561,10 +753,13 @@ class HeroHistoryDriver {
   }
 
   private handlePopState = (event: PopStateEvent) => {
+    // A pop between a layer entry and the rung beneath it is not a ladder move.
+    if (consumeHistoryLayerPop(event)) return;
+    this.popSerial += 1;
     const previous = this.position;
-    const marker = readHeroHistoryMarker(event.state);
+    const marker = markerOf(event.state);
     const href = normalizeHref(window.location.href);
-    this.position = marker?.role ?? 'background';
+    this.position = positionOf(event.state);
 
     const late = this.consumeLateTraversal(marker, href);
     let programmatic = late.matched;
@@ -573,7 +768,8 @@ class HeroHistoryDriver {
       if (!this.accepts(waiter.accept, marker, href)) continue;
       programmatic = true;
       programmaticToken ??= waiter.ownerToken;
-      waiter.finish(true);
+      // Settled now (the pop is ours), resolved after the dispatch — see `afterDispatch`.
+      waiter.finish(true, true);
     }
 
     const record = marker ? this.recordForToken(marker.token) : null;

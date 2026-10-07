@@ -3,10 +3,13 @@
 import {
   forwardRef,
   useId,
+  useState,
   type InputHTMLAttributes,
   type TextareaHTMLAttributes,
   type ReactNode,
 } from 'react';
+import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
+import IconButton from './IconButton';
 import { cn } from '@/lib/utils';
 
 /**
@@ -31,10 +34,15 @@ import { cn } from '@/lib/utils';
  * `Textarea` follows the height through block padding, since it grows.
  *
  * **One height for chrome, 40dp** — `size="sm"`, the app's own step (M3 offers
- * no 40dp field), matching `Select size="sm"` and the dense row it sits in. Two
- * fences: unlabelled only (the notch geometry is derived from 56dp), and no
- * `trailing` slot (the 8dp inset is `(56 - 40) / 2`; a 40dp box has no room to
- * centre a 40dp control).
+ * no 40dp field), matching `Select size="sm"` and the dense row it sits in. It is
+ * unlabelled only (the notch geometry is derived from 56dp), and its `trailing` slot
+ * holds one **32dp** control (`IconButton size="sm"` — a filter's clear button) on
+ * the same inset formula as every size, `(40 - 32) / 2` = 4px; a 40dp control has
+ * no room there.
+ *
+ * **A password field brings its own visibility toggle** (`revealable`, on by default):
+ * one drawn by this system, in the trailing slot — Edge's native eye is hidden in
+ * globals.css, so there is exactly one, the same in every engine.
  */
 
 /** `OutlinedTextFieldTokens.ContainerHeight`. The only height M3 gives a field. */
@@ -48,7 +56,8 @@ const BARE_HEIGHT = 'h-14';
  * `size="sm"` — the dense step, and the one height in this file M3 does not name.
  * 40dp matches `Select size="sm"`'s box. Both use 14px type and a 16dp inset;
  * typed text is body-m, while the dropdown's chosen label is label-l. See the
- * docblock above for the two fences: unlabelled only, and no `trailing`.
+ * docblock above for the two fences: unlabelled only, and a trailing slot of one
+ * 32dp control.
  */
 const DENSE_HEIGHT = 'h-10';
 /**
@@ -63,8 +72,14 @@ const HERO_HEIGHT = 'h-14';
 
 /** The control's own ink and placeholder, shared by both primitives. */
 const CONTROL = 'text-body-l placeholder:text-on-surface-variant';
-/** Dense typed text uses body-m; Select's same-size value uses the label-l role. */
-const DENSE_CONTROL = 'text-body-m placeholder:text-on-surface-variant';
+/**
+ * Dense typed text uses body-m; Select's same-size value uses the label-l role.
+ * **Under a finger it is body-l, 16px**: iOS Safari zooms the page into any focused
+ * field set smaller and leaves it zoomed — the fix is the type size, never a viewport
+ * `maximum-scale`, which would take pinch zoom away from everyone. The 28px body-l
+ * line box still sits inside the 40dp box.
+ */
+const DENSE_CONTROL = 'text-body-m pointer-coarse:text-body-l placeholder:text-on-surface-variant';
 
 /* Same guard as `Skeleton`'s conditional radius: `cn` is a plain join, so a
  * textarea asking for `resize-none` used to emit that *and* the default
@@ -215,14 +230,22 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> &
   FieldProps & {
     /** Leading adornment — an icon, not a control. */
     icon?: ReactNode;
-    /** Trailing adornment; may be interactive (clear button, visibility toggle). */
+    /**
+     * Trailing controls, inside the box. 40dp controls in a 56dp field; one 32dp
+     * control in a `sm` field. A password field's visibility toggle comes after them.
+     */
     trailing?: ReactNode;
     /**
      * `lg` is M3's search bar — 56dp and fully rounded. `sm` is the dense step,
-     * 40dp with `body-m`, for a filter bar or a row. Both are **unlabelled only**,
-     * and `sm` additionally takes no `trailing`. See the docblock above.
+     * 40dp with `body-m`, for a filter bar or a row. Both are **unlabelled only**.
+     * See the docblock above.
      */
     size?: 'sm' | 'md' | 'lg';
+    /**
+     * A `type="password"` field's show/hide toggle. On by default; pass `false` only
+     * where the value must never be shown on screen.
+     */
+    revealable?: boolean;
     fieldClassName?: string;
   };
 
@@ -236,6 +259,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     icon,
     trailing,
     size = 'md',
+    revealable = true,
+    type,
     className = '',
     fieldClassName = '',
     id,
@@ -254,6 +279,28 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
      because a labelled field's whole notch geometry is derived from 56dp. A `sm`
      on a labelled field is a no-op rather than an error, the same way `lg` is. */
   const dense = !labelled && size === 'sm';
+  const [revealed, setRevealed] = useState(false);
+  const reveal = type === 'password' && revealable;
+  /* The toggle names the action (显示密码 / 隐藏密码), as its icon does. It keeps the
+     caret where it is: a press that moved focus onto the button would drop a phone
+     keyboard mid-password, so the pointer press does not take focus; Tab still
+     reaches it. */
+  const revealToggle = reveal && (
+    <IconButton
+      size={dense ? 'sm' : 'md'}
+      aria-label={revealed ? '隐藏密码' : '显示密码'}
+      icon={revealed ? <MdVisibilityOff /> : <MdVisibility />}
+      onPointerDown={(event) => event.preventDefault()}
+      onClick={() => setRevealed((shown) => !shown)}
+      disabled={rest.disabled}
+    />
+  );
+  const trailingSlot = (trailing || revealToggle) && (
+    <>
+      {trailing}
+      {revealToggle}
+    </>
+  );
 
   return (
     <Field helper={helper} error={error} count={count} className={fieldClassName} supportId={supportId}>
@@ -262,10 +309,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           labelled,
           invalid: Boolean(error),
           icon: Boolean(icon),
-          /* The dense field has no room for a control: the 8dp inset either side is
-             `(56 - 40) / 2`, so at 40dp there is nothing left to centre. Dropped
-             here rather than left to the call site, so the inset stays one value. */
-          trailing: Boolean(trailing) && !dense,
+          trailing: Boolean(trailingSlot),
           hero,
           dense,
         })}
@@ -278,6 +322,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           id={inputId}
+          type={reveal && revealed ? 'text' : type}
           aria-describedby={[describedBy, supportId].filter(Boolean).join(' ') || undefined}
           aria-invalid={error ? true : undefined}
           required={required}
@@ -295,7 +340,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         />
         {labelled && <FieldLabel label={label} required={required} htmlFor={inputId} />}
         {!labelled && <fieldset aria-hidden="true" />}
-        {trailing && !dense && <span className="m3-field-trail">{trailing}</span>}
+        {trailingSlot && <span className="m3-field-trail">{trailingSlot}</span>}
       </div>
     </Field>
   );
@@ -420,7 +465,7 @@ export const ColorSwatch = forwardRef<HTMLInputElement, ColorSwatchProps>(functi
         /* The native colour swatch keeps its 4dp corner and the form family's
            56dp height; the ordinary filled text field has the softer 8dp corner. */
         'h-14 w-14 shrink-0 cursor-pointer rounded-xs border border-outline p-0.5',
-        'outline-none transition-ui focus-visible:ring-2 focus-ring',
+        'focus-visible:outline-hidden transition-ui focus-visible:ring-2 focus-ring',
         'disabled:cursor-not-allowed disabled:disabled-content',
         className,
       )}

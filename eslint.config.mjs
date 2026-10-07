@@ -7,6 +7,7 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     files: ['**/*.ts', '**/*.tsx'],
+    linterOptions: { reportUnusedDisableDirectives: 'error' },
     rules: {
       '@typescript-eslint/consistent-type-imports': ['error', {
         prefer: 'type-imports',
@@ -24,6 +25,7 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     // Git-ignored screenshots, measurement harnesses and generated browser bundles.
     '.workbuddy/**',
+    '.claude/**',
     // One-off local probes / e2e scripts, not part of the app runtime.
     'scripts/**',
   ]),

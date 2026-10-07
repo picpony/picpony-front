@@ -2,6 +2,7 @@
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import Spinner from './Spinner';
+import { blockActivation } from './Button';
 import { useTooltip } from './Tooltip';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +13,7 @@ export type IconButtonVariant =
   | 'outlined'
   | 'danger'
   | 'danger-text'
+  | 'danger-quiet'
   | 'media'
   | 'on-primary';
 export type IconButtonSize = 'sm' | 'md' | 'lg';
@@ -24,6 +26,7 @@ export type IconButtonSize = 'sm' | 'md' | 'lg';
  * frame. M3 Expressive gives the icon button a shape axis for this.
  */
 export type IconButtonShape = 'round' | 'square';
+export type IconButtonSelectedTone = 'secondary' | 'tertiary';
 
 /**
  * M3's icon button, as a primitive.
@@ -55,7 +58,8 @@ export type IconButtonShape = 'round' | 'square';
  *             so the app bar's four controls were hand-rolled with
  *             `focus-ring-on-primary` and an eight-class string repeated four
  *             times — a 48px box, a state layer, a ripple and a transition, once
- *             per button, drifting independently of the primitive.
+ *             per button, drifting independently of the primitive. Its ink is the
+ *             bar's own quieter role, on-primary-variant; the ring stays on-primary.
  *
  * Hover, focus and press are the shared `state-layer`, painted from the
  * button's own `color`, so a variant never has to name a second tint. Sizes are
@@ -74,8 +78,10 @@ export type IconButtonShape = 'round' | 'square';
  */
 const VARIANTS: Record<IconButtonVariant, string> = {
   standard: 'bg-transparent text-on-surface-variant focus-ring',
-  filled: 'bg-primary text-on-primary focus-ring',
-  tonal: 'bg-secondary-container text-on-secondary-container focus-ring',
+  /* `forced-boundary` wherever there is a container to lose: forced colors flattens it
+     to the canvas (the outlined variant's border survives on its own). */
+  filled: 'bg-primary text-on-primary focus-ring forced-boundary',
+  tonal: 'bg-secondary-container text-on-secondary-container focus-ring forced-boundary',
   outlined:
     'border border-outline bg-transparent text-on-surface-variant enabled:hover:border-primary-ink focus-ring',
   /* A destructive icon-only action, and the only reason it is a variant rather
@@ -85,11 +91,18 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      applied came down to Tailwind's output order. It takes the same
      scheme-independent `*-fill` pair `Button`'s `danger` does, for the reason
      spelled out in the semantic-fills block in globals.css. */
-  danger: 'bg-error-fill text-on-fill focus-ring',
+  danger: 'bg-error-fill text-on-fill focus-ring forced-boundary',
   /* An unfilled destructive action keeps a secondary control's hierarchy.
      A caller's `text-error` would compete with standard's neutral ink because
      `cn` joins utilities without resolving them. */
   'danger-text': 'bg-transparent text-error focus-ring',
+  /* The same action repeated down a list, one per row (/history's delete), whose ink waits for
+     intent: neutral at rest, the error ink while its row is hovered — the moment `hover-reveal`
+     shows it, so a pointer sees what it always saw — or while it has the keyboard's focus. Under
+     a finger nothing hovers, and a page of rows was a column of red bins; a removal that 撤销
+     takes back is a trailing action, not a warning (OD-5). */
+  'danger-quiet':
+    'bg-transparent text-on-surface-variant enabled:hover:text-error enabled:group-hover:text-error focus-visible:text-error focus-ring',
   /* `state-layer` paints from the element's own `color`, so `on-media` gives the
      hover and press their tint without a second hand-picked value.
      The ring is `focus-ring-on-media`, painted inward: `focus-ring` is
@@ -100,8 +113,15 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      No backdrop blur, for the reason spelled out on `Badge`'s `media` tone: the plate is what
      carries legibility, the blur was never in the measurement, and one treatment per plate
      beats two. */
-  media: 'bg-media-plate text-on-media focus-ring-on-media',
-  'on-primary': 'bg-transparent text-on-primary focus-ring-on-primary',
+  media: 'bg-media-plate text-on-media focus-ring-on-media forced-boundary',
+  'on-primary': 'bg-transparent text-on-primary-variant focus-ring-on-primary',
+};
+
+/* The selected state's container pair. Spelled per tone rather than composed, for the reason
+   `SHAPES` is: `cn` is a plain join. */
+const SELECTED: Record<IconButtonSelectedTone, string> = {
+  secondary: 'bg-secondary-container text-on-secondary-container',
+  tertiary: 'bg-tertiary-container text-on-tertiary-container',
 };
 
 /* The M3 icon-button steps, verbatim: `XSmallIconButtonTokens.ContainerHeight` 32,
@@ -168,10 +188,31 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   size?: IconButtonSize;
   /** `square` takes the 12dp step — see `IconButtonShape`. */
   shape?: IconButtonShape;
-  /** Swaps the glyph for a spinner and blocks interaction. */
+  /**
+   * Busy: swaps the glyph for a spinner and blocks the press, keeping the control's
+   * container, ink and focus — see `blockActivation` in `Button`.
+   */
   loading?: boolean;
-  /** Marks a toggle as on. Reads out, and picks up the selected container. */
+  /**
+   * The selected container (and M3's selected shape). Appearance only unless `toggle`
+   * says this control *is* a toggle — a popup trigger reports `aria-expanded` instead,
+   * and a control whose label already names the state (取消收藏) needs no second report.
+   */
   selected?: boolean;
+  /**
+   * Which container pair the selected state takes. `secondary` is every selection in the app;
+   * `tertiary` is the theme's accent, for the few toggles that are one of its accent moments —
+   * a favourite or a like that is on. Under 单色 the two are one colour, so a call site needs no
+   * branch for it. The focus ring is the same in both.
+   */
+  selectedTone?: IconButtonSelectedTone;
+  /**
+   * Declares an on/off toggle: `aria-pressed` then reports `selected`, true *or* false,
+   * and the label names the action and stays the same in both states (收藏, not
+   * 收藏/取消收藏). Without it an unselected toggle announced as a plain button and a
+   * selected one said its state twice.
+   */
+  toggle?: boolean;
   /**
    * The dismiss gesture: the glyph turns a quarter-turn on hover.
    *
@@ -204,6 +245,7 @@ export interface IconButtonClassOptions {
   size?: IconButtonSize;
   shape?: IconButtonShape;
   selected?: boolean;
+  selectedTone?: IconButtonSelectedTone;
   disabled?: boolean;
   /** Busy controls keep their ink and container while blocking interaction. */
   loading?: boolean;
@@ -225,6 +267,7 @@ export function iconButtonClasses({
   size = 'md',
   shape = 'round',
   selected = false,
+  selectedTone = 'secondary',
   disabled = false,
   loading = false,
   dismiss = false,
@@ -232,7 +275,12 @@ export function iconButtonClasses({
 }: IconButtonClassOptions = {}): string {
   const isDisabled = disabled || loading;
   return cn(
-    'inline-flex shrink-0 items-center justify-center outline-none',
+    'inline-flex shrink-0 items-center justify-center focus-visible:outline-hidden',
+    /* The painted box is M3's 32 / 40 / 56dp; the hit area is the platform's floor — 48px
+       under a finger, 24px under a pointer (which every size already clears). That needs a
+       control that does not clip its own box, hence the inner ripple host in
+       `IconButton`. Chrome, not content: no long-press text selection, no double-tap zoom. */
+    'touch-target select-none touch-manipulation',
     loading ? 'cursor-wait' : disabled ? 'cursor-not-allowed' : 'cursor-pointer',
     'transition-icon-button',
     /* One indicator, and the width has to agree with the colour: `media` sets
@@ -254,9 +302,7 @@ export function iconButtonClasses({
        *selected* icon button lost the ring's colour entirely — `ring-2` then fell
        back to `currentcolor`, i.e. whatever ink happened to surround it. That is
        the exact failure the `focus-ring` utility was added to end. */
-    selected
-      ? 'bg-secondary-container text-on-secondary-container focus-ring'
-      : VARIANTS[variant],
+    selected ? cn(SELECTED[selectedTone], 'focus-ring forced-selected') : VARIANTS[variant],
     /* A *selected* icon button is a rounded square, not a circle:
        `SelectedContainerShapeRound` is `CornerMedium` at the small step and
        `CornerLarge` at the medium one. That is M3's shape-as-state, and it is the
@@ -295,6 +341,8 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
     shape = 'round',
     loading = false,
     selected = false,
+    selectedTone = 'secondary',
+    toggle = false,
     dismiss = false,
     disabled,
     tooltip,
@@ -307,11 +355,13 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
        a future reorder would have silently turned it back into a no-op. */
     type = 'button',
     className = '',
+    onClick,
     onPointerEnter,
     onPointerLeave,
     onPointerDown,
     onFocus,
     onBlur,
+    onContextMenu,
     'aria-describedby': describedBy,
     ...rest
   },
@@ -333,25 +383,29 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
           else if (ref) ref.current = node;
         }}
         type={type}
-        disabled={isDisabled}
-        aria-pressed={rest['aria-pressed'] ?? (selected ? true : undefined)}
+        /* Native `disabled` is unavailability only; busy blocks the press below and
+           keeps focus, which a disabled element gives up — so busy wins when both are set. */
+        disabled={disabled && !loading}
         /* Always present, never conditional on `disabled`.
            `[data-ripple]` in globals.css is what gives this element
-           `position: relative` and `overflow: hidden`, and the ripple span is an
-           absolutely-positioned child that depends on both. Dropping the attribute
+           `position: relative` (and its host span the clip), and the ripple span is an
+           absolutely-positioned descendant that depends on both. Dropping the attribute
            when the button becomes disabled therefore does not merely stop *future*
            ripples — it un-positions the one currently animating, which reflows to
            the initial containing block and finishes in the top-left corner of the
            page. That is reachable from a single click on any button whose own
            handler sets `loading`: the 领取 button on /tasks is the one that showed
            it. `RippleLayer` already refuses to spawn on a disabled target, so the
-           gate belongs there and only there. */
-        data-ripple=""
+           gate belongs there and only there.
+           `inner`: the wave is clipped by the host span below rather than by this box,
+           which would clip the 48px touch target out of hit-testing with it. */
+        data-ripple="inner"
         className={iconButtonClasses({
           variant,
           size,
           shape,
           selected,
+          selectedTone,
           disabled: isDisabled,
           loading,
           dismiss,
@@ -360,15 +414,20 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
         {...rest}
         {...anchorProps}
         /* Tooltip behaviour augments the control's own intent/focus handlers.
-           Spreading it over the caller silently erased all five events. */
+           Spreading it over the caller silently erased all six events. */
         onPointerEnter={combineHandlers(onPointerEnter, anchorProps.onPointerEnter)}
         onPointerLeave={combineHandlers(onPointerLeave, anchorProps.onPointerLeave)}
         onPointerDown={combineHandlers(onPointerDown, anchorProps.onPointerDown)}
         onFocus={combineHandlers(onFocus, anchorProps.onFocus)}
         onBlur={combineHandlers(onBlur, anchorProps.onBlur)}
+        onContextMenu={combineHandlers(onContextMenu, anchorProps.onContextMenu)}
+        onClick={loading ? blockActivation : onClick}
+        aria-pressed={rest['aria-pressed'] ?? (toggle ? selected : undefined)}
+        aria-disabled={loading || rest['aria-disabled'] || undefined}
         aria-describedby={[describedBy, anchorProps['aria-describedby']].filter(Boolean).join(' ') || undefined}
         aria-busy={loading || rest['aria-busy'] || undefined}
       >
+        <span data-ripple-host="" aria-hidden="true" />
         {loading ? (
           <span aria-hidden="true">
             <Spinner size={size === 'sm' ? 'sm' : 'md'} tone="inherit" />

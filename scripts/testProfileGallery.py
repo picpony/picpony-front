@@ -2,7 +2,10 @@
 
 Run: npm run build && npm run test:browser -- --profile-gallery
 All business traffic is intercepted, including generated, decodable image bytes.
-The upload fixture deliberately contains only the six fields promised by that API.
+A profile's uploads are its bound Derpibooru account's (`uploader_id:` search — PicPony has no
+uploads action), and its 收藏夹 tab lists the public folders (`get_profile_fave_folders`).
+Against the dev server the profile header comes from the real backend's seed; the browser's
+reads are the fixtures below either way.
 """
 import base64
 import io
@@ -27,21 +30,24 @@ USER = {'id': 1, 'username': 'fixture', 'role': 'user', 'token': 'review-fixture
         'email': 'review@example.test', 'email_verified': True, 'avatar': '', 'experience': 1350}
 RESULTS = []
 FAILURES = []
+FOLDERS = [
+    {'id': 1, 'name': '主收藏夹', 'is_main': 1, 'item_count': 1139, 'latest_image_id': 3004},
+    {'id': 8, 'name': '测试合并', 'is_main': 0, 'item_count': 10, 'latest_image_id': 3005},
+    {'id': 61, 'name': 'panel', 'is_main': 0, 'item_count': 0, 'latest_image_id': None},
+]
 
 
-def image_record(image_id, sparse=False):
+def image_record(image_id):
     stem = f'https://derpicdn.net/img/2024/1/1/{image_id}'
-    record = {'id': image_id, 'name': f'fixture_{image_id}', 'width': 1600,
-              'height': HEIGHTS[image_id % len(HEIGHTS)], 'view_url': stem + '/view.png',
-              'representations': {key: f'{stem}/{key}.png' for key in
-                                  ['full', 'large', 'medium', 'small', 'tall', 'thumb', 'thumb_small', 'thumb_tiny']}}
-    if not sparse:
-        record.update({'aspect_ratio': record['width'] / record['height'], 'format': 'png',
-                       'source_url': None, 'uploader': 'fixture', 'uploader_id': 1,
-                       'created_at': '2024-01-01T00:00:00Z', 'size': 1024,
-                       'score': 42, 'comment_count': 3, 'tags': ['pony', 'safe', 'solo'],
-                       'description': '', 'upvotes': 40, 'downvotes': 2})
-    return record
+    return {'id': image_id, 'name': f'fixture_{image_id}', 'width': 1600,
+            'height': HEIGHTS[image_id % len(HEIGHTS)], 'view_url': stem + '/view.png',
+            'representations': {key: f'{stem}/{key}.png' for key in
+                                ['full', 'large', 'medium', 'small', 'tall', 'thumb', 'thumb_small', 'thumb_tiny']},
+            'aspect_ratio': 1600 / HEIGHTS[image_id % len(HEIGHTS)], 'format': 'png',
+            'source_url': None, 'uploader': 'fixture', 'uploader_id': 1,
+            'created_at': '2024-01-01T00:00:00Z', 'size': 1024,
+            'score': 42, 'comment_count': 3, 'tags': ['pony', 'safe', 'solo'],
+            'description': '', 'upvotes': 40, 'downvotes': 2}
 
 
 def unwrap(raw):
@@ -63,6 +69,8 @@ class Fixtures:
         self.details = []
         self.allowed_details = set()
         self.profile_reads = []
+        self.upload_queries = []
+        self.folder_reads = []
         self.history = []
         self.hold_uploads = True
         self.hold_details = True
@@ -109,21 +117,14 @@ class Fixtures:
             self.history.append(json.loads(request.post_data))
             self.json(route, {'success': True})
             return
-        if action in ['get_user_uploads', 'get_user_profile'] or '/profiles/' in target.path:
+        if action == 'get_user_profile' or '/profiles/' in target.path:
             self.profile_reads.append({'action': action, 'userId': params.get('user_id', [None])[0],
                                        'path': target.path})
         if action == 'get_user_uploads':
-            page = int(params.get('page', ['1'])[0])
-            records = [image_record(3000 + (page - 1) * 12 + i, sparse=True) for i in range(12)]
-            assert all(len(record) == 6 for record in records)
-            value = {'success': True, 'uploads': records, 'total_pages': 2}
-            if self.hold_uploads:
-                self.pending_uploads.append((route, value))
-            else:
-                self.json(route, value)
-            return
-        if action == 'get_shared_faves':
-            self.json(route, {'success': True, 'username': 'fixture', 'faves': list(range(3000, 3024))})
+            raise AssertionError('get_user_uploads does not exist; uploads are an uploader_id: search')
+        if action == 'get_profile_fave_folders':
+            self.folder_reads.append(params.get('username', [None])[0])
+            self.json(route, {'success': True, 'folders': FOLDERS})
             return
         api_path = target.path.replace('/api/v1/json', '')
         detail = re.fullmatch(r'/images/(\d+)', api_path)
@@ -137,12 +138,26 @@ class Fixtures:
             return
         if api_path == '/search/images':
             query = params.get('q', [''])[0]
-            if 'uploader_id:' in query or re.search(r'\bid:\d+', query):
+            if 'uploader_id:' in query:
+                # The profile's uploads (and the Derpibooru profile's): the first read is held so
+                # the grid skeleton can be inspected.
                 count = int(params.get('per_page', ['12'])[0])
                 page = int(params.get('page', ['1'])[0])
-                self.json(route, {'total': 48 if 'uploader_id:' in query else 24,
-                                  'images': [image_record(3000 + (page - 1) * count + i)
-                                             for i in range(count)]})
+                self.upload_queries.append(query)
+                value = {'total': 48, 'images': [image_record(3000 + (page - 1) * count + i) for i in range(count)]}
+                if self.hold_uploads:
+                    self.pending_uploads.append((route, value))
+                else:
+                    self.json(route, value)
+                return
+            # Positive `id:` terms only. Every image search also carries the site's public blacklist
+            # as `-id:N` exclusions, and on a dev server that list is the live backend's: read as ids,
+            # a home-feed revalidation (a seed past its two-minute TTL) came back as the fifteen
+            # blacklisted pictures, and the home check saw a 15-card grid.
+            ids = [int(found) for found in re.findall(r'(?<![-\w])id:(\d+)', query)]
+            if ids:
+                # The folder covers: one search for every folder's newest picture.
+                self.json(route, {'total': len(ids), 'images': [image_record(image_id) for image_id in ids]})
                 return
         if api_path.startswith('/profiles/'):
             self.json(route, {'user': {'id': 1, 'name': 'fixture', 'slug': 'fixture',
@@ -216,40 +231,50 @@ def gallery_scope(page):
     return pane if pane.count() else page.locator('main')
 
 
-def inspect_grid(page, expected_count, baseline=None, sparse=False):
+def inspect_grid(page, expected_count, baseline=None):
     scope = gallery_scope(page)
     expect(scope.locator(THUMB)).to_have_count(expected_count)
     page.wait_for_timeout(650)
+    # The masonry is one flat list of absolutely placed slots (`.masonry-grid > .masonry-item`),
+    # so columns and gaps are read off the slots' boxes rather than off column containers.
     rows = scope.locator(THUMB).evaluate_all("""nodes => nodes.map(n => {
-      const r=n.getBoundingClientRect(), card=n.closest('.image-card'), col=card.parentElement, grid=col.parentElement;
-      const picture=n.querySelector('img'), s=getComputedStyle(n), cs=getComputedStyle(col), gs=getComputedStyle(grid);
+      const card=n.closest('.image-card'), slot=card.closest('.masonry-item') || card, r=slot.getBoundingClientRect();
+      const picture=n.querySelector('img'), s=getComputedStyle(n);
       return {id:Number(n.dataset.imageHeroId),width:r.width,height:r.height,x:r.x,y:r.y,
-        aspect:s.aspectRatio,cols:grid.children.length,gap:Number.parseFloat(gs.columnGap),
-        rowGap:Number.parseFloat(cs.rowGap),radius:s.borderRadius,linked:card.querySelector('a')?.pathname,
+        thumbWidth:n.getBoundingClientRect().width,thumbHeight:n.getBoundingClientRect().height,
+        aspect:s.aspectRatio,radius:s.borderRadius,linked:card.querySelector('a')?.pathname,
         inViewport:r.bottom>0 && r.top<innerHeight,
         decoded:!!picture && picture.complete && picture.naturalWidth>0,
         imageRatio:picture?.naturalWidth/picture?.naturalHeight,
         badges:card.querySelector('[data-image-hero-chrome]')?.textContent.trim()};
     })""")
-    first = rows[0]
+    columns = sorted({round(row['x']) for row in rows})
+    first_column = sorted((row for row in rows if round(row['x']) == columns[0]), key=lambda row: row['y'])
+    layout = {
+        'cols': len(columns),
+        'gap': round(columns[1] - columns[0] - rows[0]['width']) if len(columns) > 1 else 0,
+        'rowGap': round(first_column[1]['y'] - first_column[0]['y'] - first_column[0]['height'])
+        if len(first_column) > 1 else None,
+        'radius': rows[0]['radius'],
+    }
     expected_cols = 4 if page.viewport_size['width'] >= 1024 else 2
-    assert first['cols'] == expected_cols, first
+    assert layout['cols'] == expected_cols, layout
     expected_gap = 16 if page.viewport_size['width'] >= 640 else 8
-    assert first['gap'] == first['rowGap'] == expected_gap, first
-    assert len({round(row['width'] / row['height'], 2) for row in rows}) >= 3, 'Previews became square tiles'
+    assert layout['gap'] == layout['rowGap'] == expected_gap, layout
+    assert len({round(row['thumbWidth'] / row['thumbHeight'], 2) for row in rows}) >= 3, 'Previews became square tiles'
     for row in rows:
         w, h = map(float, row['aspect'].split('/'))
-        assert abs(row['width'] / row['height'] - w / h) < .01, row
-        assert abs(w / h - 1600 / HEIGHTS[row['id'] % len(HEIGHTS)]) < .01, row
+        assert abs(row['thumbWidth'] / row['thumbHeight'] - w / h) < .01, row
+        # Only the fixtures' own pictures have a known shape (a dev server's home seed is live).
+        if row['id'] < 100000:
+            assert abs(w / h - 1600 / HEIGHTS[row['id'] % len(HEIGHTS)]) < .01, row
         assert row['linked'] == f"/pic/{row['id']}", row
         if row['inViewport']:
             assert row['decoded'], f'Visible preview did not decode: {row}'
-        if sparse:
-            assert row['badges'] == 'PNG', 'Sparse uploads must not invent vote/comment counts'
     if baseline:
-        assert {key: first[key] for key in baseline} == baseline, (first, baseline)
+        assert {key: layout[key] for key in baseline} == baseline, (layout, baseline)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), 'Horizontal overflow'
-    return {key: first[key] for key in ['cols', 'gap', 'rowGap', 'radius']}
+    return layout
 
 
 def select_page_two(page):
@@ -283,7 +308,9 @@ def journey(page, fixtures, label, image_id, animated=True, delayed=False, expec
     scroll = page.locator('[data-image-hero-gallery-scroll]').evaluate('(n)=>n.scrollTop')
     active_tab = page.locator('[data-tab-pane-active]').get_attribute('data-tab-pane') if page.locator('[data-tab-pane-active]').count() else None
     assert set(fixtures.details) <= fixtures.allowed_details, f'Unrequested details fetched: {fixtures.details}'
-    fixtures.allowed_details.add(image_id)
+    # The viewer warms the pictures either side of the one it settles on (the list's order,
+    # consecutive ids here), so a step paints at once; nothing else may be read.
+    fixtures.allowed_details.update({image_id - 1, image_id, image_id + 1})
     fixtures.hold_details = delayed
     previous_visits = len(fixtures.history)
     page.evaluate('window.__galleryFrames=[];window.__galleryRecording=true')
@@ -297,11 +324,11 @@ def journey(page, fixtures, label, image_id, animated=True, delayed=False, expec
         wait_pending(page, fixtures.pending_details, 'image detail')
         page.wait_for_timeout(350)
         if animated:
-            # The stage can hand its preview to the routed detail before metadata arrives.
-            expect(page.locator('[data-image-detail-meta-loading]:visible').first).to_be_visible()
+            # The stage hands the card's own record to the routed detail before the detail read
+            # lands: what the card carried shows, and nothing reads as a broken value.
             stage_text = page.locator('[data-image-detail-host]').inner_text()
             assert 'Invalid Date' not in stage_text and 'NaN' not in stage_text, stage_text
-        assert len(fixtures.history) == previous_visits, 'A sparse preview was recorded before its metadata arrived'
+        assert len(fixtures.history) == previous_visits, 'A preview was recorded before its metadata arrived'
         fixtures.release_details()
     expect(page).to_have_url(BASE + f'/pic/{image_id}', timeout=15000)
     expect(page.locator('html')).to_have_attribute('data-image-hero-state', 'detail-idle', timeout=15000)
@@ -352,12 +379,61 @@ def journey(page, fixtures, label, image_id, animated=True, delayed=False, expec
                          if '/profiles/' in read['path'] and not read['path'].endswith('/profiles/fixture'))
     assert not wrong_profile, f'Opening a picture changed the background profile id: {wrong_profile}'
     for item in fixtures.history:
-        assert item.get('uploader') == 'fixture', f'History captured sparse preview metadata: {item}'
+        assert item.get('uploader') == 'fixture', f'History captured preview metadata: {item}'
     page.screenshot(path=str(OUTPUT / f'{label}-returned.png'))
     return {'route': path, 'tab': active_tab, 'scrollBefore': scroll, 'scrollAfter': returned_scroll,
             'openingFrames': len(opening), 'closingFrames': len(closing),
             'detailRequests': fixtures.details.copy(), 'profileReads': fixtures.profile_reads.copy(),
             'history': fixtures.history.copy()}
+
+
+def step_journey(page, fixtures, from_id, to_id, expected_page):
+    """Open `from_id`, step once with the keyboard to `to_id` (on the next page), close."""
+    scope = gallery_scope(page)
+    source = scope.locator(THUMB + f'[data-image-hero-id="{from_id}"]')
+    source.evaluate("""n => {
+      const s=document.querySelector('[data-image-hero-gallery-scroll]');
+      s.scrollTop += n.getBoundingClientRect().top-s.getBoundingClientRect().top-150;
+    }""")
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(650)
+    fixtures.allowed_details.update({from_id - 1, from_id, to_id, to_id + 1})
+    fixtures.hold_details = False
+    source.locator('..').click()
+    page.mouse.move(0, 0)
+    expect(page).to_have_url(BASE + f'/pic/{from_id}', timeout=15000)
+    expect(page.locator('html')).to_have_attribute('data-image-hero-state', 'detail-idle', timeout=15000)
+    page.wait_for_timeout(300)
+    page.keyboard.press('ArrowRight')
+    expect(page).to_have_url(BASE + f'/pic/{to_id}', timeout=15000)
+    expect(page.locator(f'[data-image-hero-role="detail"][data-image-hero-id="{to_id}"]')).to_be_visible(timeout=15000)
+    page.wait_for_timeout(400)
+    page.keyboard.press('Escape')
+    expect(page).to_have_url(BASE + '/user/1', timeout=15000)
+    expect(page.locator('[data-image-detail-overlay]')).to_have_count(0, timeout=15000)
+    page.wait_for_timeout(500)
+    expect(gallery_scope(page).locator('[aria-current="page"]')).to_have_text(str(expected_page))
+    target = gallery_scope(page).locator(THUMB + f'[data-image-hero-id="{to_id}"]')
+    expect(target).to_be_in_viewport()
+    assert set(fixtures.details) <= fixtures.allowed_details, f'Unrequested details fetched: {fixtures.details}'
+    return {'from': from_id, 'to': to_id, 'page': expected_page}
+
+
+def inspect_folders(page, fixtures):
+    """The 收藏夹 tab: one card per public folder, linking to the shared-folder route."""
+    scope = gallery_scope(page)
+    cards = scope.locator('a[href^="/favorites/shared/"]')
+    expect(cards).to_have_count(len(FOLDERS))
+    assert fixtures.folder_reads, 'The folders tab did not read get_profile_fave_folders'
+    hrefs = cards.evaluate_all('ns => ns.map(n => n.getAttribute("href"))')
+    for href, folder in zip(hrefs, FOLDERS):
+        assert re.fullmatch(r'/favorites/shared/[^/]+/' + str(folder['id']), href), href
+    page.wait_for_function("""() => [...document.querySelectorAll('[data-tab-pane-active] a[href^="/favorites/shared/"] img')]
+      .every(i => i.complete && i.naturalWidth > 0)""")
+    covered = cards.evaluate_all('ns => ns.map(n => !!n.querySelector("img"))')
+    assert covered == [folder['latest_image_id'] is not None for folder in FOLDERS], covered
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), 'Horizontal overflow'
+    return {'folders': hrefs}
 
 
 def run_profile(browser, name, width, motion):
@@ -385,10 +461,11 @@ def run_profile(browser, name, width, motion):
             assert not fixtures.details, 'Home idle fetched image details'
         page.goto(BASE + '/user/1', wait_until='domcontentloaded')
         wait_pending(page, fixtures.pending_uploads, 'profile uploads')
+        assert all('uploader_id:' in query for query in fixtures.upload_queries), fixtures.upload_queries
         expect(page.locator('[data-tab-pane-active] .skeleton')).to_have_count(12)
         fixtures.release_uploads()
         page.wait_for_load_state('networkidle')
-        inspect_grid(page, 12, baseline, sparse=True)
+        inspect_grid(page, 12, baseline)
         assert not fixtures.details, 'Profile idle fetched image details'
         if animated:
             select_page_two(page)
@@ -396,17 +473,20 @@ def run_profile(browser, name, width, motion):
         result = journey(page, fixtures, name + '-uploads', image_id, animated=animated,
                          delayed=True, expected_page=2 if animated else 1)
         RESULTS.append({'profile': name, 'case': 'uploads', **result})
-        print(f'PASS {name} uploads: masonry, sparse metadata, open and return', flush=True)
+        print(f'PASS {name} uploads: masonry, open and return', flush=True)
         if animated:
+            # 上一张 / 下一张 cross the tab's pages: from page 2's last picture into page 3, and
+            # the close lands on page 3's card.
+            result = step_journey(page, fixtures, 3023, 3024, expected_page=3)
+            RESULTS.append({'profile': name, 'case': 'uploads-step', **result})
+            print(f'PASS {name} uploads: a step crosses the page and the close turns the list', flush=True)
             page.get_by_role('tab', name='收藏夹', exact=True).click()
             page.mouse.move(0, 0)
             page.wait_for_load_state('networkidle')
             page.wait_for_timeout(600)
-            inspect_grid(page, 12, baseline)
-            select_page_two(page)
-            result = journey(page, fixtures, name + '-faves', 3012, expected_page=2)
-            RESULTS.append({'profile': name, 'case': 'faves', **result})
-            print(f'PASS {name} favourites: same id as uploads, open and return', flush=True)
+            result = inspect_folders(page, fixtures)
+            RESULTS.append({'profile': name, 'case': 'folders', **result})
+            print(f'PASS {name} public folders: one card per folder, covers inside the filters', flush=True)
             page.goto(BASE + '/derpi/user/fixture', wait_until='networkidle')
             inspect_grid(page, 24, baseline)
             result = journey(page, fixtures, name + '-derpi', 3000)

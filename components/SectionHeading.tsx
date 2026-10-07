@@ -22,6 +22,13 @@ interface SectionHeadingProps extends Omit<HTMLAttributes<HTMLElement>, 'childre
    * readers navigate by the outline.
    */
   as?: 'h2' | 'h3';
+  /**
+   * `section` (the default) names a section of the page. `group` names a run of rows *within* a
+   * list — a day of /history, a day of the coin ledger: the quieter `title-s` in
+   * `on-surface-variant`, 8dp above its rows and inset 4dp, so the rows stay the subject and the
+   * day reads as their caption rather than as a section of its own.
+   */
+  level?: 'section' | 'group';
   className?: string;
 }
 
@@ -44,10 +51,12 @@ export default function SectionHeading({
   subtitle,
   actions,
   as: Tag = 'h2',
+  level = 'section',
   className = '',
   ...rest
 }: SectionHeadingProps) {
-  const spacing = cn(!HAS_MARGIN_BOTTOM.test(className) && 'mb-4', className);
+  const group = level === 'group';
+  const spacing = cn(!HAS_MARGIN_BOTTOM.test(className) && (group ? 'mb-2' : 'mb-4'), group && 'px-1', className);
   /* With actions or a subtitle there is a wrapper below and it owns the
      spacing; otherwise the heading itself is the outermost element. */
   const wrapped = Boolean(actions || subtitle);
@@ -55,7 +64,8 @@ export default function SectionHeading({
   const heading = (
     <Tag
       className={cn(
-        'text-title-m-emphasized text-on-surface flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1',
+        group ? 'text-title-s text-on-surface-variant' : 'text-title-m-emphasized text-on-surface',
+        'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1',
         !wrapped && spacing,
       )}
       {...(wrapped ? undefined : rest)}

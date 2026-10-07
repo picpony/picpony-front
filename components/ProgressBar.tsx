@@ -2,7 +2,7 @@
 
 import { clamp, cn } from '@/lib/utils';
 
-export type ProgressTone = 'secondary' | 'success' | 'warning';
+export type ProgressTone = 'secondary' | 'tertiary' | 'success' | 'warning';
 export type ProgressSurface = 'default' | 'media';
 
 /**
@@ -16,19 +16,27 @@ export type ProgressSurface = 'default' | 'media';
  * the empty half *is* the content. `secondary` measures 5.00:1 / 5.47:1 and is the
  * substitution the focus ring already made. `primary` is removed from the union
  * rather than left available.
+ *
+ * `tertiary` is the theme's accent, for the one meter that is an accent moment — the level on a
+ * profile — and it brings its own track: tertiary on tertiary-container measures 3.45:1 at worst
+ * across the ten, where it would sit on another hue's container otherwise. Under 单色 it is the
+ * secondary pair, as every other meter.
  */
 const FILLS: Record<ProgressTone, string> = {
   secondary: 'bg-secondary',
+  tertiary: 'bg-tertiary',
   success: 'bg-success-fill',
   warning: 'bg-warning-fill',
 };
 
 /** `secondary-container` is `ProgressIndicatorTokens.TrackColor`; over a
- *  photograph no surface role applies, so the media roles take over. */
+ *  photograph no surface role applies, so the media roles take over. The accent
+ *  meter's own track is `ACCENT_TRACK`. */
 const TRACKS: Record<ProgressSurface, string> = {
   default: 'bg-secondary-container',
   media: 'bg-media-outline',
 };
+const ACCENT_TRACK = 'bg-tertiary-container';
 
 /* **No stop indicator, and `StopSize` is a divergence now.** Tried twice — a dot in
  * the fill's colour (clipped into a nub by the track's rounding on any bar below
@@ -64,8 +72,13 @@ const HAS_WIDTH = /(?:^|\s)(?:\S+:)?w-\S+/;
  * more than 100%). `spring-slow-effects` is the softest effects tier; what is
  * borrowed is the family, not the literal stiffness.
  *
- * The fill is `scaleX` on a `transform-origin: left` box, not an animated width:
- * width puts every frame through layout and paint.
+ * The fill is a full-width rounded bar *translated* in from the left, not an animated
+ * width (which puts every frame through layout and paint) and no longer a `scaleX`:
+ * scaling a rounded box scales its corner with it, so at 10% the leading cap's 2px
+ * radius came out 0.2px wide — a square end on a round track. Translated, the visible
+ * end is always the bar's own round cap, and the track's clip rounds the other.
+ * Forced colors flattens both halves into the canvas, so the fill takes the system
+ * highlight and the track the system edge.
  */
 export default function ProgressBar({
   value,
@@ -102,17 +115,18 @@ export default function ProgressBar({
            profile banner's XP bar 24px off its right end. A caller that has said
            otherwise has already answered the question. */
         !HAS_WIDTH.test(className) && 'w-full',
-        TRACKS[surface],
+        surface === 'default' && tone === 'tertiary' ? ACCENT_TRACK : TRACKS[surface],
+        'forced-boundary',
         className,
       )}
     >
       <div
         className={cn(
-          'h-full w-full origin-left rounded-full',
+          'h-full w-full origin-left rounded-full forced-mark',
           fill,
-          determinate ? 'spring-slow-effects transition-transform' : 'm3-linear-bar',
+          determinate ? 'spring-slow-effects transition-[transform,background-color]' : 'm3-linear-bar',
         )}
-        style={determinate ? { transform: `scaleX(${pct / 100})` } : undefined}
+        style={determinate ? { transform: `translateX(${pct - 100}%)` } : undefined}
       />
     </div>
   );

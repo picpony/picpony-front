@@ -12,13 +12,10 @@ import { cn } from '@/lib/utils';
 
 export type CardVariant = 'filled' | 'elevated' | 'outlined' | 'transparent';
 export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
-export type CardOutlineTone = 'neutral' | 'error';
 
 interface CardAppearanceProps {
   variant?: CardVariant;
   padding?: CardPadding;
-  /** Semantic boundary for an outlined surface, such as an active blocking rule. */
-  outlineTone?: CardOutlineTone;
   children?: ReactNode;
 }
 
@@ -55,19 +52,16 @@ type CardProps = CardAppearanceProps & (
 const VARIANTS: Record<CardVariant, string> = {
   /* M3's *filled* card is `surface-container-highest` at elevation 0 — the highest
      tone step, which is what lets a card read as a distinct plane with no border
-     and no shadow. */
-  filled: 'bg-surface-container-highest',
+     and no shadow. That step is exactly what forced colors flattens, so the tonal
+     variants take the system edge there (`forced-boundary`); the outlined one keeps
+     its own border. */
+  filled: 'bg-surface-container-highest forced-boundary',
   // Retain the quieter tonal variant without lifting a card off the page.
-  elevated: 'bg-surface-container-low',
+  elevated: 'bg-surface-container-low forced-boundary',
   // For dense lists where filled cards would stack into one grey mass.
-  outlined: 'bg-surface border',
+  outlined: 'bg-surface border border-outline-variant',
   // No surface at all — content lies directly on the page background.
   transparent: 'bg-transparent',
-};
-
-const OUTLINES: Record<CardOutlineTone, string> = {
-  neutral: 'border-outline-variant',
-  error: 'border-error',
 };
 
 const PADDINGS: Record<CardPadding, string> = {
@@ -81,7 +75,6 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
   const {
     variant = 'filled',
     padding = 'md',
-    outlineTone = 'neutral',
     interactive = false,
     as,
     className = '',
@@ -99,12 +92,11 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
     className: cn(
       'rounded-md spring-fast-effects transition-[border-color,box-shadow]',
       VARIANTS[variant],
-      variant === 'outlined' && OUTLINES[outlineTone],
       PADDINGS[padding],
       /* A card that is a button still reads as a card: no pill, no label role,
          and the text stays left-aligned — a button centres its content by
          default, which would re-set every paragraph inside it. */
-      isControl && 'block w-full text-left outline-none focus-visible:ring-2 focus-ring',
+      isControl && 'block w-full touch-manipulation text-left focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
       /* `disabled` is typed and forwarded, so it has to *look* disabled:
          `disabled-content` is the app's one weight (38%, M3's figure), and the
          state layer comes off with it. The ripple host stays positioned while

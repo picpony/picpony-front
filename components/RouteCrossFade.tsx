@@ -58,8 +58,8 @@ export default class RouteCrossFade extends Component<Props> {
         /* `pointer-events-none` is load-bearing: without it a wheel or touch
            during the fade is swallowed by a dead frame instead of reaching the
            scroller underneath. Stacks above page content, below the tab pill,
-           hero stage and flight layer. */
-        className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
+           hero stage and flight layer — its step in the stacking scale. */
+        className="pointer-events-none absolute inset-0 z-route-crossfade overflow-hidden"
       />
     );
   }

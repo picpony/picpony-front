@@ -29,7 +29,14 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 export type Priority = 'immediate' | 'background';
 
 /**
- * How much of the network the app may occupy, and how much of that a *guess* may occupy.
+ * Which upstream a read waits on. Each has its own slots: one global queue once let four slow
+ * Derpibooru reads (a rate-limited relay, four page turns) hold every slot, and the forum —
+ * which never touches Derpibooru — sent nothing for as long as the relay was held.
+ */
+export type Lane = 'picpony' | 'derpi';
+
+/**
+ * How much of an upstream the app may occupy, and how much of that a *guess* may occupy.
  *
  * The background cap is what makes prefetching safe: a background read can never take the last
  * slot, so speculation can never delay a request a user is actually waiting for.
@@ -39,45 +46,54 @@ const MAX_CONCURRENT_BACKGROUND = 2;
 /** Past this, queued guesses are dropped oldest-first rather than allowed to accumulate. */
 const MAX_BACKGROUND_QUEUE = 8;
 
-type Job = {
+export type Job = {
   run: () => Promise<void>;
   priority: Priority;
   key: string;
   cancel: () => void;
 };
 
-const immediateQueue: Job[] = [];
-const backgroundQueue: Job[] = [];
-let active = 0;
-let activeBackground = 0;
+interface LaneState {
+  immediate: Job[];
+  background: Job[];
+  active: number;
+  activeBackground: number;
+}
 
-function pump() {
-  while (active < MAX_CONCURRENT) {
+const lanes: Record<Lane, LaneState> = {
+  picpony: { immediate: [], background: [], active: 0, activeBackground: 0 },
+  derpi: { immediate: [], background: [], active: 0, activeBackground: 0 },
+};
+
+function pump(lane: Lane) {
+  const state = lanes[lane];
+  while (state.active < MAX_CONCURRENT) {
     const job =
-      immediateQueue.shift() ??
-      (activeBackground < MAX_CONCURRENT_BACKGROUND ? backgroundQueue.shift() : undefined);
+      state.immediate.shift() ??
+      (state.activeBackground < MAX_CONCURRENT_BACKGROUND ? state.background.shift() : undefined);
     if (!job) return;
     const background = job.priority === 'background';
-    active += 1;
-    if (background) activeBackground += 1;
+    state.active += 1;
+    if (background) state.activeBackground += 1;
     void job.run().finally(() => {
-      active -= 1;
-      if (background) activeBackground -= 1;
-      pump();
+      state.active -= 1;
+      if (background) state.activeBackground -= 1;
+      pump(lane);
     });
   }
 }
 
-function enqueue(job: Job) {
+function enqueue(lane: Lane, job: Job) {
+  const state = lanes[lane];
   if (job.priority === 'immediate') {
     /* A real activation owns the next slot, ahead of waiting intent — and jumps other immediate
        work too: the most recent activation is the one the user is looking at. */
-    immediateQueue.unshift(job);
+    state.immediate.unshift(job);
   } else {
-    if (backgroundQueue.length >= MAX_BACKGROUND_QUEUE) backgroundQueue.shift()?.cancel();
-    backgroundQueue.push(job);
+    if (state.background.length >= MAX_BACKGROUND_QUEUE) state.background.shift()?.cancel();
+    state.background.push(job);
   }
-  pump();
+  pump(lane);
 }
 
 /**
@@ -91,7 +107,7 @@ function enqueue(job: Job) {
  * Read per call, not cached: `effectiveType` changes as the connection does. Chromium-only API —
  * `undefined` (no information) is treated as willing, the default every other browser has.
  */
-function speculationAllowed(): boolean {
+export function speculationAllowed(): boolean {
   if (typeof navigator === 'undefined') return false;
   const connection = (
     navigator as Navigator & {
@@ -103,8 +119,10 @@ function speculationAllowed(): boolean {
   return connection.effectiveType !== 'slow-2g' && connection.effectiveType !== '2g';
 }
 
-function dropQueued(key: string) {
-  for (const queue of [immediateQueue, backgroundQueue]) {
+/** Remove a queued job, running its `cancel`; false if it is not queued (running or done). */
+function dropQueued(lane: Lane, key: string) {
+  const state = lanes[lane];
+  for (const queue of [state.immediate, state.background]) {
     const index = queue.findIndex((job) => job.key === key);
     if (index !== -1) {
       const [job] = queue.splice(index, 1);
@@ -113,6 +131,40 @@ function dropQueued(key: string) {
     }
   }
   return false;
+}
+
+/**
+ * Lane scheduling for a queue that keeps its own entries — `lib/detail.ts`, whose picture reads
+ * go to Derpibooru like the gallery's and must share its slots: two independent 4-slot queues
+ * meant up to eight concurrent Derpibooru requests, and more 429s.
+ */
+export function scheduleLaneJob(lane: Lane, job: Job) {
+  enqueue(lane, job);
+}
+
+/** Drop a queued job without running its `cancel` (the owner is cancelling it itself). */
+export function unscheduleLaneJob(lane: Lane, key: string): boolean {
+  const state = lanes[lane];
+  for (const queue of [state.immediate, state.background]) {
+    const index = queue.findIndex((job) => job.key === key);
+    if (index !== -1) {
+      queue.splice(index, 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Move a queued guess to the front as a real activation; false if it is not queued. */
+export function promoteLaneJob(lane: Lane, key: string): boolean {
+  const state = lanes[lane];
+  const index = state.background.findIndex((job) => job.key === key);
+  if (index === -1) return state.immediate.some((job) => job.key === key);
+  const [job] = state.background.splice(index, 1);
+  job.priority = 'immediate';
+  state.immediate.unshift(job);
+  pump(lane);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +290,11 @@ type Entry<T> = {
 export interface ResourceOptions<Args, T> {
   /** Namespaces the cache and names the resource in a ledger. */
   name: string;
+  /**
+   * The upstream this read waits on, whose slots it shares. Default `picpony`. A fetch that
+   * awaits another resource must await one in a different lane, or a full lane waits on itself.
+   */
+  lane?: Lane;
   /** Everything the answer depends on, as a string. Same key means same answer. */
   key: (args: Args) => string;
   fetch: (args: Args, signal: AbortSignal) => Promise<T>;
@@ -293,6 +350,14 @@ export interface Resource<Args, T> {
   seed: (args: Args, value: T, fetchedAt: number) => void;
   /** Abort a *background* read for these args. An immediate one is somebody's screen. */
   cancelBackground: (args: Args) => boolean;
+  /**
+   * A mounted reader moved off this key (a page turn, a new query, an unmount). If nobody else
+   * is reading it and its first answer has not landed, the request is abandoned so the screen
+   * the user is now looking at gets the slot — four superseded page turns used to hold all four
+   * slots while the page actually on screen waited behind them. Checked a microtask later, after
+   * the commit has resubscribed whoever still reads the key.
+   */
+  release: (key: string) => void;
 }
 
 const registry = new Set<{ clear: () => void; expireAll: () => void }>();
@@ -318,7 +383,7 @@ export function expireAllResources() {
 }
 
 export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Resource<Args, T> {
-  const { name, key: keyOf, fetch: fetcher, ttl = 60_000, maxEntries = 32, publishGate } = options;
+  const { name, key: keyOf, fetch: fetcher, ttl = 60_000, maxEntries = 32, publishGate, lane = 'picpony' } = options;
   const store = new Map<string, Entry<T>>();
 
   const isStale = (entry: Entry<T>) =>
@@ -370,8 +435,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
   function discard(key: string, entry: Entry<T>) {
     store.delete(key);
     entry.controller?.abort();
-    dropQueued(`${name}:${key}`);
-    dropQueued(`${name}:${key}:revalidate`);
+    dropQueued(lane, `${name}:${key}`);
+    dropQueued(lane, `${name}:${key}:revalidate`);
     entry.settle.reject(new DOMException(`${name} read was replaced`, 'AbortError'));
     if (entry.pendingCommit) {
       pendingPublish.delete(entry.pendingCommit);
@@ -388,8 +453,33 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       discard(key, entry);
       if (refetch && entry.listeners.size > 0) {
         if (entry.args !== undefined) {
-          const replacement = create(key, entry.args as Args, 'immediate');
-          replacement.listeners = entry.listeners;
+          /* The answer on screen stays on screen while it is re-read — "refreshes underneath",
+             as `read({ force })` does; the replacement once started without it, so every mounted
+             reader that did not keep its previous data dropped to its skeleton.
+             The holder is a placeholder carrying value and listeners, and the re-read starts a
+             microtask later: a mutation that invalidates and then `write`s its authoritative
+             answer in the same tick (/history's 清空) replaces the holder first, and no request
+             is sent only to be aborted. A `read` in the same tick adopts it the same way. */
+          const holder: Entry<T> = {
+            key,
+            args: entry.args,
+            status: 'queued',
+            placeholder: true,
+            value: entry.value,
+            fetchedAt: entry.fetchedAt,
+            seededAt: entry.seededAt,
+            priority: 'immediate',
+            promise: Promise.resolve(undefined as unknown as T),
+            settle: { resolve: () => {}, reject: () => {} },
+            snapshot: EMPTY as ResourceSnapshot<T>,
+            listeners: entry.listeners,
+          };
+          holder.snapshot = buildSnapshot(holder);
+          store.set(key, holder);
+          const holderArgs = entry.args as Args;
+          queueMicrotask(() => {
+            if (store.get(key) === holder) void read(holderArgs, { force: true }).catch(() => {});
+          });
         } else {
           /* An as-yet unread subscriber still needs its listener slot. */
           entry.snapshot = EMPTY as ResourceSnapshot<T>;
@@ -439,7 +529,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     const controller = new AbortController();
     entry.controller = controller;
 
-    enqueue({
+    enqueue(lane, {
       key: `${name}:${key}`,
       priority,
       cancel: () => {
@@ -497,7 +587,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
          the front, if already in flight there is nothing to do but wait. */
       if (priority === 'immediate' && existing.priority === 'background' && existing.status === 'queued') {
         existing.priority = 'immediate';
-        if (dropQueued(`${name}:${key}`)) {
+        if (dropQueued(lane, `${name}:${key}`)) {
           store.delete(key);
           const promoted = create(key, args, 'immediate');
           promoted.listeners = existing.listeners;
@@ -547,15 +637,19 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     return entry.promise;
   }
 
-  /** A refresh that never shows a loading state and never replaces a good value with an error. */
+  /**
+   * A refresh that never shows a loading state and never replaces a good value with an error.
+   *
+   * The in-flight `controller` is what stops a second refresh starting beside the first.
+   * `fetchedAt` moves only when an answer lands: it used to be pushed forward up front, so a
+   * refresh the queue dropped (past its background cap) or one that failed left the stale
+   * answer looking fresh for another full TTL — the refresh the tab return promised never came.
+   */
   function revalidate(args: Args, key: string, stale: Entry<T>) {
     if (stale.status !== 'resolved' || stale.controller) return;
-    /* Marked resolved-but-refreshing by moving `fetchedAt` forward, so a second render in the
-       same second does not start a second refresh. */
-    stale.fetchedAt = Date.now();
     const controller = new AbortController();
     stale.controller = controller;
-    enqueue({
+    enqueue(lane, {
       key: `${name}:${key}:revalidate`,
       priority: 'background',
       cancel: () => {
@@ -766,12 +860,23 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       const key = keyOf(args);
       const entry = store.get(key);
       if (!entry || entry.priority !== 'background' || entry.listeners.size > 0) return false;
-      if (entry.status === 'queued' && dropQueued(`${name}:${key}`)) return true;
+      if (entry.status === 'queued' && dropQueued(lane, `${name}:${key}`)) return true;
       if (entry.status === 'loading') {
         discard(key, entry);
         return true;
       }
       return false;
+    },
+    release(key) {
+      queueMicrotask(() => {
+        const entry = store.get(key);
+        if (!entry || entry.placeholder || entry.listeners.size > 0) return;
+        if (entry.status !== 'queued' && entry.status !== 'loading') return;
+        /* A refresh of an answer already held is cheap to let land, and worth keeping; a
+           background read is already capped. Only a first answer nobody waits for is dropped. */
+        if (entry.value !== undefined || entry.priority !== 'immediate') return;
+        discard(key, entry);
+      });
     },
   };
 
@@ -841,8 +946,24 @@ export function useResource<Args, T>(
      * server's value.
      */
     initial?: { key: string; data: T; generatedAt: number };
+    /**
+     * Re-read this key underneath what is on screen every `refetchInterval` ms while it is
+     * mounted — for answers somebody else changes (the unread badge, an open conversation).
+     * Quiet: no loading state, and a failure leaves the shown value alone. Jittered ±10% so
+     * every open tab does not ask in the same second; skipped while the tab is hidden or the
+     * device is offline, with one read on return if a tick was missed; stopped on unmount.
+     */
+    refetchInterval?: number;
   },
-): ResourceSnapshot<T> & { refresh: () => void } {
+): ResourceSnapshot<T> & {
+  refresh: () => void;
+  /**
+   * `data` is the previous key's answer, held by `keepPrevious` while this key has none. With
+   * `error` set it means the page turn *failed* and the rows on screen belong to another page —
+   * the screen must say so, not leave a pager reading 2 over page 1's pictures.
+   */
+  isPrevious: boolean;
+} {
   const key = args === SKIP ? null : resource.keyOf(args as Args);
   const retentionScope = options?.keepPrevious ?? false;
   const keepPrevious = retentionScope !== false;
@@ -911,8 +1032,45 @@ export function useResource<Args, T>(
     void resource.read(args as Args).catch(() => {
       /* The error is in the snapshot; the promise rejection is not this hook's to report. */
     });
+    /* Leaving the key (or unmounting) offers its unanswered request back — see `release`. */
+    return () => resource.release(key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource, key]);
+
+  const refetchInterval = options?.refetchInterval;
+  useEffect(() => {
+    if (key === null || !refetchInterval || refetchInterval <= 0 || typeof document === 'undefined') return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastTick = Date.now();
+    const due = () => document.visibilityState === 'visible' &&
+      (typeof navigator === 'undefined' || navigator.onLine !== false);
+    const tick = () => {
+      lastTick = Date.now();
+      resource.expire(args as Args);
+    };
+    const schedule = () => {
+      timer = setTimeout(() => {
+        if (due()) tick();
+        schedule();
+      }, refetchInterval * (0.9 + Math.random() * 0.2));
+    };
+    /* A hidden tab skips its ticks; coming back after one was missed reads at once rather than
+       waiting out a fresh interval — and restarts the interval from that read, or the timer
+       already running fires within the second and the key is read twice on return. */
+    const onVisibility = () => {
+      if (!due() || Date.now() - lastTick < refetchInterval) return;
+      tick();
+      if (timer !== undefined) clearTimeout(timer);
+      schedule();
+    };
+    schedule();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource, key, refetchInterval]);
 
   const refresh = useCallback(
     () => {
@@ -949,11 +1107,11 @@ export function useResource<Args, T>(
 
   return useMemo(() => {
     if (!keepPrevious || snapshot.data !== undefined || key === null || previous === undefined) {
-      return { ...snapshot, refresh };
+      return { ...snapshot, refresh, isPrevious: false };
     }
     /* `isLoading` stays whatever the *new* key reports — the caller dims on it — while `data` is
        the old page, so the list keeps its box and the scroller keeps its height. */
-    return { ...snapshot, data: previous, refresh };
+    return { ...snapshot, data: previous, refresh, isPrevious: true };
   }, [keepPrevious, snapshot, previous, key, refresh]);
 }
 
@@ -996,9 +1154,9 @@ let returnBound = false;
  * app in one frame — the interruption this is supposed to prevent, delivered by the mechanism meant
  * to prevent it.
  *
- * Nothing actually goes out until something reads: `expire` only marks, and the mounted components
- * are what turn that into a request on their next render. A screen nobody is looking at costs
- * nothing.
+ * `expire` re-reads what is mounted at once (and retries a mounted read that failed, which is
+ * what lets a screen recover on reconnect); an entry nobody is looking at is only marked, costs
+ * nothing, and is refreshed underneath when a screen next mounts against it.
  *
  * Called once, from the app shell.
  */

@@ -87,6 +87,17 @@ function find(tree, predicate) {
   }
 }
 
+/* The real `settle`: the screens branch on its outcome instead of holding a `try`. */
+const settleModule = {
+  settle: async (work) => {
+    try {
+      return { ok: true, value: await work };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  },
+};
+
 function historyFixture() {
   const hooks = harness();
   let account = 'A';
@@ -97,14 +108,27 @@ function historyFixture() {
   const notices = [];
   const { default: History } = load('app/history/page.tsx', {
     ...hooks.dependencies,
-    '@/lib/hooks': { useSession: () => ({ token: 'A', ready: true }), readToken: () => account },
+    '@/lib/hooks': { useSession: () => ({ token: 'A', ready: true }), readToken: () => account, useNow: () => null },
     '@/lib/screenState': { useScreenState: (_, initial) => hooks.react.useState(initial) },
-    '@/lib/resource': { useResource: () => ({ data: { history: [{ id: 7 }], totalPages: 1 } }) },
-    '@/lib/resources': { browsingHistory: { invalidate: () => writes.push('invalidate'), write: (...args) => writes.push(args) } },
+    '@/lib/resource': {
+      SKIP: 'skip',
+      useResource: () => ({ data: { entries: [{ id: 7, previewUrl: null, uploader: null, viewedAt: null }], totalPages: 1 } }),
+    },
+    '@/lib/resources': {
+      browsingHistory: { invalidate: () => writes.push('invalidate'), write: (...args) => writes.push(args), prefetch: () => {} },
+    },
+    './useHistoryDeletes': { useHistoryDeletes: () => ({ hidden: new Set(), remove: () => {}, forget: () => writes.push('forget') }) },
+    './useHistorySequence': { useHistorySequence: () => undefined },
+    './days': load('app/history/days.ts', { '@/lib/format': load('lib/format.ts', {}) }),
+    '@/lib/focusLanding': { focusLanding: () => true },
+    '@/lib/detailTransit': { findDetailOriginLink: () => null, rememberDetailOrigin: () => {} },
+    '@/lib/imageSequence': { openFromSequence: () => {} },
+    '@/lib/settle': settleModule,
+    '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') },
+    '@/lib/format': load('lib/format.ts', {}),
     '@/components/ConfirmDialog': { useConfirm: () => ({ confirm: () => confirmation.promise, confirmDialog: null }) },
-    '@/components/AuthModal': { useAuthModal: () => ({ openAuth: () => {} }) },
     '@/components/Toast': { showToast: (...args) => notices.push(args) },
-    '@/lib/api': { api: { clearBrowsingHistory: async (token) => { calls.push(token); return { json: () => response.promise }; } } },
+    '@/lib/api/history': { clearBrowsingHistory: (token) => { calls.push(token); return response.promise; } },
   });
   const tree = hooks.render(History);
   const clear = find(tree, (node) => node.props.children === '清空记录').props.onClick;
@@ -113,132 +137,38 @@ function historyFixture() {
 
 test('history confirmation cannot clear a newly selected account', async () => {
   const fixture = historyFixture();
-  const clearing = fixture.clear();
+  fixture.clear();
   fixture.changeAccount();
   fixture.confirmation.resolve(true);
-  await clearing;
+  await flush();
   assert.deepEqual(fixture.calls, []);
   assert.deepEqual(fixture.writes, []);
 });
 
 test('a history response from the previous account cannot update the cache or report success', async () => {
   const fixture = historyFixture();
-  const clearing = fixture.clear();
+  fixture.clear();
   fixture.confirmation.resolve(true);
   await flush();
   assert.deepEqual(fixture.calls, ['A']);
   fixture.changeAccount();
-  fixture.response.resolve({ success: true });
-  await clearing;
+  fixture.response.resolve(undefined);
+  await flush();
   assert.deepEqual(fixture.writes, []);
   assert.deepEqual(fixture.notices, []);
 });
 
-function messagesFixture(snapshot) {
-  const hooks = harness();
-  let account = 'A';
-  const reads = { announcement: [], notification: [], interaction: [], chat: [] };
-  const request = (tab, page) => {
-    const result = deferred();
-    reads[tab].push({ ...result, page });
-    return result.promise;
-  };
-  const { Messages, NotificationPane } = load('app/messages/page.tsx', {
-    ...hooks.dependencies,
-    'next/navigation': { useRouter: () => ({ push: () => {} }), useSearchParams: () => new URLSearchParams() },
-    '@/lib/hooks': { readToken: () => account, useEscapeBack: () => {}, useMediaQuery: () => false },
-    '@/lib/pageCache': { readSnapshot: () => snapshot, writeSnapshot: () => {} },
-    '@/lib/resource': { useResource: () => ({ data: {} }) },
-    '@/lib/resources': { unreadCounts: { read: async () => ({}) } },
-    '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') },
-    '@/components/ChatBubble': { markRuns: () => [] },
-    '@/app/actions/getEmojis': { getEmojis: async () => [] },
-    '@/lib/api': { api: {
-      getAnnouncementHistory: () => request('announcement'),
-      getNotifications: () => request('notification'),
-      getInteractionNotifications: (_, page) => request('interaction', page),
-      getRecentContacts: () => request('chat'),
-    } },
-  }, '\nexports.Messages = MessagesContent; exports.NotificationPane = NotificationPane;');
-  const render = () => hooks.render(() => Messages({ token: 'A' }));
-  const pane = (tree, tab) => find(tree, (node) => node.type === '@/components/TabPanes:TabPane' && node.props.value === tab);
-  const notification = (tree, tab) => find(pane(tree, tab), (node) => node.type === NotificationPane);
-  const select = async (tab) => {
-    find(render(), (node) => node.type === '@/components/Tabs:default').props.onChange(tab);
-    render();
-    await hooks.effects();
-  };
-  return { hooks, reads, render, pane, notification, select, NotificationPane, changeAccount: () => { account = 'B'; } };
-}
-
-test('message lists reject superseded/account-stale replies without changing another pane', async () => {
-  const fixture = messagesFixture();
-  fixture.render();
-  await fixture.hooks.effects();
-  await fixture.select('notification');
-  fixture.reads.notification[0].resolve({ success: true, notifications: [{ id: 1, title: 'Current notification' }] });
+test('a confirmed clear publishes the empty answer and reports success once', async () => {
+  const fixture = historyFixture();
+  fixture.clear();
+  fixture.confirmation.resolve(true);
   await flush();
-  fixture.reads.announcement[0].resolve({ success: false });
+  fixture.response.resolve(undefined);
   await flush();
-  let props = fixture.notification(fixture.render(), 'notification').props;
-  assert.equal(props.items[0].id, 1);
-  assert.equal(props.loading, false);
-  assert.equal(props.error, null, 'announcement failures stay in the announcement pane');
-
-  const older = props.onRetry();
-  const newer = props.onRetry();
-  fixture.reads.notification[2].resolve({ success: true, notifications: [{ id: 3 }] });
-  await newer;
-  fixture.reads.notification[1].resolve({ success: false });
-  await older;
-  props = fixture.notification(fixture.render(), 'notification').props;
-  assert.equal(props.items[0].id, 3);
-  assert.equal(props.error, null, 'a late failed retry cannot replace a newer success');
-
-  const previousAccount = props.onRetry();
-  fixture.changeAccount();
-  fixture.reads.notification[3].resolve({ success: true, notifications: [{ id: 4 }] });
-  await previousAccount;
-  assert.equal(fixture.notification(fixture.render(), 'notification').props.items[0].id, 3);
-  fixture.hooks.dispose();
-});
-
-test('interaction pagination retains its rows, survives silent failures and restores the last page', async () => {
-  const fixture = messagesFixture({
-    stale: false,
-    value: {
-      tab: 'interaction', announcements: [], notifications: [], contacts: [],
-      interactions: [{ id: 30 }], interactionsPage: 3, interactionsTotalPages: 5,
-    },
-  });
-  fixture.render();
-  await fixture.hooks.effects();
-  assert.equal(fixture.reads.interaction[0].page, 3, 'restoring a snapshot refreshes its page');
-  fixture.reads.interaction[0].resolve({ success: false });
-  await flush();
-  let props = fixture.notification(fixture.render(), 'interaction').props;
-  assert.equal(props.items[0].id, 30);
-  assert.equal(props.error, null, 'a background failure leaves restored content readable');
-
-  const nextPage = find(props.children, (node) => node.type === '@/components/Pagination:default').props.onPageChange(4);
-  props = fixture.notification(fixture.render(), 'interaction').props;
-  const duringPageChange = fixture.NotificationPane(props);
-  assert.equal(duringPageChange.props['data-pagination-anchor'], true);
-  assert.equal(duringPageChange.props['aria-busy'], true);
-  assert.equal(props.items[0].id, 30, 'pending pagination keeps the prior list height');
-  fixture.reads.interaction[1].resolve({ success: true, notifications: [{ id: 40 }], total_pages: 5 });
-  await nextPage;
-  props = fixture.notification(fixture.render(), 'interaction').props;
-  assert.equal(props.items[0].id, 40);
-
-  await fixture.select('announcement');
-  fixture.reads.announcement[0].resolve({ success: true, announcements: [] });
-  await flush();
-  await fixture.select('interaction');
-  assert.deepEqual(fixture.reads.interaction.map((entry) => entry.page), [3, 4, 4]);
-  fixture.reads.interaction[2].resolve({ success: true, notifications: [{ id: 40 }], total_pages: 5 });
-  await flush();
-  fixture.hooks.dispose();
+  assert.equal(fixture.writes[0], 'forget');
+  assert.equal(fixture.writes[1], 'invalidate');
+  assert.deepEqual(fixture.writes.slice(2).map(([args, value]) => [args.page, args.date, value.entries.length]), [[1, null, 0], [1, null, 0]]);
+  assert.deepEqual(fixture.notices, [['已清空浏览历史', 'success']]);
 });
 
 test('task claims reject duplicate clicks and show the acknowledged receipt before refresh', async () => {
@@ -246,24 +176,94 @@ test('task claims reject duplicate clicks and show the acknowledged receipt befo
   const reply = deferred();
   let claims = 0;
   let refreshes = 0;
-  const data = { success: true, level: 1, experience: 0, coins: 0, novice_tasks: { bind_api: { progress: 1, claimed: 0 } } };
+  const notices = [];
+  const data = {
+    level: 1, experience: 0, coins: 0, equippedBadges: [],
+    progress: { novice: Object.fromEntries(['bind_api', 'verify_api', 'set_bg'].map(id => [id, { progress: 1, claimed: false }])), daily: null, weekly: null },
+  };
   const { default: Tasks } = load('app/tasks/page.tsx', {
     ...hooks.dependencies,
-    '@/lib/hooks': { useSession: () => ({ token: 'A', ready: true }), readToken: () => 'A' },
+    '@/lib/hooks': {
+      useSession: () => ({ user: null, token: 'A', ready: true }), readToken: () => 'A', updateUserInfo: () => {}, useNow: () => null,
+    },
     '@/lib/screenState': { useScreenState: (_, initial) => hooks.react.useState(initial) },
-    '@/lib/resource': { useResource: () => ({ data, refresh: () => { refreshes++; } }) },
-    '@/components/AuthModal': { useAuthModal: () => ({ openAuth: () => {} }) },
-    '@/components/Toast': { showToast: () => {} },
-    '@/lib/api': { api: { claimTask: async () => { claims++; return { json: () => reply.promise }; } } },
+    '@/lib/resource': { SKIP: 'skip', useResource: () => ({ data, refresh: () => {} }) },
+    '@/lib/resources': { tasks: { expire: () => { refreshes++; } }, coinTransactions: { invalidate: () => {} } },
+    '@/lib/settle': settleModule,
+    '@/app/settings/tabs': { settingsHref: (tab) => `/settings?tab=${tab}` },
+    '@/components/Toast': { showToast: (...args) => notices.push(args) },
+    '@/lib/api/tasks': { claimTask: () => { claims++; return reply.promise; } },
   });
-  const claim = find(hooks.render(Tasks), (node) => node.type === '@/components/Button:default' && node.props.children === '领取').props.onClick;
-  const first = claim();
-  await claim();
-  assert.equal(claims, 1);
-  reply.resolve({ success: true, experience: 100, coins: 5 });
-  await first;
-  const tree = hooks.render(Tasks);
-  assert.equal(find(tree, (node) => node.props.label === '首次绑定 API Key 进度').props.tone, 'success');
-  assert.equal(find(tree, (node) => node.type === '@/components/Button:default' && node.props.children === '领取'), undefined);
+  const row = (tree) => find(tree, (node) => node.props.task?.claimId === 'novice_bind_api');
+  const claim = row(hooks.render(Tasks)).props.onClaim;
+  claim();
+  claim();
+  await flush();
+  assert.equal(claims, 1, 'a second press while the claim is out sends nothing');
+  assert.equal(row(hooks.render(Tasks)).props.claiming, true);
+  reply.resolve({ experience: 100, coins: 5 });
+  await flush();
+  const after = row(hooks.render(Tasks));
+  assert.equal(after.props.claimed, true, 'the receipt shows before the re-read lands');
+  assert.equal(after.props.claiming, false);
   assert.equal(refreshes, 1);
+  assert.deepEqual(notices, [['已领取，经验 +100，金币 +5', 'success']]);
+});
+
+test('a claim receipt without figures reports none', async () => {
+  const hooks = harness();
+  const notices = [];
+  const data = {
+    level: null, experience: null, coins: null, equippedBadges: [],
+    progress: { novice: null, daily: Object.fromEntries(['login', 'fav', 'share', 'comment'].map(id => [id, { progress: 1, claimed: false }])), weekly: null },
+  };
+  const { default: Tasks } = load('app/tasks/page.tsx', {
+    ...hooks.dependencies,
+    '@/lib/hooks': {
+      useSession: () => ({ user: null, token: 'A', ready: true }), readToken: () => 'A', updateUserInfo: () => {}, useNow: () => null,
+    },
+    '@/lib/screenState': { useScreenState: (_, initial) => hooks.react.useState(initial) },
+    '@/lib/resource': { SKIP: 'skip', useResource: () => ({ data, refresh: () => {} }) },
+    '@/lib/resources': { tasks: { expire: () => {} }, coinTransactions: { invalidate: () => {} } },
+    '@/lib/settle': settleModule,
+    '@/app/settings/tabs': { settingsHref: (tab) => `/settings?tab=${tab}` },
+    '@/components/Toast': { showToast: (...args) => notices.push(args) },
+    '@/lib/api/tasks': { claimTask: async () => ({ experience: null, coins: null }) },
+  });
+  find(hooks.render(Tasks), (node) => node.props.task?.claimId === 'login').props.onClaim();
+  await flush();
+  assert.deepEqual(notices, [['已领取奖励', 'success']]);
+});
+
+
+test('Undo during a navigation-triggered history delete waits for the verdict and restores it', async () => {
+  const hooks = harness();
+  const response = deferred();
+  const notices = [];
+  const restored = [];
+  let deletes = 0;
+  const { useHistoryDeletes } = load('app/history/useHistoryDeletes.ts', {
+    ...hooks.dependencies,
+    '@/lib/hooks': { readToken: () => 'A' },
+    '@/lib/api/errors': { apiErrorMessage: () => 'fixture failure' },
+    '@/lib/api/history': {
+      deleteBrowsingHistoryItem: () => { deletes++; return response.promise; },
+      restoreBrowsingHistoryItem: async (token, entry) => { restored.push([token, entry.id]); },
+    },
+    '@/lib/resources': { browsingHistory: { peek: () => ({}), invalidate() {}, expire() {} } },
+    '@/components/Toast': { showToast: (...args) => notices.push(args) },
+    fixture: { window: { addEventListener() {}, removeEventListener() {} }, document: { activeElement: null } },
+  }, 'Object.assign(globalThis, require("fixture"));');
+  const view = hooks.render(() => useHistoryDeletes('A', { page: 1, date: null }));
+  await hooks.effects();
+  view.remove({ id: 7 });
+  const undo = notices[0][2].action.onClick;
+  hooks.dispose(); // Leaving the page sends the held deletion.
+  assert.equal(deletes, 1);
+  undo();
+  await flush();
+  assert.deepEqual(restored, [], 'do not race a restore ahead of the delete');
+  response.resolve();
+  await flush(); await flush();
+  assert.deepEqual(restored, [['A', 7]], 'the offered Undo is not lost while the delete is pending');
 });

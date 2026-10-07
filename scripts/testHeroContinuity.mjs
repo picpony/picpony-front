@@ -13,6 +13,8 @@ const { buildFlightKeyframes, createHeroLeg, evaluateLeg } = await import('../li
 const { heroRectCenterDistance } = await import('../lib/hero/geometry.ts');
 const { velocityAt } = await import('../lib/hero/progress.ts');
 const { HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } = await import('../lib/hero/constants.ts');
+const { clamp, clamp01 } = await import('../lib/utils.ts');
+const utils = { clamp, clamp01 };
 
 function load(file, dependencies, globals) {
   const source = ts.transpileModule(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), {
@@ -80,6 +82,7 @@ function scrollHarness(t, top = 200) {
   const { HeroScrollContinuity } = load('lib/hero/scroll.ts', {
     './input': { noteHeroInteraction() {} },
     './scheduler': { heroFrameScheduler: scheduler },
+    '@/lib/utils': utils,
   }, {
     WheelEvent: TestWheelEvent,
     performance: { now: () => now },
@@ -290,7 +293,7 @@ function inputTransferHarness(t) {
     './scheduler': { heroFrameScheduler: scheduler },
   }, globals);
   const { HeroScrollContinuity } = load('lib/hero/scroll.ts', {
-    './input': input, './scheduler': { heroFrameScheduler: scheduler },
+    './input': input, './scheduler': { heroFrameScheduler: scheduler }, '@/lib/utils': utils,
   }, globals);
   const quietWaits = [];
   const dependencies = Object.fromEntries([
@@ -307,9 +310,12 @@ function inputTransferHarness(t) {
       return promise;
     } },
     './routes': { HeroRouteRegistry: class {} },
+    // The real store; binding would initialise a second controller against this stub window.
+    './runtime': { ...load('lib/hero/runtime.ts', {}, globals), bindImageHeroEngine() {} },
     './scheduler': { heroFrameScheduler: scheduler },
     './scroll': { HeroScrollContinuity },
     './session': sessionHelpers,
+    '@/lib/imageSequence': { revealInImageSequence: async () => false },
   });
   const { HeroController } = load('lib/hero/controller.ts', dependencies, globals);
   const controller = new HeroController();
@@ -508,6 +514,37 @@ test('launch speed uses the same units for translation, resizing, and combined t
     const leg = createHeroLeg({ from, to, fromRadius: 20, toRadius: 16, direction: 'forward',
       duration: 160, startedAt: 1000, baseAspect: to.width / to.height, speed: 0.5 });
     close(evaluateLeg(leg, 1000).speed, 0.5, `launch speed for ${JSON.stringify(to)}`);
+  }
+});
+
+test('a reversal leaves at the speed it was caught at, and carries on before it turns', () => {
+  /* R10-007: the inherited speed saturated at −0.5 and the arc clamped negative progress to the
+     start, so a caught flyer stood still for a frame or two and restarted from rest. */
+  const from = { left: 1620, top: 650, width: 256, height: 197 };
+  const to = { left: 632, top: 221, width: 944, height: 531 };
+  const options = { from, to, fromRadius: 16, toRadius: 16, direction: 'forward', duration: 250,
+    startedAt: 1000, baseAspect: to.width / to.height };
+  const outbound = createHeroLeg(options);
+  for (const at of [1040, 1070, 1100]) {
+    const caught = evaluateLeg(outbound, at);
+    assert.ok(caught.speed > 0.5, `the outbound leg is moving fast at ${at}ms (${caught.speed})`);
+    const back = createHeroLeg({ ...options, from: caught.rect, to: from, fromRadius: caught.radius,
+      direction: 'back', duration: 200, startedAt: at, speed: -caught.speed });
+    /* Velocity continuity: the new leg leaves at the caught speed, sign included — up to the
+       spring's floor of −3 in normalised units (a dip of ≈10% of the way home), which only a
+       catch in the first few frames of a leg reaches. */
+    const home = heroRectCenterDistance(caught.rect, from);
+    const floor = Math.min(caught.speed, (3 * home) / 200);
+    const launch = evaluateLeg(back, at).speed;
+    assert.ok(launch < 0 && -launch >= 0.98 * floor && -launch <= 1.05 * caught.speed,
+      `launch ${launch} continues the caught ${-caught.speed} (floor ${-floor}) at ${at}ms`);
+    assertRectClose(evaluateLeg(back, at).rect, caught.rect, `the reversal starts where it was caught (${at}ms)`);
+    // The dip: a few ms in, the flyer is still travelling the way it was heading (toward `to`).
+    const early = evaluateLeg(back, at + 12).rect;
+    const towardTo = Math.sign(to.left - from.left);
+    assert.ok(Math.sign(early.left - caught.rect.left) === towardTo,
+      `the caught flyer carries on before turning (${caught.rect.left} -> ${early.left})`);
+    assertRectClose(evaluateLeg(back, at + 200).rect, from, `the reversal lands home (${at}ms)`);
   }
 });
 

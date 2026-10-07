@@ -145,6 +145,10 @@ socket.addEventListener('message', async (e) => {
     body: stub.binary ? stub.body : Buffer.from(stub.body, 'utf8').toString('base64'),
   });
 });
+/* Measure the code, not the service worker: it would answer `/_next/image` from its own thread,
+   where `Fetch` never sees the request (see the same line in netAudit.mjs). */
+await send('Network.enable');
+await send('Network.setBypassServiceWorker', { bypass: true });
 await send('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
 await send('Emulation.setDeviceMetricsOverride', {
   width: 1440,

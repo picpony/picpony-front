@@ -2,9 +2,10 @@
 
 import { setHeroBusyCheck } from '@/lib/appScroller';
 import { setRouteTransit, setThemeWipeGuard } from '@/lib/pageTransit';
-import { motionTier } from '@/lib/appearance';
+import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
+import { DURATION } from '@/lib/motionTokens';
 
-import { getImageHeroRuntime, subscribeImageHeroRuntime } from '@/lib/hero';
+import { getImageHeroRuntime, subscribeImageHeroRuntime } from '@/lib/hero/runtime';
 import { captureVisualClone, type RouteSnapshot } from '@/lib/pageSnapshot';
 
 /**
@@ -21,8 +22,15 @@ import { captureVisualClone, type RouteSnapshot } from '@/lib/pageSnapshot';
  * DOM. The GSAP half is `lib/routeCrossFadePlay.ts`, loaded on demand below.
  */
 
-/** Watchdog: nothing may outlive the fade by more than this. */
-const MAX_LIFETIME_MS = 900;
+/**
+ * Watchdog: nothing may outlive the fade by more than this, counted from the animation's first
+ * frame. The longest leg is a mapped route's strip — the tab strip's 400ms, on Web Animations —
+ * which at the slowest speed (the wall-clock rule: 1.4x) is 560ms. The bound is deliberately
+ * slack, `DURATION.emphasized` at that speed plus 400ms (1100ms): a watchdog that is too tight
+ * truncates a slide whose first frame came late, and one that is too loose costs nothing. A fixed
+ * 900ms armed before the first frame once truncated the slide at 缓慢 in exactly that way.
+ */
+const MAX_LIFETIME_MS = Math.round(DURATION.emphasized * 1000 * MOTION_SPEED_SCALE.slow) + 400;
 
 /**
  * Where each screen sits on the app's notional plane, so moves between listed screens read as
@@ -52,6 +60,8 @@ export function routeMove(from: string, to: string): { axis: 'x' | 'y'; directio
 type ActiveFade = {
   layer: HTMLElement;
   stop: () => void;
+  /** The first frame, then the watchdog armed from it. */
+  frame: number;
   timer: number;
   unsubscribe: () => void;
 };
@@ -144,9 +154,6 @@ export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot |
   // A backgrounded tab would animate a frame nobody saw and resume mid-way.
   if (document.visibilityState !== 'visible') return null;
 
-  const hero = getImageHeroRuntime();
-  if (hero.phase !== 'gallery-idle' || hero.background) return null;
-
   /* Leaving an image detail fades the *detail*, not the gallery behind it: `/pic/:id` renders
    * as an overlay above `[data-page-content]`, which still holds the gallery, so snapshotting
    * the page content made the picture vanish while the gallery under it cross-faded. The
@@ -154,10 +161,25 @@ export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot |
    * `data-route-fade-only` rides along because the *direction* must change too.
    */
   const overlay = document.querySelector<HTMLElement>('[data-image-detail-overlay]');
+  const hero = getImageHeroRuntime();
+  /* Idle, or an idle detail being left for another page (a drawer row, a link inside it): the
+     engine hears of that navigation only after this commit, so it still reports the detail,
+     and the overlay is still what is on screen. Anything else is a flight's. */
+  const leavingDetail = hero.phase === 'detail-idle' && overlay !== null;
+  if ((hero.phase !== 'gallery-idle' || hero.background) && !leavingDetail) return null;
+
   const source = overlay ?? document.querySelector<HTMLElement>('[data-page-content]');
   if (!source) return null;
   const snapshot = captureVisualClone(source, layer);
   if (snapshot && overlay) snapshot.node.dataset.routeFadeOnly = '';
+  /* The back affordance is the page's chrome, not the shell's: it leaves with the page it
+     belongs to (`playRouteCrossFade`), where it used to vanish in the frame the route changed.
+     A detail's own is inside the overlay and leaves in its clone; whatever the slot holds is
+     under the overlay, unseen, so an arriving page's back affordance is an arrival. */
+  if (snapshot) {
+    const slot = overlay ? null : document.querySelector<HTMLElement>('[data-page-back-slot]');
+    snapshot.chrome = slot && slot.childElementCount > 0 ? (captureVisualClone(slot, layer)?.node ?? null) : null;
+  }
   /* getSnapshotBeforeUpdate runs before any incoming child's layout effect.
      The route supplies that page's entrance, so its grid and empty states must
      know before they seed their own opacity and transforms. */
@@ -167,11 +189,20 @@ export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot |
 
 /** Hangs the watchdog and the hero guard on whichever animation is running. */
 export function arm(layer: HTMLElement, stop: () => void) {
+  /* A flight takes the pixels back. Either idle is not one: a fade that leaves a detail starts
+     while the engine still reports `detail-idle`, and its report of `gallery-idle` lands a moment
+     into the fade. */
   const unsubscribe = subscribeImageHeroRuntime(() => {
-    if (getImageHeroRuntime().phase !== 'gallery-idle') cancelRouteCrossFade();
+    const { phase } = getImageHeroRuntime();
+    if (phase !== 'gallery-idle' && phase !== 'detail-idle') cancelRouteCrossFade();
   });
-  const timer = window.setTimeout(cancelRouteCrossFade, MAX_LIFETIME_MS);
-  active = { layer, stop, timer, unsubscribe };
+  const fade: ActiveFade = { layer, stop, frame: 0, timer: 0, unsubscribe };
+  /* Armed on the first frame, which is when the animation's own clock starts. */
+  fade.frame = window.requestAnimationFrame(() => {
+    fade.frame = 0;
+    if (active === fade) fade.timer = window.setTimeout(cancelRouteCrossFade, MAX_LIFETIME_MS);
+  });
+  active = fade;
 }
 
 export function cancelRouteCrossFade() {
@@ -179,6 +210,7 @@ export function cancelRouteCrossFade() {
   if (!active) return;
   const fade = active;
   active = null;
+  if (fade.frame) window.cancelAnimationFrame(fade.frame);
   window.clearTimeout(fade.timer);
   fade.unsubscribe();
   fade.stop();

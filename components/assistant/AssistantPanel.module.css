@@ -1,0 +1,8 @@
+.conversation { display: flex; min-height: 0; flex-direction: column; height: min(64dvh, 560px); gap: 16px; }
+.messages { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.sheet {
+  margin-bottom: var(--picpony-assistant-keyboard, 0px);
+  max-height: min(85dvh, var(--picpony-assistant-height, 85dvh));
+}
+.sheetBody { overflow: hidden; }
+.sheet .conversation { height: min(64dvh, calc(var(--picpony-assistant-height, 85dvh) - 136px)); }

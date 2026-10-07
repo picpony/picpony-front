@@ -29,6 +29,10 @@ const virtual = {
   './Toast': `exports.showToast=(message)=>window.toasts.push(message);`,
   '@/components/Toast': `exports.showToast=(message)=>window.toasts.push(message);`,
   '@wangeditor/editor': `module.exports=window.wangEditor;`,
+  /* The image-search dialog's two network seams, answered by the page like the `api` proxy above
+     (it imports them directly since F2): a file search and a search by link. */
+  '@/lib/api/picpony': `exports.searchImage=(...args)=>window.fixtureRequest('searchImage',args);`,
+  '@/lib/api/semantic': `exports.searchImageByUrl=(...args)=>window.fixtureRequest('searchImageByUrl',args);`,
   'empty': '',
 };
 const packageFiles = {
@@ -160,7 +164,12 @@ with sync_playwright() as p:
   expect(page.get_by_role('listbox')).not_to_be_visible()
 
   def open_login(name='Fixture'):
+   # Every open is a new flow and so a new form, committed a frame after the call returns; type
+   # only once it is there, or the fill lands in the previous form's input just before that
+   # form is replaced (the same race exists at the baseline commit).
+   page.evaluate("window.__loginInput=document.querySelector('#auth-login-f1')")
    page.evaluate("window.auth.openAuth('login')")
+   page.wait_for_function("(()=>{const f=document.querySelector('#auth-login-f1');return !!f&&f!==window.__loginInput})()")
    dialog=page.get_by_role('dialog',name='登录',exact=True)
    dialog.locator('#auth-login-f1').fill(name)
    dialog.locator('#auth-login-f2').fill('Password123')
@@ -204,7 +213,8 @@ with sync_playwright() as p:
   page.evaluate("window.auth.switchView('reset')")
   response(4,'replaced-token')
   page.wait_for_timeout(50)
-  expect(page.get_by_role('dialog',name='找回密码',exact=True)).to_be_visible()
+  # The dialog is named by its visible heading (R2-029): the reset view's first step reads 忘记密码.
+  expect(page.get_by_role('dialog',name='忘记密码',exact=True)).to_be_visible()
   assert page.evaluate("localStorage.getItem('user_info')")==None
   page.evaluate('window.auth.closeAuth()')
   # Register, then cancel while email verification is pending.
@@ -219,7 +229,9 @@ with sync_playwright() as p:
   page.evaluate('window.respond(5,{success:true,user_id:7,username:"NewMember"})')
   code=page.get_by_role('group',name='邮箱验证码').locator('input')
   for i,char in enumerate('123456'):code.nth(i).fill(char)
-  dialog.get_by_role('button',name='验证并登录',exact=True).click()
+  # The sixth digit submits the verification step by itself (the 验证并登录 button sends the
+  # same request); the dialog is named by that step's heading now.
+  expect(page.get_by_role('dialog',name='验证邮箱',exact=True)).to_be_visible()
   page.wait_for_function('window.requests.length===7')
   page.evaluate('window.auth.closeAuth()')
   response(6,'cancelled-verification')

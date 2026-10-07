@@ -73,6 +73,9 @@ const send = (method, params = {}) =>
 await send('Runtime.enable');
 await send('Log.enable');
 await send('Page.enable');
+/* Measure the code, not the service worker (see the same line in netAudit.mjs). */
+await send('Network.enable');
+await send('Network.setBypassServiceWorker', { bypass: true });
 
 const PATTERNS = {
   'image cards': /image-card/g,

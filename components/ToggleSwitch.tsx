@@ -1,7 +1,7 @@
 'use client';
 
-import { type ReactNode, useRef, useState } from 'react';
-import { spawnRipple } from '@/lib/ripple';
+import { type ReactNode, useId, useRef, useState } from 'react';
+import { spawnRipple, trackPress, type RippleHandle } from '@/lib/ripple';
 import { cn } from '@/lib/utils';
 
 import CheckGlyph from './CheckGlyph';
@@ -78,9 +78,15 @@ const TRACK_TRANSITION =
  * its resting size as it reaches its position. Reduced motion substitutes the
  * critically damped response through the shared spring tokens.
  *
- * And one palette note: the spec paints the selected icon `on-primary-container`,
- * which assumes that token flips with the scheme. This palette deliberately holds
- * `primary`/`on-primary` constant across schemes, so the check stays `primary`.
+ * And two palette notes. The spec paints the selected icon `on-primary-container`,
+ * which assumes that token flips with the scheme; this palette deliberately holds
+ * `primary`/`on-primary` constant across schemes, so the check stays `primary` — the
+ * documented pair, solved to ≥4.5:1 for every built-in (`primary-ink` on the handle
+ * measured 2.0–2.9:1 once `on-primary` became the dark ink of the light fills). And
+ * the selected track carries a `primary-ink` edge: on the pale-coated palettes the
+ * fill measures ~1:1 against the row it sits on (小蝶 light 1.01:1, 露娜 dark 1.32:1),
+ * so "on" was readable only from the handle. Where ink and fill are the same tone the
+ * edge is simply invisible.
  */
 export default function ToggleSwitch({
   checked,
@@ -93,6 +99,8 @@ export default function ToggleSwitch({
 }: ToggleSwitchProps) {
   const stateLayerRef = useRef<HTMLSpanElement>(null);
   const isRow = layout === 'row';
+  const labelId = useId();
+  const descriptionId = useId();
   /**
    * The press state, driven by pointer events rather than by CSS `:active` —
    * deliberately, do not simplify. On a touch screen the browser owns `:active`:
@@ -103,6 +111,10 @@ export default function ToggleSwitch({
    * and the travel start in the same frame and, both being the same spring, land
    * together. `pointercancel` and `pointerleave` are part of it, or a press that
    * turns into a scroll leaves the handle swollen.
+   *
+   * Under a finger the press itself waits for the tap timeout (`trackPress`): a touch
+   * that is the start of a scroll through the settings list must not swell the handle
+   * or pulse a wave. A quick tap still gets its wave, at release.
    */
   const [pressed, setPressed] = useState(false);
   const isPressed = pressed && !disabled;
@@ -135,13 +147,19 @@ export default function ToggleSwitch({
              real, since a switch takes effect the moment it moves. A valid role on
              a checkbox input, so space-bar behaviour and `checked` come free. */
           role="switch"
-          className="peer absolute top-1/2 left-1/2 z-10 h-12 w-13 -translate-x-1/2 -translate-y-1/2 cursor-[inherit] appearance-none rounded-full outline-none"
+          className="peer absolute top-1/2 left-1/2 z-10 h-12 w-13 -translate-x-1/2 -translate-y-1/2 cursor-[inherit] appearance-none rounded-full focus-visible:outline-hidden"
           checked={checked}
           disabled={disabled}
           /* Only when the caller gives one. An `aria-label` *overrides* the
              accessible name the wrapping `<label>` already provides — so a
              fallback here would rename labelled switches to a generic word. */
           aria-label={ariaLabel}
+          /* The name is the label text alone; the supporting line is a description.
+             Both sat inside the wrapping `<label>`, so the whole sentence under the
+             title was read as the switch's name. The wrapping label still makes the
+             whole row the click target. */
+          aria-labelledby={!ariaLabel && label ? labelId : undefined}
+          aria-describedby={description ? descriptionId : undefined}
           onChange={(e) => onChange(e.target.checked)}
           onPointerUp={release}
           onPointerCancel={release}
@@ -150,21 +168,37 @@ export default function ToggleSwitch({
             // A fieldset can disable this input without setting the component prop.
             // Match the native state, as the delegated RippleLayer does.
             if (e.currentTarget.matches(':disabled') || e.button !== 0) return;
-            setPressed(true);
             const host = stateLayerRef.current;
-            if (!host) return;
-            // Always from the middle of the circle: the switch's wave reads as
-            // the handle pulsing, wherever along the track you pressed.
-            const rect = host.getBoundingClientRect();
-            spawnRipple(host, rect.width / 2, rect.height / 2);
+            let wave: RippleHandle | null = null;
+            // Always from the middle of the circle: the wave reads as the handle
+            // pulsing, wherever along the track you pressed.
+            const pulse = () => {
+              if (!host?.isConnected) return;
+              const rect = host.getBoundingClientRect();
+              wave = spawnRipple(host, rect.width / 2, rect.height / 2);
+            };
+            trackPress(e, {
+              press: () => {
+                setPressed(true);
+                pulse();
+              },
+              tap: pulse,
+              cancel: () => {
+                setPressed(false);
+                wave?.cancel();
+              },
+            });
           }}
         />
         {/* Track */}
+        {/* Under forced colors the track, handle and check are all painted marks the
+            mode would flatten; the selected track takes the system highlight and the
+            parts on it the highlight's own ink. Focus there is the input's outline. */}
         <span
           aria-hidden="true"
           className={`flex h-8 w-13 items-center justify-center rounded-full border-2 peer-focus-visible:ring-2 peer-focus-visible:focus-ring ${TRACK_TRANSITION} ${
             checked
-              ? 'border-transparent bg-primary'
+              ? 'border-primary-ink bg-primary forced-mark forced-colors:border-[color:Highlight]'
               : 'border-outline bg-surface-container-highest'
           }`}
         >
@@ -218,11 +252,13 @@ export default function ToggleSwitch({
                       : 'size-4',
                   checked ? 'bg-on-primary' : 'bg-outline',
                   !checked && !disabled && 'group-hover/switch:bg-on-surface-variant',
+                  'forced-color-adjust-none',
+                  checked ? 'forced-colors:bg-[color:HighlightText]' : 'forced-colors:bg-[color:CanvasText]',
                 )}
               >
                 {/* Only the selected state carries a mark. */}
                 <CheckGlyph
-                  className={`absolute inset-0 m-auto size-4 text-primary-ink ${ICON_TRANSITION} ${
+                  className={`absolute inset-0 m-auto size-4 text-primary forced-colors:text-[color:Highlight] ${ICON_TRANSITION} ${
                     checked ? 'opacity-100' : 'opacity-0'
                   }`}
                 />
@@ -234,10 +270,19 @@ export default function ToggleSwitch({
       {label && (
         <div className={isRow ? 'min-w-0 flex-1' : undefined}>
           {/* No ink prop: if a label ever needs a semantic it takes a `tone`
-              union like `Radio` does, not an arbitrary string. */}
-          <span className="text-label-l text-on-surface">{label}</span>
+              union like `Radio` does, not an arbitrary string. A block, so the line box
+              is the label role's own: inline, it sat in the div's inherited body line,
+              and a switch row came out 73px beside every other 72px two-line row. */}
+          <span id={labelId} className="block text-label-l text-on-surface">
+            {label}
+          </span>
           {/* `on-surface-variant`, the supporting-text ink role — not `outline`,
-              which is a *boundary* role for rules and field borders. */}          {description && <p className="text-body-s text-on-surface-variant mt-0.5">{description}</p>}
+              which is a *boundary* role for rules and field borders. */}
+          {description && (
+            <p id={descriptionId} className="text-body-s text-on-surface-variant mt-0.5">
+              {description}
+            </p>
+          )}
         </div>
       )}
     </label>

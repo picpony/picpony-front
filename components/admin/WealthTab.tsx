@@ -1,199 +1,284 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { showToast } from '@/components/Toast';
-import Modal from '@/components/Modal';
-import Select from '@/components/Select';
-import { MdAttachMoney } from 'react-icons/md';
-import DataTable, { type Column } from '@/components/DataTable';
-import { SectionHeader, SearchInput } from './';
+import { useMemo, useState } from 'react';
+import { MdToll } from 'react-icons/md';
 import Button from '@/components/Button';
+import DataTable, { type Column } from '@/components/DataTable';
 import { Input } from '@/components/Input';
+import Modal from '@/components/Modal';
+import SearchInput from '@/components/SearchInput';
+import SectionHeading from '@/components/SectionHeading';
+import Select from '@/components/Select';
+import { showToast } from '@/components/Toast';
 import { ICON } from '@/lib/icons';
 import * as adminApi from '@/lib/api/admin';
-import { adminData, defineAdminQuery, useAdminQuery } from './queries';
+import SectionHeader from './SectionHeader';
+import { AdminForm, FormGrid } from './AdminForm';
+import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
+import { useAdminQuery, tableError } from './queries';
+import { usersQuery } from './sharedQueries';
 import { useAdminMutation } from './useAdminMutation';
+import type { AdminPanelProps } from './registry';
+import { coinsAfter, wealthPayload, wholeNumber, type CoinsOp, type WealthUser } from './wealth';
+import { figureField, figureOf, figureText } from './figures';
 
-interface User {
-  id: number;
-  username: string;
-  experience: number;
-  coins: number;
-}
+const EMPTY: WealthUser[] = [];
 
-const emptyUsers: User[] = [];
-const usersQuery = defineAdminQuery<User[]>('wealth', async (token, signal) => {
-  const data = await adminApi.adminGetWealth(token, signal);
-  return adminData(data, data.users || []);
-});
+const COINS_OPS: { value: CoinsOp; label: string }[] = [
+  { value: 'add', label: '增加' },
+  { value: 'sub', label: '扣除' },
+  { value: 'set', label: '设为' },
+];
 
-export default function WealthTab({ token }: { token: string }) {
+const REASON_LABEL: Record<CoinsOp, string> = {
+  add: '增加金币的原因',
+  sub: '扣除金币的原因',
+  set: '金币变动的原因',
+};
+
+/**
+ * 经验与金币 (创始人 only). The dialog changes two different things in two different ways, and now says
+ * so: experience is *set* to a value, coins are added, deducted or set by an operator named in
+ * words (增加 / 扣除 / 设为, not bracketed glyphs), with the result previewed before it is sent.
+ *
+ * The rows are 用户管理's own read (`usersQuery`, one request for both panels — G4-020). A figure a
+ * row did not carry reads 当前 — and is never treated as 0 (G4-015): the table prints `—`, the
+ * experience field opens empty, and an add or a deduction against an unknown balance has no
+ * preview to show, so it shows none.
+ */
+export default function WealthTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(usersQuery, token);
-  const users = read.data ?? emptyUsers;
-  const isLoading = read.loading;
-  const loadUsers = read.refresh;
-  const [searchKw, setSearchKw] = useState('');
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const users: readonly WealthUser[] = read.data?.rows ?? EMPTY;
   const mutation = useAdminMutation(token);
-  const isSubmitting = mutation.busy;
-  const [form, setForm] = useState({
-    experience: 0,
-    coinsOp: 'add',
-    coinsValue: '',
-    reason: '',
-  });
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<{ user: WealthUser; open: boolean; session: number } | null>(null);
 
-  const filteredUsers = useMemo(() => {
-    if (!searchKw) return users;
-    const kw = searchKw.toLowerCase();
-    return users.filter((u) => String(u.id) === kw || u.username?.toLowerCase().includes(kw));
-  }, [searchKw, users]);
+  const filtered = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return users;
+    return users.filter((user) => String(user.id) === keyword || user.username?.toLowerCase().includes(keyword));
+  }, [users, query]);
+  const paged = usePagedRows(filtered, query.trim());
 
-  const openModal = (user: User) => {
-    if (mutation.isPending()) return;
-    setEditingUser(user);
-    setForm({
-      experience: user.experience || 0,
-      coinsOp: 'add',
-      coinsValue: '',
-      reason: '',
-    });
+  const open = (user: WealthUser) =>
+    setEditing((current) => ({ user, open: true, session: (current?.session ?? 0) + 1 }));
+  const close = () => {
+    if (editing && mutation.isPending(editing.user.id)) return;
+    setEditing((current) => (current ? { ...current, open: false } : current));
   };
 
-  const closeModal = () => {
-    if (mutation.isPending()) return;
-    setEditingUser(null);
-  };
-
-  const submit = async () => {
-    if (!editingUser || mutation.isPending()) return;
-    if (!form.reason.trim()) {
-      showToast('请填写变动原因', 'error');
-      return;
-    }
-    await mutation.run(
-      () => adminApi.adminUpdateWealth(token, {
-        target_id: editingUser.id,
-        experience: form.experience,
-        coins_op: form.coinsOp,
-        coins_value: form.coinsValue,
-        reason: form.reason,
-      }),
-      () => {
-        showToast('已更新', 'success');
-        setEditingUser(null);
-      },
-      '修改失败',
-      { onCommitted: loadUsers },
-    );
-  };
-
-  const wealthColumns: Column<User>[] = [
-    { key: 'id', header: 'ID', render: (u) => `#${u.id}` },
+  const columns: Column<WealthUser>[] = [
     {
       key: 'name',
       header: '用户名',
       primary: true,
-      render: (u) => <span className="text-body-m-emphasized text-primary-ink">{u.username}</span>,
+      render: (user) => <span className="text-body-m-emphasized text-on-surface">{user.username}</span>,
     },
-    { key: 'exp', header: '当前经验', render: (u) => u.experience || 0 },
+    { key: 'id', header: 'ID', width: 'auto', render: (user) => `#${user.id}` },
+    { key: 'exp', header: '经验', render: (user) => <span className="tabular-nums">{figureText(user.experience)}</span> },
     {
       key: 'coins',
-      header: '当前金币',
-      render: (u) => <span className="text-body-m-emphasized text-warning">{u.coins || 0}</span>,
+      header: '金币',
+      render: (user) => (
+        <span className="inline-flex items-center gap-1 tabular-nums">
+          <MdToll size={ICON.dense} aria-hidden="true" className="text-on-surface-variant" />
+          {figureText(user.coins)}
+        </span>
+      ),
     },
     {
       key: 'actions',
       header: '操作',
       actions: true,
-      render: (u) => (
-        <Button onClick={() => openModal(u)} variant="filled" size="xs" disabled={isSubmitting}>
+      render: (user) => (
+        <Button size="xs" variant="tonal" onClick={() => open(user)}>
           修改资产
         </Button>
       ),
     },
   ];
+
+  const keyword = query.trim();
   return (
     <div className="space-y-6">
-      <SectionHeader
-        icon={<MdAttachMoney size={ICON.standard} />}
-        title="经验与金币管理"
-        onRefresh={loadUsers}
-      />
-      <SearchInput value={searchKw} onChange={setSearchKw} placeholder="搜索用户 ID 或用户名…" />
-      <DataTable<User>
-        columns={wealthColumns}
-        rows={filteredUsers}
-        rowKey={(u) => u.id}
-        loading={isLoading}
-        error={read.error}
-        onRetry={loadUsers}
-        empty="没有找到匹配的用户"
-      />
-      <Modal
-        isOpen={editingUser !== null}
-        onClose={closeModal}
-        title={`修改资产 - ${editingUser?.username || ''}`}
-        maxWidth="md"
-        footer={
-          <>
-            <Button variant="text" onClick={closeModal} disabled={isSubmitting}>
-              取消
-            </Button>
-            <Button variant="filled" onClick={submit} loading={isSubmitting}>
-              确认修改
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <Input
-              label="经验值"
-              id="wealthtab-f1"
-              type="number"
-              disabled={isSubmitting}
-              value={form.experience}
-              onChange={(e) => setForm({ ...form, experience: parseInt(e.target.value) || 0 })}
-            />
-          </div>
-          <div>
-            <p className="block text-label-l text-on-surface-variant mb-1">金币操作</p>
-            <div className="flex gap-2">
-              
-              <Select
-                disabled={isSubmitting}
-                value={form.coinsOp}
-                onChange={(v) => setForm({ ...form, coinsOp: v })}
-                aria-label="金币操作方式"
-                options={[
-                  { value: 'add', label: '[+]' },
-                  { value: 'sub', label: '[-]' },
-                  { value: 'set', label: '[=]' },
-                ]}
-              />
-              <Input
-                type="number"
-                disabled={isSubmitting}
-                value={form.coinsValue}
-                onChange={(e) => setForm({ ...form, coinsValue: e.target.value })}
-                placeholder="数值"
-                fieldClassName="flex-1"
-              />
-            </div>
-          </div>
-          <div>
-            <Input
-              label="变动原因（必填）"
-              type="text"
-              disabled={isSubmitting}
-              value={form.reason}
-              onChange={(e) => setForm({ ...form, reason: e.target.value })}
-              placeholder="例如：违规惩罚、特殊活动奖励…"
-            />
-          </div>
-        </div>
-      </Modal>
+      <SectionHeader section="wealth" onRefresh={read.refresh} isLoading={read.refreshing} />
+      <SearchInput value={query} onChange={setQuery} placeholder="搜索用户 ID 或用户名…" />
+      <AdminListAnchor>
+        <DataTable<WealthUser>
+          columns={columns}
+          rows={paged.rows}
+          listKey={paged.listKey}
+          rowKey={(user) => user.id}
+          loading={read.loading}
+          skeletonRows={8}
+          {...tableError('用户列表加载失败', read.error)}
+          onRetry={read.retryable ? read.refresh : undefined}
+          empty={keyword ? '没有找到匹配的用户' : '暂无用户'}
+        />
+        <AdminPager
+          page={paged.page}
+          totalPages={paged.totalPages}
+          onPageChange={paged.setPage}
+          summary={read.data ? (keyword ? `找到 ${paged.total} 位用户` : `共 ${paged.total} 位用户`) : undefined}
+        />
+      </AdminListAnchor>
+      {editing && (
+        <WealthDialog
+          key={`${editing.user.id}:${editing.session}`}
+          user={editing.user}
+          open={editing.open}
+          busy={mutation.pendingKeys.has(editing.user.id)}
+          onClose={close}
+          onSubmit={(payload) =>
+            void mutation.run(
+              () => adminApi.adminUpdateWealth(token, payload),
+              () => {
+                showToast(`已更新「${editing.user.username}」的资产`, 'success');
+                setEditing((current) => (current ? { ...current, open: false } : current));
+              },
+              '修改失败',
+              { key: editing.user.id, onCommitted: read.refresh },
+            )}
+        />
+      )}
     </div>
+  );
+}
+
+function WealthDialog({
+  user,
+  open,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  user: WealthUser;
+  open: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (payload: Record<string, unknown>) => void;
+}) {
+  const currentExp = figureOf(user.experience);
+  const currentCoins = figureOf(user.coins);
+  const [form, setForm] = useState({
+    experience: figureField(user.experience),
+    experienceReason: '',
+    coinsOp: 'add' as CoinsOp,
+    coinsValue: '',
+    coinsReason: '',
+  });
+  const [errors, setErrors] = useState<Partial<Record<keyof typeof form | 'form', string>>>({});
+  const formId = `wealth-${user.id}`;
+
+  const set = <K extends keyof typeof form>(field: K, value: (typeof form)[K]) => {
+    setForm((previous) => ({ ...previous, [field]: value }));
+    setErrors((previous) => ({ ...previous, [field]: undefined, form: undefined }));
+  };
+
+  const experience = wholeNumber(form.experience);
+  const expChanged = experience !== null && experience !== currentExp;
+  const coins = wholeNumber(form.coinsValue);
+  /* 设为 needs no balance; adding or deducting does, so an unknown one previews nothing. */
+  const coinsResult =
+    coins === null ? null : form.coinsOp === 'set' ? coins : currentCoins === null ? null : coinsAfter(currentCoins, form.coinsOp, coins);
+
+  const submit = () => {
+    if (busy) return;
+    const next: typeof errors = {};
+    /* Blank is "leave it": an experience the row did not carry opens empty, and must not stop a
+       coin change from being sent. */
+    if (form.experience.trim() && experience === null) next.experience = '经验值必须是不小于 0 的整数';
+    if (expChanged && !form.experienceReason.trim()) next.experienceReason = '请填写经验值变动的原因';
+    if (form.coinsValue.trim() && coins === null) next.coinsValue = '金币数值必须是不小于 0 的整数';
+    if (coinsResult !== null && coinsResult < 0) next.coinsValue = `扣除后金币为 ${figureText(coinsResult)}，不能少于 0`;
+    if (coins !== null && !form.coinsReason.trim()) next.coinsReason = '请填写金币变动的原因';
+    if (!Object.values(next).some(Boolean)) {
+      const payload = wealthPayload(user, form);
+      if (!payload) next.form = '请修改经验值，或填写要变动的金币数值';
+      else {
+        onSubmit(payload);
+        return;
+      }
+    }
+    setErrors(next);
+  };
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      closeOnEscape={!busy}
+      title={`修改资产 · ${user.username}`}
+      maxWidth="md"
+      footer={
+        <>
+          <Button type="button" variant="text" onClick={onClose} disabled={busy}>
+            取消
+          </Button>
+          <Button type="submit" form={formId} variant="filled" loading={busy}>
+            确认修改
+          </Button>
+        </>
+      }
+    >
+      <AdminForm id={formId} onSubmit={submit} className="max-w-none" aria-label={`修改 ${user.username} 的资产`}>
+        <SectionHeading as="h3" aside={`当前 ${figureText(user.experience)}`}>经验值</SectionHeading>
+        <Input
+          label="设为"
+          inputMode="numeric"
+          autoComplete="off"
+          value={form.experience}
+          readOnly={busy}
+          error={errors.experience}
+          helper={expChanged ? `当前 ${figureText(user.experience)} → 修改后 ${figureText(experience)}` : '经验值直接设为这里的数值'}
+          onChange={(event) => set('experience', event.target.value)}
+          data-autofocus=""
+        />
+        {expChanged && (
+          <Input
+            label="经验值变动的原因"
+            value={form.experienceReason}
+            readOnly={busy}
+            error={errors.experienceReason}
+            onChange={(event) => set('experienceReason', event.target.value)}
+          />
+        )}
+        <SectionHeading as="h3" aside={`当前 ${figureText(user.coins)}`}>金币</SectionHeading>
+        <FormGrid>
+          <Select
+            label="操作"
+            value={form.coinsOp}
+            options={COINS_OPS}
+            disabled={busy}
+            onChange={(value) => set('coinsOp', value)}
+          />
+          <Input
+            label="数值"
+            inputMode="numeric"
+            autoComplete="off"
+            value={form.coinsValue}
+            readOnly={busy}
+            error={errors.coinsValue}
+            helper={coinsResult !== null && coinsResult >= 0 ? `当前 ${figureText(user.coins)} → 修改后 ${figureText(coinsResult)}` : '留空则不变动金币'}
+            onChange={(event) => set('coinsValue', event.target.value)}
+          />
+        </FormGrid>
+        {coins !== null && (
+          <Input
+            label={REASON_LABEL[form.coinsOp]}
+            value={form.coinsReason}
+            readOnly={busy}
+            error={errors.coinsReason}
+            helper="会显示在该用户的金币账单中"
+            onChange={(event) => set('coinsReason', event.target.value)}
+          />
+        )}
+        {errors.form && (
+          <p role="alert" className="px-4 text-body-s text-error">
+            {errors.form}
+          </p>
+        )}
+      </AdminForm>
+    </Modal>
   );
 }

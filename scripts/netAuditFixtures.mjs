@@ -124,11 +124,14 @@ const user = (id) => ({
  */
 const PICPONY = {
   get_block_tags: blockFiltersEnvelope,
+  /* The live shape; empty, so no journey's feed query changes. */
+  get_public_blacklist: () => ({ success: true, blacklist: [] }),
   /* `auto` on both axes — what an administrator who has pinned nothing leaves. */
   get_maintenance_status: () => ({
     success: true,
     maintenance_mode: false,
     maintenance_message: '',
+    translate_enabled: true,
     global_api_route_policy: 'auto',
     global_image_route_policy: 'auto',
     global_api_third_party_url: '',
@@ -137,26 +140,53 @@ const PICPONY = {
   /* No announcement, so the modal stays shut and does not add a paint to every journey. */
   get_announcement: () => ({ success: false }),
   get_announcement_history: () => ({ success: true, announcements: [] }),
+  /* The empty /search screen's own first read, and what a `<Link>` to it warms (`prefetchRoute`).
+     With no fixture here the warm failed, and a failure is not a cached answer — the screen read
+     again and the step cost two requests, which the ledger read as speculation adding one. */
+  get_quick_tags: () => ({ success: true, tags: {
+    rating: [{ en: 'safe', cn: '安全' }, { en: 'suggestive', cn: '性暗示' }],
+    species: [{ en: 'pony', cn: '小马' }, { en: 'human', cn: '人类' }],
+    character: [{ en: 'twilight sparkle', cn: '暮光闪闪' }, { en: 'rainbow dash', cn: '云宝黛西' }],
+    general: [{ en: 'solo', cn: '单人' }, { en: 'cute', cn: '可爱' }],
+  } }),
+  /* The shared journeys have no decorative companion or selected pony. Successful empty
+     reads keep a disabled feature cached; the dedicated runtime probes exercise real media. */
+  get_mascot_config: () => ({ success: true, enabled: false, id: '', name: '', mascot_image: '', tips: [], mascots: [] }),
+  get_available_ponies: () => ({ success: true, enabled: true, ponies: [] }),
+  get_my_ponies: () => ({ success: true, ponies: [] }),
+  get_pony_configs: () => ({ success: true, configs: [] }),
+  assistant_quota: () => ({ success: true, quota: { enabled: true, user_enabled: true, remaining: 50,
+    daily_remaining: 50, purchased_remaining: 0, reserved: 0, daily_points: 50, points_per_coin: 2, coins: 100 } }),
+  assistant_permission: () => ({ success: true, permission: { mode: 'default' } }),
   get_user: () => ({ success: true, user: user(1) }),
-  get_user_profile: (params) => ({ success: true, user: user(params.get('user_id')) }),
+  /* A bound Derpibooru account: a profile's uploads tab is that account's Derpibooru uploads
+     (`userUploads` in lib/resources.ts). PicPony has no uploads action. */
+  get_user_profile: (params) => ({
+    success: true,
+    user: { ...user(params.get('user_id')), derpi_user_id: 1, derpi_username: 'fixture', has_api_key: true },
+  }),
   get_unread_counts: () => ({ success: true, total_unread: 0, counts: {} }),
+  /* PicPony's own comment counts for one grid page (decision 15) — a read that travels as a POST,
+     its ids in the body, which the stub does not read. No picture has on-site comments, the live
+     answer for most. Without it the envelope failed, and a failed read is not kept, so every
+     grid remount re-asked: the ledger charged a Back with a request the app does not make. */
+  get_batch_comment_counts: () => ({ success: true, counts: {} }),
   get_forum_posts: () => ({
     success: true,
     posts: Array.from({ length: 15 }, (_, i) => forumPost(i + 1)),
     total_pages: 4,
   }),
+  get_forum_post_detail: (params) => ({
+    success: true,
+    post: forumPost(Number(params.get('id') ?? params.get('post_id')) || 1),
+    comments: [],
+    total_pages: 1,
+  }),
   get_shared_faves: () => ({
     success: true,
     username: 'fixture',
+    folder_name: '主收藏夹',
     faves: Array.from({ length: 30 }, (_, i) => 2000 + i),
-  }),
-  get_user_uploads: () => ({
-    success: true,
-    uploads: Array.from({ length: 12 }, (_, i) => ({
-      ...image(3000 + i),
-      name: `上传 ${i}`,
-    })),
-    total_pages: 2,
   }),
   get_user_posts: () => ({
     success: true,
@@ -185,17 +215,57 @@ const PICPONY = {
     ],
   }),
   get_faves: () => ({ success: true, faves: Array.from({ length: 30 }, (_, i) => 2000 + i) }),
+  get_fave_folders: () => ({
+    success: true,
+    folders: [
+      { id: 1, name: '主收藏夹', is_main: 1, item_count: 30, latest_image_id: 2029 },
+      { id: 2, name: '收藏夹', is_main: 0, item_count: 8, latest_image_id: 2014 },
+    ],
+  }),
+  get_profile_fave_folders: () => ({
+    success: true,
+    folders: [{ id: 1, name: '主收藏夹', is_main: 1, item_count: 30, latest_image_id: 2029 }],
+  }),
   get_browsing_history: () => ({
     success: true,
     history: Array.from({ length: 12 }, (_, i) => ({
       image_id: 4000 + i,
-      viewed_at: '2024-01-01T00:00:00Z',
+      view_time: '2024-01-01 00:00:00',
+      preview_url: image(4000 + i).representations.thumb,
       ...image(4000 + i),
     })),
     total_pages: 3,
   }),
-  get_tasks: () => ({ success: true, tasks: [], signed_today: false }),
+  get_tasks: () => ({
+    success: true,
+    level: 5,
+    experience: 1350,
+    coins: 100,
+    equipped_badges: [],
+    novice_tasks: {
+      bind_api: { progress: 1, claimed: 0 },
+      verify_api: { progress: 1, claimed: 0 },
+      set_bg: { progress: 0, claimed: 0 },
+    },
+    tasks: {
+      login_progress: 1, login_claimed: 0,
+      fav_progress: 2, fav_claimed: 0,
+      share_progress: 1, share_claimed: 0,
+      comment_progress: 0, comment_claimed: 0,
+    },
+    weekly_tasks: { upload_progress: 2, upload_claimed: 0 },
+  }),
   get_block_groups: () => ({ success: true, groups: [] }),
+  get_tag_groups: () => ({ success: true, groups: [] }),
+  get_tag_subscriptions: () => ({ success: true, subscriptions: [] }),
+  get_shop_items: () => ({
+    success: true,
+    items: [{ id: 4, name: '钥匙扣', description: '现场领取', image_url: '', price: 8, stock: 3, active: 1 }],
+  }),
+  get_coin_transactions: () => ({
+    success: true,
+    transactions: [{ amount: 10, reason: '每日登录', created_at: '2024-01-01 08:00:00' }],
+  }),
   get_recent_contacts: () => ({ success: true, contacts: [] }),
   get_notifications: () => ({ success: true, notifications: [] }),
   get_interaction_notifications: () => ({
@@ -213,8 +283,14 @@ const DERPI = [
      byte-identical and a probe cannot tell a cache hit from a re-fetch. */
   [
     /^\/search\/images$/,
-    (params) =>
-      imagePage(Number(params.get('per_page')) || 50, 1000 + (Number(params.get('page')) || 1) * 1000),
+    (params) => {
+      const ids = [...(params.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map((match) => Number(match[1]));
+      if (ids.length) {
+        const unique = [...new Set(ids)];
+        return { images: unique.slice(0, Number(params.get('per_page')) || 50).map((id) => image(id)), total: unique.length };
+      }
+      return imagePage(Number(params.get('per_page')) || 50, 1000 + (Number(params.get('page')) || 1) * 1000);
+    },
   ],
   [/^\/images\/featured$/, () => ({ image: image(9001, { width: 1920, height: 1080 }), interactions: [] })],
   [/^\/images\/\d+$/, (_params, pathname) => ({ image: image(Number(pathname.split('/').pop())) })],

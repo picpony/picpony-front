@@ -1,5 +1,3 @@
-'use client';
-
 import { getTagTranslations } from '@/lib/api/picpony';
 
 /**
@@ -75,6 +73,46 @@ function persist() {
 export function tagTranslationKey(tag: string): string {
   const colon = tag.indexOf(':');
   return (colon === -1 ? tag : tag.slice(colon + 1)).toLowerCase();
+}
+
+function fresh(entry: CacheEntry | undefined, now = Date.now()): entry is CacheEntry {
+  if (!entry) return false;
+  const age = now - entry.t;
+  return age >= 0 && age < (entry.c !== null ? HIT_TTL_MS : MISS_TTL_MS);
+}
+
+/**
+ * 缓存里已有的翻译，同步读出（不发请求）：标签列表首次渲染就用它，已见过的标签不必先显示英文
+ * 再换成中文。只返回仍在有效期内的条目；缺席的标签不出现在结果里。服务端没有缓存，返回空对象。
+ */
+export function peekTagTranslations(tags: readonly string[]): Record<string, string | null> {
+  if (typeof window === 'undefined') return {};
+  const entries = store();
+  const now = Date.now();
+  const out: Record<string, string | null> = {};
+  for (const tag of tags) {
+    const key = tagTranslationKey(tag);
+    const hit = entries.get(key);
+    if (fresh(hit, now)) out[key] = hit.c;
+  }
+  return out;
+}
+
+/**
+ * 把别处读到的翻译（服务端随详情首屏带来的那份）记进缓存，下次打开同一批标签时直接命中。
+ * 只写入字符串译名与"词库未收录"的确定答案；已有且仍新鲜的条目不覆盖。
+ */
+export function rememberTagTranslations(translations: Record<string, string | null>) {
+  if (typeof window === 'undefined') return;
+  const entries = store();
+  const now = Date.now();
+  let changed = false;
+  for (const [key, value] of Object.entries(translations)) {
+    if (fresh(entries.get(key), now)) continue;
+    entries.set(key, { c: typeof value === 'string' && value ? value : null, t: now });
+    changed = true;
+  }
+  if (changed) persist();
 }
 
 /** 请求在途的翻译，使并发调用合并到同一次请求。 */

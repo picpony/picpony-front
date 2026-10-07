@@ -71,6 +71,30 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 /** Validate without allocating a Data URL when a cropper will read the file itself. */
+/**
+ * A unique-enough id, on every origin this app is reachable from.
+ *
+ * **`crypto.randomUUID` only exists in a secure context** — HTTPS, or `localhost`. This app is
+ * served over plain HTTP on a LAN address during development (`allowedDevOrigins` in
+ * `next.config.ts` lists several), and there `crypto.randomUUID` is simply `undefined`: calling it
+ * threw `TypeError: crypto.randomUUID is not a function` inside the desktop-pony runtime and took
+ * the whole shell render down with it. `crypto.getRandomValues` *is* available in an insecure
+ * context, so it is the first fallback; `Math.random` is the last.
+ *
+ * One helper, because the guard was hand-written three times already (`lib/hero/history.ts`,
+ * `lib/historyLayers.ts`, `lib/api/tagSubscriptions.ts`) and missed in three more places.
+ * The result is always `[A-Za-z0-9-]`, so it is safe in a URL, an id or a `postMessage` channel name.
+ */
+export function randomId(): string {
+  const api = typeof crypto === 'undefined' ? undefined : crypto;
+  if (typeof api?.randomUUID === 'function') return api.randomUUID();
+  if (typeof api?.getRandomValues === 'function') {
+    const bytes = api.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function validateImageFile(file: File, maxSizeMB = 5): void {
   if (!file.type.startsWith('image/')) throw new Error('请选择有效的图片文件');
   if (file.size > maxSizeMB * 1024 * 1024) {

@@ -2,13 +2,30 @@
 
 import { getImage } from '@/lib/api/derpi';
 import type { PonyImage } from '@/lib/types/image';
+import { promoteLaneJob, scheduleLaneJob, unscheduleLaneJob } from '@/lib/resource';
 import { imageHeroController } from './hero/controller';
+
+/**
+ * The opened picture's record: a TTL'd, LRU cache of Derpibooru `images/<id>` reads with a
+ * paint-bound, hero-gated publication (an answer landing mid-flight waits for the flight).
+ *
+ * The *requests* go through the resource layer's Derpibooru lane (`lib/resource.ts`) rather than a
+ * queue of their own: a picture opened from the gallery and the gallery's page reads are the same
+ * upstream, and two independent 4-slot queues meant up to eight concurrent Derpibooru requests —
+ * more 429s — with neither side knowing the other was busy. An opened picture is an immediate job
+ * and jumps the gallery's queued work; hover intent is a background job and cannot take the last
+ * slot.
+ *
+ * A failed read is dropped from the cache (so the next request retries) but its error stays
+ * readable through `peekImageDetailError` until then: an open overlay subscribed to a record that
+ * failed used to see exactly what it saw while loading — `null` — and kept its skeletons forever.
+ * The error is an `ApiError` (`lib/api/errors.ts`): `isNotFound` tells a deleted picture from an
+ * outage, `isRetryable` whether to offer 重试.
+ */
 
 const CACHE_TTL = 2 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 48;
-const MAX_CONCURRENT_REQUESTS = 4;
-const MAX_CONCURRENT_BACKGROUND_REQUESTS = 2;
-const MAX_BACKGROUND_QUEUE = 8;
+const LANE = 'derpi' as const;
 
 type DetailResult = { image: PonyImage };
 export type DetailRequestPriority = 'background' | 'immediate';
@@ -26,15 +43,14 @@ type DetailEntry = {
 };
 
 const detailCache = new Map<number, DetailEntry>();
+const detailErrors = new Map<number, unknown>();
 const detailListeners = new Map<number, Set<() => void>>();
-const immediateQueue: number[] = [];
-const backgroundQueue: number[] = [];
-let activeRequests = 0;
-let activeBackgroundRequests = 0;
 const pendingNotifications = new Set<number>();
 let notificationFrame = 0;
 let notificationVisibleFrames = 0;
 let notificationVisibilityListenerInstalled = false;
+
+const jobKey = (imageId: number) => `image-detail:${imageId}`;
 
 function isExpired(entry: DetailEntry, timestamp = Date.now()) {
   return entry.status === 'resolved' && timestamp - entry.createdAt >= CACHE_TTL;
@@ -125,22 +141,10 @@ function createAbortError() {
   return new DOMException('Image detail prefetch was cancelled', 'AbortError');
 }
 
-function removeQueuedId(queue: number[], imageId: number) {
-  const index = queue.indexOf(imageId);
-  if (index !== -1) queue.splice(index, 1);
-}
-
-function enqueueImmediate(imageId: number) {
-  removeQueuedId(immediateQueue, imageId);
-  removeQueuedId(backgroundQueue, imageId);
-  // A real activation takes the next slot ahead of stale hover/focus intent already queued.
-  immediateQueue.unshift(imageId);
-}
-
 function cancelQueuedEntry(imageId: number, entry: DetailEntry) {
   if (entry.status !== 'queued' || entry.priority !== 'background') return false;
   if (detailCache.get(imageId) !== entry || detailListeners.has(imageId)) return false;
-  removeQueuedId(backgroundQueue, imageId);
+  unscheduleLaneJob(LANE, jobKey(imageId));
   detailCache.delete(imageId);
   entry.reject(createAbortError());
   notifyImageDetail(imageId);
@@ -156,96 +160,58 @@ function cancelLoadingEntry(imageId: number, entry: DetailEntry) {
   return true;
 }
 
-function dequeue(queue: number[], priority: DetailRequestPriority) {
-  while (queue.length > 0) {
-    const imageId = queue.shift()!;
-    const entry = detailCache.get(imageId);
-    if (entry?.status === 'queued' && entry.priority === priority) {
-      return { imageId, entry };
+async function runEntry(imageId: number, entry: DetailEntry) {
+  /* Cancelled or replaced while it waited for a slot: nothing to send. */
+  if (detailCache.get(imageId) !== entry || entry.status !== 'queued') return;
+  const controller = new AbortController();
+  entry.status = 'loading';
+  entry.controller = controller;
+  entry.createdAt = Date.now();
+  try {
+    const result = await getImage(String(imageId), controller.signal);
+    if (detailCache.get(imageId) === entry) {
+      entry.value = result;
+      entry.status = 'resolved';
+      entry.createdAt = Date.now();
+      detailErrors.delete(imageId);
+      touchEntry(imageId, entry);
+      trimDetailCache(imageId);
+      notifyImageDetail(imageId);
     }
-  }
-  return null;
-}
-
-function runDetailQueue() {
-  while (activeRequests < MAX_CONCURRENT_REQUESTS) {
-    const immediate = dequeue(immediateQueue, 'immediate');
-    const queued =
-      immediate ??
-      (activeBackgroundRequests < MAX_CONCURRENT_BACKGROUND_REQUESTS
-        ? dequeue(backgroundQueue, 'background')
-        : null);
-    if (!queued) return;
-
-    const { imageId, entry } = queued;
-    const startedAsBackground = entry.priority === 'background';
-    const controller = new AbortController();
-    entry.status = 'loading';
-    entry.controller = controller;
-    entry.createdAt = Date.now();
-    activeRequests += 1;
-    if (startedAsBackground) activeBackgroundRequests += 1;
-
-    void getImage(String(imageId), controller.signal)
-      .then((result) => {
-        if (detailCache.get(imageId) === entry) {
-          entry.value = result;
-          entry.status = 'resolved';
-          entry.createdAt = Date.now();
-          touchEntry(imageId, entry);
-          trimDetailCache(imageId);
-          notifyImageDetail(imageId);
-        }
-        entry.resolve(result);
-      })
-      .catch((error) => {
-        if (detailCache.get(imageId) === entry) {
-          detailCache.delete(imageId);
-          notifyImageDetail(imageId);
-        }
-        entry.reject(error);
-      })
-      .finally(() => {
-        entry.controller = undefined;
-        activeRequests -= 1;
-        if (startedAsBackground) activeBackgroundRequests -= 1;
-        runDetailQueue();
-      });
+    entry.resolve(result);
+  } catch (error) {
+    if (detailCache.get(imageId) === entry) {
+      detailCache.delete(imageId);
+      /* Kept for subscribers until the next request for this id clears it. A cancellation is
+         not a failure anybody should be shown. */
+      if (!(error instanceof Error && error.name === 'AbortError')) detailErrors.set(imageId, error);
+      notifyImageDetail(imageId);
+    }
+    entry.reject(error);
+  } finally {
+    entry.controller = undefined;
   }
 }
 
-function dropOldestBackgroundRequest() {
-  for (let index = 0; index < backgroundQueue.length;) {
-    const imageId = backgroundQueue[index];
-    const entry = detailCache.get(imageId);
-    if (!entry || entry.status !== 'queued' || entry.priority !== 'background') {
-      backgroundQueue.splice(index, 1);
-      continue;
-    }
-    if (detailListeners.has(imageId)) {
-      index += 1;
-      continue;
-    }
-    backgroundQueue.splice(index, 1);
-    return cancelQueuedEntry(imageId, entry);
-  }
-  return false;
-}
-
-function enqueueDetail(imageId: number, entry: DetailEntry) {
-  if (entry.priority === 'immediate') {
-    enqueueImmediate(imageId);
-  } else {
-    let queuedBackgroundCount = 0;
-    for (const candidate of detailCache.values()) {
-      if (candidate.status === 'queued' && candidate.priority === 'background') {
-        queuedBackgroundCount += 1;
+function scheduleEntry(imageId: number, entry: DetailEntry) {
+  scheduleLaneJob(LANE, {
+    key: jobKey(imageId),
+    priority: entry.priority,
+    run: () => runEntry(imageId, entry),
+    /* The lane drops its oldest queued guess once too many pile up. A guess somebody is now
+       watching is not a guess any more: it goes back in as a real activation. */
+    cancel: () => {
+      if (detailCache.get(imageId) !== entry || entry.status !== 'queued') return;
+      if (detailListeners.has(imageId)) {
+        entry.priority = 'immediate';
+        scheduleEntry(imageId, entry);
+        return;
       }
-    }
-    if (queuedBackgroundCount >= MAX_BACKGROUND_QUEUE) dropOldestBackgroundRequest();
-    backgroundQueue.push(imageId);
-  }
-  runDetailQueue();
+      detailCache.delete(imageId);
+      entry.reject(createAbortError());
+      notifyImageDetail(imageId);
+    },
+  });
 }
 
 export function subscribeImageDetail(id: number | string, listener: () => void) {
@@ -277,10 +243,7 @@ export function prefetchImageDetail(
       cached.priority === 'background'
     ) {
       cached.priority = 'immediate';
-      if (cached.status === 'queued') {
-        enqueueImmediate(imageId);
-        runDetailQueue();
-      }
+      if (cached.status === 'queued') promoteLaneJob(LANE, jobKey(imageId));
     }
     touchEntry(imageId, cached);
     return cached.promise;
@@ -302,9 +265,42 @@ export function prefetchImageDetail(
     status: 'queued',
   };
   detailCache.set(imageId, entry);
+  /* A new attempt supersedes the failure a subscriber may be showing. */
+  detailErrors.delete(imageId);
   notifyImageDetail(imageId);
-  enqueueDetail(imageId, entry);
+  scheduleEntry(imageId, entry);
   return promise;
+}
+
+/**
+ * Install a record the server read (`lib/detail.server.ts`, a direct `/pic/:id`) as a resolved
+ * entry, so the page's own read finds it and sends nothing, and a step back to the picture later
+ * paints from it. Published at once — the component renders the same record from its props on
+ * the hydrating pass, so there is nothing to hold back. An entry already present (a read the page
+ * started, a record from earlier in the session) is left alone: it is at least as fresh.
+ *
+ * Browser only, like `resource.seed`: this module is evaluated during SSR too, where the store
+ * would be shared across concurrent requests.
+ */
+export function seedImageDetail(image: PonyImage, fetchedAt: number) {
+  if (typeof window === 'undefined') return;
+  const imageId = image.id;
+  if (detailCache.has(imageId)) return;
+  const value: DetailResult = { image };
+  const noop = () => {};
+  detailCache.set(imageId, {
+    /* Never newer than now: an RSC payload can be minutes old, and "just fetched" would pin it. */
+    createdAt: Math.min(fetchedAt, Date.now()),
+    promise: Promise.resolve(value),
+    resolve: noop,
+    reject: noop,
+    priority: 'immediate',
+    status: 'resolved',
+    value,
+    publishedValue: value,
+  });
+  detailErrors.delete(imageId);
+  trimDetailCache(imageId);
 }
 
 export function cancelImageDetailPrefetch(id: number | string) {
@@ -330,7 +326,6 @@ export function cancelOtherBackgroundImageDetailPrefetch(preserveId: number | st
       cancelled += 1;
     }
   }
-  if (cancelled > 0) runDetailQueue();
   return cancelled;
 }
 
@@ -340,4 +335,13 @@ export function peekImageDetail(id: number | string) {
   if (!cached) return null;
   // useSyncExternalStore snapshots must be pure; TTL eviction happens on request/trim paths, never in render.
   return cached.publishedValue ?? null;
+}
+
+/**
+ * The failure of the last read for this picture, if it failed and nothing has retried it yet —
+ * an `ApiError` carrying the HTTP status (`isNotFound` for a deleted picture). Pure, like
+ * `peekImageDetail`; subscribers are notified when it appears and when a retry clears it.
+ */
+export function peekImageDetailError(id: number | string): unknown {
+  return detailErrors.get(normalizeId(id)) ?? null;
 }

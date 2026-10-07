@@ -31,6 +31,7 @@ import { interpolate } from './spring';
 import { screenRectToPlane, sizePlaneLayer, type HeroScrollPlane } from './plane';
 import type { FrameAsset, FrameLease } from './frameCache';
 import type { HeroDirection } from './types';
+import { clamp } from '@/lib/utils';
 
 export type HeroFlightRole = 'foreground' | 'retiring';
 
@@ -108,9 +109,9 @@ function getFlightGeometryFrames(leg: HeroLeg): readonly FlightGeometryFrame[] {
 /**
  * The flyer uses matching translate/scale transform lists, so WAAPI interpolates each
  * component linearly between the emitted offsets. Interpolate those same boxes rather than
- * re-evaluating the curve: the two differ between samples, especially where a reversal's
- * negative progress is clamped by the arc. Catching the analytic box there moved an already
- * visible flyer by several pixels before the replacement animation could start.
+ * re-evaluating the curve: the two differ between samples, most of all through a reversal's
+ * dip below zero. Catching the analytic box there moved an already visible flyer by several
+ * pixels before the replacement animation could start.
  */
 function flightRectAt(leg: HeroLeg, offset: number): HeroRect {
   const frames = getFlightGeometryFrames(leg);
@@ -262,7 +263,7 @@ export function createHeroLeg({
  * into the spring that takes over an interrupted leg.
  */
 export function evaluateLeg(leg: HeroLeg, time: number): HeroPose {
-  const elapsed = Math.min(leg.duration, Math.max(0, time - leg.startedAt));
+  const elapsed = clamp(time - leg.startedAt, 0, leg.duration);
   const offset = leg.duration > 0 ? elapsed / leg.duration : 1;
   const progress = progressAt(leg.progress, offset);
   const rect = flightRectAt(leg, offset);

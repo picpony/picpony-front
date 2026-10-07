@@ -2,15 +2,22 @@
 
 import Image from 'next/image';
 import {
+  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type CSSProperties,
   type SyntheticEvent,
 } from 'react';
+import Skeleton from './Skeleton';
+import ErrorRetry from './ErrorRetry';
 import { getHeroMediaPreviewSizes } from '@/lib/hero/geometry';
 import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
+import { DURATION } from '@/lib/motionTokens';
+import { MOTION_SPEED_SCALE } from '@/lib/appearance';
+import { cn } from '@/lib/utils';
 
 const HERO_MEDIA_PREVIEW_SIZES = getHeroMediaPreviewSizes();
 
@@ -128,6 +135,23 @@ export default function DetailVideo({
   // Mirror DetailImage: while the hero flyer owns the screen, do not mount the
   // final video. Preview alone drives handoff readiness.
   const mountFinal = !heroActive || !hasPreview || preloadFinal;
+  /* A retry is a fresh element: a `<video>` that errored keeps its error state. */
+  const [reload, setReload] = useState(0);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const finalFailed = failedSrc === finalSrc;
+  /* Whether a frame is on screen — the placeholder shimmers until then (see `DetailImage`). */
+  const [paintedSrc, setPaintedSrc] = useState<string | null>(null);
+  const isPainted = paintedSrc === finalSrc;
+  const [placeholderGone, setPlaceholderGone] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isPainted) return;
+    const timer = window.setTimeout(
+      () => startTransition(() => setPlaceholderGone(finalSrc)),
+      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+    );
+    return () => window.clearTimeout(timer);
+  }, [finalSrc, isPainted]);
+  const showFailure = finalFailed;
 
   const cancelFinalReady = useCallback((owner?: HTMLVideoElement) => {
     const lease = finalFrameLeaseRef.current;
@@ -214,6 +238,7 @@ export default function DetailVideo({
     clearPreviewFallback();
     previewReadyRef.current = true;
     publishPreviewReady();
+    setPaintedSrc(sourceRef.current.finalSrc);
   }, [clearPreviewFallback, publishPreviewReady]);
 
   /** Same contract as `DetailImage`'s — see the docstring there. */
@@ -233,10 +258,17 @@ export default function DetailVideo({
   const markFinalFailed = useCallback(() => {
     finalFailedRef.current = true;
     cancelFinalReady();
+    setFailedSrc(sourceRef.current.finalSrc);
     const failedSurfaceId = surfaceIdRef.current;
     if (!failedSurfaceId || previewReadyRef.current) return;
     onMediaUnavailableRef.current?.(failedSurfaceId);
   }, [cancelFinalReady]);
+
+  const retryFinal = useCallback(() => {
+    finalFailedRef.current = false;
+    setFailedSrc(null);
+    setReload((value) => value + 1);
+  }, []);
 
   const markFinalPaintable = useCallback(() => {
     const target = targetRef.current;
@@ -244,6 +276,7 @@ export default function DetailVideo({
     finalReadyRef.current = true;
     target.setAttribute('data-image-detail-final-ready', 'true');
     publishFinalReady();
+    setPaintedSrc(sourceRef.current.finalSrc);
     if (!sourceRef.current.previewSrc || previewFailedRef.current) {
       markPreviewReady();
       return;
@@ -360,7 +393,7 @@ export default function DetailVideo({
       cancelFinalReady(video);
       video.pause();
     };
-  }, [cancelFinalReady, finalSrc, heroActive, markFinalReady, mountFinal]);
+  }, [cancelFinalReady, finalSrc, heroActive, markFinalReady, mountFinal, reload]);
 
   useEffect(() => {
     const previewVideo = previewVideoRef.current;
@@ -436,8 +469,16 @@ export default function DetailVideo({
       className="group relative flex-none cursor-default overflow-hidden rounded-lg bg-surface-container-low"
       style={style}
     >
-      {finalSrc && mountFinal && (
+      {placeholderGone !== finalSrc && !finalFailed && (
+        <Skeleton aria-hidden="true" className="absolute inset-0 rounded-lg" />
+      )}
+      {finalSrc && mountFinal && !finalFailed && (
+        /* **Muted, on every entry path.** It played with sound after a hero flight (the tap is
+           the activation that allows it) and not at all on a direct load, where the autoplay
+           policy refuses sound — the same picture behaved two ways depending on how it was
+           reached. The controls carry the volume, so sound is one press away. */
         <video
+          key={reload}
           ref={setFinalVideoRef}
           src={finalSrc}
           aria-label={heroActive ? undefined : alt}
@@ -445,14 +486,22 @@ export default function DetailVideo({
           controls={!heroActive}
           autoPlay={!heroActive}
           loop
-          muted={heroActive}
+          muted
           playsInline
           preload={heroActive && hasPreview && !preloadFinal ? 'metadata' : 'auto'}
           onLoadedData={handleFinalLoaded}
           onError={markFinalFailed}
           data-image-detail-layer="final"
-          className="image-detail-final absolute inset-0 z-0 block h-full w-full object-contain"
+          className={cn(
+            'image-detail-final absolute inset-0 z-0 block h-full w-full object-contain',
+            !previewSrc && 'transition-opacity spring-default-effects',
+          )}
         />
+      )}
+      {showFailure && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
+          <ErrorRetry size="inline" title="视频加载失败" onRetry={retryFinal} />
+        </div>
       )}
       {previewSrc &&
         (previewKind === 'video' ? (
@@ -466,7 +515,7 @@ export default function DetailVideo({
             onLoadedData={handlePreviewVideoLoaded}
             onError={markPreviewFailed}
             data-image-detail-layer="preview"
-            className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
+            className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain transition-opacity spring-fast-effects"
           />
         ) : (
           <Image
@@ -481,7 +530,7 @@ export default function DetailVideo({
             onLoad={handlePreviewImageLoaded}
             onError={markPreviewFailed}
             data-image-detail-layer="preview"
-            className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
+            className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain transition-opacity spring-fast-effects"
           />
         ))}
     </div>

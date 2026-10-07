@@ -3,7 +3,7 @@
 /**
  * What a screen was *showing*, for the length of the session.
  *
- * The half of pageCache that is not a cache: what the server said is shared and keyed
+ * The half of the old page cache that is not a cache: what the server said is shared and keyed
  * by the arguments of the read (lib/resource.ts); which arguments this screen was last
  * using is private to the screen and lives here. Session-scoped on purpose — a reload
  * genuinely reloads, and signing out empties the store.
@@ -24,10 +24,22 @@ export function useScreenState<T>(key: string, initial: T): [T, (value: T | ((pr
 
   const set = useCallback(
     (next: T | ((prev: T) => T)) => {
+      /* Written here, synchronously, whenever the previous value is known without the state
+         updater — always for a plain value, and for a functional one once this key has been set
+         this session (the store then holds exactly what the state holds, and is already current
+         for a second set in the same tick). An update issued in the render that unmounts the
+         screen never runs its updater, so a store written only there kept the stale value
+         (measured on /messages: a conversation closed by a navigation from inside its layer). */
+      if (typeof next !== 'function' || store.has(key)) {
+        const resolved =
+          typeof next === 'function' ? (next as (p: T) => T)(store.get(key) as T) : next;
+        store.set(key, resolved);
+        setValue(resolved);
+        return;
+      }
+      /* A functional update of a key never set this session: its `prev` exists only here. */
       setValue((prev) => {
-        const resolved = typeof next === 'function' ? (next as (p: T) => T)(prev) : next;
-        // Written in the updater, not an effect: a navigation unmounting in the same
-        // commit as the last `set` would otherwise lose it.
+        const resolved = (next as (p: T) => T)(prev);
         store.set(key, resolved);
         return resolved;
       });

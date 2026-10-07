@@ -165,21 +165,71 @@ test('clipboard fallback always removes staging and restores focus, including on
 });
 
 test('all date shapes accept backend timestamps and ISO offsets without corrupting relative times', () => {
-  const now = new Date('2026-09-14T12:00:00').getTime();
+  /* Pinned to an absolute instant: PicPony writes Beijing wall-clock time with no offset, so the
+     answers must not depend on the zone this test (or a server, or a visitor) runs in. */
+  const now = new Date('2026-09-14T12:00:00+08:00').getTime();
   class ClockDate extends Date { static now() { return now; } }
   const format = load('lib/format.ts', {}, { Date: ClockDate, Intl });
   assert.equal(format.formatDateTime('2026-09-14 09:26:00'), '2026/09/14 09:26');
   assert.equal(format.formatShortDateTime('2026-09-14 09:26:00'), '09/14 09:26');
   assert.equal(format.formatDate('2026-09-14 09:26:00'), '2026/09/14');
   assert.equal(format.formatMonthDay('2026-09-14 09:26:00'), '09/14');
-  for (const name of ['formatDateTime', 'formatShortDateTime', 'formatDate', 'formatMonthDay']) {
+  assert.equal(format.formatClock('2026-09-14 09:26:00'), '09:26');
+  for (const name of ['formatDateTime', 'formatShortDateTime', 'formatDate', 'formatMonthDay', 'formatCompactDate']) {
     assert.equal(format[name]('invalid date'), 'invalid date');
     assert.equal(format[name](new Date(NaN)), '');
   }
-  assert.equal(format.formatLastOnline('2026-09-14 11:48:00'), '12分钟前');
-  assert.equal(format.formatLastOnline(new Date(now - 12 * 60_000).toISOString()), '12分钟前');
-  assert.equal(format.formatLastOnline('2020-01-01T00:00:00Z'), '2020-01-01');
+  /* Offset-less means Beijing; an explicit zone is taken as written and shown in Beijing. */
+  assert.equal(format.parseBackendTime('2026-09-14 09:26:00').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(format.parseBackendTime('2026-09-14T09:26:00').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(format.parseBackendTime('2026-09-14').toISOString(), '2026-09-13T16:00:00.000Z');
+  assert.equal(format.parseBackendTime('2026-09-14T01:26:00Z').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(format.parseBackendTime('2026-09-14T01:26:00+0000').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(format.formatDateTime('2026-09-14T01:26:00Z'), '2026/09/14 09:26');
+  assert.equal(format.parseBackendTime(''), null);
+  assert.equal(format.parseBackendTime('not a date'), null);
+  assert.ok(format.backendTimeValue('2026-09-14 09:26:00') < format.backendTimeValue('2026-09-14T01:27:00Z'),
+    'a Beijing stamp and a UTC one sort on one clock');
+
+  /* The year appears only when it is not this one. */
+  assert.equal(format.formatCompactDateTime('2026-02-03 16:36:00'), '02/03 16:36');
+  assert.equal(format.formatCompactDateTime('2013-02-03 16:36:00'), '2013/02/03');
+  assert.equal(format.formatCompactDate('2026-02-03 16:36:00'), '02/03');
+  assert.equal(format.formatCompactDate('2013-02-03T08:36:00Z'), '2013/02/03');
+
+  /* A conversation's day, on Beijing calendar days. */
+  assert.equal(format.formatDayLabel('2026-09-14 08:05:00'), '今天 08:05');
+  assert.equal(format.formatDayLabel('2026-09-14 08:05:00', now, { clock: false }), '今天');
+  assert.equal(format.formatDayLabel('2026-09-13 23:59:00'), '昨天');
+  assert.equal(format.formatDayLabel('2026-09-10 10:00:00'), '周四');
+  assert.equal(format.formatDayLabel('2026-03-04 10:00:00'), '3月4日');
+  assert.equal(format.formatDayLabel('2024-03-04 10:00:00'), '2024年3月4日');
+
+  /* One precision, and 在线 is a status rather than a time. */
+  assert.equal(format.formatRelativeTime('2026-09-14 11:59:40'), '刚刚');
+  assert.equal(format.formatRelativeTime('2026-09-14 11:48:00'), '12 分钟前');
+  assert.equal(format.formatRelativeTime('2026-09-14 08:36:00'), '3 小时前');
+  assert.equal(format.formatRelativeTime('2026-09-12 11:00:00'), '2 天前');
+  assert.equal(format.formatRelativeTime('2026-07-20 10:00:00'), '2026/07/20');
+  assert.equal(format.formatRelativeTime('2026-09-14 12:05:00'), '刚刚', 'a skewed future stamp is not negative');
+  assert.deepEqual({ ...format.lastOnlineStatus('2026-09-14 11:57:00') }, { online: true, text: '在线' });
+  assert.deepEqual({ ...format.lastOnlineStatus('2026-09-14 11:48:00') }, { online: false, text: '12 分钟前' });
+  assert.equal(format.formatLastOnline(new Date(now - 12 * 60_000).toISOString()), '12 分钟前');
+  assert.equal(format.formatLastOnline('2020-01-01T00:00:00Z'), '2020/01/01');
   assert.equal(format.formatLastOnline('invalid date'), 'invalid date');
+
+  /* Numbers: one count shape, sizes in the unit that reads. */
+  assert.equal(format.formatCount(4422), '4,422');
+  assert.equal(format.formatCount(-2), '-2');
+  assert.equal(format.formatCount(12_345), '1.2万');
+  assert.equal(format.formatCount(10_000), '1万');
+  assert.equal(format.formatCount(345_000_000), '3.5亿');
+  assert.equal(format.formatCount(undefined), '0');
+  assert.equal(format.formatBytes(512), '512 B');
+  assert.equal(format.formatBytes(30 * 1024), '30 KB');
+  assert.equal(format.formatBytes(1.5 * 1024 * 1024), '1.5 MB');
+  assert.equal(format.formatBytes(12.4 * 1024 * 1024), '12 MB');
+  assert.equal(format.formatBytes(null), '');
 });
 
 function stateHarness() {
@@ -242,11 +292,14 @@ test('paged reads retain rows only within their resource and explicit account/fi
   const first = ['page one'];
   snapshots.set('1', { ...empty, data: first });
   assert.equal(render().data, first);
+  assert.equal(render().isPrevious, false, 'an answer for this key is not a previous one');
   page = 2;
   assert.equal(render().data, first, 'a page change keeps the list height');
+  assert.equal(render().isPrevious, true, 'retained rows say they belong to another key');
   snapshots.set('2', { ...empty, error: new Error('Offline') });
   assert.equal(render().data, first, 'failed next pages keep the previous answer with the new error');
   assert.equal(render().error.message, 'Offline');
+  assert.equal(render().isPrevious, true, 'a failed page turn is distinguishable from a loaded page');
   scope = 'first-user:developer';
   assert.equal(render().data, undefined, 'a filter change cannot retain the previous filter');
   scope = 'first-user:safe';
@@ -280,6 +333,10 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     use: (value) => value,
     useState: (...args) => activeHarness.react.useState(...args),
     useCallback: (...args) => activeHarness.react.useCallback(...args),
+    useEffect: (...args) => activeHarness.react.useEffect(...args),
+    useMemo: (...args) => activeHarness.react.useMemo(...args),
+    useRef: (...args) => activeHarness.react.useRef(...args),
+    useId: () => 'derpi-profile',
   };
   // The store survives navigation, while each keyed component has fresh hook slots.
   const screenState = load('lib/screenState.ts', { react });
@@ -288,13 +345,23 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
   const { default: Page } = load('app/derpi/user/[id]/page.tsx', {
     react,
     'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
-    'next/navigation': { useParams: () => ({ id: userId }), useRouter: () => ({ back() {}, push() {} }) },
+    'next/link': { default: 'Link' },
+    'next/navigation': {
+      useParams: () => ({ id: userId }),
+      usePathname: () => `/derpi/user/${userId}`,
+      useRouter: () => ({ back() {}, push() {} }),
+    },
     'react-icons/md': {},
     '@/lib/hooks': { useEscapeBack() {}, useStoredValue: () => filter },
+    '@/lib/imageSequence': { createPagedSequence: (options) => ({ key: options.key }) },
+    '@/lib/listReveal': { useListReveal: () => async () => false },
+    '@/lib/api/errors': load('lib/api/errors.ts', {}, { Error, TypeError }),
+    '@/lib/format': { formatCount: String },
+    '@/lib/backNavigation': { useBackOrParent: () => () => {} },
     '@/lib/constants': { LS_KEYS: { contentFilter: 'contentFilter' } },
     '@/lib/searchQuery': { parseContentFilter: (value) => value },
     '@/lib/screenState': screenState,
-    '@/lib/resources': { derpiUserProfile: 'profile', derpiUserUploads: 'uploads' },
+    '@/lib/resources': { derpiUserProfile: 'profile', derpiUserUploads: 'uploads', useBrowsingFingerprint: () => 'fingerprint' },
     '@/lib/resource': { SKIP: Symbol('skip'), useResource: (resource, args) => {
       if (resource === 'profile') return {
         data: { id: args.id === 'first-user' ? 42 : 43, name: args.id, uploads_count: 90 }, refresh() {},
@@ -317,7 +384,11 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     '@/components/PageBack': { default: 'PageBack' },
     '@/components/EmptyState': { default: 'EmptyState' },
     '@/components/Button': { default: 'Button', buttonClasses: () => '' },
+    '@/components/buttonStyles': { buttonClasses: () => '' },
+    '@/components/FailedTurnHold': { default: 'FailedTurnHold' },
+    '@/components/Tooltip': { useTooltip: () => ({ anchorRef: null, anchorProps: {}, tooltip: null }) },
     '@/components/SectionHeading': { default: 'SectionHeading' },
+    './DerpiDescription': { default: 'DerpiDescription' },
     '@/lib/icons': { ICON: {} },
   });
   let instance;
@@ -395,6 +466,8 @@ test('developer-mode writes preserve accepted settings after closing without upd
     '@/components/Skeleton': { default: 'Skeleton', SkeletonCircle: 'SkeletonCircle' },
     '@/components/ErrorRetry': { default: 'ErrorRetry' },
     '@/components/Toast': { showToast: (...args) => notices.push(args) },
+    // One realm for both modules, so `instanceof Error` holds across them as in the browser.
+    '@/lib/api/errors': load('lib/api/errors.ts', {}, { Error, TypeError }),
     '@/lib/hooks': { useSession: () => ({ token, ready: true }), readToken: () => token },
     '@/lib/constants': { LS_KEYS: { developer: 'developer' } },
     '@/lib/icons': { ICON: {} },
@@ -409,7 +482,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
       disableDeveloperMode: async () => Response.json({ success: true }),
     },
   }, {
-    AbortController, Event, queueMicrotask,
+    AbortController, Event, queueMicrotask, Error,
     window: { dispatchEvent() {} },
     localStorage: { setItem: (key, value) => stored.set(key, value), removeItem: (key) => stored.delete(key) },
   });
@@ -460,24 +533,36 @@ test('tag groups keep their distinct navigation actions and independent expansio
   const selected = [];
   const expanded = [];
   const jsx = (type, props) => ({ type, props });
+  /* One render, outside React: state is its initial value, effects do not run. */
+  const react = {
+    useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
+    useRef: () => ({ current: null }),
+    useEffect: () => {},
+  };
   const { default: TagList } = load('components/TagList.tsx', {
-    'react/jsx-runtime': { jsx, jsxs: jsx },
+    react,
+    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
     'next/navigation': { useRouter: () => ({ push: (...args) => pushes.push(args) }) },
     '@/components/Button': { default: 'Button' },
     '@/components/Chip': { default: 'Chip' },
-    '@/components/Skeleton': { default: 'Skeleton' },
+    '@/components/Tooltip': { useTooltip: (label) => ({ anchorRef: null, anchorProps: { tip: label }, tooltip: null }) },
+    '@/lib/format': { formatCount: (value) => String(value) },
     '@/lib/tagCategories': { tagCategoryChip: (category) => category },
     '@/lib/tagTranslations': { tagTranslationKey: (name) => name.toLowerCase() },
   });
   const tree = TagList({
     tags: ['artist:one & two', 'artist:second', 'oc:pony', 'oc:other', 'safe', 'smile', 'spoiler:omit'],
     visibleTagLimits: { imageId: 4, artists: 1, ocs: 1, regular: 1 },
-    showTagCounts: true, tagCounts: { safe: 0 }, tagTranslations: { safe: '安全' },
-    onTagClick: (tag) => selected.push(tag), onShowMore: (limits) => expanded.push(limits),
+    translations: { safe: '安全' },
+    counts: { safe: 0 },
+    onTagClick: (tag) => selected.push(tag),
+    onShowMore: (section) => expanded.push(section),
   });
+  /* Function components (each chip) are expanded in place. */
   function collect(node, type) {
     if (Array.isArray(node)) return node.flatMap((child) => collect(child, type));
     if (!node || typeof node !== 'object') return [];
+    if (typeof node.type === 'function') return collect(node.type(node.props), type);
     return [...(node.type === type ? [node] : []), ...collect(node.props?.children, type)];
   }
   const chips = collect(tree, 'Chip');
@@ -486,10 +571,13 @@ test('tag groups keep their distinct navigation actions and independent expansio
   assert.equal(new URL(pushes[0][0], 'https://app.invalid').searchParams.get('q'), 'artist:one & two');
   assert.equal(new URL(pushes[1][0], 'https://app.invalid').searchParams.get('q'), 'oc:pony');
   assert.deepEqual(selected, ['safe']);
-  assert.equal(chips[2].props.children[0], '安全');
-  assert.equal(collect(chips[2], 'span')[0].props.children, '0');
+  /* The glossary's name is shown, the real tag is named on demand, and the count sits outside the
+     truncating label, so a long name cannot hide it. */
+  const spans = collect(chips[2], 'span');
+  assert.equal(spans.find((span) => span.props.className === 'truncate').props.children, '安全');
+  assert.equal(spans.find((span) => String(span.props.className).includes('tabular-nums')).props.children, '0');
+  assert.equal(chips[2].props.tip, 'safe');
+  assert.equal(chips[0].props.tip, undefined);
   collect(tree, 'Button').forEach((button) => button.props.onClick());
-  assert.deepEqual(expanded.map((value) => [value.imageId, value.artists, value.ocs, value.regular]), [
-    [4, 65, 1, 1], [4, 1, 65, 1], [4, 1, 1, 121],
-  ]);
+  assert.deepEqual(expanded, ['artists', 'ocs', 'regular']);
 });

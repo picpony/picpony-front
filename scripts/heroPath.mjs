@@ -214,7 +214,9 @@ for (const [name, from, image, viewport] of CASES) {
 const TABLE_TOLERANCE = 0.004;
 const MODELS = [
   ['HERO_FLIGHT_CURVE', HERO_FLIGHT_PROGRESS.forward],
-  ...[-0.5, 0, 1, 2, 2.5].map((velocity) => [
+  /* Down to the reversal floor: a caught flyer leaves at the speed it was travelling, −1…−2.5
+     on real legs, and its table has to hold the dip as faithfully as a from-rest curve. */
+  ...[-3, -2, -0.5, 0, 1, 2, 2.5].map((velocity) => [
     `spring v=${velocity}`,
     { kind: 'spring', response: { ...constants.HERO_FLIGHT_RESPONSE.forward, velocity } },
   ]),

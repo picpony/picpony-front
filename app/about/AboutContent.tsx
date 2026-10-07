@@ -1,12 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AnimationItem } from 'lottie-web';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Card from '@/components/Card';
 import FlutedGlass from '@/components/FlutedGlass';
-import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import DeveloperGuideModal from '@/components/DeveloperGuideModal';
 import {
   entranceMotion,
@@ -17,17 +14,21 @@ import {
   useMotionTier,
 } from '@/lib/appearance';
 import { loadLottiePlayer } from '@/lib/lottieAssets';
+import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import Logo from '@/components/Logo';
 import { useResource } from '@/lib/resource';
 import { teamMembers, type TeamMember } from '@/lib/resources';
 import type { TeamSeed } from '@/lib/team.server';
-import PageHeader from '@/components/PageHeader';
-import PageBack from '@/components/PageBack';
-import { readToken, useEscapeBack } from '@/lib/hooks';
-import SectionHeading from '@/components/SectionHeading';
+import { readToken } from '@/lib/hooks';
 import { getAssetUrl } from '@/lib/utils';
 import Avatar from '@/components/Avatar';
+import AboutFrame, { ROSTER_GRID, TeamCard, TeamSkeleton } from './AboutFrame';
+
+/* Module scope: the React Compiler does not lower a dynamic `import()` inside a component. */
+const loadTrace = () =>
+  Promise.all([loadLottiePlayer(), import('@/lib/lottie/logoNonParallel.json').then((m) => m.default)]);
 
 /** The Lottie composition's own frame, so the reserved box matches what lands. */
 const TRACE_ASPECT = '3000 / 1053';
@@ -65,10 +66,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
     if (staticMark) return;
     let animation: AnimationItem | null = null;
     let cancelled = false;
-    Promise.all([
-      loadLottiePlayer(),
-      import('@/lib/lottie/logoNonParallel.json').then((m) => m.default),
-    ]).then(([player, data]) => {
+    loadTrace().then(([player, data]) => {
       if (
         cancelled || !hostRef.current || motionTier() !== 'standard' || !entranceMotion()
       ) return;
@@ -137,17 +135,22 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
      treatment the brand bar's mark gets. The filter draws a 1px halo in `currentColor`,
      so `currentColor` must be the *plate's* own body, not the page's ink: a halo in the
      glass colour knocks the mark out of the texture behind it; a halo in `on-surface`
-     would only thicken it. */
+     would only thicken it.
+
+     The press counter sits on a plain wrapper, as in the branch above, and the image is only an
+     image (G4-029): on the `img` role itself it made an interactive picture that no key could
+     press. The guide stays a pointer gesture by design — an easter egg — so it has no keyboard
+     path; giving it a real entry point is the owner's call. */
   return (
-    <div
-      ref={hostRef}
-      role="img"
-      aria-label="PicPony"
-      className={`logo-keyline logo-keyline-plate text-glass-body select-none ${MARK_WIDTH}`}
-      style={{ aspectRatio: TRACE_ASPECT }}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={handleClick}
-    />
+    <div className={`select-none ${MARK_WIDTH}`} onMouseDown={(e) => e.preventDefault()} onClick={handleClick}>
+      <div
+        ref={hostRef}
+        role="img"
+        aria-label="PicPony"
+        className="logo-keyline logo-keyline-plate text-glass-body w-full"
+        style={{ aspectRatio: TRACE_ASPECT }}
+      />
+    </div>
   );
 }
 
@@ -183,7 +186,9 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
   const read = useResource(teamMembers, {}, { initial: teamSeed ?? undefined });
   const members = read.data ?? [];
   const loading = read.data === undefined && read.error === undefined;
-  const error = Boolean(read.error);
+  /* A failure only stands in for the roster when there is no roster to show: a background
+     re-read that fails leaves the names on screen. */
+  const error = read.data === undefined && read.error !== undefined;
 
   // 按分类分组，组内按 order_num 排序
   const groups = (['developer', 'manager', 'editor', 'special'] as const)
@@ -194,58 +199,47 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
     .filter((g) => g.items.length > 0);
 
   return (
-    <Card variant="filled" padding="lg" className="mt-4">
-      <SectionHeading>运营团队</SectionHeading>
-
-      {/* The skeleton is the loaded state's own shape: group headings over wrapped rows
-          of member cards on the same rhythm. A flat row with a different gap and no
-          headings made the list re-space and grow two heading rows when data landed. */}
-      {loading && (
-        <div className="space-y-5" aria-hidden="true">
-          {[0, 1].map((g) => (
-            <div key={g}>
-              <Skeleton className="mb-3 h-5 w-20" delay={g * 120} />
-              <div className="flex flex-wrap gap-x-4 gap-y-5">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="flex w-full items-center gap-3 p-2 sm:w-44">
-                    <SkeletonCircle size={56} delay={g * 120 + i * 80} />
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <Skeleton className="h-4 w-16" delay={g * 120 + i * 80 + 40} />
-                      <Skeleton className="h-3 w-20" delay={g * 120 + i * 80 + 80} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+    <TeamCard>
+      {loading && <TeamSkeleton />}
 
       {/* `ErrorRetry` with a retry that actually retries — a bare sentence gave no
           way to recover from one transient network failure. */}
       {!loading && error && (
         <ErrorRetry
           size="inline"
-          title="运营团队信息加载失败"
-          onRetry={read.refresh}
+          title="运营团队加载失败"
+          message={apiErrorMessage(read.error)}
+          onRetry={isRetryable(read.error) ? read.refresh : undefined}
         />
       )}
 
-      {!loading && !error && (
+      {!loading && !error && groups.length === 0 && <EmptyState size="inline" title="暂无团队成员" />}
+
+      {!loading && !error && groups.length > 0 && (
         <div className="space-y-5">
           {groups.map((group) => (
             <div key={group.label}>
-              <h3 className="mb-3 text-label-l text-primary-ink">{group.label}</h3>
-              <div className="flex flex-wrap gap-x-4 gap-y-5">
+              {/* A label over its rows, in supporting ink: `primary-ink` is the brand as a mark
+                  and measured 2.39:1 on this card as text (R7-010). */}
+              <h3 className="mb-3 text-label-l text-on-surface-variant">{group.label}</h3>
+              <div className={ROSTER_GRID}>
                 {group.items.map((m) => {
                   const href = resolveMemberLink(m.link_url);
                   const avatar = resolveMemberAvatar(m);
                   const inner = (
                     <>
-                      <Avatar src={avatar} name={m.name} size={56} unoptimized />
+                      <Avatar src={avatar} name={m.name} size={48} unoptimized />
                       <div className="min-w-0">
-                        <p className="truncate text-label-l text-on-surface">{m.name}</p>
-                        <p className="mt-0.5 text-body-s text-on-surface-variant">{m.role}</p>
+                        {/* The name is the cell's content: two lines before it is cut (OD-6), its
+                            whole text still in `title`. A long Latin handle breaks inside the
+                            word rather than overflowing; the grid stretches every cell in a row to
+                            the tallest and each centres on its avatar, so the avatars stay level. */}
+                        <p className="line-clamp-2 wrap-anywhere text-label-l text-on-surface" title={m.name}>{m.name}</p>
+                        {/* One line, its whole text in `title` (D1-008): wrapped in a narrow cell,
+                            a role left one character on a line of its own (「小马维基数据支 / 持」). */}
+                        <p className="mt-0.5 truncate text-body-s text-on-surface-variant" title={m.role}>
+                          {m.role}
+                        </p>
                       </div>
                     </>
                   );
@@ -258,12 +252,12 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
                       /* Focus ring and ripple, like every other interactive row in the
                          app — without them a keyboard user could reach this link and see
                          no indication they had. */
-                      className="flex w-full items-center gap-3 rounded-md p-2 outline-none transition-ui state-layer focus-visible:ring-2 focus-ring sm:w-44"
+                      className="flex min-w-0 items-center gap-3 rounded-md p-2 transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
                     >
                       {inner}
                     </Link>
                   ) : (
-                    <div key={m.id} className="flex w-full items-center gap-3 p-2 sm:w-44">
+                    <div key={m.id} className="flex min-w-0 items-center gap-3 p-2">
                       {inner}
                     </div>
                   );
@@ -273,70 +267,30 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
           ))}
         </div>
       )}
-    </Card>
+    </TeamCard>
   );
 }
 
 export default function AboutContent({ teamSeed }: { teamSeed: TeamSeed | null }) {
-  const router = useRouter();
   const [guideOpen, setGuideOpen] = useState(false);
-  /* Reachable only from the footer, so not a sidebar destination — it carries the
-     shared back affordance (see AGENTS.md). */
-  const handleBack = useCallback(() => router.back(), [router]);
-  useEscapeBack(handleBack);
 
   return (
     <>
-      <PageBack onClick={handleBack} title="返回 (Esc)" />
-      <div className="pt-14">
-        <div className="mx-auto max-w-4xl">
-          <PageHeader title="关于本站" />
-        </div>
-
-        {/* The plate bleeds to the content area's edges: a negative inline margin exactly
-            cancels the shell's page padding, so the band's border box lands on the
-            scroller's own edges — not a viewport unit, since the scroller is narrower than
-            the window by the docked drawer and the scrollbar gutter, and anything measured
-            against the viewport overflows sideways.
-
-            It must sit on a block child, not the page root: the shell forces the root to a
-            definite width, and a flex item with a definite cross size does not stretch, so
-            the same margin there would shift the box left instead of widening it.
-
-            No corner radius — that is the role, not a preference: a radius says where a
-            surface ends, and this one runs off both sides of the column (the concentric
-            rule gives the same answer, the gap to the enclosure being zero).
-
-            A floor rather than a fixed height — the glass is a material, not a picture, and
-            may grow. 288/384px, up from 256/320: at the old height a full-width band was
-            better than 5:1 on a desktop, reading as a strip of texture rather than a panel.
-            The reeds are sized off the height (`FluteConfig.frequency`), so the step moves
-            their pitch too. Width is not an axis here — the negative margin already puts
-            the band on the scroller's edges, and anything wider needs a viewport unit,
-            which overflows.
-
-            `bg-glass-body` is the plate's own colour, not a surface step: what shows if
-            WebGL is unavailable is the material at rest, not a differently toned rectangle. */}
-        <div className="relative -mx-4 mt-2 flex min-h-72 items-center justify-center overflow-hidden bg-glass-body sm:-mx-6 sm:min-h-96">
-          <FlutedGlass />
-          {/* `relative` keeps the mark above the glass: siblings at the same z-index, so
-              paint order is DOM order and only a *positioned* element takes part in it.
-              Without it the plate covers the mark and swallows its clicks. */}
-          <div className="relative">
-            <TraceHeader onActivate={() => setGuideOpen(true)} />
-          </div>
-        </div>
-
-        <div className="mx-auto mt-8 max-w-4xl">
-          <Card variant="filled" padding="lg">
-            <SectionHeading className="mb-3">关于 PicPony</SectionHeading>
-            <p className="text-body-m text-on-surface-variant">一个看图的网站，没了</p>
-          </Card>
-
-          <TeamSection teamSeed={teamSeed} />
-        </div>
-        <DeveloperGuideModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
-      </div>
+      <AboutFrame
+        plate={
+          <>
+            <FlutedGlass />
+            {/* `relative` keeps the mark above the glass: siblings at the same z-index, so
+                paint order is DOM order and only a *positioned* element takes part in it.
+                Without it the plate covers the mark and swallows its clicks. */}
+            <div className="relative">
+              <TraceHeader onActivate={() => setGuideOpen(true)} />
+            </div>
+          </>
+        }
+        team={<TeamSection teamSeed={teamSeed} />}
+      />
+      <DeveloperGuideModal isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
     </>
   );
 }

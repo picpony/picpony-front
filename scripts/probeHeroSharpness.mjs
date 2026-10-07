@@ -221,6 +221,10 @@ if (FAKE_CDN) {
     else fulfil();
   });
   globalThis.__arrivals = arrivals;
+  /* Measure the code, not the service worker: it would answer `/_next/image` from its own thread,
+     where `Fetch` never sees the request (see the same line in netAudit.mjs). */
+  await send('Network.enable');
+  await send('Network.setBypassServiceWorker', { bypass: true });
   await send('Fetch.enable', {
     patterns: [{ urlPattern: '*derpicdn.net*', requestStage: 'Request' }],
   });
@@ -401,6 +405,13 @@ else {
  * hover covers it. Without the flag this stays a report.
  */
 let failed = false;
+/* A run that measured nothing is not a pass when the assertions were asked for: with no decoded
+   card image the guard below skipped every check and the probe exited 0 (G0-013, R12-023). */
+if (out?.error && FAKE_CDN && !NO_WARM) {
+  console.log(`
+FAIL: nothing was measured (${out.error}), so the assertions could not run.`);
+  failed = true;
+}
 if (!out?.error && FAKE_CDN && !NO_WARM) {
   const flyerSamples = out.samples.filter((s) => s.layer === 'flyer' && s.naturalW > 0);
   const canvas = flyerSamples[0]?.naturalW ?? 0;

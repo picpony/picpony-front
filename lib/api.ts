@@ -10,10 +10,8 @@ export type {
   PonyImage,
   FeaturedImage,
   ApiResponse,
-  FavesResponse,
   SharedFavesResponse,
   Comment,
-  CommentsResponse,
 } from '@/lib/types/image';
 
 export type {
@@ -36,11 +34,8 @@ export type {
 
 export type {
   Contact,
-  ContactsResponse,
   Message,
-  MessagesResponse,
   Notification,
-  InteractionNotificationsResponse,
   UnreadCountsResponse,
   Announcement,
 } from '@/lib/types/message';

@@ -1,0 +1,13 @@
+.hint {
+  display: none;
+}
+
+@supports selector(input::-webkit-datetime-edit) {
+  .field[data-empty] input::-webkit-datetime-edit {
+    visibility: hidden;
+  }
+
+  .hint {
+    display: block;
+  }
+}

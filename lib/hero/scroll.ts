@@ -2,6 +2,7 @@
 
 import { noteHeroInteraction } from './input';
 import { heroFrameScheduler } from './scheduler';
+import { clamp } from '@/lib/utils';
 
 const SCROLL_EPSILON_PX = 0.25;
 const WHEEL_RESIDUAL_RESPONSE_MS = 24;
@@ -355,21 +356,12 @@ export class HeroScrollContinuity {
 
     const startLeft = this.residualTargetLeft ?? measurement.left;
     const startTop = this.residualTargetTop ?? measurement.top;
-    this.residualTargetLeft = Math.min(
-      measurement.maxLeft,
-      Math.max(0, startLeft + this.pendingResidualLeft),
-    );
-    this.residualTargetTop = Math.min(
-      measurement.maxTop,
-      Math.max(0, startTop + this.pendingResidualTop),
-    );
+    this.residualTargetLeft = clamp(startLeft + this.pendingResidualLeft, 0, measurement.maxLeft);
+    this.residualTargetTop = clamp(startTop + this.pendingResidualTop, 0, measurement.maxTop);
     this.pendingResidualLeft = 0;
     this.pendingResidualTop = 0;
 
-    const elapsed = Math.min(
-      48,
-      Math.max(1, measurement.at - (this.residualSampleAt || measurement.at)),
-    );
+    const elapsed = clamp(measurement.at - (this.residualSampleAt || measurement.at), 1, 48);
     this.residualSampleAt = measurement.at;
     const amount = 1 - Math.exp(-elapsed / WHEEL_RESIDUAL_RESPONSE_MS);
     let nextLeft = measurement.left + (this.residualTargetLeft - measurement.left) * amount;

@@ -31,6 +31,8 @@ export const HERO_GALLERY_ANCHOR_SELECTOR = '[data-image-hero-gallery-anchor]';
 
 export const HERO_REVEAL_SELECTOR = '[data-image-detail-reveal]';
 export const HERO_SURFACE_SELECTOR = '[data-image-detail-surface]';
+/** Pinned controls inside the routed dialog besides the back affordance (the step arrows). */
+export const HERO_CHROME_SELECTOR = '[data-image-detail-chrome]';
 
 // ---------------------------------------------------------------------------
 // Lifecycle timings
@@ -87,10 +89,11 @@ export const HERO_MAX_HEIGHT_DVH = 80;
  * below the overlay offset, page padding and header; at a bare 80dvh the picture's bottom
  * was cropped, on portrait images only.
  *
- * 264 rather than the ~240 the chain sums to: the extra ~31px is margin for a header that
- * follows the type scale (it is one metadata line taller below the breakpoint). This is a
- * tuned constant, not a structural fix — the structural version caps against the overlay's
- * own height, whose chain is all definite, and is the right answer if this drifts again.
+ * 264 rather than the ~240 the chain sums to with a one-line header: the extra covers the
+ * header's second metadata line (it is two lines at every width now — see `DetailHeader`), with
+ * a few px of margin for a type scale that moves. This is a tuned constant, not a structural
+ * fix — the structural version caps against the overlay's own height, whose chain is all
+ * definite, and is the right answer if this drifts again.
  */
 export const HERO_MEDIA_VIEWPORT_CHROME_PX = 264;
 export const HERO_MEDIA_BREAKPOINT_PX = 640;

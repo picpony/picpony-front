@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export type BadgeTone =
@@ -161,6 +161,12 @@ export function MediaBadge({
  * size.
  *
  * Renders nothing at zero, so callers do not each need their own guard.
+ *
+ * **The pop is for a count arriving, not for a page arriving.** It plays when the count
+ * goes from nothing to something while this badge is on screen — not on mount, where
+ * cached unread counts used to pop on every visit, an entrance of their own beside the
+ * page's. The meaning is visually hidden text rather than an `aria-label`: a label on a
+ * role-less span is not read by every screen reader, text is.
  */
 export function CountBadge({
   count,
@@ -169,22 +175,38 @@ export function CountBadge({
 }: {
   count: number;
   className?: string;
-  /** Accessible name, e.g. "3 条未读". Without it a bare number reads as noise. */
+  /** What the number means, e.g. "3 条未读". Without it a bare number reads as noise. */
   label?: string;
 }) {
+  /* The previous count, held in state so the transition is seen during render (the
+     documented pattern for reacting to a prop change) rather than in an effect a frame
+     late, when the badge has already painted without its entrance. */
+  const [seen, setSeen] = useState(count);
+  const [arrived, setArrived] = useState(false);
+  if (count !== seen) {
+    setSeen(count);
+    setArrived(!seen && count > 0);
+  }
   if (!count) return null;
+  const shown = count > 99 ? '99+' : count;
   return (
     <span
-      aria-label={label}
       className={cn(
         'bg-error-fill text-on-fill text-label-s-emphasized',
         'flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1',
-        'leading-none tabular-nums',
-        'animate-control-pop',
+        'leading-none tabular-nums forced-boundary',
+        arrived && 'animate-control-pop',
         className,
       )}
     >
-      {count > 99 ? '99+' : count}
+      {label ? (
+        <>
+          <span aria-hidden="true">{shown}</span>
+          <span className="sr-only">{label}</span>
+        </>
+      ) : (
+        shown
+      )}
     </span>
   );
 }

@@ -198,9 +198,10 @@ function quantize(model: HeroProgressModel): HeroProgressModel {
  *
  * Worth knowing which model the count is sized for: at 24 samples the largest error a linear
  * interpolation between offsets makes is 0.332% for `HERO_FLIGHT_CURVE` but **0.512%** for the
- * ζ0.9 spring at rest and **0.609%** at the −0.5 launch velocity a reversal saturates to. The
- * spring is the harder curve to table, and the reverse leg is its worst case. At 32 those are
- * 0.189% / 0.297% / 0.353%. See `HERO_PROGRESS_SAMPLES`.
+ * ζ0.9 spring at rest and **1.099%** at the −3 launch velocity a reversal may leave at (the
+ * floor in `spring.ts`). The spring is the harder curve to table, and a fast reversal's dip is
+ * its worst case. At 32 those are 0.189% / 0.297% / 0.632%; the shipped 48 holds them all under
+ * the 0.4% `hero:path` tolerance. See `HERO_PROGRESS_SAMPLES`.
  */
 export function sampleProgress(
   model: HeroProgressModel,

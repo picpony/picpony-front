@@ -4,6 +4,7 @@ import {
   BACKGROUND_REVEAL_DISTANCE_PX,
   DISMISS_DISTANCE_PX,
   DRAG_RESISTANCE_PX,
+  HERO_CHROME_SELECTOR,
   HERO_REVEAL_SELECTOR,
   HERO_SURFACE_SELECTOR,
   PULL_RELEASE_DURATION_MS,
@@ -20,6 +21,7 @@ import { progressAt, relaunch } from './progress';
    played at the user, which is the same line M3 draws when it settles a drawer's drag on
    a spring while closing it on an effects curve. */
 import { motionScale, motionTier } from '@/lib/appearance';
+import { clamp } from '@/lib/utils';
 
 const PULL_ATTRIBUTE = 'imageHeroPulling';
 type PullStyle = { element: HTMLElement; property: 'transform' | 'opacity'; original: string; written: string };
@@ -158,12 +160,10 @@ export class HeroPullSurface {
        than left absolute: it exists to stop a flick from a near-closed position reading as a
        cut, which is a proportion of the gesture rather than a wall-clock minimum. */
     const scale = motionScale();
-    const duration = Math.max(
+    const duration = clamp(
+      PULL_RELEASE_DURATION_MS * scale * Math.sqrt(start / DISMISS_DISTANCE_PX),
       PULL_RELEASE_MIN_DURATION_MS * scale,
-      Math.min(
-        PULL_RELEASE_DURATION_MS * scale,
-        PULL_RELEASE_DURATION_MS * scale * Math.sqrt(start / DISMISS_DISTANCE_PX),
-      ),
+      PULL_RELEASE_DURATION_MS * scale,
     );
     // Travel runs start → 0, so a finger still moving away is negative progress
     // speed: the surface overshoots slightly before returning, as it should.
@@ -295,8 +295,9 @@ export class HeroPullSurface {
     };
     const content = overlay.querySelector<HTMLElement>('.image-detail-overlay-content');
     if (content) remember(content, 'transform');
-    overlay.querySelectorAll<HTMLElement>(`${HERO_SURFACE_SELECTOR}, ${HERO_REVEAL_SELECTOR}`)
-      .forEach((element) => remember(element, 'opacity'));
+    overlay.querySelectorAll<HTMLElement>(
+      `${HERO_SURFACE_SELECTOR}, ${HERO_REVEAL_SELECTOR}, ${HERO_CHROME_SELECTOR}`,
+    ).forEach((element) => remember(element, 'opacity'));
     if (floatingBack) remember(floatingBack, 'opacity');
   }
 

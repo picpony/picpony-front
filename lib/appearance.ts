@@ -1,13 +1,19 @@
 'use client';
 
 /**
- * The five device-local appearance preferences, and their only owner — the `LS_KEYS`/`COOKIE_KEYS`
- * mapping lives here: colour scheme, palette, motion tier, motion speed, entrance animations. One
- * module because they are one concern with one shape: a stored setting that may say "follow the
- * system", a resolved value on `<html>` as an attribute or a class, a cookie so the server puts it
- * there before first paint, and a subscription so the app bar glyph and /settings dropdowns cannot
- * disagree. None syncs to the account (`darkMode` was never in `CloudSettings`) — these describe
- * the device, not the person. **Read the root, not the store:** `motionTier()`, `currentPalette()`
+ * The six appearance preferences, and their only owner — the `LS_KEYS`/`COOKIE_KEYS`
+ * mapping lives here: colour scheme, palette, 配色方案 (多色 / 单色), motion tier, motion speed,
+ * entrance animations. One module because they are one concern with one shape: a stored setting
+ * that may say "follow the system", a resolved value on `<html>` as an attribute or a class, a
+ * cookie so the server puts it there before first paint, and a subscription so the app bar glyph
+ * and /settings dropdowns cannot disagree. Four stay on the device — the scheme, the motion tier,
+ * the speed and entrance motion describe the device, not the person (the original front end never
+ * synced `darkMode`). The palette follows the account, as the original front end's `theme` did,
+ * and 配色方案 and the custom palette's 副色相 travel with it — they are part of what "my theme"
+ * means: `lib/settingsSync.ts` notices a new stored choice through this module's subscription and
+ * writes it, and on sign-in commits the account's through `commitPalette` / `commitCustomPalette`
+ * / `commitPaletteHues` — this module stays the only writer of the keys.
+ * **Read the root, not the store:** `motionTier()`, `currentPalette()`
  * and `entranceMotion()` read the `<html>` attribute, not localStorage — that is what the CSS is
  * keyed on and therefore what is in force; a stored setting may say `system`, an attribute never does.
  */
@@ -23,9 +29,24 @@ import {
   isPaletteId,
   type PaletteId,
 } from './generated/themeColors';
+import {
+  formatCustomSpec,
+  packTones,
+  parseAccent,
+  parseCustomSpec,
+  sameCustomSpec,
+  unpackCustomTones,
+  type AccentChoice,
+  type CustomSpec,
+  type CustomTones,
+  type FaceScheme,
+  type PaletteHues,
+  type PaletteTone,
+  type ThemeFace,
+} from './paletteSpec';
 
-export { CUSTOM_PALETTE, DEFAULT_PALETTE, PALETTES };
-export type { PaletteId };
+export { CUSTOM_PALETTE, DEFAULT_PALETTE, PALETTES, packTones, unpackCustomTones };
+export type { AccentChoice, CustomSpec, CustomTones, FaceScheme, PaletteHues, PaletteId, PaletteTone, ThemeFace };
 
 export type ColorScheme = 'light' | 'dark';
 export type SchemeSetting = ColorScheme | 'system';
@@ -75,7 +96,12 @@ function writeStored(key: string, value: string) {
 }
 
 function writeCookie(name: string, value: string) {
-  document.cookie = `${name}=${value};path=/;max-age=${COOKIE_MAX_AGE};samesite=lax`;
+  try {
+    document.cookie = `${name}=${value};path=/;max-age=${COOKIE_MAX_AGE};samesite=lax`;
+  } catch {
+    /* A sandboxed or opaque-origin frame throws on any cookie write. The attribute and
+       storage still carry the preference; only the server's first paint loses it. */
+  }
 }
 
 const oneOf = <T extends string>(value: string | null, allowed: readonly T[], fallback: T): T =>
@@ -137,16 +163,33 @@ export function currentPalette(): PaletteId {
 
 /** The seed behind the custom palette, or null when none is installed — read off `<html>` like
  * `currentPalette`: the attribute is what the injected `<style>` was built from, so it is what is
- * painted. Non-null even while another theme is in force (the eleventh chip's data). */
+ * painted. Non-null even while another theme is in force (the eleventh tile's data). */
 export function currentCustomSeed(): string | null {
   return root()?.dataset.paletteSeed ?? null;
 }
 
-/** The custom palette's two hexes, packed, or null when none is installed. The *string* is the
+/** The installed custom palette's 副色相 — `null` for 自动, and while none is installed. A
+ * primitive, so it is a stable snapshot for `useSyncExternalStore` as it is. */
+export function currentCustomAccent(): AccentChoice {
+  return parseAccent(root()?.dataset.paletteAccent) ?? null;
+}
+
+/** The installed custom palette's spec — what `recoverCustomPalette` compares storage with. */
+export function currentCustomSpec(): CustomSpec | null {
+  const seed = currentCustomSeed();
+  return seed ? { seed, accent: currentCustomAccent() } : null;
+}
+
+/** The custom palette's tile hexes, packed, or null when none is installed. The *string* is the
  * subscribed snapshot, not a parsed object — `useSyncExternalStore` compares by identity, so a
  * fresh object per call would re-render for ever; callers unpack. */
 export function currentCustomTonesRaw(): string | null {
   return root()?.dataset.paletteTones ?? null;
+}
+
+/** 配色方案 in force: `mono` only while the attribute says so — 多色 is its absence. */
+export function currentPaletteHues(): PaletteHues {
+  return root()?.dataset.paletteHues === 'mono' ? 'mono' : 'multi';
 }
 
 /** Non-reactive convenience for `applyThemeColorMeta`, which is already inside a commit. */
@@ -167,7 +210,7 @@ export function motionSpeed(): MotionSpeed {
 /**
  * Whether an entrance may play — the `data-entrance` attribute, present only when the answer is no.
  * Separate from the tier: the tier bounds motion a gesture you asked for may use; this decides
- * whether the app volunteers any (scroll reveal, results cascade, `Reveal`, splash — motion that
+ * whether the app volunteers any (results cascade, `Reveal`, the app bar mark's boot draw-on — motion that
  * happens *to* you). Every reader is a call site, not a token: a `--motion-entrance` multiplier
  * beside `--motion-scale` had to come out — two keyframes serve entrances and gestures at once
  * (see globals.css). Route changes, pane swaps, overlays, status feedback are the tier's business.
@@ -209,45 +252,40 @@ export function applyPalette(id: PaletteId) {
 }
 
 /**
+ * 配色方案. The attribute is present only for 单色, so 多色 — the default — is the absence the
+ * CSS needs no selector for; the cookie carries both, so the server renders the one chosen.
+ * `primary` is the same in both, so the chrome colour does not move.
+ */
+export function applyPaletteHues(hues: PaletteHues) {
+  const el = root();
+  if (!el) return;
+  if (hues === 'mono') el.dataset.paletteHues = 'mono';
+  else delete el.dataset.paletteHues;
+  writeCookie(COOKIE_KEYS.paletteHues, hues);
+}
+
+/**
  * The eleventh palette, resolved by `lib/paletteLazy.ts` and installed here without importing the
  * recipe — which keeps HCT out of every route that reads a preference.
  */
 export interface CustomPaletteInstall {
   /** The user's hex, normalised. It **is** `primary` in the light scheme. */
   seed: string;
-  /** The two `html[data-palette='custom']` blocks, ready to be a stylesheet. */
+  /** Its 副色相: `null` for 自动. */
+  accent: AccentChoice;
+  /** The `html[data-palette='custom']` blocks, both 配色方案, ready to be a stylesheet. */
   css: string;
-  /** `primary` and `on-primary` per scheme, for the chrome colour and the picker's chip. */
-  tones: { light: PaletteTone; dark: PaletteTone };
-}
-
-/** Same two fields the ten built-ins carry in `lib/generated/themeColors.ts` — the eleventh
- * chip and the chrome draw with the same code. */
-export interface PaletteTone {
-  primary: string;
-  onPrimary: string;
-}
-
-/**
- * The four hexes of a custom install, parked on `<html>` as one attribute rather than recomputed —
- * `applyThemeColorMeta` runs inside a View Transition capture, where a `getComputedStyle` would
- * force a synchronous style recalc. And the eleventh chip must show the user's colour **while
- * another theme is in force** — the chip cannot read the always-active tokens (reading
- * `--md-sys-color-primary` there paints whichever palette is active, which turned the custom chip
- * blue); the trap `lib/generated/themeColors.ts` avoids for the other ten.
- */
-const FIELDS = ['primary', 'onPrimary'] as const;
-const packTones = (t: { light: PaletteTone; dark: PaletteTone }) =>
-  [...FIELDS.map((f) => t.light[f]), ...FIELDS.map((f) => t.dark[f])].join(' ');
-
-export function unpackCustomTones(
-  value: string | null | undefined,
-): { light: PaletteTone; dark: PaletteTone } | null {
-  const parts = (value ?? '').split(' ');
-  if (parts.length !== FIELDS.length * 2) return null;
-  const at = (offset: number) =>
-    Object.fromEntries(FIELDS.map((f, i) => [f, parts[offset + i]])) as unknown as PaletteTone;
-  return { light: at(0), dark: at(FIELDS.length) };
+  /**
+   * What the chrome colour and the picker's eleventh tile are drawn from, parked on `<html>` as
+   * `data-palette-tones` rather than recomputed — `applyThemeColorMeta` runs inside a View
+   * Transition capture, where a `getComputedStyle` would force a synchronous style recalc. And the
+   * tile must show the user's colour **while another theme is in force**, which no token read can
+   * give (reading `--md-sys-color-primary` there paints whichever palette is active, which turned
+   * the custom chip blue once); the trap `lib/generated/themeColors.ts` and `themeFaces.ts` avoid
+   * for the other ten. Packed by `packTones` (`lib/paletteSpec.ts`), which `app/layout.tsx` uses
+   * at SSR too.
+   */
+  tones: CustomTones;
 }
 
 /** Where the injected rules live. The server renders one with the same id at SSR. */
@@ -272,8 +310,10 @@ export function applyCustomPalette(install: CustomPaletteInstall) {
   }
   style.textContent = install.css;
   el.dataset.paletteSeed = install.seed;
+  if (install.accent === null) delete el.dataset.paletteAccent;
+  else el.dataset.paletteAccent = String(install.accent);
   el.dataset.paletteTones = packTones(install.tones);
-  writeCookie(COOKIE_KEYS.paletteCustom, install.seed);
+  writeCookie(COOKIE_KEYS.paletteCustom, formatCustomSpec(install));
 }
 
 export function applyMotion(tier: MotionTier, speed: MotionSpeed) {
@@ -316,8 +356,8 @@ export function applyThemeColorMeta(id: PaletteId, scheme: ColorScheme) {
   }
 }
 
-/* --- The store: one version counter for all five — a component caring about one re-rendering
-   when another moves costs a render and saves five subscriptions. --- */
+/* --- The store: one version counter for all six — a component caring about one re-rendering
+   when another moves costs a render and saves six subscriptions. --- */
 
 let version = 0;
 const listeners = new Set<() => void>();
@@ -397,11 +437,47 @@ export function commitPalette(id: PaletteId) {
  * it — that frame paints the default theme, and inside a View Transition it is the captured one.
  */
 export function commitCustomPalette(install: CustomPaletteInstall) {
-  writeStored(LS_KEYS.paletteCustom, install.seed);
+  writeStored(LS_KEYS.paletteCustom, formatCustomSpec(install));
   applyCustomPalette(install);
   writeStored(LS_KEYS.palette, CUSTOM_PALETTE);
   applyPalette(CUSTOM_PALETTE);
   flushSync(emit);
+}
+
+export function commitPaletteHues(hues: PaletteHues) {
+  writeStored(LS_KEYS.paletteHues, hues);
+  applyPaletteHues(hues);
+  flushSync(emit);
+}
+
+/**
+ * Put the user's own palette back when the request that rendered this document could not.
+ *
+ * The first paint of a custom palette needs its spec cookie (the server derives the
+ * declarations; the pre-paint script cannot). With the cookie gone — expired, cleared, or a
+ * browser refusing cookies — the page painted the default brand and *stayed* there, although
+ * storage still said `custom` with a seed: the two stores disagreed and /settings showed 默认.
+ * The same holds for a cookie that names another spec than storage does. Called once after
+ * mount by the shell: derives the palette on the lazy HCT chunk and installs it with no wipe
+ * (nothing was asked of the user), which also rewrites both cookies. A no-op — and no chunk —
+ * in every other case.
+ */
+export function recoverCustomPalette(): void {
+  if (readStored(LS_KEYS.palette) !== CUSTOM_PALETTE) return;
+  const spec = parseCustomSpec(readStored(LS_KEYS.paletteCustom));
+  if (!spec) return;
+  if (currentPalette() === CUSTOM_PALETTE && sameCustomSpec(currentCustomSpec(), spec)) return;
+  void import('./paletteLazy')
+    .then(({ resolveCustomPalette }) => resolveCustomPalette(spec))
+    .then((install) => {
+      /* The user may have picked another palette while the chunk was on its way. */
+      if (!install || readStored(LS_KEYS.palette) !== CUSTOM_PALETTE
+        || !sameCustomSpec(parseCustomSpec(readStored(LS_KEYS.paletteCustom)), spec)) return;
+      commitCustomPalette(install);
+    })
+    .catch(() => {
+      /* The recipe chunk failed: the default brand stays, as it would have anyway. */
+    });
 }
 
 export function commitMotion(setting: MotionSetting, speed: MotionSpeed) {
@@ -427,10 +503,16 @@ function useAppearance<T>(read: () => T, serverValue: T): T {
 }
 
 export const useSchemeSetting = () => useAppearance(readSchemeSetting, 'system' as SchemeSetting);
-export const useScheme = () => useAppearance(currentScheme, 'light' as ColorScheme);
+/** `serverValue` is the scheme the server painted, when the caller knows it (the app bar gets it
+ *  from the cookie), so a glyph that follows the scheme renders the same on both sides of
+ *  hydration instead of correcting itself after it. */
+export const useScheme = (serverValue: ColorScheme = 'light') =>
+  useAppearance(currentScheme, serverValue);
 export const usePalette = () => useAppearance(currentPalette, DEFAULT_PALETTE);
 export const useCustomSeed = () => useAppearance(currentCustomSeed, null as string | null);
+export const useCustomAccent = () => useAppearance(currentCustomAccent, null as AccentChoice);
 export const useCustomTonesRaw = () => useAppearance(currentCustomTonesRaw, null as string | null);
+export const usePaletteHues = () => useAppearance(currentPaletteHues, 'multi' as PaletteHues);
 export const useMotionSetting = () => useAppearance(readMotionSetting, 'system' as MotionSetting);
 export const useMotionSpeed = () => useAppearance(motionSpeed, 'default' as MotionSpeed);
 export const useEntranceMotion = () => useAppearance(entranceMotion, true);

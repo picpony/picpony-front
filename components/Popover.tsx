@@ -23,6 +23,47 @@ const MENU_MARGIN = 8;
 const VIEWPORT_PADDING = 12;
 /** 18rem — past this the panel scrolls no matter how much room it has. */
 export const POPOVER_MAX_HEIGHT = 288;
+/**
+ * Below this share of its trigger still on screen, a panel has lost the thing it hangs
+ * off and closes. Half, not "any": a trigger half under the app bar is still the control
+ * you pressed; a sliver is not, and an upward panel above it would be over the bar.
+ */
+const DETACH_BELOW = 0.5;
+
+/**
+ * Every ancestor that clips the anchor — the region it has to stay visible in. The
+ * app scroller is one (it starts below the app bar, so "scrolled under the bar" is
+ * "clipped"), and so is a dialog's scrolling body. A fixed ancestor pins everything
+ * below it to the viewport, so the walk stops there.
+ */
+function clippingAncestors(element: HTMLElement): HTMLElement[] {
+  const found: HTMLElement[] = [];
+  for (let node = element.parentElement; node && node !== document.body; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (style.overflowX !== 'visible' || style.overflowY !== 'visible') found.push(node);
+    if (style.position === 'fixed') break;
+  }
+  return found;
+}
+
+/** How much of `element`'s box is inside the viewport and every one of `clippers`. */
+function visibleFraction(element: HTMLElement, clippers: HTMLElement[]): number {
+  const rect = element.getBoundingClientRect();
+  const area = rect.width * rect.height;
+  if (area <= 0) return 0;
+  let left = Math.max(rect.left, 0);
+  let top = Math.max(rect.top, 0);
+  let right = Math.min(rect.right, window.innerWidth);
+  let bottom = Math.min(rect.bottom, window.innerHeight);
+  for (const clipper of clippers) {
+    const box = clipper.getBoundingClientRect();
+    left = Math.max(left, box.left);
+    top = Math.max(top, box.top);
+    right = Math.min(right, box.right);
+    bottom = Math.min(bottom, box.bottom);
+  }
+  return (Math.max(0, right - left) * Math.max(0, bottom - top)) / area;
+}
 
 /**
  * The height a list of `rows` menu rows will come out at, for `estimatedHeight`.
@@ -296,8 +337,20 @@ export default function Popover({
     };
   }, [open, mounted, rendering, placement.up, placement.width, anchorRef, variant, matchAnchorWidth]);
 
+  /* The latest close handler, for listeners that must not re-subscribe on every
+     render of a caller passing an inline function. */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   /* Reposition against scroll and resize rather than trapping the page: a
-     popover is not modal, the page behind it stays live.
+     popover is not modal, the page behind it stays live — until the trigger it
+     hangs off scrolls out from under it. Then it closes, as a native menu does:
+     it used to keep repositioning against a trigger that had gone under the app
+     bar, a panel painted over the chrome and attached to nothing. Closing moves
+     focus that was inside the panel back to the trigger *without scrolling to it*,
+     so the page stays where the user put it and the keyboard is not dropped.
 
      Passive and rAF-coalesced. `measure` reads `getBoundingClientRect`, so a
      non-passive capture listener made every scroll event wait on a layout read
@@ -305,11 +358,19 @@ export default function Popover({
      guards re-entry and the cleanup cancels a pending one. */
   useEffect(() => {
     if (!open) return;
+    const clippers = anchorRef.current ? clippingAncestors(anchorRef.current) : [];
     let frame = 0;
     const onReflow = () => {
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
+        const anchor = anchorRef.current;
+        if (anchor && visibleFraction(anchor, clippers) < DETACH_BELOW) {
+          const panel = panelRef.current;
+          if (panel && panel.contains(document.activeElement)) anchor.focus({ preventScroll: true });
+          onCloseRef.current(false);
+          return;
+        }
         measure();
       });
     };
@@ -320,7 +381,7 @@ export default function Popover({
       window.removeEventListener('scroll', onReflow, true);
       window.removeEventListener('resize', onReflow);
     };
-  }, [open, measure]);
+  }, [open, measure, anchorRef]);
 
   useEffect(() => {
     if (!open) return;
@@ -381,7 +442,9 @@ export default function Popover({
          at final dimensions before animating. Menu content fades in as its
          surface expands; search suggestions keep only the single panel fade. */
       className={cn(
-        'popover-scrollbar text-on-surface z-popover overflow-y-auto',
+        /* `forced-boundary`: forced colors flattens the surface tone and drops the
+           shadow, the panel's only two separations from the page under it. */
+        'popover-scrollbar text-on-surface z-popover overflow-y-auto forced-boundary',
         variant === 'search'
           ? 'rounded-2xl bg-surface-container-highest p-2 shadow-e1'
           : 'rounded-lg bg-surface-container shadow-e2',

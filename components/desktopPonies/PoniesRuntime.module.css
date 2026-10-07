@@ -1,0 +1,75 @@
+/* The content area's own box, less the home pill's band (`--app-bottom-chrome`), placed by the
+   stylesheet rather than measured: the layer sits beside the scroller in the box the scroller
+   fills (`PoniesRuntime`), so the docked drawer moves and resizes it in the very layout that moves
+   the page — no script, no second pass, never a frame behind — and the content area's rounded
+   corner clips it like the page under it. `contain: strict` keeps whatever happens inside — a
+   control placed over a sprite — from dirtying the page's own layout and style. */
+.layer {
+  position: absolute;
+  inset: 0 0 var(--app-bottom-chrome, 0px);
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    visibility 0s;
+}
+
+/* Paused — a dialog, a picture, the keyboard — the layer fades on FastEffects over an engine that
+   has stopped where it was, and comes back on the same response with every pony where it stood. */
+.layer[data-paused] {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    visibility 0s var(--duration-spring-fast-effects);
+}
+
+/* `color-scheme: light` is load-bearing. A frame whose document's colour scheme differs from the
+   one its `<iframe>` element uses is given an opaque canvas (the browser's guard against a light
+   document's text landing on a dark page) — so under the dark scheme the transparent frame was
+   painted solid white over the entire content area. The frame document declares no scheme, i.e.
+   light; the element is told the same, and the canvas stays transparent in both schemes. The
+   ponies' speech takes its colours from the tokens it is sent, not from the scheme.
+   **The size of the window, not of the layer**, anchored at the layer's leading corner and clipped
+   by it: no change of the content area — a docked drawer's run, the home pill's band — resizes
+   the frame, which is its own process. The stage the ponies walk is the layer's box, told to the
+   frame once it settles (`PoniesRuntime`). */
+.frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  pointer-events: none;
+  color-scheme: light;
+}
+
+/* One control per pony, invisible, laid over its sprite only while it matters (see
+   `PoniesRuntime`). It takes the pointer only while a fine pointer is over that pony
+   (`data-active`); otherwise every pixel of the page under a pony stays the page's. */
+.target {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: none;
+  touch-action: none;
+  cursor: grab;
+  visibility: hidden;
+}
+
+.target[data-placed] {
+  visibility: visible;
+}
+
+.target[data-active] {
+  pointer-events: auto;
+}
+
+.target:active {
+  cursor: grabbing;
+}

@@ -64,13 +64,20 @@ export default function Menu({
   const activeIndex = chosenIndex < 0 ? firstEnabled : chosenIndex;
 
   /* Closing forgets the caret, so the next open starts at the top again. In the
-     close handler rather than an effect, because closing is an event. */
+     close handler rather than an effect, because closing is an event.
+
+     **The menu returns focus itself**, before the caller hears about it. Focus is on
+     an item inside the panel, and the panel goes inert the moment it starts leaving —
+     so a caller that ignored `refocus` (the only one did) dropped a keyboard user
+     onto the body after Escape or after running an item. Owning it here makes the
+     docblock's promise true for every caller. */
   const handleClose = useCallback(
     (refocus: boolean) => {
       setChosenIndex(-1);
+      if (refocus) anchorRef.current?.focus();
       onClose(refocus);
     },
-    [onClose],
+    [onClose, anchorRef],
   );
 
   /* Focus follows the active index, which is what makes this a menu rather than
@@ -171,7 +178,8 @@ export default function Menu({
              The explicit pointer variant keeps the 40dp / 48dp density without
              two min-height utilities competing in the generated stylesheet. */
           className={cn(
-            'flex min-h-10 pointer-coarse:min-h-12 w-full items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l outline-none',
+            'flex min-h-10 pointer-coarse:min-h-12 w-full items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l',
+            'focus-visible:outline-hidden select-none touch-manipulation',
             /* The *inset* ring. The panel scrolls, and `overflow-y-auto` clips a
                row's outset ring at the ends of its scroll area. */
             'spring-fast-effects transition-[color,box-shadow,opacity] focus-visible:inset-ring-2 focus-visible:focus-ring-inset',

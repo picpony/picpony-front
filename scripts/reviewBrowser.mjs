@@ -36,7 +36,7 @@ const overrides = {
   get_messages: { success: true, messages },
   get_notifications: { success: true, notifications },
   admin_get_users: { success: true, users: [user] },
-  admin_get_notifications: { success: true, notifications },
+  admin_get_notifications: { success: true, notifications, page: 1, total_pages: 1, total: notifications.length },
   admin_get_all_messages: { success: true, messages },
   admin_get_reports: { success: true, reports: [{ id: 1, image_id: 1000, username: 'Fixture', reason: 'Fixture report', status: 'pending', created_at: '2024-01-01' }] },
   admin_get_blacklist: { success: true, blacklist: [] },

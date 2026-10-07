@@ -1,6 +1,12 @@
 import type { NextRequest } from 'next/server';
 import { revalidateTag } from 'next/cache';
-import { BLOCK_FILTERS_CACHE_TAG, clearBlockFiltersMemo } from '@/lib/blockFilters.server';
+import {
+  BLOCK_FILTERS_CACHE_TAG,
+  PUBLIC_BLACKLIST_CACHE_TAG,
+  clearBlockFiltersMemo,
+  clearPublicBlacklistMemo,
+} from '@/lib/blockFilters.server';
+import { COOKIE_KEYS, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 
 /**
  * Reverse proxy for the PicPony PHP backend.
@@ -19,7 +25,9 @@ import { BLOCK_FILTERS_CACHE_TAG, clearBlockFiltersMemo } from '@/lib/blockFilte
  * Over HTTPS every header passes through untouched.
  */
 
-const UPSTREAM_ORIGIN = 'https://picpony.top';
+// The same server-controlled staging/fixture origin used by the server readers. Never a
+// request parameter: the public proxy still has one fixed backend and one fixed API path.
+const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || 'https://picpony.top';
 const UPSTREAM_PATH = '/api.php';
 
 /**
@@ -65,7 +73,26 @@ const SKIP_RESPONSE_HEADERS = new Set([
   'content-length',
   'cdn-cache-control',
   'vercel-cdn-cache-control',
+  /* The upstream's software banner is not ours to advertise. */
+  'x-powered-by',
+  'server',
 ]);
+
+/**
+ * The app's own cookies, which the backend never reads. They are this origin's (theme, motion,
+ * the hidden-tag fingerprint, the spoiler list…), and forwarding them sent a visitor's hidden
+ * tags upstream with every API call and put kilobytes on requests the backend only needs a
+ * `PHPSESSID` from. Everything else in the header passes through untouched.
+ */
+const APP_COOKIES = new Set<string>(Object.values(COOKIE_KEYS));
+
+function backendCookies(header: string): string {
+  return header
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part && !APP_COOKIES.has(part.slice(0, part.indexOf('=') === -1 ? part.length : part.indexOf('=')).trim()))
+    .join('; ');
+}
 
 /** True when the *browser* spoke HTTPS, honouring a proxy in front of us. */
 function isSecureRequest(request: NextRequest): boolean {
@@ -106,7 +133,13 @@ async function proxy(
     request.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
   );
   request.headers.forEach((value, key) => {
-    if (!SKIP_REQUEST_HEADERS.has(key) && !connectionHeaders.has(key)) headers.set(key, value);
+    if (SKIP_REQUEST_HEADERS.has(key) || connectionHeaders.has(key)) return;
+    if (key === 'cookie') {
+      const forwarded = backendCookies(value);
+      if (forwarded) headers.set(key, forwarded);
+      return;
+    }
+    headers.set(key, value);
   });
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
@@ -138,15 +171,28 @@ async function proxy(
   }
 
   /* Only a write the backend has actually authorised and accepted may invalidate the public
-     search definitions. Expire immediately: showing old filters after a successful edit can
-     expose a picture the newly saved rules exclude. */
+     search definitions or the public image blacklist. Expire immediately: showing old rules after
+     a successful edit can expose a picture the newly saved rules exclude. */
   const action = request.nextUrl.searchParams.get('action');
-  if (request.method === 'POST' && !suffix && upstream.ok &&
-      (action === 'admin_add_block_tag' || action === 'admin_remove_block_tag')) {
+  const filterEdit = action === 'admin_add_block_tag' || action === 'admin_remove_block_tag';
+  const blacklistEdit = action === 'admin_add_blacklist' || action === 'admin_remove_blacklist';
+  const statusEdit = [
+    'admin_save_global_api_route_policy', 'admin_save_global_image_route_policy',
+    'admin_toggle_maintenance', 'admin_toggle_translate', 'admin_toggle_semantic_search',
+    'admin_save_semantic_cloud',
+  ].includes(action ?? '');
+  if (request.method === 'POST' && !suffix && upstream.ok && (filterEdit || blacklistEdit || statusEdit)) {
     const result: unknown = await upstream.clone().json().catch(() => null);
     if (result && typeof result === 'object' && 'success' in result && result.success === true) {
-      revalidateTag(BLOCK_FILTERS_CACHE_TAG, { expire: 0 });
-      clearBlockFiltersMemo();
+      if (filterEdit) {
+        revalidateTag(BLOCK_FILTERS_CACHE_TAG, { expire: 0 });
+        clearBlockFiltersMemo();
+      } else if (blacklistEdit) {
+        revalidateTag(PUBLIC_BLACKLIST_CACHE_TAG, { expire: 0 });
+        clearPublicBlacklistMemo();
+      } else {
+        revalidateTag(SITE_STATUS_CACHE_TAG, { expire: 0 });
+      }
     }
   }
 

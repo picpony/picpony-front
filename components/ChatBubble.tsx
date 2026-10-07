@@ -11,6 +11,14 @@ import { cn } from '@/lib/utils';
  * 4dp — the app's grouped-list seam. What it keeps from a bubble: each row is only
  * as wide as its own text, so the ragged right edge carries the rhythm of speech.
  *
+ * **The text is plain text.** Line breaks are kept (`pre-wrap`) and nothing is parsed as
+ * Markdown — a message is what was typed. The caller hands in the rendered pieces (links,
+ * emoji pictures); the bubble only lays them out.
+ *
+ * **An attachment is not a bubble.** A shared picture or folder is a card with its own
+ * surface (`attachment`), laid out on the speaker's side in the same column — wrapping it in
+ * the bubble's fill put a card inside a card.
+ *
  * **The tail belongs to the run, not the message.** A run (consecutive messages
  * from one sender) is one turn: only its last bubble carries the timestamp and only
  * the run has large outer corners.
@@ -32,12 +40,14 @@ export interface ChatBubbleProps {
   /** Sent by the current user — decides the side, the tone and the tail corner. */
   own: boolean;
   children: ReactNode;
+  /** A card (a shared picture, a folder) rather than text: no bubble surface around it. */
+  attachment?: boolean;
   /** Rendered under the bubble. Pass only on the last bubble of a run. */
-  timestamp?: string;
+  timestamp?: ReactNode;
   /**
-   * Delivery state, beside the timestamp. Only the newest outgoing message in a
-   * thread should carry one — a 已读 under every bubble is a column of noise, and
-   * the state of an older message is implied by the newer one below it.
+   * Delivery state, beside the timestamp — 已读 under the newest message the other side has
+   * read, 已送达 under a newer one, and the state of a message still on its way (see
+   * `receiptPlacement` in app/messages). The older ones' state is implied by those.
    */
   status?: ReactNode;
   /**
@@ -59,6 +69,7 @@ export interface ChatBubbleProps {
 export default function ChatBubble({
   own,
   children,
+  attachment = false,
   timestamp,
   status,
   startOfRun = true,
@@ -68,41 +79,49 @@ export default function ChatBubble({
   return (
     <div className={cn('@container/bubble flex', own ? 'justify-end' : 'justify-start', className)}>
       <div className={cn('flex min-w-0 max-w-[85%] flex-col @lg/bubble:max-w-[70%]', own ? 'items-end' : 'items-start')}>
-        <div
-          className={cn(
-            /* Wrapping plus `min-w-0`: a flex item's min-width is its
-               min-content width, and the min-content width of an unbroken
-               200-character string is 200 characters — one pasted URL made the
-               bubble wider than its cap and pushed the chat frame off screen.
-               Message text renders into `<span>`s, so the base layer's
-               `overflow-wrap` on p/li/td never reached here. */
-            'text-body-m min-w-0 max-w-full rounded-lg px-4 py-2 wrap-anywhere',
-            /* Two steps of one family rather than a fill and a tint: see the note on
-               the component. The ink is the container's own `on-` role either way, so
-               it follows the fill in both schemes. */
-            own
-              ? 'bg-secondary-container text-on-secondary-container'
-              : 'bg-surface-container-highest text-on-surface',
-            /* **The run is one block, cut where the rows meet.** On the speaker's
-               side a corner drops to 4dp wherever another row of the same turn
-               is against it; everything else stays 16dp, so a turn keeps the row
-               shape outside and only its seams are tight — a grouped list with
-               each row free to be as wide as its own text. 4dp, not square:
-               the shape scale has no 0dp role for anything holding text.
-               Both flags are needed; with the bottom cut unconditionally every
-               row ended in a seam, including the last, which has nothing below. */
-            !startOfRun && (own ? 'rounded-tr-xs' : 'rounded-tl-xs'),
-            !endOfRun && (own ? 'rounded-br-xs' : 'rounded-bl-xs'),
-          )}
-        >
-          {children}
-        </div>
+        {attachment ? (
+          <div className="min-w-0 max-w-full">{children}</div>
+        ) : (
+          <div
+            className={cn(
+              /* Wrapping plus `min-w-0`: a flex item's min-width is its
+                 min-content width, and the min-content width of an unbroken
+                 200-character string is 200 characters — one pasted URL made the
+                 bubble wider than its cap and pushed the chat frame off screen.
+                 `pre-wrap` keeps the sender's line breaks and spaces; the words
+                 still wrap at the bubble's edge. */
+              'text-body-m min-w-0 max-w-full whitespace-pre-wrap rounded-lg px-4 py-2 wrap-anywhere',
+              /* Forced colors flattens the two fills to one canvas; the edge is what is left
+                 of a bubble there. */
+              'forced-boundary',
+              /* Two steps of one family rather than a fill and a tint: see the note on
+                 the component. The ink is the container's own `on-` role either way, so
+                 it follows the fill in both schemes. */
+              own
+                ? 'bg-secondary-container text-on-secondary-container'
+                : 'bg-surface-container-highest text-on-surface',
+              /* **The run is one block, cut where the rows meet.** On the speaker's
+                 side a corner drops to 4dp wherever another row of the same turn
+                 is against it; everything else stays 16dp, so a turn keeps the row
+                 shape outside and only its seams are tight — a grouped list with
+                 each row free to be as wide as its own text. 4dp, not square:
+                 the shape scale has no 0dp role for anything holding text.
+                 Both flags are needed; with the bottom cut unconditionally every
+                 row ended in a seam, including the last, which has nothing below. */
+              !startOfRun && (own ? 'rounded-tr-xs' : 'rounded-tl-xs'),
+              !endOfRun && (own ? 'rounded-br-xs' : 'rounded-bl-xs'),
+            )}
+          >
+            {children}
+          </div>
+        )}
         {(timestamp || status) && (
           /* Below the bubble, not above: above, it separated a message from the one
              it was replying to with no indication which it belonged to. */
           /* `on-surface-variant` — the secondary-ink role, not `outline`, which is a
              *boundary* role. At 11px it was under the contrast the ink roles
-             guarantee, and every other timestamp on this page uses this role. */
+             guarantee, and every other timestamp on this page uses this role. A status
+             passes its own ink only for a failure. */
           <span className="text-label-s text-on-surface-variant mt-1 flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 tabular-nums">
             {timestamp}
             {status}
@@ -129,11 +148,14 @@ export default function ChatBubble({
 export function ChatRun({
   own,
   avatar,
+  label,
   children,
   className = '',
 }: {
   own: boolean;
   avatar?: ReactNode;
+  /** Who is speaking, for a screen reader — the portrait says it to everyone else. */
+  label?: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -141,11 +163,16 @@ export function ChatRun({
     <div
       className={cn('flex items-start gap-2', own ? 'flex-row-reverse' : 'flex-row', className)}
     >
-      <div className="sticky top-2 h-8 w-8 shrink-0 self-start">{avatar}</div>
+      <div className="sticky top-2 h-8 w-8 shrink-0 self-start" aria-hidden="true">
+        {avatar}
+      </div>
       {/* 2dp between the rows of one turn — `ListTokens.SegmentedGap`. Wide enough
           a gap and the 4dp seams have nothing to close against, so a run reads as
           separate rows that happen to be near each other. */}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        {label && <span className="sr-only">{label}</span>}
+        {children}
+      </div>
     </div>
   );
 }
@@ -164,7 +191,7 @@ export function ChatRun({
  * its last bubble).
  */
 export function markRuns<T>(
-  items: T[],
+  items: readonly T[],
   senderOf: (item: T) => string | number,
   breaksAfter?: (item: T, next: T) => boolean,
 ): { item: T; startOfRun: boolean; endOfRun: boolean }[] {

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { readToken } from '@/lib/hooks';
 import { requireAdminSuccess } from '@/lib/adminMutations';
+import { apiErrorMessage } from '@/lib/api/errors';
 import { showToast } from '@/components/Toast';
 
 type MutationKey = string | number;
@@ -55,7 +56,9 @@ export function useAdminMutation(token: string) {
       if (!isCurrent()) return;
       onSuccess(data);
     } catch (error) {
-      if (isCurrent()) showToast(error instanceof Error ? error.message : failure, 'error');
+      /* The backend's own sentence when it gave one, a transport failure's Chinese sentence
+         otherwise — never an engine's English (`apiErrorMessage`). */
+      if (isCurrent()) showToast(apiErrorMessage(error, failure), 'error');
     } finally {
       if (generation.current === started) locked.current.delete(key);
       if (isCurrent()) setPending({ token, keys: new Set(locked.current) });

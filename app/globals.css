@@ -30,6 +30,12 @@
    simply run. */
 @custom-variant no-motion (&:is(html[data-motion='off'] *));
 
+/* 单色, at a call site — for the few marks that show 多色 itself rather than reading a token (a
+   palette chip's lower quarters, the custom colour's 副色相 line). Keyed on the attribute rather
+   than branching on the hook, so the server's HTML is already right for a 单色 visitor and
+   hydration moves nothing. Everything else follows 配色方案 through the tokens. */
+@custom-variant mono (&:is(html[data-palette-hues='mono'] *));
+
 /* `lib/tagCategories.ts` composes these by interpolating a hue name, which the source
    scanner cannot see; safelisted here so the reason lives next to the tokens. */
 @source inline("bg-accent-{red,orange,yellow,green,teal,blue,indigo,purple}");
@@ -42,61 +48,54 @@
  * **`scripts/palette.mjs` generates every tonal role below. Run it, don't edit them.**
  * Idempotent against this file — the check that these values are the recipe's output.
  *
- * Seed #E06C9F; the basis is HCT (the space M3 quotes its numbers in). Role → tone verbatim
+ * Ramp seed #E06C9F (the mascot's mane); the basis is HCT (the space M3 quotes its numbers in). Role → tone verbatim
  * from AOSP's `ColorLightTokens.kt` / `ColorDarkTokens.kt` (v0_210).
  *
  * Tones are plain hex rather than functional colour notations, so the browser's own gamut
  * mapping cannot drift the out-of-gamut ends between engines. The accent scale below is the
  * exception and stays in OKLCH, because an even hue sweep at fixed lightness and chroma is
- * the whole point of that scale. The neutral hue is warm (not the old blue-tinted greys) so
- * the chrome reads as one material with the brand.
+ * the whole point of that scale.
+ *
+ * **These are the default theme's 多色 values**, so a visitor with no cookie needs no selector:
+ * 多色 is the default 配色方案, and its 单色 counterpart (the second colour, the accent and the
+ * neutrals back on the primary's hue — M3's TonalSpot) lives in `app/theme-palettes.css`,
+ * keyed on `data-palette-hues='mono'`. Under 多色 the neutrals are the mascot's coat — cream in
+ * light, periwinkle-lavender in dark — so the page reads as one material with her.
  * ======================================================================== */
 
 :root {
-  /* — Primary — the brand pink itself — **tone 61 light, 54 dark** — the only role off AOSP's
-     tone map, and the *direction* is inverted too: this app holds the brand pink rather than a
-     tone of it, so both schemes sit seven tones apart from their ground while reading as one
-     colour. Fills, switches, the app bar and active pills all use this.
+  /* — Primary — all ten built-in fills use direction A: the established hue (the brand's is the
+     mascot's mane, stepped 9.7° toward coral to stay clear of 碧琪), a suitable light or deep
+     register, and clearColorAt's large-area chroma ceiling. Their dark fill is seven tones lower
+     under the same register rule; see scripts/palette.mjs for each art source.
 
-     These two hexes are *given* (no artwork to read a Fill from); the other ten themes' are
-     *transcribed* byte for byte from the MLP-VectorClub guide — a coat Fill and its Shadow Fill.
-     Nothing computes a brand fill: two rules were tried and both produced an ugly yellow (at
-     every tone a rule visits, a yellow is mud or a shout). The fills span tones 20–95, which is
-     why the ink role below exists.
+     All ten built-in on-primary pairs clear 4.5:1 in both schemes. The default's paired dark
+     ink is #65032a: 9.10:1 light / 7.48:1 dark.
+     Exact manual/saved custom themes retain their established derivation and are not migrated. */
 
-     The cost, so nobody rediscovers it as a bug: white ink on it is 3.08:1 light / 3.87:1 dark,
-     under the 4.5:1 AA floor for 14px text — the label of every filled button, the active
-     pagination number, the featured badge. Not fixable in place: both levers (a tone-48 fill;
-     a P10 paired ink) have a visible price and neither is taken. The app bar is not the
-     failing case — its glyphs and wordmark are non-text and need 3:1. Five of the ten palettes
-     are light enough to take dark ink (the paired ink goes to whichever of white and P20
-     clears 3:1 on both bars), which clears the text floor outright. */
-  --md-sys-color-primary: #e06c9f;
-  --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #ffd9e5;
-  --md-sys-color-on-primary-container: #3e0022;
+  --md-sys-color-primary: #fdcad3;
+  --md-sys-color-on-primary: #65032a;
+  /* The app bar's own ink — its icons and the wordmark — a step quieter than on-primary: three
+     quarters of on-primary's contrast against the bar, floored at 4.5:1 (scripts/palette.mjs,
+     ASSERTION 19). Everything else that sits on primary keeps on-primary. */
+  --md-sys-color-on-primary-variant: #7d1a3c;
+  --md-sys-color-primary-container: #ffd9df;
+  --md-sys-color-on-primary-container: #3f0017;
 
-  /* — The brand as ink. Same hue, at whichever tone can still be read on the page: light =
-     lightest tone ≤ the fill making 2.9:1 against the page surface; dark = darkest tone ≥ the
-     dark fill making 3:1 on the dark page.
+  /* — Primary as ink. Named themes solve this separately from their fill, targeting 4.6:1
+     against tone-90 light and tone-30 dark surfaces, with 4.5:1 asserted against the actual
+     page, highest container and selection container. It serves marks and emphasized text.
+     The ramp still measures its chroma floor at tone 61; pale fills do not get muddy ramps.
+     Custom themes keep their prior role values. Prose uses on-surface/variant; links use link. */
 
-     A theme's fill and its ink are allowed to be very different colours (eight of the ten are) —
-     one answers a question about a surface, the other about a mark. The ramp the inks come off
-     is built at a chroma measured at tone 61, not the fill's own tone — see `lib/paletteRule.ts`
-     before touching that; reading it at the fill's tone gives a tint a chroma-20 ramp and turns
-     every glyph khaki-grey. The script asserts the ink's chroma floor.
-
-     The primary is a fill role (pairs with its own ink); as ink on a light surface the default
-     tone is only 2.94:1 — fine for a glyph under the 3:1 non-text bar, wrong for prose, which
-     is why body text takes the surface-variant tone and navigable text takes the link. */
-  --md-sys-color-primary-ink: #e06c9f;
+  --md-sys-color-primary-ink: #a93d5c;
 
   /* — Links. Navigable text at the brand hue's own text tone (P40 light / P80 dark). It was a
      fixed blue in both schemes; the affordance is now carried by a rest-state underline on prose
      links, so the colour no longer has to be blue. A text tone, not the brand tone: the fill
      tone on a light surface is 2.94:1, under the AA floor for body-sized text. */
-  --md-sys-color-link: #9f3869;
-  --md-sys-color-link-hover: #902c5d;
+  --md-sys-color-link: #a33857;
+  --md-sys-color-link-hover: #932c4c;
 
   /* — Focus, as one value. Solid, not tinted: a tinted ring composites to ~1.4:1 on a light
      surface, under the 3:1 WCAG 2.4.11 asks of a focus indicator.
@@ -108,9 +107,12 @@
      app bar, which is what the on-primary focus token is for. Do not "fix" a filled button
      to use it.
      The on-media focus token is the third: a control on a photograph, where neither the
-     secondary nor the brand ink has guaranteed contrast. All three are indirections, so they
-     follow a re-seed. */
-  --md-sys-color-focus: var(--md-sys-color-secondary);
+     secondary nor the brand ink has guaranteed contrast.
+
+     **A literal, not the secondary token**, which under 多色 is the theme's second colour: the
+     ring is TonalSpot's secondary in both 配色方案, because it answers "where is the keyboard"
+     and switching the scheme must not change that answer. Generated per theme like the rest. */
+  --md-sys-color-focus: #75565c;
   --md-sys-color-focus-on-primary: var(--md-sys-color-on-primary);
   /* The third and last: a control sitting on a *photograph*, where neither the secondary
      nor the brand ink has any guaranteed contrast because there is no surface underneath to
@@ -119,30 +121,40 @@
      two focus tokens and one control drawing its own. */
   --md-sys-color-focus-on-media: var(--md-sys-color-on-media);
 
-  /* — Secondary / tertiary ———————————————————————————————————————————— */
-  --md-sys-color-secondary: #735761;
+  /* — Secondary / tertiary — under 多色, the theme's **second colour** and its **accent**:
+     the default's are the mascot's periwinkle-lavender coat shading and her bows' periwinkle.
+     Every selection container reads the secondary family, so it follows the second colour for
+     free; the tertiary family is read at a few accent moments only — a favourite or like that is
+     on, the level meter, an empty state's glyph. The tertiary tone in light is a *mark* tone,
+     50 rather than M3's 40 (a warm hue turns brown at 40): white on it is not a text pair.
+     Under 单色 both families are the primary's hue, TonalSpot's secondary. */
+  --md-sys-color-secondary: #575e74;
   --md-sys-color-on-secondary: #ffffff;
-  --md-sys-color-secondary-container: #ffd9e5;
-  --md-sys-color-on-secondary-container: #2a151e;
-  --md-sys-color-tertiary: #7e5537;
+  --md-sys-color-secondary-container: #dce1fd;
+  --md-sys-color-on-secondary-container: #141b2e;
+  --md-sys-color-tertiary: #5f76ac;
   --md-sys-color-on-tertiary: #ffffff;
-  --md-sys-color-tertiary-container: #ffdcc5;
-  --md-sys-color-on-tertiary-container: #301400;
+  --md-sys-color-tertiary-container: #d9e2ff;
+  --md-sys-color-on-tertiary-container: #001944;
+  /* A selected filter chip: TonalSpot's secondary container pair in both 配色方案. The tag
+     categories own chip-shaped colour at this tone step, so an accent never wears a chip. */
+  --md-sys-color-chip-selected: #ffd9df;
+  --md-sys-color-on-chip-selected: #2b151a;
 
   /* — Surfaces — five container levels replaced a shadow-based depth mix: tonal steps
      survive dark mode; shadows don't. */
-  --md-sys-color-surface: #fff8f8;
-  --md-sys-color-surface-dim: #e6d6da;
-  --md-sys-color-surface-bright: #fff8f8;
+  --md-sys-color-surface: #fff8f6;
+  --md-sys-color-surface-dim: #e8d7cf;
+  --md-sys-color-surface-bright: #fff8f6;
   --md-sys-color-surface-container-lowest: #ffffff;
-  --md-sys-color-surface-container-low: #fff0f3;
-  --md-sys-color-surface-container: #faeaed;
-  --md-sys-color-surface-container-high: #f4e4e8;
-  --md-sys-color-surface-container-highest: #eedfe2;
-  --md-sys-color-on-surface: #21191c;
-  --md-sys-color-on-surface-variant: #514347;
-  --md-sys-color-outline: #837378;
-  --md-sys-color-outline-variant: #d5c2c7;
+  --md-sys-color-surface-container-low: #fff1eb;
+  --md-sys-color-surface-container: #fceae3;
+  --md-sys-color-surface-container-high: #f6e5dd;
+  --md-sys-color-surface-container-highest: #f0dfd7;
+  --md-sys-color-on-surface: #221a15;
+  --md-sys-color-on-surface-variant: #52443c;
+  --md-sys-color-outline: #85746b;
+  --md-sys-color-outline-variant: #d7c2b9;
 
   /* The /about plate: three roles, as tokens rather than literals in `lib/flutedGlass.ts`,
      because the band holding the plate paints its background with the same colour and the
@@ -163,9 +175,9 @@
   --md-sys-color-glass-body-b: #f0e8ea;
   --md-sys-color-glass-sheen: #ffffff;
 
-  --md-sys-color-inverse-surface: #372e31;
-  --md-sys-color-inverse-on-surface: #fdedf0;
-  --md-sys-color-inverse-primary: #ffb0ce;
+  --md-sys-color-inverse-surface: #382e29;
+  --md-sys-color-inverse-on-surface: #ffede5;
+  --md-sys-color-inverse-primary: #ffb1c1;
   --md-sys-color-scrim: #000000;
 
   /* The dim behind a dialog, sheet or modal drawer, as a token: 32% is the scrim container
@@ -271,56 +283,55 @@
 }
 
 .dark {
-  /* Tone 54 against the light scheme's 61 — same hue, seven tones deeper, so the brand keeps a
-     little separation from a near-black ground while still reading as one colour. Holding the
-     hue matters: a naive HSL darken drifts ~5° toward coral.
+  /* The brand primary is tone 79 beside light's 86. Its paired dark ink is the same
+     in both schemes and clears the text floor. Direction A keeps three character themes deep:
+     Luna, Rarity and Chrysalis retain dark bar/page edges below 3:1 (1.77 / 2.13 / 2.39), while
+     their paired white ink remains readable (10.45 / 8.68 / 7.74). Boundary contrast is reported
+     separately from text contrast. */
 
-     Seven tones is this theme's own step, not a rule: the other nine take their character's
-     **Shadow Fill** (the artist's "one step deeper"), landing 5–24 tones below the light fill.
-     The dark-shift constant survives for one caller, the custom palette, which has no shadow
-     value to read.
+  --md-sys-color-primary: #fdaebe;
+  --md-sys-color-on-primary: #65032a;
+  --md-sys-color-on-primary-variant: #7d1a3c;
+  --md-sys-color-primary-container: #841f40;
+  --md-sys-color-on-primary-container: #ffd9df;
+  /* Built-in primary-ink rises to remain readable on raised/selected dark surfaces. The
+     default's is #ffadbe, at its #fdaebe fill's own tone (the fill already reads); it clears
+     the selected container at 5.31:1. The exact-custom policy retains its old page-only ink
+     calculation. */
 
-     Deliberate divergence: three of the nine land at tone 20–26 and measure 1.42–1.72:1 against
-     this near-black page (邪茧, 露娜, 瑞瑞) — their bar has no edge in dark mode, knowingly.
-     Lifting them to the tone-42 floor makes 露娜's dark bar *lighter* than her light one. The
-     white ink on them is still 10.8–13.1:1. */
-  --md-sys-color-primary: #cb5b8d;
-  --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #811f51;
-  --md-sys-color-on-primary-container: #ffd9e5;
-  /* Equal to the primary fill here, and **in the dark scheme it is equal for every palette** —
-     the role's dark column is the brand's dark tone, unconditionally. On a near-black ground
-     the brand is already 3.98–9.74:1 across the eleven, so there is nothing for the ink step
-     to fix; it exists for the light scheme, where five palettes walk down to reach it. */
-  --md-sys-color-primary-ink: #cb5b8d;
+  --md-sys-color-primary-ink: #ffadbe;
   /* The brand hue at P80. It was a fixed light blue — 10.1:1 against the surface, 8.9:1
      against the container step, 6.8:1 against the highest step — and the tonal answer
      lands in the same place, 10.92:1 against the surface, so the swap costs nothing here
      either. See the light block for why links follow the palette at all. */
-  --md-sys-color-link: #ffb0ce;
-  --md-sys-color-link-hover: #ffc5d9;
+  --md-sys-color-link: #ffb1c1;
+  --md-sys-color-link-hover: #ffc6d0;
+  /* TonalSpot's secondary at P80, in both 配色方案 — see the light block. */
+  --md-sys-color-focus: #e4bdc3;
 
-  --md-sys-color-secondary: #e1bdc9;
-  --md-sys-color-on-secondary: #412933;
-  --md-sys-color-secondary-container: #5a3f49;
-  --md-sys-color-on-secondary-container: #ffd9e5;
-  --md-sys-color-tertiary: #f1bc96;
-  --md-sys-color-on-tertiary: #49290e;
-  --md-sys-color-tertiary-container: #633e22;
-  --md-sys-color-on-tertiary-container: #ffdcc5;
+  --md-sys-color-secondary: #bcc5eb;
+  --md-sys-color-on-secondary: #252f4d;
+  --md-sys-color-secondary-container: #3c4665;
+  --md-sys-color-on-secondary-container: #dbe1ff;
+  --md-sys-color-tertiary: #afc6ff;
+  --md-sys-color-on-tertiary: #142f60;
+  --md-sys-color-tertiary-container: #2d4578;
+  --md-sys-color-on-tertiary-container: #d9e2ff;
+  --md-sys-color-chip-selected: #5b3f45;
+  --md-sys-color-on-chip-selected: #ffd9df;
 
-  --md-sys-color-surface: #191114;
-  --md-sys-color-surface-dim: #191114;
-  --md-sys-color-surface-bright: #40373a;
-  --md-sys-color-surface-container-lowest: #130c0f;
-  --md-sys-color-surface-container-low: #21191c;
-  --md-sys-color-surface-container: #261d20;
-  --md-sys-color-surface-container-high: #30282a;
-  --md-sys-color-surface-container-highest: #3c3235;
-  --md-sys-color-on-surface: #eedfe2;
-  --md-sys-color-on-surface-variant: #d5c2c7;
-  --md-sys-color-outline: #9d8c91;
-  --md-sys-color-outline-variant: #514347;
+  --md-sys-color-surface: #131318;
+  --md-sys-color-surface-dim: #131318;
+  --md-sys-color-surface-bright: #39383f;
+  --md-sys-color-surface-container-lowest: #0e0e13;
+  --md-sys-color-surface-container-low: #1b1b21;
+  --md-sys-color-surface-container: #1f1f25;
+  --md-sys-color-surface-container-high: #2a292f;
+  --md-sys-color-surface-container-highest: #35343a;
+  --md-sys-color-on-surface: #e4e1e9;
+  --md-sys-color-on-surface-variant: #c8c5d0;
+  --md-sys-color-outline: #918f9a;
+  --md-sys-color-outline-variant: #47464f;
 
   /* The plate sits a step above the high container surface — the scheme where the glass is
      actually visible: the specular is most of a plate that would otherwise clip, and the ink is
@@ -332,9 +343,9 @@
   --md-sys-color-glass-body-b: #4c4447;
   --md-sys-color-glass-sheen: #ffe3ee;
 
-  --md-sys-color-inverse-surface: #eedfe2;
-  --md-sys-color-inverse-on-surface: #372e31;
-  --md-sys-color-inverse-primary: #9f3869;
+  --md-sys-color-inverse-surface: #e4e1e9;
+  --md-sys-color-inverse-on-surface: #303036;
+  --md-sys-color-inverse-primary: #a33857;
   --md-sys-color-scrim: #000000;
 
   /* Lighter than every container level, so a thumb still reads as lifted — which
@@ -397,6 +408,17 @@
      one layer and no spread — none of the tokens above fit. Scheme-independent and heavier
      than level 1: what is behind it is a photograph, any luminance. */
   --md-sys-elevation-drop-1: 0 1px 3px rgb(0 0 0 / 0.3);
+  /* The same mechanism for a free-standing figure — the mascot — at rest and lifted under the
+     pointer. A character is a silhouette, so a box-shadow would draw its transparent margins as a
+     grey slab; these follow its alpha instead. Scheme-independent for drop-1's reason: what is
+     behind the figure is whatever page is under it, photographs included. */
+  --md-sys-elevation-drop-2: 0 4px 10px rgb(0 0 0 / 0.16);
+  --md-sys-elevation-drop-3: 0 8px 18px rgb(0 0 0 / 0.22);
+  /* Level 2 as a whole filter, for a surface whose outline is not its box: a speech bubble, whose
+     tail a box-shadow cannot follow (the bubble's shadow stopped at its edge and left the tail
+     flat). The ladder's two layers as two drop-shadows, per scheme like the ladder; a filter takes
+     no spread, so the ambient layer is its blur alone. */
+  --md-sys-elevation-filter-2: drop-shadow(0 1px 2px rgb(0 0 0 / 0.15)) drop-shadow(0 2px 6px rgb(0 0 0 / 0.1));
 }
 
 .dark {
@@ -409,6 +431,60 @@
   --md-sys-elevation-3: 0 4px 8px 3px rgb(0 0 0 / 0.28), 0 1px 3px 0 rgb(0 0 0 / 0.4);
   --md-sys-elevation-4: 0 6px 10px 4px rgb(0 0 0 / 0.3), 0 2px 3px 0 rgb(0 0 0 / 0.4);
   --md-sys-elevation-5: 0 8px 12px 6px rgb(0 0 0 / 0.32), 0 4px 4px 0 rgb(0 0 0 / 0.45);
+  --md-sys-elevation-filter-2: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35)) drop-shadow(0 2px 6px rgb(0 0 0 / 0.25));
+}
+
+/* The UA's own parts — form-control internals, autofill, a scroller without one of the app's
+   scrollbar classes, the canvas shown during an overscroll — follow the scheme the *app* is
+   in. The colour-scheme meta in the layout only states that both are supported, so without
+   this they followed the OS: an app in dark mode on a light OS painted light widgets. */
+:root {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+}
+
+/* Shell geometry other layers position against.
+
+   The app-chrome-bottom value is the viewport y of the chrome's bottom edge: the dev banner,
+   the app bar, the maintenance notice, the offline banner and the top safe-area inset,
+   together. Toasts hang below it and the top loader rides it. These declarations are only the
+   first-paint answer (the server knows which rows it rendered, so the `:has()` forms are right
+   before any script runs); `AppLayout` then writes the measured value on `<html>` and keeps it
+   live. The dev banner row is 6px + a 32dp control + its top inset, which is at least 6px; the
+   maintenance notice under the bar is 6px + an 18px line + 6px.
+
+   The home bar footprint is what the floating 图库/论坛 pill covers at the bottom of the
+   content: 12px above it, the 48dp pill, and 12px or the bottom inset below it, whichever is
+   larger. The home route reserves exactly this at the end of its content and uses it as the
+   scroller's bottom scroll padding, so neither the footer nor a focused row lands under it. */
+:root {
+  --app-chrome-bottom: calc(4rem + env(safe-area-inset-top));
+  --home-bar-footprint: calc(3.75rem + max(0.75rem, env(safe-area-inset-bottom)));
+}
+
+:root:has([data-dev-banner]) {
+  --app-chrome-bottom: calc(6.375rem + max(0.375rem, env(safe-area-inset-top)));
+}
+
+:root:has([data-maintenance-notice]) {
+  --app-chrome-bottom: calc(5.875rem + env(safe-area-inset-top));
+}
+
+:root:has([data-dev-banner]):has([data-maintenance-notice]) {
+  --app-chrome-bottom: calc(8.25rem + max(0.375rem, env(safe-area-inset-top)));
+}
+
+/* No pull-to-refresh and no rubber-banding of the whole shell. The document never scrolls
+   (the app scroller is a `<main>` inside it), so an overscroll at the top of that scroller,
+   or a drag on non-scrolling chrome, chained to the root — where Android reloads the whole
+   app (state lost, a cold start) and iOS drags the app bar with the page. A reload is a
+   deliberate act here, not a gesture that happens by accident at the top of a gallery. */
+html,
+body {
+  overscroll-behavior: none;
 }
 
 .bbcode-content,
@@ -457,6 +533,29 @@
   padding-inline-start: 1.5em;
 }
 
+/* The markers, which preflight also removes: without them a list was a column of bare lines
+   indented for bullets that were never drawn. A nested bulleted list steps to a ring, and a
+   marker is supporting ink, not the text's. */
+.bbcode-content ul,
+.rich-text-content ul {
+  list-style-type: disc;
+}
+
+.bbcode-content ul ul,
+.rich-text-content ul ul {
+  list-style-type: circle;
+}
+
+.bbcode-content ol,
+.rich-text-content ol {
+  list-style-type: decimal;
+}
+
+.bbcode-content li::marker,
+.rich-text-content li::marker {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
 .bbcode-content li,
 .rich-text-content li {
   margin-block: 0.25em;
@@ -491,6 +590,95 @@
   object-fit: contain;
 }
 
+/* A picture holds a placeholder's box until it has arrived, then fades in on the effects clock
+   (the renderer clears the mark on load): with no size before its bytes it was a zero-height
+   line that pushed the text under it down once per picture. The failed one keeps the box and
+   says so in its alt text. */
+.bbcode-content img[data-loading],
+.rich-text-content img[data-loading],
+.bbcode-content img[data-failed],
+.rich-text-content img[data-failed] {
+  /* A length, not a percentage: inside the zoom button, whose width is its content's, a
+     percentage has nothing to resolve against and the box came out zero wide. */
+  width: 16rem;
+  min-height: 10rem;
+  background-color: var(--md-sys-color-surface-container-high);
+}
+
+.bbcode-content img[data-loading],
+.rich-text-content img[data-loading] {
+  opacity: 0;
+}
+
+.bbcode-content img,
+.rich-text-content img {
+  transition: opacity var(--duration-spring-default-effects) var(--ease-spring-effects);
+}
+
+.bbcode-content img[data-failed],
+.rich-text-content img[data-failed] {
+  display: grid;
+  place-items: center;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--text-body-s);
+}
+
+/* A picture that opens the viewer is a button around it (not inside a link, which takes the
+   press itself). The button carries the block's rhythm; the picture inside it none. */
+.bbcode-content .rt-image {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-block: 1em;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: zoom-in;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bbcode-content .rt-image > img {
+  margin-block: 0;
+}
+
+.bbcode-content .rt-image:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 2px var(--md-sys-color-focus);
+}
+
+/* A colour the author chose. It is theirs, not the palette's, so it can be dark on the dark
+   scheme or pale on the light one — rgb(44, 62, 80) on the dark page measured 1.6:1. The
+   lightness is clamped toward the page's ink (at most 0.55 on light, at least 0.72 on dark, in
+   OKLCH), hue and chroma kept: a colour stays that colour and stays legible. A highlight is a
+   tint of the chosen colour under the scheme's own ink, so neither scheme turns it into text on
+   an opaque swatch it cannot be read on. Engines without relative colour keep the colour as
+   written. */
+.bbcode-content [data-ink],
+.rich-text-content [data-ink] {
+  color: var(--rt-ink);
+}
+
+@supports (color: light-dark(oklch(from red min(l, 0.5) c h), red)) {
+  .bbcode-content [data-ink],
+  .rich-text-content [data-ink] {
+    color: light-dark(
+      oklch(from var(--rt-ink) min(l, 0.55) c h),
+      oklch(from var(--rt-ink) max(l, 0.72) c h)
+    );
+  }
+}
+
+@supports (background-color: color-mix(in oklab, red 35%, transparent)) {
+  .bbcode-content [data-highlight],
+  .rich-text-content [data-highlight] {
+    background-color: color-mix(in oklab, var(--rt-highlight) 35%, transparent);
+    border-radius: 2px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+}
+
 .bbcode-content > :first-child,
 .rich-text-content > :first-child {
   margin-top: 0;
@@ -501,25 +689,18 @@
   margin-bottom: 0;
 }
 
-/* Inline rich text — a direct message rather than a document. Keeps a pasted block from
-   adding document-sized margins inside a chat bubble. Comes *after* the prose rhythm above at
-   the same specificity, so source order is what makes it win — keep it here. */
-.rich-text-inline > :is(ul, ol, pre, blockquote, table, img, video),
-.rich-text-inline > .popover-scrollbar {
-  margin-block: 0.375rem;
-}
-
 /* Quoted text, in one treatment (there were four across the two renderers).
  *
- * A quote sits inside a reply on the low container step, so it steps *up* to the high
- * surface — an inset block reads as inset by a container step, not an alpha. The leading rule
- * is the brand ink at 4px, the same colour as the cite attribution above it, so mark and
- * attribution read as one object. No italic: Han glyphs have no true italic, and a sheared
- * glyph reads as a rendering fault.
+ * A quote is a distinct block inside the text around it, one container step away from its
+ * host: a reply sits on the low step, so its quotes take the high one. The host names its own
+ * step in `--rt-quote-surface` when it differs — the post card is the highest step, where the
+ * high one read as a lighter hole in it, so a post's quotes step the other way. The leading rule
+ * is the brand ink at 4px — a mark, which is what primary-ink is for. No italic: Han glyphs have
+ * no true italic, and a sheared glyph reads as a rendering fault.
  */
 .bbcode-content blockquote,
 .rich-text-content blockquote {
-  background: var(--md-sys-color-surface-container-high);
+  background: var(--rt-quote-surface, var(--md-sys-color-surface-container-high));
   border-inline-start: 4px solid var(--md-sys-color-primary-ink);
   border-radius: var(--radius-sm);
   padding: 0.625rem 0.875rem;
@@ -527,7 +708,8 @@
 }
 
 /* Who is being quoted: cite is the element for it, and the rule above explains away its
-   default italic. */
+   default italic. Supporting text in the supporting ink — as 12px text the brand ink measured
+   about 2.5:1 (R6-036); the rule beside it keeps the brand mark. */
 .bbcode-content blockquote > cite,
 .rich-text-content blockquote > cite {
   display: block;
@@ -536,7 +718,7 @@
   font-size: var(--text-label-m);
   font-weight: var(--text-label-m-emphasized--font-weight);
   letter-spacing: var(--text-label-m--letter-spacing);
-  color: var(--md-sys-color-primary-ink);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 /* A quote nested in a quote steps back down rather than climbing further, so a three-deep
@@ -599,20 +781,11 @@
   border-top: 1px solid var(--md-sys-color-outline-variant);
 }
 
-/* Announcement bodies arrive as server-rendered HTML whose paragraph breaks are bare br
-   runs — giving the break itself a box is the only hook available. Lived in a page-local
-   global style block (still global, loads later, silently outranks this file) alongside a
-   conflicting copy of the emoji picker's keyframes; it is here now. */
-.announcement-content br {
-  display: block;
-  content: '';
-  margin-bottom: 0.5rem;
-}
-
 @theme inline {
   /* — Colour utilities ——————————————————————————————————————————————— */
   --color-primary: var(--md-sys-color-primary);
   --color-on-primary: var(--md-sys-color-on-primary);
+  --color-on-primary-variant: var(--md-sys-color-on-primary-variant);
   --color-primary-container: var(--md-sys-color-primary-container);
   --color-on-primary-container: var(--md-sys-color-on-primary-container);
   --color-primary-ink: var(--md-sys-color-primary-ink);
@@ -626,6 +799,8 @@
   --color-on-tertiary: var(--md-sys-color-on-tertiary);
   --color-tertiary-container: var(--md-sys-color-tertiary-container);
   --color-on-tertiary-container: var(--md-sys-color-on-tertiary-container);
+  --color-chip-selected: var(--md-sys-color-chip-selected);
+  --color-on-chip-selected: var(--md-sys-color-on-chip-selected);
 
   --color-surface: var(--md-sys-color-surface);
   --color-surface-dim: var(--md-sys-color-surface-dim);
@@ -694,11 +869,12 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  /* — Type. Latin resolves in Geist; CJK glyphs miss there and fall through to Noto Sans SC. */
-  --font-sans:
-    var(--font-geist-sans), var(--font-noto-sc), 'PingFang SC', 'HarmonyOS Sans SC',
-    'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
-  --font-mono: var(--font-geist-mono), 'Noto Sans Mono CJK SC', monospace;
+  /* — Type. Latin resolves in Geist; a Han glyph misses there and falls to `--font-han`, the
+     one half of the stack that depends on the platform. It is a variable of its own, set
+     below this block, because this block is `inline`: a font utility bakes the value in, so an
+     override of this token would reach the body and miss every utility. */
+  --font-sans: var(--font-geist-sans), var(--font-han);
+  --font-mono: var(--font-geist-mono), var(--font-han-mono);
 
   /* The M3 baseline type scale, verbatim — size, line-height, weight and tracking for all
      fifteen roles.
@@ -853,18 +1029,22 @@
      "rounded" + the step suffix; spelled without prefixes since class names here would
      re-emit):
 
-        full   Button / FAB / avatar / circular icon button / count pill
-        2xl    Dialog, bottom sheet, large media container   (28dp)
-        lg     Gallery thumbnail / grid tile, chat row       (16dp, pinned to
-               HERO_TARGET_RADIUS_PX — see above)
+        full   Button / FAB / avatar / circular icon button / count pill / search bar
+        2xl    Dialog, bottom sheet, large media container,  (28dp)
+               search suggestions
+        lg     Gallery thumbnail / grid tile, chat row,      (16dp, pinned to
+               menu / popover / autocomplete panel,          HERO_TARGET_RADIUS_PX —
+               the modal drawer's trailing corners           see above)
         md     Card, grouped-list block, section surface     (12dp)
-        sm     Chip, small tag                                (8dp)
-        xs     Text field, select menu, popover, badge,       (4dp)
+        sm     Chip, small tag, filled text field, dropdown  (8dp)
+               field, menu and listbox row
+        xs     Outlined text field, colour swatch, badge,    (4dp)
                snackbar, tooltip, inline code, list seam
 
-     Text fields and menus are on the extra-small step per the token files (the field and
-     menu container-shape tokens); read the token file, not the table. The base radius token
-     exists so the bare rounded utility follows the scale. */
+     The token files put fields and menus on the extra-small step (the field and menu
+     container-shape tokens); the filled field, the dropdown field and the menu family above
+     are this app's stated refinements of that — AGENTS.md's shape table is the authority.
+     The base radius token exists so the bare rounded utility follows the scale. */
   --radius: 0.25rem; /* 4, == --radius-xs */
   --radius-xs: 0.25rem; /* 4  extra-small */
   --radius-sm: 0.5rem; /* 8  small */
@@ -1292,6 +1472,34 @@
 
 }
 
+/* --- The Chinese face, per platform ----------------------------------------
+ *
+ * Everywhere but Windows the system's own Chinese UI face is the right one and costs nothing:
+ * PingFang SC on Apple, by name; elsewhere Noto Sans CJK or Source Han Sans by name, else the
+ * generic sans-serif, which Chromium resolves per script under the document's zh-CN — that is
+ * HarmonyOS Sans on HarmonyOS and the system face on Android, reachable no other way. The Noto
+ * Sans SC web font is last, fetched only for a glyph no face on the device has.
+ *
+ * **Windows is the exception.** The one Chinese face every Windows machine has is Microsoft
+ * YaHei, drawn as Segoe UI's companion, and beside Geist it reads as dated (the owner's call).
+ * So there the web font leads, and YaHei only fills the moment before a slice arrives — the
+ * swap changes glyph shapes, never layout: a Han glyph is one em wide in both faces and every
+ * type role fixes its line height. PingFang SC is kept out of the Windows stack and HarmonyOS
+ * Sans out of both (the generic already reaches it where it is the system face): on Windows
+ * either exists only when installed by hand, often as one weight, and the matcher then paints
+ * every weight in it — with only the Black file installed, all body text rendered black.
+ * `data-os` is set from the request in `app/layout.tsx` and confirmed by the pre-paint script.
+ */
+:root {
+  --font-han: 'PingFang SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif, var(--font-noto-sc);
+  --font-han-mono: 'Noto Sans Mono CJK SC', monospace;
+}
+
+html[data-os='windows'] {
+  --font-han: var(--font-noto-sc), 'Microsoft YaHei', sans-serif;
+  --font-han-mono: var(--font-noto-sc), 'Microsoft YaHei', monospace;
+}
+
 /* --- The animation preference --------------------------------------------
  *
  * Three tiers and three speeds, on two orthogonal axes: the **tier** decides what kind of
@@ -1328,7 +1536,7 @@ html[data-motion='off'] {
  *
  * A separate preference from the tier: the tier is about how much motion a gesture *you*
  * asked for may use; this is about whether the app volunteers any of its own (the scroll
- * reveal, the grid cascade, the Reveal component, the splash's draw-on).
+ * reveal, the grid cascade, the Reveal component, the app bar mark's one-time draw-on).
  *
  * **It has no CSS half, on purpose.** It shipped as a second multiplier, but two keyframes
  * serve both kinds at once (the page-transition token is a cold mount's fade *and* a route
@@ -1439,20 +1647,8 @@ html[data-motion='reduced'] {
   --logo-keyline: 2px;
 }
 
-
-/* Once the splash's trace has finished drawing it is opaque and permanent, so the base
- * under it has no job left — and leaving it is not free: two independently antialiased
- * renderings do not cancel at the rim (the trace's partial-alpha edge lets the base's grey
- * through as a halo, which reads as out-of-register but is pure antialiasing — a single
- * alternating red/blue pixel along the same edge — so there is nothing to nudge).
- *
- * The hover cut keeps its base: that trace is temporary and has to fade back out, and there
- * must be no frame in which the wordmark is missing. */
-.logo-intro:has(.logo-trace[data-settled]) .logo-mask {
-  opacity: 0;
-  transition: opacity var(--transition-duration-standard) var(--ease-standard);
-}
-
+/* Both cuts — the app bar's one-time boot signature and the hover trace — keep the base
+   underneath and fade back out to it: there is no frame in which the wordmark is missing. */
 .logo-trace svg {
   display: block;
   width: 100%;
@@ -1483,6 +1679,34 @@ html[data-motion='reduced'] {
     position: relative;
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A control whose *hit area* is larger than what it paints (the touch-target utility's
+     pseudo-element, 48px under a finger around a 40 or 32dp box) cannot clip its own box —
+     the clip would cut the hit area out of hit-testing with it. Such a control says so with
+     the attribute's inner value and clips the wave in a host span instead: the first child,
+     covering the box, taking the control's own corner. `rippleHostOf` in `lib/ripple.ts` is
+     where the wave finds it. */
+  [data-ripple='inner'] {
+    overflow: visible;
+  }
+
+  [data-ripple-host] {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  /* The positioning half of three utilities, here for the reason the ripple attribute is:
+     a positioning utility on the same element has to win outright, not by Tailwind's sort
+     order. Each utility keeps everything else (the pseudo-elements, the isolation). */
+  .state-layer,
+  .state-layer-active,
+  .touch-target,
+  .touch-target-block {
+    position: relative;
   }
 }
 
@@ -1555,27 +1779,37 @@ html[data-motion='reduced'] {
 }
 
 /* Skeleton shimmer — a light sweep reads as "loading" better than a flat pulse. Applied
-   via the skeleton class in place of Tailwind's own pulse utility. */
-.skeleton {
-  position: relative;
-  overflow: hidden;
-}
+   via the skeleton class in place of Tailwind's own pulse utility.
 
-.skeleton::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in oklab, var(--foreground) 7%, transparent),
-    transparent
-  );
-  animation: shimmer calc(1.6s * var(--motion-scale)) linear infinite;
-  /* Pseudo-elements do not inherit animation-delay implicitly; this lets a per-tile
-     inline delay on the skeleton element stagger the sweep. */
-  animation-delay: inherit;
+   **Inside the components layer, and that is load-bearing** — the same trap the ripple
+   attribute above fell into. Unlayered, the relative positioning here outranked every
+   utility, so each call site asking for an absolutely positioned placeholder (every image's
+   shimmer, the banner's, the detail's media well) silently fell back to a static box with
+   no content: 0 by 0, and the sweep animated invisibly. Layered, a positioning or overflow
+   utility wins and everything naming none still gets these defaults. The off tier's rule
+   that hides the sweep is unlayered and still wins over the pseudo-element below. */
+@layer components {
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--foreground) 7%, transparent),
+      transparent
+    );
+    animation: shimmer calc(1.6s * var(--motion-scale)) linear infinite;
+    /* Pseudo-elements do not inherit animation-delay implicitly; this lets a per-tile
+       inline delay on the skeleton element stagger the sweep. */
+    animation-delay: inherit;
+  }
 }
 
 @keyframes shimmer {
@@ -1585,7 +1819,10 @@ html[data-motion='reduced'] {
 }
 
 /* Theme utilities frequently transition their own colours: freezing descendant transitions
-   for the lifetime of this wipe keeps the snapshot from being browser-timing dependent. */
+   for the lifetime of this wipe keeps the snapshot from being browser-timing dependent.
+   A rule over every element keyed on one attribute is a whole-document style pass whenever
+   the attribute moves, so `circularReveal` sets it inside the transition's update callback,
+   beside the scheme change — the one recalculation that change pays anyway. */
 html[data-theme-vt],
 html[data-theme-vt] *,
 html[data-theme-vt] *::before,
@@ -1624,14 +1861,8 @@ html[data-theme-vt]::view-transition-new(root) {
  * read as a flicker, and the four documented exceptions below still have to animate.
  */
 html[data-motion='off'] {
-  /* Continuous loops that are *not* progress: they stop. (The four indeterminate
-     indicators keep their own unscaled durations and are slowed rather than stopped, below.)
-     Tailwind's spin and pulse utilities are listed because their tokens are Tailwind's, so
-     the motion scale never reaches them. */
-  & .animate-spin,
-  & .animate-pulse {
-    animation-duration: 2.4s !important;
-  }
+  /* (No rule for Tailwind's own spin and pulse loops: nothing in the app uses them — the
+     indeterminate indicators are the app's own keyframes, slowed rather than stopped below.) */
 
   /* Transitions, not animations — the properties have to leave the list, not just the
      clocks: a zero-duration transform still *applies*, so a hover's end state would arrive
@@ -1660,10 +1891,10 @@ html[data-motion='off'] {
       opacity !important;
   }
 
-  /* The shimmer is a decorative loop, so it stops rather than shortening. Hidden rather
-     than un-animated: left in place with no animation, the gradient sits wherever its first
-     keyframe put it. The reduced tier keeps it (a skeleton says something is still loading,
-     same argument as the progress exceptions). */
+  /* The shimmer stops here rather than shortening, and only here: a skeleton's sweep says "this
+     is still loading", the progress indicators' argument, so the reduced tier keeps it. Hidden
+     rather than un-animated: left in place with no animation, the gradient sits wherever its
+     first keyframe put it. */
   & .skeleton::after {
     display: none;
   }
@@ -1676,11 +1907,11 @@ html[data-motion='off'] .ripple {
   display: none;
 }
 
-/* Belt and braces. Under the off tier, nothing arms this (the shared axis returns before
-   flagging a transit; the snapshot declines further upstream); under reduced both run — the
+/* Belt and braces. Under the off tier, nothing arms this (a tab switch lands in one task and
+   never flags a transit; the snapshot declines further upstream); under reduced both run — the
    axis becomes a cross-fade — and the footer's hold-out is part of that, so this must not
-   reach it. */
-html[data-motion='off'] :is(.page-chrome, [data-page-transit] .page-chrome) {
+   reach it. A placeholder's hold keeps the footer hidden here through its visibility. */
+html[data-motion='off'] .page-chrome {
   opacity: 1;
   translate: none;
   transition: none;
@@ -1711,9 +1942,10 @@ html[data-motion='off'] :is(.page-chrome, [data-page-transit] .page-chrome) {
     transparent
   );
   background-color: transparent;
-  /* 300ms, not 200: the veil shares its hover with the tile's own scale and caption fade,
-     and at 200 the darkening finished before the picture stopped moving. */
-  transition: background-color var(--transition-duration-composite) var(--ease-standard);
+  /* The standard 200ms: the veil is the whole of a tile's hover — the tile no longer scales
+     and has no caption to fade — so it is a lone colour change settling in place, not a
+     composite gesture whose parts share a longer clock (R4-051). */
+  transition: background-color var(--transition-duration-standard) var(--ease-standard);
 }
 
 .group:is(:focus-visible, :has(:focus-visible)) .media-hover-scrim {
@@ -1880,6 +2112,61 @@ html[data-motion='off'] {
   }
 }
 
+/* The room a page makes for the back affordance above it — on the page root, instead of a
+ * top padding each page picked for itself (they had converged on 56px, which reserved a dead
+ * band on a desktop where the button sits in the empty margin beside the column anyway).
+ *
+ * The button is chrome at a fixed spot (above); what varies is whether the page's column
+ * leaves room beside it. So the reservation is the button's footprint below the page gutter —
+ * its inset plus 40dp plus 16px of air, less the gutter (16px on a phone, 24px from `sm`) — and
+ * it is released by a query on the page column (`[data-page-content]` is the container) once a
+ * centred column clears the button's right edge by the same 16px: 48rem of content box for a
+ * 42rem (2xl, a form — /claim-badge) column, 62rem for a 56rem (4xl) one, 70rem for a 64rem (5xl)
+ * one.
+ *
+ * The media form is for a page that opens on full-width media (a profile's banner): nothing
+ * ever leaves room beside it, so it is never released, and the air is 8px — media below a
+ * control, not text. */
+.page-back-room,
+.page-back-room-2xl,
+.page-back-room-5xl {
+  padding-top: 3.25rem;
+}
+
+.page-back-room-media {
+  padding-top: 2.75rem;
+}
+
+@media (min-width: 640px) {
+  .page-back-room,
+  .page-back-room-2xl,
+  .page-back-room-5xl {
+    padding-top: 3rem;
+  }
+
+  .page-back-room-media {
+    padding-top: 2.5rem;
+  }
+}
+
+@container page (min-width: 48rem) {
+  .page-back-room-2xl {
+    padding-top: 0;
+  }
+}
+
+@container page (min-width: 62rem) {
+  .page-back-room {
+    padding-top: 0;
+  }
+}
+
+@container page (min-width: 70rem) {
+  .page-back-room-5xl {
+    padding-top: 0;
+  }
+}
+
 /* ---------------------------------------------------------------------------
  * Lightbox (yet-another-react-lightbox)
  *
@@ -2010,11 +2297,12 @@ html[data-motion='off'] {
 
 /* M3 shared-axis tab panes.
  *
- * The two panes stack in ONE grid cell rather than one being display-none — during a
- * switch both need a box at once, and stacking makes the row as tall as the taller pane,
- * so the scroller's scroll height can only grow while the transition runs. Absolute
- * positioning is the wrong alternative: the container collapses to the incoming pane's
- * height, the browser clamps the scroll offset, and the page snaps to the top.
+ * The two panes stack in ONE grid cell — during a switch both need a box at once, and
+ * stacking makes the row as tall as the taller pane, so the scroller's scroll height can
+ * only grow while the transition runs. Absolute positioning is the wrong alternative: the
+ * container collapses to the incoming pane's height, the browser clamps the scroll offset,
+ * and the page snaps to the top. A concealed pane (below) is a zero-height box in the same
+ * cell, so the row measures the pane on screen.
  *
  * Align-items start, not the default stretch: stretching a short forum pane to the
  * gallery's height would change every full-height element inside it.
@@ -2047,44 +2335,120 @@ html[data-motion='off'] {
 
 /* The footer belongs to the whole page on a route change. Only a tab switch
  * holds it out, because its final position depends on which pane remains.
- * Return the ink on DefaultEffects without a second positional entrance. */
+ * Return the ink on DefaultEffects without a second positional entrance.
+ * The flag sits on the footer itself (`beginPageTransit`): keyed on the scroller, every flip
+ * made the engine walk the whole page looking for the footer. */
 .page-chrome {
   transition: opacity var(--duration-spring-default-effects) var(--ease-spring-effects);
 }
 
-[data-page-transit] .page-chrome {
+.page-chrome[data-page-transit] {
   opacity: 0;
   transition: none;
 }
 
-/* React's own active flag decides normally. The motion layer's two flags
-   override it for the length of a switch, so the leaving pane keeps its box
-   past the route commit and the entering pane gets one before it. */
-[data-tab-panel]
-  > [data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
-    [data-tab-pane-entering]
-  ) {
+/* **Held back while the page is still a placeholder.** The footer sits at the bottom of the
+ * page column (`mt-auto`), so under a placeholder shorter than the window it was painted at
+ * the bottom of the screen and thrown off it when the content landed — the most repeated
+ * layout shift in the app (0.14 on a desktop, up to 0.24 on a phone, per cold load). A
+ * placeholder that stands in for a page's first load carries `data-page-loading` (the route
+ * fallback, the grid skeleton, any screen's first-load skeleton); while one is in the page,
+ * the footer keeps its box but is not shown, and it returns on the same DefaultEffects fade
+ * the tab hold uses. One element, restyled once per load. A placeholder in a tab pane that is
+ * not the one on screen does not count.
+ *
+ * **Decided by script, not by a selector**: `lib/pageLoadingHold.ts` watches the page and sets
+ * the attribute below. The same condition as a has-selector here made Blink restyle the whole
+ * page on every pane flip and every insertion (see that module). The server paints the footer
+ * held; without script it is shown. */
+.page-chrome[data-page-held] {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+@media (scripting: none) {
+  .page-chrome[data-page-held] {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* The page column is the query container the back affordance's room is measured against
+ * (see the back-affordance block). Inline-size only: the column's height stays its content's. */
+[data-page-content] {
+  container: page / inline-size;
+}
+
+/* Where focus lands after a route change or the skip link: a heading, or `main` while the
+ * page has none yet. It was not tabbed to, so it wears no ring — the next Tab continues from
+ * it, which is the whole point. */
+[data-route-focus]:focus {
+  outline: none;
+}
+
+/* The top safe-area inset is paid by whichever chrome row is on top: the dev banner while it
+ * is shown, the app bar otherwise. */
+[data-dev-banner] + [data-app-bar] {
+  padding-top: 0;
+}
+
+/* The home route's floating 图库/论坛 pill covers the bottom of the content. The route reserves
+ * the pill's footprint at the end of its content, so the footer's last line ends above it, and
+ * uses it as the scroller's bottom scroll padding, so a row reached by Tab is scrolled clear of
+ * it rather than to the very bottom edge, underneath it. */
+[data-home-bar] .app-scroller {
+  scroll-padding-bottom: var(--home-bar-footprint);
+}
+
+[data-home-bar] [data-page-content] {
+  padding-bottom: var(--home-bar-footprint);
+}
+
+/* The navigation progress line (nextjs-toploader), on the chrome's bottom edge — the dev
+ * banner, the app bar and the offline banner are all above it — rather than across the top of
+ * the window, where it ran over the banner in the bar's ink and could not be seen. In the
+ * stacking scale, not at the library's own 1600. No peg: M3's indicator has no glow. */
+html #nprogress .bar {
+  top: var(--app-chrome-bottom);
+  z-index: var(--z-top-loader);
+}
+
+html #nprogress .peg {
   display: none;
 }
 
-[data-tab-panel] > [data-tab-pane][data-tab-pane-leaving] {
-  pointer-events: none;
+/* React's own active flag decides normally. The motion layer's two flags
+   override it for the length of a switch, so the leaving pane keeps its box
+   past the route commit and the entering pane gets one before it.
+
+   **Concealed, not removed.** The content-visibility value skips the pane's rendering and
+   keeps its style and layout, so showing it again lays out the panel and reuses the pane's
+   own. Display none threw both away, and every switch rebuilt them inside the tap's own task:
+   the whole gallery or forum restyled and laid out before the first frame (80–120ms on a
+   desktop, most of a second on a slow phone). The concealed pane is a zero-height box in the
+   shared cell, and like the pane it replaces it is out of the tab order, the accessibility tree
+   and find-in-page. An engine without the property keeps display none (below). */
+[data-tab-panel]
+  > [data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
+    [data-tab-pane-entering]
+  ):not([data-tab-pane-prerender]) {
+  content-visibility: hidden;
 }
 
-/* Freeze CSS transitions inside a pane while GSAP drives it.
- *
- * GSAP writes inline opacity and translate every frame, and an inline write triggers a CSS
- * transition — so each frame was re-animated over 200ms and the switch read as mushy. Same
- * technique and reason as the theme-wipe freeze below.
- *
- * Keyed on its own flag rather than the leaving/entering flags: those decide *layout* and
- * have to outlive the animation (the entering flag stays until the route commit lands, a
- * whole fetch later on a slow list), which made the freeze outlive the movement and every
- * hover inside the arriving pane snap. `runTabTransition` sets and clears this pair. */
-[data-tab-pane-animating],
-[data-tab-pane-animating] * {
-  transition: none !important;
-}
+/* (The pre-render flag is left out of that selector and styled no further: a pane that has
+   never been shown is laid out once in an idle slice exactly as a switch would show it — in
+   place, in flow — and concealed again in the same task, before any frame could paint it.
+   See `prerenderPane`. Anything less than the real placement, a size containment or a clip,
+   leaves a layout the first real show cannot reuse.) */
+
+/* (No pointer-events rule on the leaving pane. The property is inherited, so the flag restyled
+   the leaving pane's whole subtree at the start of every switch; a press on either pane during
+   a run finishes the run instead — see `runTabTransition`.) */
+
+/* (No transition freeze here. While a switch runs, the nodes it moves carry the freeze inline —
+   see `playSharedAxis`. A rule reaching every descendant of both panes, keyed on a flag, cost
+   a whole-pane style recalculation at both ends of every switch.) */
 
 /* The arriving pane paints above the departing one: on a phone the two are the same width,
    and any sub-pixel overlap during the crossover reads as the new page landing *under* the
@@ -2094,19 +2458,26 @@ html[data-motion='off'] {
 }
 
 /* The transition has settled but the route may not have committed, in which case React is
-   *also* still marking the outgoing pane active — and settle's property cleanup has just
-   restored it to full opacity. Without this the old page reappears on top at the very end.
-   `useTabPanes` clears the flag once the commit lands. */
+   *also* still marking the outgoing pane active — and settle's cancelled animations have just
+   put it back at rest. Without this the old page reappears on top at the very end.
+   The tab driver clears the flag once the commit lands. */
 [data-tab-panel] > [data-tab-pane][data-tab-pane-done] {
-  display: none;
+  content-visibility: hidden;
 }
 
-/* Belt and braces, and only for the off tier — `startTabTransition` already returns before
-   setting the flag there. Under reduced the outgoing pane is mid-cross-fade and needs
-   its box, so hiding it would take the fade away. */
-html[data-motion='off'] [data-tab-panel] > [data-tab-pane][data-tab-pane-leaving] {
-  display: none;
+@supports not (content-visibility: hidden) {
+  [data-tab-panel]
+    > [data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
+      [data-tab-pane-entering]
+    ),
+  [data-tab-panel] > [data-tab-pane][data-tab-pane-done] {
+    display: none;
+  }
 }
+
+/* (No off-tier rule hiding the leaving pane. Under 关闭 the driver flags the outgoing pane
+   before React's commit and lands the switch in the same task, so the flag is never painted —
+   and it is what keeps the pane's box while the scroll offset and the height floor are read.) */
 
 /* Element defaults MUST stay inside the base layer: unlayered CSS outranks every cascade
    layer, so an unlayered heading size would beat a type-scale utility on the same element. */
@@ -2163,6 +2534,81 @@ html[data-motion='off'] [data-tab-panel] > [data-tab-pane][data-tab-pane-leaving
   }
 }
 
+/* The gallery masonry, placed by CSS — see `lib/masonry.ts` for why the layout is not chosen
+ * in script. The script computes each card's slot for all three column counts; the media
+ * queries below pick one, so the server's HTML is already the right layout on every device.
+ *
+ * The outer element is the size container the columns divide: `cqw` is what lets a *vertical*
+ * offset be a multiple of the column width (a percentage `top` would resolve against the
+ * height). The grid is absolutely positioned inside, so it takes its height from the tallest
+ * column, which the script hands over as a `max()` per count. The gap and the counts are the
+ * old flex layout's exactly: 8px under `sm` and 16px from it, 2 / 3 / 4 columns at the phone,
+ * `md` and `lg` widths. */
+.masonry {
+  container-type: inline-size;
+}
+
+.masonry-grid {
+  --masonry-gap: 0.5rem;
+  --masonry-n: 2;
+  --masonry-w: calc((100cqw - (var(--masonry-n) - 1) * var(--masonry-gap)) / var(--masonry-n));
+  position: relative;
+  height: var(--mh2);
+  /* The grid is a relayout boundary too — its height is the placement's, its width its
+     container's — so mounting the next chunk of a page lays out the grid, not the page. */
+  contain: size layout style;
+}
+
+.masonry-item {
+  --mc: var(--mc2);
+  --ma: var(--ma2);
+  --mk: var(--mk2);
+  position: absolute;
+  width: var(--masonry-w);
+  left: calc(var(--mc) * (var(--masonry-w) + var(--masonry-gap)));
+  top: calc(var(--ma) * var(--masonry-w) + var(--mk) * var(--masonry-gap));
+  /* **Each slot is a relayout boundary.** Its height is the card's own (the aspect the placement
+     above already stacks by), so it can take size and layout containment: a picture decoding,
+     a failure plate or a spoiler cover inside one card lays out that card and stops there. Without
+     it every such change dirtied the path up to the document and each layout pass walked the
+     whole gallery — about 1,700 objects to settle a handful (R12-010). No paint containment: the
+     entrance cascade moves a card a few pixels outside its slot, and that must not be clipped. */
+  height: calc(var(--mr, 1) * var(--masonry-w));
+  contain: size layout style;
+}
+
+@media (min-width: 640px) {
+  .masonry-grid {
+    --masonry-gap: 1rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .masonry-grid {
+    --masonry-n: 3;
+    height: var(--mh3);
+  }
+
+  .masonry-item {
+    --mc: var(--mc3);
+    --ma: var(--ma3);
+    --mk: var(--mk3);
+  }
+}
+
+@media (min-width: 1024px) {
+  .masonry-grid {
+    --masonry-n: 4;
+    height: var(--mh4);
+  }
+
+  .masonry-item {
+    --mc: var(--mc4);
+    --ma: var(--ma4);
+    --mk: var(--mk4);
+  }
+}
+
 /* Isolate each gallery tile's paint invalidation while its image decodes or its chips change.
  *
  * **Content-visibility auto was tried here and measured worse — do not add it.** The tile's
@@ -2216,15 +2662,6 @@ html[data-motion='off'] [data-tab-panel] > [data-tab-pane][data-tab-pane-leaving
   pointer-events: none;
 }
 
-/* During a close the route shell is visually leaving, but new native input must reach the
-   already-visible gallery. The old scroller remains scrollable so an already-latched stream
-   can publish its residual delta to the gallery. */
-html[data-image-hero-transition='back'] [data-image-detail-overlay],
-html[data-image-hero-transition='back'] [data-image-detail-overlay] *,
-html[data-image-hero-transition='back'] [data-image-detail-floating-back='route'] {
-  pointer-events: none !important;
-}
-
 /* Gallery cards use paint containment, which clips descendant outlines to the padding box.
    A UA rectangular focus ring then survives only as four corner stubs on rounded thumbs.
    Suppress it for mouse/history focus; keyboard uses an *inset* ring that stays inside the
@@ -2241,17 +2678,53 @@ a:has([data-image-hero-role='thumbnail']):-moz-focusring {
  * The box-shadow form failed twice: it was an alpha on a non-focus token (the surface ink
  * rather than the focus role), and an inset shadow paints *below* the element's descendants,
  * so the thumbnail box and its image covered the 2px band exactly. An after-pseudo-element
- * at inset 0 paints above both; an inherited border-radius tracks the anchor's corner. A
- * z-index of 3 clears the card's own chrome layer at 2 — a small local integer, since this
- * stacks against the card's children. */
+ * at inset 0 paints above both; an inherited border-radius tracks the anchor's corner. Its
+ * z-index clears the card's chrome and failure plate and the banner's caption layer — small
+ * local integers, since this stacks against the card's own children.
+ *
+ * **It is drawn on the picture**, so it is the on-media ring with a dark companion inside it
+ * (R4-044): the secondary focus colour has no guaranteed contrast against art, and a white ring
+ * alone vanishes against a pale sky — two pixels of white and one of the scrim hold on light and
+ * dark pictures alike, the same pairing the lightbox's controls rely on. Inward, as every ring in
+ * a paint-contained box must be. */
 a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 21;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 2px var(--md-sys-color-focus);
+  box-shadow:
+    inset 0 0 0 2px var(--md-sys-color-focus-on-media),
+    inset 0 0 0 3px var(--md-sys-color-scrim);
   pointer-events: none;
+}
+
+/* The card's spoiler cover and failure plate size their content to the card: a landscape card
+ * on a phone is ~180 by 100px, where the cover's glyph, label, tags and hint do not all fit. The
+ * hint goes first, then the failure caption, then the tag line — the glyph, the label and the
+ * control always stay. Size containers: the boxes are absolutely inset, so their size comes from
+ * the card, never from what is inside them. */
+.card-spoiler,
+.card-failure {
+  container-type: size;
+}
+
+@container (max-height: 8.5rem) {
+  .card-spoiler-hint {
+    display: none;
+  }
+}
+
+@container (max-height: 7rem) {
+  .card-failure-caption {
+    display: none;
+  }
+}
+
+@container (max-height: 5.5rem) {
+  .card-spoiler-tags {
+    display: none;
+  }
 }
 
 /* Shared image transition: a single flyer stays inside the app content area. */
@@ -2260,10 +2733,12 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
      the hero handoff cannot shift. */
   --image-detail-overlay-offset: 1.5rem;
   --image-detail-page-padding: 1rem;
-  /* The strip's header height: one metadata row below the small breakpoint, two above. It
-     must equal the rendered height exactly — Stage and route are laid out against it during a
-     flight — so it is derived from the same tokens that produce the row rather than typed as
-     a rem value. */
+  /* The strip's header height: two metadata rows at every width (`DetailHeader` fixes the two,
+     and truncates rather than wraps). It must equal the rendered height exactly — Stage and
+     route are laid out against it during a flight, and a strip that grew after the landing
+     moved the picture — so it is derived from the same tokens that produce the rows rather
+     than typed as a rem value. It promised one row from 640px up, where six items fit only on
+     the widest screens: between 640 and 1279 the strip wrapped and the picture hopped. */
   --image-detail-meta-line: calc(var(--text-body-m) * var(--text-body-m--line-height));
   --image-detail-header-height: calc(1.5rem + 2 * var(--image-detail-meta-line) + 0.25rem);
 }
@@ -2272,13 +2747,29 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   [data-image-detail-host] {
     --image-detail-overlay-offset: 1.5rem;
     --image-detail-page-padding: 1.5rem;
-    /* One row fits from here up — the six items stop wrapping. */
-    --image-detail-header-height: calc(1.5rem + var(--image-detail-meta-line));
   }
 }
 
 .image-detail-overlay-content {
   padding-top: var(--image-detail-overlay-offset);
+}
+
+/* 上一张 / 下一张 on the routed detail: the dialog's trailing actions, pinned opposite the back
+ * affordance at the same inset and on the same layer, so the two read as one row of chrome. */
+.image-detail-step {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: var(--z-hero-back);
+  display: flex;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .image-detail-step {
+    top: 1rem;
+    right: 1rem;
+  }
 }
 
 .image-detail-page {
@@ -2294,9 +2785,11 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   min-height: var(--image-detail-header-height);
 }
 
-/* Freeze route geometry only while Stage and route must be pixel-identical.
-   After handoff, long-title expansion is allowed to grow the real header. */
-html[data-image-hero-transition] .image-detail-header-route {
+/* Freeze route geometry only while Stage and route must be pixel-identical — the opening legs,
+   which end in the handoff. After it, long-title expansion is allowed to grow the real header.
+   Not a close: no Stage is involved, and freezing there collapsed an expanded header under the
+   picture just as the return measured it, so the flight took off from a box that had moved. */
+html[data-image-hero-state^='opening'] .image-detail-header-route {
   height: var(--image-detail-header-height);
   max-height: var(--image-detail-header-height);
   overflow: hidden;
@@ -2357,8 +2850,11 @@ html[data-image-hero-transition] #nprogress {
 /* The zoom affordance stands down for the length of a flight: the stage's landing target
  * renders no children, so the handoff frame would otherwise conjure a 40dp control into the
  * corner and the close frame take it away — chrome appearing out of nothing at the two
- * moments the transition says "this is one object". */
-html[data-image-hero-transition] [data-image-detail-zoom] {
+ * moments the transition says "this is one object". The step arrows are the same kind of
+ * chrome (the Stage draws none) and stand down with it; on the buttons rather than their group,
+ * so their own opacity transition fades them in after a landing, while the pull's veil on the
+ * group follows the finger with none. */
+html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detail-step] > *) {
   opacity: 0 !important;
   transition: none !important;
 }
@@ -2462,8 +2958,26 @@ html[data-image-hero-transition] [data-image-detail-zoom] {
   will-change: transform;
 }
 
+/* The detail scrolls vertically and never sideways. Its only horizontal movement is its own —
+ * a step's slide and a swipe's drag, both transforms — so nothing may make the box a horizontal
+ * scroller: a line too long for a phone (a source URL once) or a transform's own overflow turned
+ * the page into one, and a sideways drag then panned the detail instead of paging it. The Stage
+ * wears the same class, so the two still measure identically (no horizontal scrollbar on either). */
 .image-detail-overlay-scroll {
   overscroll-behavior: contain;
+  overflow-x: hidden;
+}
+
+/* During a close the detail surfaces are visually leaving, but new native input must reach the
+ * gallery already coming back; the old scroller stays scrollable, so an already-latched stream
+ * can relay its residual delta. Keyed on each leaving surface (the engine marks them, see
+ * `syncLeaving`) rather than on a document flag: a universal descendant rule under a flag on the
+ * root is invalidated by the attribute's name, so every open and close began with a style pass
+ * over the whole document (R12-009). Here the pass is bounded by the subtree that is leaving. */
+[data-image-detail-overlay][data-image-hero-leaving],
+[data-image-detail-overlay][data-image-hero-leaving] *,
+[data-image-detail-floating-back][data-image-hero-leaving] {
+  pointer-events: none !important;
 }
 
 /*
@@ -2480,6 +2994,7 @@ html[data-image-hero-transition] [data-image-detail-zoom] {
 
 [data-image-hero-pulling] [data-image-detail-surface],
 [data-image-hero-pulling] [data-image-detail-reveal],
+[data-image-hero-pulling] [data-image-detail-chrome],
 [data-image-detail-floating-back][data-image-hero-pulling] {
   will-change: opacity;
 }
@@ -2535,6 +3050,16 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 
 .main-scrollbar {
   scrollbar-gutter: stable;
+}
+
+/* The page scroller reserves the gutter on **both** edges. On one edge only, every centred
+   page column sat half a gutter left of its section's centre, and a full-bleed band (the
+   /about plate) touched the left edge and stopped a gutter short of the right. Both edges
+   keep what the reservation is for — no sideways shift between a short route and a long one
+   — and make the insets symmetric. A classic scrollbar costs its width twice; an overlay
+   scrollbar (phones, most trackpads) costs nothing either way. */
+.app-scroller {
+  scrollbar-gutter: stable both-edges;
 }
 
 /* An image-detail overlay brings its own scroller and covers the gallery completely, so the
@@ -2659,21 +3184,37 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * component bounds"). Compact controls can keep their painted box while the
  * hit area follows the pointer's floor.
  *
- * Do not combine with the ripple attribute — its hidden overflow clips the pseudo-element
- * out of hit-testing too; those take the touch-size utility. Do not use on an inline target
+ * Combine with the ripple attribute only in its inner form — the plain attribute's hidden
+ * overflow clips the pseudo-element out of hit-testing too. The button, icon-button, chip and
+ * select primitives clip their wave in an inner host and take this; a control that cannot
+ * takes the touch-size utility instead. Do not use on an inline target
  * in prose: SC 2.5.8 exempts one constrained by the line-height, because a 48px band on a
  * line steals clicks from the lines above and below. */
 @utility touch-target {
-  position: relative;
-
+  /* Positioned by the base layer's rule for this class (beside the ripple attribute), so an
+     absolute or fixed utility on the same element wins outright.
+     Negative insets rather than a centred box and a translate: an axis where the control
+     already clears the floor gets an inset of exactly 0, the control's own edges, where the
+     translated box rounded about 1px past a fractional edge into the neighbour (measured on
+     a row of tabs: the last pixel of each tab answered to the next). */
   &::after {
     content: '';
     position: absolute;
-    left: 50%;
-    top: 50%;
-    width: max(100%, var(--touch-floor));
-    height: max(100%, var(--touch-floor));
-    translate: -50% -50%;
+    inset-block: min(0px, calc((100% - var(--touch-floor)) / 2));
+    inset-inline: min(0px, calc((100% - var(--touch-floor)) / 2));
+  }
+}
+
+/* The same floor on the block axis only, for a target whose inline neighbour is another
+ * target in the same object — an input chip's label and its remove cross. Extending those
+ * sideways would put one on top of the other (a tap on the last glyph of a tag removing it),
+ * so each keeps its own inline extent and only grows to the floor's height. */
+@utility touch-target-block {
+  &::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    inset-block: min(0px, calc((100% - var(--touch-floor)) / 2));
   }
 }
 
@@ -2698,11 +3239,38 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   }
 }
 
+/* The cue a hidden scrollbar leaves behind: a row with more to show fades out at the edge
+ * the rest is behind — and only there, so a row scrolled to its start does not fade its
+ * first item. The row's owner keeps the two data attributes current (`Tabs` does); the
+ * fade is a mask, so it dims whatever the row holds without a colour of its own and
+ * scrolls nowhere. 32px, the room `Tabs` leaves a selected tab from the edge, so the tab
+ * the user is on is never inside the fade. The opaque stops are the mask's alpha, not a
+ * colour. */
+@utility scroll-fade-x {
+  --scroll-fade-start: 0px;
+  --scroll-fade-end: 0px;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--scroll-fade-start),
+    black calc(100% - var(--scroll-fade-end)),
+    transparent
+  );
+
+  &[data-overflow-start] {
+    --scroll-fade-start: 2rem;
+  }
+
+  &[data-overflow-end] {
+    --scroll-fade-end: 2rem;
+  }
+}
+
 /* M3 Expressive grouped list: a run of related rows is one block of material that has been
  * *cut*, not a stack of cards. Outer corners on the large step, every cut edge inside on the
- * extra-small step, a 2px seam between rows. Expressed with sibling selectors rather than
- * first/last-child pseudo-classes because the rows sit next to a section heading; the has()
- * sibling selector asks "is another row after me", which is the actual question.
+ * extra-small step, a 2px seam between rows. The first row is found by a sibling selector
+ * rather than the first-child pseudo-class because the rows sit after a section heading;
+ * the last one by counting only rows from the end (below).
  */
 .m3-row {
   border-radius: var(--radius-xs);
@@ -2715,14 +3283,57 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   border-start-end-radius: var(--radius-lg);
 }
 
-/* Last row of a run: nothing of the same kind after it. */
-.m3-row:not(:has(+ .m3-row)) {
+/* Last row of a run: the last row among its siblings. **One run per parent** is the
+   contract that makes this exact — every list in the app already renders one (a second run
+   wants its own wrapper), and a trailing non-row sibling such as a pager is fine. It was a
+   sibling has() test, which Chromium re-evaluates for every row whenever *any* row's inline
+   style changes — and the GSAP tab lean wrote inline styles on every row of a forum page each
+   frame (327 has()-driven invalidations in one switch; its compositor successor writes a row's
+   inline style twice a run, to restack it and to give it back). A positional pseudo-class is
+   invalidated by insertions and removals only. */
+.m3-row:nth-last-child(1 of .m3-row) {
   border-end-start-radius: var(--radius-lg);
   border-end-end-radius: var(--radius-lg);
 }
 
+/* Forced colors flattens the row tone and the 2px seam into one canvas, so a run would
+   read as a single undivided block: each row takes the system edge instead (see the
+   forced-colors block beside the focus rings, whose focus outline replaces it). */
+@media (forced-colors: active) {
+  .m3-row {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+}
+
 .m3-row + .m3-row {
   margin-top: 2px;
+}
+
+/* A row on its way out of a run (`PresenceList` pins it out of the flow and takes it out of the
+   run, marking it `data-presence-row`) is invisible to the run's own shape: the row after it keeps
+   the seam and the cut corners it will have once the leaver is gone. Without this the row after a
+   deleted one rounded its top as if it opened a new run for the length of the fade, then snapped
+   back and dropped 2px when the leaver was removed. Up to three leavers in a row — a burst of
+   deletes faster than one fade. */
+.m3-row + [data-presence-row] + .m3-row,
+.m3-row + [data-presence-row] + [data-presence-row] + .m3-row,
+.m3-row + [data-presence-row] + [data-presence-row] + [data-presence-row] + .m3-row {
+  margin-top: 2px;
+  border-start-start-radius: var(--radius-xs);
+  border-start-end-radius: var(--radius-xs);
+}
+
+/* `DataTable`'s header row exists only in its wide layout; below that width it is not
+   displayed but is still the run's first row as far as the sibling rules can tell, so
+   the first data row is given the run's opening shape (and no seam above it) here. The
+   width is the table's own `@2xl` container step. */
+@container table (width < 42rem) {
+  [data-table-header] + .m3-row {
+    margin-top: 0;
+    border-start-start-radius: var(--radius-lg);
+    border-start-end-radius: var(--radius-lg);
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -2775,8 +3386,17 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   --field-trail: 0.5rem;
 }
 
+/* A trailing *icon* drawn inside the control itself — the labelled `Select`'s arrow — sits
+   on M3's 12dp trailing-icon inset rather than the text's 16dp. */
+.m3-field[data-trail='icon'] {
+  --field-trail: 0.75rem;
+}
+
+/* The control: a text input, a textarea, or — for the labelled `Select`, M3's exposed
+   dropdown — the combobox button that stands where the input would. */
 .m3-field > input,
-.m3-field > textarea {
+.m3-field > textarea,
+.m3-field > button {
   /* Above the outline overlay, or the overlay eats the caret. A small integer, not a
      z-index token: siblings inside one component take no part in the app's stacking order. */
   position: relative;
@@ -2791,8 +3411,65 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 }
 
 .m3-field > input:disabled,
-.m3-field > textarea:disabled {
+.m3-field > textarea:disabled,
+.m3-field > button:disabled {
   cursor: not-allowed;
+}
+
+/* The engine's own chrome inside the box, none of which speaks this system: Chromium's
+   blue search cancel cross (no token colour, no hit area — `SearchInput` draws its own clear
+   control), the number stepper (a grey spinner inside a filled field), and Edge's password
+   eye (a second, differently drawn reveal beside `Input`'s own). One rule per vendor
+   pseudo-element: an engine that does not know one drops the whole selector list. */
+.m3-field > input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.m3-field > input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.m3-field > input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.m3-field > input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.m3-field > input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.m3-field > input::-ms-reveal {
+  display: none;
+}
+
+.m3-field > input::-ms-clear {
+  display: none;
+}
+
+/* Autofill. The engine paints its own tint *inside* the input's square box with an
+   important declaration no author rule can outrank — a light-blue rectangle inside a 4dp
+   outline, an 8dp fill and a pill alike, and in the dark scheme a pale plate under
+   near-white text. Clipping the background to the glyphs puts that tint where the text is
+   already painted over it, whatever the field sits on (an outlined field has no fill of its
+   own to paint over it with); the fill colour and caret keep the field's own ink, which the
+   engine's forced text colour would otherwise replace. The transition delay is the
+   long-standing second line for an engine that ignores the clip on its own tint. */
+.m3-field > input:is(:autofill, :-webkit-autofill) {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: var(--md-sys-color-on-surface);
+  caret-color: var(--md-sys-color-on-surface);
+  transition:
+    background-color 0s 600000s,
+    color 0s 600000s;
 }
 
 /* The visible label. Pointer events are off so clicking where it sits still focuses the
@@ -2924,9 +3601,9 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 
 /* The gap to the trailing controls: 8px, which with a 40dp control in a 56dp box is the
    same 8px it has above and below. (One inset for every field size: the number is
-   (field height − control height) / 2.) */
+   (field height − control height) / 2.) It read 12px here while this comment said 8. */
 .m3-field[data-size='lg'][data-trail] {
-  --field-trail: 0.75rem;
+  --field-trail: 0.5rem;
 }
 
 .m3-field[data-size='lg'] > fieldset {
@@ -2940,9 +3617,13 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 /* ---------------------------------------------------------------------------
  * The small size — the dense field, 40dp: the one height M3 does not name. A field in a
  * filter bar or settings row is chrome; its neighbours are a 40dp select and a 32dp chip,
- * and matching them stops one row running at two heights. Unlabelled only, and no trailing
- * control (which keeps the "one inset for every size" claim true). 16px inline matches the
- * small select's own padding, so a field and a dropdown put text on the same columns.
+ * and matching them stops one row running at two heights. Unlabelled only. 16px inline
+ * matches the small select's own padding, so a field and a dropdown put text on the same
+ * columns.
+ *
+ * Its trailing slot holds one **32dp** control (the filter field's clear button), and the
+ * inset is the same formula as every other size — (40 − 32) / 2 = 4px, all the way round —
+ * so "one inset for every field size" stays true rather than being forked.
  * --------------------------------------------------------------------------- */
 .m3-field[data-size='sm'] {
   --field-lead: 1rem;
@@ -2953,8 +3634,17 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   --field-lead: 2.5rem;
 }
 
+.m3-field[data-size='sm'][data-trail] {
+  --field-trail: 0.25rem;
+}
+
 .m3-field[data-size='sm'] > .m3-field-lead {
   inset-inline-start: 0.75rem;
+}
+
+.m3-field[data-size='sm'] > .m3-field-trail {
+  gap: 0.25rem;
+  padding-inline-end: 0.25rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -3033,26 +3723,31 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 
 /* Floated: focused, or holding a value. The placeholder-shown pseudo-class is the test for
    "empty" and needs a non-empty placeholder to work against (hence the input component's
-   single-space fallback). */
+   single-space fallback). A labelled `Select` has no placeholder to test, so it states the
+   same fact with the filled attribute. */
 .m3-field:focus-within > label,
+.m3-field[data-filled] > label,
 .m3-field:has(> :is(input, textarea):not(:placeholder-shown)) > label {
   transform: translateY(-50%) scale(0.75);
 }
 
 .m3-field:focus-within > fieldset > legend,
+.m3-field[data-filled] > fieldset > legend,
 .m3-field:has(> :is(input, textarea):not(:placeholder-shown)) > fieldset > legend {
   max-width: 100%;
 }
 
 /* A placeholder alongside a label would sit on top of the resting label, so it waits until
-   the label is out of the way. */
+   the label is out of the way. (The `Select` placeholder is a span in its button.) */
 .m3-field[data-labelled] > input::placeholder,
-.m3-field[data-labelled] > textarea::placeholder {
+.m3-field[data-labelled] > textarea::placeholder,
+.m3-field[data-labelled] > button [data-field-placeholder] {
   color: transparent;
 }
 
 .m3-field[data-labelled]:focus-within > input::placeholder,
-.m3-field[data-labelled]:focus-within > textarea::placeholder {
+.m3-field[data-labelled]:focus-within > textarea::placeholder,
+.m3-field[data-labelled]:focus-within > button [data-field-placeholder] {
   color: var(--md-sys-color-on-surface-variant);
 }
 
@@ -3060,7 +3755,7 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
    this control's focus indicator (see `Input.tsx`). Scoped to the labelled variant — these
    three rules *are* the outlined language, and an unlabelled field no longer speaks it. */
 @media (hover: hover) {
-  .m3-field[data-labelled]:hover:not(:focus-within):not([data-invalid]):not(:has(> :is(input, textarea):disabled)) > fieldset {
+  .m3-field[data-labelled]:hover:not(:focus-within):not([data-invalid]):not(:has(> :is(input, textarea, button):disabled)) > fieldset {
     border-color: var(--md-sys-color-on-surface);
   }
 }
@@ -3074,7 +3769,7 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 }
 
 .m3-field:focus-within > label {
-  color: var(--md-sys-color-primary-ink);
+  color: var(--md-sys-color-on-surface);
 }
 
 .m3-field[data-labelled][data-invalid] > fieldset {
@@ -3090,15 +3785,16 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
    container 0.04, because they start at different strengths. Fading everything at 0.38 left
    a disabled outlined field three times too heavy on the border. Split out, each part fades
    from its own resting value, which also keeps both variants correct without a second rule. */
-.m3-field:has(> :is(input, textarea):disabled) > label,
-.m3-field:has(> :is(input, textarea):disabled) > input,
-.m3-field:has(> :is(input, textarea):disabled) > textarea,
-.m3-field:has(> :is(input, textarea):disabled) > .m3-field-lead,
-.m3-field:has(> :is(input, textarea):disabled) > .m3-field-trail {
+.m3-field:has(> :is(input, textarea, button):disabled) > label,
+.m3-field:has(> :is(input, textarea, button):disabled) > input,
+.m3-field:has(> :is(input, textarea, button):disabled) > textarea,
+.m3-field:has(> :is(input, textarea, button):disabled) > button,
+.m3-field:has(> :is(input, textarea, button):disabled) > .m3-field-lead,
+.m3-field:has(> :is(input, textarea, button):disabled) > .m3-field-trail {
   opacity: 0.38;
 }
 
-.m3-field[data-labelled]:has(> :is(input, textarea):disabled) > fieldset {
+.m3-field[data-labelled]:has(> :is(input, textarea, button):disabled) > fieldset {
   border-color: color-mix(in srgb, transparent 88%, var(--md-sys-color-on-surface));
 }
 
@@ -3159,6 +3855,60 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 }
 
 /* ---------------------------------------------------------------------------
+ * Forced colors (Windows High Contrast and its kin)
+ *
+ * The mode repaints everything in system colours and throws away both of the ways this app
+ * separates things: every container tone flattens to the canvas colour, and every box
+ * shadow is dropped — which is what every focus ring above is. So without this block no
+ * control in the app showed focus at all. An *outline* survives (its colour is forced to the
+ * system text colour unless it names a system colour itself), so the indicator comes back as
+ * one: Highlight, 2px, outside the control like the ring it stands in for — and inside it
+ * wherever the ring was the inset form, because those controls sit in enclosures that clip
+ * (menu rows, tab rows, grouped-list rows, gallery cards).
+ *
+ * **Important, and unlayered, on purpose**: this is a floor, not a style — it has to beat
+ * every rule that hides an outline, including ones written at call sites and in sections
+ * this block cannot see (the lightbox's own buttons hide theirs at a higher specificity).
+ * The class-text match is how "this control used the inset ring" is read without restating
+ * Tailwind's escaping. A field reports focus on its container (as its ring does), so the
+ * control inside a field is left out; the labelled field's own 2px outline takes the system
+ * colour rather than gaining a second box that would cut through its floated label. The
+ * roving cursor (a listbox row the keyboard is on without focusing it) paints a state layer,
+ * which this mode also flattens, so it takes the same indicator. The utilities that give a
+ * primitive its boundary and selection marks back live at the end of this file.
+ * --------------------------------------------------------------------------- */
+@media (forced-colors: active) {
+  :focus-visible:not(.m3-field > *) {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+
+  [class*='inset-ring']:focus-visible:not(.m3-field > *),
+  .state-layer-active {
+    outline: 2px solid Highlight !important;
+    outline-offset: -2px !important;
+  }
+
+  /* A gallery card's anchor suppresses its own outline at a higher specificity than the
+     floor above (paint containment would clip it to corner stubs) and draws its ring on an
+     after-pseudo-element instead — a shadow, which this mode drops. The pseudo-element takes
+     the outline, inside the card where the containment cannot clip it. */
+  a:has([data-image-hero-role='thumbnail']):focus-visible::after {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  .m3-field:not([data-labelled]):focus-within > fieldset {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .m3-field[data-labelled]:focus-within > fieldset {
+    border-color: Highlight;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * Stacking order
  *
  * Two kinds of layering: **app-level** (stacks against other components — a token here, and
@@ -3169,16 +3919,35 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * below it and the numbers encode which pairs must never tie.
  * ------------------------------------------------------------------------ */
 :root {
+  /* The route cross-fade's still frame: above the live page it is fading off, below the page
+     chrome (the back affordance and the home bar must show over the clone). */
+  --z-route-crossfade: 20;
+  /* The desktop ponies' layer: shell chrome present on both sides of a navigation, so above the
+     route cross-fade's still frame; scenery, so below every control of the page chrome — the back
+     affordance, the home pill, the mascot — which a pony walks behind rather than across. */
+  --z-companions: 25;
   --z-page-chrome: 30;
-  /* The routed image-detail surface and the drawer's scrim share this level: both dim the
-     page, neither is ever on screen with the other. */
+  /* The routed image-detail surface. */
   --z-detail-overlay: 40;
   --z-hero-retiring: 43;
   --z-hero-stage: 44;
   --z-hero-flight: 45;
   --z-hero-back: 46;
-  /* The app bar and the drawer are one piece of chrome in two parts. */
+  /* The app bar, the banners above and below it, and the docked drawer: one band of chrome. */
   --z-app-bar: 50;
+  /* The phone's modal drawer and its scrim clear the app bar and both banners — M3's modal
+     drawer covers the whole window and dims everything it does not cover. The scrim sits one
+     step below the panel rather than tying with it, so the order is stated, not DOM order. */
+  --z-drawer-scrim: 60;
+  --z-drawer: 70;
+  /* The navigation progress line, riding the chrome's bottom edge: above the chrome it hangs
+     from (a navigation started from the drawer is visible as the drawer closes), below any
+     dialog. The library ships its own 1600; pulled into the scale for the reason the viewer is. */
+  --z-top-loader: 80;
+  /* The skip link is the first stop in the tab order and must be visible over the chrome it
+     skips when it takes focus. A dialog makes the whole shell inert, so nothing above that
+     step can ever hold focus at the same time. */
+  --z-skip-link: 90;
   --z-dialog: 100;
   /* Above the dialog layer: a select menu inside a modal is the common case and its menu
      has to escape the panel. */
@@ -3191,12 +3960,15 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
      on the lightbox. Above the popover layer (with which it once tied, resolved by portal
      order) and above the viewer; never interactive, so nothing can be trapped under it. */
   --z-tooltip: 260;
-  /* The boot splash outranks anything the app can put up — but not a toast: a failure raised
-     while the splash shows is the one message that must survive it. */
-  --z-app-loading: 300;
   --z-toast: 400;
 }
 
+@utility z-route-crossfade {
+  z-index: var(--z-route-crossfade);
+}
+@utility z-companions {
+  z-index: var(--z-companions);
+}
 @utility z-page-chrome {
   z-index: var(--z-page-chrome);
 }
@@ -3205,6 +3977,15 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 }
 @utility z-app-bar {
   z-index: var(--z-app-bar);
+}
+@utility z-drawer-scrim {
+  z-index: var(--z-drawer-scrim);
+}
+@utility z-drawer {
+  z-index: var(--z-drawer);
+}
+@utility z-skip-link {
+  z-index: var(--z-skip-link);
 }
 @utility z-dialog {
   z-index: var(--z-dialog);
@@ -3219,9 +4000,6 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
    other three are consumed from CSS rules in this file. */
 @utility z-hero-stage {
   z-index: var(--z-hero-stage);
-}
-@utility z-app-loading {
-  z-index: var(--z-app-loading);
 }
 @utility z-toast {
   z-index: var(--z-toast);
@@ -3258,7 +4036,8 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
    text colour — replacing hand-picked hover tints that had to be written twice (light +
    dark) per call site. */
 @utility state-layer {
-  position: relative;
+  /* Positioned by the base layer (see the ripple attribute), not here: a positioning
+     utility beside this one must win outright rather than by sort order. */
   isolation: isolate;
 
   &::before {
@@ -3299,7 +4078,6 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * listbox and the search autocomplete both have that cursor, and neither showed the sighted
  * keyboard user anything. */
 @utility state-layer-active {
-  position: relative;
   isolation: isolate;
 
   &::before {
@@ -3311,5 +4089,106 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
     opacity: var(--md-sys-state-focus-opacity);
     pointer-events: none;
     z-index: -1;
+  }
+}
+
+/* A drop zone's content sits above the zone's own target (a button behind it) and lets
+   the pointer through to it; a control inside the content takes the pointer back, so it
+   stays an ordinary control rather than part of the zone's. See `DropZone`. */
+[data-dropzone-content] {
+  pointer-events: none;
+}
+
+[data-dropzone-content] :is(a, button, input, select, textarea, [tabindex]) {
+  pointer-events: auto;
+}
+
+/* Forced colors, per primitive: what a container tone or a painted mark becomes when the
+ * mode flattens both (see the forced-colors block beside the focus rings). Three roles, so a
+ * primitive names what its part *is* rather than spelling system colours at each site:
+ *
+ *   forced-boundary  a control or surface that separated itself by tone gets the system
+ *                    text colour as a 1px edge, drawn inside its box so nothing re-lays-out;
+ *                    focus replaces it with the 2px Highlight outline.
+ *   forced-selected  a selected container (a rail tab, the current page) takes the system's
+ *                    own selection pair.
+ *   forced-mark      a mark that exists only as a painted background (a tab indicator, a
+ *                    switch track, a radio dot, a meter's fill) takes Highlight, or it would
+ *                    vanish into the canvas and take the state with it.
+ *
+ * Opting out of forced colours is what lets the selection pair show at all; it is inherited,
+ * so a part inside a selected container states its own system colour where it has one.
+ *
+ * The two colour roles are important inside their media query, and that is not a shortcut:
+ * a utility's place in the stylesheet follows its first property, and these sort ahead of the
+ * container and ink utilities on the same element, so without it the element's own tone won —
+ * measured under emulated forced colours, the selected rail tab kept its pink container, a
+ * switch track its brand fill, and a selected pill its dark label on the system highlight.
+ * Outside forced colours none of this exists. */
+@utility forced-boundary {
+  @media (forced-colors: active) {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+}
+
+@utility forced-selected {
+  @media (forced-colors: active) {
+    forced-color-adjust: none;
+    background-color: Highlight !important;
+    color: HighlightText !important;
+  }
+}
+
+@utility forced-mark {
+  @media (forced-colors: active) {
+    forced-color-adjust: none;
+    background-color: Highlight !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * D1 — favourites: the grid's selection mode
+ *
+ * In the selection mode a card's checkbox lies over its whole picture (`CardSelection` in
+ * `MasonryGrid`), so its keyboard ring is the gallery card's own: two pixels of the on-media ink
+ * with one pixel of the scrim inside them, drawn inward on a pseudo-element. Inward, because the
+ * picture is the enclosure; on a pseudo-element, because a shadow on the button itself paints
+ * under its own veil and tick disc. The corner follows the button's. Under forced colours the
+ * shadow is dropped and the shared focus floor draws its outline instead.
+ * --------------------------------------------------------------------------- */
+[data-select-card]:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 2px var(--md-sys-color-focus-on-media),
+    inset 0 0 0 3px var(--md-sys-color-scrim);
+  pointer-events: none;
+}
+
+/* The bar's travel is 16px, and the reduced tier's is 8px, as every travel there is. */
+html[data-motion='reduced'] [data-selection-travel][data-hidden] {
+  translate: 0 0.5rem;
+}
+
+/* The room the back affordance needs above a grid column (80rem, the favourites' folder pages):
+ * the same reservation as the narrower columns', released once a centred 80rem column clears the
+ * button by the same margin — 86rem of content box, the 4xl rule's 6rem over its column. */
+.page-back-room-7xl {
+  padding-top: 3.25rem;
+}
+
+@media (min-width: 640px) {
+  .page-back-room-7xl {
+    padding-top: 3rem;
+  }
+}
+
+@container page (min-width: 86rem) {
+  .page-back-room-7xl {
+    padding-top: 0;
   }
 }

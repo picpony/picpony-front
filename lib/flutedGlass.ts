@@ -27,6 +27,8 @@
  * verified in a browser.
  */
 
+import { clamp01 } from '@/lib/utils';
+
 /* --- Swirl: the field behind the glass ---------------------------------------------- */
 
 export interface SwirlConfig {
@@ -362,10 +364,6 @@ export function inkStops(
     out[key] = inkColor(plate, hue, INK_STOPS[key].offset * sign, INK_STOPS[key].chroma);
   });
   return out;
-}
-
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
 /* --- The shaders ---------------------------------------------------------------------

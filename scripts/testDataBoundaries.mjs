@@ -54,6 +54,7 @@ const admin = await import('../lib/api/admin.ts');
 const catalogue = await import('../lib/resources.ts');
 const { defineResource, clearAllResources, expireAllResources } = await import('../lib/resource.ts');
 const { COOKIE_KEYS, LS_KEYS, IMAGE_WORKER_BASE } = await import('../lib/constants.ts');
+const { ApiError } = await import('../lib/api/errors.ts');
 const relay = await import('../app/relay/route.ts');
 const php = await import('../app/api.php/[[...path]]/route.ts');
 const { createServerMemo } = await import('../lib/serverMemo.ts');
@@ -61,7 +62,7 @@ const { readHomeFeed } = await import('../lib/feed.server.ts');
 const { readUserProfile } = await import('../lib/profile.server.ts');
 const { readTeamMembers } = await import('../lib/team.server.ts');
 const { inlineRoutePolicyScript } = await import('../lib/route.server.ts');
-const { readBlockFilters, clearBlockFiltersMemo, BLOCK_FILTERS_CACHE_TAG } = await import('../lib/blockFilters.server.ts');
+const { readBlockFilters, clearBlockFiltersMemo, clearPublicBlacklistMemo, BLOCK_FILTERS_CACHE_TAG } = await import('../lib/blockFilters.server.ts');
 const blockFilters = await import('../lib/blockFilters.ts');
 await route.ensureRoutePolicy();
 
@@ -97,6 +98,7 @@ beforeEach(() => {
   cookies.clear();
   events.length = 0;
   blockFilters.installBlockFilters(blockFilters.DEFAULT_BLOCK_FILTERS);
+  blockFilters.installPublicBlacklist([]);
   globalThis.localStorage = storage;
   globalThis.fetch = async (url) => { throw new Error(`Unexpected network request: ${url}`); };
   route.syncLinePrefs();
@@ -150,31 +152,59 @@ test('non-envelope JSON is reported as API failure instead of crashing callers',
   assert.deepEqual(await client.readJson(json({ success: true, value: 1 })), { success: true, value: 1 });
 });
 
-test('comment sources survive each other\'s decode failure and both failures remain an error', async () => {
-  for (const failed of ['picpony', 'derpi', 'both']) {
+test('each comment source fails on its own terms, as an error rather than an empty thread', async () => {
+  /* PicPony's thread and Derpibooru's are two reads now (the detail joins them); a bad answer from
+     either is that source's ApiError, never an empty list, and neither read touches the other. */
+  for (const failed of ['picpony', 'derpi']) {
     globalThis.fetch = async (url) => {
       const local = String(url).includes('get_comments');
-      if (failed === 'both' || (local ? failed === 'picpony' : failed === 'derpi')) {
+      if (local ? failed === 'picpony' : failed === 'derpi') {
         return new Response('<html>bad gateway</html>', { status: 200 });
       }
-      return json({ success: true, comments: [{ id: local ? 1 : 2, body: 'kept', created_at: '2026-01-01',
-        user_id: 1, username: 'local', author: 'external', avatar: null }] });
+      return local
+        ? json({ success: true, comments: [{ id: 1, body: 'kept', created_at: '2026-01-01 00:00:00',
+          user_id: 1, username: 'local', avatar: null, experience: 150, equipped_badges: '[]' }] })
+        : json({ total: 1, comments: [{ id: 2, body: 'kept', created_at: '2026-01-01T00:00:00Z',
+          user_id: 9, author: 'external', avatar: 'data:image/svg+xml;base64,AAAA' }] });
     };
-    const result = await picpony.getComments('123');
-    assert.equal(result.success, failed !== 'both');
-    assert.equal(result.comments.length, failed === 'both' ? 0 : 1);
+    if (failed === 'picpony') {
+      await assert.rejects(picpony.getSiteComments(123), (error) => error instanceof ApiError);
+      const other = await derpi.getImageComments(123, 1);
+      assert.equal(other.total, 1);
+      assert.deepEqual(other.comments.map((row) => [row.id, row.username, row.source, row.avatar]),
+        [[2, 'external', 'trixiebooru', null]]);
+    } else {
+      await assert.rejects(derpi.getImageComments(123, 1), (error) => error instanceof ApiError);
+      const own = await picpony.getSiteComments(123);
+      assert.deepEqual(own.map((row) => [row.id, row.username, row.source, row.experience]), [[1, 'local', 'picpony', 150]]);
+    }
   }
-  globalThis.fetch = async () => json({ success: true, comments: [] });
-  assert.deepEqual(await picpony.getComments('123'), { success: true, comments: [] });
+  globalThis.fetch = async (url) => (String(url).includes('get_comments')
+    ? json({ success: true, comments: [] })
+    : json({ total: 0, comments: [] }));
+  assert.deepEqual(await picpony.getSiteComments(123), []);
+  assert.deepEqual(await derpi.getImageComments(123, 1), { comments: [], total: 0 });
 });
 
 test('user ids, featured keys and explicit search sorts cannot append URL parameters', async () => {
   const urls = [];
-  globalThis.fetch = async (url) => { urls.push(new URL(String(url), 'https://app.invalid')); return json({ images: [], total: 0 }); };
-  const id = '1&action=unintended';
-  await picpony.getUserProfile(id);
+  globalThis.fetch = async (url) => {
+    const target = new URL(String(url), 'https://app.invalid');
+    urls.push(target);
+    if (target.searchParams.get('action') === 'get_user_profile') {
+      return json({ success: true, user: { id: 1, username: 'public' } });
+    }
+    if (target.pathname.endsWith('/images/featured')) return json({ image: null });
+    return json({ images: [], total: 0 });
+  };
+  /* A profile id is a positive integer: anything else is not found without a request, so a
+     crafted one cannot reach the query at all. */
+  const crafted = '1&action=unintended';
+  await assert.rejects(picpony.getUserProfile(crafted), (error) => error.notFound === true);
+  assert.equal(urls.length, 0, 'a crafted profile id sends nothing');
+  await picpony.getUserProfile('583672');
   assert.equal(urls.at(-1).searchParams.get('action'), 'get_user_profile');
-  assert.equal(urls.at(-1).searchParams.get('user_id'), id);
+  assert.equal(urls.at(-1).searchParams.get('user_id'), '583672');
   const key = 'secret&filter_id=0#fragment';
   await derpi.getFeatured(key);
   assert.equal(urls.at(-1).searchParams.get('key'), key);
@@ -182,8 +212,18 @@ test('user ids, featured keys and explicit search sorts cannot append URL parame
   await client.fetchDerpiImages('https://derpibooru.org/api/v1/json', { query: 'pony', sortField: 'score&q=explicit' });
   assert.equal(urls.at(-1).searchParams.get('sf'), 'created_at');
   assert.equal(urls.at(-1).searchParams.getAll('q').length, 1);
+  /* `hotness` was never a Philomena field; a legacy value falls back rather than reaching the
+     URL, and the legacy `relevance` means `_score`. */
   await client.fetchDerpiImages('https://derpibooru.org/api/v1/json', { query: 'pony', sortField: 'hotness' });
-  assert.equal(urls.at(-1).searchParams.get('sf'), 'hotness');
+  assert.equal(urls.at(-1).searchParams.get('sf'), 'created_at');
+  await client.fetchDerpiImages('https://derpibooru.org/api/v1/json', { query: 'pony OR zebra', sortField: 'relevance' });
+  assert.equal(urls.at(-1).searchParams.get('sf'), '_score');
+  await client.fetchDerpiImages('https://derpibooru.org/api/v1/json', { query: 'pony', sortField: 'random' });
+  assert.match(urls.at(-1).searchParams.get('sf'), /^random:\d+$/, 'the random sort is seeded');
+  assert.equal(urls.at(-1).searchParams.has('sd'), false);
+  const seeded = urls.at(-1).searchParams.get('sf');
+  await client.fetchDerpiImages('https://derpibooru.org/api/v1/json', { query: 'pony', sortField: 'random', page: 2 });
+  assert.equal(urls.at(-1).searchParams.get('sf'), seeded, 'page two keeps the seed of page one');
 });
 
 test('request cancellation interrupts a retry delay without another fetch', async () => {
@@ -204,8 +244,9 @@ test('request cancellation interrupts a retry delay without another fetch', asyn
 test('featured resources partition two account API keys and forum errors never become empty lists', async () => {
   assert.notEqual(catalogue.featuredImage.keyOf({ apiKey: 'key-a' }), catalogue.featuredImage.keyOf({ apiKey: 'key-b' }));
   globalThis.fetch = async () => json({ success: false, message: 'upstream failure' });
-  await assert.rejects(catalogue.forumPosts.read({ page: 1 }), /论坛/);
-  await assert.rejects(derpi.getImages(), /响应无效/);
+  await assert.rejects(catalogue.forumPosts.read({ page: 1 }), (error) =>
+    error instanceof ApiError && error.kind === 'envelope' && error.message === 'upstream failure');
+  await assert.rejects(derpi.getImages(), (error) => error instanceof ApiError && error.kind === 'invalid');
   await assert.rejects(admin.checkTagExists('fake-token', 'pony'), /upstream failure/);
 });
 
@@ -215,7 +256,10 @@ test('Derpi profile uploads never reuse developer results after returning to saf
     const target = new URL(String(url));
     urls.push(target);
     assert.ok(target.pathname.endsWith('/search/images'));
-    assert.equal(target.searchParams.get('q'), 'uploader_id:42');
+    /* The uploader query sits inside the viewer's exclusions, like the feed's. */
+    const q = target.searchParams.get('q');
+    assert.ok(q.startsWith('(uploader_id:42)'), q);
+    if (target.searchParams.get('filter_id') !== '56027') assert.match(q, /-explicit/);
     return derpiUploadsResponse(target);
   };
   const developer = { id: 42, page: 1, perPage: 24, contentFilter: 'developer' };
@@ -243,6 +287,7 @@ test('Derpi upload requests retain their filter snapshot while the shared route 
     const target = new URL(String(url), 'https://app.invalid');
     if (target.searchParams.get('action') === 'get_maintenance_status') return policyResponse.promise;
     if (target.searchParams.get('action') === 'get_block_tags') return Promise.resolve(json(blockFiltersEnvelope()));
+    if (target.searchParams.get('action') === 'get_public_blacklist') return Promise.resolve(json({ success: true, blacklist: [] }));
     assert.ok(target.pathname.endsWith('/search/images'));
     imageUrls.push(target);
     return Promise.resolve(derpiUploadsResponse(target));
@@ -271,123 +316,31 @@ test('Derpi upload requests retain their filter snapshot while the shared route 
   assert.deepEqual(catalogue.derpiUserUploads.peek(developer).data.images.map((image) => image.id), [1, 2]);
 });
 
-test('dictionary tag reads isolate concurrent tags and accounts when answers arrive out of order', async () => {
-  const args = [
-    { tag: 'pony', token: 'account-a' },
-    { tag: 'zebra', token: 'account-a' },
-    { tag: 'pony', token: 'account-b' },
-  ];
-  const incoming = args.map(() => deferred());
-  const entries = args.map(({ tag, token }, id) => ({
-    id, en: tag, cn: `${token}: ${tag}`, cat: 'general', count: 1,
-    description: `Details for ${tag}`, aliases: [],
-  }));
-  let calls = 0;
-  globalThis.fetch = (url, init) => {
-    const target = new URL(String(url), 'https://app.invalid');
-    assert.equal(target.searchParams.get('action'), 'get_dictionary');
-    const token = new Headers(init.headers).get('Authorization')?.replace(/^Bearer /, '');
-    const tag = target.searchParams.get('keyword');
-    const index = args.findIndex((arg) => arg.tag === tag && arg.token === token);
-    assert.notEqual(index, -1, 'a dictionary request must use its own account and selected tag');
-    calls += 1;
-    return incoming[index].promise;
-  };
-  const reads = args.map((arg) => catalogue.dictionaryTag.read(arg));
-  await tick();
-  for (const index of [2, 1, 0]) incoming[index].resolve(json({ success: true, tags: [entries[index]] }));
-  assert.deepEqual(await Promise.all(reads), entries);
-  assert.equal(calls, 3);
-  await tick();
-  for (const [index, arg] of args.entries()) {
-    assert.deepEqual(catalogue.dictionaryTag.peek(arg).data, entries[index]);
-    assert.deepEqual(await catalogue.dictionaryTag.read(arg), entries[index]);
-  }
-  assert.deepEqual(await catalogue.dictionaryTag.read({ tag: 'PONY', token: 'account-a' }), entries[0]);
-  assert.equal(calls, 3, 'revisiting either account or tag reuses only its own answer');
-});
-
-test('dictionary failures remain errors while a successful lookup without an exact match is null', async () => {
-  const failures = [
-    { body: { success: false, error: 'dictionary unavailable' }, message: /dictionary unavailable/ },
-    { body: { success: true, tags: null }, message: /词库查询失败/ },
-  ];
-  for (const [index, failure] of failures.entries()) {
-    const args = { tag: `failed-${index}`, token: 'account-a' };
-    globalThis.fetch = async () => json(failure.body);
-    await assert.rejects(catalogue.dictionaryTag.read(args), failure.message);
-    await tick();
-    const snapshot = catalogue.dictionaryTag.peek(args);
-    assert.equal(snapshot.data, undefined);
-    assert.ok(snapshot.error instanceof Error);
-  }
-
-  let calls = 0;
-  globalThis.fetch = async () => {
-    calls += 1;
-    return json({ success: true, tags: [{ en: 'pony related' }] });
-  };
-  const missing = { tag: 'pony', token: 'account-a' };
-  assert.equal(await catalogue.dictionaryTag.read(missing), null);
-  await tick();
-  assert.equal(catalogue.dictionaryTag.peek(missing).data, null);
-  assert.equal(catalogue.dictionaryTag.peek(missing).error, undefined);
-  assert.equal(await catalogue.dictionaryTag.read(missing), null);
-  assert.equal(calls, 1, 'a successful missing-tag result is cached, unlike a request failure');
-});
-
-test('dictionary invalidation replaces missing and existing answers and preserves mounted readers', async () => {
-  const args = { tag: 'new pony', token: 'account-a' };
-  const created = { id: 7, en: args.tag, cn: '新词条', cat: 'general', count: 1, description: 'created', aliases: [] };
-  const updated = { ...created, cn: '更新后的词条', description: 'updated' };
-  let entries = [];
-  let calls = 0;
-  globalThis.fetch = async () => {
-    calls += 1;
-    return json({ success: true, tags: entries });
-  };
-  assert.equal(await catalogue.dictionaryTag.read(args), null);
-  entries = [created];
-  catalogue.dictionaryTag.invalidate();
-  assert.deepEqual(await catalogue.dictionaryTag.read(args), created,
-    'a newly created dictionary entry must replace the earlier not-found answer');
-  assert.equal(calls, 2);
-  await tick();
-
-  let notices = 0;
-  const unsubscribe = catalogue.dictionaryTag.subscribe(args, () => { notices += 1; });
-  try {
-    entries = [updated];
-    catalogue.dictionaryTag.invalidate();
-    assert.deepEqual(await catalogue.dictionaryTag.read(args), updated);
-    await tick();
-    assert.deepEqual(catalogue.dictionaryTag.peek(args).data, updated);
-    assert.equal(calls, 3, 'an imperative read joins the invalidation refresh already started for the modal');
-    assert.ok(notices > 0, 'the open modal keeps receiving the replacement answer');
-  } finally {
-    unsubscribe();
-  }
-});
-
 test('every catalogue read forwards its AbortSignal through its real API adapter', async () => {
   const cases = [
     [catalogue.homeFeed, { page: 2, sort: 'score', fp: 'safe|-|d|-|' }],
     [catalogue.searchFeed, { query: 'pony', page: 1, sortDir: 'desc' }],
     [catalogue.featuredImage, { apiKey: 'fake-key' }],
-    [catalogue.imagesByIds, { ids: [1], page: 1, perPage: 1 }],
+    [catalogue.favePictures, { ids: [1] }], [catalogue.derpiFaves, { apiKey: 'fake-key', page: 1 }],
     [catalogue.forumPosts, { page: 1 }], [catalogue.forumThread, { id: '1', page: 1 }],
     [catalogue.userProfile, { id: '1' }], [catalogue.sharedFaveIds, { username: 'pony' }],
     [catalogue.derpiUserProfile, { id: '1' }],
     [catalogue.derpiUserUploads, { id: 1, page: 1, perPage: 24, contentFilter: 'safe' }],
-    [catalogue.dictionaryTag, { tag: 'pony', token: 'fake' }],
+    [catalogue.siteComments, { imageId: 1 }], [catalogue.derpiComments, { imageId: 1, page: 1 }],
+    [catalogue.translateSwitch, {}],
     [catalogue.userPosts, { id: '1', page: 1 }], [catalogue.userComments, { id: '1', page: 1 }],
     [catalogue.userUploads, { id: '1', page: 1, perPage: 1, token: 'fake' }],
     [catalogue.sessionUser, { token: 'fake' }], [catalogue.unreadCounts, { token: 'fake' }],
-    [catalogue.faveIds, { token: 'fake' }], [catalogue.browsingHistory, { token: 'fake', page: 1 }],
+    [catalogue.faveIds, { token: 'fake' }], [catalogue.faveFolders, { token: 'fake' }],
+    [catalogue.sharedPrivacyFaves, { token: 'fake', ownerId: 1 }], [catalogue.browsingHistory, { token: 'fake', page: 1 }],
     [catalogue.tasks, { token: 'fake' }], [catalogue.blockGroups, { token: 'fake' }],
     [catalogue.teamMembers, {}],
   ];
   for (const [resource, args] of cases) {
+    /* The uploads grid reads the profile first; in the app that is the header's (seeded) read. */
+    if (resource === catalogue.userUploads) {
+      catalogue.userProfile.seed({ id: '1' }, { id: 1, username: 'pony', derpi_user_id: 7 }, Date.now());
+    }
     let signal;
     globalThis.fetch = async (_, init) => {
       signal = init?.signal;
@@ -486,6 +439,22 @@ test('relay rejects off-namespace targets and executable upstream documents', as
   assert.equal(response.status, 502);
   assert.match(response.headers.get('content-type'), /application\/json/);
   assert.equal((await response.text()).includes('<script>'), false);
+});
+
+test('relay passes an upstream client error through as its status, never its body', async () => {
+  /* Derpibooru answers a deleted picture with a plain-text 404: an answer, not a dead line. */
+  for (const [status, type, body] of [[404, 'text/plain', 'Not Found'], [404, 'text/html', '<script>bad()</script>'], [400, 'text/html', 'Bad']]) {
+    globalThis.fetch = async () => new Response(body, { status, headers: { 'Content-Type': type } });
+    const response = await relay.GET(request('https://app.invalid/relay?url=https%3A%2F%2Fderpibooru.org%2Fapi%2Fv1%2Fjson%2Fimages%2F1'));
+    assert.equal(response.status, status, `${status} ${type}`);
+    assert.match(response.headers.get('content-type'), /application\/json/);
+    const text = await response.text();
+    assert.equal(text.includes(body), false, 'the upstream body is not served');
+  }
+  /* A server error in a non-JSON body is still a bad line, which `proxyFetch` fails over from. */
+  globalThis.fetch = async () => new Response('<html>down</html>', { status: 503, headers: { 'Content-Type': 'text/html' } });
+  const response = await relay.GET(request('https://app.invalid/relay?url=https%3A%2F%2Fderpibooru.org%2Fapi%2Fv1%2Fjson%2Fimages'));
+  assert.equal(response.status, 502);
 });
 
 test('relay strips session/framing headers, prohibits caches and follows request cancellation', async () => {
@@ -595,12 +564,15 @@ test('SSR reads have bounded anonymous requests and keys partition public profil
     }
     return json({ total: 0, images: [] });
   };
-  const [a, b, team, feed] = await Promise.all([
-    readUserProfile('12&action=other'), readUserProfile('13'), readTeamMembers(),
+  const [crafted, a, b, team, feed] = await Promise.all([
+    readUserProfile('12&action=other'), readUserProfile('12'), readUserProfile('13'), readTeamMembers(),
     readHomeFeed('invalid|a|d|p|blocked', 'score&q=explicit'),
   ]);
+  /* An id that cannot be a profile's is the route's not-found state, and is never sent. */
+  assert.equal(crafted, 'missing');
+  assert.equal(observed.some(({ parsed }) => parsed.searchParams.get('user_id')?.includes('&')), false);
   assert.notEqual(a.key, b.key);
-  assert.equal(a.data.id, '12&action=other');
+  assert.equal(a.data.id, '12');
   assert.equal(b.data.id, '13');
   assert.deepEqual(team.data, []);
   assert.deepEqual(feed.data.images, []);
@@ -624,6 +596,7 @@ test('home SSR seeds bypass stale persistent responses while retaining bounded r
   globalThis.fetch = async (url, init) => {
     const parsed = new URL(String(url));
     if (parsed.searchParams.get('action') === 'get_block_tags') return json(blockFiltersEnvelope());
+    if (parsed.searchParams.get('action') === 'get_public_blacklist') return json({ success: true, blacklist: [] });
     reads.push({ parsed, init });
     // Next's stale-while-revalidate path returns an old payload immediately.
     // Only an uncached network read can truthfully receive a fresh seed timestamp.
@@ -695,6 +668,7 @@ test('third-party key forwarding honors policy and an older policy refresh canno
   const second = deferred();
   let calls = 0;
   globalThis.fetch = (url) => String(url).includes('get_block_tags') ? Promise.resolve(json(blockFiltersEnvelope())) :
+    String(url).includes('get_public_blacklist') ? Promise.resolve(json({ success: true, blacklist: [] })) :
     ++calls === 1 ? first.promise : second.promise;
   const old = route.refreshRoutePolicy();
   const latest = route.refreshRoutePolicy();
@@ -710,6 +684,7 @@ test('a cancelled caller stops waiting for the shared policy without cancelling 
   let fetches = 0;
   globalThis.fetch = (url) => {
     fetches += 1;
+    if (String(url).includes('get_public_blacklist')) return Promise.resolve(json({ success: true, blacklist: [] }));
     return String(url).includes('get_block_tags') ? Promise.resolve(json(blockFiltersEnvelope())) : incoming.promise;
   };
   const policy = route.refreshRoutePolicy();
@@ -717,7 +692,7 @@ test('a cancelled caller stops waiting for the shared policy without cancelling 
   const read = client.proxyFetch('https://derpibooru.org/api/v1/json/images/1', { signal: controller.signal });
   controller.abort();
   await assert.rejects(read, { name: 'AbortError' });
-  assert.equal(fetches, 2, 'only the shared policy and public-filter requests were sent');
+  assert.equal(fetches, 3, 'only the shared policy, public-filter and public-blacklist requests were sent');
   incoming.resolve(json({ success: true, global_api_route_policy: 'direct', global_image_route_policy: 'direct' }));
   await policy;
 });
@@ -760,6 +735,7 @@ test('rule installation changes resource keys and publishes settings once per se
 
 test('SSR waits for public rules before querying pictures and produces the same key as the browser', async () => {
   clearBlockFiltersMemo();
+  clearPublicBlacklistMemo();
   const rules = deferred();
   const fixture = blockFiltersEnvelope();
   fixture.tags.push({ id: 999, filter_key: 'safe', tag_name: 'freshly blocked' });
@@ -771,9 +747,12 @@ test('SSR waits for public rules before querying pictures and produces the same 
       assert.deepEqual(init.next.tags, [BLOCK_FILTERS_CACHE_TAG]);
       return rules.promise;
     }
+    if (String(url).includes('get_public_blacklist')) return json({ success: true, blacklist: [3898802, 193324] });
     imageCalls += 1;
     const target = new URL(String(url));
     assert.match(decodeURIComponent(target.searchParams.get('q') ?? ''), /-freshly\\ blocked/);
+    /* The public blacklist is excluded in the query itself, on the server as in the browser. */
+    assert.match(decodeURIComponent(target.searchParams.get('q') ?? ''), /-id:193324, -id:3898802/);
     return json({ total: 0, images: [] });
   };
   const feed = readHomeFeed('safe|-|d|-|', 'created_at');
@@ -785,6 +764,7 @@ test('SSR waits for public rules before querying pictures and produces the same 
   const [seed, current] = await Promise.all([feed, sameRules]);
   assert.ok(seed, `feed seed missing; ruleCalls=${ruleCalls}, imageCalls=${imageCalls}`);
   blockFilters.installBlockFilters(current);
+  blockFilters.installPublicBlacklist([193324, 3898802]);
   const fp = catalogue.browsingFingerprint();
   assert.equal(seed.fp, fp);
   assert.equal(seed.key, catalogue.homeFeed.keyOf({ page: 1, sort: 'created_at', fp }));
@@ -812,18 +792,24 @@ test('only accepted block-tag mutations expire both Next tags and the process me
   let envelope = { success: true };
   let status = 200;
   const exports = {};
+  let blacklistInvalidations = 0;
   const dependencies = {
     'next/cache': { revalidateTag: (tag, profile) => {
-      assert.equal(tag, BLOCK_FILTERS_CACHE_TAG);
       assert.equal(profile.expire, 0);
+      if (tag === 'picpony-public-blacklist') { blacklistInvalidations += 1; return; }
+      assert.equal(tag, BLOCK_FILTERS_CACHE_TAG);
       invalidations += 1;
     } },
-    '@/lib/blockFilters.server': { BLOCK_FILTERS_CACHE_TAG, clearBlockFiltersMemo: () => { memoClears += 1; } },
+    '@/lib/blockFilters.server': {
+      BLOCK_FILTERS_CACHE_TAG, PUBLIC_BLACKLIST_CACHE_TAG: 'picpony-public-blacklist',
+      clearBlockFiltersMemo: () => { memoClears += 1; }, clearPublicBlacklistMemo: () => {},
+    },
+    '@/lib/constants': { COOKIE_KEYS },
   };
   vm.runInNewContext(transpiled, { exports, require: (name) => {
     assert.ok(name in dependencies, name);
     return dependencies[name];
-  }, Response, Headers, URL, AbortSignal, fetch: async () => json(envelope, { status }) });
+  }, process: { env: {} }, Response, Headers, URL, AbortSignal, fetch: async () => json(envelope, { status }) });
   for (const [method, action, success, httpStatus, expected] of [
     ['POST', 'admin_add_block_tag', false, 200, 0],
     ['POST', 'admin_add_block_tag', true, 403, 0],
@@ -839,6 +825,22 @@ test('only accepted block-tag mutations expire both Next tags and the process me
     assert.equal(invalidations, expected);
     assert.equal(memoClears, expected);
   }
+  envelope = { success: true };
+  status = 200;
+  await exports.POST(request('https://app.invalid/api.php?action=admin_add_blacklist', { method: 'POST' }), context());
+  await exports.POST(request('https://app.invalid/api.php?action=admin_remove_blacklist', { method: 'POST' }), context());
+  assert.equal(blacklistInvalidations, 2, 'an accepted blacklist edit expires the public blacklist');
+  assert.equal(invalidations, 2, 'and leaves the filter definitions alone');
+});
+
+test('PHP proxy forwards only the cookies the backend reads', async () => {
+  let forwarded;
+  globalThis.fetch = async (_, init) => { forwarded = init.headers.get('cookie'); return json({ success: true }); };
+  const cookie = `${COOKIE_KEYS.browsing}=safe%7C-%7Cd%7C-%7Csolo; PHPSESSID=abc; ${COOKIE_KEYS.darkMode}=true; other=1`;
+  await php.GET(request('https://app.invalid/api.php?action=get_user', { headers: { Cookie: cookie } }), context());
+  assert.equal(forwarded, 'PHPSESSID=abc; other=1');
+  await php.GET(request('https://app.invalid/api.php?action=get_user', { headers: { Cookie: `${COOKIE_KEYS.palette}=luna` } }), context());
+  assert.equal(forwarded, null, 'nothing is sent when only app cookies were present');
 });
 
 test('clearing server filters during an in-flight read cannot restore the old rule generation', async () => {
@@ -863,6 +865,9 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
   const maintenanceWrites = [];
   let statsRefreshes = 0;
   let statusRefreshes = 0;
+  const translateWrites = [];
+  const publishedStatus = [];
+  let acceptTranslation = false;
   let patched;
   const toasts = [];
   const element = (type, props) => ({ type, props: props ?? {} });
@@ -876,20 +881,31 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
     '@/components/SectionHeading': componentStub('SectionHeading'),
     '@/components/ErrorRetry': componentStub('ErrorRetry'), '@/components/Skeleton': componentStub('Skeleton'),
     '@/components/Input': { Textarea: 'Textarea' }, '@/lib/icons': { ICON: {} },
+    '@/lib/format': { formatCount: String, formatDateTime: String },
+    '@/lib/resources': { translateSwitch: { write: (_args, value) => { translateWrites.push(value); } } },
+    '@/lib/siteStatus': { publishSavedSiteStatus: (value) => { publishedStatus.push(value); } },
+    '@/lib/api/adminSiteTools': { collectSiteStats: async () => ({ images: 1, tags: 2, comments: 3 }) },
     'react-icons/md': {},
     '@/components/ConfirmDialog': { useConfirm: () => ({ confirmThen: (_a, _b, run) => run(), confirmDialog: null }) },
     '@/lib/api/admin': {
       adminToggleMaintenance: async (_token, values) => { maintenanceWrites.push(values); return json({ success: true }); },
+      adminToggleTranslate: async () => json(acceptTranslation ? { success: true } : { success: false, error: '拒绝' }),
+    },
+    './SectionHeader': componentStub('SectionHeader'),
+    './RefreshButton': componentStub('RefreshButton'),
+    './sharedQueries': {
+      siteStatusQuery: { name: 'site-status', write: (_token, value) => { patched = typeof value === 'function' ? value(statusValue) : value; statusValue = patched; } },
     },
     './queries': {
-      defineAdminQuery: (name) => ({ name, write: (_token, value) => { patched = value; statusValue = value; } }),
+      defineAdminQuery: (name) => ({ name, write: () => {} }),
       adminData: (_, value) => value,
+      retryError: (title, message) => ({ title, message: message && message !== title ? message : undefined }),
       useAdminQuery: (resource) => resource.name === 'site-status' ? {
-        data: statusValue, error: statusError, loading: false, refresh: () => {
+        data: statusValue, error: statusError, loading: false, refreshing: false, retryable: true, refresh: () => {
           assert.ok(patched, 'the accepted write must be patched before refresh');
           statusRefreshes += 1;
         },
-      } : { data: undefined, error: statsError, loading: false, refresh: () => { statsRefreshes += 1; } },
+      } : { data: undefined, error: statsError, loading: false, refreshing: false, retryable: true, refresh: () => { statsRefreshes += 1; } },
     },
     './useAdminMutation': { useAdminMutation: () => ({ busy: false, run: async (request, success, _failure, options) => {
       const response = await request(() => true);
@@ -908,33 +924,46 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
     assert.ok(name in dependencies, name);
     return dependencies[name];
   } });
+  /* Every prop that can hold an element — `children`, a heading's `actions`. */
   function find(node, check) {
     if (Array.isArray(node)) return node.flatMap((child) => find(child, check));
     if (!node || typeof node !== 'object') return [];
-    return [...(check(node) ? [node] : []), ...find(node.props?.children, check)];
+    return [...(check(node) ? [node] : []), ...Object.values(node.props ?? {}).flatMap((value) => find(value, check))];
   }
   let tree = exports.default({ token: 'fake' });
   const switches = find(tree, (node) => node.type === 'ToggleSwitch');
+  assert.equal(switches.length, 2);
   assert.ok(switches.every((node) => node.props.disabled === false), 'statistics failure cannot disable loaded status controls');
   const textarea = find(tree, (node) => node.type === 'Textarea')[0];
   textarea.props.onChange({ target: { value: 'saved independently' } });
   tree = exports.default({ token: 'fake' });
   const save = find(tree, (node) => node.type === 'Button' && node.props.children === '保存提示文字')[0];
-  await save.props.onClick();
+  save.props.onClick();
+  for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(maintenanceWrites.length, 1);
   assert.equal(maintenanceWrites[0].maintenance_mode, true);
   assert.equal(maintenanceWrites[0].maintenance_message, 'saved independently');
   assert.equal(patched.maintenanceMessage, 'saved independently');
+  assert.equal(publishedStatus.length, 1);
+  assert.equal(publishedStatus[0].maintenance, true);
   assert.equal(statusRefreshes, 1);
-  assert.equal(toasts.at(-1)[0], '维护提示已保存');
+  assert.equal(toasts.at(-1)[0], '已保存维护提示');
   statsError = undefined;
   tree = exports.default({ token: 'fake' });
-  const refresh = find(tree, (node) => node.type === 'Button' && node.props.children === '刷新统计')[0];
+  const refresh = find(tree, (node) => node.type === 'RefreshButton' && node.props.label === '刷新统计')[0];
   refresh.props.onClick();
   assert.equal(statsRefreshes, 1);
+  find(tree, (node) => node.type === 'ToggleSwitch')[1].props.onChange(false);
+  for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(translateWrites.length, 0, 'a translate write the backend has not accepted publishes nothing');
+  acceptTranslation = true;
+  find(tree, (node) => node.type === 'ToggleSwitch')[1].props.onChange(false);
+  for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(translateWrites, [false], 'an acknowledged change reaches mounted image details at once');
   statusValue = undefined;
   statusError = 'not loaded';
   tree = exports.default({ token: 'fake' });
-  assert.ok(find(tree, (node) => node.type === 'ToggleSwitch').every((node) => node.props.disabled));
+  assert.equal(find(tree, (node) => node.type === 'ToggleSwitch').length, 0,
+    'an unknown site state shows no switch at all — never a default value that later flips');
   assert.equal(find(tree, (node) => node.type === 'Button' && node.props.children === '保存提示文字').length, 0);
 });

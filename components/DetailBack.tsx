@@ -31,6 +31,11 @@ type DetailBackProps = ButtonHTMLAttributes<HTMLButtonElement> & {
  * the accessibility tree and without a ripple of its own, because the real one
  * is mounted at the same time. Without this, two focusable 返回图片列表 buttons
  * sit in the tab order for the length of every flight.
+ *
+ * **It never takes focus either, not even from a press.** A mouse press focused
+ * it — a node inside an `aria-hidden` subtree — and when the copy unmounted at
+ * the handoff, focus fell to `<body>` (R10-016). The press's default is what
+ * moves focus, so the copy cancels it and keeps the click.
  */
 const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function DetailBack(
   {
@@ -38,6 +43,7 @@ const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function Detai
     className = '',
     title = '返回图库 (Esc)',
     tabIndex,
+    onMouseDown,
     'aria-label': ariaLabel = '返回图片列表',
     'aria-hidden': ariaHidden,
     ...props
@@ -48,6 +54,10 @@ const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function Detai
     <IconButton
       ref={ref}
       {...props}
+      onMouseDown={(event) => {
+        if (passive) event.preventDefault();
+        onMouseDown?.(event);
+      }}
       variant="tonal"
       size="md"
       shape="square"

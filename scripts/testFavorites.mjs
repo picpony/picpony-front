@@ -20,7 +20,8 @@ function fixture(rawUrl, body) {
   const url = new URL(rawUrl);
   const action = url.searchParams.get('action');
   if (action === 'get_user') return json({ success: true, user: { ...user, settings: {} } });
-  if (action === 'get_faves') return json({ success: true, faves: favorites });
+  if (action === 'get_fave_folders') return json({ success: true, folders: [{id:1,name:'主收藏夹',is_main:1,item_count:favorites.length,latest_image_id:2000}] });
+  if (action === 'get_faves') return json({ success: true, faves: favorites, faves_folders: Object.fromEntries(favorites.map(id=>[id,[1]])) });
   if (action === 'toggle_fave') {
     const id = JSON.parse(body).image_id;
     mutations++;
@@ -33,7 +34,9 @@ function fixture(rawUrl, body) {
   }
   const target = new URL(url.searchParams.get('url') ?? rawUrl);
   if (target.pathname.endsWith('/search/images')) {
-    const ids = [...(target.searchParams.get('q') ?? '').matchAll(/id:(\d+)/g)].map((match) => Number(match[1]));
+    /* Positive `id:` terms only: a list query also carries the public blacklist as `-id:N`
+       exclusions, and matching those answered an id search nobody made (B2, F3). */
+    const ids = [...(target.searchParams.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map((match) => Number(match[1]));
     if (mutations === 1 && ids.includes(2100) && failRefresh) {
       failRefresh = false;
       return { ...json({ error: 'Retry this refresh' }), status: 429 };
@@ -107,58 +110,49 @@ with sync_playwright() as p:
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(origin + '/favorites', wait_until='networkidle')
+        page.locator('a[href="/favorites/folder/1"]').click()
         cards = page.locator('[data-page-content] a[href^="/pic/"]')
         expect(cards).to_have_count(50)
-        page.get_by_role('button', name='加载更多', exact=True).click()
-        expect(cards).to_have_count(100)
+        # Selection is the existing gallery, with sibling keyboard controls; Back peels it.
+        page.get_by_role('button', name='选择', exact=True).click()
+        selected = page.locator('[data-select-card]')
+        expect(selected).to_have_count(50)
+        selected.first.focus()
+        page.keyboard.press('Space')
+        expect(selected.first).to_have_attribute('aria-checked', 'true')
+        selected.nth(2).click(modifiers=['Shift'])
+        expect(page.get_by_text('已选择 3 张', exact=True)).to_be_visible()
+        assert page.locator('a button').count() == 0
+        assert page.locator('.image-card[inert]').count() == 50
+        page.evaluate('history.back()')
+        expect(page.get_by_role('button', name='选择', exact=True)).to_be_focused()
+        expect(page).to_have_url(origin + '/favorites/folder/1')
+        expect(cards).to_have_count(50)
+        page.get_by_role('button', name='第 2 页', exact=True).click()
+        expect(page).to_have_url(origin + '/favorites/folder/1?page=2')
+        expect(page.locator('a[href="/pic/2090"]')).to_have_count(1)
         page.locator('a[href="/pic/2090"]').first.click()
         expect(page.locator('[data-image-detail-overlay]')).to_be_visible()
-        expect(cards).to_have_count(100)
-        page.get_by_role('button', name='取消收藏', exact=True).click()
-        expect(page.get_by_role('button', name='收藏', exact=True)).to_be_visible()
+        page.get_by_role('button', name='收藏', exact=True, pressed=True).click()
+        expect(page.get_by_role('button', name='收藏', exact=True, pressed=False)).to_be_visible()
         page.keyboard.press('Escape')
-        expect(page).to_have_url(origin + '/favorites')
-        try:
-            expect(page.get_by_role('button', name='重试', exact=True)).to_be_visible()
-        except Exception:
-            print(json.dumps({'cards': cards.count(), 'pageErrors': errors, 'text': page.locator('[data-page-content]').inner_text()[:1200]}, ensure_ascii=False), flush=True)
-            raise
-        expect(cards).to_have_count(99)
-        expect(page.get_by_role('button', name='加载更多', exact=True)).to_be_disabled()
+        expect(page).to_have_url(origin + '/favorites/folder/1?page=2')
+        expect(page.get_by_role('button', name='重试', exact=True)).to_be_visible()
+        expect(cards).to_have_count(49)
         page.get_by_role('button', name='重试', exact=True).click()
-        expect(cards).to_have_count(100)
-        expect(page.locator('a[href="/pic/2090"]')).to_have_count(0)
-        expect(page.locator('a[href="/pic/2099"]')).to_have_count(1)
-        page.get_by_role('button', name='加载更多', exact=True).click()
-        expect(cards).to_have_count(119)
-        assert len(set(cards.evaluate_all('(links) => links.map(link => link.href)'))) == 119
-        expect(page.get_by_role('button', name='加载更多', exact=True)).to_have_count(0)
-        # A third-page read started before another removal must not append its
-        # obsolete boundary after the live list has been reconciled.
-        page.reload(wait_until='networkidle')
         expect(cards).to_have_count(50)
-        page.get_by_role('button', name='加载更多', exact=True).click()
-        expect(cards).to_have_count(100)
-        state['hold_more'] = True
-        page.get_by_role('button', name='加载更多', exact=True).click()
-        for _ in range(100):
-            if held_more: break
-            page.wait_for_timeout(50)
-        assert len(held_more) == 1, 'Expected to hold the third-page response'
+        expect(page.locator('a[href="/pic/2090"]')).to_have_count(0)
         page.locator('a[href="/pic/2099"]').first.click()
-        page.get_by_role('button', name='取消收藏', exact=True).click()
-        expect(page.get_by_role('button', name='收藏', exact=True)).to_be_visible()
+        page.get_by_role('button', name='收藏', exact=True, pressed=True).click()
+        expect(page.get_by_role('button', name='收藏', exact=True, pressed=False)).to_be_visible()
         page.keyboard.press('Escape')
-        expect(page).to_have_url(origin + '/favorites')
-        expect(cards).to_have_count(100)
-        route, stub = held_more.pop()
-        route.fulfill(status=200, content_type=stub['contentType'], body=stub['body'])
-        page.wait_for_load_state('networkidle')
-        expect(cards).to_have_count(100)
+        expect(page).to_have_url(origin + '/favorites/folder/1?page=2')
+        expect(cards).to_have_count(50)
         expect(page.locator('a[href="/pic/2099"]')).to_have_count(0)
-        page.get_by_role('button', name='加载更多', exact=True).click()
-        expect(cards).to_have_count(118)
-        assert len(set(cards.evaluate_all('(links) => links.map(link => link.href)'))) == 118
+        page.get_by_role('button', name='第 3 页', exact=True).click()
+        expect(cards).to_have_count(18)
+        page.get_by_role('button', name='第 1 页', exact=True).click()
+        expect(cards).to_have_count(50)
         page.locator('a[href="/pic/2010"]').first.click()
         expect(page.get_by_role('button', name='species:__proto__', exact=True)).to_be_visible()
         expect(page.get_by_role('button', name='species:constructor', exact=True)).to_be_visible()
@@ -180,7 +174,7 @@ with sync_playwright() as p:
         expect(page).to_have_url(origin + '/search?q=pony&page=2')
         expect(search).to_have_value('pony')
         assert not errors, errors
-        print('Favourites keep loaded pages after mutation; reserved tag names render safely.', flush=True)
+        print('Favourites keep the current folder page after mutation; reserved tag names render safely.', flush=True)
     finally:
         browser.close()
 `;

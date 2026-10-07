@@ -10,6 +10,7 @@ import { HERO_GALLERY_ANCHOR_SELECTOR } from './constants';
 import { motionTier } from '@/lib/appearance';
 import { toCurrentImageLine } from '@/lib/imageLoader';
 import {
+  findImageHeroThumbnail,
   getHeroRect,
   getVisualMedia,
   isAnimatedVisualSource,
@@ -111,12 +112,16 @@ const warmingDetail = new Set<number>();
  * raw host while the visitor is on a proxy line downloads the bytes twice and still hands the
  * flyer something the browser has to fetch again.
  */
-export function warmImageHeroSource(image: ImagePreview | null | undefined) {
+export function warmImageHeroSource(
+  image: ImagePreview | null | undefined,
+  { forStep = false }: { forStep?: boolean } = {},
+) {
   if (!image || typeof window === 'undefined') return;
   if (warmedDetailFrames.has(image.id) || warmingDetail.has(image.id)) return;
   /* Nothing to warm for a tier that cannot fly: no snapshot is registered, so the preview
-     layer is not rendered and the bytes and canvas would have no consumer whatsoever. */
-  if (motionTier() !== 'standard') return;
+     layer is not rendered and the bytes and canvas would have no consumer whatsoever — unless
+     this is a viewer's neighbour, whose step paints this rung as its preview in every tier. */
+  if (!forStep && motionTier() !== 'standard') return;
   if (isVideoRecord(image)) return;
   const url = toCurrentImageLine(flightSourceFor(image));
   /* An animated source is excluded rather than captured: the flyer must start on the frame
@@ -215,6 +220,49 @@ export function prepareImageHero(
     sourceKey: source.dataset.imageHeroSourceKey ?? null,
     mediaType,
     canAnimate: canAnimate && rect.width > 0 && rect.height > 0,
+    createdAt: Date.now(),
+  };
+}
+
+/**
+ * The snapshot a step (上一张 / 下一张) lands on: what the detail paints the moment it swaps,
+ * before the record arrives. The list's own preview record, and the best bitmap already decoded
+ * for the picture — the card's, when the list is showing it, or the rung warmed when the viewer
+ * arrived beside it (`warmImageHeroSource(…, { forStep: true })`). There is no press to capture
+ * from, so the frame may be absent: it matters only to a later flight home, which captures the
+ * live frame first.
+ */
+export function prepareImageHeroStep(image: ImagePreview): ImageHeroSnapshot {
+  const card = findImageHeroThumbnail(image.id);
+  const visual = card ? getVisualMedia(card) : null;
+  const warmed = warmedDetailFrames.get(image.id);
+  const cardFrame = visual ? captureHeroFrame(visual) : null;
+  const usedWarmed = Boolean(
+    warmed && (!visual || !isVolatileVisualMedia(visual)) &&
+      (!cardFrame || warmed.asset.pixels > cardFrame.pixels),
+  );
+  const previewFrame = usedWarmed ? warmed!.asset : cardFrame;
+  /* With nothing decoded to show, the smallest rung that reads at the detail's size: `medium` for
+     a still, the poster thumbnail for a video (whose `medium` is the video file itself — the
+     preview layer then paints it as an image until the video's first frame). */
+  const fallback = toCurrentImageLine(
+    isVideoRecord(image)
+      ? image.representations?.thumb || image.representations?.small || ''
+      : flightSourceFor(image) || image.representations?.small || '',
+  );
+  const previewSrc = normalizeHeroSrc(
+    (usedWarmed ? warmed!.src : undefined) ||
+      visual?.currentSrc ||
+      visual?.getAttribute('src') ||
+      fallback,
+  );
+  return {
+    image,
+    previewSrc,
+    previewFrame,
+    sourceKey: card?.dataset.imageHeroSourceKey ?? null,
+    mediaType: visual instanceof HTMLVideoElement ? 'video' : 'image',
+    canAnimate: false,
     createdAt: Date.now(),
   };
 }

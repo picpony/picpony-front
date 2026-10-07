@@ -1,0 +1,127 @@
+# The production browser suites: a real `next build`, then each suite starting its own `next start`
+# against stubbed upstreams and driving Microsoft Edge (Python Playwright's `msedge` channel, and
+# CDP for the request ledger and the probes). They are written for Windows — the Edge paths the
+# CDP scripts look in are Windows paths — so they run on `windows-latest`, which has Edge
+# installed. Runs for pull requests, dev/master pushes, nightly, and on demand.
+name: Browser suites
+
+on:
+  pull_request:
+  push:
+    branches: [dev, master]
+  schedule:
+    # 03:17 Beijing time.
+    - cron: '17 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  PYTHONUTF8: '1'
+  NODE_OPTIONS: '--unhandled-rejections=strict'
+
+jobs:
+  browser:
+    name: Production suites (Edge)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Python syntax
+        run: python -m compileall -q scripts
+
+      # Playwright drives the installed Edge (`channel='msedge'`), so no browser download. Pillow
+      # draws the fixture pictures; OpenCV (headless, with numpy) encodes the hero suite's VP8 clip.
+      - name: Python packages
+        run: python -m pip install --disable-pip-version-check playwright pillow opencv-python-headless numpy
+
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/npm-cache
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      # Needs no app build: bundles `lib/motion.ts` itself and serves it to Edge.
+      - name: Drawer swipe
+        run: npm run test:drawer
+
+      - name: Production build
+        id: build
+        if: ${{ !cancelled() }}
+        run: npm run build
+
+      # Each suite is its own step and every one runs after the build, so one failure does not
+      # hide the others; the job fails if any did.
+      - name: Primitives
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:primitives
+      - name: Removal focus and the roving tab stop
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:presence
+      - name: Request ledger
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run net:audit
+      - name: Page turn without an empty frame
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run net:scroll
+      - name: Tab heights and offsets
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run net:tabs
+      - name: Home tabs and history
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run net:tabnav
+      - name: Overlays and Back
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:overlays
+      - name: Security
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:security
+      - name: Favourites
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:favorites
+      - name: UI review
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:ui
+      - name: Routes and profiles
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:browser
+      - name: Hero interactions
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:hero
+      - name: Page turn cards
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run perf:pageturn
+      - name: Press ripple
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run perf:ripple
+
+      - name: Failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-evidence
+          path: .workbuddy/
+          if-no-files-found: ignore
+          retention-days: 7

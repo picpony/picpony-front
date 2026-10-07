@@ -30,18 +30,32 @@ export function routeTransitActive(element: HTMLElement): boolean {
  * response in globals.css. Route changes carry the footer inside the whole page
  * instead, so they do not use this hold. Reference-counted: two tab moves can be
  * armed in the same tick, and the first to settle must not un-flag the other.
+ *
+ * **The flag goes on the footer itself**, registered by its own ref. On the scroller,
+ * under a `[data-page-transit] .page-chrome` rule, each flip sent the engine through
+ * every element of the page looking for the footer — at both ends of every switch.
  */
 let transitDepth = 0;
+const footers = new Set<HTMLElement>();
+
+/** The page footer, on mount; returns the unregister. See `lib/pageLoadingHold.ts`. */
+export function registerPageFooter(footer: HTMLElement): () => void {
+  footers.add(footer);
+  footer.toggleAttribute('data-page-transit', transitDepth > 0);
+  return () => {
+    footers.delete(footer);
+  };
+}
 
 export function beginPageTransit(): () => void {
   transitDepth += 1;
-  getAppScroller()?.setAttribute('data-page-transit', '');
+  if (transitDepth === 1) for (const footer of footers) footer.setAttribute('data-page-transit', '');
   let released = false;
   return () => {
     if (released) return;
     released = true;
     transitDepth = Math.max(0, transitDepth - 1);
-    if (transitDepth === 0) getAppScroller()?.removeAttribute('data-page-transit');
+    if (transitDepth === 0) for (const footer of footers) footer.removeAttribute('data-page-transit');
   };
 }
 

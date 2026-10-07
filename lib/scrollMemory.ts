@@ -21,15 +21,17 @@
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { getImageHeroRuntime } from '@/lib/hero';
+import { getImageHeroRuntime } from '@/lib/hero/runtime';
 import { getAppScroller, heroOwnsScreen } from '@/lib/appScroller';
+import { clearTabScroll } from '@/lib/tabScroll';
+import { noteInAppNavigation } from '@/lib/backNavigation';
 
 /** The Navigation API surface this needs, which TypeScript's DOM lib does not have yet. */
 type NavigationEntryLike = { key?: string };
 type NavigationLike = { currentEntry?: NavigationEntryLike | null };
 
 /**
- * Offsets by history entry, for the session. Module scope like `lib/pageCache.ts`: reload is
+ * Offsets by history entry, for the session. Module scope like `lib/screenState.ts`: reload is
  * a legitimate reset.
  */
 const offsets = new Map<string, number>();
@@ -84,6 +86,9 @@ function useRouteScrollMemory() {
   const pathname = usePathname();
   /** The pathname the last apply ran for; `null` until the first navigation. */
   const seenRef = useRef<string | null>(null);
+  /** The page content the last apply found under the scroller: `[data-page-content]` is keyed on
+      the background pathname, so a page an overlay covered is the same node when it closes. */
+  const contentRef = useRef<Element | null>(null);
 
   /* Declarative only: the document scroller never moves, so the browser had nothing to
      restore either way; `manual` keeps that true if `<body>`'s overflow ever changes. */
@@ -135,16 +140,31 @@ function useRouteScrollMemory() {
   useLayoutEffect(() => {
     const previous = seenRef.current;
     seenRef.current = pathname;
+    const content = document.querySelector('[data-page-content]');
+    const samePage = content !== null && content === contentRef.current;
+    contentRef.current = content;
     const key = entryKey(pathname);
     const wasTraversal = traversedKey !== null && traversedKey === key;
     traversedKey = null;
     // First mount: the browser is already at the top, and a deep link's own anchor is its own.
     if (previous === null || previous === pathname) return;
+    noteInAppNavigation();
+    /* The same rule for the page's tab groups: arriving by a push is a fresh visit, so their
+       remembered offsets go; a traversal keeps them (see `lib/tabScroll.ts`). */
+    if (!wasTraversal) clearTabScroll(pathname);
     if (!mayOwn(pathname)) return;
+    /* A picture's overlay closing back onto the page it covered: that page never left the screen,
+       so its offset is its own — and a close that nothing flies may just have moved it on purpose,
+       turning the list to the picture last on screen (`revealInImageSequence`). Restoring the
+       entry's offset from before the picture opened threw that away under the closing container.
+       A page the router remounted (a reload, a Back into a list left for another route) is a new
+       node and is restored as before. */
+    if (wasTraversal && samePage && previous.startsWith('/pic/')) return;
     const scroller = getAppScroller();
     if (!scroller) return;
-    /* No growth watcher and no second attempt: `lib/pageCache.ts` re-seeds a returning page
-       from the render it was showing, so the height is usually right on the first commit;
+    /* No growth watcher and no second attempt: the resource cache (`lib/resource.ts`) and the
+       screen state (`lib/screenState.ts`) re-seed a returning page from what it was showing,
+       so the height is usually right on the first commit;
        when it is short the browser clamps and the landing is as close as it can be — the same
        rule the per-tab memory applies through its own clamp. */
     scroller.scrollTop = wasTraversal ? (offsets.get(key) ?? 0) : 0;

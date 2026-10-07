@@ -2,164 +2,499 @@
 
 import {
   startTransition,
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
-  useState,
-  useCallback,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
 } from 'react';
+import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
+import { useOffline } from 'next/offline';
 import {
-  MdDownload,
-  MdOpenInNew,
-  MdStar,
-  MdStarBorder,
-  MdShare,
-  MdFlag,
   MdChevronLeft,
   MdChevronRight,
-  MdThumbUp,
-  MdThumbDown,
+  MdDownload,
+  MdFlag,
+  MdIosShare,
+  MdLibraryAdd,
+  MdLink,
+  MdOpenInNew,
+  MdSend,
+  MdShare,
+  MdStar,
+  MdStarBorder,
+  MdTranslate,
 } from 'react-icons/md';
-import Modal from '@/components/Modal';
-import { cn, copyText } from '@/lib/utils';
-import { useAuthModal } from '@/components/AuthModal';
-import { api, type Comment } from '@/lib/api';
-import dynamic from 'next/dynamic';
-import { ICON } from '@/lib/icons';
 import type { PicLightboxSlide } from '@/components/PicLightbox';
-/* The whole lightbox — core *and* its five plugins — behind one boundary. See `PicLightbox`. */
-const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false });
-import { showToast } from '@/components/Toast';
-import IconButton from '@/components/IconButton';
-import Card from '@/components/Card';
-import Menu, { type MenuAction } from '@/components/Menu';
-import Skeleton from '@/components/Skeleton';
-import DetailHeader from '@/components/DetailHeader';
+import { useAuthModal } from '@/components/AuthModal';
+import Button from '@/components/Button';
+import { buttonClasses } from '@/components/buttonStyles';
+import CommentSection, { type ReplyTarget } from '@/components/CommentSection';
 import DetailBack from '@/components/DetailBack';
-import PageBack from '@/components/PageBack';
-import { readToken, useEscapeBack, useSession, useStoredBoolean } from '@/lib/hooks';
-import { LS_KEYS } from '@/lib/constants';
-import { SKIP, useResource } from '@/lib/resource';
-import { faveIds as faveIdsResource, sharedFaveIds } from '@/lib/resources';
-import { useOverlayLayer } from '@/lib/overlay';
+import DetailHeader from '@/components/DetailHeader';
 import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
-import TagList, { groupTags } from '@/components/TagList';
-import TagInfoModal from '@/components/TagInfoModal';
-import { loadTagCounts } from '@/lib/tagCounts';
-import { loadTagTranslations, tagTranslationKey } from '@/lib/tagTranslations';
-import CommentSection from '@/components/CommentSection';
-import Button, { buttonClasses } from '@/components/Button';
+import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import { Textarea } from '@/components/Input';
-import { getHeroMediaStyle } from '@/lib/hero/geometry';
-import { scrollAppToElement } from '@/lib/scrollTo';
-import { peekImageDetail, prefetchImageDetail, subscribeImageDetail } from '@/lib/detail';
+import IconButton from '@/components/IconButton';
+import Menu, { type MenuAction } from '@/components/Menu';
+import PageBack from '@/components/PageBack';
+import { useShareToContact } from '@/components/ShareToContactDialog';
+import Skeleton from '@/components/Skeleton';
+import TagInfoModal from '@/components/TagInfoModal';
+import TagList, {
+  BATCH_SIZES,
+  groupTags,
+  visibleTagsOf,
+  type TagSection,
+  type VisibleTagLimits,
+} from '@/components/TagList';
+import { showToast } from '@/components/Toast';
+import DetailDescription from '@/components/detail/DetailDescription';
+import DetailSources from '@/components/detail/DetailSources';
+import DetailVotes from '@/components/detail/DetailVotes';
+import ImageTranslationStatus from '@/components/detail/ImageTranslationStatus';
+import ReportDialog from '@/components/detail/ReportDialog';
+import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
+import { readJson } from '@/lib/api/http';
+import { shareThumbUrl } from '@/lib/api/messages';
+import { addBrowsingHistory, reportImage } from '@/lib/api/picpony';
+import { addPrivacyFave } from '@/lib/api/favorites';
+import { getBrowsingSettings } from '@/lib/api/client';
+import { favoritesHref, goesToPrivacySpace, resolveDefaultFolder, type DefaultFolder } from '@/lib/favorites';
+import { favouriteImage, favouritesChanged, restoreFavourite, unfavouriteImage } from '@/lib/favoritesActions';
+import { addPrivacyPictures } from '@/lib/favoritesPrivacy';
+import { useSyncedSetting } from '@/lib/settingsSync';
+import FolderPicker from '@/components/favorites/FolderPicker';
+import { createShareLink, trackShare } from '@/lib/api/share';
+import { useBackOrParent } from '@/lib/backNavigation';
+import { LS_KEYS } from '@/lib/constants';
+import { plainTextOf } from '@/lib/derpiMarkup';
+import {
+  peekImageDetail,
+  peekImageDetailError,
+  prefetchImageDetail,
+  seedImageDetail,
+  subscribeImageDetail,
+} from '@/lib/detail';
+import { downloadOriginal } from '@/lib/download';
+import { describeImage } from '@/lib/imageDescription';
+import { getRawImageUrl } from '@/lib/imageLoader';
+import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
+import { useDetailStep } from '@/lib/hero/useDetailStep';
+import { findDetailOriginLink, playDetailEntrance } from '@/lib/detailTransit';
 import {
   bindImageHeroDismissGesture,
-  getImageHeroRuntime,
+  findImageHeroCardLink,
   getImageHeroOrigin,
+  getImageHeroRuntime,
   interruptImageHero,
   isImageHeroDetailDataPublishable,
   isImageHeroPublicationQuiet,
+  leaveImageHeroOrphanLadder,
   markImageHeroRoutePreviewPaintable,
   markImageHeroRouteResolvedWithoutMedia,
   publishWhenHeroSettled,
+  registerImageDetailClose,
   registerImageHeroRoute,
   requestImageHeroClose,
-  requestImageHeroDetailRouteChange,
   subscribeImageHeroRuntime,
   updateImageHeroRouteTarget,
 } from '@/lib/hero';
+import { readToken, useEscapeBack, useSession, useStoredBoolean } from '@/lib/hooks';
+import { ICON } from '@/lib/icons';
+import { useOverlayLayer } from '@/lib/overlay';
+import { SKIP, useResource } from '@/lib/resource';
+import { faveFolders, faveIds as faveIdsResource, translateSwitch } from '@/lib/resources';
+import { scrollAppToElement } from '@/lib/scrollTo';
+import { loadTagCounts } from '@/lib/tagCounts';
+import { loadTagTranslations, peekTagTranslations, rememberTagTranslations } from '@/lib/tagTranslations';
+import { useImageTranslation } from '@/lib/translation';
+import type { DetailSeed, ImagePreview, PonyImage } from '@/lib/types/image';
+import { cn, copyText } from '@/lib/utils';
+
+/* The whole lightbox — core, plugins and stylesheet — behind one boundary (see `PicLightbox`).
+   `loading` keeps the first open from suspending to the route's boundary, which would replace
+   the whole detail with the route skeleton while the chunk arrives. */
+const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false, loading: () => null });
+
+/** Fetched on intent — a pointer arriving on the picture, a press, focus reaching its zoom control. */
+function warmLightbox() {
+  void import('@/components/PicLightbox');
+}
 
 type PicDetailProps = {
   presentation?: 'page' | 'overlay';
+  /**
+   * A direct load's record, read on the server (`lib/detail.server.ts`) and already on the
+   * document's image line — `null` when that read did not land in time. Page presentation only.
+   */
+  seed?: DetailSeed | null;
 };
 
 function getServerDetail() {
   return null;
 }
 
-/**
- * The gallery's press order, as this screen's prev/next stack — read at first render so
- * the failure state's one action is gated on it without a late re-layout. Empty on the
- * server or when unparseable, so callers treat it as a plain array.
- */
-const NAV_HISTORY_KEY = 'picpony_nav_history';
+function readHeroSessionId() {
+  return getImageHeroRuntime().sessionId;
+}
 
-function readNavHistory(): number[] {
-  if (typeof window === 'undefined') return [];
+/**
+ * The picture's box, which the media fills. The box — not the media element — takes the hero's
+ * geometry, so the step arrows can sit over the picture as its siblings; the media element is
+ * still the landing target and measures exactly the box.
+ */
+const MEDIA_FILL: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%' };
+
+const INITIAL_TAG_LIMIT = 80;
+const INITIAL_RELATION_TAG_LIMIT = 32;
+
+/** How long 显示更多 waits for the next batch's names before revealing it anyway. */
+const SHOW_MORE_WAIT_MS = 1200;
+
+const initialTagLimits = (imageId: number): VisibleTagLimits => ({
+  imageId,
+  artists: INITIAL_RELATION_TAG_LIMIT,
+  ocs: INITIAL_RELATION_TAG_LIMIT,
+  regular: INITIAL_TAG_LIMIT,
+});
+
+interface TagData {
+  imageId: number;
+  translations: Record<string, string | null>;
+  counts: Record<string, number | null>;
+}
+
+const isRegularTag = (tag: string) => !tag.startsWith('artist:') && !tag.startsWith('oc:');
+
+/**
+ * The next batch's glossary names and counts, fetched before the batch is revealed — so its chips
+ * appear with the names they keep instead of English words that change width a moment later.
+ * Bounded: past `SHOW_MORE_WAIT_MS` the batch shows with what has arrived.
+ */
+function prepareTagBatch(
+  tags: string[],
+  { translations, counts }: { translations: boolean; counts: boolean },
+): Promise<Omit<TagData, 'imageId'>> {
+  const out: Omit<TagData, 'imageId'> = { translations: {}, counts: {} };
+  const work: Promise<unknown>[] = [];
+  if (translations && tags.length > 0) {
+    work.push(loadTagTranslations(tags, (part) => Object.assign(out.translations, part)));
+  }
+  const regular = tags.filter(isRegularTag);
+  if (counts && regular.length > 0) work.push(loadTagCounts(regular, (part) => Object.assign(out.counts, part)));
+  const cap = new Promise<void>((resolve) => setTimeout(resolve, SHOW_MORE_WAIT_MS));
+  return Promise.race([Promise.all(work).then(() => undefined, () => undefined), cap]).then(() => out);
+}
+
+// ---------------------------------------------------------------------------
+// Sharing — the original front end's contract, through B3's `lib/api/share.ts`
+// ---------------------------------------------------------------------------
+
+/** Short links made this page life, per picture: a second copy does not store a second row. */
+const shareLinks = new Map<number, string>();
+
+const shareTitle = (id: number) => `分享一张精美的小马图（ID：${id}）`;
+
+/** The link preview's line: the description's first words, else an invitation. */
+function shareDescription(description: string | null | undefined): string {
+  const text = plainTextOf(description).replace(/\s+/g, ' ').trim();
+  if (!text) return '点击链接自动打开详情，快来看看吧~';
+  const chars = Array.from(text);
+  return chars.length > 40 ? `${chars.slice(0, 40).join('')}…` : text;
+}
+
+/** The short link for the picture (the long one when the backend cannot make one). */
+async function imageShareLink(image: ImagePreview, token: string | null): Promise<string> {
+  const cached = shareLinks.get(image.id);
+  if (cached) return cached;
+  const link = await createShareLink(
+    {
+      targetUrl: new URL(`/pic/${image.id}`, window.location.origin).href,
+      title: shareTitle(image.id),
+      desc: shareDescription(image.description),
+      imageUrl: shareThumbUrl(image.representations) || undefined,
+      imageId: image.id,
+    },
+    { token },
+  );
+  if (link.short) shareLinks.set(image.id, link.url);
+  return link.url;
+}
+
+async function copyLink(url: string, token: string | null): Promise<boolean> {
+  if (!(await copyText(url))) return false;
+  showToast('已复制分享链接', 'success');
+  trackShare(token);
+  return true;
+}
+
+/**
+ * 复制链接. The link is made over the network first, and some browsers only allow a clipboard
+ * write inside the gesture that asked for it — by the time the link exists that gesture can be
+ * spent, so a copy that fails is offered again as a tap (B3's search share does the same).
+ */
+async function copyImageLink(image: ImagePreview, token: string | null): Promise<void> {
+  const url = await imageShareLink(image, token);
+  if (await copyLink(url, token)) return;
+  showToast('分享链接已生成', 'info', {
+    action: {
+      label: '复制',
+      onClick: () => {
+        void copyLink(url, token).then((copied) => {
+          if (!copied) showToast('复制失败，请检查浏览器的剪贴板权限', 'error');
+        });
+      },
+    },
+  });
+}
+
+/** 分享到其他应用: the system share sheet, with the same link and words. */
+async function shareImageNatively(image: ImagePreview, token: string | null): Promise<void> {
+  const url = await imageShareLink(image, token);
+  const data: ShareData = { title: shareTitle(image.id), text: shareDescription(image.description), url };
+  const open = () =>
+    navigator.share(data).then(
+      () => trackShare(token),
+      (error: unknown) => {
+        const name = error instanceof DOMException ? error.name : '';
+        /* The reader closed the sheet: nothing to say. */
+        if (name === 'AbortError') return;
+        /* The gesture was spent waiting for the link: offer the sheet again, from a fresh tap. */
+        if (name === 'NotAllowedError') {
+          showToast('分享链接已生成', 'info', { action: { label: '分享', onClick: () => void open() } });
+          return;
+        }
+        void copyImageLink(image, token);
+      },
+    );
+  await open();
+}
+
+// ---------------------------------------------------------------------------
+// The picture's actions, at module scope (the React Compiler lowers no `finally` in a component)
+// ---------------------------------------------------------------------------
+
+type Outcome = { ok: true } | { ok: false; message: string };
+type FavePress =
+  | { ok: true; kind: 'faved'; folderName: string }
+  | { ok: true; kind: 'unfaved'; previous: number[] }
+  | { ok: true; kind: 'privacy' }
+  | { ok: true; kind: 'picker' }
+  | { ok: false; message: string };
+
+/**
+ * One press on 收藏, in the original front end's order (`handleFaveClick`): a picture not yet
+ * favourited that the auto-privacy rule claims goes to the privacy space instead; then, with
+ * 一键收藏 off, the press opens the folder picker; otherwise it toggles — into the default
+ * folder, or out of favourites altogether (`fave: false`, which cannot add; 撤销 puts it back).
+ *
+ * It starts from the shared complete index (`faveIds`), even when the press beats the screen's
+ * first read: a cold key must not be written as a one-item list. Every cache that knows the
+ * picture's state is corrected or re-read by `lib/favoritesActions.ts`.
+ */
+async function sendFavePress(
+  token: string,
+  image: PonyImage,
+  choice: { oneTap: boolean; defaultFolder: DefaultFolder; autoPrivacy: boolean },
+): Promise<FavePress> {
   try {
-    const stored = sessionStorage.getItem(NAV_HISTORY_KEY);
-    const parsed = stored ? JSON.parse(stored) : null;
-    return Array.isArray(parsed) ? parsed.filter((value) => typeof value === 'number') : [];
-  } catch {
-    return [];
+    const index = await faveIdsResource.read({ token });
+    if (readToken() !== token) return { ok: false, message: '登录状态已改变，请重新操作' };
+    const faved = index.ids.includes(image.id);
+    const contentFilter = getBrowsingSettings().contentFilter;
+    if (goesToPrivacySpace({ alreadyFaved: faved, autoPrivacy: choice.autoPrivacy, contentFilter, tags: image.tags })) {
+      await addPrivacyFave(token, image);
+      if (readToken() === token) { addPrivacyPictures(token, [image]); favouritesChanged(token); }
+      return { ok: true, kind: 'privacy' };
+    }
+    if (!choice.oneTap) return { ok: true, kind: 'picker' };
+    if (faved) {
+      const { previous } = await unfavouriteImage(token, image.id);
+      return { ok: true, kind: 'unfaved', previous };
+    }
+    /* A chosen folder that has since gone falls back to the main folder, as the list says. */
+    let target = choice.defaultFolder;
+    if (target.id > 0) {
+      const list = faveFolders.peek({ token }).data ?? (await faveFolders.read({ token }).catch(() => null));
+      if (list) target = resolveDefaultFolder(list.folders, target);
+    }
+    await favouriteImage(token, image.id, target.id);
+    return { ok: true, kind: 'faved', folderName: target.name };
+  } catch (error) {
+    return { ok: false, message: apiErrorMessage(error, '收藏失败') };
   }
 }
 
-const INITIAL_TAG_LIMIT = 80;
-
-/* A `Menu`, not a lone button: "分享" promises a menu (`aria-haspopup="menu"`) and
-   future entries have an obvious home. */
-const SHARE_ITEMS: MenuAction[] = [{ value: 'copy-link', label: '复制链接' }];
-
-const INITIAL_RELATION_TAG_LIMIT = 32;
-const commentsInFlight = new Map<string, Promise<Comment[]>>();
-
-function getCommentsOnce(imageId: string) {
-  const existing = commentsInFlight.get(imageId);
-  if (existing) return existing;
-
-  const request = api
-    .getComments(imageId)
-    .then((response) => (response.success ? response.comments : []))
-    .catch((error) => {
-      console.error('Failed to load comments:', error);
-      return [];
-    })
-    .finally(() => {
-      if (commentsInFlight.get(imageId) === request) commentsInFlight.delete(imageId);
-    });
-  commentsInFlight.set(imageId, request);
-  return request;
+async function sendReport(token: string, imageId: number, reason: string): Promise<Outcome> {
+  try {
+    const data = await readJson<{ success?: unknown; message?: string; error?: string }>(
+      await reportImage(token, imageId, reason),
+    );
+    if (data.success === true) return { ok: true };
+    return { ok: false, message: data.error || data.message || '举报提交失败' };
+  } catch (error) {
+    return { ok: false, message: apiErrorMessage(error, '举报提交失败') };
+  }
 }
 
-export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
+/** The picture's own record over the list's row, and a row that is a video over one that is not. */
+function mediaFacts(image: ImagePreview) {
+  const reps = image.representations ?? {};
+  const preferMedium = (image.size || 0) > 16 * 1024 * 1024 || (image.width || 0) * (image.height || 0) > 40_000_000;
+  const imageSrc =
+    (preferMedium ? reps.medium : undefined) || reps.large || reps.medium || reps.full || image.view_url || '';
+  const format = (image.format || imageSrc.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
+  const isVideo = format === 'webm' || format === 'mp4';
+  const videoSrc = reps.medium || reps.large || reps.full || image.view_url || '';
+  const fullSrc = reps.full || image.view_url || '';
+  return { reps, imageSrc, format, isVideo, videoSrc, fullSrc };
+}
+
+// ---------------------------------------------------------------------------
+// The loading placeholder, shared with the route's streaming fallback
+// ---------------------------------------------------------------------------
+
+/**
+ * The detail's shape while its record is on the way: the two metadata rows, a media well, and
+ * the body under it. Also the direct load's streaming fallback (`DetailPageFallback`), so the
+ * first byte and the client's own placeholder are one shape.
+ */
+function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?: boolean }) {
+  return (
+    <div
+      data-page-loading={page ? '' : undefined}
+      className={cn('image-detail-page mx-auto max-w-5xl', page && 'page-back-room-5xl', gutter)}
+    >
+      <div className="flex flex-col rounded-md bg-transparent">
+        {/* `DetailHeader`'s real shape: two centred one-line rows. Each row opens with an empty
+            run of the rows' own type — a strut — so it is exactly one `body-m` line tall, as the
+            real rows are; a fixed height would be a guess at the line box. */}
+        <div className="image-detail-header-route px-4 py-3 sm:px-6">
+          <div className="flex flex-col items-center gap-y-1 text-body-m">
+            <div className="flex items-center justify-center gap-x-3 sm:gap-x-4">
+              <span aria-hidden="true">{'​'}</span>
+              <Skeleton className="h-4 w-28" delay={60} />
+              <Skeleton className="h-4 w-14" delay={120} />
+              <Skeleton className="h-4 w-10" delay={180} />
+            </div>
+            <div className="flex items-center justify-center gap-x-3 sm:gap-x-4">
+              <span aria-hidden="true">{'​'}</span>
+              <Skeleton className="h-4 w-20" delay={90} />
+              <Skeleton className="h-4 w-8" delay={150} />
+              <Skeleton className="h-4 w-20" delay={210} />
+            </div>
+          </div>
+        </div>
+        <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6 md:min-h-[48dvh]">
+          {/* Inset only: a width or height beside it would replace the computed insets. */}
+          <Skeleton className="absolute inset-4 rounded-lg" delay={90} />
+        </div>
+        <div className="image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6">
+          <div className="mx-auto w-full max-w-5xl space-y-6">
+            <div>
+              <div className="mb-1.5 flex justify-between">
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 w-14" delay={60} />
+              </div>
+              <Skeleton className="h-1 w-full rounded-full" delay={120} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Skeleton className="h-10 w-28 rounded-full" delay={150} />
+              <Skeleton className="h-10 w-40 rounded-full" delay={180} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A direct load's first byte while the server reads the picture (up to its 2.5s bound): the
+ * detail's own placeholder and its back affordance — drawn in every state, loading included.
+ */
+export function DetailPageFallback() {
+  const back = useBackOrParent('/');
+  useEscapeBack(back);
+  return (
+    <div className="relative">
+      <PageBack onClick={back} label="返回图片列表" />
+      <DetailSkeleton page />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The detail
+// ---------------------------------------------------------------------------
+
+export default function PicDetail({ presentation = 'page', seed = null }: PicDetailProps) {
   const params = useParams();
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const session = useSession();
-  const id = params.id as string;
-  const imageId = Number(id);
-  const heroRuntime = useSyncExternalStore(
-    subscribeImageHeroRuntime,
-    getImageHeroRuntime,
-    getImageHeroRuntime,
-  );
+  const overlayRef = useRef<HTMLElement>(null);
+  const overlayScrollerRef = useRef<HTMLDivElement>(null);
+  /** What the step's shared axis moves: the overlay's cross-fade block, or the page's column. */
+  const stepContentRef = useRef<HTMLDivElement>(null);
+  /** Whether something layered over the detail owns input — read at event time by the step. */
+  const stepBlockedRef = useRef<() => boolean>(() => false);
+  /* The picture on screen is the step's, not the route's: 上一张 / 下一张 change it in place,
+     and the route (and its `[id]`) stays the one the viewer opened on — see `useDetailStep`. */
+  const {
+    imageId,
+    neighbours: stepNeighbours,
+    loading: stepLoading,
+    step: stepTo,
+    bindSwipe,
+    isStepping,
+  } = useDetailStep({
+    routeId: Number(params.id),
+    contentRef: stepContentRef,
+    rootRef: presentation === 'overlay' ? overlayRef : stepContentRef,
+    scrollerRef: presentation === 'overlay' ? overlayScrollerRef : null,
+    isBlocked: () => stepBlockedRef.current(),
+    onError: (error) => showToast(apiErrorMessage(error), 'error'),
+  });
+  /* The session id alone: every other runtime field changes several times per flight and on
+     every step, and this is the largest tree on screen — subscribed to the whole runtime, it
+     re-rendered at the press of every 上一张 / 下一张, in the frame the step starts. */
+  const heroSessionId = useSyncExternalStore(subscribeImageHeroRuntime, readHeroSessionId, readHeroSessionId);
   const routeInstanceId = useId();
-  const surfaceId = useMemo(
-    () => `hero-route:${imageId}:${routeInstanceId}`,
-    [imageId, routeInstanceId],
-  );
+  const surfaceId = useMemo(() => `hero-route:${imageId}:${routeInstanceId}`, [imageId, routeInstanceId]);
   // Latch the seed for this route id: a live read would flip to null when the module
   // snapshot expires and remount the media mid-view. Re-read on a new runtime session,
   // when a fresh controller-owned snapshot may exist for this otherwise stable route id.
   const heroSeed = useMemo(() => {
-    void heroRuntime.sessionId;
+    void heroSessionId;
     return getImageHeroOrigin(imageId);
-  }, [imageId, heroRuntime.sessionId]);
-  const subscribeDetail = useCallback(
-    (listener: () => void) => subscribeImageDetail(imageId, listener),
-    [imageId],
-  );
+  }, [imageId, heroSessionId]);
+
+  /* A direct load's server-read record. Installed in the record cache during render — the
+     resource layer's own `initial` precedent: idempotent (an entry already there is left alone),
+     browser-only, and an effect would be a frame late for the hydrating pass that must not
+     disagree with the server's HTML. */
+  const pageSeed = presentation === 'page' && seed?.id === imageId ? seed : null;
+  const seedImage = pageSeed?.image ?? null;
+  const seedNotFound = pageSeed !== null && pageSeed.image === null;
+  if (seedImage && pageSeed) seedImageDetail(seedImage, pageSeed.generatedAt);
+
+  const subscribeDetail = useCallback((listener: () => void) => subscribeImageDetail(imageId, listener), [imageId]);
   const readDetail = useCallback(() => peekImageDetail(imageId), [imageId]);
+  const readDetailError = useCallback(() => peekImageDetailError(imageId), [imageId]);
   const prefetchedDetail = useSyncExternalStore(subscribeDetail, readDetail, getServerDetail);
-  const image = prefetchedDetail?.image ?? heroSeed?.image ?? null;
+  const recordError = useSyncExternalStore(subscribeDetail, readDetailError, getServerDetail);
+  /** The picture's full record — the list's row is not one (a profile's row has no uploader). */
+  const record = prefetchedDetail?.image ?? seedImage;
+  const image = record ?? heroSeed?.image ?? null;
   /**
    * The media box is latched per route id, seeded once per image, so the width source
    * (hero seed record vs detail record) never switches under it and the box cannot
@@ -168,11 +503,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
    * Set during render rather than in an effect, so a new route id never paints a frame at
    * the previous image's aspect ratio.
    */
-  const [latchedMedia, setLatchedMedia] = useState<{
-    id: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  const [latchedMedia, setLatchedMedia] = useState<{ id: number; width: number; height: number } | null>(null);
   const seedWidth = heroSeed?.image.width || image?.width || 0;
   const seedHeight = heroSeed?.image.height || image?.height || 0;
   if (seedWidth > 0 && seedHeight > 0 && latchedMedia?.id !== imageId) {
@@ -180,21 +511,12 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   }
   const latchedMediaBox = latchedMedia?.id === imageId ? latchedMedia : null;
 
-
   const [revealedHeroSeedAt, setRevealedHeroSeedAt] = useState<number | null>(null);
   const [finalReadyId, setFinalReadyId] = useState<number | null>(null);
-  const [deferredBodyId, setDeferredBodyId] = useState<number | null>(() =>
-    heroSeed ? null : imageId,
-  );
-  const [visibleTags, setVisibleTags] = useState({
-    imageId,
-    artists: INITIAL_RELATION_TAG_LIMIT,
-    ocs: INITIAL_RELATION_TAG_LIMIT,
-    regular: INITIAL_TAG_LIMIT,
-  });
-  const [detailError, setDetailError] = useState<{ id: number; error: Error } | null>(null);
-  /* Both keyed by image id, like `finalReadyId`: the route is reused across
-     detail↔detail navigations, so a per-image answer must not outlive its image. */
+  const [deferredBodyId, setDeferredBodyId] = useState<number | null>(() => (heroSeed ? null : imageId));
+  const [visibleTags, setVisibleTags] = useState<VisibleTagLimits>(() => initialTagLimits(imageId));
+  /* Keyed by image id, like `finalReadyId`: the route is reused across detail↔detail
+     navigations, so a per-image answer must not outlive its image. */
   const [previewFailedId, setPreviewFailedId] = useState<number | null>(null);
   const [mediaUnavailableId, setMediaUnavailableId] = useState<number | null>(null);
   const previewFailed = previewFailedId === imageId;
@@ -211,85 +533,67 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
   const preloadFinal = Boolean(heroSeed);
   const finalReady = finalReadyId === imageId;
   const deferredBodyReady = deferredBodyId === imageId;
-  const visibleTagLimits =
-    visibleTags.imageId === imageId
-      ? visibleTags
-      : {
-          imageId,
-          artists: INITIAL_RELATION_TAG_LIMIT,
-          ocs: INITIAL_RELATION_TAG_LIMIT,
-          regular: INITIAL_TAG_LIMIT,
-        };
-  const error = detailError?.id === imageId ? detailError.error : null;
-  const isLoading = !image && !error;
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const favesRead = useResource(
-    faveIdsResource,
-    deferredBodyReady && session.token ? { token: session.token } : SKIP,
-  );
-  const isFaved = favesRead.data?.includes(imageId) ?? false;
+  const visibleTagLimits = visibleTags.imageId === imageId ? visibleTags : initialTagLimits(imageId);
+
+  /* What the screen is: the picture, a picture that does not exist, a read that failed, or the
+     read still on its way. A deleted picture is not an outage — it gets no 重试. */
+  const notFound = !image && (seedNotFound || (recordError !== null && isNotFound(recordError)));
+  const loadFailed = !image && !notFound && recordError !== null;
+  const isLoading = !image && !notFound && !loadFailed;
+  /** The list's row is on screen but the record behind it could not be read. */
+  const bodyError = image !== null && record === null && recordError !== null ? recordError : null;
+  /* Offline, a record still on its way is not "loading" — nothing will arrive until the network
+     does, so its placeholders give way to saying so, and the read runs again on reconnect. */
+  const offline = useOffline();
+  const recordPending = record === null && recordError === null && !offline;
+
+  const favesRead = useResource(faveIdsResource, deferredBodyReady && session.token ? { token: session.token } : SKIP);
+  const isFaved = favesRead.data?.ids.includes(imageId) ?? false;
   const [favePending, setFavePending] = useState<{ imageId: number; token: string } | null>(null);
-  const faveRequest = useRef(0);
-  const faveBusy = useRef(false);
-  const isFaveLoading = favePending?.imageId === imageId && favePending?.token === session.token;
-  useEffect(() => {
-    faveBusy.current = false;
-    return () => { faveRequest.current += 1; };
-  }, [imageId, session.token]);
+  const faveBusy = favePending?.imageId === imageId && favePending.token === session.token;
+  const oneTapFave = useSyncedSetting('defaultFaveToMain');
+  const defaultFolder = useSyncedSetting('defaultFaveFolder');
+  const autoPrivacy = useSyncedSetting('autoPrivacyFaves');
+  const showPrivacySpace = useSyncedSetting('showPrivacyFaves');
+  /* 收藏到…, per picture: stepping to the next one closes it. */
+  const [pickerFor, setPickerFor] = useState<number | null>(null);
+  const pickerOpen = pickerFor === imageId && session.token !== null;
 
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [isLoadingComments, setIsLoadingComments] = useState(true);
-  const [commentsViewport, setCommentsViewport] = useState({ imageId, ready: false });
-  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareMenu, setShareMenu] = useState<{ imageId: number; native: boolean } | null>(null);
+  const shareOpen = shareMenu?.imageId === imageId;
+  const [sharingId, setSharingId] = useState<number | null>(null);
   const shareButtonRef = useRef<HTMLButtonElement>(null);
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState('');
-  const [isReporting, setIsReporting] = useState(false);
+  const { share: shareToContact, shareDialog } = useShareToContact();
 
-  // --- Lightbox state ---
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-
-  // --- Image navigation state ---
-  /**
-   * Nav history is read during the first render, not from an effect: the failure state's
-   * one action (上一张) is gated on it, and an effect-learned answer mounts at least one
-   * paint after the block — adding a 24px margin plus a 40dp button to a centred column
-   * lifts the block 32px ("appears lower, then jumps up").
-   *
-   * `sessionStorage` is unavailable while rendering on the server, hence the guard; the
-   * lazy initialiser runs once per mount on the client, before first paint.
-   */
-  const [navHistory, setNavHistory] = useState<number[]>(() => readNavHistory());
-  const currentNavIndex = useMemo(() => navHistory.indexOf(Number(id)), [navHistory, id]);
-  /**
-   * Whether this screen can offer 上一张, decided **once, at mount** — deliberately not
-   * derived from `currentNavIndex`, which moves as the press order grows. The button only
-   * needs to know whether a previous picture *is* reachable, and that is settled at mount;
-   * a later change would re-lay-out the failure state's block (see above).
-   */
-  const [hasNavPrevious] = useState(() => {
-    const ids = readNavHistory();
-    const index = ids.indexOf(Number(id));
-    return index > 0 || (index === -1 && ids.length > 0);
+  /* The report's words are kept per picture for the life of the view: a failed submit, a sign-in
+     asked for mid-sentence, a dialog closed and opened again — none of them loses them. */
+  const [report, setReport] = useState<{ imageId: number; open: boolean; reason: string }>({
+    imageId,
+    open: false,
+    reason: '',
   });
+  const reportState = report.imageId === imageId ? report : { imageId, open: false, reason: '' };
+  const [reportBusy, setReportBusy] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-  // --- Tag info modal state ---
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-
-  // --- Comment reply state ---
-  const [replyTo, setReplyTo] = useState<{ id: number; username: string; body: string } | null>(
-    null,
-  );
-  const commentEditorMountRef = useRef<HTMLDivElement>(null);
-  const commentsSectionRef = useRef<HTMLDivElement>(null);
-  const overlayRef = useRef<HTMLElement>(null);
-  const overlayScrollerRef = useRef<HTMLDivElement>(null);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
+  /* The route used to remount for every picture, so its per-picture state reset itself. A step
+     keeps it mounted: what belongs to one picture resets when the picture changes (the rest is
+     keyed by image id already). */
+  const [stateImageId, setStateImageId] = useState(imageId);
+  if (stateImageId !== imageId) {
+    setStateImageId(imageId);
+    setReplyTo(null);
+    setSelectedTag(null);
+  }
+  const composerRef = useRef<HTMLDivElement>(null);
   const overlayContentRef = useRef<HTMLDivElement>(null);
   const overlaySurfaceRef = useRef<HTMLDivElement>(null);
   const overlayBackRef = useRef<HTMLButtonElement>(null);
   const detailTargetRef = useRef<HTMLDivElement>(null);
   const previewSurfaceRef = useRef<string | null>(null);
-  const shouldLoadComments = commentsViewport.imageId === imageId && commentsViewport.ready;
 
   const heroNavigation = useMemo(
     () => ({
@@ -359,251 +663,198 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     });
   }, [imageId, presentation, surfaceId]);
 
+  /* An open nothing flew into — from a history row, a link in a comment, Forward — still arrives:
+     out of the row it was pressed in, or with the plain arrival (`lib/detailTransit.ts`). Before
+     the first paint, and once per overlay: a step to the next picture keeps this one, and the
+     picture is read off the overlay's own route id, which a step does not change. */
+  useLayoutEffect(() => {
+    if (presentation !== 'overlay' || !overlayRef.current) return;
+    return playDetailEntrance(overlayRef.current);
+  }, [presentation]);
+
   /**
    * Tell the controller there will never be anything to hand off to, so the container
-   * transform can finish and the error surface in its place — otherwise a failed load
-   * leaves the flight waiting out a 30s timeout with this page sealed behind it.
+   * transform can finish and the failure surface in its place — otherwise a failed load
+   * leaves the flight waiting out a 30s timeout with this page sealed behind it. Two terms
+   * for two failures: no picture at all (the record failed and no row stands in for it), and
+   * both media layers reporting they will never paint.
    */
-  /* Two terms for two failures: `error` is the detail *record* failing (unreachable during
-     a flight — it can only be set when there is no hero seed), while `mediaUnavailable` is
-     both media layers reporting they will never paint. A record can resolve with no
-     paintable media; deliberate — the branch below renders the picture's box, not the
-     error state, for that case. */
-  const resolvedWithoutMedia = presentation === 'overlay' && (Boolean(error) || mediaUnavailable);
+  const resolvedWithoutMedia = presentation === 'overlay' && (notFound || loadFailed || mediaUnavailable);
   useEffect(() => {
     if (!resolvedWithoutMedia) return;
     markImageHeroRouteResolvedWithoutMedia(surfaceId);
   }, [resolvedWithoutMedia, surfaceId]);
 
-  // Wait for the detail record: a profile preview has no uploader metadata yet.
-  // The effect belongs to the mounted detail, so prefetch alone never records a visit.
-  const historyImage = prefetchedDetail?.image;
+  /* The picture's name in the tab while the viewer is open over the list (the list's own title
+     comes back on close). A direct load's title is the route's metadata. */
   useEffect(() => {
-    const token = readToken();
-    if (!token || !historyImage) return;
-    const reps = historyImage.representations ?? {};
-    const previewUrl = reps.thumb || reps.small || reps.large || historyImage.view_url;
-    void api
-      .addBrowsingHistory(token, {
-        image_id: historyImage.id,
-        preview_url: previewUrl,
-        uploader: historyImage.uploader || '匿名',
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one visit per resolved image id
-  }, [historyImage?.id]);
+    if (presentation !== 'overlay') return;
+    const previous = document.title;
+    document.title = `#${imageId} - PicPony`;
+    return () => {
+      document.title = previous;
+    };
+  }, [imageId, presentation]);
 
+  /* One visit per picture, once its record is in (a profile's row has no uploader yet). The
+     mounted detail records it, so a prefetch alone never does. */
+  const recordedVisitRef = useRef<number | null>(null);
+  useEffect(() => {
+    const token = session.token;
+    if (!token || !record || recordedVisitRef.current === record.id) return;
+    recordedVisitRef.current = record.id;
+    const reps = record.representations ?? {};
+    void addBrowsingHistory(token, {
+      image_id: record.id,
+      preview_url: getRawImageUrl(reps.thumb || reps.small || reps.large || record.view_url || ''),
+      uploader: record.uploader || '匿名用户',
+    }).catch(() => {});
+  }, [record, session.token]);
+
+  /* The server's glossary names go into the browser's cache, so the next picture that shares
+     tags with this one starts with them. */
+  const seedTranslations = pageSeed?.translations ?? null;
+  useEffect(() => {
+    if (seedTranslations) rememberTagTranslations(seedTranslations);
+  }, [seedTranslations]);
+
+  // ---- Tags: glossary names and counts ----
   const showTagCounts = useStoredBoolean(LS_KEYS.showTagCounts);
   const showChineseTags = useStoredBoolean(LS_KEYS.showChineseTags, true);
+  const tags = image?.tags;
+  /* What is known when the list first renders is simply there: a direct load's names came with
+     the document, an overlay's from the browser's cache (the overlay is never a hydrating pass,
+     so reading the cache here cannot disagree with server HTML). The rest arrive below. */
+  const [tagData, setTagData] = useState<TagData>(() => ({
+    imageId,
+    translations: presentation === 'overlay' ? peekTagTranslations(tags ?? []) : { ...(seedTranslations ?? {}) },
+    counts: {},
+  }));
+  const currentTagData =
+    tagData.imageId === imageId ? tagData : { imageId, translations: peekTagTranslations(tags ?? []), counts: {} };
+  if (tagData.imageId !== imageId) setTagData(currentTagData);
+  const [preparing, setPreparing] = useState<{ imageId: number; section: TagSection } | null>(null);
 
-  // Tag count map: tag name → image count
-  const [tagCounts, setTagCounts] = useState<Record<string, number | null>>({});
-
-  // 词库中文翻译：剥离前缀的小写标签名 → 中文（null = 词库未收录）
-  const [tagTranslations, setTagTranslations] = useState<Record<string, string | null>>({});
+  const limitArtists = visibleTagLimits.artists;
+  const limitOcs = visibleTagLimits.ocs;
+  const limitRegular = visibleTagLimits.regular;
   useEffect(() => {
-    if (!deferredBodyReady) return;
-    if (!showChineseTags) return;
-    if (!image?.tags || image.tags.length === 0) return;
-    const groups = groupTags(image.tags);
-    const visibleTags = [
-      ...groups.artists.slice(0, visibleTagLimits.artists),
-      ...groups.ocs.slice(0, visibleTagLimits.ocs),
-      ...groups.regularTags.slice(0, visibleTagLimits.regular),
-    ];
-    /* 翻译 key 由 lib/tagTranslations 内部剥前缀转小写；这里只取画面上没见过的标签。 */
-    const missingTags = visibleTags.filter(
-      (tag) => !Object.hasOwn(tagTranslations, tagTranslationKey(tag)),
-    );
-    if (missingTags.length === 0) return;
-    let cancelled = false;
-    void loadTagTranslations(missingTags, (translations) => {
-      if (cancelled) return;
-      setTagTranslations((current) => ({ ...current, ...translations }));
+    if (!tags?.length || (!showChineseTags && !showTagCounts)) return;
+    const visible = visibleTagsOf(groupTags(tags), {
+      imageId,
+      artists: limitArtists,
+      ocs: limitOcs,
+      regular: limitRegular,
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    deferredBodyReady,
-    image,
-    showChineseTags,
-    tagTranslations,
-    visibleTagLimits.artists,
-    visibleTagLimits.ocs,
-    visibleTagLimits.regular,
-  ]);
-
-  useEffect(() => {
-    if (!deferredBodyReady) return;
-    if (!showTagCounts) return;
-    if (!image?.tags || image.tags.length === 0) return;
-    const uniqueTags = [
-      ...new Set(groupTags(image.tags).regularTags.slice(0, visibleTagLimits.regular)),
-    ];
-    const missingTags = uniqueTags.filter((tag) => tagCounts[tag] === undefined);
-    if (missingTags.length === 0) return;
     let cancelled = false;
-    /* Batched and cached in `lib/tagCounts`; cached ones land in the same tick, so a
-       tag list seen before paints its numbers without a request. */
-    void loadTagCounts(missingTags, (counts) => {
+    let pending: Omit<TagData, 'imageId'> | null = null;
+    let cancelPublish: (() => void) | null = null;
+    /* Requested as soon as the tags are known — the flight's window included — but written to
+       state only once the flight has landed: this is the largest tree on screen. */
+    const collect = (kind: 'translations' | 'counts', part: Record<string, string | number | null>) => {
       if (cancelled) return;
-      setTagCounts((current) => ({ ...current, ...counts }));
-    });
+      if (!pending) pending = { translations: {}, counts: {} };
+      Object.assign(pending[kind], part);
+      if (cancelPublish) return;
+      cancelPublish = publishWhenHeroSettled(
+        () => {
+          cancelPublish = null;
+          const next = pending;
+          pending = null;
+          if (cancelled || !next) return;
+          setTagData((state) =>
+            state.imageId !== imageId
+              ? state
+              : {
+                  imageId,
+                  translations: Object.keys(next.translations).length
+                    ? { ...state.translations, ...next.translations }
+                    : state.translations,
+                  counts: Object.keys(next.counts).length ? { ...state.counts, ...next.counts } : state.counts,
+                },
+          );
+        },
+        { idle: false, canPublish: () => isImageHeroDetailDataPublishable(imageId) },
+      );
+    };
+    if (showChineseTags) void loadTagTranslations(visible, (part) => collect('translations', part));
+    const regular = visible.filter(isRegularTag);
+    if (showTagCounts && regular.length > 0) void loadTagCounts(regular, (part) => collect('counts', part));
     return () => {
       cancelled = true;
+      cancelPublish?.();
     };
-  }, [deferredBodyReady, image, showTagCounts, tagCounts, visibleTagLimits.regular]);
+  }, [imageId, limitArtists, limitOcs, limitRegular, showChineseTags, showTagCounts, tags]);
 
-  // Dynamically import lightbox CSS
-  useEffect(() => {
-    if (!deferredBodyReady) return;
-    let cancelled = false;
-    const load = async () => {
-      if (!cancelled) await import('yet-another-react-lightbox/styles.css');
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredBodyReady]);
-
-  /* The comment-editor IntersectionObserver that used to live here is gone with what it
-     gated: `CommentComposer` renders a placeholder button and mounts the editor on press,
-     so the 774KB raw / 176KB brotli editor chunk is paid for by intent. The ref survives
-     because the reply flow still scrolls to it. */
-
-  useEffect(() => {
-    if (!deferredBodyReady) return;
-    const element = commentsSectionRef.current;
-    if (!element) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
-        setCommentsViewport({ imageId, ready: true });
-        observer.disconnect();
-      },
-      { rootMargin: '160px' },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [deferredBodyReady, imageId]);
-
-  // Save current image ID to navigation history
-  useEffect(() => {
-    if (!deferredBodyReady) return;
-    let cancelled = false;
-    if (image) {
-      try {
-        let ids = readNavHistory();
-        const currentIdNum = image.id;
-        if (!ids.includes(currentIdNum)) {
-          ids.push(currentIdNum);
-          if (ids.length > 200) ids = ids.slice(-200);
-          sessionStorage.setItem(NAV_HISTORY_KEY, JSON.stringify(ids));
-        }
-        /* Still deferred only to satisfy the lint rule against a synchronous `setState`
-           in an effect: nothing on screen waits for this any more. */
-        queueMicrotask(() => {
-          if (cancelled) return;
-          setNavHistory(ids);
-        });
-      } catch {}
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredBodyReady, image]);
-
-  // Keyboard shortcuts (for detail page only - YARL handles its own)
-  useEffect(() => {
-    if (isLightboxOpen) return;
-    if (selectedTag !== null) return;
-    if (isReportModalOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      if (e.key === 'Escape') {
-        if (isShareOpen) setIsShareOpen(false);
-        if (replyTo) setReplyTo(null);
-        return;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLightboxOpen, selectedTag, isReportModalOpen, isShareOpen, replyTo]);
-
-  const fetchComments = useCallback(() => getCommentsOnce(id), [id]);
-
-  useEffect(() => {
-    let isMounted = true;
-    let cancelBody = () => {};
-
-    if (id) {
-      void prefetchImageDetail(imageId).catch((err: Error) => {
-        if (isMounted && !heroSeed) setDetailError({ id: imageId, error: err });
-      });
-
-      // Fetch and final-media decode start immediately. Only the sizeable body subtree
-      // waits for resolved detail plus an idle slice, so its mount cannot steal the first
-      // event of a newly started wheel/touch stream.
-      if (!heroSeed || prefetchedDetail) {
-        cancelBody = publishWhenHeroSettled(
-          () => {
-            if (!isMounted) return;
-            startTransition(() => setDeferredBodyId(imageId));
-          },
-          {
-            canPublish: () => {
-              if (!isImageHeroDetailDataPublishable(imageId)) return false;
-              /* The whole `opening.` family, not just `opening.flight`: publication stays
-                 true across `landed` and `handoff`, so the body's mount could land in the
-                 handoff frame — the frame that must be pixel-identical on both sides and
-                 writes scroll position in a batched read/write pass. A React commit of
-                 this size there is the worst possible moment for it. */
-              return !getImageHeroRuntime().phase.startsWith('opening.');
+  /* 显示更多: the batch's names first, then the batch — its chips appear once, as they stay. */
+  const handleShowMore = (section: TagSection) => {
+    if (!tags?.length || preparing?.imageId === imageId) return;
+    const limits = visibleTagLimits;
+    const next: VisibleTagLimits = { ...limits, [section]: limits[section] + BATCH_SIZES[section] };
+    const groups = groupTags(tags);
+    const shown = new Set(visibleTagsOf(groups, limits));
+    const added = visibleTagsOf(groups, next).filter((tag) => !shown.has(tag));
+    const targetId = imageId;
+    setPreparing({ imageId: targetId, section });
+    void prepareTagBatch(added, { translations: showChineseTags, counts: showTagCounts }).then((data) => {
+      setPreparing((current) => (current?.imageId === targetId ? null : current));
+      setTagData((state) =>
+        state.imageId !== targetId
+          ? state
+          : {
+              imageId: targetId,
+              translations: { ...state.translations, ...data.translations },
+              counts: { ...state.counts, ...data.counts },
             },
-          },
-        );
-      }
-    }
+      );
+      setVisibleTags(next);
+    });
+  };
 
-    return () => {
-      isMounted = false;
-      cancelBody();
-    };
-  }, [heroSeed, id, imageId, prefetchedDetail]);
-
+  // ---- The record, and the body under the picture ----
+  /* The read starts (or joins the one a hover started) on the first render; a failure lands in
+     the record cache's error slot, which the screen reads. Not re-run on the answer: after a
+     failure, re-running would retry in a loop. A server that answered 404 is taken at its word. */
   useEffect(() => {
-    if (!deferredBodyReady || !shouldLoadComments || !id) return;
-    let isMounted = true;
-    let cancelPublication = () => {};
-    void (async () => {
-      await Promise.resolve();
-      if (!isMounted) return;
-      const nextComments = await fetchComments();
-      if (!isMounted) return;
-      cancelPublication = publishWhenHeroSettled(() => {
-        if (!isMounted) return;
-        setComments(nextComments);
-        setIsLoadingComments(false);
-      });
-    })();
-    return () => {
-      isMounted = false;
-      cancelPublication();
-    };
-  }, [deferredBodyReady, fetchComments, id, shouldLoadComments]);
+    if (seedNotFound) return;
+    void prefetchImageDetail(imageId).catch(() => {});
+  }, [imageId, seedNotFound]);
 
-  // --- Lightbox handlers ---
+  const retryRecord = useCallback(() => {
+    void prefetchImageDetail(imageId).catch(() => {});
+  }, [imageId]);
+
+  /* Back online: a read that failed for want of a network tries again by itself. */
+  const recordFailedRetryably = recordError !== null && isRetryable(recordError);
+  useEffect(() => {
+    if (!recordFailedRetryably) return;
+    window.addEventListener('online', retryRecord);
+    return () => window.removeEventListener('online', retryRecord);
+  }, [recordFailedRetryably, retryRecord]);
+
+  // Fetch and final-media decode start immediately. Only the sizeable body subtree
+  // waits for resolved detail plus an idle slice, so its mount cannot steal the first
+  // event of a newly started wheel/touch stream.
+  const hasRecord = record !== null;
+  const hasRecordError = recordError !== null;
+  useEffect(() => {
+    if (heroSeed && !hasRecord && !hasRecordError && !offline) return;
+    return publishWhenHeroSettled(() => startTransition(() => setDeferredBodyId(imageId)), {
+      canPublish: () => {
+        if (!isImageHeroDetailDataPublishable(imageId)) return false;
+        /* The whole `opening.` family, not just `opening.flight`: publication stays true
+           across `landed` and `handoff`, so the body's mount could land in the handoff frame
+           — the frame that must be pixel-identical on both sides. */
+        return !getImageHeroRuntime().phase.startsWith('opening.');
+      },
+    });
+  }, [hasRecord, hasRecordError, heroSeed, imageId, offline]);
+
+  // ---- Lightbox ----
   const handleOpenLightbox = useCallback(() => {
     if (!isImageHeroPublicationQuiet()) return;
     /* Record where the detail image is, so the viewer grows out of the picture you
-       tapped rather than the middle of the screen. A simplified M3 container transform —
-       the full shared-element morph is `lib/hero`'s, and a same-route overlay must not
-       hand it a second surface to own. Origin alone makes the connection read. */
+       tapped rather than the middle of the screen. */
     const media = document.querySelector<HTMLElement>('[data-image-hero-role="detail"]');
     const root = document.documentElement;
     if (media) {
@@ -617,9 +868,7 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
     setIsLightboxOpen(true);
   }, []);
 
-  const handleCloseLightbox = useCallback(() => {
-    setIsLightboxOpen(false);
-  }, []);
+  const handleCloseLightbox = useCallback(() => setIsLightboxOpen(false), []);
 
   const handleFinalReady = useCallback(
     (ownerSurfaceId?: string) => {
@@ -635,841 +884,690 @@ export default function PicDetail({ presentation = 'page' }: PicDetailProps) {
       () => {
         if (heroSeed) setRevealedHeroSeedAt(heroSeed.createdAt);
       },
-      {
-        idle: false,
-        canPublish: () => isImageHeroDetailDataPublishable(imageId),
-      },
+      { idle: false, canPublish: () => isImageHeroDetailDataPublishable(imageId) },
     );
   }, [finalReady, heroSeed, imageId]);
 
-  // --- Navigation handlers ---
-  const handleNavigate = useCallback(
-    (direction: number) => {
-      /* An id not in the press order sits *after* its end, not before its start: the
-         appending effect needs the image record, which a failed load never produces, so
-         the index stays −1 while the error is on screen — and −1 + −1 used to fall
-         through to 「已是第一张」, the one button that state offers doing nothing. */
-      const from = currentNavIndex === -1 ? navHistory.length : currentNavIndex;
-      const newIndex = from + direction;
-      if (newIndex >= 0 && newIndex < navHistory.length) {
-        const targetId = navHistory[newIndex];
-        if (targetId !== Number(id)) {
-          const href = `/pic/${targetId}`;
-          if (presentation === 'overlay') {
-            router.prefetch(href);
-            void prefetchImageDetail(targetId, { priority: 'immediate' });
-            void requestImageHeroDetailRouteChange({
-              imageId,
-              detailHref: href,
-              navigation: heroNavigation,
-            });
-          } else {
-            router.push(href, { scroll: false });
-          }
-        }
-      } else {
-        showToast(direction > 0 ? '已是最后一张' : '已是第一张', 'info');
-      }
-    },
-    [currentNavIndex, heroNavigation, id, imageId, navHistory, presentation, router],
-  );
-
+  // ---- Navigation ----
+  const backOrParent = useBackOrParent('/');
   const handleBackToGallery = useCallback(() => {
     if (interruptImageHero()) return;
 
-    if (presentation === 'page' && !getImageHeroOrigin(imageId)) {
-      router.push('/', { scroll: false });
+    if (presentation === 'page') {
+      /* A page is either a cold entry — back through history when the entry behind is the
+         app's, otherwise up to the gallery in place of this entry, never a push (R4-041) — or
+         a reload of an open overlay, whose ladder is still in history with nothing behind it:
+         that collapses to the list it was opened from, its search and page intact (R10-003). */
+      const orphan = leaveImageHeroOrphanLadder();
+      if (!orphan) {
+        backOrParent();
+        return;
+      }
+      void orphan.collapsed.then((landed) => {
+        if (!landed) router.replace(orphan.background, { scroll: false });
+      });
       return;
     }
-    void requestImageHeroClose({
-      imageId,
-      navigation: heroNavigation,
-      cause: 'button',
-    });
-  }, [heroNavigation, imageId, presentation, router]);
+    void requestImageHeroClose({ imageId, navigation: heroNavigation, cause: 'button' });
+  }, [backOrParent, heroNavigation, imageId, presentation, router]);
 
+  /* **Modal to the list, not to the app.** The overlay covers the content area and nothing else:
+     the list beneath goes `inert` once the picture has landed, while the app bar and the drawer
+     stay live beside it — exactly as they are on the detail's own page, where a direct visit
+     always had them. Making them inert as well left a docked drawer and an app bar on screen that
+     no click reached. So focus enters on open and returns to the card on close, but Tab may leave
+     for the chrome (`containFocus: false`), and the section is a non-modal dialog. */
   useOverlayLayer(presentation === 'overlay' && !isLightboxOpen, overlayRef, {
+    containFocus: false,
     onClose: () => {
       if (replyTo) setReplyTo(null);
       else handleBackToGallery();
     },
-    additionalRefs: [overlayBackRef],
-    returnFocus: () => document.querySelector<HTMLElement>(
-      `[data-image-hero-role="thumbnail"][data-image-hero-id="${imageId}"]`,
-    )?.closest<HTMLAnchorElement>('a') ?? null,
+    /* The card of the picture on screen, in the active pane (a profile keeps uploads and
+       favourites both mounted, and the same picture can be in each). A card still on a page
+       the list has yet to turn to is not here: the controller focuses it once revealed. */
+    returnFocus: () => findImageHeroCardLink(imageId) ?? findDetailOriginLink(imageId),
+  });
+
+  /* The drawer row of the very page this overlay covers means 返回 (`SidebarNav`'s reselect):
+     the shell reaches this 返回 through the runtime, since it must not import the engine. */
+  useEffect(() => {
+    if (presentation !== 'overlay') return;
+    return registerImageDetailClose(handleBackToGallery);
+  }, [handleBackToGallery, presentation]);
+
+  /* An arrow a step made unavailable (the list's true end) cannot keep focus, and the browser
+     would drop it on the document at the next frame: hand it to the other arrow first. */
+  useLayoutEffect(() => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLButtonElement) || !active.disabled) return;
+    const group = active.closest<HTMLElement>('[data-image-detail-step]');
+    if (!group) return;
+    const sibling = [...group.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button !== active && !button.disabled,
+    );
+    (sibling ?? overlayRef.current)?.focus({ preventScroll: true });
   });
 
   // Stable dismiss bind: rebinding on isLoading/modal state disposed the gesture
   // mid-pull and made pull-to-dismiss feel random.
   const dismissCanStartRef = useRef<() => boolean>(() => true);
+  const layered = isLightboxOpen || selectedTag !== null || reportState.open || shareOpen;
 
   useLayoutEffect(() => {
-    dismissCanStartRef.current = () =>
-      !isLightboxOpen && selectedTag === null && !isReportModalOpen && !isShareOpen;
-  }, [isLightboxOpen, isReportModalOpen, isShareOpen, selectedTag]);
+    stepBlockedRef.current = () => layered;
+    /* A step moving the content (or a finger paging it) and a pull are two hands on one
+       surface: whichever started first keeps it. */
+    dismissCanStartRef.current = () => !layered && !isStepping();
+  }, [isStepping, layered]);
 
   useEffect(() => {
     if (presentation !== 'overlay') return;
-    return bindImageHeroDismissGesture(
-      surfaceId,
-      () => dismissCanStartRef.current(),
-      heroNavigation,
-    );
+    return bindImageHeroDismissGesture(surfaceId, () => dismissCanStartRef.current(), heroNavigation);
   }, [heroNavigation, presentation, surfaceId]);
 
-  /* Escape leaves the screen — unless something is layered over it, in which case that
-     thing owns the key and closes itself first (the keydown handler near the top clears
-     `isShareOpen` and `replyTo`). */
-  useEscapeBack(
-    handleBackToGallery,
-    !isLightboxOpen && selectedTag === null && !isReportModalOpen && !isShareOpen && !replyTo,
-  );
+  /* Escape leaves the screen — unless something is layered over it, which owns the key and
+     closes itself first; a reply in progress is dropped before the screen is left. */
+  useEscapeBack(handleBackToGallery, !layered && !replyTo);
+  useEffect(() => {
+    if (!replyTo || layered) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) setReplyTo(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [layered, replyTo]);
 
-  // --- Comment reply ---
-  const handleReply = (comment: Comment) => {
-    setReplyTo({ id: comment.id, username: comment.username, body: comment.body });
-    /* The overlay presentation scrolls its own container, not the app scroller — which
-       is why a bare `scrollIntoView` could not say *which* scroller and handed the jump
-       to the browser's own curve. `scrollAppToElement` takes the scroller and lands the
-       target's top edge at the top. */
-    scrollAppToElement(commentEditorMountRef.current, {
+  // ---- Comments ----
+  const handleReply = (target: ReplyTarget) => {
+    setReplyTo(target);
+    /* The overlay presentation scrolls its own container, not the app scroller. */
+    scrollAppToElement(composerRef.current, {
       scroller: presentation === 'page' ? undefined : overlayScrollerRef.current,
     });
   };
 
-  const handleCancelReply = () => {
-    setReplyTo(null);
-  };
-
-  // --- Fave toggle ---
-  const handleShareSelect = useCallback((value: string) => {
-    if (value !== 'copy-link') return;
-    /* `copyText`, not a raw clipboard write — that has no fallback on a non-secure
-       origin and the toast then lied about it. */
-    void copyText(window.location.href).then((ok) =>
-      showToast(ok ? '链接已复制' : '复制失败，请手动复制地址栏链接', ok ? 'success' : 'error'),
-    );
-  }, []);
-
-  const handleToggleFave = async () => {
-    const token = readToken();
-    if (!token) {
-      showToast('请先登录', 'error');
-      openAuth('login');
+  // ---- The one-click image translation (decision 15) ----
+  const facts = image ? mediaFacts(image) : null;
+  /* The service keys its cache on the original's raw URL — the same string on every line. */
+  const translationSource = facts && !facts.isVideo && image?.view_url ? getRawImageUrl(image.view_url) : null;
+  const translationEnabled = useSyncExternalStore(
+    (listener) => translateSwitch.subscribe({}, listener),
+    () => translateSwitch.peek({}).data,
+    () => undefined,
+  );
+  const translateOff = translationEnabled === false;
+  const [checkingSwitchId, setCheckingSwitchId] = useState<number | null>(null);
+  const imageTranslation = useImageTranslation(translateOff ? null : translationSource, {
+    onFinished: () => showToast('翻译完成，已显示译图', 'success'),
+    onBroken: () => showToast('译图暂时无法显示，已恢复原图', 'error'),
+  });
+  const translationBusy =
+    checkingSwitchId === imageId ||
+    imageTranslation.phase === 'requesting' ||
+    imageTranslation.phase === 'queued' ||
+    imageTranslation.phase === 'translating' ||
+    imageTranslation.phase === 'loading';
+  /* The site switch is read on the first press, not on every picture: an administrator's switch
+     is not worth a request per visit, and a press that finds it off hides the control. */
+  const handleTranslate = () => {
+    if (imageTranslation.phase !== 'idle') {
+      imageTranslation.toggle();
       return;
     }
-
-    if (faveBusy.current || !image || token !== session.token) return;
-
-    const targetId = image.id;
-    const run = ++faveRequest.current;
-    const isCurrent = () => run === faveRequest.current && readToken() === token;
-    faveBusy.current = true;
-    setFavePending({ imageId: targetId, token });
-    try {
-      /* Start from the shared complete list, even when the button is pressed before its
-         first status read lands. Writing a one-item array on a cold key loses other faves. */
-      const knownIds = await faveIdsResource.read({ token });
-      if (!isCurrent()) return;
-      const res = await api.toggleFave(token, targetId);
-      const data = await res.json();
-      /* Once the server has accepted a mutation, its cache correction survives navigation.
-         UI feedback is still scoped to this detail; account changes discard both. */
-      if (readToken() !== token) return;
-      if (data.success) {
-        const newFavedStatus = data.is_faved !== undefined ? Boolean(data.is_faved) : !knownIds.includes(targetId);
-        faveIdsResource.write({ token }, (previous) => {
-          const ids = previous ?? knownIds;
-          return newFavedStatus
-            ? (ids.includes(targetId) ? ids : [targetId, ...ids])
-            : ids.filter((faveId) => faveId !== targetId);
-        });
-        if (typeof session.user?.username === 'string') {
-          sharedFaveIds.expire({ username: session.user.username });
+    const targetId = imageId;
+    const start = imageTranslation.toggle;
+    setCheckingSwitchId(targetId);
+    translateSwitch.read({}).then(
+      (enabled) => {
+        setCheckingSwitchId((current) => (current === targetId ? null : current));
+        if (!enabled) {
+          showToast('图片翻译暂未开放', 'info');
+          return;
         }
-        if (isCurrent()) showToast(newFavedStatus ? '收藏成功' : '已取消收藏', 'success');
-      } else if (isCurrent()) {
-        showToast(data.message || '操作失败', 'error');
-      }
-    } catch (err) {
-      if (!isCurrent()) return;
-      console.error('Toggle fave error:', err);
-      showToast('操作失败', 'error');
-    } finally {
-      if (isCurrent()) {
-        faveBusy.current = false;
-        setFavePending(null);
-      }
-    }
+        start();
+      },
+      (error: unknown) => {
+        setCheckingSwitchId((current) => (current === targetId ? null : current));
+        showToast(apiErrorMessage(error, '图片翻译暂时不可用'), 'error');
+      },
+    );
   };
 
-  // --- Download ---
-  const handleDownload = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!image?.representations?.full && !image?.view_url) {
-      showToast('无法下载：图片地址缺失', 'error');
-      return;
-    }
-    const downloadUrl = image.representations?.full || image.view_url || '';
-    try {
-      const response = await fetch(downloadUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const fileName = downloadUrl.split('/').pop() || `image-${image!.id}`;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Download failed:', error);
-      window.open(downloadUrl, '_blank');
-    }
-  };
-
-  // --- Report ---
-  const handleReport = async () => {
-    if (!reportReason.trim()) {
-      showToast('请填写举报原因', 'error');
-      return;
-    }
+  // ---- Actions ----
+  const handleToggleFave = () => {
     const token = readToken();
     if (!token) {
-      showToast('请先登录', 'error');
       openAuth('login');
       return;
     }
-    setIsReporting(true);
-    try {
-      const res = await api.reportImage(token, Number(id), reportReason);
-      const data = await res.json();
-      if (data.success) {
-        showToast('举报已提交，感谢您的反馈', 'success');
-        setIsReportModalOpen(false);
-        setReportReason('');
-      } else {
-        showToast(data.message || '提交失败', 'error');
+    if (!image || faveBusy) return;
+    /* The full record when it has landed — the privacy space stores it whole — else the row. */
+    const target = (record ?? image) as PonyImage;
+    const targetId = target.id;
+    setFavePending({ imageId: targetId, token });
+    void sendFavePress(token, target, { oneTap: oneTapFave, defaultFolder, autoPrivacy }).then((outcome) => {
+      setFavePending((current) => (current?.imageId === targetId && current.token === token ? null : current));
+      /* A different account now: nothing of this answer is said to it. */
+      if (readToken() !== token) return;
+      if (!outcome.ok) {
+        showToast(outcome.message, 'error');
+        return;
       }
-    } catch {
-      showToast('提交失败', 'error');
-    } finally {
-      setIsReporting(false);
+      if (outcome.kind === 'picker') {
+        setPickerFor(targetId);
+      } else if (outcome.kind === 'privacy') {
+        showToast('露骨图片已自动收藏到隐私空间', 'info', {
+          action: showPrivacySpace
+            ? { label: '查看', onClick: () => router.push(favoritesHref('privacy'), { scroll: false }) }
+            : { label: '设置', onClick: () => router.push('/settings', { scroll: false }) },
+        });
+      } else if (outcome.kind === 'faved') {
+        showToast(`已收藏到「${outcome.folderName}」`, 'success', {
+          action: { label: '更改', onClick: () => setPickerFor(targetId) },
+        });
+      } else {
+        showToast('已取消收藏', 'success', {
+          action: {
+            label: '撤销',
+            onClick: () =>
+              void restoreFavourite(token, targetId, outcome.previous, defaultFolder.id).catch((error: unknown) =>
+                showToast(apiErrorMessage(error, '撤销失败'), 'error'),
+              ),
+          },
+        });
+      }
+    });
+  };
+
+  const handleOpenFolderPicker = () => {
+    if (!readToken()) {
+      openAuth('login');
+      return;
     }
+    if (image) setPickerFor(image.id);
   };
 
-  // --- Helpers ---
-  const getImageFormat = (url: string): string => {
-    const lower = url.split(/[?#]/, 1)[0].toLowerCase();
-    if (lower.endsWith('.webm')) return 'WEBM';
-    if (lower.endsWith('.mp4')) return 'MP4';
-    if (lower.endsWith('.png')) return 'PNG';
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'JPEG';
-    if (lower.endsWith('.gif')) return 'GIF';
-    if (lower.endsWith('.webp')) return 'WEBP';
-    if (lower.endsWith('.svg')) return 'SVG';
-    return '未知';
+  const handleShareSelect = (value: string) => {
+    if (!image) return;
+    const token = readToken();
+    if (value === 'contact') {
+      shareToContact({ kind: 'image', imageId: image.id, thumbUrl: shareThumbUrl(image.representations) });
+      return;
+    }
+    const targetId = image.id;
+    const done = () => setSharingId((current) => (current === targetId ? null : current));
+    setSharingId(targetId);
+    const task = value === 'native' ? shareImageNatively(image, token) : copyImageLink(image, token);
+    void task.then(done, done);
   };
 
-  // Build YARL slides array
-  const imageSrc = image?.representations?.full || image?.view_url || '';
-  const lightboxFormat = getImageFormat(imageSrc);
-  const lightboxVideoType =
-    lightboxFormat === 'WEBM' ? 'video/webm' : lightboxFormat === 'MP4' ? 'video/mp4' : null;
-  const yarlSlides: PicLightboxSlide[] =
-    image && imageSrc
-      ? lightboxVideoType
-        ? [
-            {
-              type: 'video' as const,
-              sources: [{ src: imageSrc, type: lightboxVideoType }],
-              autoPlay: true,
-              controls: true,
-              loop: true,
-            },
-          ]
-        : [
-            {
-              src: imageSrc,
-              alt: image.name || `图片 #${image.id}`,
-              width: image.width ?? undefined,
-              height: image.height ?? undefined,
-              download: {
-                url: imageSrc,
-                filename: `image-${image.id}.${getImageFormat(imageSrc).toLowerCase()}`,
-              },
-            },
-          ]
-      : [];
+  const handleDownload = () => {
+    if (!image || downloadingId === image.id) return;
+    const source = { id: image.id, url: facts?.fullSrc ?? '', format: image.format };
+    if (!source.url) {
+      showToast('原图地址缺失，无法下载', 'error');
+      return;
+    }
+    const targetId = image.id;
+    const done = () => setDownloadingId((current) => (current === targetId ? null : current));
+    setDownloadingId(targetId);
+    void downloadOriginal(source).then(done, () => {
+      done();
+      showToast('原图下载失败', 'error', {
+        action: {
+          label: '在新标签页打开',
+          onClick: () => window.open(getRawImageUrl(source.url), '_blank', 'noopener,noreferrer'),
+        },
+      });
+    });
+  };
+
+  const handleReportPress = () => {
+    if (!readToken()) {
+      openAuth('login');
+      return;
+    }
+    setReport({ ...reportState, open: true });
+  };
+
+  const handleReportSubmit = () => {
+    const reason = reportState.reason.trim();
+    if (!reason || reportBusy) return;
+    const token = readToken();
+    if (!token) {
+      /* The session ended mid-sentence: sign in, and the words are still here afterwards. */
+      openAuth('login');
+      return;
+    }
+    const targetId = imageId;
+    setReportBusy(true);
+    void sendReport(token, targetId, reason).then((outcome) => {
+      setReportBusy(false);
+      if (!outcome.ok) {
+        showToast(outcome.message, 'error');
+        return;
+      }
+      showToast('已提交举报，感谢反馈', 'success');
+      setReport((current) => (current.imageId === targetId ? { imageId: targetId, open: false, reason: '' } : current));
+    });
+  };
+
+  // ---- Lightbox slides ----
+  const lightboxSlides: PicLightboxSlide[] = [];
+  if (image && facts?.fullSrc) {
+    const videoType = facts.format === 'webm' ? 'video/webm' : facts.format === 'mp4' ? 'video/mp4' : null;
+    if (facts.isVideo && videoType) {
+      lightboxSlides.push({
+        type: 'video' as const,
+        sources: [{ src: facts.fullSrc, type: videoType }],
+        autoPlay: true,
+        controls: true,
+        loop: true,
+      });
+    } else {
+      /* What is on screen: the translation while it is shown. */
+      const translated = imageTranslation.shown ? imageTranslation.url : null;
+      lightboxSlides.push({
+        src: translated ?? facts.fullSrc,
+        alt: translated ? `${describeImage(image)}（译图）` : describeImage(image),
+        width: image.width || undefined,
+        height: image.height || undefined,
+      });
+    }
+  }
 
   /* The overlay's own horizontal inset, and only where there is not one already: in the
-     `page` presentation `[data-page-content]` already insets, and a second one stacked
-     to 24/40px. The overlay is portalled outside that wrapper and does need its own.
-     Horizontal only — a geometry contract, not a preference: `HeroStage` renders the
-     landing target inside `image-detail-page mx-auto max-w-5xl px-2 sm:px-4` with no
-     vertical padding, and the stage and this must produce pixel-identical boxes or the
-     handoff visibly shifts. Vertical padding here drops the media well 16/24px below
-     the box the flyer was aimed at, so the picture lands and then hops. If this gains
-     vertical padding, the stage gains the same padding in the same commit. */
+     `page` presentation `[data-page-content]` already insets. Horizontal only — a geometry
+     contract: `HeroStage` renders the landing target inside `image-detail-page mx-auto
+     max-w-5xl px-2 sm:px-4` with no vertical padding, and the Stage and this must produce
+     pixel-identical boxes or the handoff visibly shifts. If this gains vertical padding, the
+     Stage gains the same padding in the same commit. */
   const overlayGutter = presentation === 'overlay' ? 'px-2 sm:px-4' : '';
 
   /**
    * `centred` threads the `StatusView fill` chain: `fill` is `flex-1`, so every box
    * between the block and the scroller must be a flex column or the `1` has nothing to
-   * divide. The scroller is `absolute inset-0` (definite height); `min-h-full` on the
-   * content wrapper resolves against it; from there down it is flex distribution.
-   * `min-height: 100%` on the block itself computes to `auto` — a height from flex
-   * distribution is indefinite in Chrome — and centred nothing.
+   * divide.
    */
-  const renderDetailShell = (content: React.ReactNode, centred = false) => {
+  const renderDetailShell = (content: ReactNode, centred = false) => {
     if (presentation === 'page') {
-      /* A direct link to /pic/123 gets the same pinned 返回图库 as a gallery arrival —
-         the placement is `PageBack`'s (shared by four screens; see its comment for why
-         it is a zero-height sticky strip). */
       return (
-        <div className={cn('relative', centred && 'flex flex-1 flex-col')}>
-          <PageBack onClick={handleBackToGallery} title="返回图库 (Esc)" label="返回图片列表" />
+        <div
+          ref={stepContentRef}
+          tabIndex={-1}
+          className={cn('relative focus-visible:outline-hidden', centred && 'flex flex-1 flex-col')}
+        >
+          <PageBack onClick={handleBackToGallery} label="返回图片列表" />
           {content}
         </div>
       );
     }
 
     return (
-      <>
-        <section
-          ref={overlayRef}
-          data-image-detail-overlay
-          data-image-hero-route-id={String(imageId)}
-          data-image-hero-surface-id={surfaceId}
-          role="dialog"
-          aria-modal="true"
-          aria-label="图片详情"
-          tabIndex={-1}
-          className="image-detail-route absolute inset-0 z-detail-overlay overflow-hidden"
-        >
-          {/* The container transform's window and counter-scale, structurally identical
-              to `HeroStage`'s pair (the handoff depends on that), inert until
-              `buildContainerAnimations` drives them. Both `absolute inset-0`, so the
-              `StatusView fill` chain below is unaffected: `flex-1` starts at
-              `.image-detail-overlay-content`, under the absolutely positioned scroller. */}
-          <div data-image-detail-clip className="image-detail-clip absolute inset-0">
-            <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
-          <div
-            ref={overlaySurfaceRef}
-            data-image-detail-surface
-            className="absolute inset-0 bg-surface"
-          />
-          <div
-            ref={overlayScrollerRef}
-            className="image-detail-overlay-scroll main-scrollbar absolute inset-0 z-10 overflow-y-auto overscroll-contain"
-          >
-            <div
-              ref={overlayContentRef}
-              className={cn(
-                'image-detail-overlay-content relative min-h-full w-full',
-                centred && 'flex flex-col',
-              )}
-            >
-              {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR. */}
-              <div
-                data-image-detail-crossfade
-                className={cn('w-full', centred && 'flex flex-1 flex-col')}
-              >
-                {content}
-              </div>
-            </div>
-          </div>
-            </div>
-          </div>
-        </section>
-        {/* No `data-image-detail-reveal`: this renders as a *sibling* of the overlay, and
-            the reveal cascade queries inside the overlay only. Its entrance is the
-            `floatingBack` branch of `buildOverlayAnimations`; the pull gesture reaches it
-            through a compound selector rather than a descendant one. */}
+      <section
+        ref={overlayRef}
+        data-image-detail-overlay
+        data-image-hero-route-id={String(imageId)}
+        data-image-hero-surface-id={surfaceId}
+        role="dialog"
+        aria-label="图片详情"
+        tabIndex={-1}
+        className="image-detail-route absolute inset-0 z-detail-overlay overflow-hidden"
+      >
+        {/* The dialog's first element, so it is the first Tab stop — it is the first thing on
+            screen (R10-008). Absolutely placed, so nothing moves; outside the window and
+            counter-scale below, so the container transform never scales it. No
+            `data-image-detail-reveal`: its entrance is the `floatingBack` branch of
+            `buildOverlayAnimations`, and the pull gesture reaches it by a compound selector. */}
         <DetailBack
           ref={overlayBackRef}
           data-image-detail-back-button
           data-image-detail-floating-back="route"
           data-image-hero-route-id={String(imageId)}
+          aria-keyshortcuts="Escape"
+          title="返回图片列表 (Esc)"
           onClick={handleBackToGallery}
           className="image-detail-back"
         />
-      </>
-    );
-  };
-
-  // --- Loading skeleton ---
-  if (isLoading) {
-    return renderDetailShell(
-      /* The skeleton is never a landing target — the flight is over before this can
-         mount — so it is free to carry the vertical padding the real render must not. */
-      <div className={cn('image-detail-page max-w-5xl mx-auto py-4 sm:py-6', overlayGutter)}>
-        <div className="flex flex-col rounded-md bg-transparent">
-          {/* Matches `DetailHeader`'s real shape: three centred metadata cells, no
-              visible title (the `<h1>` is `sr-only`). A mismatched skeleton re-spaces
-              the row when the data lands. */}
-          <div className="image-detail-header-route p-4 sm:p-6">
-            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
-              <Skeleton className="h-5 w-28" delay={60} />
-              <Skeleton className="h-5 w-16" delay={120} />
-              <Skeleton className="h-5 w-12" delay={180} />
-            </div>
+        {/* 上一张 / 下一张 in the list the picture was opened from (decision 19): the
+            dialog's trailing actions, pinned opposite the back affordance and in its shape.
+            Hidden outright when the picture belongs to no list; at a true end an arrow is
+            unavailable, and it shows the wait while the next page loads. Absent from the
+            hero Stage, so they stand down during a flight (globals.css); the pull fades
+            them with the back affordance (`data-image-detail-chrome`). */}
+        {stepNeighbours.inSequence && (
+          <div data-image-detail-step data-image-detail-chrome className="image-detail-step">
+            <IconButton
+              variant="tonal"
+              size="md"
+              shape="square"
+              icon={<MdChevronLeft />}
+              aria-label="上一张"
+              disabled={stepNeighbours.previous === null && !stepNeighbours.canLoadPrevious}
+              loading={stepLoading === -1}
+              onClick={() => stepTo(-1)}
+            />
+            <IconButton
+              variant="tonal"
+              size="md"
+              shape="square"
+              icon={<MdChevronRight />}
+              aria-label="下一张"
+              disabled={stepNeighbours.next === null && !stepNeighbours.canLoadNext}
+              loading={stepLoading === 1}
+              onClick={() => stepTo(1)}
+            />
           </div>
-          <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
-            {/* Inset only — a width/height beside it would *replace* the computed
-                right/bottom insets, making the placeholder 32px wider than its box and
-                overflowing the media well on both axes. */}
-            <Skeleton className="absolute inset-4 rounded-md" delay={90} />
-          </div>
-          <div
-            data-image-detail-reveal="body"
-            className="image-detail-deferred image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6"
-          >
-            <div className="mx-auto w-full max-w-5xl space-y-4">
-              <div className="mb-2 flex justify-between">
-                <Skeleton className="h-4 w-14" />
-                <Skeleton className="h-4 w-14" delay={60} />
+        )}
+        {/* The container transform's window and counter-scale, structurally identical
+            to `HeroStage`'s pair (the handoff depends on that), inert until
+            `buildContainerAnimations` drives them. */}
+        <div data-image-detail-clip className="image-detail-clip absolute inset-0">
+          <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
+            <div ref={overlaySurfaceRef} data-image-detail-surface className="absolute inset-0 bg-surface" />
+            <div
+              ref={overlayScrollerRef}
+              className="image-detail-overlay-scroll main-scrollbar absolute inset-0 z-10 overflow-y-auto overscroll-contain"
+            >
+              <div
+                ref={overlayContentRef}
+                className={cn('image-detail-overlay-content relative min-h-full w-full', centred && 'flex flex-col')}
+              >
+                {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR — and
+                    what a step's shared axis moves (`useDetailStep`); the two never run together. */}
+                <div ref={stepContentRef} data-image-detail-crossfade className={cn('w-full', centred && 'flex flex-1 flex-col')}>
+                  {content}
+                </div>
               </div>
-              <Skeleton className="h-2.5 w-full" delay={120} />
-              <Skeleton className="h-4 w-2/3" delay={180} />
-              <Skeleton className="h-4 w-full" delay={240} />
             </div>
           </div>
         </div>
-      </div>,
+      </section>
     );
+  };
+
+  // --- Loading ---
+  if (isLoading) {
+    /* Never a landing target — the flight is over before this can mount — so it is free to
+       carry the vertical padding the real render must not. */
+    return renderDetailShell(<DetailSkeleton gutter={overlayGutter} page={presentation === 'page'} />);
   }
 
-  // --- Error state ---
-  if (error || !image) {
-    /* `ErrorRetry`, not `StatusView` directly — this screen is one of the AGENTS.md
-       presets. `fill`, because this block *is* the whole screen in both presentations;
-       `page`'s half-viewport floor would centre it in the upper third of a full-height
-       scroller. The only action offered is 上一张: the overlay already draws its own
-       back affordance top-left. */
-    return renderDetailShell(
-      <ErrorRetry
-        fill
-        message="图片可能不存在或已被删除"
-        action={
-          hasNavPrevious && (
-            <Button variant="tonal" onClick={() => handleNavigate(-1)}>
+  // --- A picture that does not exist, or a read that failed ---
+  if (notFound || loadFailed || !image || !facts) {
+    /* `fill`, because this block is the whole screen in both presentations. The list's own
+       exits stay offered: step past a picture that is gone. */
+    const canPrevious = stepNeighbours.previous !== null || stepNeighbours.canLoadPrevious;
+    const canNext = stepNeighbours.next !== null || stepNeighbours.canLoadNext;
+    /* Offline, the read runs again by itself on reconnect: no 重试 to press meanwhile. */
+    const retryable = loadFailed && !offline && isRetryable(recordError);
+    const stepActions = stepNeighbours.inSequence && (canPrevious || canNext);
+    const actions =
+      stepActions || retryable ? (
+        <div className="flex flex-wrap justify-center gap-3">
+          {retryable && (
+            <Button variant="filled" onClick={retryRecord}>
+              重试
+            </Button>
+          )}
+          {stepActions && canPrevious && (
+            <Button variant="tonal" loading={stepLoading === -1} onClick={() => stepTo(-1)}>
               上一张
             </Button>
-          )
-        }
-      />,
+          )}
+          {stepActions && canNext && (
+            <Button variant="tonal" loading={stepLoading === 1} onClick={() => stepTo(1)}>
+              下一张
+            </Button>
+          )}
+        </div>
+      ) : undefined;
+    return renderDetailShell(
+      notFound ? (
+        <EmptyState fill title="图片不存在" description="该图片可能已被删除" action={actions} />
+      ) : (
+        <ErrorRetry
+          fill
+          title="图片加载失败"
+          message={offline ? '网络不可用，恢复后自动加载' : apiErrorMessage(recordError)}
+          action={actions}
+        />
+      ),
       true,
     );
   }
 
-  const preferMediumDetail =
-    (image.size || 0) > 16 * 1024 * 1024 || (image.width || 0) * (image.height || 0) > 40_000_000;
-  const detailImageSrc =
-    (preferMediumDetail ? image.representations?.medium : undefined) ||
-    image.representations?.large ||
-    image.representations?.medium ||
-    image.representations?.full ||
-    image.view_url ||
-    '';
-  const imageFormat = (
-    image.format ||
-    detailImageSrc.split(/[?#]/)[0].split('.').pop() ||
-    ''
-  ).toLowerCase();
-  const isVideo = imageFormat === 'webm' || imageFormat === 'mp4';
-  const detailVideoSrc =
-    image.representations?.medium ||
-    image.representations?.large ||
-    image.representations?.full ||
-    image.view_url ||
-    '';
-  const detailHeroStyle = getHeroMediaStyle(
-    latchedMediaBox ?? { width: image.width, height: image.height },
-  );
+  const detailHeroStyle = getHeroMediaStyle(latchedMediaBox ?? { width: image.width, height: image.height });
+  /* A direct load has no card to borrow a bitmap from: the record's thumbnail stands in until
+     the full picture is decoded (a still — an animated thumbnail would restart the animation). */
+  const directPreview =
+    !heroSeed && !facts.isVideo && facts.format !== 'gif' && !image.animated ? facts.reps.thumb || undefined : undefined;
+  const previewSrc = heroSeed?.previewSrc ?? directPreview;
+  const canTranslate = Boolean(translationSource) && !translateOff;
+  const shareItems: MenuAction[] = [
+    { value: 'copy', label: '复制链接', icon: <MdLink size={ICON.standard} /> },
+    ...(shareMenu?.native ? [{ value: 'native', label: '分享到其他应用', icon: <MdIosShare size={ICON.standard} /> }] : []),
+    { value: 'contact', label: '分享给联系人', icon: <MdSend size={ICON.standard} /> },
+  ];
 
   return renderDetailShell(
-    <div className={cn('image-detail-page max-w-5xl mx-auto', overlayGutter)}>
-      <div className="bg-transparent flex flex-col rounded-md">
-        {/* === Title & Meta === (back affordance is `renderDetailShell`'s, both
-            presentations — an inline copy would be a second one) */}
+    <div className={cn('image-detail-page mx-auto max-w-5xl', presentation === 'page' && 'page-back-room-5xl', overlayGutter)}>
+      <div className="flex flex-col rounded-md bg-transparent">
+        {/* Title and measurements. The back affordance is `renderDetailShell`'s, both
+            presentations — an inline copy would be a second one. */}
         <DetailHeader
           key={image.id}
           image={image}
           layout={presentation}
-          metadataReady={Boolean(prefetchedDetail)}
+          pending={recordPending}
+          referenceNow={pageSeed?.generatedAt ?? null}
         />
 
-        {/* === Image Display (clickable to open lightbox) === */}
-        <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
-          {isVideo ? (
-            <DetailVideo
-              key={`${image.id}:${heroSeed?.createdAt ?? 0}`}
-              imageId={image.id}
-              previewSrc={heroSeed?.previewSrc}
-              previewKind={heroSeed?.mediaType}
-              finalSrc={detailVideoSrc}
-              alt={image.name || `视频 #${image.id}`}
-              style={detailHeroStyle}
-              heroActive={isHeroPreview}
-              preloadFinal={preloadFinal}
-              surfaceId={presentation === 'overlay' ? surfaceId : undefined}
-              onTargetChange={handleDetailTargetChange}
-              onPreviewReady={handlePreviewPaintable}
-              onFinalReady={handleFinalReady}
-              onPreviewFailed={handlePreviewFailed}
-              onMediaUnavailable={handleMediaUnavailable}
-            />
-          ) : (
-            <DetailImage
-              key={`${image.id}:${heroSeed?.createdAt ?? 0}`}
-              imageId={image.id}
-              previewSrc={heroSeed?.previewSrc}
-              finalSrc={detailImageSrc}
-              alt={image.name || `图片 #${image.id}`}
-              width={image.width}
-              height={image.height}
-              style={detailHeroStyle}
-              heroActive={isHeroPreview}
-              preloadFinal={preloadFinal}
-              surfaceId={presentation === 'overlay' ? surfaceId : undefined}
-              onTargetChange={handleDetailTargetChange}
-              onPreviewReady={handlePreviewPaintable}
-              onFinalReady={handleFinalReady}
-              onPreviewFailed={handlePreviewFailed}
-              onMediaUnavailable={handleMediaUnavailable}
-              onOpen={handleOpenLightbox}
-            />
-          )}
-        </div>
-
-        {/* === Detail Info === */}
-        <div
-          data-image-detail-reveal="body"
-          className="image-detail-deferred flex min-h-[var(--image-detail-body-min-height)] flex-col bg-transparent p-4 sm:p-6"
-          // Isolate deferred body paint so late mount cannot blank the gallery
-          // compositor layer under the overlay (mid-scroll "background vanished").
-          style={{ contentVisibility: 'visible', contain: 'none' }}
-        >
-          
-          <div className="max-w-5xl mx-auto w-full space-y-6">
-            {/* Votes — no extra bottom margin: the column is already spaced at 24px
-                between siblings, and this block carried it twice. */}
-            {!prefetchedDetail ? (
-              <div aria-hidden="true" data-image-detail-score-loading>
-                <div className="mb-1.5 flex justify-between">
-                  <Skeleton className="h-4 w-14" />
-                  <Skeleton className="h-4 w-14" delay={60} />
-                </div>
-                {/* Matches the real track below: the skeleton must not shift the row
-                    when the votes land. */}
-                <Skeleton className="h-1 w-full rounded-full" delay={120} />
-              </div>
+        {/* The picture. No minimum height: the box already has the picture's aspect ratio, and a
+            floor under a small picture was a band of empty well. The Stage's well matches. */}
+        <div className="relative flex w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6">
+          {/* The picture's box, and where a finger pages (decision 19). It takes the hero
+              geometry — an in-flow flex item exactly like the Stage's landing target — and the
+              media fills it. It leaves `pan-x` out of its touch action, so the browser never
+              claims a horizontal drag (the pull-down and pinch keep theirs). A video pages too,
+              except from the band along its bottom edge, where its own controls take the drag. */}
+          <div
+            ref={bindSwipe}
+            data-image-detail-media
+            className="relative flex-none touch-pan-y touch-pinch-zoom"
+            style={detailHeroStyle}
+            onPointerEnter={warmLightbox}
+            onPointerDown={warmLightbox}
+            onFocus={warmLightbox}
+          >
+            {facts.isVideo ? (
+              <DetailVideo
+                key={`${image.id}:${heroSeed?.createdAt ?? 0}`}
+                imageId={image.id}
+                previewSrc={heroSeed?.previewSrc}
+                previewKind={heroSeed?.mediaType}
+                finalSrc={facts.videoSrc}
+                alt={describeImage(image)}
+                style={MEDIA_FILL}
+                heroActive={isHeroPreview}
+                preloadFinal={preloadFinal}
+                surfaceId={presentation === 'overlay' ? surfaceId : undefined}
+                onTargetChange={handleDetailTargetChange}
+                onPreviewReady={handlePreviewPaintable}
+                onFinalReady={handleFinalReady}
+                onPreviewFailed={handlePreviewFailed}
+                onMediaUnavailable={handleMediaUnavailable}
+              />
             ) : (
-              image.upvotes !== undefined &&
-              image.downvotes !== undefined && (
-                <div>
-                  <div className="flex justify-between text-label-l mb-1.5">
-                    <span className="text-on-surface flex items-center gap-1">
-                      <MdThumbUp size={ICON.dense} className="text-success" aria-label="赞" />
-                      {image.upvotes}
-                    </span>
-                    <span className="text-on-surface flex items-center gap-1">
-                      {image.downvotes}
-                      <MdThumbDown size={ICON.dense} className="text-error" aria-label="踩" />
-                    </span>
-                  </div>
-                  <div className="relative w-full h-1 bg-secondary-container rounded-full overflow-hidden">
-                    {/* With no votes the bare track shows through — the track colour is
-                        the M3 progress-track token (`secondary-container`, 4dp tall). */}
-                    {image.upvotes === 0 && image.downvotes === 0 ? null : (
-                      <>
-                        {/* Deliberately not a `ProgressBar`: a 100%-stacked two-segment
-                            *ratio* with a both-zero state, which `value`/`max` cannot
-                            express. `scaleX` on two full-width absolute bars, not
-                            animated width on two flex items — animating width reflows
-                            the row every frame while this runs live during overlay
-                            paging, exactly when layout work is least affordable.
-                            Absolute, because a scaled flex item still occupies its
-                            unscaled basis: two 100%-wide flex items would shrink to
-                            50/50 and the scale would apply to the wrong box; anchored
-                            at opposite edges they tile exactly ([0, r] and [r, 1]).
-                            `spring-slow-effects`, the same spring `ProgressBar` takes:
-                            critically damped, and an overshoot would push one segment
-                            over the other. */}
-                        <div
-                          className="bg-success-fill spring-slow-effects absolute inset-y-0 left-0 w-full origin-left transition-transform"
-                          style={{
-                            transform: `scaleX(${image.upvotes / (image.upvotes + image.downvotes)})`,
-                          }}
-                        />
-                        <div
-                          className="bg-error-fill spring-slow-effects absolute inset-y-0 left-0 w-full origin-right transition-transform"
-                          style={{
-                            transform: `scaleX(${image.downvotes / (image.upvotes + image.downvotes)})`,
-                          }}
-                        />
-                      </>
-                    )}
-                  </div>
-                </div>
-              )
-            )}
-            {deferredBodyReady && (
-              <>
-                {/* Secondary actions: one primitive for all five, so the box is sized
-                    by `IconButton`, not by hand around a 20px glyph. */}
-                {/* Wrap: the controls plus the divider total ~249px against a 240px
-                    content box on a 320px viewport, so the row overflows rather than
-                    wrapping. The divider is decorative and goes first on a phone,
-                    where the wrap already separates the groups. */}
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {navHistory.length > 0 && (
-                    <>
-                      <IconButton
-                        onClick={() => handleNavigate(-1)}
-                        disabled={currentNavIndex <= 0}
-                        aria-label="上一张"
-                        icon={<MdChevronLeft size={ICON.control} />}
-                      />
-                      <IconButton
-                        onClick={() => handleNavigate(1)}
-                        disabled={currentNavIndex >= navHistory.length - 1}
-                        aria-label="下一张"
-                        icon={<MdChevronRight size={ICON.control} />}
-                      />
-                    </>
-                  )}
-                  {/* Dividers are `outline-variant`. This was
-                      `surface-container-highest`, which is a *surface* tone and
-                      lands almost invisible on the container it divides. */}
-                  <div className="mx-1 h-6 w-px bg-outline-variant max-sm:hidden" />
-                  <IconButton
-                    onClick={handleToggleFave}
-                    loading={isFaveLoading}
-                    selected={isFaved}
-                    aria-label={isFaved ? '取消收藏' : '收藏'}
-                    icon={
-                      isFaved ? (
-                        <MdStar
-                          size={ICON.control}
-                          className="animate-star-burst"
-                        />
-                      ) : (
-                        <MdStarBorder size={ICON.control} />
-                      )
-                    }
-                  />
-                  <div className="relative">
-                    <IconButton
-                      ref={shareButtonRef}
-                      onClick={() => setIsShareOpen(!isShareOpen)}
-                      aria-label="分享"
-                      aria-expanded={isShareOpen}
-                      aria-haspopup="menu"
-                      icon={<MdShare size={ICON.control} />}
-                    />
-                    {/* `Menu`, not a hand-rolled panel. This one announced
-                        itself as `role="menu"` and then implemented none of the
-                        contract — no arrow keys, no Escape, no focus
-                        management — and caught outside clicks with a
-                        full-screen transparent div instead of the overlay hooks
-                        that already existed. */}
-                    <Menu
-                      open={isShareOpen}
-                      onClose={() => setIsShareOpen(false)}
-                      anchorRef={shareButtonRef}
-                      aria-label="分享"
-                      items={SHARE_ITEMS}
-                      onSelect={handleShareSelect}
-                    />
-                  </div>
-                  <IconButton
-                    onClick={() => setIsReportModalOpen(true)}
-                    aria-label="举报"
-                    className="hover:text-error"
-                    icon={<MdFlag size={ICON.control} />}
-                  />
-                </div>
-                {/* Description */}
-                <div>
-                  {/* No `tracking-wider`: the label roles already carry a
-                      tracking token, deliberately set to half the M3 figure
-                      because Han glyphs fill the em box. Widening it here put
-                      this one heading out of step with every other. */}
-                  <h3 className="mb-2 text-label-m-emphasized text-on-surface-variant">简介</h3>
-                  {image.description ? (
-                    image.description.length > 100 ||
-                    (image.description.match(/\n/g) || []).length >= 3 ? (
-                      /* `Card interactive`, which renders a real `<button>` — the
-                         whole surface is one control. It was a hand-written
-                         `rounded-md border border-outline-variant
-                         bg-surface-container-low p-4` plus a state layer and a
-                         focus ring, i.e. the outlined card's recipe on a tone step
-                         that is neither of the card variants, spelled out here and
-                         again on both non-interactive branches below.
-                         `aria-expanded` is what makes the collapsed state readable
-                         rather than merely visible. */
-                      <Card
-                        variant="outlined"
-                        interactive
-                        aria-expanded={isDescriptionExpanded}
-                        onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                      >
-                        <p
-                          className={`text-body-m text-on-surface whitespace-pre-wrap break-words ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}
-                        >
-                          {image.description}
-                        </p>
-                        <span className="text-label-l text-primary-ink mt-2 block text-center">
-                          {isDescriptionExpanded ? '折叠简介' : '展开简介'}
-                        </span>
-                      </Card>
-                    ) : (
-                      <Card variant="outlined">
-                        <p className="text-body-m text-on-surface whitespace-pre-wrap break-words">
-                          {image.description}
-                        </p>
-                      </Card>
-                    )
-                  ) : (
-                    <Card variant="outlined">
-                      {/* No `italic`. The rich-text layer states the app's one
-                          typographic prohibition and states why — Han has no true
-                          italic, so the browser synthesises a slant that is not a
-                          typeface. A placeholder sentence is exactly where it is
-                          tempting and exactly where it looks wrong. */}
-                      <p className="text-body-m text-on-surface-variant">
-                        滚木
-                      </p>
-                    </Card>
-                  )}
-                </div>
-                {/* Source URL */}
-                {image.source_url && (
-                  <div>
-                    <h3 className="text-label-m-emphasized text-on-surface-variant mb-2">
-                      来源
-                    </h3>
-                    <a
-                      href={image.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="prose-link touch-target inline-block break-words focus-visible:ring-2 focus-ring"
-                    >
-                      {image.source_url}
-                    </a>
-                  </div>
-                )}
-                <TagList
-                  tags={image.tags}
-                  visibleTagLimits={visibleTagLimits}
-                  showTagCounts={showTagCounts}
-                  tagCounts={tagCounts}
-                  tagTranslations={showChineseTags ? tagTranslations : undefined}
-                  onTagClick={setSelectedTag}
-                  onShowMore={setVisibleTags}
-                />
-                {/* Action buttons.
-                    Two `flex-1` buttons of equal weight read as a choice
-                    between equals — but downloading is the reason you are on
-                    this screen and "view upstream" is a footnote. M3 pairs a
-                    filled primary with a *tonal* secondary and sizes both to
-                    their content; only below `sm` do they go full-width, where
-                    a thumb needs the whole line. */}
-                <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
-                  <Button
-                    onClick={handleDownload}
-                    variant="filled"
-                    size="lg"
-                    className="max-sm:w-full"
-                    icon={<MdDownload />}
-                  >
-                    下载原图
-                  </Button>
-                  <a
-                    href={`https://trixiebooru.org/${image.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="在 Derpibooru 查看（在新标签页打开）"
-                    className={buttonClasses({
-                      variant: 'tonal',
-                      size: 'lg',
-                      className: 'max-sm:w-full',
-                    })}
-                  >
-                    <MdOpenInNew size={ICON.control} aria-hidden="true" />在 Derpibooru 查看
-                  </a>
-                </div>
-                <CommentSection
-                  comments={comments}
-                  isLoadingComments={isLoadingComments}
-                  imageId={imageId}
-                  replyTo={replyTo}
-                  commentsSectionRef={commentsSectionRef}
-                  commentEditorMountRef={commentEditorMountRef}
-                  fetchComments={fetchComments}
-                  handleReply={handleReply}
-                  handleCancelReply={handleCancelReply}
-                  setComments={setComments}
-                />
-              </>
+              <DetailImage
+                key={`${image.id}:${heroSeed?.createdAt ?? 0}`}
+                imageId={image.id}
+                previewSrc={previewSrc}
+                finalSrc={facts.imageSrc}
+                alt={describeImage(image)}
+                width={image.width}
+                height={image.height}
+                style={MEDIA_FILL}
+                heroActive={isHeroPreview}
+                preloadFinal={preloadFinal}
+                surfaceId={presentation === 'overlay' ? surfaceId : undefined}
+                onTargetChange={handleDetailTargetChange}
+                onPreviewReady={handlePreviewPaintable}
+                onFinalReady={handleFinalReady}
+                onPreviewFailed={handlePreviewFailed}
+                onMediaUnavailable={handleMediaUnavailable}
+                onOpen={handleOpenLightbox}
+                translationSrc={imageTranslation.url}
+                showTranslation={imageTranslation.shown}
+                onTranslationError={imageTranslation.reportBroken}
+              />
             )}
           </div>
         </div>
+
+        {/* The body: votes, the picture's actions, its tags, its description and sources, and
+            the comments — in that order on screen and for the keyboard. */}
+        <div
+          data-image-detail-reveal="body"
+          className="image-detail-deferred flex min-h-[var(--image-detail-body-min-height)] flex-col bg-transparent p-4 sm:p-6"
+          // Ordinary painted content, deliberately: skipping or containing this subtree made
+          // the first scroll after a handoff reveal blank space (see the deferred-body rule in
+          // globals.css). Stated inline so no utility can reintroduce the isolation.
+          style={{ contentVisibility: 'visible', contain: 'none' }}
+        >
+          <div className="mx-auto w-full max-w-5xl space-y-6">
+            <DetailVotes image={record} pending={recordPending} />
+            {deferredBodyReady &&
+              (record === null && offline ? (
+                <ErrorRetry size="inline" title="网络不可用" message="恢复后自动加载图片信息" />
+              ) : bodyError !== null ? (
+                <ErrorRetry
+                  size="inline"
+                  title={isNotFound(bodyError) ? '图片不存在或已被删除' : '图片信息加载失败'}
+                  message={isNotFound(bodyError) ? undefined : apiErrorMessage(bodyError)}
+                  onRetry={isRetryable(bodyError) ? retryRecord : undefined}
+                />
+              ) : (
+                <>
+                  {/* The picture's actions: saving it (the reason most people are here) and its
+                      page upstream, then favourite, share, translate and report. */}
+                  {/* One wrapping row: the two buttons lead, the icon group trails — beside them
+                      while the line holds all of it, on a line of its own (centred on a phone, at
+                      the trailing edge above) when it does not. */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="filled"
+                        icon={<MdDownload />}
+                        loading={downloadingId === image.id}
+                        onClick={handleDownload}
+                      >
+                        下载原图
+                      </Button>
+                      <a
+                        href={`https://trixiebooru.org/${image.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="在 Derpibooru 查看（在新标签页打开）"
+                        className={buttonClasses({ variant: 'tonal' })}
+                      >
+                        <MdOpenInNew aria-hidden="true" />在 Derpibooru 查看
+                      </a>
+                    </div>
+                    <div className="mx-auto flex items-center gap-1 sm:me-0 sm:ms-auto">
+                      <IconButton
+                        toggle
+                        selected={isFaved}
+                        selectedTone="tertiary"
+                        loading={faveBusy}
+                        aria-label="收藏"
+                        icon={isFaved ? <MdStar className="animate-star-burst" /> : <MdStarBorder />}
+                        onClick={handleToggleFave}
+                      />
+                      <IconButton
+                        aria-label="收藏到…"
+                        aria-haspopup="dialog"
+                        aria-expanded={pickerOpen}
+                        icon={<MdLibraryAdd />}
+                        onClick={handleOpenFolderPicker}
+                      />
+                      <IconButton
+                        ref={shareButtonRef}
+                        aria-label="分享"
+                        aria-haspopup="menu"
+                        aria-expanded={shareOpen}
+                        loading={sharingId === image.id}
+                        icon={<MdShare />}
+                        onClick={() =>
+                          setShareMenu(
+                            shareOpen ? null : { imageId, native: typeof navigator.share === 'function' },
+                          )
+                        }
+                      />
+                      <Menu
+                        open={shareOpen}
+                        onClose={() => setShareMenu(null)}
+                        anchorRef={shareButtonRef}
+                        aria-label="分享"
+                        items={shareItems}
+                        onSelect={handleShareSelect}
+                      />
+                      {canTranslate && (
+                        <IconButton
+                          toggle
+                          selected={imageTranslation.shown}
+                          loading={translationBusy}
+                          aria-label="图片翻译"
+                          icon={<MdTranslate />}
+                          onClick={handleTranslate}
+                        />
+                      )}
+                      <IconButton aria-label="举报" icon={<MdFlag />} onClick={handleReportPress} />
+                    </div>
+                  </div>
+                  {canTranslate && <ImageTranslationStatus translation={imageTranslation} />}
+                  <TagList
+                    tags={image.tags}
+                    visibleTagLimits={visibleTagLimits}
+                    translations={showChineseTags ? currentTagData.translations : undefined}
+                    counts={showTagCounts ? currentTagData.counts : undefined}
+                    onTagClick={setSelectedTag}
+                    onShowMore={handleShowMore}
+                    preparing={preparing?.imageId === imageId ? preparing.section : null}
+                  />
+                  <DetailDescription description={image.description} />
+                  <DetailSources image={image} />
+                  <CommentSection
+                    imageId={imageId}
+                    derpiCount={record?.comment_count}
+                    replyTo={replyTo}
+                    onReply={handleReply}
+                    onCancelReply={() => setReplyTo(null)}
+                    composerRef={composerRef}
+                    scrollerRef={presentation === 'overlay' ? overlayScrollerRef : null}
+                  />
+                </>
+              ))}
+          </div>
+        </div>
       </div>
-      {/* ========== YARL Fullscreen Lightbox (replaces custom lightbox) ========== */}
       {isLightboxOpen && (
-        <PicLightbox open={isLightboxOpen} close={handleCloseLightbox} slides={yarlSlides} />
+        <PicLightbox open={isLightboxOpen} close={handleCloseLightbox} slides={lightboxSlides} onDownload={handleDownload} />
       )}
       <TagInfoModal tag={selectedTag} onClose={() => setSelectedTag(null)} />
-      {/* ========== Report Modal ========== */}{' '}
-      <Modal
-        isOpen={isReportModalOpen}
-        onClose={() => {
-          if (!isReporting) {
-            setIsReportModalOpen(false);
-            setReportReason('');
-          }
-        }}
-        title="举报图片"
-        closeOnOverlayClick={!isReporting}
-        footer={
-          <>
-            <Button
-              variant="text"
-              onClick={() => {
-                setIsReportModalOpen(false);
-                setReportReason('');
-              }}
-              disabled={isReporting}
-            >
-              取消
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleReport}
-              loading={isReporting}
-              disabled={!reportReason.trim()}
-            >
-              {isReporting ? '提交中…' : '提交举报'}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant mb-4">
-          请描述违规原因，管理员将会审核处理。
-        </p>
-        <Textarea
-          value={reportReason}
-          onChange={(e) => setReportReason(e.target.value)}
-          placeholder="请详细描述违规原因…"
-          rows={4}
-          disabled={isReporting}
-          className="resize-none"
-        />
-      </Modal>
+      <ReportDialog
+        open={reportState.open}
+        reason={reportState.reason}
+        busy={reportBusy}
+        onReasonChange={(reason) => setReport({ ...reportState, reason })}
+        onSubmit={handleReportSubmit}
+        onClose={() => setReport({ ...reportState, open: false })}
+      />
+      {shareDialog}
+      {session.token && (
+        <FolderPicker key={`${session.token}:${imageId}`} open={pickerOpen} token={session.token} imageId={imageId} onClose={() => setPickerFor((current) => current === imageId ? null : current)} />
+      )}
     </div>,
   );
 }

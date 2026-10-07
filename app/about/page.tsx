@@ -1,5 +1,8 @@
+import type { Metadata } from 'next';
 import AboutContent from './AboutContent';
 import { readTeamMembers } from '@/lib/team.server';
+
+export const metadata: Metadata = { title: '关于本站' };
 
 /**
  * Server shell for /about. The page itself is unchanged and still a client component; what

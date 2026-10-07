@@ -29,7 +29,12 @@ export type ImageHeroBackgroundLocation = {
 export type ImageHeroSnapshot = {
   image: ImagePreview;
   previewSrc: string;
-  previewFrame: FrameAsset;
+  /**
+   * The bitmap a flight takes off from. Always present on a snapshot a press made; a step's
+   * (上一张 / 下一张) may have none when the list never painted that picture — it needs one only
+   * if the viewer later closes by flying, and the close captures the live frame first.
+   */
+  previewFrame: FrameAsset | null;
   sourceKey: string | null;
   mediaType: 'image' | 'video';
   canAnimate: boolean;
@@ -90,6 +95,8 @@ export type HeroStageNodes = HeroSurfaceNodes & {
 export type HeroNavigation = {
   push: (href: string) => void;
   replace: (href: string) => void;
+  /** Warm a route's payload ahead of the press (the card's intent ladder). */
+  prefetch?: (href: string) => void;
 };
 
 export type HeroOpenIntent = {
@@ -119,8 +126,14 @@ export type HeroCloseIntent = {
   cause?: 'button' | 'history' | 'dismiss' | 'interrupt';
 };
 
-export type HeroDetailRouteChangeIntent = {
-  imageId: number;
-  detailHref: string;
-  navigation: HeroNavigation;
+/**
+ * 上一张 / 下一张 inside an open viewer: an in-place change of the picture, never a navigation.
+ * `flush` completes the detail's own visual swap immediately — a close or an interruption that
+ * arrives mid-transition must measure the picture that is about to be on screen.
+ */
+export type HeroDetailStepIntent = {
+  fromId: number;
+  toId: number;
+  snapshot: ImageHeroSnapshot;
+  flush: () => void;
 };

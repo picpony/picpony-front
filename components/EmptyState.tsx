@@ -15,6 +15,8 @@ interface EmptyStateProps {
   size?: StatusViewSize;
   /** The whole route is this block — fill the scroller and centre. See `StatusView`. */
   fill?: boolean;
+  /** Off where the caller animates the swap that brought this block in. See `StatusView`. */
+  entrance?: boolean;
   className?: string;
 }
 
@@ -25,7 +27,8 @@ interface EmptyStateProps {
  *
  * The glyph defaults to a tray so a call site that forgets still shows an
  * absence rather than a rendering failure; override it where the screen has
- * something more specific to say.
+ * something more specific to say. It takes the theme's accent — one of the few
+ * accent moments 多色 has.
  *
  * **`inline` deliberately shows no glyph.** It had a default 36px tray which,
  * with its gap, stood taller than the 120px wells this size exists for — the
@@ -39,12 +42,15 @@ export default function EmptyState({
   icon,
   size = 'page',
   fill = false,
+  entrance = true,
   className = '',
 }: EmptyStateProps) {
   return (
     <StatusView
       size={size}
       fill={fill}
+      entrance={entrance}
+      iconTone="tertiary"
       className={className}
       title={title}
       description={description}

@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import { clamp, cn } from '@/lib/utils';
 import { SPRING_MS } from '@/lib/spring';
 import { useExitAnimation, useMounted } from '@/lib/overlay';
+import { trackPress } from '@/lib/ripple';
 
 /** Gap between the anchor and the bubble, per M3. */
 const OFFSET = 4;
@@ -26,6 +27,23 @@ const VIEWPORT_PADDING = 8;
  * is how a helpful label becomes a flicker.
  */
 const HOVER_DELAY_MS = 500;
+/**
+ * How long the bubble waits after the pointer leaves the control before it goes — the
+ * time to cross the 4dp gap onto the bubble itself, which WCAG 1.4.13 requires be
+ * possible ("hoverable"). Short enough that a pointer sweeping along a toolbar does not
+ * trail a bubble behind it.
+ */
+const LEAVE_GRACE_MS = 120;
+/**
+ * A finger's version of the rest delay: a touch held this long without travelling is a
+ * long press, and a long press on a labelled control is how a phone asks what it is.
+ */
+const LONG_PRESS_MS = 500;
+/**
+ * How long a long-press tooltip stays after the finger lifts — Compose's own
+ * `TooltipDuration` (1500ms): there is no pointer left to hover it, so it times out.
+ */
+const TOUCH_HOLD_MS = 1500;
 /**
  * How long the bubble stays mounted after `open` goes false. Read from the spring
  * itself rather than hand-typed beside it: the fade runs on `fast-effects`, and a
@@ -45,8 +63,10 @@ const EXIT_MS = SPRING_MS.fastEffects;
  * no severity — its whole job is to contrast with whatever surface it is over,
  * and flipping is exactly how it keeps doing that.
  *
- * Shows on hover after a delay and on **focus immediately** (a keyboard user has
- * already committed to the control). Hides on leave, blur, Escape and press.
+ * Shows on hover after a delay, on **focus immediately** (a keyboard user has
+ * already committed to the control) and on a **long press** under a finger. Hides on
+ * leave (after a short grace, so the pointer can move onto the bubble), blur, Escape
+ * and press; a long-press bubble times out after the finger lifts.
  *
  * `aria-describedby`, not `aria-label`: the control already has a name, and the
  * tooltip repeats it for the eye — announcing it as the name too would read it
@@ -57,11 +77,16 @@ export function Tooltip({
   anchorRef,
   open,
   id,
+  onPointerEnter,
+  onPointerLeave,
 }: {
   label: string;
   anchorRef: RefObject<HTMLElement | null>;
   open: boolean;
   id: string;
+  /** The bubble is hoverable: a pointer on it keeps it open. */
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
 }) {
   const mounted = useMounted();
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -135,6 +160,10 @@ export function Tooltip({
 
   if (!mounted || !rendering) return null;
 
+  /* Named before the style literal: the React Compiler cannot lower a conditional computed
+     key, and bailing out here left the one component every icon button renders uncompiled. */
+  const edge = place.above ? 'bottom' : 'top';
+
   return createPortal(
     <div
       ref={bubbleRef}
@@ -142,17 +171,24 @@ export function Tooltip({
       role="tooltip"
       data-open={open ? 'true' : 'false'}
       inert={!open}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       style={{
         position: 'fixed',
         left: place.left,
-        [place.above ? 'bottom' : 'top']: place.top,
+        [edge]: place.top,
         maxWidth: `calc(100vw - ${VIEWPORT_PADDING * 2}px)`,
       }}
       className={cn(
         /* 4dp corner, 8dp/4dp padding and a 24dp floor — M3's plain tooltip. No
-           shadow: the inverse container is the whole separation. */
-        'm3-tooltip bg-inverse-surface text-inverse-on-surface text-body-s z-tooltip',
-        'pointer-events-none flex min-h-6 items-center rounded-xs px-2 py-1 wrap-anywhere',
+           shadow: the inverse container is the whole separation — which forced colors
+           flattens, hence the system edge. */
+        'm3-tooltip bg-inverse-surface text-inverse-on-surface text-body-s z-tooltip forced-boundary',
+        'flex min-h-6 items-center rounded-xs px-2 py-1 wrap-anywhere',
+        /* Hoverable while open (WCAG 1.4.13): the pointer may move onto the bubble
+           without it vanishing. Never while leaving, so a closing bubble cannot catch
+           a press meant for what is under it. */
+        open ? 'pointer-events-auto' : 'pointer-events-none',
         /* `FastEffects` in **both** directions, which is what `Tooltip.kt` does.
            One spring both ways means the bubble cannot arrive and leave on two
            different clocks.
@@ -186,10 +222,21 @@ export function Tooltip({
  * An optional external target binds the same behaviour to a third-party-owned
  * button, such as an editor toolbar. It preserves other description IDs.
  * Pass `undefined` to opt out: no element, listeners or `aria-describedby`.
+ *
+ * **Touch** has no hover, so a long press shows the bubble (as on Android), it stays
+ * `TOUCH_HOLD_MS` after the finger lifts, and the click that ends the long press is
+ * swallowed — asking what a control is must not also press it. A long press that
+ * travels or turns into a scroll shows nothing.
  */
 type TooltipAnchorProps = Pick<
   HTMLAttributes<HTMLElement>,
-  'aria-describedby' | 'onPointerEnter' | 'onPointerLeave' | 'onPointerDown' | 'onFocus' | 'onBlur'
+  | 'aria-describedby'
+  | 'onPointerEnter'
+  | 'onPointerLeave'
+  | 'onPointerDown'
+  | 'onFocus'
+  | 'onBlur'
+  | 'onContextMenu'
 >;
 
 export function useTooltip(label?: string, externalTarget?: HTMLElement | null): {
@@ -202,7 +249,11 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
   const [open, setOpen] = useState(false);
   const [lastLabel, setLastLabel] = useState(label);
   const [lastTarget, setLastTarget] = useState(externalTarget);
-  const timer = useRef<number | null>(null);
+  const showTimer = useRef<number | null>(null);
+  const hideTimer = useRef<number | null>(null);
+  /* The long press in flight: whether its bubble is up, and how to stop swallowing the
+     click that ends it. Refs, because every one of these is read from an event. */
+  const touchPress = useRef<{ shown: boolean; disarm: () => void } | null>(null);
 
   // Disabled controls temporarily remove their label and event handlers. A
   // later re-enable must start a fresh hover, not resurrect the old bubble.
@@ -213,8 +264,10 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
   }
 
   const cancel = useCallback(() => {
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = null;
+    if (showTimer.current !== null) window.clearTimeout(showTimer.current);
+    if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+    showTimer.current = null;
+    hideTimer.current = null;
   }, []);
 
   const hide = useCallback(() => {
@@ -222,18 +275,113 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
     setOpen(false);
   }, [cancel]);
 
+  const hideAfter = useCallback((ms: number) => {
+    if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+    hideTimer.current = window.setTimeout(() => {
+      hideTimer.current = null;
+      setOpen(false);
+    }, ms);
+  }, []);
+
+  const keepOpen = useCallback(() => {
+    if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+    hideTimer.current = null;
+  }, []);
+
   const showForPointer = useCallback((event: { pointerType: string }) => {
+    // A finger has no hover; its path is the long press below.
     if (event.pointerType === 'touch') return;
-    cancel();
+    keepOpen();
+    if (showTimer.current !== null) window.clearTimeout(showTimer.current);
     // Rest delay describes intent, so only the fade reads the motion preference.
-    timer.current = window.setTimeout(() => setOpen(true), HOVER_DELAY_MS);
-  }, [cancel]);
+    showTimer.current = window.setTimeout(() => {
+      showTimer.current = null;
+      setOpen(true);
+    }, HOVER_DELAY_MS);
+  }, [keepOpen]);
+
+  const leaveForPointer = useCallback((event: { pointerType: string }) => {
+    if (event.pointerType === 'touch') return;
+    if (showTimer.current !== null) window.clearTimeout(showTimer.current);
+    showTimer.current = null;
+    hideAfter(LEAVE_GRACE_MS);
+  }, [hideAfter]);
+
+  /* A press dismisses the bubble — except a finger's, which may be the start of a long
+     press asking for it. */
+  const onPress = useCallback((event: PointerEvent | React.PointerEvent) => {
+    touchPress.current?.disarm();
+    touchPress.current = null;
+    if (event.pointerType !== 'touch') {
+      hide();
+      return;
+    }
+    hide();
+    const anchor = event.currentTarget as HTMLElement;
+    /* On a link a long press already means something — the platform's link menu (open in a
+       new tab, copy the address) — and a label is not worth taking that away. */
+    if (anchor.closest('a[href]')) return;
+    const press: { shown: boolean; disarm: () => void } = { shown: false, disarm: () => {} };
+    touchPress.current = press;
+    trackPress(
+      event,
+      {
+        press: () => {
+          if (touchPress.current !== press) return;
+          press.shown = true;
+          setOpen(true);
+          /* Swallow the click this press ends in, in the capture phase on `window`,
+             ahead of React's own listener at the root. */
+          const swallow = (e: MouseEvent) => {
+            if (e.target instanceof Node && anchor.contains(e.target)) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+            press.disarm();
+          };
+          let expiry: number | null = null;
+          press.disarm = () => {
+            window.removeEventListener('click', swallow, true);
+            if (expiry !== null) window.clearTimeout(expiry);
+            expiry = null;
+          };
+          window.addEventListener('click', swallow, true);
+          // Belt and braces: a release that produces no click must not leave it armed.
+          expiry = window.setTimeout(() => press.disarm(), LONG_PRESS_MS + 5000);
+        },
+        release: () => {
+          if (touchPress.current !== press) return;
+          // The finger is gone: nothing is holding this control any more.
+          touchPress.current = null;
+          hideAfter(TOUCH_HOLD_MS);
+          /* The click follows the release at once; after a beat, nothing is coming. */
+          window.setTimeout(() => press.disarm(), 400);
+        },
+        cancel: () => {
+          if (touchPress.current !== press) return;
+          press.disarm();
+          touchPress.current = null;
+          if (press.shown) hide();
+        },
+      },
+      LONG_PRESS_MS,
+    );
+  }, [hide, hideAfter]);
+
+  /* A long press is also the platform's context-menu gesture (Edge on a Windows touch
+     screen opens the page menu over the bubble). While a finger is holding this control
+     for its label, that menu is not what was asked for. `touchPress` is set only while a
+     finger is down, so a mouse's right click is never touched. */
+  const onContextMenu = useCallback((event: Event | React.SyntheticEvent) => {
+    if (touchPress.current) event.preventDefault();
+  }, []);
 
   const showForFocus = useCallback((event: { target: EventTarget | null }) => {
     if (event.target instanceof HTMLElement && event.target.matches(':focus-visible')) {
+      keepOpen();
       setOpen(true);
     }
-  }, []);
+  }, [keepOpen]);
 
   // Third-party toolbars own their buttons. Bind the same behaviour directly
   // instead of adding another tooltip recipe or a wrapper around their DOM.
@@ -241,20 +389,22 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
     if (!externalTarget || !label) return;
     anchorRef.current = externalTarget;
     externalTarget.addEventListener('pointerenter', showForPointer);
-    externalTarget.addEventListener('pointerleave', hide);
-    externalTarget.addEventListener('pointerdown', hide);
+    externalTarget.addEventListener('pointerleave', leaveForPointer);
+    externalTarget.addEventListener('pointerdown', onPress);
     externalTarget.addEventListener('focus', showForFocus);
     externalTarget.addEventListener('blur', hide);
+    externalTarget.addEventListener('contextmenu', onContextMenu);
     return () => {
       cancel();
       externalTarget.removeEventListener('pointerenter', showForPointer);
-      externalTarget.removeEventListener('pointerleave', hide);
-      externalTarget.removeEventListener('pointerdown', hide);
+      externalTarget.removeEventListener('pointerleave', leaveForPointer);
+      externalTarget.removeEventListener('pointerdown', onPress);
       externalTarget.removeEventListener('focus', showForFocus);
       externalTarget.removeEventListener('blur', hide);
+      externalTarget.removeEventListener('contextmenu', onContextMenu);
       if (anchorRef.current === externalTarget) anchorRef.current = null;
     };
-  }, [externalTarget, label, showForPointer, showForFocus, hide, cancel]);
+  }, [externalTarget, label, showForPointer, leaveForPointer, onPress, showForFocus, hide, cancel, onContextMenu]);
 
   useLayoutEffect(() => {
     if (!externalTarget || !label || !open) return;
@@ -270,6 +420,8 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
   }, [externalTarget, label, open, id]);
 
   useEffect(() => cancel, [cancel, label]);
+  /* Unmounting mid-press must not leave a click swallower on `window`. */
+  useEffect(() => () => touchPress.current?.disarm(), []);
 
   /* Escape dismisses it, which WCAG 1.4.13 requires of any content that appears on
      hover: it has to go away without moving the pointer.
@@ -296,12 +448,22 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
     anchorProps: {
       'aria-describedby': open ? id : undefined,
       onPointerEnter: showForPointer,
-      onPointerLeave: hide,
-      onPointerDown: hide,
+      onPointerLeave: leaveForPointer,
+      onPointerDown: onPress,
       onFocus: showForFocus,
       onBlur: hide,
+      onContextMenu,
     },
-    tooltip: <Tooltip label={label} anchorRef={anchorRef} open={open} id={id} />,
+    tooltip: (
+      <Tooltip
+        label={label}
+        anchorRef={anchorRef}
+        open={open}
+        id={id}
+        onPointerEnter={keepOpen}
+        onPointerLeave={() => hideAfter(LEAVE_GRACE_MS)}
+      />
+    ),
   };
 }
 

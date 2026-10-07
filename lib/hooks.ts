@@ -40,10 +40,14 @@ export function useDisplay(): DisplayInfo {
   return { mobile: !atLeastSm, tablet: atLeastSm && !atLeastLg, desktop: atLeastLg };
 }
 
-export function useMasonryColumns() {
-  const atLeastMd = useMediaQuery(MEDIA.md, true);
-  const atLeastLg = useMediaQuery(MEDIA.lg, true);
-  return atLeastLg ? 4 : atLeastMd ? 3 : 2;
+/* Outside the hook: the React Compiler cannot lower a `??` inside a `try`, and with the read
+   inline it skipped the whole hook — which the image viewer and the mascot render. */
+function readStoredValue(key: string, fallback: string | null): string | null {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 /** A device preference with the same fallback during SSR and denied storage.
@@ -61,13 +65,7 @@ export function useStoredValue(key: string, fallback: string | null = null): str
     };
   }, [key]);
 
-  return useSyncExternalStore(subscribe, () => {
-    try {
-      return localStorage.getItem(key) ?? fallback;
-    } catch {
-      return fallback;
-    }
-  }, () => fallback);
+  return useSyncExternalStore(subscribe, () => readStoredValue(key, fallback), () => fallback);
 }
 
 export function useStoredBoolean(key: string, fallback = false): boolean {
@@ -152,15 +150,28 @@ export function useSession() {
   return useMemo(() => ({ user, token: user?.token ?? null, ready }), [user, ready]);
 }
 
-/** Publish a new login and its API key together before starting account reads. */
+/**
+ * The sentence a sign-in shows when the browser refuses to store it — private modes, a site
+ * setting, a sandboxed frame. The session *is* the stored token, so there is nothing to fall
+ * back to; saying so beats a generic network error.
+ */
+export const SESSION_STORAGE_BLOCKED = '浏览器禁用了本地存储，无法保持登录';
+
+/** Publish a new login and its API key together before starting account reads.
+ * Throws a readable Chinese `Error` when storage is refused, rather than the engine's
+ * `SecurityError`. */
 export function writeUserInfo(user: StoredUserInfo): void {
   const serialised = JSON.stringify(user);
   if (!parseSession(serialised)) throw new Error('登录信息无效');
-  localStorage.setItem(LS_KEYS.userInfo, serialised);
-  if (typeof user.api_key === 'string' && user.api_key) {
-    localStorage.setItem(LS_KEYS.derpiApiKey, user.api_key);
-  } else {
-    localStorage.removeItem(LS_KEYS.derpiApiKey);
+  try {
+    localStorage.setItem(LS_KEYS.userInfo, serialised);
+    if (typeof user.api_key === 'string' && user.api_key) {
+      localStorage.setItem(LS_KEYS.derpiApiKey, user.api_key);
+    } else {
+      localStorage.removeItem(LS_KEYS.derpiApiKey);
+    }
+  } catch (error) {
+    throw new Error(SESSION_STORAGE_BLOCKED, { cause: error });
   }
   window.dispatchEvent(new Event('user_info_updated'));
 }
@@ -176,11 +187,16 @@ export function updateUserInfo(token: string, patch: Record<string, unknown>): b
   return true;
 }
 
-/** The expected token protects a new login from an older request's 401. */
+/** The expected token protects a new login from an older request's 401. Storage that
+ * refuses the removal cannot hold a session either, so the event still goes out. */
 export function clearUserInfo(expectedToken: string): boolean {
   if (readToken() !== expectedToken) return false;
-  localStorage.removeItem(LS_KEYS.userInfo);
-  localStorage.removeItem(LS_KEYS.derpiApiKey);
+  try {
+    localStorage.removeItem(LS_KEYS.userInfo);
+    localStorage.removeItem(LS_KEYS.derpiApiKey);
+  } catch {
+    /* Blocked mid-session: nothing further can be stored or removed; tell the app anyway. */
+  }
   window.dispatchEvent(new Event('user_info_updated'));
   return true;
 }
@@ -188,6 +204,50 @@ export function clearUserInfo(expectedToken: string): boolean {
 /** The token alone, which is what most call sites actually wanted. */
 export function readToken(): string | null {
   return readUserInfo()?.token || null;
+}
+
+/* One shared clock for relative times, ticking on the minute while anything reads it. */
+let clockNow = 0;
+let clockTimer: ReturnType<typeof setTimeout> | undefined;
+const clockListeners = new Set<() => void>();
+
+function scheduleClockTick() {
+  clockTimer = setTimeout(() => {
+    clockNow = Date.now();
+    for (const listener of clockListeners) listener();
+    scheduleClockTick();
+  }, 60_000 - (Date.now() % 60_000) + 50);
+}
+
+function subscribeClock(listener: () => void) {
+  if (clockListeners.size === 0) {
+    /* Stopped while nothing read it: the value it holds is stale by however long that was.
+       React compares the snapshot again after subscribing, so this is picked up at once. */
+    clockNow = Date.now();
+    scheduleClockTick();
+  }
+  clockListeners.add(listener);
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size === 0 && clockTimer !== undefined) {
+      clearTimeout(clockTimer);
+      clockTimer = undefined;
+    }
+  };
+}
+
+const readClock = () => clockNow || (clockNow = Date.now());
+const serverClock = () => null;
+
+/**
+ * "Now", for relative times (`12 分钟前`), as a value React can hydrate: `null` on the server
+ * and in the hydration render, then the current time, re-read once a minute. Text that depends
+ * on the moment it is rendered must not be in server HTML — the server and the browser render
+ * it seconds apart, and a minute boundary (or the five-minute 在线 window) falling between them
+ * is a hydration mismatch. Render an absolute date, or nothing, while this is `null`.
+ */
+export function useNow(): number | null {
+  return useSyncExternalStore(subscribeClock, readClock, serverClock);
 }
 
 /**
@@ -234,6 +294,38 @@ export function useDeferredLoading(
   return visible;
 }
 
+/** Input types that take typed text — where Escape belongs to the field, not the screen. */
+const TEXT_ENTRY_TYPES = new Set([
+  'text', 'search', 'email', 'url', 'tel', 'password', 'number',
+  'date', 'datetime-local', 'month', 'time', 'week',
+]);
+
+/**
+ * Whether keyboard focus is somewhere the user types: a text input, a textarea, a select, or
+ * rich text (`contenteditable`, which is how the forum editor takes input). A checkbox or a
+ * button is not — Escape from those still means "leave".
+ */
+export function isEditableTarget(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === 'undefined' || !(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
+  return target instanceof HTMLInputElement && TEXT_ENTRY_TYPES.has(target.type);
+}
+
+/**
+ * Whether a key press asks the screen to close — `useEscapeBack`'s whole decision, kept pure so
+ * it can be checked without a DOM. Not for an IME's composition-cancel, a press something nearer
+ * already handled, or a press while the user types in a field (see `useEscapeBack`).
+ */
+export function escapeMeansBack(
+  event: Pick<KeyboardEvent, 'key' | 'defaultPrevented' | 'isComposing' | 'keyCode' | 'target'>,
+): boolean {
+  if (event.key !== 'Escape' || event.defaultPrevented) return false;
+  if (event.isComposing || event.keyCode === 229) return false;
+  const focused = typeof document === 'undefined' ? null : document.activeElement;
+  return !isEditableTarget(event.target) && !isEditableTarget(focused);
+}
+
 /**
  * Escape closes the screen — every full-screen view's second way out beside its
  * pinned back button. `enabled` stands the screen down while something layered on
@@ -241,6 +333,15 @@ export function useDeferredLoading(
  * close two levels. `defaultPrevented` covers the same hazard for handlers that
  * call preventDefault rather than being tracked in state, and the listener is
  * on window in the bubble phase so a nearer listener gets first refusal.
+ *
+ * **Escape inside a field is the field's.** People press it to dismiss an IME's candidate
+ * list or to clear what they typed; treating it as "leave" closed a half-written message and
+ * navigated away from a half-written reply, discarding both. So a press whose target (or the
+ * focused element) takes text is ignored, as is any press during IME composition — a macOS
+ * Chinese IME's composition-cancel arrives as `key: 'Escape'` with `isComposing` set, and
+ * older engines report it as key code 229. A screen that wants Escape-to-clear handles it
+ * inside the field.
+ *
  * `onBack` is held in a ref written from an effect: pages rebuild their handler
  * every render, and a render React discards must not mutate it.
  */
@@ -254,7 +355,7 @@ export function useEscapeBack(onBack: () => void, enabled = true) {
   useEffect(() => {
     if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!escapeMeansBack(event)) return;
       event.preventDefault();
       latest.current();
     };

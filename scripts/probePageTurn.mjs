@@ -102,6 +102,10 @@ onEvent.push(async (msg) => {
     /* A paused request whose frame navigated away is gone; nothing to answer. */
   }
 });
+/* Measure the code, not the service worker: it would answer `/_next/image` from its own thread,
+   where `Fetch` never sees the request (see the same line in netAudit.mjs). */
+await send('Network.enable');
+await send('Network.setBypassServiceWorker', { bypass: true });
 await send('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
 
 await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });

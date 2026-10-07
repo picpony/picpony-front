@@ -8,7 +8,8 @@ import { springTiming } from '@/lib/springTiming';
  * The tab indicator's glide, on Web Animations — NOT GSAP: four lines of GSAP were
  * `components/Tabs.tsx`'s only reason to import `lib/motion` (which registers GSAP and five
  * plugins at module scope), putting the whole engine into the root shell of every route, and
- * moving one element to an `x` and a `width` on a spring is a thing WAAPI does natively.
+ * moving one element along a spring is a thing WAAPI does natively — on the compositor, as a
+ * transform (see the keyframes below for how a change of width stays one).
  * `springTiming` rather than `spring()` because it is renderer-neutral and returns a duration
  * already scaled by the speed preference (WAAPI has no `gsap.globalTimeline.timeScale`
  * equivalent).
@@ -26,7 +27,6 @@ export function useSlidingIndicator<
   I extends HTMLElement = HTMLSpanElement,
 >(
   active: string,
-  extraDeps: unknown[] = [],
 ): { containerRef: RefObject<C | null>; indicatorRef: RefObject<I | null> } {
   const containerRef = useRef<C>(null);
   const indicatorRef = useRef<I>(null);
@@ -47,42 +47,55 @@ export function useSlidingIndicator<
       );
       if (!indicator || !container || !target) return;
 
-      const to = { transform: `translateX(${target.offsetLeft}px)`, width: `${target.offsetWidth}px` };
-
-      /* GSAP's `overwrite: 'auto'` has no WAAPI equivalent, so the previous glide is
-         cancelled by hand — *committed* first, or a tab tapped mid-glide would snap back to
-         where the cancelled animation started before setting off again. */
-      const previous = running.current;
-      if (previous) {
-        try {
-          previous.commitStyles();
-        } catch {
-          /* `commitStyles` throws on a non-replaceable animation; the style write below
-             is the answer either way. */
-        }
-        previous.cancel();
-        running.current = null;
-      }
+      const toX = target.offsetLeft;
+      const toWidth = target.offsetWidth;
+      /* The end state is written inline first and the glide runs *to* it with no fill, so a
+         finished (or cancelled) animation already rests where it should. */
+      const rest = () => {
+        indicator.style.transformOrigin = '0 0';
+        indicator.style.width = `${toWidth}px`;
+        indicator.style.transform = `translateX(${toX}px)`;
+      };
 
       if (!placed.current || motionTier() === 'off') {
+        running.current?.cancel();
+        running.current = null;
         placed.current = true;
-        Object.assign(indicator.style, to);
+        rest();
       } else {
+        /* Where the mark is *now*, read before the previous glide is let go — a tab tapped
+           mid-glide sets off from the pose on screen, not from where the cancelled one began. */
         const style = getComputedStyle(indicator);
-        const from = { transform: style.transform, width: style.width };
-        const animation = indicator.animate([from, to], {
-          ...springTiming('defaultSpatial'),
-          fill: 'forwards',
-        });
+        const matrix = style.transform === 'none' ? null : new DOMMatrixReadOnly(style.transform);
+        const fromX = matrix?.m41 ?? 0;
+        const fromWidth = (parseFloat(style.width) || toWidth) * (matrix?.a ?? 1);
+        const thin = indicator.offsetHeight <= 4;
+        running.current?.cancel();
+        running.current = null;
+        rest();
+        /* **Compositor-only whenever it can be.** A `width` keyframe is laid out on the main
+           thread every frame, and the home pill glides during a tab switch, when the main thread
+           has the route's commit to render. Equal widths (the pill's two tabs) are a pure
+           translate; a thin bar (the underline, 2dp) takes the width change as a scale from its
+           left edge, where the stretch of a 1px cap cannot be seen; only a tall mark whose width
+           really changes keeps the width keyframe — a rounded pill would show the scale. */
+        const keyframes: Keyframe[] =
+          Math.abs(fromWidth - toWidth) < 0.5
+            ? [{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }]
+            : thin
+              ? [
+                  { transform: `translateX(${fromX}px) scaleX(${fromWidth / toWidth})` },
+                  { transform: `translateX(${toX}px) scaleX(1)` },
+                ]
+              : [
+                  { transform: `translateX(${fromX}px)`, width: `${fromWidth}px` },
+                  { transform: `translateX(${toX}px)`, width: `${toWidth}px` },
+                ];
+        const animation = indicator.animate(keyframes, springTiming('defaultSpatial'));
         running.current = animation;
-        /* Drop the fill after settling so no composited layer stays alive for
-           the life of every tab row. */
         animation.finished
           .then(() => {
-            if (running.current !== animation) return;
-            Object.assign(indicator.style, to);
-            animation.cancel();
-            running.current = null;
+            if (running.current === animation) running.current = null;
           })
           .catch(() => {
             /* Cancelled by the next glide, which has already taken over. */
@@ -92,9 +105,11 @@ export function useSlidingIndicator<
       /* Font loading, badge counts and viewport changes can move a tab without
          changing its value. Keep the mark under its label in those cases, too.
          Geometry changes place it immediately: reflow is not a tab selection.
-         Observing all tabs also catches a preceding label getting wider. */
-      let left = target.offsetLeft;
-      let width = target.offsetWidth;
+         Observing all tabs also catches a preceding label getting wider. The baseline is
+         the geometry read above: read again here, after the writes, it forced a second
+         style and layout pass inside the tap's own task. */
+      let left = toX;
+      let width = toWidth;
       const observer = new ResizeObserver(() => {
         const nextLeft = target.offsetLeft;
         const nextWidth = target.offsetWidth;
@@ -103,17 +118,15 @@ export function useSlidingIndicator<
         width = nextWidth;
         running.current?.cancel();
         running.current = null;
-        Object.assign(indicator.style, {
-          transform: `translateX(${left}px)`,
-          width: `${width}px`,
-        });
+        indicator.style.transformOrigin = '0 0';
+        indicator.style.width = `${width}px`;
+        indicator.style.transform = `translateX(${left}px)`;
       });
       observer.observe(container);
       container.querySelectorAll<HTMLElement>('[data-tab]').forEach((tab) => observer.observe(tab));
       return () => observer.disconnect();
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `extraDeps` is the caller's list.
-    [active, ...extraDeps],
+    [active],
   );
 
   useLayoutEffect(() => () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -8,6 +8,7 @@ import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
 import { disableDeveloperMode, enableDeveloperMode, getDeveloperStatus } from '@/lib/api/picpony';
+import { FAILURE_MESSAGES, apiErrorMessage } from '@/lib/api/errors';
 import { MdCheckCircle, MdCancel, MdConstruction } from 'react-icons/md';
 import { ICON } from '@/lib/icons';
 import { readToken, useSession } from '@/lib/hooks';
@@ -54,6 +55,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const generation = useRef(0);
   const locked = useRef(false);
@@ -82,7 +84,8 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       getDeveloperStatus(token, controller.signal)
         .then((data) => {
           if (!isCurrent()) return;
-          if (!data?.success) throw new Error('开发者状态加载失败');
+          // The title already says what failed; the line under it says why.
+          if (!data?.success) throw new Error(FAILURE_MESSAGES.invalid);
           if (data?.is_developer_banned) {
             setStatus('banned');
             return;
@@ -91,8 +94,10 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
           setPrerequisites(data?.prerequisites || {});
           setStatus('ready');
         })
-        .catch(() => {
-          if (isCurrent()) setStatus('error');
+        .catch((failure) => {
+          if (!isCurrent()) return;
+          setLoadError(apiErrorMessage(failure));
+          setStatus('error');
         });
     });
     return () => {
@@ -132,13 +137,25 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       showToast(enabled ? '开发者模式已开启' : '开发者模式已关闭', enabled ? 'success' : 'info');
     } catch (failure) {
       if (!isCurrent()) return;
-      const message = failure instanceof Error ? failure.message : '网络错误，请稍后再试';
+      const message = apiErrorMessage(failure);
       if (enabled) setError(message);
       else showToast(message, 'error');
     } finally {
       if (generation.current === current) locked.current = false;
       if (isCurrent()) setSubmitting(false);
     }
+  };
+
+  /* A form, so Enter in the field does what the button does — it did nothing. The single
+     field submits the form by itself (implicit submission needs no submit button), and an
+     incomplete code says so instead of doing nothing again. */
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (password.length !== 8) {
+      setError('请输入 8 位维护密码');
+      return;
+    }
+    void changeMode(true);
   };
 
   return (
@@ -185,15 +202,21 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
         )}
 
         {status === 'error' && (
-          <ErrorRetry size="inline" title="开发者状态加载失败" onRetry={() => setAttempt((value) => value + 1)} />
+          <ErrorRetry
+            size="inline"
+            title="开发者状态加载失败"
+            message={loadError || undefined}
+            onRetry={() => setAttempt((value) => value + 1)}
+          />
         )}
 
         {status === 'ready' && (
           <>
             {isDeveloper ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-body-m text-primary-ink">
-                  <MdConstruction size={ICON.control} />
+                {/* The sentence is text on the surface; the brand ink is for the mark. */}
+                <div className="flex items-center gap-2 text-body-m text-on-surface">
+                  <MdConstruction size={ICON.control} className="text-primary-ink" aria-hidden="true" />
                   当前已处于开发者模式
                 </div>
               </div>
@@ -206,21 +229,34 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                 </div>
 
                 {allMet ? (
-                  <div className="space-y-3">
+                  <form onSubmit={handleSubmit} noValidate>
+                    {/* A code shared by the maintainers, not this user's password: a password
+                        manager offered to save it over the account's real credential. Every
+                        manager's own opt-out is spelled out, since each reads only its own.
+                        No length cap either — a pasted string cut to eight characters is a
+                        different, wrong code that looks right; the button waits for eight. */}
                     <Input
                       label="维护密码"
                       type="password"
+                      name="maintenance-code"
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);
                         setError('');
                       }}
-                      maxLength={8}
-                      autoComplete="current-password"
-                      placeholder="请输入 8 位维护密码"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      enterKeyHint="done"
+                      data-1p-ignore=""
+                      data-lpignore="true"
+                      data-bwignore=""
+                      data-form-type="other"
+                      helper="8 位维护密码"
                       error={error || undefined}
                     />
-                  </div>
+                  </form>
                 ) : (
                   <p className="text-body-s text-on-surface-variant">
                     满足以上条件后，方可开启开发者模式（不过滤任何标签内容）。

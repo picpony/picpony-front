@@ -19,21 +19,25 @@
       The colours are the **default** palette's `surface` / `on-surface` / `on-surface-variant`,
       spelled out because there is no stylesheet here to read a token from. That is a knowing
       divergence from "only `--md-sys-color-*` tokens": this document is outside the design
-      system's reach by construction. Keep them in step with `app/globals.css` if the default
-      palette moves — nothing automated checks it, because nothing can.
+      system's reach by construction. `testPalette.mjs` checks these values:
+      when `npm run colors:write` moves the default palette, copy the six values
+      from its `:root` and `.dark` blocks. The fonts are the platform's own: this page
+      makes no requests, so it cannot load the app's web faces. HarmonyOS Sans is not named — on
+      a desktop it exists only when installed by hand, often as a single weight that would then
+      paint all of this text (the generic below reaches it where it is the system face).
     -->
     <style>
       :root {
         color-scheme: light dark;
-        --surface: #fff8f8;
-        --on-surface: #22191b;
-        --on-surface-variant: #524345;
+        --surface: #fff8f6;
+        --on-surface: #221a15;
+        --on-surface-variant: #52443c;
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --surface: #191114;
-          --on-surface: #f0dee0;
-          --on-surface-variant: #d6c2c4;
+          --surface: #131318;
+          --on-surface: #e4e1e9;
+          --on-surface-variant: #c8c5d0;
         }
       }
       * {
@@ -55,7 +59,10 @@
           system-ui,
           -apple-system,
           'Segoe UI',
-          'Noto Sans SC',
+          'PingFang SC',
+          'Microsoft YaHei',
+          'Noto Sans CJK SC',
+          'Source Han Sans SC',
           sans-serif;
         text-align: center;
       }

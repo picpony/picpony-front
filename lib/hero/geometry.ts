@@ -1,7 +1,5 @@
 'use client';
 
-import type { CSSProperties } from 'react';
-import type { PonyImage } from '@/lib/types/image';
 import {
   HERO_ARC_CROP_BUDGET,
   HERO_ARC_CONTAIN_SCAN,
@@ -10,12 +8,6 @@ import {
   HERO_ARC_SOLVE_STEPS,
   HERO_BACKGROUND_SINK_SCALE,
   HERO_MASK_RADIUS_STEP_PX,
-  HERO_MAX_HEIGHT_DVH,
-  HERO_MEDIA_VIEWPORT_CHROME_PX,
-  HERO_MEDIA_BREAKPOINT_PX,
-  HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX,
-  HERO_MEDIA_MAX_WIDTH_PX,
-  HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX,
 } from './constants';
 import { clamp01 } from '@/lib/utils';
 
@@ -36,71 +28,14 @@ export type HeroBoxTransform = {
   scaleY: number;
 };
 
-type HeroMediaDimensions = Pick<PonyImage, 'width' | 'height'>;
-
-// ---------------------------------------------------------------------------
-// Media box sizing — single source shared by the Stage landing target and the
-// routed detail media. Both MUST render pixel-identical boxes or the handoff
-// visibly shifts.
-// ---------------------------------------------------------------------------
-
-function getHeroMediaDimensions(image: HeroMediaDimensions) {
-  const width = Math.max(1, image.width || 1);
-  const height = Math.max(1, image.height || 1);
-  return { width, height, aspectRatio: width / height };
-}
-
-export function getHeroMediaResponsiveSizes(image: HeroMediaDimensions) {
-  const { width, aspectRatio } = getHeroMediaDimensions(image);
-  const mobilePaddingRem = HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX / 16;
-  const desktopPaddingRem = HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX / 16;
-  return `(max-width: ${HERO_MEDIA_BREAKPOINT_PX - 1}px) min(calc(100vw - ${mobilePaddingRem}rem), ${width}px, calc(${HERO_MAX_HEIGHT_DVH}dvh * ${aspectRatio})), min(calc(100vw - ${desktopPaddingRem}rem), ${HERO_MEDIA_MAX_WIDTH_PX}px, ${width}px, calc(${HERO_MAX_HEIGHT_DVH}dvh * ${aspectRatio}))`;
-}
-
-export function getHeroMediaPreviewSizes() {
-  return `(max-width: ${HERO_MEDIA_BREAKPOINT_PX - 1}px) 100vw, ${HERO_MEDIA_MAX_WIDTH_PX}px`;
-}
-
-export function getHeroMediaRenderedWidth(
-  image: HeroMediaDimensions,
-  viewport: { width: number; height: number },
-) {
-  const { width, aspectRatio } = getHeroMediaDimensions(image);
-  const horizontalPadding =
-    viewport.width < HERO_MEDIA_BREAKPOINT_PX
-      ? HERO_MEDIA_MOBILE_HORIZONTAL_PADDING_PX
-      : HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX;
-  // Both terms of the height cap — the same expression the stylesheet's cap uses. Omitting
-  // the chrome term makes this return a width the element never paints, and anything
-  // measuring against this instead of the DOM places the landing box off.
-  const heightCap = Math.min(
-    viewport.height * (HERO_MAX_HEIGHT_DVH / 100),
-    viewport.height - HERO_MEDIA_VIEWPORT_CHROME_PX,
-  );
-  return Math.min(
-    width,
-    HERO_MEDIA_MAX_WIDTH_PX,
-    Math.max(1, viewport.width - horizontalPadding),
-    Math.max(1, heightCap * aspectRatio),
-  );
-}
-
-/** The media box's height cap, as one CSS expression both presentations share. */
-const MEDIA_MAX_HEIGHT =
-  `min(${HERO_MAX_HEIGHT_DVH}dvh, calc(100dvh - ${HERO_MEDIA_VIEWPORT_CHROME_PX}px))`;
-
-export function getHeroMediaStyle(image: HeroMediaDimensions): CSSProperties {
-  const { width, height, aspectRatio } = getHeroMediaDimensions(image);
-  return {
-    aspectRatio: `${width} / ${height}`,
-    // The cap is the *smaller* of 80dvh and the viewport minus the chrome around the media
-    // (see `HERO_MEDIA_VIEWPORT_CHROME_PX`); without the second term a portrait picture
-    // lands in a box whose bottom is below the overlay's, and the flight clips it.
-    width: `min(100%, ${width}px, calc(${MEDIA_MAX_HEIGHT} * ${aspectRatio}))`,
-    maxWidth: '100%',
-    maxHeight: MEDIA_MAX_HEIGHT,
-  };
-}
+/* The media box sizing lives in `./mediaBox`, which the Stage (rendered by the shell on every
+   route) can import without this module's solver. Re-exported for the detail's media. */
+export {
+  getHeroMediaPreviewSizes,
+  getHeroMediaRenderedWidth,
+  getHeroMediaResponsiveSizes,
+  getHeroMediaStyle,
+} from './mediaBox';
 
 // ---------------------------------------------------------------------------
 // Flyer geometry
@@ -426,7 +361,15 @@ function createHeroPointArc(from: HeroPoint, to: HeroPoint): HeroPointArc {
 
 /** Linear in the *angle*, so the corner's speed along its own arc is uniform in `t`. */
 function heroPointArcAt(arc: HeroPointArc, t: number, bow: number): HeroPoint {
-  if (t <= 0) return arc.from;
+  if (t === 0) return arc.from;
+  /* Before the start — a reversal whose spring leaves at the speed the flyer was caught at dips
+     below zero before it recovers. The corner keeps going the way it was heading, along the
+     path's own tangent: clamped to the endpoint, the dip was erased and the caught flyer stood
+     still for the frames it should have spent carrying on (R10-007). */
+  if (t < 0) {
+    const tangent = heroPointArcTangent(arc, bow);
+    return { x: arc.from.x + tangent.x * t, y: arc.from.y + tangent.y * t };
+  }
   if (t >= 1) return arc.to;
   const chordX = arc.from.x + (arc.to.x - arc.from.x) * t;
   const chordY = arc.from.y + (arc.to.y - arc.from.y) * t;
@@ -434,6 +377,17 @@ function heroPointArcAt(arc: HeroPointArc, t: number, bow: number): HeroPoint {
   const angle = arc.beginAngle + (arc.endAngle - arc.beginAngle) * t;
   const arcX = arc.center.x + Math.cos(angle) * arc.radius;
   const arcY = arc.center.y + Math.sin(angle) * arc.radius;
+  return { x: chordX + (arcX - chordX) * bow, y: chordY + (arcY - chordY) * bow };
+}
+
+/** d/dt of `heroPointArcAt` at t = 0: the chord's direction bent toward the arc's by `bow`. */
+function heroPointArcTangent(arc: HeroPointArc, bow: number): HeroPoint {
+  const chordX = arc.to.x - arc.from.x;
+  const chordY = arc.to.y - arc.from.y;
+  if (!arc.center || !(bow > 0)) return { x: chordX, y: chordY };
+  const sweep = arc.endAngle - arc.beginAngle;
+  const arcX = -Math.sin(arc.beginAngle) * arc.radius * sweep;
+  const arcY = Math.cos(arc.beginAngle) * arc.radius * sweep;
   return { x: chordX + (arcX - chordX) * bow, y: chordY + (arcY - chordY) * bow };
 }
 
@@ -665,7 +619,13 @@ export function solveHeroArcContainBows(
       height: Math.max(0, Math.min(rect.top + rect.height, visible.top + visible.height) - top),
     };
   };
-  const escapeAt = (innerBow: number, outerBow: number) => {
+  /**
+   * The worst visible escape over the leg. `settle` stops at the first sample over the slack,
+   * which is all a yes/no feasibility test needs; ranking windows against each other needs the
+   * whole leg, or every infeasible window reports whichever early sample first crossed the line
+   * and the "friendliest" choice below is made between truncated numbers (R10-012).
+   */
+  const escapeAt = (innerBow: number, outerBow: number, settle = true) => {
     const innerArc = createHeroRectArc(inner.from, inner.to, innerBow);
     const outerArc = createHeroRectArc(outer.from, outer.to, outerBow);
     let worst = -Infinity;
@@ -674,7 +634,7 @@ export function solveHeroArcContainBows(
       const seen = clip(lerpHeroRectArc(innerArc, progress));
       if (!(seen.width > 0) || !(seen.height > 0)) continue;
       worst = Math.max(worst, heroRectEscape(seen, lerpHeroRectArc(outerArc, progress)));
-      if (worst > HERO_ARC_CONTAIN_SLACK) return worst;
+      if (settle && worst > HERO_ARC_CONTAIN_SLACK) return worst;
     }
     return worst;
   };
@@ -708,7 +668,7 @@ export function solveHeroArcContainBows(
   let least = Infinity;
   for (let index = 0; index <= HERO_ARC_CONTAIN_SCAN; index += 1) {
     const bow = index / HERO_ARC_CONTAIN_SCAN;
-    const escape = escapeAt(inner.bow, bow);
+    const escape = escapeAt(inner.bow, bow, false);
     if (escape < least) {
       least = escape;
       outerBow = bow;

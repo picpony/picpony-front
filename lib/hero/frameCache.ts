@@ -14,6 +14,7 @@ import {
   type VisualMedia,
 } from './dom';
 import { initializeHeroInput, isHeroInteractionQuiet, subscribeHeroInteraction } from './input';
+import { clamp } from '@/lib/utils';
 
 const HERO_FRAME_CACHE_MAX_PIXELS = HERO_FRAME_MAX_DIMENSION * HERO_FRAME_MAX_DIMENSION * 2;
 
@@ -47,11 +48,8 @@ function getHeroFrameDimension(width: number, height: number) {
   const maxViewportHeight = window.innerHeight * (HERO_MAX_HEIGHT_DVH / 100);
   const maxHeight = Math.min(maxViewportHeight, height, window.innerWidth / ratio);
   const maxWidth = Math.min(window.innerWidth, width, maxViewportHeight * ratio);
-  const dpr = Math.min(HERO_FRAME_MAX_DPR, Math.max(1, window.devicePixelRatio || 1));
-  return Math.min(
-    HERO_FRAME_MAX_DIMENSION,
-    Math.max(1, Math.ceil(Math.max(maxWidth, maxHeight) * dpr)),
-  );
+  const dpr = clamp(window.devicePixelRatio || 1, 1, HERO_FRAME_MAX_DPR);
+  return clamp(Math.ceil(Math.max(maxWidth, maxHeight) * dpr), 1, HERO_FRAME_MAX_DIMENSION);
 }
 
 function getHeroFrameCapture(media: VisualMedia): HeroFrameCapture | null {

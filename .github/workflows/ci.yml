@@ -1,0 +1,85 @@
+# Every push to dev / master and every pull request: the checks that need no browser.
+#
+# No lockfile is committed (it was removed on purpose), so dependencies resolve from package.json
+# on each run; the npm cache keeps that quick. Node 24 matches development, and the TS-importing
+# scripts (`scripts/tsResolve.mjs`) need 22.18 or later for synchronous module hooks and type
+# stripping.
+name: CI
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  NODE_OPTIONS: '--unhandled-rejections=strict'
+
+jobs:
+  verify:
+    name: Typecheck, lint, unit tests, generated files, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Changed-line whitespace
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$BASE"
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base=$(git rev-parse HEAD^)
+          fi
+          git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "$base" HEAD -- . ":(exclude)public/companions/browserponies.js"
+
+      - name: Test and tooling syntax
+        run: |
+          for script in scripts/*.mjs; do node --check "$script" || exit 1; done
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      # The palette generator verifies its generated files and every colour assertion; a stale
+      # `app/theme-palettes.css` or `lib/generated/*` fails here rather than drifting.
+      - name: Colours
+        run: npm run colors
+
+      - name: Hero path
+        run: npm run hero:path
+
+      - name: Emoji table
+        run: npm run emoji
+
+      - name: Production build
+        run: npm run build

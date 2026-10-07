@@ -23,6 +23,12 @@ interface AvatarProps {
   /** Ring in the brand colour, for the profile header and other hero spots. */
   ringed?: boolean;
   /**
+   * The page's largest paint — a profile header's avatar. Loads eagerly at high fetch
+   * priority instead of lazily (Next 16 retires `priority` for exactly these two), so
+   * the picture Next reports as the LCP element is not the last thing to arrive.
+   */
+  priority?: boolean;
+  /**
    * Render a native `<img referrerPolicy="no-referrer">` instead of `next/image`.
    * Deliberate escape hatch for a host that is neither in `next.config.ts`'s
    * whitelist nor willing to serve a request carrying a `Referer` — QQ's avatar
@@ -53,6 +59,7 @@ export default function Avatar({
   size = 40,
   className = '',
   ringed = false,
+  priority = false,
   unoptimized = false,
 }: AvatarProps) {
   const url = getAvatarUrl(src);
@@ -62,13 +69,21 @@ export default function Avatar({
      avatar is always a definite square. */
   const heroBox = 'w-24 h-24 sm:w-32 sm:h-32 [container-type:size]';
   /* The escape hatch's own error state: a bare `<img>` needs `onError`; the
-     fallback is already mounted underneath, so this just stops painting over it. */
-  const [broken, setBroken] = useState(false);
+     fallback is already mounted underneath, so this just stops painting over it.
+     Keyed on the URL that failed, so a new `src` (a changed avatar, the next row
+     reusing this instance) gets its own attempt instead of inheriting the old one's
+     failure for the component's lifetime. */
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const broken = brokenUrl !== null && brokenUrl === url;
 
   return (
     <div
       className={cn(
-        'relative shrink-0 overflow-hidden rounded-full bg-surface-container-high text-on-surface-variant',
+        /* The container pair, not a neutral step: an avatar sits on every neutral step there
+           is, and on a dialog (`surface-container-high`) a neutral disc was the dialog's own
+           colour — only the bare glyph showed (G0-006). Missing media is `primary-container`
+           here as it is for an absent profile banner; `secondary-container` means selected. */
+        'relative shrink-0 overflow-hidden rounded-full bg-primary-container text-on-primary-container',
         ringed && 'ring-2 ring-primary-ink',
         !inline && heroBox,
         className,
@@ -90,9 +105,10 @@ export default function Avatar({
             src={url}
             alt={name || '用户头像'}
             referrerPolicy="no-referrer"
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : undefined}
             decoding="async"
-            onError={() => setBroken(true)}
+            onError={() => setBrokenUrl(url)}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
@@ -101,6 +117,8 @@ export default function Avatar({
             alt={name || '用户头像'}
             fill
             sizes={inline ? `${size}px` : '128px'}
+            eager={priority}
+            fetchPriority={priority ? 'high' : undefined}
             className="object-cover"
           />
         )

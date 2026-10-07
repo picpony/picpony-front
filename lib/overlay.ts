@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import { getAppScroller } from '@/lib/appScroller';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
+import { useHistoryLayer, type HistoryLayer } from '@/lib/historyLayers';
+import { focusLanding, focusPageLanding } from '@/lib/focusLanding';
 
 /* ---------------------------------------------------------------------------
  * Overlay behaviour — focus trap, scroll lock, exit hold, Esc — lives here, once,
@@ -101,10 +103,24 @@ interface OverlayOptions {
   closeOnEscape?: boolean;
   /** Menus own Escape but leave roving focus and Tab to their control. */
   modal?: boolean;
+  /**
+   * False for a modal surface that covers the page but not the app: focus still enters it on
+   * open and returns on close, but Tab may leave it and nothing pulls focus back. The image
+   * detail over a list is the one — the list beneath is `inert`, while the app bar and the
+   * drawer stay live beside it, as they are on the detail's own page.
+   */
+  containFocus?: boolean;
   /** Portalled siblings that belong to the same surface, e.g. the detail back button. */
   additionalRefs?: readonly ElementRef[];
   /** A route overlay can outlive the element that originally opened it. */
   returnFocus?: () => HTMLElement | null;
+  /**
+   * Back closes this layer as well: it holds a same-URL history entry while open (see
+   * `lib/historyLayers.ts`). `Modal` and `Sheet` turn it on; Back then obeys the same
+   * `closeOnEscape` rule as Esc. Off for the image-detail overlay, whose entries are the
+   * hero ladder's.
+   */
+  history?: boolean;
 }
 
 interface OverlayLayer {
@@ -112,6 +128,8 @@ interface OverlayLayer {
   options: RefObject<OverlayOptions>;
   parent: OverlayLayer | null;
   depth: number;
+  /** This layer's history entry, when it has one — for ordering layers opened together. */
+  history: RefObject<HistoryLayer | null>;
 }
 
 /** React ancestry survives portals. Effect order does not: when two nested
@@ -145,10 +163,19 @@ function activeLayers(): OverlayLayer[] {
   return layers.filter((layer) => rootsOf(layer).some(available));
 }
 
-function focusScope(): { layer: OverlayLayer; roots: HTMLElement[] } | null {
+/** The modal surface in charge of focus, and whether it holds focus inside itself. */
+function focusScope(): { layer: OverlayLayer; roots: HTMLElement[]; contained: boolean } | null {
   const active = activeLayers();
   const index = active.findLastIndex((layer) => layer.options.current.modal !== false);
-  return index < 0 ? null : { layer: active[index], roots: active.slice(index).flatMap(rootsOf) };
+  if (index < 0) return null;
+  const layer = active[index];
+  return { layer, roots: active.slice(index).flatMap(rootsOf), contained: layer.options.current.containFocus !== false };
+}
+
+/** The scope Tab cycles inside and focus is held in; null where focus may leave. */
+function containingScope() {
+  const scope = focusScope();
+  return scope?.contained ? scope : null;
 }
 
 function focusPanel(layer: OverlayLayer): void {
@@ -179,7 +206,7 @@ export function moveFocusFrom(
   exclude?: HTMLElement | null,
 ): void {
   if (!anchor) return;
-  const scope = focusScope();
+  const scope = containingScope();
   const items = focusableItems(scope?.roots ?? [document.body])
     .filter((el) => !exclude?.contains(el));
   const index = items.indexOf(anchor);
@@ -199,7 +226,7 @@ function onOverlayKeyDown(event: KeyboardEvent): void {
     return;
   }
   if (event.key !== 'Tab') return;
-  const scope = focusScope();
+  const scope = containingScope();
   if (!scope) return;
   const items = focusableItems(scope.roots);
   const index = items.indexOf(document.activeElement as HTMLElement);
@@ -215,9 +242,89 @@ function onOverlayKeyDown(event: KeyboardEvent): void {
 }
 
 function onOverlayFocus(event: FocusEvent): void {
-  const scope = focusScope();
+  const scope = containingScope();
   if (!scope || scope.roots.some((root) => root.contains(event.target as Node))) return;
   focusPanel(scope.layer);
+}
+
+/* ---------------------------------------------------------------------------
+ * The page under a modal layer.
+ *
+ * `aria-modal` alone is a request that some screen readers ignore (iOS VoiceOver
+ * historically among them), so while a modal surface portalled *outside* the shell is up,
+ * the shell's root (`[data-app-root]`) is made `inert` — out of the tab order and the
+ * accessibility tree together. Portals (dialogs, sheets, menus, tooltips, toasts) mount on
+ * `<body>`, outside that root, so none of them is caught by it. A modal layer *inside* the
+ * root (the phone drawer, the image-detail overlay) does not trigger it, or it would make
+ * itself inert. Only an `inert` this module set is ever removed.
+ * ------------------------------------------------------------------------ */
+
+let inertRoot: HTMLElement | null = null;
+const modalListeners = new Set<() => void>();
+
+function isModal(layer: OverlayLayer) {
+  return layer.options.current.modal !== false;
+}
+
+function syncBackground() {
+  const root = document.querySelector<HTMLElement>('[data-app-root]');
+  const covered = Boolean(root) && layers.some((layer) => {
+    const panel = layer.panelRef.current;
+    return isModal(layer) && Boolean(panel?.isConnected) && !root!.contains(panel);
+  });
+  if (inertRoot && (inertRoot !== root || !covered)) {
+    inertRoot.inert = false;
+    inertRoot = null;
+  }
+  if (covered && root && !inertRoot && !root.inert) {
+    root.inert = true;
+    inertRoot = root;
+  }
+  modalListeners.forEach((listener) => listener());
+}
+
+/** Whether a modal surface (dialog, sheet, modal drawer, the image detail) is up. */
+export function hasModalLayer(): boolean {
+  return layers.some(isModal);
+}
+
+/** Subscribe to `hasModalLayer` alone (a `useSyncExternalStore` source). */
+export function subscribeModalLayers(listener: () => void): () => void {
+  modalListeners.add(listener);
+  return () => {
+    modalListeners.delete(listener);
+  };
+}
+
+/**
+ * Nothing is asking for the user's attention: no modal layer, no hero flight, no route
+ * transition. The app's own interruptions (the announcement) wait for this rather than
+ * stacking a second modal task on top of the one the user is in.
+ */
+export function isScreenQuiet(): boolean {
+  if (typeof document === 'undefined') return false;
+  if (hasModalLayer()) return false;
+  const root = document.documentElement;
+  if (root.dataset.imageHeroTransition) return false;
+  const phase = root.dataset.imageHeroState;
+  if (phase && phase !== 'gallery-idle' && phase !== 'detail-idle') return false;
+  return !document.querySelector('[data-route-transit]');
+}
+
+/** Subscribe to `isScreenQuiet` (a `useSyncExternalStore` source). */
+export function subscribeScreenQuiet(listener: () => void): () => void {
+  modalListeners.add(listener);
+  const observer = new MutationObserver(listener);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-image-hero-transition', 'data-image-hero-state'],
+  });
+  const scroller = getAppScroller();
+  if (scroller) observer.observe(scroller, { attributes: true, attributeFilter: ['data-route-transit'] });
+  return () => {
+    modalListeners.delete(listener);
+    observer.disconnect();
+  };
 }
 
 /**
@@ -232,8 +339,21 @@ export function useOverlayLayer(
 ): OverlayLayer {
   const latest = useRef(options);
   const parent = useContext(OverlayLayerContext);
-  const layer = useMemo(() => ({ panelRef, options: latest, parent, depth: (parent?.depth ?? -1) + 1 }),
-    [panelRef, parent]);
+  const historyParent = useMemo(() => {
+    for (let candidate = parent; candidate; candidate = candidate.parent) {
+      if (candidate.options.current.history) return candidate.history;
+    }
+    return null;
+  }, [parent]);
+  const history = useHistoryLayer(isOpen, () => latest.current.onClose(), {
+    enabled: Boolean(options.history),
+    dismissible: options.closeOnEscape !== false,
+    parent: historyParent,
+  });
+  const layer = useMemo(
+    () => ({ panelRef, options: latest, parent, depth: (parent?.depth ?? -1) + 1, history }),
+    [panelRef, parent, history],
+  );
   useLayoutEffect(() => { latest.current = options; });
   useEffect(() => {
     if (!isOpen) return;
@@ -247,6 +367,7 @@ export function useOverlayLayer(
       document.addEventListener('keydown', onOverlayKeyDown);
       document.addEventListener('focusin', onOverlayFocus, true);
     }
+    syncBackground();
     let frame = 0;
     const enter = () => {
       if (latest.current.modal === false) return;
@@ -271,23 +392,42 @@ export function useOverlayLayer(
         document.removeEventListener('keydown', onOverlayKeyDown);
         document.removeEventListener('focusin', onOverlayFocus, true);
       }
+      // Before the focus restore below: the trigger lives in the root being released.
+      syncBackground();
       if (latest.current.modal === false) return;
       // Wait for the closing commit to remove background inert. Never steal
       // focus from a newer dialog opened in the same commit.
       requestAnimationFrame(() => {
         const scope = focusScope();
         const active = document.activeElement;
+        /* Focus already inside the surface now in charge is not ours to move — including this
+           same dialog opened again before this frame, whose panel is the very node that just
+           departed (it stays mounted through its exit), so the departing-roots test below
+           cannot tell them apart. Moving it pulled focus to the first field mid-typing: text
+           meant for a second field landed in the first. */
+        if (active instanceof HTMLElement && scope && scope.roots.some((root) => root.contains(active))) return;
         // A hero return exposes the gallery before its old route unmounts. Preserve a
         // new focus choice made there (or in a newer overlay) during that interval.
         if (active instanceof HTMLElement && active !== document.body && available(active) &&
           !departingRoots.some((root) => root.contains(active))) return;
         const preferred = latest.current.returnFocus?.();
         const target = preferred ?? previous;
+        /* A surface that does not contain focus leaves the rest of the app live, so a control out
+           there — the app bar's 登录 under the image detail — is a place focus may return to. */
         if (target && target !== document.body && available(target) &&
-          (!scope || scope.roots.some((root) => root.contains(target)))) {
+          (!scope || !scope.contained || scope.roots.some((root) => root.contains(target)))) {
           target.focus({ preventScroll: true });
+          /* A landing target (a page heading `focusLanding` gave a temporary tabindex) lost that
+             tabindex when this dialog took the focus, so focusing it again is a silent no-op.
+             After a password change the sign-out remount had landed on the heading, the
+             sign-in dialog opened from there, and closing it left focus on the body. */
+          if (document.activeElement !== target && !focusLanding(target) && wasTopModal && !scope) focusPageLanding();
         } else if (wasTopModal && scope) {
           focusPanel(scope.layer);
+        } else if (wasTopModal) {
+          /* The opener is gone and no surface is left to hold focus: land on the page, as a
+             route change does, rather than on the body. */
+          focusPageLanding();
         }
       });
     };

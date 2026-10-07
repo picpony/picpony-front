@@ -1,0 +1,434 @@
+[
+  {
+    "name": "AK叶琳",
+    "path": "a.k. yearling",
+    "source": "https://picpony.top/assets/ponies/a.k.%20yearling/a.k.yearling-idle-right.gif",
+    "source_sha256": "da5bb53da9e447f04097ee1cb74a6f7b988c72e8ceec032837005b65b85e3241",
+    "file": "2c3a5695f63207e9.png",
+    "dimensions": [
+      90,
+      92
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "云宝黛西",
+    "path": "rainbow dash",
+    "source": "https://picpony.top/assets/ponies/rainbow%20dash/stand_rainbow_right.gif",
+    "source_sha256": "ab09b6331a29a13f0e043e310ca2f8d270762ae405e42bf168d8a3460909178b",
+    "file": "aef81111889061d5.png",
+    "dimensions": [
+      98,
+      86
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "云宝黛西（幼驹）",
+    "path": "rainbow dash (filly)",
+    "source": "https://picpony.top/assets/ponies/rainbow%20dash%20%28filly%29/stand_filly_dash_right.gif",
+    "source_sha256": "048b565f24f01ca8b2865e748f18ea15f4c0712ab7b74fe2188b8aaa4f638f54",
+    "file": "978fccf3be5ace65.png",
+    "dimensions": [
+      90,
+      72
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "余晖烁烁",
+    "path": "sunset shimmer",
+    "source": "https://picpony.top/assets/ponies/sunset%20shimmer/sunsetshimmer-idle-right.gif",
+    "source_sha256": "c8ca75bc88ed6d20fc184d9e340d6286b6862ba4050c3f2ae888836222f5f859",
+    "file": "3e4a831dbf709621.png",
+    "dimensions": [
+      86,
+      86
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "塞拉斯蒂娅公主",
+    "path": "princess celestia",
+    "source": "https://picpony.top/assets/ponies/princess%20celestia/stand_right.gif",
+    "source_sha256": "2bbdbfade9aee56f7f4dfa001b9f8c3e124adfd51d79c67512c707606bc5c740",
+    "file": "7443d92c4ed94791.png",
+    "dimensions": [
+      192,
+      140
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "塞拉斯蒂娅公主（幼驹其二）",
+    "path": "princess celestia (alternate filly)",
+    "source": "https://picpony.top/assets/ponies/princess%20celestia%20%28alternate%20filly%29/stand_right.gif",
+    "source_sha256": "83dae1586e4d8af382822cd0f746fe64a28c98e282b6eda2d8621b7d1441e26f",
+    "file": "3b15757cc58b85a9.png",
+    "dimensions": [
+      118,
+      84
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "塞拉斯蒂娅公主（幼驹）",
+    "path": "princess celestia (filly)",
+    "source": "https://picpony.top/assets/ponies/princess%20celestia%20%28filly%29/stand_right.gif",
+    "source_sha256": "357594e8ae5fceb309a67ccc231dfdbd17298911595639c86fb9e42302bb8188",
+    "file": "7df7e42ce19c4a7b.png",
+    "dimensions": [
+      88,
+      86
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "天琴心弦",
+    "path": "lyra",
+    "source": "https://picpony.top/assets/ponies/lyra/lyra_stand_right.gif",
+    "source_sha256": "970f411256dc5629e5c4f0d22bd9c4cc8fe633263386adbc6ef7daf6d2c0d614",
+    "file": "c4ddeffba8c2336a.png",
+    "dimensions": [
+      92,
+      84
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "小呆",
+    "path": "derpy hooves",
+    "source": "https://picpony.top/assets/ponies/derpy%20hooves/derpy_stand_right.gif",
+    "source_sha256": "751b26f63af19f20391ff80a6f8a8c99ec9a6ab6846f675b4ab2ba4b82547a99",
+    "file": "f0e4b68e45ffa21f.png",
+    "dimensions": [
+      94,
+      84
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "小苹花",
+    "path": "apple bloom",
+    "source": "https://picpony.top/assets/ponies/apple%20bloom/stand_right.gif",
+    "source_sha256": "e4cd0d2a81a481c2d27df619c640adb130148bbf67c0c6bb31bdc72748eee632",
+    "file": "7cf92b146c9e00cb.png",
+    "dimensions": [
+      76,
+      78
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "小蝶",
+    "path": "fluttershy",
+    "source": "https://picpony.top/assets/ponies/fluttershy/stand_fluttershy_right.gif",
+    "source_sha256": "66f36b0d6a6b6faa31ca52c7d3e7e84bb0d5a664457c4d27ab610c457ee39cd9",
+    "file": "b777ab121d78b08a.png",
+    "dimensions": [
+      102,
+      78
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "小蝶（幼驹）",
+    "path": "fluttershy (filly)",
+    "source": "https://picpony.top/assets/ponies/fluttershy%20%28filly%29/fillyshy_stand_right.gif",
+    "source_sha256": "4d5043465fd2111150a97b36a897b379890a5335d372dc0aeeef0c050f4d3c6e",
+    "file": "7ff87c504e1070b2.png",
+    "dimensions": [
+      82,
+      68
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "崔克茜",
+    "path": "trixie",
+    "source": "https://picpony.top/assets/ponies/trixie/stand_right.gif",
+    "source_sha256": "421432d2812e90d5a9e11565520057b12666a7fb0695a2f15e6bbb2147e9b05a",
+    "file": "50573ac999b4f751.png",
+    "dimensions": [
+      94,
+      110
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "斯派克",
+    "path": "spike",
+    "source": "https://picpony.top/assets/ponies/spike/spike_idle_right.gif",
+    "source_sha256": "51e9955843dbcce710e390214fe06e22b46e7e4bb9e8a4809531f2a86deb97d5",
+    "file": "798552d3924a30ba.png",
+    "dimensions": [
+      34,
+      58
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "无畏天马",
+    "path": "daring do",
+    "source": "https://picpony.top/assets/ponies/daring%20do/standingright.gif",
+    "source_sha256": "9fb43d0553c4ca27eca6303e9a8419fd01ce8bd6a20e522ca7be35d7d7aa173e",
+    "file": "afdd508daaa95310.png",
+    "dimensions": [
+      98,
+      88
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "暮光闪闪",
+    "path": "twilight sparkle",
+    "source": "https://picpony.top/assets/ponies/twilight%20sparkle/stand_twilight_right.gif",
+    "source_sha256": "15841985d34475c93ac4c8eb3bf5c75ba2a2d76317fb0ee2568f9d0243cc6730",
+    "file": "841ecd7a6a9026fa.png",
+    "dimensions": [
+      98,
+      80
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "暮光闪闪公主",
+    "path": "princess twilight sparkle",
+    "source": "https://picpony.top/assets/ponies/princess%20twilight%20sparkle/p-twi-idle-right.gif",
+    "source_sha256": "9f3d522230ab85e455b0cc7428b08c562e84bb578a8c92e4e5af193dcaed4590",
+    "file": "6088b2060564bfb0.png",
+    "dimensions": [
+      98,
+      82
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "暮光闪闪（幼驹）",
+    "path": "twilight sparkle (filly)",
+    "source": "https://picpony.top/assets/ponies/twilight%20sparkle%20%28filly%29/twilightfilly_dance_right.gif",
+    "source_sha256": "804740447e4138e5a90115f3b653c156ab183692f4c72cbbaa08763d6042757b",
+    "file": "019cf30106a2af04.png",
+    "dimensions": [
+      86,
+      72
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "梦魇之月",
+    "path": "nightmare moon",
+    "source": "https://picpony.top/assets/ponies/nightmare%20moon/stand_right.gif",
+    "source_sha256": "12a37c291eb4cb6fec8c080dad923c7a60ee3d1033f031cd93b883275e54c17f",
+    "file": "3a4bb8466abe318f.png",
+    "dimensions": [
+      192,
+      140
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "泽科拉",
+    "path": "zecora",
+    "source": "https://picpony.top/assets/ponies/zecora/stand_zecora_right.gif",
+    "source_sha256": "3181a2a6a599024333f7a152f8406d62319ad3c657a626795ee5b5d805e56e6f",
+    "file": "50469ba1f164561e.png",
+    "dimensions": [
+      90,
+      88
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "瑞瑞",
+    "path": "rarity",
+    "source": "https://picpony.top/assets/ponies/rarity/stand_rarity_right.gif",
+    "source_sha256": "82e6be4086b54c8eaa343b2b298555cc77d609457d400846aae945b19a4fe57a",
+    "file": "c7f1128804bcdaa4.png",
+    "dimensions": [
+      92,
+      84
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "瑞瑞（幼驹）",
+    "path": "rarity (filly)",
+    "source": "https://picpony.top/assets/ponies/rarity%20%28filly%29/rarityfilly_stand_right.gif",
+    "source_sha256": "73cf15e6ed03d3938a26dcf5bbf990ec4839e8baf833e2a6063b933e9acf22ce",
+    "file": "fb248ca0b04a93f6.png",
+    "dimensions": [
+      86,
+      68
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "瑞雯",
+    "path": "raven",
+    "source": "https://picpony.top/assets/ponies/raven/raven-idle-right.gif",
+    "source_sha256": "0d1796cd9c496f331352575db5bba26a8b7e6f73bb7e8e75a07fdd8ce3b2ecde",
+    "file": "092cda390b474161.png",
+    "dimensions": [
+      72,
+      84
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "甜贝儿",
+    "path": "sweetie belle",
+    "source": "https://picpony.top/assets/ponies/sweetie%20belle/stand_right.gif",
+    "source_sha256": "9beedc5f2f1571a489fd0f99ba702b688f2167521f2ab042439d1987bd039442",
+    "file": "6e579f2a28c3d8a3.png",
+    "dimensions": [
+      78,
+      64
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "苹果杰克",
+    "path": "applejack",
+    "source": "https://picpony.top/assets/ponies/applejack/stand_aj_right.gif",
+    "source_sha256": "edc5d6de12a7d5e2f50d1b0db08b736d330fd5658156247d64a5b8efc7defb49",
+    "file": "e202d17897549ee6.png",
+    "dimensions": [
+      88,
+      94
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "苹果杰克（幼驹）",
+    "path": "applejack (filly)",
+    "source": "https://picpony.top/assets/ponies/applejack%20%28filly%29/stand_right.gif",
+    "source_sha256": "efe17436acd71e820d05123a2acc19ac36d0a6909af7fe68ee30eba9b45d0d2f",
+    "file": "b5f630ad51de21bc.png",
+    "dimensions": [
+      68,
+      66
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "萍卡美娜",
+    "path": "pinkamena diane pie",
+    "source": "https://picpony.top/assets/ponies/pinkamena%20diane%20pie/stand_pinkamena_right.gif",
+    "source_sha256": "6eccc46f1f057b6306ab848e0dc394a06871f9dc9866946dd32036daa3bcf8c8",
+    "file": "dae9eb7bfaf7bcc6.png",
+    "dimensions": [
+      106,
+      126
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "萍琪派",
+    "path": "pinkie pie",
+    "source": "https://picpony.top/assets/ponies/pinkie%20pie/stand_pinkiepie_right.gif",
+    "source_sha256": "5ab6a77c515b02fd44fd8e1bbb8a5cc67bedb51d2c3ee86d1febcf0a616f204e",
+    "file": "bd6a51f34bb9dcb5.png",
+    "dimensions": [
+      96,
+      86
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "萍琪派（幼驹）",
+    "path": "pinkie pie (filly)",
+    "source": "https://picpony.top/assets/ponies/pinkie%20pie%20%28filly%29/filly_pinkie_stand_right.gif",
+    "source_sha256": "132e0f7a76c263be400e5a357130d4bfb30dff9e32ba3ea88aa76efa5411d61b",
+    "file": "50e804e8789437dc.png",
+    "dimensions": [
+      64,
+      62
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "邪茧女王",
+    "path": "queen chrysalis",
+    "source": "https://picpony.top/assets/ponies/queen%20chrysalis/chrysalis-idle-right.gif",
+    "source_sha256": "558c7889388d7a059302368dadd70f8d49f307e973e22c44c9f67f7d56806b22",
+    "file": "bd116bd84625c95e.png",
+    "dimensions": [
+      94,
+      122
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "银甲闪闪",
+    "path": "shining armor",
+    "source": "https://picpony.top/assets/ponies/shining%20armor/stand_right.gif",
+    "source_sha256": "48ae90cd292a5f149ea7313f254d69a5afbb1451f6026b899eab3113a652faef",
+    "file": "9d5538163438f7b9.png",
+    "dimensions": [
+      88,
+      104
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "露娜公主",
+    "path": "princess luna",
+    "source": "https://picpony.top/assets/ponies/princess%20luna/luna_idle_right.gif",
+    "source_sha256": "29f3f17c13a6fece9a8b54a8f13bb33a97915b1f38a007f3b18f5ed3f90650d5",
+    "file": "ffbdc4971d93e54f.png",
+    "dimensions": [
+      144,
+      128
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "露娜公主（幼驹）",
+    "path": "princess luna (filly)",
+    "source": "https://picpony.top/assets/ponies/princess%20luna%20%28filly%29/stand_right.gif",
+    "source_sha256": "1e2966902014f9bd5b89e6c01084bd54f061b2fc3e19ce2b0468b1f93a84daf3",
+    "file": "ece2fc1f09ed7dbe.png",
+    "dimensions": [
+      72,
+      62
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "露娜公主（第1季）",
+    "path": "princess luna (season 1)",
+    "source": "https://picpony.top/assets/ponies/princess%20luna%20%28season%201%29/stand_right.gif",
+    "source_sha256": "f6b05986c89258f0c039df6c8ab211231704d92d2c2327a4c2ad10b298d09510",
+    "file": "bd14e5a7ae01ec2f.png",
+    "dimensions": [
+      96,
+      88
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "韵律公主",
+    "path": "princess cadance",
+    "source": "https://picpony.top/assets/ponies/princess%20cadance/stand_right.gif",
+    "source_sha256": "d5c10a6f3c3561a04a2f77aa2facbf23ab4b67cccccc514032f78c625270f5b5",
+    "file": "6882fd3a477d63a0.png",
+    "dimensions": [
+      114,
+      100
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  },
+  {
+    "name": "飞板璐",
+    "path": "scootaloo",
+    "source": "https://picpony.top/assets/ponies/scootaloo/stand_right.gif",
+    "source_sha256": "98b11e14dd92dc15635674917c89ce45f025838c1d446aab58c58775370f6952",
+    "file": "35976ff507cf93a3.png",
+    "dimensions": [
+      90,
+      66
+    ],
+    "operation": "first-frame PNG decode, no visual modification"
+  }
+]

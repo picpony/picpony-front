@@ -11,16 +11,18 @@ import {
 import { usePathname, useSearchParams } from 'next/navigation';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
-import { getHeroMediaStyle } from '@/lib/hero/geometry';
+import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
 import Skeleton from '@/components/Skeleton';
+/* The runtime store, not the engine: the Stage is mounted by the shell on every route, and it
+   only ever renders while a session — and therefore the engine — exists. */
 import {
   getImageHeroStage,
   interruptImageHero,
   observeImageHeroClientNavigation,
   registerImageHeroStage,
   subscribeImageHeroStage,
-  type ImageHeroStageState,
-} from '@/lib/hero';
+} from '@/lib/hero/runtime';
+import type { ImageHeroStageState } from '@/lib/hero/types';
 
 const EMPTY_STAGE: ImageHeroStageState = { phase: 'idle', snapshot: null, sessionId: null };
 
@@ -110,6 +112,26 @@ export default function HeroStage() {
 
   return (
     <>
+      {/* Before the overlay in the DOM: a Stage copy after the section was the last node of the
+          flight's surface (the routed copy is the first element of its dialog now, so it is the
+          first Tab stop — R10-008). Positioned, so the order changes nothing on screen.
+          `passive`: while the Stage's copy rides along, the routed one is mounted too — it
+          never takes focus, is out of the accessibility tree, and takes no ripple. No
+          `data-image-detail-reveal` on either copy: the cascade never reaches them. Their
+          entrance is the `floatingBack` branch in `buildOverlayAnimations`, and the pull
+          gesture reaches them through a compound selector on the element itself. */}
+      <DetailBack
+        ref={backRef}
+        passive
+        data-image-detail-back-button
+        data-image-detail-floating-back="stage"
+        data-image-hero-stage-back
+        data-image-hero-stage-foreground
+        onClick={() => {
+          interruptImageHero();
+        }}
+        className="image-detail-back"
+      />
       <section
         ref={overlayRef}
         data-image-detail-overlay
@@ -149,8 +171,8 @@ export default function HeroStage() {
             <div data-image-detail-crossfade className="w-full">
             <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
               <div className="flex flex-col rounded-md bg-transparent">
-                <DetailHeader key={image.id} image={image} layout="stage" metadataReady={false} />
-                <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6 md:min-h-[48dvh]">
+                <DetailHeader key={image.id} image={image} layout="stage" pending />
+                <div className="relative flex w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6">
                   {/* The landing target is an ordinary in-flow flex item, because
                       the routed `DetailImage` is one too and the two must measure
                       identically — a second box inside an absolutely-positioned
@@ -195,26 +217,6 @@ export default function HeroStage() {
           </div>
         </div>
       </section>
-      {/* `passive`: while the Stage's copy rides along, the routed one is mounted
-          too, so without it the app has two focusable 返回图片列表 buttons in the
-          tab order and two in the accessibility tree.
-          No `data-image-detail-reveal` here — both back buttons render as
-          *siblings* of the overlay, so the cascade never reached them. Their
-          entrance is the `floatingBack` branch in `buildOverlayAnimations`, and
-          the pull gesture reaches them through a compound selector on the
-          element itself. */}
-      <DetailBack
-        ref={backRef}
-        passive
-        data-image-detail-back-button
-        data-image-detail-floating-back="stage"
-        data-image-hero-stage-back
-        data-image-hero-stage-foreground
-        onClick={() => {
-          interruptImageHero();
-        }}
-        className="image-detail-back"
-      />
     </>
   );
 }
