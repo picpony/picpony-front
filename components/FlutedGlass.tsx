@@ -780,8 +780,8 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
   }, []);
 
   return (
-    <div ref={hostRef} aria-hidden className={cn('pointer-events-none absolute inset-0', className)}>
-      <canvas ref={canvasRef} className="block h-full w-full" />
+    <div ref={hostRef} aria-hidden className={cn('pointer-events-none absolute inset-0 rounded-[inherit]', className)}>
+      <canvas ref={canvasRef} className="block h-full w-full rounded-[inherit]" />
     </div>
   );
 }
