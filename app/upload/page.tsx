@@ -32,6 +32,12 @@ import { getAppScroller } from '@/lib/appScroller';
 import { readToken, useSession } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { scrollAppToTop } from '@/lib/scrollTo';
+import {
+  UPLOAD_MAX_TAG_INPUT,
+  uploadDescriptionProblem,
+  uploadSourceUrl,
+  uploadTagInput,
+} from '@/lib/uploadLimits';
 import { cn } from '@/lib/utils';
 import SizeSwap from './SizeSwap';
 import UploadQuickTags from './UploadQuickTags';
@@ -52,8 +58,6 @@ const RATINGS = new Set<string>(RATING_TAGS.map((rating) => rating.tag));
 const DERPI_RULES = 'https://derpibooru.org/pages/rules';
 /** Derpibooru's own search for the signed-in account's uploads. */
 const DERPI_MY_UPLOADS = 'https://derpibooru.org/search?q=my%3Auploads';
-/** Derpibooru's own description limit. */
-const MAX_DESCRIPTION = 50_000;
 /** How long a picked file may take to report its size before the zone says it is reading it. */
 const READING_GRACE_MS = 200;
 /** The longest wait for that size; past it the preview shows without a reserved box. */
@@ -93,13 +97,17 @@ function fileProblem(file: File): string | null {
   return null;
 }
 
-/** A source, when there is one, is a whole web address — what Derpibooru stores. */
+/**
+ * A source, when there is one, is a whole web address — what Derpibooru stores — and one the
+ * submit hop forwards: the same check (`uploadSourceUrl`), so the form never accepts an address
+ * the hop then refuses as 「来源链接无效」 (review P4-F2: one with a user name in it, or a long one).
+ */
 function sourceProblem(value: string): string | null {
   const text = value.trim();
-  if (!text) return null;
+  if (!text || uploadSourceUrl(text)) return null;
   try {
     const url = new URL(text);
-    if ((url.protocol === 'https:' || url.protocol === 'http:') && url.hostname) return null;
+    if (url.username || url.password) return '来源链接不能包含用户名或密码';
   } catch {
     /* Not a URL at all. */
   }
@@ -117,10 +125,13 @@ function validate(draft: UploadDraft): Errors {
   const count = draft.tags.length + (draft.rating ? 1 : 0);
   if (count < MIN_UPLOAD_TAGS) {
     errors.tags = `至少需要 ${MIN_UPLOAD_TAGS} 个标签（含分级），还差 ${MIN_UPLOAD_TAGS - count} 个`;
+  } else if (uploadTagInput(draft.rating, draft.tags).length > UPLOAD_MAX_TAG_INPUT) {
+    errors.tags = `标签总长度超过 ${UPLOAD_MAX_TAG_INPUT} 个字符，请删减部分标签`;
   }
   const source = sourceProblem(draft.source);
   if (source) errors.source = source;
-  if (Array.from(draft.description).length > MAX_DESCRIPTION) errors.description = `作品描述最多 ${MAX_DESCRIPTION} 个字`;
+  const description = uploadDescriptionProblem(draft.description);
+  if (description) errors.description = description;
   return errors;
 }
 
@@ -359,6 +370,7 @@ export default function UploadPage() {
   const ratingRef = useRef<HTMLFieldSetElement>(null);
   const tagField = useRef<TagComboFieldHandle>(null);
   const sourceRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
   const doneRef = useRef<HTMLHeadingElement>(null);
 
@@ -552,7 +564,10 @@ export default function UploadPage() {
       sourceRef.current?.focus();
       return;
     }
-    if (found.description) return;
+    if (found.description) {
+      descriptionRef.current?.focus();
+      return;
+    }
     /* Focus waits on the busy button, which keeps it (a disabled field would drop it). */
     submitRef.current?.focus();
     if (!(await confirm({
@@ -562,7 +577,7 @@ export default function UploadPage() {
       tone: 'filled',
     }))) return;
     if (readToken() !== token) return;
-    const tagInput = [draft.rating, ...draft.tags].filter(Boolean).join(', ');
+    const tagInput = uploadTagInput(draft.rating, draft.tags);
     void startUpload({
       owner: token,
       apiKey,
@@ -732,6 +747,7 @@ export default function UploadPage() {
           />
 
           <Textarea
+            ref={descriptionRef}
             label="作品描述"
             value={formDraft.description}
             disabled={showBusy}

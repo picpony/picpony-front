@@ -76,6 +76,11 @@ export default function ReplyComposer({
   const headingId = useId();
   const errorId = useId();
   const blank = isBlankRichText(content);
+  /* The reply target as it is now, for a send that lands after the reader picked another. */
+  const latestReplyTo = useRef(replyTo);
+  useEffect(() => {
+    latestReplyTo.current = replyTo;
+  });
 
   useEffect(() => {
     onDirtyChange(!blank);
@@ -105,11 +110,16 @@ export default function ReplyComposer({
     }
     setError(null);
     setSending(true);
+    /* What this send carries. The editor stays editable while it is out, so the reader may go on
+       typing or pick another reply to answer; the send's success takes away only what it sent
+       (review P4-F3: it emptied the editor and dropped the newly picked target as well). */
+    const sent = content;
+    const target = replyTo;
     const outcome = await sendReply(session, threadId, {
       postId,
-      content: (replyTo ? replyQuote(replyTo.username, replyTo.content) : '') + content.trim(),
-      replyToUserId: replyTo?.userId,
-      replyToCommentId: replyTo?.commentId,
+      content: (target ? replyQuote(target.username, target.content) : '') + sent.trim(),
+      replyToUserId: target?.userId,
+      replyToCommentId: target?.commentId,
     });
     setSending(false);
     if (readToken() !== session) return;
@@ -117,8 +127,8 @@ export default function ReplyComposer({
       setError(outcome.message);
       return;
     }
-    setContent('');
-    onCancelReply();
+    setContent((current) => (current === sent ? '' : current));
+    if (target && latestReplyTo.current?.commentId === target.commentId) onCancelReply();
     showToast('已发送回复', 'success');
     onSent(outcome.last, session);
   };

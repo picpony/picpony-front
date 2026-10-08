@@ -165,7 +165,8 @@ test('upload submit bounds streamed UTF-8 bytes before contacting upstream', asy
   let requests = 0;
   globalThis.fetch = async () => { requests++; throw new Error('must not reach upstream'); };
   let cancelled = false;
-  const bytes = new TextEncoder().encode('马'.repeat(50_000));
+  /* Past the 512KB cap (review P4-F2 raised it from 128KB to hold every valid form). */
+  const bytes = new TextEncoder().encode('马'.repeat(200_000));
   const body = new ReadableStream({
     start(controller) { controller.enqueue(bytes); },
     cancel() { cancelled = true; },

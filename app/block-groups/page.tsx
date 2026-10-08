@@ -126,6 +126,7 @@ export default function BlockGroupsPage() {
     if (current) return;
     toggles.current.set(group.id, state);
     void (async () => {
+      let sentAny = false;
       while (readToken() === token && state.confirmed !== state.wanted) {
         const sending = state.wanted;
         const sent = await settle(toggleBlockGroup(token, group.id, sending));
@@ -138,8 +139,13 @@ export default function BlockGroupsPage() {
           break;
         }
         state.confirmed = sending;
+        sentAny = true;
       }
       toggles.current.delete(group.id);
+      /* A list read that was already out when the switch flipped answers with the old state and
+         replaces the flip — on screen and in the device's mirror — after which nothing put it
+         back (review P4-F8). Once the server has the last word, the list is asked again. */
+      if (sentAny && readToken() === token) blockGroups.expire({ token });
     })();
   }, [token]);
 

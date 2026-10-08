@@ -102,6 +102,10 @@ async function run(token: string, now: () => number): Promise<SyncResult> {
   /* Whether a count this run reports differs from the one the list holds: only then — or when the
      backend found new pictures — does the list read afterwards answer anything new. */
   let moved = false;
+  /* Whether any batch's counts were read at all. A run that could read none has nothing to
+     report: it is a failed run, not a finished one (review P4-F5) — finalised and stamped, it
+     held the next attempt off for ten minutes where a failure waits one. */
+  let readAny = false;
   for (let start = 0; start < list.length; start += TAG_COUNT_BATCH) {
     const batch = list.slice(start, start + TAG_COUNT_BATCH);
     let counts: Record<string, number>;
@@ -116,6 +120,7 @@ async function run(token: string, now: () => number): Promise<SyncResult> {
       continue;
     }
     if (!current(token)) return failed;
+    readAny = true;
     const updates: TagCountUpdate[] = [];
     for (const entry of batch) {
       const count = counts[normaliseTagName(entry.tagName)];
@@ -130,7 +135,7 @@ async function run(token: string, now: () => number): Promise<SyncResult> {
       /* One batch the backend refused: the others still count, as in the original. */
     }
   }
-  if (!current(token)) return failed;
+  if (!current(token) || !readAny) return failed;
 
   let updatedTags: number;
   try {
