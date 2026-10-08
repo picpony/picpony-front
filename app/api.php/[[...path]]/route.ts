@@ -39,6 +39,20 @@ const UPSTREAM_PATH = '/api.php';
  */
 const UPSTREAM_TIMEOUT_MS = 30_000;
 
+/**
+ * A request **body** is not bounded by `UPSTREAM_TIMEOUT_MS` (review P1-F1). PHP answers only
+ * after the whole multipart has arrived, so a single 30s budget for body + answer meant a 50MB
+ * `upload_temp_upload` needed ≥ 13.3 Mbit/s of upstream bandwidth, and every slower phone saw a
+ * 502 that read as an outage. Instead:
+ *
+ * - while the body is streaming, it must make progress: no chunk for `BODY_IDLE_MS` aborts;
+ * - once it has been sent, the answer gets the usual `UPSTREAM_TIMEOUT_MS`;
+ * - and the whole exchange is capped at `BODY_TOTAL_MS`, so a trickle cannot hold a connection
+ *   forever (Node's own `server.requestTimeout`, 300s by default, may end it sooner).
+ */
+const BODY_IDLE_MS = 30_000;
+const BODY_TOTAL_MS = 15 * 60_000;
+
 /** Hop-by-hop headers, plus ones `fetch` must recompute for the new request. */
 const SKIP_REQUEST_HEADERS = new Set([
   'host',
@@ -114,6 +128,30 @@ function downgradeCookie(cookie: string): string {
   );
 }
 
+/**
+ * The incoming body, re-streamed so its pace can be watched: aborts `controller` when no chunk
+ * arrives for `BODY_IDLE_MS`, and once the last chunk is through, gives the upstream
+ * `UPSTREAM_TIMEOUT_MS` to answer. `done()` clears whichever timer is pending.
+ */
+function pacedBody(body: ReadableStream<Uint8Array>, controller: AbortController) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = (ms: number, reason: string) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(new DOMException(reason, 'TimeoutError')), ms);
+  };
+  arm(BODY_IDLE_MS, 'request body stalled');
+  const stream = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, sink) {
+      arm(BODY_IDLE_MS, 'request body stalled');
+      sink.enqueue(chunk);
+    },
+    flush() {
+      arm(UPSTREAM_TIMEOUT_MS, 'upstream did not answer');
+    },
+  }));
+  return { stream, done: () => clearTimeout(timer) };
+}
+
 async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> },
@@ -142,24 +180,30 @@ async function proxy(
     headers.set(key, value);
   });
 
-  const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  const hasBody = request.method !== 'GET' && request.method !== 'HEAD' && request.body !== null;
+  /* Bounded: without a signal the handler inherits the platform's socket timeout, so a hung
+     upstream hangs this route with it, holding a Node connection open. A bodyless request gets
+     one budget; a body gets a pace instead (see `BODY_IDLE_MS`). */
+  const paceController = hasBody ? new AbortController() : null;
+  const paced = hasBody && paceController ? pacedBody(request.body!, paceController) : null;
   let upstream: Response;
   try {
     const init: RequestInit & { duplex: 'half' } = {
       method: request.method,
       headers,
       /* Stream uploads with backpressure instead of buffering an unauthenticated request of
-         unbounded size in Node. The timeout now also bounds the incoming body transfer. */
-      body: hasBody ? request.body : undefined,
+         unbounded size in Node. */
+      body: paced ? paced.stream : undefined,
       duplex: 'half',
       redirect: 'manual',
       cache: 'no-store',
-      /* Bounded: without this the handler inherits the platform's socket timeout, so a
-         hung upstream hangs this route with it, holding a Node connection open. */
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
+      signal: paceController
+        ? AbortSignal.any([request.signal, paceController.signal, AbortSignal.timeout(BODY_TOTAL_MS)])
+        : AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
     };
     upstream = await fetch(target, init);
   } catch {
+    paced?.done();
     /* Same shape `app/relay/route.ts` returns for the same condition: `proxyFetch`
        (lib/api/client.ts) treats 502 as a failover trigger, which is exactly what it
        would have concluded from the network throw this is standing in for. A timeout
@@ -169,6 +213,9 @@ async function proxy(
       { status: 502 },
     );
   }
+
+  /* Headers are in: the answer's own body is bounded by the total cap, not the pace. */
+  paced?.done();
 
   /* Only a write the backend has actually authorised and accepted may invalidate the public
      search definitions or the public image blacklist. Expire immediately: showing old rules after

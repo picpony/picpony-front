@@ -1,6 +1,6 @@
 import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
 import { ApiError, FAILURE_MESSAGES, statusMessage, toApiError } from './errors';
-import { envelopeMessage } from './http';
+import { envelopeMessage, noteUnauthorized } from './http';
 
 /**
  * 发布图片 — a picture goes to Derpibooru in two steps, the original front end's contract:
@@ -74,6 +74,9 @@ export function stageUpload(
         data = null;
       }
       const serverMessage = envelopeMessage(data);
+      /* A bare XHR bypasses `picponyRequest`, so its 401 must report itself (review P1-F10):
+         otherwise a dead session failed the upload and left the app signed in. */
+      if (xhr.status === 401) noteUnauthorized(token);
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new ApiError('http', {
           status: xhr.status,
@@ -108,6 +111,9 @@ export function stageUpload(
       done();
       reject(toApiError(new TypeError('Failed to fetch')));
     };
+    /* No `xhr.timeout`: a 50MB file on a slow line legitimately takes minutes, and the server
+       hop bounds a stalled body by its pace instead (`app/api.php/…/route.ts`). Kept for a
+       platform that imposes its own. */
     xhr.ontimeout = () => {
       done();
       reject(new ApiError('timeout'));

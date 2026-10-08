@@ -115,11 +115,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        /* Everything except the three proxy route handlers, which answer with a stricter policy
-           of their own (`sandbox; default-src 'none'; frame-ancestors 'none'`). A policy set here
-           does not add to a handler's own, it replaces it (measured on `share.php`: only this
-           block's `frame-ancestors 'self'` survived), so a proxy left inside it loses its sandbox. */
-        source: '/:path((?!api\\.php|relay|share\\.php).*)',
+        /* Everything except the four route handlers that answer with a stricter policy of their
+           own (`sandbox; default-src 'none'; frame-ancestors 'none'`): the three proxies and
+           `/upload/submit`. A policy set here does not add to a handler's own, it replaces it
+           (measured on `share.php`: only this block's `frame-ancestors 'self'` survived), so a
+           handler left inside it loses its sandbox. Each name is matched as a whole first segment
+           (`(?:/|$)`), so `/relayX` or `/share.php.bak` still get the headers (review P1-F2). */
+        source: '/:path((?!(?:api\\.php|relay|share\\.php|upload/submit)(?:/|$)).*)',
         headers: SECURITY_HEADERS,
       },
       {
@@ -136,7 +138,8 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/search-api/:path*',
-        destination: 'https://picpony.top/search-api/:path*',
+        /* The same server-controlled upstream as the api.php handler (review P1-F7). */
+        destination: `${process.env.PICPONY_UPSTREAM_ORIGIN || 'https://picpony.top'}/search-api/:path*`,
       },
     ];
   },

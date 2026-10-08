@@ -2,15 +2,18 @@
   "name": "picpony-front",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "next dev -p 3100",
     "build": "next build",
     "start": "next start -p 3100",
     "lint": "eslint --max-warnings=0",
-    "format:check": "git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check HEAD -- . \":(exclude)public/companions/browserponies.js\"",
+    "format:check": "node scripts/formatCheck.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run colors && npm run hero:path && npm run emoji",
-    "test": "node --test scripts/testResources.mjs scripts/testSessionAndTags.mjs scripts/repairSecurityTest.mjs scripts/testDataBoundaries.mjs scripts/testPageFlows.mjs scripts/testGlossaryFlows.mjs scripts/testSanitizeHtml.mjs scripts/testApiTransport.mjs scripts/testAdminConsistency.mjs scripts/testPageConsistency.mjs scripts/testCoreConsistency.mjs scripts/testHeroContinuity.mjs scripts/testApiErrors.mjs scripts/testDataLayer.mjs scripts/testShell.mjs scripts/testSearch.mjs scripts/testMessages.mjs scripts/testGallery.mjs scripts/testDetail.mjs scripts/testSettingsSync.mjs scripts/testProfiles.mjs scripts/testRichText.mjs scripts/testForum.mjs scripts/testFolderTransit.mjs scripts/testPalette.mjs scripts/testShop.mjs scripts/testSubscriptions.mjs scripts/testTracking.mjs scripts/testFaveFolders.mjs scripts/testFaveRecovery.mjs scripts/testPersonalScreens.mjs scripts/testUploadRecovery.mjs scripts/testAdminConsole.mjs scripts/testAdminInlineEditor.mjs scripts/testAdminSiteTools.mjs scripts/testMascotPreferences.mjs scripts/testMascotShape.mjs scripts/testPoniesStage.mjs scripts/testRouteFallback.mjs scripts/testAdminCatalogTools.mjs scripts/testSiteStatus.mjs scripts/testPonyChooser.mjs scripts/testAssistantRecovery.mjs scripts/testImageRecommendations.mjs",
+    "test": "node --test scripts/testResources.mjs scripts/testSessionAndTags.mjs scripts/repairSecurityTest.mjs scripts/testDataBoundaries.mjs scripts/testPageFlows.mjs scripts/testGlossaryFlows.mjs scripts/testSanitizeHtml.mjs scripts/testApiTransport.mjs scripts/testAdminConsistency.mjs scripts/testPageConsistency.mjs scripts/testCoreConsistency.mjs scripts/testHeroContinuity.mjs scripts/testApiErrors.mjs scripts/testDataLayer.mjs scripts/testShell.mjs scripts/testSearch.mjs scripts/testMessages.mjs scripts/testGallery.mjs scripts/testDetail.mjs scripts/testSettingsSync.mjs scripts/testProfiles.mjs scripts/testRichText.mjs scripts/testForum.mjs scripts/testFolderTransit.mjs scripts/testPalette.mjs scripts/testShop.mjs scripts/testSubscriptions.mjs scripts/testTracking.mjs scripts/testFaveFolders.mjs scripts/testFaveRecovery.mjs scripts/testPersonalScreens.mjs scripts/testUploadRecovery.mjs scripts/testAdminConsole.mjs scripts/testAdminInlineEditor.mjs scripts/testAdminSiteTools.mjs scripts/testMascotPreferences.mjs scripts/testMascotShape.mjs scripts/testPoniesStage.mjs scripts/testRouteFallback.mjs scripts/testAdminCatalogTools.mjs scripts/testSiteStatus.mjs scripts/testPonyChooser.mjs scripts/testAssistantRecovery.mjs scripts/testImageRecommendations.mjs scripts/testProxyPacing.mjs",
     "test:primitives": "node scripts/testPrimitives.mjs",
     "test:presence": "node scripts/testPresenceFocus.mjs",
     "test:drawer": "node scripts/testDrawerSwipe.mjs",
@@ -60,6 +63,7 @@
     "rehype-sanitize": "^6.0.0",
     "rehype-stringify": "10.0.1",
     "remark-gfm": "^4.0.1",
+    "sharp": "^0.35.3",
     "unified": "11.0.5",
     "yet-another-react-lightbox": "^3.32.2"
   },

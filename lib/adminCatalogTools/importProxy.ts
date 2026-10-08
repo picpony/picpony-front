@@ -2,7 +2,12 @@ import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
 import { CHUNK_BYTES, DICTIONARY_LIMIT, IMAGE_DB_LIMIT, importUrl, uploadId, validatePackage, type Dataset } from './importModel';
 import { integer, object } from './model';
 
-const TARGETS: Record<Dataset, string> = { images: 'https://picpony.top/image_tags_importer.php', dictionary: 'https://picpony.top/tag_sync_importer.php' };
+/**
+ * The same server-controlled origin as the api.php handler: a fixture or staging run must not send
+ * an administrator's bearer to production (review P1-F7).
+ */
+const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const TARGETS: Record<Dataset, string> = { images: `${UPSTREAM_ORIGIN}/image_tags_importer.php`, dictionary: `${UPSTREAM_ORIGIN}/tag_sync_importer.php` };
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 const failure = (status: number, error: string) => Response.json({ success: false, error }, { status, headers: HEADERS });
 /**
@@ -138,7 +143,7 @@ const DENY_TTL_MS = 5000;
 const VERDICT_MAX = 64;
 const verdicts = new Map<string, { answer: Promise<Verdict>; until: number }>();
 async function askBackend(token: string, fetcher: typeof fetch): Promise<Verdict> {
-  const response = await fetcher(`${PICPONY_API_ORIGIN}${PICPONY_API_BASE}?action=get_user`, {
+  const response = await fetcher(`${UPSTREAM_ORIGIN}${PICPONY_API_BASE}?action=get_user`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     cache: 'no-store', redirect: 'manual', signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
   });
@@ -232,6 +237,16 @@ export function importForm(dataset: Dataset, incoming: FormData): FormData {
   }
   return out;
 }
+/**
+ * How long the upstream may take. A fixed 90s needed ≥ 23 Mbit/s for a 256 MB dictionary package
+ * (review P1-F6); the budget now grows with the body at `UPSTREAM_RATE_FLOOR` — server to server,
+ * so far faster than an operator's own line — on top of the 90s the PHP needs to process it.
+ */
+const UPSTREAM_RATE_FLOOR = 1024 * 1024;
+export function upstreamTimeout(method: string, bytes: number): number {
+  if (method === 'GET') return 15_000;
+  return 90_000 + Math.ceil(bytes / UPSTREAM_RATE_FLOOR) * 1000;
+}
 /** No server credential, redirect, cookie, arbitrary target or backend HTML crosses this boundary. */
 export async function handleImport(request: Request, dataset: Dataset, fetcher: typeof fetch = fetch, timing: Pace = {}): Promise<Response> {
   const authorization = request.headers.get('authorization') ?? '';
@@ -239,6 +254,8 @@ export async function handleImport(request: Request, dataset: Dataset, fetcher: 
   if (request.method !== 'GET' && request.method !== 'POST') return failure(405, '请求方式无效');
   const target = new URL(TARGETS[dataset]);
   let body: FormData | undefined;
+  let bodyBytes = 0;
+  let holdsSlot = false;
   try {
     const url = new URL(request.url);
     if (request.method === 'GET') {
@@ -265,20 +282,24 @@ export async function handleImport(request: Request, dataset: Dataset, fetcher: 
       if (verdict === 'denied') return failure(403, '仅管理员可使用数据导入');
       if (verdict === 'unknown') return failure(503, '暂时无法校验管理员身份，请稍后重试');
       if (inFlightBodies >= MAX_IN_FLIGHT_BODIES) return failure(503, '导入服务正忙，请稍后重试');
+      /* Held until the upstream has answered, not just until the form is rebuilt (review P1-F6):
+         the rebuilt `FormData` keeps the package's `File` alive for the whole upstream call, so a
+         slot released earlier did not bound what the process holds. Released in `finally` below. */
       inFlightBodies += 1;
-      try {
-        const bytes = await bounded(request, limit, { signal: request.signal, ...timing });
-        const form = await new Response(bytes as BodyInit, { headers: { 'content-type': type } }).formData();
-        body = importForm(dataset, form);
-      } finally { inFlightBodies -= 1; }
+      holdsSlot = true;
+      const bytes = await bounded(request, limit, { signal: request.signal, ...timing });
+      bodyBytes = bytes.byteLength;
+      const form = await new Response(bytes as BodyInit, { headers: { 'content-type': type } }).formData();
+      body = importForm(dataset, form);
     }
   } catch (error) {
+    if (holdsSlot) { inFlightBodies -= 1; holdsSlot = false; }
     const kind = error instanceof Error ? error.message : '';
     if (kind === 'stalled') return failure(408, '上传中断或过慢，请重新上传');
     return failure(kind === 'large' ? 413 : 400, '导入参数或文件无效');
   }
   try {
-    const response = await fetcher(target, { method: request.method, headers: { Authorization: authorization, Accept: 'application/json' }, body, cache: 'no-store', redirect: 'manual', signal: AbortSignal.any([request.signal, AbortSignal.timeout(request.method === 'GET' ? 15000 : 90000)]) });
+    const response = await fetcher(target, { method: request.method, headers: { Authorization: authorization, Accept: 'application/json' }, body, cache: 'no-store', redirect: 'manual', signal: AbortSignal.any([request.signal, AbortSignal.timeout(upstreamTimeout(request.method, bodyBytes))]) });
     if (response.status >= 300 && response.status < 400) return failure(502, '导入服务返回了无法识别的数据');
     const data = object(JSON.parse(new TextDecoder().decode(await bounded(response, 1024 * 1024))));
     if (typeof data.success !== 'boolean') return failure(502, '导入服务返回了无法识别的数据');
@@ -290,4 +311,5 @@ export async function handleImport(request: Request, dataset: Dataset, fetcher: 
     if (!data.success && response.status !== 401 && response.status !== 403) result.error = '导入服务未接受请求，请核对任务状态和文件';
     return Response.json(result, { status: response.status, headers: HEADERS });
   } catch { return failure(502, request.method === 'POST' ? '未能确认提交结果，请核对任务状态' : '导入状态加载失败'); }
+  finally { if (holdsSlot) inFlightBodies -= 1; }
 }

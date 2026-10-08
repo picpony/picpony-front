@@ -85,7 +85,12 @@ test('apiErrorMessage keeps Chinese sentences and never shows an engine error', 
   assert.equal(toApiError(abort, true).kind, 'timeout', 'our own deadline is a timeout');
 });
 
-test('a read has a deadline, a write has none, and the caller’s abort is not a failure', async () => {
+test('a read has a deadline, a write has none, and the caller’s abort is not a failure', async (t) => {
+  /* `deadlineSignal` unrefs its timer so a real process can exit; here that timer is the only
+     thing pending, and on Node 22 the event loop drained before it fired, cancelling this test
+     and every one after it (review P1-F4). A ref'd handle keeps the loop alive for the test. */
+  const keepAlive = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(keepAlive));
   let seen;
   globalThis.fetch = (_, init) => {
     seen = init;

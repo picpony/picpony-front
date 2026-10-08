@@ -197,8 +197,13 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const headers = new Headers();
+  /* Headers the upstream's `Connection` names are hop-by-hop too — the other proxies drop them,
+     and this one did not (review P1-F12). */
+  const connectionHeaders = new Set(
+    response.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
+  );
   response.headers.forEach((value, name) => {
-    if (!SKIP_RESPONSE_HEADERS.has(name)) headers.set(name, value);
+    if (!SKIP_RESPONSE_HEADERS.has(name) && !connectionHeaders.has(name)) headers.set(name, value);
   });
   headers.set('Cache-Control', 'private, no-store');
   headers.set('X-Content-Type-Options', 'nosniff');

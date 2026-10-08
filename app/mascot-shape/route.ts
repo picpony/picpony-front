@@ -64,7 +64,8 @@ async function readImage(url: string): Promise<Uint8Array | null> {
   return Buffer.concat(chunks);
 }
 
-/* `sharp` is the optimizer's own decoder — Next installs it for `/_next/image` — imported where it
+/* `sharp` is the optimizer's own decoder — declared in package.json rather than left to Next's
+   optional dependency (review P1-F8) — imported where it
    is used, so a host without it answers this one route with a failure the figure falls back from
    (to an ellipse over the artwork) rather than failing the route module. The first frame of an
    animation; the orientation the browser shows. */
@@ -84,16 +85,30 @@ async function silhouette(bytes: Uint8Array): Promise<MascotShape | null> {
   return { w, h, rows: shapeRows(alpha, w, h) };
 }
 
+/**
+ * How many uncached reads may run at once (review P1-F8). The route is anonymous and a failed read
+ * is not memoised, so rotating `src` across the asset host's images made every request a fresh
+ * download (≤ 12MB) and decode (≤ 40MP). A real page view asks for one address and is served from
+ * the memo after the first; past this many concurrent misses the answer is the same failure the
+ * figure already falls back from.
+ */
+const MAX_CONCURRENT_READS = 2;
+let reading = 0;
+
 const shapeOf = createServerMemo<[string], MascotShape>({
   ttlMs: 6 * 60 * 60 * 1000,
   max: 16,
   keyOf: (src) => src,
   load: async (src) => {
+    if (reading >= MAX_CONCURRENT_READS) return null;
+    reading += 1;
     try {
       const bytes = await readImage(src);
       return bytes ? await silhouette(bytes) : null;
     } catch {
       return null;
+    } finally {
+      reading -= 1;
     }
   },
 });

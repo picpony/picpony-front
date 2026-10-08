@@ -1,9 +1,11 @@
 # Every push to dev / master and every pull request: the checks that need no browser.
 #
-# No lockfile is committed (it was removed on purpose), so dependencies resolve from package.json
-# on each run; the npm cache keeps that quick. Node 24 matches development, and the TS-importing
-# scripts (`scripts/tsResolve.mjs`) need 22.18 or later for synchronous module hooks and type
-# stripping.
+# No npm lockfile is committed, so dependencies resolve from package.json on each run; the npm
+# cache keeps that quick. (The repository does carry `bun.lock`, which `npm install` ignores — runs
+# on different days can therefore install different versions; see review P1-F3 for the decision
+# this needs.) Node 24 matches development (`.nvmrc`), and the TS-importing scripts
+# (`scripts/tsResolve.mjs`) need 22.18 or later for synchronous module hooks and type stripping
+# (`engines` in package.json).
 name: CI
 
 on:
@@ -63,6 +65,8 @@ jobs:
       - name: Test and tooling syntax
         run: |
           for script in scripts/*.mjs; do node --check "$script" || exit 1; done
+          # The browser suites' Python is otherwise only compiled on the Windows job.
+          python3 -m compileall -q scripts
 
       - name: Typecheck
         run: npm run typecheck
