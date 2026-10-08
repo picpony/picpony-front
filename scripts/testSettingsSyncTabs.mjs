@@ -40,9 +40,11 @@ globalThis.document = {
 };
 
 const writes = [];
+let failWrites = false;
 globalThis.fetch = async (url, init = {}) => {
   const action = new URL(String(url), 'https://app.invalid').searchParams.get('action');
   if (action !== 'update_settings') throw new Error(`unexpected request: ${action}`);
+  if (failWrites) return new Response('upstream down', { status: 503 });
   writes.push(JSON.parse(init.body).settings);
   return new Response(JSON.stringify({ success: true }), { status: 200 });
 };
@@ -159,4 +161,54 @@ test('P2-F11: turning developer mode off takes the developer filter with it at o
   const modal = readFileSync(new URL('../components/DeveloperGuideModal.tsx', import.meta.url), 'utf8');
   assert.match(modal, /if \(!enabled\) enforceContentGate\(\);/);
   await settle();
+});
+
+test('review P5-F1: a change another tab confirmed ends this tab\'s failed state, and is not re-sent', async () => {
+  /* Signed in afresh, with a copy of the account in hand. */
+  const user = { id: 31, token: 'token-p5', username: 'p5', birthday: '2000-01-01' };
+  values.set(LS_KEYS.userInfo, JSON.stringify(user));
+  window.dispatchEvent(new Event('user_info_updated'));
+  serverUser = { ...user, settings: { onlyPony: false } };
+  sync.adoptCloudSettings(user.token, structuredClone(serverUser), Date.now());
+  /* This tab's write fails: the change stays pending and the screen says so. */
+  failWrites = true;
+  sync.changeSyncedSetting('onlyPony', true);
+  await settle();
+  assert.equal(sync.settingsSyncSnapshot().state, 'failed');
+  const record = values.get(LS_KEYS.settingsSyncPending);
+  const at = JSON.parse(record).pending.onlyPony;
+  assert.ok(at, 'the change is in the shared record');
+  failWrites = false;
+  /* The other tab's write carries it (the stored value) and drops it from the shared record. */
+  const sentBefore = writes.length;
+  otherTabWrites(LS_KEYS.settingsSyncPending, null);
+  assert.equal(sync.settingsSyncSnapshot().state, 'idle', 'the banner goes with the confirmation');
+  assert.deepEqual(sync.settingsSyncSnapshot().pending, {});
+  await wait(50);
+  assert.equal(writes.length, sentBefore, 'nothing is re-sent');
+  /* A later change here does not put the confirmed entry back into the shared record. */
+  sync.changeSyncedSetting('banAnthro', true);
+  assert.deepEqual(Object.keys(JSON.parse(values.get(LS_KEYS.settingsSyncPending)).pending), ['banAnthro']);
+  await settle();
+});
+
+test('review P5-F1: an entry the other tab re-keyed or replaced with a newer change is kept', async () => {
+  failWrites = true;
+  sync.changeSyncedSetting('showChineseTags', false);
+  await settle();
+  assert.equal(sync.settingsSyncSnapshot().state, 'failed');
+  const mine = JSON.parse(values.get(LS_KEYS.settingsSyncPending)).pending.showChineseTags;
+  /* Another account's record (a sign-in elsewhere being written) says nothing about this one. */
+  otherTabWrites(LS_KEYS.settingsSyncPending, pendingRecord('someone-else', { onlyPony: Date.now() }));
+  assert.ok(sync.settingsSyncSnapshot().pending.showChineseTags, 'kept across a foreign record');
+  /* An older timestamp leaving the record does not cover this tab's newer change. */
+  otherTabWrites(LS_KEYS.settingsSyncPending, pendingRecord('31', { showChineseTags: mine - 1000 }));
+  otherTabWrites(LS_KEYS.settingsSyncPending, null);
+  assert.ok(sync.settingsSyncSnapshot().pending.showChineseTags, 'an older confirmation does not cover a newer change');
+  assert.equal(sync.settingsSyncSnapshot().state, 'failed');
+  failWrites = false;
+  sync.retrySettingsSync();
+  await settle();
+  assert.equal(sync.settingsSyncSnapshot().state, 'idle');
+  assert.equal(writes.at(-1).showChineseTags, false);
 });

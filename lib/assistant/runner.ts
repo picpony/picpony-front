@@ -49,7 +49,10 @@ export function createActionRunner(deps: ActionDependencies) {
         const result = receipt(action, taskId, { ok: cached.ok, summary: str(cached.summary, 1000), data: receiptData(cached.data), ...(typeof cached.error === 'string' ? { error: str(cached.error, 100) } : {}) });
         deps.journal.save(result); return result;
       }
-      if (claim.pending === true || previous?.state === 'started') throw new UncertainAction();
+      /* Review P5-F6: a recorded start is uncertainty only for a write. A read left `started` (the
+         page went away while it was out) is asked again — it changes nothing — where it used to
+         throw on every 核对任务, so the task could never finish. */
+      if (claim.pending === true || (write && previous?.state === 'started')) throw new UncertainAction();
       if (action.name === 'call_site_api') {
         try { validateSiteSpec(action, claim.request); }
         catch (e) {
@@ -57,7 +60,7 @@ export function createActionRunner(deps: ActionDependencies) {
           deps.journal.save(denied); await save(denied); return denied;
         }
       }
-    } else if (previous?.state === 'started') throw new UncertainAction();
+    } else if (write && previous?.state === 'started') throw new UncertainAction();
     deps.assertCurrent();
     deps.journal.start(taskId, action.call_id);
     let result: AssistantReceipt;

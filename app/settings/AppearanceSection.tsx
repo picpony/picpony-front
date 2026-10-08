@@ -135,8 +135,11 @@ export function ModeAndMotionSection() {
           />
         }
       />
+      {/* The one row here that follows the account (the original front end's `introAnimationEnabled`):
+          under a section headed 仅保存在本设备 it says so itself (review P5-F7). */}
       <SwitchRow
         label="入场动画"
+        description="此项随账号同步到你登录的设备"
         checked={entrances}
         onChange={(value) => changeSyncedSetting('introAnimationEnabled', value)}
         disabled={motionTier === 'off'}

@@ -47,7 +47,7 @@ export default function ApiKeyDialog({
   const [busy, setBusy] = useState(false);
   const trimmed = key.trim();
   const form = useFieldErrors<'key'>(() => [
-    ['key', !trimmed ? '请输入 API Key' : API_KEY_PATTERN.test(trimmed) ? null : 'API Key 应为 20 个字符，请检查是否多复制了空格'],
+    ['key', !trimmed ? '请输入 API Key' : API_KEY_PATTERN.test(trimmed) ? null : 'API Key 应为 20 位字母、数字、- 或 _，请检查是否多复制或漏复制了字符'],
   ]);
 
   const close = () => {
