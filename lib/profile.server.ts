@@ -1,7 +1,8 @@
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { PICPONY_API_BASE } from '@/lib/constants';
 import type { ProfileUser } from '@/lib/resources';
 import { isProfileId } from '@/lib/profiles';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * A user's public profile, read on the server; the island takes it as `initial` and seeds it into
@@ -29,7 +30,7 @@ const REVALIDATE_S = 300;
  * `PICPONY_UPSTREAM_ORIGIN` at a fixture server, and a hardcoded origin would reach past it — a
  * server read the net audit cannot see is one it cannot hold to a number.
  */
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const UPSTREAM_ORIGIN = upstreamOrigin();
 
 export interface ProfileSeed {
   key: string;

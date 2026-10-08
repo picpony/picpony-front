@@ -163,6 +163,7 @@ export const SESSION_STORAGE_BLOCKED = '浏览器禁用了本地存储，无法�
 export function writeUserInfo(user: StoredUserInfo): void {
   const serialised = JSON.stringify(user);
   if (!parseSession(serialised)) throw new Error('登录信息无效');
+  if (clearedToken === user.token) clearedToken = null;
   try {
     localStorage.setItem(LS_KEYS.userInfo, serialised);
     if (typeof user.api_key === 'string' && user.api_key) {
@@ -187,10 +188,20 @@ export function updateUserInfo(token: string, patch: Record<string, unknown>): b
   return true;
 }
 
+/**
+ * The token this page last cleared. `clearUserInfo` answering `true` is a promise that it is the
+ * one call that ended this session — `lib/api/http.ts` shows 「登录已过期」 on it, and several 401s
+ * landing together must produce one notice. Storage that refuses the removal leaves the token
+ * readable, so without this every later 401 for the same token answered `true` again (review
+ * P2-F10). Cleared again by the next sign-in written through `writeUserInfo`.
+ */
+let clearedToken: string | null = null;
+
 /** The expected token protects a new login from an older request's 401. Storage that
- * refuses the removal cannot hold a session either, so the event still goes out. */
+ * refuses the removal cannot hold a session either, so the event still goes out — once. */
 export function clearUserInfo(expectedToken: string): boolean {
-  if (readToken() !== expectedToken) return false;
+  if (clearedToken === expectedToken || readToken() !== expectedToken) return false;
+  clearedToken = expectedToken;
   try {
     localStorage.removeItem(LS_KEYS.userInfo);
     localStorage.removeItem(LS_KEYS.derpiApiKey);

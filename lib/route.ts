@@ -475,12 +475,32 @@ function currentUsername(): string {
 }
 
 /**
+ * The canonical spelling of a Derpibooru URL: its **host** moved from `trixiebooru.org` (or
+ * `www.trixiebooru.org`) to `derpibooru.org`, and nothing else touched. A bare string replace
+ * used to rewrite the first occurrence anywhere — inside a query (`q=source_url:*trixiebooru.org*`,
+ * a search a user typed) as readily as in the host — and to leave the host alone when the query
+ * came first (review P1-F17 / P2-F3). A string that is not an absolute URL is returned as it is.
+ */
+export function canonicalDerpiUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host !== 'trixiebooru.org' && host !== 'www.trixiebooru.org') return url;
+  parsed.hostname = 'derpibooru.org';
+  return parsed.toString();
+}
+
+/**
  * Rewrite a Derpibooru URL for one line. Every line starts from the canonical `derpibooru.org`
  * spelling: `trixiebooru.org` is the same site, and the accel worker and the relay both key
  * their caches on the canonical one.
  */
 export function buildApiLineUrl(url: string, line: ApiLine): string {
-  const derpiUrl = url.replace('trixiebooru.org', 'derpibooru.org');
+  const derpiUrl = canonicalDerpiUrl(url);
   switch (line) {
     case 'api_accel':
       return PROXY_API_BASE + encodeURIComponent(derpiUrl);
@@ -647,6 +667,11 @@ export function stepApiFailover(status?: number): boolean {
 
   if (prefs.useApiAccel && Date.now() >= apiState.cooldownUntil) {
     apiState.derpi = true;
+    /* A fresh stay on the backup line starts the home check from its first step. The doubling
+       belongs to one stay: left by a failure of the backup itself, the wait it had reached (up
+       to ten minutes) used to carry into the next stay, which then sat on the backup that long
+       before checking home even once (review P2-F4). */
+    backupTtl = BACKUP_TTL_MS;
     scheduleApiRevert();
     emit();
     announceOnce('直连异常，已切换至备用 API');

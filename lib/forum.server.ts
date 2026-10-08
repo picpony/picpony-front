@@ -1,8 +1,9 @@
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { PICPONY_API_BASE } from '@/lib/constants';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 import { DEFAULT_FORUM_LIST, forumListKey } from '@/lib/forumKeys';
 import { num, postOf, records } from '@/lib/forumModel';
 import type { ForumPostsResponse } from '@/lib/types/forum';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * The forum's first page, read on the server so a cold `/?tab=forum` — and the `/forum` redirect,
@@ -31,7 +32,7 @@ const TIMEOUT_MS = 2500;
 const REVALIDATE_S = 60;
 
 /** The harness points this at a fixture server (see `lib/profile.server.ts`). */
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const UPSTREAM_ORIGIN = upstreamOrigin();
 
 export interface ForumListSeed {
   key: string;

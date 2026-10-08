@@ -1,8 +1,9 @@
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
+import { PICPONY_API_BASE, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
 import { cacheSeconds } from '@/lib/serverMemo';
 import { readBlockFilters, readPublicBlacklist } from '@/lib/blockFilters.server';
 import type { BlockFilters } from '@/lib/blockFilters';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * The route policy, read on the server so a cold load's first request does not wait for it:
@@ -53,7 +54,7 @@ export function inlineRoutePolicyScript(policy: InlineRoutePolicy): string {
 /** Where the server reads the policy from: `PICPONY_API_ORIGIN` unless overridden, e.g. to
  *  point a deployment at a staging backend or to stub the Node-side fetch for an audit (CDP
  *  stubbing reaches only browser requests, never this one). */
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const UPSTREAM_ORIGIN = upstreamOrigin();
 
 /**
  * Always an object, never `null`: on a failed policy read the document still carries the

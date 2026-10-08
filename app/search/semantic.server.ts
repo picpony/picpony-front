@@ -1,7 +1,8 @@
 import { cache } from 'react';
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
+import { PICPONY_API_BASE, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 import { cacheSeconds } from '@/lib/serverMemo';
 import { semanticConfigFrom, UNKNOWN_SEMANTIC_CONFIG, type SemanticSearchConfig, type SemanticStatus } from '@/lib/semanticConfig';
+import { upstreamOrigin } from '@/lib/upstream.server';
 export { semanticConfigFrom } from '@/lib/semanticConfig';
 export type { SemanticSearchConfig } from '@/lib/semanticConfig';
 
@@ -20,7 +21,7 @@ export type { SemanticSearchConfig } from '@/lib/semanticConfig';
 
 const SERVER_STATUS_TIMEOUT_MS = 1500;
 const SERVER_STATUS_REVALIDATE_S = 30;
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const UPSTREAM_ORIGIN = upstreamOrigin();
 
 /** Once per request, however many server components ask. */
 export const readSemanticConfig = cache(async (): Promise<SemanticSearchConfig> => {

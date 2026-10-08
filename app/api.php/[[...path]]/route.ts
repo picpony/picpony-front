@@ -7,6 +7,7 @@ import {
   clearPublicBlacklistMemo,
 } from '@/lib/blockFilters.server';
 import { COOKIE_KEYS, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * Reverse proxy for the PicPony PHP backend.
@@ -27,7 +28,7 @@ import { COOKIE_KEYS, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 
 // The same server-controlled staging/fixture origin used by the server readers. Never a
 // request parameter: the public proxy still has one fixed backend and one fixed API path.
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || 'https://picpony.top';
+const UPSTREAM_ORIGIN = upstreamOrigin();
 const UPSTREAM_PATH = '/api.php';
 
 /**

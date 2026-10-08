@@ -17,7 +17,7 @@ type Rules<F extends string> = () => ReadonlyArray<readonly [F, string | null]>;
  *     <Input {...form.field('name')} onChange={(e) => { setName(e.target.value); form.clear('name'); }} />
  *     const submit = () => { if (!form.check()) return; … };
  *
- * (The sign-in dialog keeps its own copy of this, from before it was shared.)
+ * The sign-in dialog uses it too; its private copy drifted from this one (review P2-F8).
  */
 export function useFieldErrors<F extends string>(rules: Rules<F>) {
   const [errors, setErrors] = useState<Partial<Record<F, string>>>({});
@@ -68,7 +68,7 @@ export function useFieldErrors<F extends string>(rules: Rules<F>) {
 }
 
 /** A code row is a group of boxes: focus lands on its first empty one. */
-function focusField(target: HTMLElement | null | undefined) {
+export function focusField(target: HTMLElement | null | undefined) {
   if (!target) return;
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
     target.focus();

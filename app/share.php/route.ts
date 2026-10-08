@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { COOKIE_KEYS, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * PicPony's short links (`lib/api/share.ts`) on this origin: `share.php?action=create` is
@@ -27,7 +28,7 @@ const UPSTREAM = new URL('/share.php', PICPONY_API_ORIGIN);
  * Where `create` is forwarded: the same server-controlled origin as the api.php handler and the
  * `*.server.ts` readers, so a fixture or staging run never writes to production (review P1-F7).
  */
-const CREATE_UPSTREAM = new URL('/share.php', process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN);
+const CREATE_UPSTREAM = new URL('/share.php', upstreamOrigin());
 
 /** A person is waiting on either answer; the backend's observed worst case is ~9s. */
 const UPSTREAM_TIMEOUT_MS = 20_000;
