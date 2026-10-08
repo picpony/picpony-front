@@ -1,6 +1,7 @@
 import { PONY_EMOJI, type PonyEmoji } from '@/lib/generated/emoji';
 import { parseShare, shareSummary } from '@/lib/api/messages';
 import { subscriptionHref } from '@/components/subscriptions/href';
+import { getRawImageUrl } from '@/lib/imageLoader';
 
 /*
  * What a message's text *is*, as tokens — pure, so it can be tested without a DOM.
@@ -94,6 +95,30 @@ export function resolveLink(raw: string, origin?: string): { href: string; inter
   const derpi = DERPI_IMAGE.test(url.hostname) ? /^\/(?:images\/)?(\d+)\/?$/.exec(url.pathname) : null;
   if (derpi) return { href: `/pic/${derpi[1]}`, internal: true };
   return { href: url.href, internal: false };
+}
+
+/** Where a share card's picture may come from: Derpibooru's own image hosts, and PicPony's. */
+const SHARE_THUMB_HOSTS = /^(?:[a-z0-9-]+\.)*(?:derpicdn\.net|derpibooru\.org|trixiebooru\.org|picpony\.top)$/i;
+
+/**
+ * The picture a share card may draw, or `''` for none (the card then shows its placeholder).
+ *
+ * The thumbnail rides in the message itself (`[image_share:<id>:<url>]`), so it is whatever the
+ * sender wrote — and the card draws it through the reader's image line: a sender could make every
+ * reader's browser fetch an address of their choosing, directly or through PicPony's worker and
+ * CDN, the moment the conversation opened (review P4-F7). A real card's picture is a Derpibooru
+ * rendition of the shared picture (`shareThumbUrl`), so only those hosts are drawn.
+ */
+export function shareThumbSrc(url: string): string {
+  const raw = getRawImageUrl(url.trim());
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'https:' && !parsed.username && !parsed.password && SHARE_THUMB_HOSTS.test(parsed.hostname)
+      ? parsed.href
+      : '';
+  } catch {
+    return '';
+  }
 }
 
 /** Plain text into text and link tokens. */

@@ -565,3 +565,15 @@ test('a name slot is asked for, then named or the tag itself — and an answer o
   assert.equal(names.tagNameOf('constructor', known()), undefined);
   assert.equal(names.tagNameOf('toString', known({ waited: new Set(['tostring']) })), null);
 });
+
+test('review P4-F5: a run that could read no counts at all is a failed run — not finalised, not stamped', async () => {
+  signIn('unread');
+  picpony.get_tag_subscriptions = { success: true, subscriptions: subscriptions(2) };
+  picpony.sync_tag_subscriptions = { success: true };
+  picpony.finalize_tag_subscription_sync = { success: true, updated_tags: 0 };
+  derpi = () => new Response('busy', { status: 503 });
+  assert.deepEqual(await sync.syncTagSubscriptionsNow('unread', () => 7_000_000), { ok: false, updatedTags: 0 });
+  assert.equal(picponyCalls('finalize_tag_subscription_sync').length, 0, 'nothing reported, nothing to finalise');
+  assert.equal(sessionValues.get('tag_subscription_sync_v2_unread'), undefined, 'not stamped as a finished run');
+  assert.equal(sync.periodicSyncDue('unread', 7_000_000 + sync.SYNC_MIN_GAP_MS), true, 'retried after a minute, not ten');
+});

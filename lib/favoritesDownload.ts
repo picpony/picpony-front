@@ -14,7 +14,9 @@
  *   5xx on it) once left no line at all, and every picture of the batch "failed" without a single
  *   fetch (G3-008).
  * - **One picture at a time**, so a slow line holds one transfer, and the caller can stop between
- *   any two. A transfer that stalls fails (no bytes for 20 s), and so does one over 45 s in all.
+ *   any two. A transfer that stalls fails (no bytes for 20 s), and so does one that crawls: past
+ *   45 s, one averaging under 128 KiB/s (review P4-F6 — a flat 45 s failed every original over
+ *   ~30MB on a 5 Mbit/s line however steadily it arrived, then fetched it again on the next line).
  * - **At most a page an archive** (`ARCHIVE_LIMIT`): a whole privacy space is several archives,
  *   each saved as it is finished, so what a download holds in memory is bounded by one archive of
  *   originals rather than by the size of the space — a phone tab packing a few hundred pictures
@@ -34,6 +36,8 @@ import { ZipWriter, uniqueEntryName } from '@/lib/zip';
 
 const STALL_MS = 20_000;
 const TRANSFER_MS = 45_000;
+/** The slowest average a transfer may keep once past `TRANSFER_MS`: each byte buys this much time. */
+const MIN_RATE_BYTES_PER_MS = 128 * 1024 / 1000;
 const PROBE_MS = 8_000;
 
 type Line = 'worker' | 'cdn' | 'direct';
@@ -97,13 +101,23 @@ function isMedia(response: Response): boolean {
   return type.startsWith('image/') || type.startsWith('video/') || type === 'application/octet-stream';
 }
 
-/** The body as bytes, failing if no bytes arrive for `STALL_MS` or the whole takes `TRANSFER_MS`. */
+/**
+ * How long a transfer that has received `bytes` may have taken in all: `TRANSFER_MS`, plus the time
+ * those bytes would take at `MIN_RATE_BYTES_PER_MS`. Exported for the tests.
+ */
+export function transferBudgetMs(bytes: number): number {
+  return TRANSFER_MS + bytes / MIN_RATE_BYTES_PER_MS;
+}
+
+/** The body as bytes, failing if no bytes arrive for `STALL_MS` or it falls behind `transferBudgetMs`. */
 async function readBytes(url: string, signal?: AbortSignal): Promise<Uint8Array> {
   signal?.throwIfAborted();
   const controller = new AbortController();
   const forward = () => controller.abort(signal?.reason);
   signal?.addEventListener('abort', forward, { once: true });
-  const overall = setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), TRANSFER_MS);
+  const started = Date.now();
+  const timeout = () => controller.abort(new DOMException('timeout', 'TimeoutError'));
+  let overall = setTimeout(timeout, transferBudgetMs(0));
   let stall = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
   try {
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', signal: controller.signal });
@@ -121,6 +135,8 @@ async function readBytes(url: string, signal?: AbortSignal): Promise<Uint8Array>
       if (done) break;
       chunks.push(value);
       length += value.length;
+      clearTimeout(overall);
+      overall = setTimeout(timeout, Math.max(0, started + transferBudgetMs(length) - Date.now()));
       stall = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
     }
     const bytes = new Uint8Array(length);

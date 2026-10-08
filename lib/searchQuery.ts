@@ -68,49 +68,118 @@ export function escapeTag(tag: string): string {
  * - an unmatched parenthesis, either way round (outside quotes, not already escaped);
  * - a trailing lone backslash, which would escape the closing parenthesis. Doubled.
  *
+ * **Quotes are read the way Philomena's lexer reads them** (review P4-F1). A `"` opens a quoted
+ * term only where a term *starts* — at the beginning, after `,` `(` `)`, a negation (`-` `!`
+ * `NOT `), an operator (` AND ` ` OR ` ` && ` ` || `) or a closed quoted term. Anywhere else it is
+ * an ordinary character of the term (`x"y` is one tag), and the parentheses after it are live.
+ * Treating every quote as a quote let `-x"), explicit OR (y"` through unchanged: the scan saw one
+ * quoted run hiding both parentheses, Philomena saw `(-x") AND explicit OR (y" AND -explicit …)`
+ * — explicit pictures in safe mode, and the public blacklist's `-id:N` bypassed, from a link
+ * anyone can share. A mid-term quote is now escaped (it means the same literal character either
+ * way), so no quote the scan skips over can be one Philomena does not.
+ *
  * Balanced text is returned unchanged, so a valid advanced query means what it always meant.
  */
 export function balanceUserQuery(text: string): string {
   let chars = Array.from(text);
-
-  /* Pass 1: escape unterminated quotes until none is left. Each round escapes one, so this
-     ends; the rescan matters because a quote hides the parentheses after it. */
+  /* Rescanned after each quote it escapes (one per round, so this ends): an escaped quote turns
+     what followed it back into term text, which can change what the next quote is. */
   for (;;) {
-    let escaped = false;
-    let openQuote = -1;
-    for (let i = 0; i < chars.length; i += 1) {
-      const ch = chars[i];
-      if (escaped) { escaped = false; continue; }
-      if (ch === '\\') { escaped = true; continue; }
-      if (ch === '"') openQuote = openQuote === -1 ? i : -1;
+    const scan = scanQueryText(chars);
+    if (scan.badQuote === -1) {
+      const out = chars.map((ch, i) => (scan.unmatched.has(i) ? `\\${ch}` : ch)).join('');
+      /* An odd run of backslashes at the very end escapes whatever follows — our `)`. */
+      const trailing = /\\+$/.exec(out)?.[0].length ?? 0;
+      return trailing % 2 === 1 ? `${out}\\` : out;
     }
-    if (openQuote === -1) break;
-    chars = [...chars.slice(0, openQuote), '\\"', ...chars.slice(openQuote + 1)];
+    chars = [...chars.slice(0, scan.badQuote), '\\"', ...chars.slice(scan.badQuote + 1)];
   }
+}
 
-  /* Pass 2: parentheses outside quotes; an unmatched one of either kind is escaped. */
+/** Philomena's operators between terms, each with the whitespace its lexer requires around it. */
+const QUERY_OPERATOR = /^\s+(?:AND|OR|&&|\|\|)\s+/;
+const QUERY_NOT = /^NOT\s+/;
+
+/**
+ * One pass over the user's text, after Philomena's lexer (`PhilomenaQuery.Parse.Lexer`): the
+ * first quote that is not a terminated quoted term at a term start (`badQuote`, or -1), and the
+ * parentheses — outside quoted terms, not escaped — that have no partner. `chars` holds single
+ * characters, plus the `\"` pairs a previous round wrote.
+ */
+function scanQueryText(chars: readonly string[]): { badQuote: number; unmatched: Set<number> } {
   const unmatched = new Set<number>();
-  const open: number[] = [];
-  let escaped = false;
-  let quoted = false;
+  /* Each open parenthesis, and whether it opened at a term start (a group for certain). */
+  const open: { at: number; group: boolean }[] = [];
+  const rest = (i: number) => chars.slice(i, i + 16).join('');
+  let termStart = true;
   for (let i = 0; i < chars.length; i += 1) {
     const ch = chars[i];
-    if (escaped) { escaped = false; continue; }
-    if (ch === '\\') { escaped = true; continue; }
-    if (ch === '\\"') continue;
-    if (ch === '"') { quoted = !quoted; continue; }
-    if (quoted) continue;
-    if (ch === '(') open.push(i);
-    else if (ch === ')') {
-      if (open.length) open.pop();
-      else unmatched.add(i);
+    if (ch === '\\"') {
+      termStart = false;
+      continue;
+    }
+    if (termStart) {
+      if (/\s/.test(ch) || ch === ',' || ch === '-' || ch === '!') continue;
+      const not = QUERY_NOT.exec(rest(i));
+      if (not) {
+        i += not[0].length - 1;
+        continue;
+      }
+      if (ch === '"') {
+        let close = -1;
+        for (let j = i + 1; j < chars.length; j += 1) {
+          if (chars[j] === '\\') j += 1;
+          else if (chars[j] === '"') {
+            close = j;
+            break;
+          }
+        }
+        if (close === -1) return { badQuote: i, unmatched };
+        i = close;
+        continue;
+      }
+      if (ch === '(') {
+        open.push({ at: i, group: true });
+        continue;
+      }
+      if (ch === ')') {
+        if (open.length) open.pop();
+        else unmatched.add(i);
+        continue;
+      }
+      termStart = false;
+    }
+    /* Inside a term: its text runs until a separator, an operator or a closing parenthesis. */
+    if (ch === '\\') {
+      i += 1;
+      continue;
+    }
+    if (ch === '"') return { badQuote: i, unmatched };
+    if (ch === ',') {
+      termStart = true;
+      continue;
+    }
+    const operator = QUERY_OPERATOR.exec(rest(i));
+    if (operator) {
+      i += operator[0].length - 1;
+      termStart = true;
+      continue;
+    }
+    if (ch === '(') {
+      /* Mid-term: a nested part of the term (`a(b)`), or a group if it never closes. Counted
+         either way; a quote after it is treated as term text, which is safe in both readings. */
+      open.push({ at: i, group: false });
+      continue;
+    }
+    if (ch === ')') {
+      const opened = open.pop();
+      if (!opened) unmatched.add(i);
+      /* A group's end starts a new term; a nested part's end continues the term it is in. */
+      termStart = !opened || opened.group;
     }
   }
-  for (const i of open) unmatched.add(i);
-  const out = chars.map((ch, i) => (unmatched.has(i) ? `\\${ch}` : ch)).join('');
-  /* An odd run of backslashes at the very end escapes whatever follows — our `)`. */
-  const trailing = /\\+$/.exec(out)?.[0].length ?? 0;
-  return trailing % 2 === 1 ? `${out}\\` : out;
+  for (const { at } of open) unmatched.add(at);
+  return { badQuote: -1, unmatched };
 }
 
 /**

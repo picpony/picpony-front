@@ -7,6 +7,7 @@ import Card from '@/components/Card';
 import FadeInImage from '@/components/FadeInImage';
 import { shareHref, type ShareTarget } from '@/lib/api/messages';
 import { ICON } from '@/lib/icons';
+import { shareThumbSrc } from './messageText';
 
 /**
  * A shared picture, favourites folder or privacy space, drawn as the card it was sent as —
@@ -18,7 +19,8 @@ import { ICON } from '@/lib/icons';
  * <folderId>` and the privacy space's `/favorites/privacy/<ownerId>`, the favourites screens'.
  *
  * The thumbnail goes through the viewer's own image line (`FadeInImage resilient`), with the
- * give-up plate when every line fails; the URL in the message is the raw one.
+ * give-up plate when every line fails; the URL in the message is the raw one — drawn only from
+ * Derpibooru's and PicPony's own hosts (`shareThumbSrc`), since the sender wrote it.
  */
 export default function ShareCard({ target }: { target: ShareTarget; own?: boolean }) {
   const router = useRouter();
@@ -32,6 +34,7 @@ export default function ShareCard({ target }: { target: ShareTarget; own?: boole
   };
 
   if (target.kind === 'image') {
+    const thumb = shareThumbSrc(target.thumbUrl);
     return (
       <Card
         as="a"
@@ -43,9 +46,9 @@ export default function ShareCard({ target }: { target: ShareTarget; own?: boole
         className="w-56 max-w-full overflow-hidden"
       >
         <span className="relative block h-36 w-full bg-surface-container-high">
-          {target.thumbUrl ? (
+          {thumb ? (
             <FadeInImage
-              src={target.thumbUrl}
+              src={thumb}
               alt={`图片 #${target.imageId}`}
               fill
               sizes="224px"
