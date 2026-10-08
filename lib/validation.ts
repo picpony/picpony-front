@@ -96,6 +96,19 @@ export function validatePasswordConfirmation(password: string, confirmation: str
 }
 
 /** Only presence: see the module note on login passwords. */
+/**
+ * A Derpibooru API key: 20 characters of `[A-Za-z0-9_-]`, exactly what Philomena mints and what
+ * the upload hop (`app/upload/submit/route.ts`'s `KEY_OK`) accepts. One rule for the user's own
+ * 账户 dialog (review P5-F2) and the administrator's user editor (review P6-F4), so a key either
+ * can save is one publishing takes.
+ */
+export const API_KEY_PATTERN = /^[A-Za-z0-9_-]{20}$/;
+export const API_KEY_MESSAGE = 'API Key 应为 20 位字母、数字、- 或 _，请检查是否多复制或漏复制了字符';
+
+export function validateApiKey(value: string): string | null {
+  return API_KEY_PATTERN.test(value.trim()) ? null : API_KEY_MESSAGE;
+}
+
 export function validateRequired(value: string, message: string): string | null {
   return value.trim() ? null : message;
 }

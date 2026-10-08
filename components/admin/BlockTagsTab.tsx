@@ -82,6 +82,14 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
       setDraftError('请输入标签名');
       return;
     }
+    /* No Derpibooru tag contains a comma — it is the tag separator — and in a search it is AND.
+       `explicit, grimdark` typed as two tags at once was stored as one, and every visitor's search
+       then carried `-explicit,\ grimdark`: the exclusion of one tag and a *required* second term
+       (review P6-F7). One tag per add. */
+    if (/[,，]/.test(name)) {
+      setDraftError('一次添加一个标签，标签名不能包含逗号');
+      return;
+    }
     if ((groups[key] ?? []).some((tag) => blockTagName(tag.tag_name) === name)) {
       setDraftError(`「${RULES[key].name}」中已有标签 ${name}`);
       return;

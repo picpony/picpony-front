@@ -47,9 +47,16 @@ export function withDerpiContentFilter(url: string, contentFilter: unknown): str
   return target.toString();
 }
 
-/** Escape a backend/admin tag before embedding it in Philomena's query grammar. */
+/**
+ * Escape a backend/admin tag before embedding it in Philomena's query grammar.
+ *
+ * The comma is escaped too (review P6-F7): Philomena reads a bare `,` as AND, so a rule's tag that
+ * held one — `a, b`, typed into 屏蔽标签 as two tags at once — split into `-a AND \ b` inside every
+ * visitor's search, the second half a required term. `\,` is the literal character; a real tag has
+ * none, so nothing that worked changes.
+ */
 export function escapeTag(tag: string): string {
-  return tag.replace(/([+\-=&|><!(){}[\]^"~*?:\\/\s])/g, '\\$1');
+  return tag.replace(/([+\-=&|><!(){}[\]^"~*?:\\/\s,])/g, '\\$1');
 }
 
 /**

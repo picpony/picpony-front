@@ -5,6 +5,14 @@ export type Dataset = 'images' | 'dictionary';
 export const CHUNK_BYTES = 10 * 1024 * 1024;
 export const IMAGE_DB_LIMIT = 8 * 1024 * 1024 * 1024;
 export const DICTIONARY_LIMIT = 256 * 1024 * 1024;
+/**
+ * Set by `/admin/import-tools/*` on a refusal it made **itself, before the upstream was asked** —
+ * a busy slot, an unverifiable session, a stalled or malformed body. Such a request is known not to
+ * have reached the PHP service, so the client may offer the same submission again; without the
+ * mark a 503 read as a lost acknowledgement (勿重复提交) and parked the job as 提交结果待核对 for an
+ * id the server never saw (review P6-F1).
+ */
+export const IMPORT_NOT_SENT_HEADER = 'X-Import-Not-Sent';
 export type ImportPhase = 'uploading' | 'paused' | 'staged' | 'submitted' | 'processing' | 'done' | 'error' | 'unknown';
 export interface ImportJob {
   id: string; dataset: Dataset; filename: string; size: number; totalChunks: number; chunks: number[];

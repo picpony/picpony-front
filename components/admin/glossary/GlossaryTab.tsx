@@ -58,6 +58,7 @@ import {
   isUntranslated,
   pageSizeOf,
   reportedCount,
+  sameTag,
   savedTag,
   tagSavePayload,
   translatedShare,
@@ -187,9 +188,15 @@ ${duplicatePage.listKey}` : pageKey;
     else openCreate({ name: pendingTag, category: 'general', images: 0 });
   }
 
-  const completeWorkOrder = () => {
+  /**
+   * Close the feedback being handled — only when the tag just saved is the one it names (review
+   * P6-F2). A work order stays open while the operator saves other rows (the search it opened is a
+   * substring match, so neighbours are on screen) or adds an unrelated tag; marking it 已采纳并写入词库
+   * on any save closed a user's request that nobody had acted on.
+   */
+  const completeWorkOrder = (en: string) => {
     const order = workOrder;
-    if (!order) return;
+    if (!order || !sameTag(order.tag_name, en)) return;
     setWorkOrder(null);
     void (async () => {
       try {
@@ -211,7 +218,7 @@ ${duplicatePage.listKey}` : pageKey;
       () => saveDictionaryTag(token, payload as SaveBody),
       () => {
         showToast(`已保存标签「${tag.en}」`, 'success');
-        completeWorkOrder();
+        completeWorkOrder(tag.en);
         setEditing((current) => (current?.id === tag.id ? { id: tag.id, closing: true } : current));
       },
       '保存失败',
@@ -253,7 +260,7 @@ ${duplicatePage.listKey}` : pageKey;
       },
       () => {
         showToast(`已添加标签「${en}」`, 'success');
-        completeWorkOrder();
+        completeWorkOrder(en);
         setCreate((current) => ({ ...current, open: false }));
       },
       '添加失败',
@@ -428,7 +435,7 @@ ${duplicatePage.listKey}` : pageKey;
         tag={current}
         closing={editing.closing}
         saving={saveMutation.pendingKeys.has(tag.id)}
-        workOrder={workOrder && workOrder.tag_name.trim().toLowerCase() === current.en.toLowerCase() ? workOrder : null}
+        workOrder={workOrder && sameTag(workOrder.tag_name, current.en) ? workOrder : null}
         onSave={(payload) => saveEdit(current, payload)}
         onCancel={closeEditor}
         onExitComplete={() => finishClose(tag.id)}
@@ -749,7 +756,7 @@ ${duplicatePage.listKey}` : pageKey;
         open={create.open}
         prefill={create.prefill}
         saving={saveMutation.pendingKeys.has('create')}
-        workOrder={workOrder && create.open ? workOrder : null}
+        workOrder={workOrder && create.open && create.prefill?.name && sameTag(workOrder.tag_name, create.prefill.name) ? workOrder : null}
         duplicate={duplicate}
         onClose={() => {
           if (saveMutation.isPending('create')) return;

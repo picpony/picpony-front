@@ -45,7 +45,9 @@ export function wealthPayload(
     payload.experience_reason = form.experienceReason.trim();
   }
   const coins = wholeNumber(form.coinsValue);
-  if (coins !== null) {
+  /* Adding or deducting nothing is not a change (review P6-F8): it would only write an empty line
+     into the user's bill. Setting the balance to 0 is one. */
+  if (coins !== null && (coins > 0 || form.coinsOp === 'set')) {
     payload.coins_op = form.coinsOp;
     payload.coins_value = coins;
     payload.reason = form.coinsReason.trim();

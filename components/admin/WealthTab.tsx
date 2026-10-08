@@ -190,6 +190,9 @@ function WealthDialog({
     if (form.experience.trim() && experience === null) next.experience = '经验值必须是不小于 0 的整数';
     if (expChanged && !form.experienceReason.trim()) next.experienceReason = '请填写经验值变动的原因';
     if (form.coinsValue.trim() && coins === null) next.coinsValue = '金币数值必须是不小于 0 的整数';
+    /* 增加 0 / 扣除 0 changes nothing and still writes a line into the user's 金币账单 under the
+       reason typed (review P6-F8). 设为 0 is a real change and stays allowed. */
+    else if (coins === 0 && form.coinsOp !== 'set') next.coinsValue = `${form.coinsOp === 'add' ? '增加' : '扣除'}的金币须大于 0`;
     if (coinsResult !== null && coinsResult < 0) next.coinsValue = `扣除后金币为 ${figureText(coinsResult)}，不能少于 0`;
     if (coins !== null && !form.coinsReason.trim()) next.coinsReason = '请填写金币变动的原因';
     if (!Object.values(next).some(Boolean)) {

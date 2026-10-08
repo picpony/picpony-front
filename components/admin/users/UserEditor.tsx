@@ -17,7 +17,7 @@ import { GENDER_OPTIONS, optionsWith } from '@/lib/profileFields';
 import type { Role } from '@/lib/roles';
 import { copyText } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
-import { validateEmail, validateNewPassword, validateUsername, PASSWORD_HINT } from '@/lib/validation';
+import { validateApiKey, validateEmail, validateNewPassword, validateUsername, PASSWORD_HINT } from '@/lib/validation';
 import { AdminForm, FormActions, FormGrid } from '../AdminForm';
 import {
   initialUserForm,
@@ -45,7 +45,7 @@ export interface AdminUser extends EditableUser {
   badges?: unknown;
 }
 
-type FieldName = 'username' | 'email' | 'password';
+type FieldName = 'username' | 'email' | 'password' | 'apiKey';
 
 export function userEditorId(userId: number) {
   return `users-inline-${userId}-editor`;
@@ -115,10 +115,13 @@ export default function UserEditor({
     if (form.username.trim() !== before.username) next.username = validateUsername(form.username) ?? undefined;
     if (form.email.trim() !== before.email && form.email.trim()) next.email = validateEmail(form.email) ?? undefined;
     if (form.password) next.password = validateNewPassword(form.password) ?? undefined;
+    /* A changed key is held to the rule the user's own 账户 dialog and the upload hop share (review
+       P6-F4); clearing it (an unbind) and an unchanged legacy key are not re-validated. */
+    if (form.apiKey.trim() && form.apiKey.trim() !== before.apiKey) next.apiKey = validateApiKey(form.apiKey) ?? undefined;
     if (Object.values(next).some(Boolean)) {
       setErrors(next);
-      const first = (['username', 'email', 'password'] as const).find((field) => next[field]);
-      if (first) document.getElementById(id(first))?.focus();
+      const first = (['username', 'email', 'password', 'apiKey'] as const).find((field) => next[field]);
+      if (first) document.getElementById(id(first === 'apiKey' ? 'api-key' : first))?.focus();
       return;
     }
     onSave(userUpdatePayload(baseline, form, choice.locked === null));
@@ -208,6 +211,7 @@ export default function UserEditor({
               className="font-mono"
               value={form.apiKey}
               readOnly={saving}
+              error={errors.apiKey}
               helper="清空后保存会解除该用户的 API Key 绑定"
               onChange={(event) => set('apiKey', event.target.value)}
             />

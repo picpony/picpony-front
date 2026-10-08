@@ -65,7 +65,16 @@ export default function PoniesTab({ token }: AdminPanelProps) {
     {!!read.data?.skipped && <AdminNote tone="warning">有 {read.data.skipped} 个角色记录无法读取，已跳过。其余角色可以正常管理。</AdminNote>}
     {config && <div className="flex flex-wrap gap-2">{[true, false].map((enabled) => <Button key={String(enabled)} variant="text" size="xs" disabled={busy} onClick={() => confirmThen('确认批量选择', `确定要将全部 ${config.ponies.length} 个角色${enabled ? '勾选' : '取消勾选'}吗？保存后生效。`, () => setDraft({ ...config, ponies: config.ponies.map((row) => ({ ...row, enabled })) }), { tone: 'filled' })}>{enabled ? '全选角色' : '取消全选'}</Button>)}</div>}
     <AdminListAnchor><DataTable columns={columns} rows={paged.rows} listKey={paged.listKey} rowKey={(row) => row.path} loading={read.loading} {...tableError('角色加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} empty="暂无角色，可扫描资源库" /><AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} /></AdminListAnchor>
-    {shownRow && <PonyEditor key={shownRow.path} isOpen={selected !== null} token={token} pony={shownRow} onClose={() => setSelected(null)} onRenamed={(name) => { if (config) setDraft({ ...config, ponies: config.ponies.map((row) => row.path === shownRow.path ? { ...row, name } : row) }); setShownRow({ ...shownRow, name }); setSelected((current) => current && { ...current, name }); }} />}
+    {shownRow && <PonyEditor key={shownRow.path} isOpen={selected !== null} token={token} pony={shownRow} onClose={() => setSelected(null)} onRenamed={(name) => {
+      /* A rename is saved on its own. It corrects an unsaved draft when there is one; without one it
+         corrects the read itself — minting a draft from it made the panel claim unsaved settings
+         (刷新 asked to discard them) and pinned every row to this snapshot, hiding the re-read
+         `committed` asks for (review P6-F6). */
+      const renamed = (rows: Pony[]) => rows.map((row) => row.path === shownRow.path ? { ...row, name } : row);
+      if (draft) setDraft({ ...draft, ponies: renamed(draft.ponies) });
+      else if (read.data) { const base = read.data; query.write(token, (previous) => { const current = previous ?? base; return { ...current, ponies: renamed(current.ponies) }; }); query.expire(token); }
+      setShownRow({ ...shownRow, name }); setSelected((current) => current && { ...current, name });
+    }} />}
     {confirmDialog}
   </div>;
 }
