@@ -82,7 +82,7 @@ function expireSession(token: string) {
  */
 /**
  * For a request that does not go through `picponyRequest` — the import proxy's own route, which is
- * a bare `fetch` to `/admin/import-tools/*`. Without it that one surface let a dead session die
+ * a bare `fetch` to `/admin/import-tools/*`, and the upload's staging XHR (`lib/api/upload.ts`). Without it that one surface let a dead session die
  * silently: AGENTS' rule is that a 401 ends a session **once, here, not per screen**.
  */
 export function noteUnauthorized(token: string) {
@@ -96,16 +96,23 @@ function onUnauthorized(action: string, token: string) {
     return;
   }
   if (sessionChecks.has(token)) return;
+  /* Bounded like any read (review P1-F9): a confirmation that never settles would keep this
+     token's slot taken, and every later 401 for it would be ignored — a half-signed-in UI. */
+  const deadline = deadlineSignal(undefined, READ_DEADLINE_MS);
   const check = fetch(`${PICPONY_API_BASE}?action=get_user&_t=${Date.now()}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
+    signal: deadline.signal,
   })
     .then((response) => {
       void response.body?.cancel().catch(() => {});
       if (response.status === 401) expireSession(token);
     })
     .catch(() => {})
-    .finally(() => sessionChecks.delete(token));
+    .finally(() => {
+      deadline.dispose();
+      sessionChecks.delete(token);
+    });
   sessionChecks.set(token, check);
 }
 

@@ -317,19 +317,28 @@ export async function handleTagFeedback(
   return picponyPostJson('admin_handle_tag_feedback', body, { token });
 }
 
+/** Pages of the keyword search `checkTagExists` reads before it answers "absent". */
+const TAG_EXISTS_PAGE = 50;
+const TAG_EXISTS_MAX_PAGES = 10;
+
 export async function checkTagExists(token: string, enTag: string, signal?: AbortSignal) {
-  const res = await picponyRequest('get_dictionary', {
-    token,
-    query: { page: 1, limit: 50, keyword: enTag, _t: Date.now() },
-    signal,
-  });
-  const data = await readJson(res);
-  if (res.ok && data.success && Array.isArray(data.tags)) {
-    /* A row with a null `en` must not throw an engine error into a Chinese toast. */
-    const wanted = enTag.toLowerCase();
-    return data.tags.some((t: { en?: unknown }) => String(t?.en ?? '').toLowerCase() === wanted);
+  /* A row with a null `en` must not throw an engine error into a Chinese toast. */
+  const wanted = enTag.toLowerCase();
+  /* `keyword` is a fuzzy match, so a popular stem (`pony`) can push the exact entry past the first
+     page; reading only page 1 answered "absent" and the glossary created a duplicate (review
+     P1-F17). Pages are read until a short one, bounded. */
+  for (let page = 1; page <= TAG_EXISTS_MAX_PAGES; page += 1) {
+    const res = await picponyRequest('get_dictionary', {
+      token,
+      query: { page, limit: TAG_EXISTS_PAGE, keyword: enTag, _t: Date.now() },
+      signal,
+    });
+    const data = await readJson(res);
+    if (!(res.ok && data.success && Array.isArray(data.tags))) throw new Error(envelopeMessage(data) || '标签查询失败');
+    if (data.tags.some((t: { en?: unknown }) => String(t?.en ?? '').toLowerCase() === wanted)) return true;
+    if (data.tags.length < TAG_EXISTS_PAGE) return false;
   }
-  throw new Error(envelopeMessage(data) || '标签查询失败');
+  return false;
 }
 
 /**

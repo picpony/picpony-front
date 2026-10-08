@@ -21,7 +21,13 @@ import { COOKIE_KEYS, PICPONY_API_ORIGIN } from '@/lib/constants';
  * carried only the config's `frame-ancestors 'self'`).
  */
 
+/** Where a visited link is sent: the public page, on the backend's public origin. */
 const UPSTREAM = new URL('/share.php', PICPONY_API_ORIGIN);
+/**
+ * Where `create` is forwarded: the same server-controlled origin as the api.php handler and the
+ * `*.server.ts` readers, so a fixture or staging run never writes to production (review P1-F7).
+ */
+const CREATE_UPSTREAM = new URL('/share.php', process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN);
 
 /** A person is waiting on either answer; the backend's observed worst case is ~9s. */
 const UPSTREAM_TIMEOUT_MS = 20_000;
@@ -102,7 +108,7 @@ async function proxy(request: NextRequest): Promise<Response> {
     );
   }
 
-  const target = new URL(UPSTREAM);
+  const target = new URL(CREATE_UPSTREAM);
   target.search = request.nextUrl.search;
 
   const headers = new Headers();
