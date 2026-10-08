@@ -94,6 +94,11 @@ export function pageSizeOf(value: unknown): number {
   return (PAGE_SIZES as readonly number[]).includes(number) ? number : DEFAULT_PAGE_SIZE;
 }
 
+/** Whether two spellings name one dictionary entry: the dictionary keys tags lower-cased and trimmed. */
+export function sameTag(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
 export function isUntranslated(cn: string | null | undefined): boolean {
   const value = (cn ?? '').trim();
   return value === '' || value === '未翻译';
@@ -105,10 +110,17 @@ export function translationsText(tag: Pick<GlossaryTag, 'cn' | 'aliases'>): stri
   return [tag.cn, ...(tag.aliases ?? [])].join(', ');
 }
 
-/** The field's text as `cn` and `aliases`: commas of either width separate, blanks drop out. */
+/**
+ * The field's text as `cn` and `aliases`: commas of either width separate, blanks drop out.
+ *
+ * `、` is **not** a separator (review P6-F3): the field's own helper says 用逗号分隔, the original
+ * editor's batch import splits on commas alone (`cnRaw.replace(/，/g, ',').split(',')`), and a
+ * Chinese name may well contain an enumeration comma — splitting on it turned one name into a name
+ * and an alias.
+ */
 export function parseTranslations(text: string): { cn: string; aliases: string[] } {
   const parts = text
-    .split(/[,，、]/)
+    .split(/[,，]/)
     .map((part) => part.trim())
     .filter((part) => part && part !== '未翻译');
   const unique = parts.filter((part, index) => parts.indexOf(part) === index);
@@ -137,9 +149,19 @@ export function tagFormOf(tag: GlossaryTag): TagForm {
 
 const flag = (value: unknown) => (value === true || Number(value) === 1 ? 1 : 0);
 
-/** The `save_dictionary_tag` body: the original editor's, flags carried through on an edit. */
+/**
+ * The `save_dictionary_tag` body: the original editor's, flags carried through on an edit.
+ *
+ * **An untouched translations field sends the stored names as they are** (review P6-F3). The
+ * original editor gives each name its own input, so a stored name may contain a comma; this one
+ * joins them into one comma-separated field, and re-parsing that on every save split such a name in
+ * two — on a save that only changed the description. Only a field the operator edited is parsed.
+ */
 export function tagSavePayload(form: TagForm, tag?: GlossaryTag | null): Record<string, unknown> {
-  const { cn, aliases } = parseTranslations(form.translations);
+  const untouched = tag && !isUntranslated(tag.cn) && form.translations === translationsText(tag);
+  const { cn, aliases } = untouched
+    ? { cn: tag.cn, aliases: Array.isArray(tag.aliases) ? [...tag.aliases] : [] }
+    : parseTranslations(form.translations);
   const payload: Record<string, unknown> = {
     en: tag ? tag.en : form.en.trim().toLowerCase(),
     cn,

@@ -173,6 +173,12 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
   );
   const rows = history.data?.rows ?? [];
   const totalPages = history.data?.totalPages ?? 1;
+  /* A page the list no longer has — its last notice deleted — moves to the last page there is, as
+     the console's other server-paged lists do (公告, 中转统计, 搜索反馈); it used to show 暂无通知记录
+     on page N of N−1 (review P6-F5). */
+  if (history.data && !history.isPrevious && !history.isLoading && !history.error && currentPage > totalPages) {
+    setPage({ page: totalPages, scope });
+  }
   const listKey = useShownListKey(`${scope}
 ${currentPage}`, history.isPrevious);
 

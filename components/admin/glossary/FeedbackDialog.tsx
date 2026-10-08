@@ -90,6 +90,12 @@ export default function FeedbackDialog({
 
   const summary = read.data?.summary;
   const rows = read.data?.rows ?? [];
+  /* Handling the last feedback on the last page leaves a page the queue no longer has: it showed
+     暂无反馈 with the pager gone (it renders only beside rows), so the rest of the queue was out of
+     reach until the filter changed. Move to the last page there is (review P6-F5). */
+  if (read.data && !read.isPrevious && !read.isLoading && !read.error && current > read.data.totalPages) {
+    setPage({ page: read.data.totalPages, scope });
+  }
 
   return (
     <>

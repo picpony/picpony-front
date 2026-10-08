@@ -119,7 +119,7 @@ function expandTree(tree, names) {
 
 /** `usersQuery`'s value: one `admin_get_users` answer, its rows and the `stats` beside them (G2-019). */
 const usersOf = (rows) => ({ rows, stats: null });
-function fixture(file, api = {}, initialData = {}, { expose = '', expand = [] } = {}) {
+function fixture(file, api = {}, initialData = {}, { expose = '', expand = [], modules = {} } = {}) {
   const hooks = harness();
   const session = { token: 'account-A' };
   const toasts = [];
@@ -183,6 +183,7 @@ function fixture(file, api = {}, initialData = {}, { expose = '', expand = [] } 
           ...options,
           peek: () => ({ data: data[options.name] }),
           invalidate: () => refreshes.push(options.name),
+          expire: () => refreshes.push(options.name),
           write: (_, value) => { data[options.name] = typeof value === 'function' ? value(data[options.name]) : value; },
         };
         resources.set(options.name, resource);
@@ -198,6 +199,7 @@ function fixture(file, api = {}, initialData = {}, { expose = '', expand = [] } 
       },
     },
   };
+  Object.assign(dependencies, typeof modules === 'function' ? modules(dependencies) : modules);
   dependencies['@/lib/api/errors'] = load('lib/api/errors.ts');
   dependencies['./queries'] = load('components/admin/queries.ts', dependencies);
   dependencies['./useAdminMutation'] = load('components/admin/useAdminMutation.ts', dependencies);
@@ -1110,5 +1112,198 @@ test('glossary bulk toasts say only the counts that arrived — never an invente
   dialog(fx.render(), 'BatchImportDialog').props.onImport([task]);
   await settle();
   assert.equal(fx.toasts.at(-1)[0], '已导入 2 个标签，跳过 1 个已有的标签');
+  fx.hooks.dispose();
+});
+
+// ---------------------------------------------------------------------------------------------
+// Review part 6 (`part6-review.md`): regressions that need this file's panel harness. The pure and
+// route-level cases are in `testReviewPart6.mjs`.
+// ---------------------------------------------------------------------------------------------
+
+test('review P6-F2: a feedback closes only when its own tag is saved, never on a neighbour or an unrelated add', async () => {
+  const handled = [];
+  const fx = fixture('glossary/GlossaryTab', {
+    saveDictionaryTag: () => Promise.resolve(Response.json({ success: true })),
+    checkTagExists: async () => false,
+    handleTagFeedback: (...args) => { handled.push(args.slice(1)); return Promise.resolve(Response.json({ success: true })); },
+  }, glossaryData());
+  await openGlossary(fx);
+  const feedback = { id: 31, tag_name: 'TAG-2', content: '建议的正确翻译：标签二', username: '访客', status: 'pending', created_at: '2026-10-01 08:00:00' };
+  dialog(fx.render(), 'FeedbackDialog').props.onHandle(feedback);
+  fx.hooks.effects();
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  /* The search the feedback opened (a substring match) also lists tag-1; the operator saves that one. */
+  await iconButton(actionCell(fx.render(), glossaryTags[0]), '编辑标签 tag-1').props.onClick({ currentTarget: {} });
+  const neighbour = byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[0]);
+  assert.equal(neighbour.props.workOrder, null, 'the neighbour does not offer the feedback');
+  neighbour.props.onSave({ id: 1, en: 'tag-1', cn: '标签', aliases: [], cat: 'general', count: 0, description: '改了简介' });
+  await settle();
+  assert.deepEqual(handled, [], 'saving another tag leaves the feedback pending');
+
+  /* Nor does adding an unrelated tag through 添加新标签. */
+  button(fx.render(), '添加新标签').props.onClick();
+  assert.equal(dialog(fx.render(), 'CreateTagDialog').props.workOrder, null, 'an unprefilled add is not the feedback');
+  dialog(fx.render(), 'CreateTagDialog').props.onSave({ en: 'other-tag', translations: '别的', cat: 'general', count: 0, description: '' });
+  await settle();
+  assert.deepEqual(handled, [], 'adding another tag leaves the feedback pending');
+
+  /* Saving the tag it names closes it. */
+  const own = byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[1])
+    ?? (await iconButton(actionCell(fx.render(), glossaryTags[1]), '编辑标签 tag-2').props.onClick({ currentTarget: {} }), byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[1]));
+  own.props.onSave({ id: 2, en: 'tag-2', cn: '标签二', aliases: [], cat: 'general', count: 0, description: '' });
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(handled)), [[31, 'processed', '已采纳并写入词库', 'pending']]);
+  fx.hooks.dispose();
+});
+
+test('review P6-F4: the user editor holds a changed API key to the shared 20-character rule, and lets an unbind through', async () => {
+  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: 0, api_key: 'legacy key with spaces' };
+  const requests = [];
+  const fx = fixture('UsersTab', {
+    adminUpdateUser: (_, payload) => { requests.push(payload); return new Promise(() => {}); },
+  }, { 'admin-users': usersOf([user]) });
+  fx.render();
+  fx.hooks.effects();
+  await iconButton(actionCell(fx.render(), user), '编辑用户 Alice').props.onClick({ currentTarget: {} });
+  const editor = () => {
+    const table = byType(fx.render(), 'DataTable');
+    return expandTree(table.props.expandedRow(user), ['UserEditor']);
+  };
+  /* An untouched legacy key is not re-validated: the account stays editable. */
+  change(input(editor(), 'id', 'users-inline-7-username'), 'Alicia');
+  adminForm(editor()).props.onSubmit();
+  assert.deepEqual(JSON.parse(JSON.stringify(requests.at(-1))), { target_id: 7, username: 'Alicia' });
+  requests.length = 0;
+  fx.hooks.dispose();
+
+  const fx2 = fixture('UsersTab', {
+    adminUpdateUser: (_, payload) => { requests.push(payload); return new Promise(() => {}); },
+  }, { 'admin-users': usersOf([user]) });
+  fx2.render();
+  fx2.hooks.effects();
+  await iconButton(actionCell(fx2.render(), user), '编辑用户 Alice').props.onClick({ currentTarget: {} });
+  const editor2 = () => expandTree(byType(fx2.render(), 'DataTable').props.expandedRow(user), ['UserEditor']);
+  for (const bad of ['abcdefghij+lmnopqrst', 'abcdefghij.lmnopqrst', 'short', 'abcdefghijklmnopqrstu']) {
+    change(input(editor2(), 'id', 'users-inline-7-api-key'), bad);
+    adminForm(editor2()).props.onSubmit();
+    assert.equal(requests.length, 0, `${bad} is refused before sending`);
+    assert.match(input(editor2(), 'id', 'users-inline-7-api-key').props.error, /20 位/);
+  }
+  change(input(editor2(), 'id', 'users-inline-7-api-key'), 'aB3_-aB3_-aB3_-aB3_-');
+  adminForm(editor2()).props.onSubmit();
+  assert.deepEqual(JSON.parse(JSON.stringify(requests.at(-1))), { target_id: 7, api_key: 'aB3_-aB3_-aB3_-aB3_-' });
+  fx2.hooks.dispose();
+});
+
+test('review P6-F5: a server-paged list moves off a page it no longer has', async () => {
+  const fx = fixture('NotificationsTab', {}, { 'admin-notifications': { rows: [{ id: 1, user_id: 0, title: 't', content: 'c', created_at: '2026-10-01 08:00:00' }], totalPages: 2, total: 21 } });
+  fx.render();
+  fx.hooks.effects();
+  const pager = () => find(fx.render(), (node) => node.type?.name === 'AdminPager');
+  pager().props.onPageChange(2);
+  fx.render();
+  assert.equal(fx.reads.filter((read) => read.name === 'admin-notifications').at(-1).args.page, 2);
+  /* The last notice on page 2 is deleted: the re-read says there is one page now. */
+  fx.data['admin-notifications'] = { rows: [], totalPages: 1, total: 20 };
+  fx.render();
+  assert.equal(fx.reads.filter((read) => read.name === 'admin-notifications').at(-1).args.page, 1);
+  assert.equal(pager().props.page, 1);
+  fx.hooks.dispose();
+
+  const feedback = fixture('glossary/FeedbackDialog', {}, {
+    'admin-tag-feedback': { rows: [{ id: 9, tag_name: 'a', content: 'x', username: 'u', status: 'pending', created_at: '2026-10-01 08:00:00' }], summary: { pending: 41, processed: 0, rejected: 0 }, totalPages: 2 },
+  }, { expose: 'FeedbackDialog' });
+  const render = () => feedback.hooks.render(() => feedback.subject({ open: true, token: feedback.session.token, onClose() {}, onHandle() {} }));
+  render();
+  feedback.hooks.effects();
+  find(render(), (node) => node.type === '@/components/Pagination:default').props.onPageChange(2);
+  render();
+  assert.equal(feedback.reads.filter((read) => read.name === 'admin-tag-feedback').at(-1).args.page, 2);
+  /* The page's last feedback is handled: the queue now has one page, and the dialog must not sit on
+     an empty page 2 with its pager gone. */
+  feedback.data['admin-tag-feedback'] = { rows: [], summary: { pending: 40, processed: 1, rejected: 0 }, totalPages: 1 };
+  render();
+  assert.equal(feedback.reads.filter((read) => read.name === 'admin-tag-feedback').at(-1).args.page, 1);
+  feedback.hooks.dispose();
+});
+
+test('review P6-F7: 屏蔽标签 refuses a comma, which every visitor\'s search would read as AND', async () => {
+  const adds = [];
+  const fx = fixture('BlockTagsTab', {
+    getBlockTags: async () => ({ success: true }),
+    adminAddBlockTag: (_, payload) => { adds.push(payload); return Promise.resolve(Response.json({ success: true })); },
+  }, { 'admin-block-tags': { safe: [] } }, {
+    modules: { '@/lib/blockFilters': { BLOCK_FILTER_KEYS: ['safe', 'spoilers', 'banAnthro', 'banDiscomfort', 'onlyPony'], installBlockFilters() {}, parseBlockFilters: () => ({}) } },
+  });
+  fx.render();
+  fx.hooks.effects();
+  const addButton = () => find(fx.render(), (node) => node.type === '@/components/Button:default' && typeof node.props.children === 'string' && node.props.children.includes('添加'));
+  const opener = addButton();
+  if (opener) opener.props.onClick();
+  const field = () => find(fx.render(), (node) => node.type === '@/components/Input:Input');
+  assert.ok(field(), 'the add field is open');
+  for (const typed of ['explicit, grimdark', 'explicit，grimdark']) {
+    change(field(), typed);
+    const form = find(fx.render(), (node) => typeof node.props?.onSubmit === 'function');
+    form.props.onSubmit({ preventDefault() {} });
+    assert.equal(adds.length, 0, `${typed} is not sent`);
+    assert.match(field().props.error, /逗号/);
+  }
+  fx.hooks.dispose();
+});
+
+test('review P6-F8: adding or deducting zero coins is refused; setting zero is a change', () => {
+  const user = { id: 5, username: '测试用户', experience: 50, coins: 20 };
+  const requests = [];
+  const fx = fixture('WealthTab', {
+    adminUpdateWealth: (_, payload) => { requests.push(payload); return new Promise(() => {}); },
+  }, { 'admin-users': usersOf([user]) }, { expand: ['WealthDialog'] });
+  fx.render();
+  fx.hooks.effects();
+  button(actionCell(fx.render(), user), '修改资产').props.onClick();
+  const dialog = () => modal(fx.render(), '修改资产 · 测试用户');
+  const op = () => find(dialog(), (node) => node.type === '@/components/Select:default' && node.props.label === '操作');
+  for (const [value, label] of [['add', '增加金币的原因'], ['sub', '扣除金币的原因']]) {
+    op().props.onChange(value);
+    change(input(dialog(), 'label', '数值'), '0');
+    change(input(dialog(), 'label', label), '调整');
+    adminForm(dialog()).props.onSubmit();
+    assert.equal(requests.length, 0, `${value} 0 is not sent`);
+    assert.match(input(dialog(), 'label', '数值').props.error, /须大于 0/);
+  }
+  op().props.onChange('set');
+  change(input(dialog(), 'label', '数值'), '0');
+  change(input(dialog(), 'label', '金币变动的原因'), '清零');
+  adminForm(dialog()).props.onSubmit();
+  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ target_id: 5, coins_op: 'set', coins_value: 0, reason: '清零' }]);
+  fx.hooks.dispose();
+});
+
+test('review P6-F6: renaming a 角色 corrects the read, never mints an unsaved draft of the whole roster', async () => {
+  const ponies = [{ name: 'Twilight', path: 'twilight', preview: '', enabled: true }, { name: 'Rarity', path: 'rarity', preview: '', enabled: false }];
+  const fx = fixture('catalogTools/PoniesTab', {}, { 'admin-catalog-ponies': { enabled: true, ponies, skipped: 0 } }, {
+    modules: (deps) => {
+      const errors = load('lib/api/errors.ts');
+      const catalog = { CatalogOutcomeUnknown: class extends errors.ApiError {}, savePonyName: async () => ({ success: true, new_name: 'Twilight Sparkle' }) };
+      return {
+        '@/lib/api/adminCatalogTools': catalog,
+        '@/lib/desktopPonies/queries': { ponyCatalog: { expire() {} }, myPonies: { expire() {} }, ponyConfigs: { expire() {} } },
+        './useCatalogMutation': load('components/admin/catalogTools/useCatalogMutation.ts', { ...deps, '@/lib/api/errors': errors, '@/lib/api/adminCatalogTools': catalog }),
+      };
+    },
+  });
+  fx.render();
+  fx.hooks.effects();
+  const tree = fx.render();
+  button(actionCell(tree, ponies[0]), '名称与台词').props.onClick();
+  const editor = find(fx.render(), (node) => node.type?.name === 'PonyEditor');
+  editor.props.onRenamed('Twilight Sparkle');
+  const after = fx.render();
+  assert.deepEqual(fx.data['admin-catalog-ponies'].ponies.map((row) => row.name), ['Twilight Sparkle', 'Rarity'], 'the read shows the saved name');
+  assert.ok(fx.refreshes.includes('admin-catalog-ponies'), 'and is read again underneath');
+  /* No draft: 刷新 re-reads without asking to discard settings nobody changed. */
+  const header = find(after, (node) => node.type === '../SectionHeader:default');
+  header.props.onRefresh();
+  assert.equal(fx.asked.length, 0, 'refresh asks nothing — there is nothing unsaved');
   fx.hooks.dispose();
 });

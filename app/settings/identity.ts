@@ -43,7 +43,7 @@ export function isRealIdentity(id: unknown, name: unknown): boolean {
  * with any other character (`/^\S{20}$/`) was bound here and then refused at publishing with
  * 「API Key 无效」 (review P5-F2).
  */
-export const API_KEY_PATTERN = /^[A-Za-z0-9_-]{20}$/;
+export { API_KEY_PATTERN } from '@/lib/validation';
 
 async function search<T extends object>(path: string, key: string, signal?: AbortSignal): Promise<T | 'invalid'> {
   try {

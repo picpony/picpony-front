@@ -12,7 +12,8 @@ import { apiErrorMessage } from '@/lib/api/errors';
 import { readToken } from '@/lib/hooks';
 import { useFieldErrors } from '@/lib/useFieldErrors';
 import { ICON } from '@/lib/icons';
-import { API_KEY_PATTERN, detectDerpiIdentity } from './identity';
+import { detectDerpiIdentity } from './identity';
+import { validateApiKey } from '@/lib/validation';
 import { saveAccountFields } from './useAccount';
 
 const ACCOUNT_SETTINGS_URL = 'https://derpibooru.org/registrations/edit';
@@ -47,7 +48,7 @@ export default function ApiKeyDialog({
   const [busy, setBusy] = useState(false);
   const trimmed = key.trim();
   const form = useFieldErrors<'key'>(() => [
-    ['key', !trimmed ? '请输入 API Key' : API_KEY_PATTERN.test(trimmed) ? null : 'API Key 应为 20 位字母、数字、- 或 _，请检查是否多复制或漏复制了字符'],
+    ['key', !trimmed ? '请输入 API Key' : validateApiKey(trimmed)],
   ]);
 
   const close = () => {
