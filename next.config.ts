@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { upstreamOrigin } from "./lib/upstream.server";
 
 /**
  * One id per build, inlined into the client bundle. Names the service worker's static cache: a
@@ -139,7 +140,7 @@ const nextConfig: NextConfig = {
       {
         source: '/search-api/:path*',
         /* The same server-controlled upstream as the api.php handler (review P1-F7). */
-        destination: `${process.env.PICPONY_UPSTREAM_ORIGIN || 'https://picpony.top'}/search-api/:path*`,
+        destination: `${upstreamOrigin()}/search-api/:path*`,
       },
     ];
   },

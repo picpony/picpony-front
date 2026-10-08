@@ -806,6 +806,7 @@ test('only accepted block-tag mutations expire both Next tags and the process me
       clearBlockFiltersMemo: () => { memoClears += 1; }, clearPublicBlacklistMemo: () => {},
     },
     '@/lib/constants': { COOKIE_KEYS },
+    '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
   };
   vm.runInNewContext(transpiled, { exports, require: (name) => {
     assert.ok(name in dependencies, name);

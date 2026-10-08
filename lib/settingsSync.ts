@@ -609,6 +609,8 @@ let bridge: SettingsSyncBridge | null = null;
 let session: { token: string; account: string } | null = null;
 /** The account's latest cloud copy: its settings, and when the read that produced it started. */
 let base: { token: string; settings: CloudObject; startedAt: number; at: number } | null = null;
+/** A copy from a read sent before this moment predates another tab's change: never fresh. */
+let baseStaleBefore = 0;
 /** When each setting last changed on this device, confirmed or not. */
 const changedAt = new Map<string, number>();
 /** Changes the account has not confirmed: id → when it was made. Persisted per account. */
@@ -683,8 +685,13 @@ function accountOf(user: StoredUserInfo): string {
 }
 
 function loadPending(account: string): Map<string, number> {
+  return parsePending(readStored(LS_KEYS.settingsSyncPending), account);
+}
+
+/** A persisted pending record, as the map it holds for `account` (empty for another account's). */
+function parsePending(raw: string | null | undefined, account: string): Map<string, number> {
   try {
-    const record: unknown = JSON.parse(readStored(LS_KEYS.settingsSyncPending) ?? 'null');
+    const record: unknown = JSON.parse(raw ?? 'null');
     if (!record || typeof record !== 'object') return new Map();
     const { account: owner, pending: entries } = record as { account?: unknown; pending?: unknown };
     if (owner !== account || !entries || typeof entries !== 'object') return new Map();
@@ -699,15 +706,58 @@ function loadPending(account: string): Map<string, number> {
   }
 }
 
-function persistPending() {
-  if (!session || pending.size === 0) {
+/**
+ * Every unconfirmed change this browser holds for the session's account: this tab's, and those
+ * another tab persisted. The record is shared by every tab (one `localStorage`), and so are the
+ * values it names — a change made in one tab is this tab's stored value too. Each tab used to
+ * treat the record as its own: persisting overwrote the other tab's entries, an account read here
+ * adopted the cloud's old value over a change the other tab had not written yet, and a write here
+ * sent the stale cloud copy of it (review P2-F1). Newest timestamp wins per id.
+ */
+function allPending(): Map<string, number> {
+  const merged = session ? loadPending(session.account) : new Map<string, number>();
+  for (const [id, at] of pending) if ((merged.get(id) ?? 0) < at) merged.set(id, at);
+  return merged;
+}
+
+/**
+ * Write the shared record: what is stored, merged with this tab's map, minus `confirmed` — the
+ * entries a write just carried, each dropped only if nothing newer replaced it meanwhile.
+ */
+function persistPending(confirmed?: ReadonlyMap<string, number>) {
+  if (!session) {
     writeStored(LS_KEYS.settingsSyncPending, null);
     return;
   }
+  const merged = allPending();
+  if (confirmed) {
+    for (const [id, at] of confirmed) if ((merged.get(id) ?? Number.POSITIVE_INFINITY) <= at) merged.delete(id);
+  }
   writeStored(
     LS_KEYS.settingsSyncPending,
-    JSON.stringify({ account: session.account, pending: Object.fromEntries(pending) }),
+    merged.size ? JSON.stringify({ account: session.account, pending: Object.fromEntries(merged) }) : null,
   );
+}
+
+/**
+ * Another tab changed the shared record: those settings moved under this tab, so an account read
+ * that started before now cannot speak for them (the same rule as a change made here), and the
+ * cloud copy this tab holds may predate the other tab's write — the next write reads it again.
+ */
+function pendingChangedElsewhere(oldValue: string | null, newValue: string | null) {
+  if (!session) return;
+  const before = parsePending(oldValue, session.account);
+  const after = parsePending(newValue, session.account);
+  const now = Date.now();
+  let touched = false;
+  for (const id of new Set([...before.keys(), ...after.keys()])) {
+    if (before.get(id) === after.get(id)) continue;
+    changedAt.set(id, now);
+    touched = true;
+  }
+  if (!touched) return;
+  baseStaleBefore = now;
+  if (base) base = { ...base, at: 0 };
 }
 
 function clearTimer() {
@@ -774,6 +824,16 @@ function sessionChanged() {
   const user = readUserInfo();
   const next = user ? { token: user.token, account: accountOf(user) } : null;
   if (next?.token === session?.token) {
+    /* The same session can change how it names its account: a sign-in response carries no
+       `id`, so the account is its username until `get_user` merges the id in. The pending
+       record is keyed by that name, and a reload — which starts from the id — used to drop every
+       change still unconfirmed under the username (review P2-F2). Carry them across. */
+    if (next && session && next.account !== session.account) {
+      const stored = loadPending(session.account);
+      session = next;
+      for (const [id, at] of stored) if ((pending.get(id) ?? 0) < at) pending.set(id, at);
+      persistPending();
+    }
     /* Same session, a new record (a profile save, the shell's merge): the gate may have moved. */
     enforceContentGate(user);
     return;
@@ -823,12 +883,13 @@ export function adoptCloudSettings(token: string, user: AccountRecord, startedAt
      app does not manage, so without a copy there is no base, and a write waits for one. */
   if (!('settings' in user)) return;
   const settings = parseSettingsObject(user.settings);
-  base = { token, settings, startedAt, at: Date.now() };
+  base = { token, settings, startedAt, at: startedAt < baseStaleBefore ? 0 : Date.now() };
   paletteVersion += 1;
   const effects = new Set<SettingEffect>();
   let changed = mirrorDeveloperState(user.is_developer);
+  const unconfirmed = allPending();
   for (const entry of SYNCED_SETTINGS) {
-    if (pending.has(entry.id) || (changedAt.get(entry.id) ?? 0) >= startedAt) continue;
+    if (unconfirmed.has(entry.id) || (changedAt.get(entry.id) ?? 0) >= startedAt) continue;
     const next = entry.fromCloud(settings, user);
     if (next === undefined || entry.equals(next, entry.read())) continue;
     entry.write(next);
@@ -909,14 +970,16 @@ async function flush() {
     if (readToken() !== token) return;
     const current = base;
     if (!current || current.token !== token) throw new Error('云端设置读取失败');
-    const sent = new Map(pending);
+    /* Another tab's unconfirmed changes ride along: their values are this tab's stored values,
+       and leaving them out would send the cloud's older copy over them. */
+    const sent = allPending();
     const payload = composePayload(current.settings, new Set(sent.keys()));
     await queueSettingsUpdate(token, async () => {
       await readEnvelope(await updateSettings(token, { settings: payload }));
     });
     if (readToken() !== token) return;
-    for (const [id, at] of sent) if (pending.get(id) === at) pending.delete(id);
-    persistPending();
+    for (const [id, at] of sent) if ((pending.get(id) ?? Number.POSITIVE_INFINITY) <= at) pending.delete(id);
+    persistPending(sent);
     base = { ...current, settings: payload, at: Date.now() };
     bridge?.writeSession(token, payload);
     failures = 0;
@@ -963,6 +1026,7 @@ export function bindSettingsSync(next: SettingsSyncBridge): () => void {
   global.__picponySettingsSyncUnbind?.();
   const onStorage = (event: StorageEvent) => {
     if (event.key === null || event.key === LS_KEYS.userInfo) sessionChanged();
+    if (event.key === LS_KEYS.settingsSyncPending) pendingChangedElsewhere(event.oldValue, event.newValue);
   };
   const onVisible = () => {
     if (document.visibilityState === 'visible') retrySoon();

@@ -41,6 +41,7 @@ function loadProxy(fetchImpl) {
         clearBlockFiltersMemo: () => {}, clearPublicBlacklistMemo: () => {},
       },
       '@/lib/constants': { COOKIE_KEYS: {}, SITE_STATUS_CACHE_TAG: 'c' },
+      '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
     })[name],
     process: { env: {} },
     Response, Headers, URL, AbortController, DOMException, TransformStream,

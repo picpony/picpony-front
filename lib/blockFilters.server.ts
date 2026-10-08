@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { PICPONY_API_BASE } from '@/lib/constants';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 import {
   parseBlockFilters,
@@ -8,6 +8,7 @@ import {
   type BlockFilters,
   type PublicBlacklist,
 } from '@/lib/blockFilters';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 const REVALIDATE_SECONDS = 30 * 60;
 /**
@@ -16,7 +17,7 @@ const REVALIDATE_SECONDS = 30 * 60;
  * at once anyway (the api.php route handler), so this only bounds edits made elsewhere.
  */
 const BLACKLIST_REVALIDATE_SECONDS = 5 * 60;
-const UPSTREAM = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const UPSTREAM = upstreamOrigin();
 export const BLOCK_FILTERS_CACHE_TAG = 'picpony-block-filters';
 export const PUBLIC_BLACKLIST_CACHE_TAG = 'picpony-public-blacklist';
 let generation = 0;

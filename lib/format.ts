@@ -284,7 +284,10 @@ export function formatCount(value: number | null | undefined): string {
   const n = Math.round(value);
   const abs = Math.abs(n);
   if (abs < 10_000) return GROUPED.format(n);
-  if (abs < 100_000_000) return `${ONE_DECIMAL.format(n / 10_000)}万`;
+  /* Decided on the value as it will be printed: 99,995,000 is 9,999.5万 but 99,999,999 rounds
+     to 10,000万 at one decimal — which is 1亿, and must read as one (review P2-F6). */
+  const wan = Math.round(n / 1_000) / 10;
+  if (Math.abs(wan) < 10_000) return `${ONE_DECIMAL.format(wan)}万`;
   return `${ONE_DECIMAL.format(n / 100_000_000)}亿`;
 }
 

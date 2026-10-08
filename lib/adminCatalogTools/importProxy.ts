@@ -1,12 +1,13 @@
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { PICPONY_API_BASE } from '@/lib/constants';
 import { CHUNK_BYTES, DICTIONARY_LIMIT, IMAGE_DB_LIMIT, importUrl, uploadId, validatePackage, type Dataset } from './importModel';
 import { integer, object } from './model';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * The same server-controlled origin as the api.php handler: a fixture or staging run must not send
  * an administrator's bearer to production (review P1-F7).
  */
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const UPSTREAM_ORIGIN = upstreamOrigin();
 const TARGETS: Record<Dataset, string> = { images: `${UPSTREAM_ORIGIN}/image_tags_importer.php`, dictionary: `${UPSTREAM_ORIGIN}/tag_sync_importer.php` };
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 const failure = (status: number, error: string) => Response.json({ success: false, error }, { status, headers: HEADERS });

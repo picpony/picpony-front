@@ -470,6 +470,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
     '@/lib/api/errors': load('lib/api/errors.ts', {}, { Error, TypeError }),
     '@/lib/hooks': { useSession: () => ({ token, ready: true }), readToken: () => token },
     '@/lib/constants': { LS_KEYS: { developer: 'developer' } },
+    '@/lib/settingsSync': { enforceContentGate: () => {} },
     '@/lib/icons': { ICON: {} },
     'react-icons/md': {},
     '@/lib/api/picpony': {
