@@ -2,29 +2,7 @@
 
 import { useId } from 'react';
 import type { ImagePreview } from '@/lib/types/image';
-
-/** A URL as a person reads it: percent-escapes decoded where they decode cleanly. */
-function readable(url: string): string {
-  try {
-    return decodeURI(url);
-  } catch {
-    return url;
-  }
-}
-
-/** Only links a browser should follow: an `http(s)` URL, nothing a record could smuggle in. */
-function sourcesOf(image: Pick<ImagePreview, 'source_url' | 'source_urls'>): string[] {
-  const all = [...(image.source_urls ?? []), image.source_url ?? ''];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of all) {
-    const url = typeof raw === 'string' ? raw.trim() : '';
-    if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
-    seen.add(url);
-    out.push(url);
-  }
-  return out;
-}
+import { readableSourceUrl, sourceLinksOf } from '@/lib/imageSources';
 
 /**
  * Where the picture came from — every source the record names (Derpibooru keeps a list; only
@@ -36,7 +14,7 @@ function sourcesOf(image: Pick<ImagePreview, 'source_url' | 'source_urls'>): str
  */
 export default function DetailSources({ image }: { image: Pick<ImagePreview, 'source_url' | 'source_urls'> }) {
   const headingId = useId();
-  const sources = sourcesOf(image);
+  const sources = sourceLinksOf(image);
   if (sources.length === 0) return null;
   return (
     <section aria-labelledby={headingId}>
@@ -52,7 +30,7 @@ export default function DetailSources({ image }: { image: Pick<ImagePreview, 'so
               rel="noopener noreferrer"
               className="prose-link inline-block max-w-full rounded-xs py-1 text-body-m wrap-anywhere focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
             >
-              {readable(url)}
+              {readableSourceUrl(url)}
             </a>
           </li>
         ))}

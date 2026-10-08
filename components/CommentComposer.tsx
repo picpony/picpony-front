@@ -12,7 +12,7 @@ import { postComment } from '@/lib/api/picpony';
 import { readJson } from '@/lib/api/http';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { plainTextOf } from '@/lib/derpiMarkup';
-import { readCommentDraft, writeCommentDraft } from '@/lib/imageComments';
+import { readCommentDraft, replyReference, writeCommentDraft } from '@/lib/imageComments';
 import { readToken, useSession } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 
@@ -70,10 +70,7 @@ type SendOutcome = { ok: true } | { ok: false; message: string };
 /** The post itself, at module scope (the React Compiler cannot lower a `finally` in a component). */
 async function send(token: string, imageId: number, text: string, replyTo: ReplyTarget | null): Promise<SendOutcome> {
   try {
-    const response = await postComment(token, imageId, replyBody(text, replyTo), {
-      userId: replyTo?.source === 'picpony' ? replyTo.userId : 0,
-      commentId: replyTo?.id ?? null,
-    });
+    const response = await postComment(token, imageId, replyBody(text, replyTo), replyReference(replyTo));
     const data = await readJson<{ success?: unknown; message?: string; error?: string }>(response);
     if (data.success === true) return { ok: true };
     return { ok: false, message: data.error || data.message || '评论发送失败' };

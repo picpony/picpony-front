@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { backendTimeValue } from '@/lib/format';
 import { SKIP, useResource } from '@/lib/resource';
 import { derpiComments, siteCommentCounts, siteComments } from '@/lib/resources';
+import { DERPI_COMMENTS_PER_PAGE } from '@/lib/api/derpi';
 import type { Comment } from '@/lib/types/image';
 
 /**
@@ -81,6 +82,33 @@ function merge(...lists: Comment[][]): Comment[] {
   return out.sort((a, b) => backendTimeValue(b.created_at) - backendTimeValue(a.created_at));
 }
 
+/**
+ * Whether Derpibooru holds a page after the ones loaded — counted in pages, not rows (P3-F6). A
+ * page can carry fewer rows than it was asked for (a row without a usable id is dropped), and a
+ * row count then never reached the total: 加载更多 stayed offered at the end of the thread, and
+ * every press read another empty page. An empty page is the end, whatever the total said.
+ */
+export function hasMoreDerpiComments(pages: readonly (readonly Comment[])[], total: number | null): boolean {
+  if (total === null || pages.length === 0 || pages[pages.length - 1].length === 0) return false;
+  return pages.length * DERPI_COMMENTS_PER_PAGE < total;
+}
+
+/**
+ * What a reply tells the backend about the comment it answers (`post_comment`'s
+ * `reply_to_user_id` / `reply_to_comment_id`). Both are PicPony's own ids (P3-F4): a Derpibooru
+ * comment's id names nothing here — sent as `reply_to_comment_id` it named whichever PicPony
+ * comment happens to share the number, and that comment's author could be told they were
+ * answered. A Derpibooru author has no account here either, so a reply to one sends neither; the
+ * quote in the body still says what it answers.
+ */
+export function replyReference(replyTo: { id: number; source: 'picpony' | 'trixiebooru'; userId: number | null } | null): {
+  userId: number;
+  commentId: number | null;
+} {
+  if (!replyTo || replyTo.source !== 'picpony') return { userId: 0, commentId: null };
+  return { userId: replyTo.userId ?? 0, commentId: replyTo.id };
+}
+
 export function useImageComments(imageId: number, enabled: boolean): ImageComments {
   const site = useResource(siteComments, enabled ? { imageId } : SKIP);
   const first = useResource(derpiComments, enabled ? { imageId, page: 1 } : SKIP);
@@ -105,8 +133,7 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
   const moreError = ownPages ? extra.error : undefined;
 
   const derpiTotal = first.data?.total ?? null;
-  const derpiLoaded = (first.data?.comments.length ?? 0) + extraPages.reduce((sum, page) => sum + page.length, 0);
-  const hasMore = first.data !== undefined && derpiTotal !== null && derpiLoaded < derpiTotal;
+  const hasMore = first.data !== undefined && hasMoreDerpiComments([first.data.comments, ...extraPages], derpiTotal);
 
   const pagesLoaded = extraPages.length;
   const loadMore = useCallback(() => {

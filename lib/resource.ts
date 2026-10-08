@@ -333,8 +333,12 @@ export interface Resource<Args, T> {
   invalidate: (args?: Args) => void;
   /** Mark stale without dropping, so the value is still shown while it is re-read. */
   expire: (args?: Args) => void;
-  /** Correct the answer in place — an optimistic write, or a response to a mutation. */
-  write: (args: Args, update: T | ((previous: T | undefined) => T)) => void;
+  /**
+   * Correct the answer in place — an optimistic write, or a response to a mutation. The entry
+   * keeps its age; `fresh` stamps it as just read, for an answer that *is* a complete read made
+   * outside the resource (the settings sync's own account read).
+   */
+  write: (args: Args, update: T | ((previous: T | undefined) => T), options?: { fresh?: boolean }) => void;
   /**
    * Install a server-rendered answer as if it had been fetched at `fetchedAt` — the SSR seam.
    *
@@ -587,12 +591,28 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
          the front, if already in flight there is nothing to do but wait. */
       if (priority === 'immediate' && existing.priority === 'background' && existing.status === 'queued') {
         existing.priority = 'immediate';
-        if (dropQueued(lane, `${name}:${key}`)) {
+        /* Dropping the queued job runs its `cancel`, which errors the entry and queues a commit
+           for it; the replacement takes over that commit's listeners, so the commit is dropped
+           here and the replacement publishes its own snapshot. */
+        if (unscheduleLaneJob(lane, `${name}:${key}`)) {
           store.delete(key);
+          if (existing.pendingCommit) {
+            pendingPublish.delete(existing.pendingCommit);
+            existing.pendingCommit = undefined;
+          }
           const promoted = create(key, args, 'immediate');
+          /* Everything the guess was carrying over comes with it — a retry's last good value and
+             its age (P3-F2): without them the promoted entry's first snapshot had no data, and a
+             screen showing that value dropped to its skeleton for the length of the read. */
           promoted.listeners = existing.listeners;
+          promoted.value = existing.value;
+          promoted.fetchedAt = existing.fetchedAt;
           promoted.seededAt = existing.seededAt;
-          existing.promise.catch(() => {});
+          promoted.snapshot = buildSnapshot(promoted);
+          publish(promoted);
+          /* The guess's own promise resolves with the promoted answer: a caller awaiting the
+             prefetch is waiting for this key's answer, not for a cancellation. */
+          promoted.promise.then(existing.settle.resolve, existing.settle.reject);
           return promoted.promise;
         }
       }
@@ -822,7 +842,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       touch(key, entry);
       trim(key);
     },
-    write(args, update) {
+    write(args, update, options) {
       const key = keyOf(args);
       const stored = store.get(key);
       /* A placeholder holds listeners and nothing else — no previous value to update from; the
@@ -844,7 +864,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
         args,
         status: 'resolved',
         value: next,
-        fetchedAt: entry?.fetchedAt ?? Date.now(),
+        fetchedAt: options?.fresh ? Date.now() : (entry?.fetchedAt ?? Date.now()),
         seededAt: entry?.seededAt,
         priority: entry?.priority ?? 'immediate',
         promise: Promise.resolve(next),

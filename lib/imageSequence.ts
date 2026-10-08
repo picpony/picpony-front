@@ -125,6 +125,9 @@ export function useImageNeighbours(id: number): ImageNeighbours {
   return imageNeighbours(id, current.source);
 }
 
+/** How many pages one step may read past the window before it says 已是最后一张. */
+const MAX_EMPTY_PAGE_LOADS = 4;
+
 /**
  * The id one step away from `id`, loading the next (or previous) page when the step crosses the
  * end of the window. Resolves `null` when there is nothing there — the caller says 已是最后一张
@@ -133,16 +136,21 @@ export function useImageNeighbours(id: number): ImageNeighbours {
 export async function stepImageSequence(id: number, direction: 1 | -1): Promise<number | null> {
   const source = snapshot.source;
   if (!source) return null;
-  const before = imageNeighbours(id, source);
-  if (!before.inSequence) return null;
-  const adjacent = direction === 1 ? before.next : before.previous;
-  if (adjacent !== null) return adjacent;
   const load = direction === 1 ? source.loadNext : source.loadPrevious;
-  if (!load || !(direction === 1 ? before.canLoadNext : before.canLoadPrevious)) return null;
-  await load.call(source);
-  if (snapshot.source !== source) return null;
-  const after = imageNeighbours(id, source);
-  return direction === 1 ? after.next : after.previous;
+  /* A page can add nothing to the window and still not be the end (P3-F3): 本站讨论 withholds a
+     page's pictures after the read, so a page can come back empty with more after it, and a feed
+     that moved repeats a page seam's pictures, which the window drops. The step goes on to the
+     page after such a page — a few at most, so a list that has gone wrong cannot loop. */
+  for (let loads = 0; ; loads += 1) {
+    const here = imageNeighbours(id, source);
+    if (!here.inSequence) return null;
+    const adjacent = direction === 1 ? here.next : here.previous;
+    if (adjacent !== null) return adjacent;
+    if (loads >= MAX_EMPTY_PAGE_LOADS) return null;
+    if (!load || !(direction === 1 ? here.canLoadNext : here.canLoadPrevious)) return null;
+    await load.call(source);
+    if (snapshot.source !== source) return null;
+  }
 }
 
 /** Asks the active list to show `id`'s card, for a return flight to land on. */

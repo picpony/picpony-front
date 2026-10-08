@@ -236,25 +236,27 @@ export type SessionResult =
  * on each load and on each return to the tab — so the cloud sync (`lib/settingsSync.ts`) adopts
  * them here, told when the read was sent.
  */
+async function readSession(token: string, signal: AbortSignal): Promise<SessionResult> {
+  const startedAt = Date.now();
+  const res = await picpony.getUser(token, signal);
+  if (res.status === 401) {
+    void res.body?.cancel().catch(() => {});
+    return { kind: 'unauthorized' };
+  }
+  const data = await picpony.readSessionUser(res);
+  if (data && !signal.aborted) {
+    adoptCloudSettings(token, data, startedAt);
+  }
+  return data ? { kind: 'ok', user: data } : { kind: 'unreadable' };
+}
+
 export const sessionUser = defineResource<{ token: string }, SessionResult>({
   name: 'session-user',
   key: ({ token }) => token,
   ttl: 5 * MINUTES,
   /* Two: the current token and at most one it just replaced. */
   maxEntries: 2,
-  fetch: async ({ token }, signal) => {
-    const startedAt = Date.now();
-    const res = await picpony.getUser(token, signal);
-    if (res.status === 401) {
-      void res.body?.cancel().catch(() => {});
-      return { kind: 'unauthorized' };
-    }
-    const data = await picpony.readSessionUser(res);
-    if (data && !signal.aborted) {
-      adoptCloudSettings(token, data, startedAt);
-    }
-    return data ? { kind: 'ok', user: data } : { kind: 'unreadable' };
-  },
+  fetch: ({ token }, signal) => readSession(token, signal),
 });
 
 /**
@@ -264,7 +266,18 @@ export const sessionUser = defineResource<{ token: string }, SessionResult>({
  * `window` (the Node suites import it under stubbed globals).
  */
 export const settingsSyncBridge: SettingsSyncBridge = {
-  refreshSession: (token) => sessionUser.read({ token }, { force: true }),
+  /* The sync's write waits on this and then composes on the copy it adopted, so it must settle
+     only once *its own* read has been adopted (P3-F1). Through `sessionUser.read({ force })` it
+     did not: any other forced read of the account (the e-mail dialog) replaced it and it
+     rejected as aborted — which the sync takes for a cancellation and stops, leaving the change
+     unsent and the screen on 保存中 — and any write (a checkout's coin balance) resolved it with
+     the written record before anything was adopted, so the write went out on an older copy.
+     Its own request, then the answer installed for everybody else to read. */
+  refreshSession: async (token) => {
+    const result = await readSession(token, new AbortController().signal);
+    if (readUserInfo()?.token === token) sessionUser.write({ token }, result, { fresh: true });
+    return result;
+  },
   writeSession: (token, settings) => {
     const current = sessionUser.peek({ token }).data;
     if (current?.kind !== 'ok') return;
