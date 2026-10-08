@@ -29,7 +29,14 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 export type Priority = 'immediate' | 'background';
 
 /**
- * How much of the network the app may occupy, and how much of that a *guess* may occupy.
+ * Which upstream a read waits on. Each has its own slots: one global queue once let four slow
+ * Derpibooru reads (a rate-limited relay, four page turns) hold every slot, and the forum —
+ * which never touches Derpibooru — sent nothing for as long as the relay was held.
+ */
+export type Lane = 'picpony' | 'derpi';
+
+/**
+ * How much of an upstream the app may occupy, and how much of that a *guess* may occupy.
  *
  * The background cap is what makes prefetching safe: a background read can never take the last
  * slot, so speculation can never delay a request a user is actually waiting for.
@@ -39,45 +46,54 @@ const MAX_CONCURRENT_BACKGROUND = 2;
 /** Past this, queued guesses are dropped oldest-first rather than allowed to accumulate. */
 const MAX_BACKGROUND_QUEUE = 8;
 
-type Job = {
+export type Job = {
   run: () => Promise<void>;
   priority: Priority;
   key: string;
   cancel: () => void;
 };
 
-const immediateQueue: Job[] = [];
-const backgroundQueue: Job[] = [];
-let active = 0;
-let activeBackground = 0;
+interface LaneState {
+  immediate: Job[];
+  background: Job[];
+  active: number;
+  activeBackground: number;
+}
 
-function pump() {
-  while (active < MAX_CONCURRENT) {
+const lanes: Record<Lane, LaneState> = {
+  picpony: { immediate: [], background: [], active: 0, activeBackground: 0 },
+  derpi: { immediate: [], background: [], active: 0, activeBackground: 0 },
+};
+
+function pump(lane: Lane) {
+  const state = lanes[lane];
+  while (state.active < MAX_CONCURRENT) {
     const job =
-      immediateQueue.shift() ??
-      (activeBackground < MAX_CONCURRENT_BACKGROUND ? backgroundQueue.shift() : undefined);
+      state.immediate.shift() ??
+      (state.activeBackground < MAX_CONCURRENT_BACKGROUND ? state.background.shift() : undefined);
     if (!job) return;
     const background = job.priority === 'background';
-    active += 1;
-    if (background) activeBackground += 1;
+    state.active += 1;
+    if (background) state.activeBackground += 1;
     void job.run().finally(() => {
-      active -= 1;
-      if (background) activeBackground -= 1;
-      pump();
+      state.active -= 1;
+      if (background) state.activeBackground -= 1;
+      pump(lane);
     });
   }
 }
 
-function enqueue(job: Job) {
+function enqueue(lane: Lane, job: Job) {
+  const state = lanes[lane];
   if (job.priority === 'immediate') {
     /* A real activation owns the next slot, ahead of waiting intent — and jumps other immediate
        work too: the most recent activation is the one the user is looking at. */
-    immediateQueue.unshift(job);
+    state.immediate.unshift(job);
   } else {
-    if (backgroundQueue.length >= MAX_BACKGROUND_QUEUE) backgroundQueue.shift()?.cancel();
-    backgroundQueue.push(job);
+    if (state.background.length >= MAX_BACKGROUND_QUEUE) state.background.shift()?.cancel();
+    state.background.push(job);
   }
-  pump();
+  pump(lane);
 }
 
 /**
@@ -91,7 +107,7 @@ function enqueue(job: Job) {
  * Read per call, not cached: `effectiveType` changes as the connection does. Chromium-only API —
  * `undefined` (no information) is treated as willing, the default every other browser has.
  */
-function speculationAllowed(): boolean {
+export function speculationAllowed(): boolean {
   if (typeof navigator === 'undefined') return false;
   const connection = (
     navigator as Navigator & {
@@ -103,8 +119,10 @@ function speculationAllowed(): boolean {
   return connection.effectiveType !== 'slow-2g' && connection.effectiveType !== '2g';
 }
 
-function dropQueued(key: string) {
-  for (const queue of [immediateQueue, backgroundQueue]) {
+/** Remove a queued job, running its `cancel`; false if it is not queued (running or done). */
+function dropQueued(lane: Lane, key: string) {
+  const state = lanes[lane];
+  for (const queue of [state.immediate, state.background]) {
     const index = queue.findIndex((job) => job.key === key);
     if (index !== -1) {
       const [job] = queue.splice(index, 1);
@@ -113,6 +131,40 @@ function dropQueued(key: string) {
     }
   }
   return false;
+}
+
+/**
+ * Lane scheduling for a queue that keeps its own entries — `lib/detail.ts`, whose picture reads
+ * go to Derpibooru like the gallery's and must share its slots: two independent 4-slot queues
+ * meant up to eight concurrent Derpibooru requests, and more 429s.
+ */
+export function scheduleLaneJob(lane: Lane, job: Job) {
+  enqueue(lane, job);
+}
+
+/** Drop a queued job without running its `cancel` (the owner is cancelling it itself). */
+export function unscheduleLaneJob(lane: Lane, key: string): boolean {
+  const state = lanes[lane];
+  for (const queue of [state.immediate, state.background]) {
+    const index = queue.findIndex((job) => job.key === key);
+    if (index !== -1) {
+      queue.splice(index, 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Move a queued guess to the front as a real activation; false if it is not queued. */
+export function promoteLaneJob(lane: Lane, key: string): boolean {
+  const state = lanes[lane];
+  const index = state.background.findIndex((job) => job.key === key);
+  if (index === -1) return state.immediate.some((job) => job.key === key);
+  const [job] = state.background.splice(index, 1);
+  job.priority = 'immediate';
+  state.immediate.unshift(job);
+  pump(lane);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +274,8 @@ type Entry<T> = {
   value?: T;
   error?: unknown;
   fetchedAt: number;
+  /** The last SSR payload adopted by this key, preserved through retries and writes. */
+  seededAt?: number;
   priority: Priority;
   promise: Promise<T>;
   settle: { resolve: (value: T) => void; reject: (error: unknown) => void };
@@ -236,6 +290,11 @@ type Entry<T> = {
 export interface ResourceOptions<Args, T> {
   /** Namespaces the cache and names the resource in a ledger. */
   name: string;
+  /**
+   * The upstream this read waits on, whose slots it shares. Default `picpony`. A fetch that
+   * awaits another resource must await one in a different lane, or a full lane waits on itself.
+   */
+  lane?: Lane;
   /** Everything the answer depends on, as a string. Same key means same answer. */
   key: (args: Args) => string;
   fetch: (args: Args, signal: AbortSignal) => Promise<T>;
@@ -270,7 +329,7 @@ export interface Resource<Args, T> {
    */
   peekKey: (key: string) => ResourceSnapshot<T>;
   subscribeKey: (key: string, listener: () => void) => () => void;
-  /** Drop one entry, or every entry of this resource. The next read is a real request. */
+  /** Drop cached answers, preserving subscribers and immediately re-reading mounted keys. */
   invalidate: (args?: Args) => void;
   /** Mark stale without dropping, so the value is still shown while it is re-read. */
   expire: (args?: Args) => void;
@@ -282,10 +341,7 @@ export interface Resource<Args, T> {
    * A Server Component hands the first page to the client island as a prop; seeding it before the
    * first `read` means the effect finds a fresh entry and sends nothing.
    *
-   * **Not `write`.** `write`'s cold-key branch runs `create` → `enqueue` → `pump` → `job.run()`
-   * synchronously — firing the very request the seed exists to prevent — and the `dropQueued`
-   * after it may cancel an entry, leaving `write` to populate an entry no longer in the store
-   * (`peekKey` then returns EMPTY for that key forever).
+   * Unlike `write`, the first snapshot is synchronous and the server's timestamp is preserved.
    *
    * **Browser only.** This is a `'use client'` module still evaluated in Node during SSR, where
    * the module-scope `store` is shared across concurrent requests: seeding server-side would leak
@@ -294,6 +350,14 @@ export interface Resource<Args, T> {
   seed: (args: Args, value: T, fetchedAt: number) => void;
   /** Abort a *background* read for these args. An immediate one is somebody's screen. */
   cancelBackground: (args: Args) => boolean;
+  /**
+   * A mounted reader moved off this key (a page turn, a new query, an unmount). If nobody else
+   * is reading it and its first answer has not landed, the request is abandoned so the screen
+   * the user is now looking at gets the slot — four superseded page turns used to hold all four
+   * slots while the page actually on screen waited behind them. Checked a microtask later, after
+   * the commit has resubscribed whoever still reads the key.
+   */
+  release: (key: string) => void;
 }
 
 const registry = new Set<{ clear: () => void; expireAll: () => void }>();
@@ -319,7 +383,7 @@ export function expireAllResources() {
 }
 
 export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Resource<Args, T> {
-  const { name, key: keyOf, fetch: fetcher, ttl = 60_000, maxEntries = 32, publishGate } = options;
+  const { name, key: keyOf, fetch: fetcher, ttl = 60_000, maxEntries = 32, publishGate, lane = 'picpony' } = options;
   const store = new Map<string, Entry<T>>();
 
   const isStale = (entry: Entry<T>) =>
@@ -367,15 +431,74 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     store.set(key, entry);
   }
 
+  /** Detach first, so cancellation and late responses cannot publish a removed answer. */
+  function discard(key: string, entry: Entry<T>) {
+    store.delete(key);
+    entry.controller?.abort();
+    dropQueued(lane, `${name}:${key}`);
+    dropQueued(lane, `${name}:${key}:revalidate`);
+    entry.settle.reject(new DOMException(`${name} read was replaced`, 'AbortError'));
+    if (entry.pendingCommit) {
+      pendingPublish.delete(entry.pendingCommit);
+      entry.pendingCommit = undefined;
+    }
+  }
+
+  function clear(refetch: boolean, args?: Args) {
+    const entries = args === undefined
+      ? Array.from(store)
+      : [[keyOf(args), store.get(keyOf(args))] as const];
+    for (const [key, entry] of entries) {
+      if (!entry) continue;
+      discard(key, entry);
+      if (refetch && entry.listeners.size > 0) {
+        if (entry.args !== undefined) {
+          /* The answer on screen stays on screen while it is re-read — "refreshes underneath",
+             as `read({ force })` does; the replacement once started without it, so every mounted
+             reader that did not keep its previous data dropped to its skeleton.
+             The holder is a placeholder carrying value and listeners, and the re-read starts a
+             microtask later: a mutation that invalidates and then `write`s its authoritative
+             answer in the same tick (/history's 清空) replaces the holder first, and no request
+             is sent only to be aborted. A `read` in the same tick adopts it the same way. */
+          const holder: Entry<T> = {
+            key,
+            args: entry.args,
+            status: 'queued',
+            placeholder: true,
+            value: entry.value,
+            fetchedAt: entry.fetchedAt,
+            seededAt: entry.seededAt,
+            priority: 'immediate',
+            promise: Promise.resolve(undefined as unknown as T),
+            settle: { resolve: () => {}, reject: () => {} },
+            snapshot: EMPTY as ResourceSnapshot<T>,
+            listeners: entry.listeners,
+          };
+          holder.snapshot = buildSnapshot(holder);
+          store.set(key, holder);
+          const holderArgs = entry.args as Args;
+          queueMicrotask(() => {
+            if (store.get(key) === holder) void read(holderArgs, { force: true }).catch(() => {});
+          });
+        } else {
+          /* An as-yet unread subscriber still needs its listener slot. */
+          entry.snapshot = EMPTY as ResourceSnapshot<T>;
+          store.set(key, entry);
+        }
+      }
+      for (const listener of entry.listeners) listener();
+    }
+  }
+
   function trim(preserve?: string) {
     if (store.size <= maxEntries) return;
     for (const [key, entry] of store) {
       if (store.size <= maxEntries) break;
       /* Never evict a key a mounted component is reading, nor an entry with no answer yet —
          dropping an in-flight one would restart it on the next render. */
-      if (key === preserve || entry.listeners.size > 0 || entry.value === undefined) continue;
-      entry.controller?.abort();
-      store.delete(key);
+      if (key === preserve || entry.listeners.size > 0 ||
+          (!entry.placeholder && (entry.status === 'queued' || entry.status === 'loading'))) continue;
+      discard(key, entry);
     }
   }
 
@@ -406,7 +529,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     const controller = new AbortController();
     entry.controller = controller;
 
-    enqueue({
+    enqueue(lane, {
       key: `${name}:${key}`,
       priority,
       cancel: () => {
@@ -436,6 +559,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
           if (store.get(key) === entry) {
             entry.status = 'error';
             entry.error = error;
+            touch(key, entry);
+            trim(key);
             /* The last good value is kept: a failed refresh of something already on screen must
                not empty the screen — the caller decides how to show the error. */
             publish(entry);
@@ -462,10 +587,11 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
          the front, if already in flight there is nothing to do but wait. */
       if (priority === 'immediate' && existing.priority === 'background' && existing.status === 'queued') {
         existing.priority = 'immediate';
-        if (dropQueued(`${name}:${key}`)) {
+        if (dropQueued(lane, `${name}:${key}`)) {
           store.delete(key);
           const promoted = create(key, args, 'immediate');
           promoted.listeners = existing.listeners;
+          promoted.seededAt = existing.seededAt;
           existing.promise.catch(() => {});
           return promoted.promise;
         }
@@ -476,50 +602,75 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
            refresh runs underneath with no loading state — this layer's point over a plain cache. */
         void revalidate(args, key, existing);
       }
+      /* A promise settles once; background refreshes and mutation writes change the answer.
+         Returning the first read's promise here handed imperative callers that first answer
+         forever, even while React was already displaying a newer one. */
+      if (existing.status === 'resolved') return Promise.resolve(existing.value as T);
       if (existing.status !== 'error') return existing.promise;
       /* A previous failure is not a cached answer. Retry, keeping any value it had. */
       const previous = existing.value;
-      store.delete(key);
+      discard(key, existing);
       const retried = create(key, args, priority);
       retried.value = previous;
+      retried.fetchedAt = existing.fetchedAt;
+      retried.seededAt = existing.seededAt;
       retried.listeners = existing.listeners;
+      retried.snapshot = buildSnapshot(retried);
+      publish(retried);
       return retried.promise;
     }
 
     if (stored) {
-      stored.controller?.abort();
-      dropQueued(`${name}:${key}`);
-      store.delete(key);
+      discard(key, stored);
     }
     const entry = create(key, args, priority);
     /* Carried over from whatever was there, placeholder or not. Losing them is how a component
        that already subscribed never hears that its own request landed. */
-    if (stored) entry.listeners = stored.listeners;
+    if (stored) {
+      entry.listeners = stored.listeners;
+      entry.value = stored.value;
+      entry.fetchedAt = stored.fetchedAt;
+      entry.seededAt = stored.seededAt;
+      entry.snapshot = buildSnapshot(entry);
+      publish(entry);
+    }
     return entry.promise;
   }
 
-  /** A refresh that never shows a loading state and never replaces a good value with an error. */
+  /**
+   * A refresh that never shows a loading state and never replaces a good value with an error.
+   *
+   * The in-flight `controller` is what stops a second refresh starting beside the first.
+   * `fetchedAt` moves only when an answer lands: it used to be pushed forward up front, so a
+   * refresh the queue dropped (past its background cap) or one that failed left the stale
+   * answer looking fresh for another full TTL — the refresh the tab return promised never came.
+   */
   function revalidate(args: Args, key: string, stale: Entry<T>) {
-    if (stale.status !== 'resolved') return;
-    /* Marked resolved-but-refreshing by moving `fetchedAt` forward, so a second render in the
-       same second does not start a second refresh. */
-    stale.fetchedAt = Date.now();
+    if (stale.status !== 'resolved' || stale.controller) return;
     const controller = new AbortController();
-    enqueue({
+    stale.controller = controller;
+    enqueue(lane, {
       key: `${name}:${key}:revalidate`,
       priority: 'background',
-      cancel: () => controller.abort(),
+      cancel: () => {
+        controller.abort();
+        if (stale.controller === controller) stale.controller = undefined;
+      },
       run: async () => {
         try {
+          if (controller.signal.aborted || store.get(key) !== stale) return;
           const value = await fetcher(args, controller.signal);
           const current = store.get(key);
-          if (current !== stale) return;
+          if (current !== stale || controller.signal.aborted) return;
           current.value = value;
+          current.promise = Promise.resolve(value);
           current.error = undefined;
           current.fetchedAt = Date.now();
           publish(current);
         } catch {
           /* A failed background refresh leaves the screen alone — the user did not ask for it. */
+        } finally {
+          if (stale.controller === controller) stale.controller = undefined;
         }
       },
     });
@@ -569,32 +720,20 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       return () => {
         const current = store.get(key);
         current?.listeners.delete(listener);
+        if (current?.placeholder && current.listeners.size === 0) discard(key, current);
       };
     },
     invalidate(args) {
-      const drop = (key: string, entry: Entry<T>) => {
-        entry.controller?.abort();
-        dropQueued(`${name}:${key}`);
-        store.delete(key);
-        /* A queued commit would run on the next paint and hand the dropped value straight back
-           to the listeners still attached. */
-        if (entry.pendingCommit) {
-          pendingPublish.delete(entry.pendingCommit);
-          entry.pendingCommit = undefined;
-        }
-        entry.snapshot = EMPTY as ResourceSnapshot<T>;
-        for (const listener of entry.listeners) listener();
-      };
-      if (args === undefined) {
-        for (const [key, entry] of Array.from(store)) drop(key, entry);
-        return;
-      }
-      const key = keyOf(args);
-      const entry = store.get(key);
-      if (entry) drop(key, entry);
+      clear(true, args);
     },
     expire(args) {
       const mark = (entry: Entry<T>) => {
+        /* A cold read that failed offline has no resolved value to expire. The reconnect
+           event must retry mounted failures too, or that screen stays broken indefinitely. */
+        if (entry.status === 'error' && entry.listeners.size > 0 && entry.args !== undefined) {
+          void read(entry.args as Args, { force: true }).catch(() => {});
+          return;
+        }
         if (entry.status !== 'resolved') return;
         /* Two different things, depending on whether anyone is looking.
            **On screen** — re-read now, underneath, with no loading state. `revalidate` moves
@@ -623,17 +762,22 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
 
       const key = keyOf(args);
       const stored = store.get(key);
+      /* A component passes the same initial prop on every render. Re-adopting it while a
+         manual refresh is pending would cancel that refresh and restore the old payload. */
+      if (stored?.seededAt !== undefined && stored.seededAt >= fetchedAt) return;
 
       /* Never clobber a client value that is at least as fresh: makes a remount from the router
          cache harmless, and stops a stale RSC payload overwriting a refreshed value. */
       if (
         stored &&
         !stored.placeholder &&
-        stored.status === 'resolved' &&
+        stored.value !== undefined &&
         stored.fetchedAt >= fetchedAt
       ) {
         return;
       }
+
+      if (stored) discard(key, stored);
 
       /* Built literally rather than through `create()`, which would enqueue a real request. */
       let resolve!: (v: T) => void;
@@ -656,6 +800,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
            clock ahead clamps to now (safe); a clock behind makes the entry immediately stale — one
            silent background revalidation. It can only ever err toward stale. */
         fetchedAt: Math.min(fetchedAt, Date.now()),
+        seededAt: fetchedAt,
         priority: 'immediate',
         promise,
         settle: { resolve, reject },
@@ -687,46 +832,57 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
         typeof update === 'function'
           ? (update as (previous: T | undefined) => T)(entry?.value)
           : update;
-      if (!entry) {
-        /* Writing to something never read is legitimate — a mutation's response is an answer, so
-           the next screen does not have to ask. Marked fresh so it is not immediately re-read. */
-        if (stored) store.delete(key);
-        const seeded = create(key, args, 'background');
-        if (stored) seeded.listeners = stored.listeners;
-        dropQueued(`${name}:${key}`);
-        seeded.controller?.abort();
-        seeded.controller = undefined;
-        seeded.value = next;
-        seeded.status = 'resolved';
-        seeded.fetchedAt = Date.now();
-        seeded.settle.resolve(next);
-        publish(seeded);
-        return;
+      /* A write is already an answer, including on a cold key. Never call create(): enqueue
+         starts the fetch synchronously. Replacing the entry also fences off older reads and
+         revalidations, so their late responses cannot undo a successful mutation. */
+      if (stored) {
+        stored.settle.resolve(next);
+        discard(key, stored);
       }
-      entry.value = next;
-      entry.error = undefined;
-      entry.status = 'resolved';
-      /* `fetchedAt` is *not* moved forward: an optimistic value is the caller's guess at what the
-         server will say, so it stays as stale as what it replaced and is confirmed by the next
-         revalidation rather than trusted for a full TTL. */
-      publish(entry);
+      const written: Entry<T> = {
+        key,
+        args,
+        status: 'resolved',
+        value: next,
+        fetchedAt: entry?.fetchedAt ?? Date.now(),
+        seededAt: entry?.seededAt,
+        priority: entry?.priority ?? 'immediate',
+        promise: Promise.resolve(next),
+        settle: { resolve: () => {}, reject: () => {} },
+        snapshot: stored?.snapshot ?? (EMPTY as ResourceSnapshot<T>),
+        listeners: stored?.listeners ?? new Set(),
+      };
+      touch(key, written);
+      trim(key);
+      publish(written);
     },
     cancelBackground(args) {
       const key = keyOf(args);
       const entry = store.get(key);
       if (!entry || entry.priority !== 'background' || entry.listeners.size > 0) return false;
-      if (entry.status === 'queued' && dropQueued(`${name}:${key}`)) return true;
+      if (entry.status === 'queued' && dropQueued(lane, `${name}:${key}`)) return true;
       if (entry.status === 'loading') {
-        store.delete(key);
-        entry.controller?.abort();
+        discard(key, entry);
         return true;
       }
       return false;
     },
+    release(key) {
+      queueMicrotask(() => {
+        const entry = store.get(key);
+        if (!entry || entry.placeholder || entry.listeners.size > 0) return;
+        if (entry.status !== 'queued' && entry.status !== 'loading') return;
+        /* A refresh of an answer already held is cheap to let land, and worth keeping; a
+           background read is already capped. Only a first answer nobody waits for is dropped. */
+        if (entry.value !== undefined || entry.priority !== 'immediate') return;
+        discard(key, entry);
+      });
+    },
   };
 
   registry.add({
-    clear: () => resource.invalidate(),
+    /* Signing out must never re-read entries belonging to the old token. */
+    clear: () => clear(false),
     expireAll: () => resource.expire(),
   });
 
@@ -769,10 +925,11 @@ export function useResource<Args, T>(
      * a comment about exactly this before it used a cache at all, and the first version of this
      * hook reintroduced it.
      *
-     * Off by default, because for a screen that is not paged it is wrong: showing the *previous*
-     * profile while the next one loads is worse than showing a skeleton.
+     * A string limits retention to that scope, for example a profile id plus content-filter
+     * mode. Page turns keep their rows; switching profiles or filters drops the old answer.
+     * Off by default, because unpaged screens should not show a previous record's content.
      */
-    keepPrevious?: boolean;
+    keepPrevious?: boolean | string;
     /**
      * A server-rendered answer for this exact key.
      *
@@ -789,10 +946,27 @@ export function useResource<Args, T>(
      * server's value.
      */
     initial?: { key: string; data: T; generatedAt: number };
+    /**
+     * Re-read this key underneath what is on screen every `refetchInterval` ms while it is
+     * mounted — for answers somebody else changes (the unread badge, an open conversation).
+     * Quiet: no loading state, and a failure leaves the shown value alone. Jittered ±10% so
+     * every open tab does not ask in the same second; skipped while the tab is hidden or the
+     * device is offline, with one read on return if a tick was missed; stopped on unmount.
+     */
+    refetchInterval?: number;
   },
-): ResourceSnapshot<T> & { refresh: () => void } {
+): ResourceSnapshot<T> & {
+  refresh: () => void;
+  /**
+   * `data` is the previous key's answer, held by `keepPrevious` while this key has none. With
+   * `error` set it means the page turn *failed* and the rows on screen belong to another page —
+   * the screen must say so, not leave a pager reading 2 over page 1's pictures.
+   */
+  isPrevious: boolean;
+} {
   const key = args === SKIP ? null : resource.keyOf(args as Args);
-  const keepPrevious = options?.keepPrevious ?? false;
+  const retentionScope = options?.keepPrevious ?? false;
+  const keepPrevious = retentionScope !== false;
   const initial = options?.initial;
   const initialApplies = initial !== undefined && initial.key === key;
 
@@ -815,7 +989,7 @@ export function useResource<Args, T>(
      current key — and same key means same answer.
      `args` is deliberately absent from the dependency lists. It is a literal at almost every call
      site, so a new identity every render; keying on it would re-subscribe and re-request on each
-     one, which is the failure `useAuth`'s docstring records `/favorites` hitting a rate limit on. */
+     one, which once made `/favorites` re-run its effects until the API rate-limited it. */
 
   const subscribe = useCallback(
     (listener: () => void) => (key === null ? () => {} : resource.subscribeKey(key, listener)),
@@ -858,8 +1032,45 @@ export function useResource<Args, T>(
     void resource.read(args as Args).catch(() => {
       /* The error is in the snapshot; the promise rejection is not this hook's to report. */
     });
+    /* Leaving the key (or unmounting) offers its unanswered request back — see `release`. */
+    return () => resource.release(key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource, key]);
+
+  const refetchInterval = options?.refetchInterval;
+  useEffect(() => {
+    if (key === null || !refetchInterval || refetchInterval <= 0 || typeof document === 'undefined') return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastTick = Date.now();
+    const due = () => document.visibilityState === 'visible' &&
+      (typeof navigator === 'undefined' || navigator.onLine !== false);
+    const tick = () => {
+      lastTick = Date.now();
+      resource.expire(args as Args);
+    };
+    const schedule = () => {
+      timer = setTimeout(() => {
+        if (due()) tick();
+        schedule();
+      }, refetchInterval * (0.9 + Math.random() * 0.2));
+    };
+    /* A hidden tab skips its ticks; coming back after one was missed reads at once rather than
+       waiting out a fresh interval — and restarts the interval from that read, or the timer
+       already running fires within the second and the key is read twice on return. */
+    const onVisibility = () => {
+      if (!due() || Date.now() - lastTick < refetchInterval) return;
+      tick();
+      if (timer !== undefined) clearTimeout(timer);
+      schedule();
+    };
+    schedule();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource, key, refetchInterval]);
 
   const refresh = useCallback(
     () => {
@@ -878,23 +1089,30 @@ export function useResource<Args, T>(
    * (a render React discards would still have mutated it), and an effect trips
    * `react-hooks/set-state-in-effect` *and* lags a render — which on a page turn is one frame of
    * exactly the empty list this exists to prevent. */
-  const [retained, setRetained] = useState<T | undefined>(undefined);
-  if (keepPrevious && snapshot.data !== undefined && retained !== snapshot.data) {
-    setRetained(snapshot.data);
-  } else if (key === null && retained !== undefined) {
-    /* Dropped when the read is switched off entirely, or a signed-out visitor keeps seeing the
-       list they were signed in for. */
-    setRetained(undefined);
+  const [retained, setRetained] = useState<{
+    resource: Resource<Args, T>;
+    scope: boolean | string;
+    data: T | undefined;
+  }>(() => ({ resource, scope: retentionScope, data: undefined }));
+  const previous = retained.resource === resource && retained.scope === retentionScope
+    ? retained.data
+    : undefined;
+  const nextRetained = keepPrevious && key !== null
+    ? snapshot.data !== undefined ? snapshot.data : previous
+    : undefined;
+  if (retained.resource !== resource || retained.scope !== retentionScope || retained.data !== nextRetained) {
+    // Clearing a scope or disabling the read must also clear its retained answer.
+    setRetained({ resource, scope: retentionScope, data: nextRetained });
   }
 
   return useMemo(() => {
-    if (!keepPrevious || snapshot.data !== undefined || key === null || retained === undefined) {
-      return { ...snapshot, refresh };
+    if (!keepPrevious || snapshot.data !== undefined || key === null || previous === undefined) {
+      return { ...snapshot, refresh, isPrevious: false };
     }
     /* `isLoading` stays whatever the *new* key reports — the caller dims on it — while `data` is
        the old page, so the list keeps its box and the scroller keeps its height. */
-    return { ...snapshot, data: retained, refresh };
-  }, [keepPrevious, snapshot, retained, key, refresh]);
+    return { ...snapshot, data: previous, refresh, isPrevious: true };
+  }, [keepPrevious, snapshot, previous, key, refresh]);
 }
 
 /** Registers a gate-change notifier, so an owner can wake held-back publications. */
@@ -936,9 +1154,9 @@ let returnBound = false;
  * app in one frame — the interruption this is supposed to prevent, delivered by the mechanism meant
  * to prevent it.
  *
- * Nothing actually goes out until something reads: `expire` only marks, and the mounted components
- * are what turn that into a request on their next render. A screen nobody is looking at costs
- * nothing.
+ * `expire` re-reads what is mounted at once (and retries a mounted read that failed, which is
+ * what lets a screen recover on reconnect); an entry nobody is looking at is only marked, costs
+ * nothing, and is refreshed underneath when a screen next mounts against it.
  *
  * Called once, from the app shell.
  */

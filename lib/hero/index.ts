@@ -1,23 +1,24 @@
 'use client';
 
 /**
- * Public surface of the Hero transition system. Components import from here
- * rather than reaching into `lib/hero/*`, so the internal layout stays free to change.
+ * Public surface of the Hero transition system — **the engine side**. Importing this module
+ * evaluates the controller, so it belongs to the surfaces that open or show a picture (gallery
+ * cards, the detail route). The shell, which renders on every route, imports `./runtime`
+ * instead: the published state and the forwarding calls, without the engine.
  */
 
 import { imageHeroController } from './controller';
 import type {
   HeroCloseIntent,
-  HeroDetailRouteChangeIntent,
+  HeroDetailStepIntent,
   HeroNavigation,
   HeroOpenIntent,
   HeroRouteRegistration,
-  HeroStageNodes,
 } from './types';
 
 export type {
   HeroControllerPhase,
-  HeroDetailRouteChangeIntent,
+  HeroDetailStepIntent,
   HeroNavigation,
   HeroRouteRegistration,
   HeroStageNodes,
@@ -28,6 +29,22 @@ export type {
   ImageHeroStageState,
 } from './types';
 
+export {
+  getImageHeroNavigation,
+  getImageHeroRuntime,
+  getImageHeroStage,
+  initializeImageHeroHistory,
+  interruptImageHero,
+  isImageHeroTransitionRunning,
+  observeImageHeroClientNavigation,
+  registerImageDetailClose,
+  registerImageHeroStage,
+  requestImageDetailClose,
+  subscribeImageHeroRuntime,
+  subscribeImageHeroStage,
+  waitForImageHeroTransition,
+} from './runtime';
+export { findImageHeroCardLink } from './dom';
 export { warmImageHeroFrame } from './frameCache';
 export { isScrollLikelyActive } from './input';
 export { publishWhenHeroSettled } from './publish';
@@ -37,12 +54,6 @@ export {
   warmImageHero,
   warmImageHeroSource,
 } from './media';
-
-// --- Setup ---------------------------------------------------------------
-
-export function initializeImageHeroHistory(router?: HeroNavigation) {
-  imageHeroController.initialize(router);
-}
 
 // --- Intents -------------------------------------------------------------
 
@@ -54,24 +65,22 @@ export function requestImageHeroClose(intent: HeroCloseIntent) {
   return imageHeroController.requestClose(intent);
 }
 
-export function requestImageHeroDetailRouteChange(intent: HeroDetailRouteChangeIntent) {
-  return imageHeroController.requestDetailRouteChange(intent);
+/** 上一张 / 下一张: an in-place step to another picture — see `HeroController.requestDetailStep`. */
+export function requestImageHeroDetailStep(intent: HeroDetailStepIntent) {
+  return imageHeroController.requestDetailStep(intent);
 }
 
-/** Reverse whatever transition is running. Returns false if none was. */
-export function interruptImageHero(navigationHandled = false) {
-  return imageHeroController.interrupt(navigationHandled);
+/** The detail painted the picture a step was heading for. */
+export function settleImageHeroDetailStep(imageId: number) {
+  imageHeroController.settleDetailStep(imageId);
+}
+
+/** 返回 on a reloaded detail whose ladder survived it — see `HeroController.leaveOrphanLadder`. */
+export function leaveImageHeroOrphanLadder() {
+  return imageHeroController.leaveOrphanLadder();
 }
 
 // --- Registration --------------------------------------------------------
-
-export function observeImageHeroClientNavigation(href: string) {
-  imageHeroController.observeRoute(href);
-}
-
-export function registerImageHeroStage(sessionId: number, nodes: HeroStageNodes) {
-  return imageHeroController.registerStage(sessionId, nodes);
-}
 
 export function registerImageHeroRoute(registration: HeroRouteRegistration) {
   return imageHeroController.registerRoute(registration);
@@ -102,34 +111,6 @@ export function bindImageHeroDismissGesture(
 
 export function getImageHeroOrigin(imageId: number) {
   return imageHeroController.getOrigin(imageId);
-}
-
-export function getImageHeroBackgroundLocation() {
-  return imageHeroController.getBackground();
-}
-
-export function getImageHeroRuntime() {
-  return imageHeroController.getRuntime();
-}
-
-export function subscribeImageHeroRuntime(listener: () => void) {
-  return imageHeroController.subscribeRuntime(listener);
-}
-
-export function getImageHeroStage() {
-  return imageHeroController.getStage();
-}
-
-export function subscribeImageHeroStage(listener: () => void) {
-  return imageHeroController.subscribeStage(listener);
-}
-
-export function isImageHeroTransitionRunning() {
-  return imageHeroController.isRunning();
-}
-
-export function waitForImageHeroTransition(signal?: AbortSignal) {
-  return imageHeroController.waitForIdle(signal).then(() => undefined);
 }
 
 /** True once no transition is holding back detail content. */

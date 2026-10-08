@@ -7,9 +7,11 @@
  * `useEffect` would re-run and re-fetch just to animate its exit); an inert clone costs one
  * `cloneNode` and has no React attached at all.
  *
- * Three things make the clone safe to put on the page:
+ * Four things make the clone safe to put on the page:
  *
  * - pruned to what was visible, so a 50-card gallery does not decode fifty images twice;
+ * - it fetches nothing: an image the page had not finished loading is disarmed in the copy,
+ *   not re-pointed, so leaving a page does not download what the user never scrolled to;
  * - every query hook stripped (`id`, `data-image-hero-*`, `data-tab-*`), so
  *   `document.querySelector` and `getElementById` cannot resolve into it;
  * - `inert` and `pointer-events: none`, so it is invisible to the accessibility tree, to tab
@@ -45,6 +47,26 @@ const REPLACE_TAGS = new Set(['VIDEO', 'IFRAME', 'CANVAS', 'SCRIPT', 'AUDIO', 'O
 
 export interface RouteSnapshot {
   node: HTMLElement;
+  /**
+   * The page's back affordance, copied — it lives outside the page (a portal into the back
+   * slot), so the page's clone cannot carry it. `null` when the page had none; absent when the
+   * snapshot did not look.
+   */
+  chrome?: HTMLElement | null;
+  /**
+   * Scrollers inside the source and where they were — the image detail's own column. A clone
+   * opens every scroller at its top, and a detached one has no range to set, so these are
+   * applied once the clone is in the document (`restoreSnapshotScroll`).
+   */
+  scroll?: { node: Element; top: number; left: number }[];
+}
+
+/** Put the source's inner scroll offsets back on its clone; call once the clone is attached. */
+export function restoreSnapshotScroll(snapshot: RouteSnapshot) {
+  for (const { node, top, left } of snapshot.scroll ?? []) {
+    node.scrollTop = top;
+    node.scrollLeft = left;
+  }
 }
 
 function spacer(rect: { width: number; height: number }) {
@@ -82,12 +104,20 @@ function nodeAt(root: Element, path: number[]): Element | null {
  * Finds subtrees entirely outside the scrollport so the clone can replace them with
  * same-size spacers. All reads happen before any write: one forced layout, not one per node.
  */
-function offscreenPaths(source: HTMLElement, viewTop: number, viewBottom: number): number[][] {
+function offscreenPaths(
+  source: HTMLElement,
+  viewTop: number,
+  viewBottom: number,
+  /* Concealed tab panes, pruned whole by the caller. A rect read inside one would make the
+     engine lay out the subtree it is keeping skipped. */
+  skip: ReadonlySet<Element>,
+): number[][] {
   const paths: number[][] = [];
   let budget = PRUNE_BUDGET;
   const walk = (element: Element, depth: number) => {
     if (depth > PRUNE_DEPTH || budget <= 0) return;
     for (const child of element.children) {
+      if (skip.has(child)) continue;
       if (budget-- <= 0) return;
       const rect = child.getBoundingClientRect();
       if (rect.height === 0 && rect.width === 0) continue;
@@ -108,7 +138,7 @@ function offscreenPaths(source: HTMLElement, viewTop: number, viewBottom: number
  * Returns `null` when the subtree is too large to be worth cloning.
  */
 export function captureVisualClone(source: HTMLElement, host: HTMLElement): RouteSnapshot | null {
-  /* Which tab panes compute to `display: none`, found before the budget below.
+  /* Which tab panes are concealed, found before the budget below.
     *
     * `STRIP_ATTRS` removes the tab markers so a query cannot resolve into the clone — and
     * with them the only thing concealing the inactive pane. The panel no longer holds the
@@ -123,13 +153,16 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
     * page, counting against `MAX_CLONE_NODES`, and going over the budget is a cliff (capture
     * returns `null`, no transition at all).
     *
-    * Computed `display` off the live source rather than re-deriving the CSS here: the rule
+    * Computed style off the live source rather than re-deriving the CSS here: the rule
     * has four conditions across two selectors, and a duplicate would drift.
     */
   const hiddenPanes: HTMLElement[] = [];
   for (const panel of source.querySelectorAll<HTMLElement>('[data-tab-panel]')) {
     for (const pane of panel.querySelectorAll<HTMLElement>(':scope > [data-tab-pane]')) {
-      if (getComputedStyle(pane).display !== 'none') continue;
+      /* Concealed is `content-visibility: hidden` (the pane keeps its layout for the next
+         switch), or `display: none` in an engine without the property. */
+      const style = getComputedStyle(pane);
+      if (style.display !== 'none' && style.contentVisibility !== 'hidden') continue;
       /* Nested groups exist (the admin console has a `TabPanes` inside one of its own panes),
          and a pane inside a concealed pane computes `display: none` from the same rule — both
          would be collected and the discount below would subtract the inner subtree twice,
@@ -157,6 +190,7 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
     source,
     hostRect.top - PRUNE_MARGIN_PX,
     hostRect.bottom + PRUNE_MARGIN_PX,
+    new Set(hiddenPanes),
   );
   /* Appended to the same list, so both kinds of removal go through one pass and a concealed
      pane inside an already-pruned ancestor resolves to null, which is correct. */
@@ -169,44 +203,96 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
     const rect = node?.getBoundingClientRect();
     return { width: rect?.width ?? 0, height: rect?.height ?? 0 };
   });
-  const sourceOpacity = getComputedStyle(source).opacity;
+  const sourceStyle = getComputedStyle(source);
+  const sourceOpacity = sourceStyle.opacity;
+  /* The page column is a size container by an attribute the strip below removes, and what is
+     inside it queries it (the back affordance's reserved room). Kept on the clone, which has the
+     source's width, so those queries answer as they did — without it the room came back and the
+     leaving page dropped by it in the frame its clone appeared. */
+  const containerType = sourceStyle.containerType;
+  const containerName = sourceStyle.containerName;
 
   /* Indexed against `getElementsByTagName('*')` on the untouched source: the clone is an
-     exact copy at that moment, so the same index identifies the same node — but ONLY before
-     anything is replaced. Both fix-ups below therefore run before the prune. */
+     exact copy at that moment, so the same index identifies the same node. The clone's side
+     is turned into references before anything is replaced, which is what keeps the pairing
+     good through the prune.
+
+     An image is recorded with the resource it is showing, or `null` when it is not showing
+     one yet — `complete && naturalWidth > 0`, since `complete` alone is also true of a
+     failed image. */
   const sourceAll = source.getElementsByTagName('*');
-  const imgSrcByIndex = new Map<number, string>();
+  const imgSrcByIndex = new Map<number, string | null>();
   const mediaSizeByIndex = new Map<number, { width: number; height: number }>();
+  const scrolledByIndex = new Map<number, { top: number; left: number }>();
   for (let i = 0; i < sourceAll.length; i += 1) {
     const element = sourceAll[i];
+    /* Layout is already clean from the rect reads above, so these are plain reads. */
+    if (element.scrollTop || element.scrollLeft) {
+      scrolledByIndex.set(i, { top: element.scrollTop, left: element.scrollLeft });
+    }
     if (REPLACE_TAGS.has(element.tagName)) {
       const rect = element.getBoundingClientRect();
       mediaSizeByIndex.set(i, { width: rect.width, height: rect.height });
     } else if (element.tagName === 'IMG') {
-      imgSrcByIndex.set(i, (element as HTMLImageElement).currentSrc);
+      const img = element as HTMLImageElement;
+      imgSrcByIndex.set(i, img.complete && img.naturalWidth > 0 ? img.currentSrc : null);
     }
   }
 
   // --- writes --------------------------------------------------------------
   const clone = source.cloneNode(true) as HTMLElement;
-
-  // Snapshot the collection: it is live, and the loop replaces nodes.
+  /* References, not indices: taken before anything is replaced, they stay good however the
+     tree changes below. */
   const cloneAll = [...clone.getElementsByTagName('*')];
-  for (let i = 0; i < cloneAll.length; i += 1) {
-    const element = cloneAll[i];
-    const mediaSize = mediaSizeByIndex.get(i);
-    if (mediaSize) {
-      // Cloned and then reloaded / blank / autoplaying — a sized box instead.
-      element.replaceWith(spacer(mediaSize));
-      continue;
-    }
-    const src = imgSrcByIndex.get(i);
-    if (src === undefined) continue;
-    const img = element as HTMLImageElement;
+
+  // Paths still align: nothing has been replaced yet.
+  prune.forEach((path, i) => {
+    const node = nodeAt(clone, path);
+    node?.replaceWith(spacer(pruneSizes[i]));
+  });
+
+  /* Disarm every copy of an image that was not showing anything, pruned or not, before this
+     task ends. `cloneNode` copies each `src`, and a copy outside the document is not gated on
+     being seen: an eager one queues its fetch for the next microtask, and the fix-up below
+     used to turn every lazy one eager as well — leaving the gallery for /search fetched 44
+     pictures the user had never scrolled to, 18 of them in the forum pane nobody had
+     opened. Removing the sources in the
+     same task replaces that queued load with one that has nothing to fetch; pruning alone
+     does not, since a detached copy still loads. The empty `alt` keeps a source-less image
+     from painting its text: the live one was showing a placeholder, and so does the clone. */
+  for (const [i, src] of imgSrcByIndex) {
+    if (src !== null) continue;
+    const img = cloneAll[i] as HTMLElement;
+    img.removeAttribute('srcset');
+    img.removeAttribute('sizes');
+    img.removeAttribute('src');
+    img.setAttribute('alt', '');
+    /* An image whose source is taken away is in the *broken* state, not the empty one, and a
+       sized broken image paints the engine's broken-picture glyph at its corner (measured: a
+       copy of the detail's still-loading picture showed it through a whole container transform).
+       The live one was showing nothing, so the copy shows nothing. */
+    img.style.visibility = 'hidden';
+  }
+
+  for (const [i, size] of mediaSizeByIndex) {
+    const media = cloneAll[i];
+    // A copied video with a source runs its own load; take the sources before discarding it.
+    media.removeAttribute('src');
+    media.removeAttribute('poster');
+    media.replaceChildren();
+    // Cloned and then reloaded / blank / autoplaying — a sized box instead.
+    if (clone.contains(media)) media.replaceWith(spacer(size));
+  }
+
+  for (const [i, src] of imgSrcByIndex) {
+    if (!src) continue;
+    const img = cloneAll[i] as HTMLImageElement;
+    // Inside a pruned subtree: nothing left to point.
+    if (!clone.contains(img)) continue;
     // Point at the exact resource the browser already decoded, so the clone
     // paints from cache instead of re-running srcset selection at a slightly
     // different layout width.
-    if (src) img.setAttribute('src', src);
+    img.setAttribute('src', src);
     img.removeAttribute('srcset');
     img.removeAttribute('sizes');
     img.setAttribute('loading', 'eager');
@@ -221,12 +307,6 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
        cheaper than a long task. */
     img.setAttribute('decoding', 'async');
   }
-
-  // Paths still align: every replacement above was one-for-one.
-  prune.forEach((path, i) => {
-    const node = nodeAt(clone, path);
-    node?.replaceWith(spacer(pruneSizes[i]));
-  });
 
   /* A ripple mid-press must not be carried into the clone: the wave is sized to reach its
     * host's farthest corner and kept inside it by the clipping the ripple host supplies —
@@ -250,9 +330,15 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
   }
 
   // The page container carries the entry keyframe; without this the clone would
-  // replay it from opacity 0 — the exact blank this mechanism exists to remove.
+  // replay it from opacity 0 — the exact blank this mechanism exists to remove. The image
+  // detail's root has one too under the lower motion tiers (its arrive keyframe).
   clone.classList.remove('animate-page-transition');
+  clone.style.animation = 'none';
   clone.style.opacity = sourceOpacity;
+  if (containerType && containerType !== 'normal') {
+    clone.style.containerType = containerType;
+    if (containerName && containerName !== 'none') clone.style.containerName = containerName;
+  }
 
   /* Pin the clone where the content visually was. `getBoundingClientRect`
      already includes the scroll offset, so a page scrolled to 2000px yields
@@ -265,6 +351,14 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
   clone.style.width = `${sourceRect.width}px`;
   clone.style.height = `${sourceRect.height}px`;
   clone.style.margin = '0';
+  /* The rect already includes an in-flight route's root transform. Carrying
+     that inline transform into the pinned clone applies the same travel twice
+     on a rapid second navigation. Descendant poses stay intact; only this
+     root's position and dimensions have been baked into the box above. */
+  clone.style.transform = 'none';
+  clone.style.translate = 'none';
+  clone.style.scale = 'none';
+  clone.style.rotate = 'none';
   // Its parent would otherwise shrink it to its content size.
   clone.style.flex = 'none';
 
@@ -282,5 +376,11 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
   const visibleBottom = Math.min(sourceRect.height, hostRect.bottom - sourceRect.top);
   clone.style.clipPath = `inset(${visibleTop}px 0px ${Math.max(0, sourceRect.height - visibleBottom)}px 0px)`;
 
-  return { node: clone };
+  /* A pruned subtree took its scrollers with it; a spacer keeps the height, so an offset on a
+     surviving scroller still lands on the same pixels. */
+  const scroll = [...scrolledByIndex]
+    .map(([i, offset]) => ({ node: cloneAll[i], ...offset }))
+    .filter(({ node }) => clone.contains(node));
+
+  return { node: clone, scroll };
 }

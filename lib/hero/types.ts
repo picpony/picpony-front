@@ -1,6 +1,6 @@
 'use client';
 
-import type { PonyImage } from '@/lib/types/image';
+import type { ImagePreview } from '@/lib/types/image';
 import type { FrameAsset } from './frameCache';
 
 export type HeroDirection = 'forward' | 'back';
@@ -27,9 +27,14 @@ export type ImageHeroBackgroundLocation = {
 
 /** Everything captured at activation, before any network work. */
 export type ImageHeroSnapshot = {
-  image: PonyImage;
+  image: ImagePreview;
   previewSrc: string;
-  previewFrame: FrameAsset;
+  /**
+   * The bitmap a flight takes off from. Always present on a snapshot a press made; a step's
+   * (上一张 / 下一张) may have none when the list never painted that picture — it needs one only
+   * if the viewer later closes by flying, and the close captures the live frame first.
+   */
+  previewFrame: FrameAsset | null;
   sourceKey: string | null;
   mediaType: 'image' | 'video';
   canAnimate: boolean;
@@ -44,6 +49,8 @@ export type ImageHeroStageState = {
 
 export type ImageHeroRuntimeState = {
   phase: HeroControllerPhase;
+  /** Actual direction, including a reversal toward either the gallery or the detail. */
+  direction: HeroDirection | null;
   sessionId: number | null;
   imageId: number | null;
   /* No `interactionQuiet` here: it was published and never read, and every quiet↔active
@@ -88,6 +95,8 @@ export type HeroStageNodes = HeroSurfaceNodes & {
 export type HeroNavigation = {
   push: (href: string) => void;
   replace: (href: string) => void;
+  /** Warm a route's payload ahead of the press (the card's intent ladder). */
+  prefetch?: (href: string) => void;
 };
 
 export type HeroOpenIntent = {
@@ -117,8 +126,14 @@ export type HeroCloseIntent = {
   cause?: 'button' | 'history' | 'dismiss' | 'interrupt';
 };
 
-export type HeroDetailRouteChangeIntent = {
-  imageId: number;
-  detailHref: string;
-  navigation: HeroNavigation;
+/**
+ * 上一张 / 下一张 inside an open viewer: an in-place change of the picture, never a navigation.
+ * `flush` completes the detail's own visual swap immediately — a close or an interruption that
+ * arrives mid-transition must measure the picture that is about to be on screen.
+ */
+export type HeroDetailStepIntent = {
+  fromId: number;
+  toId: number;
+  snapshot: ImageHeroSnapshot;
+  flush: () => void;
 };

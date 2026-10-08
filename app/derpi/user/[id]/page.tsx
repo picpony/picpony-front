@@ -1,392 +1,417 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { use, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-  MdStar,
-  MdImage,
-  MdSearch,
-  MdOpenInNew,
-  MdUpload,
   MdChatBubbleOutline,
   MdEdit,
+  MdHome,
+  MdImage,
+  MdOpenInNew,
+  MdPersonOff,
+  MdSearch,
+  MdUpload,
 } from 'react-icons/md';
-import { api, DerpiProfileUser, PonyImage } from '@/lib/api';
+import { SKIP, useResource } from '@/lib/resource';
+import { derpiUserProfile, derpiUserUploads, useBrowsingFingerprint } from '@/lib/resources';
+import { useScreenStateFor } from '@/lib/screenState';
+import { createPagedSequence } from '@/lib/imageSequence';
+import { useListReveal } from '@/lib/listReveal';
+import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
+import { formatCount } from '@/lib/format';
+import { useEscapeBack, useStoredValue } from '@/lib/hooks';
+import { useBackOrParent } from '@/lib/backNavigation';
+import { LS_KEYS } from '@/lib/constants';
+import { parseContentFilter } from '@/lib/searchQuery';
+import { ICON } from '@/lib/icons';
+import type { DerpiProfileAward, DerpiProfileUser } from '@/lib/types/user';
 import Pagination from '@/components/Pagination';
 import Skeleton from '@/components/Skeleton';
 import Avatar from '@/components/Avatar';
-import Badge from '@/components/Badge';
+import MasonryGrid from '@/components/MasonryGrid';
+import ImageGridSkeleton from '@/components/ImageGridSkeleton';
+import Card from '@/components/Card';
 import ErrorRetry from '@/components/ErrorRetry';
-import PageBack from '@/components/PageBack';
-import { useEscapeBack } from '@/lib/hooks';
 import EmptyState from '@/components/EmptyState';
-import Button, { buttonClasses } from '@/components/Button';
+import FailedTurnHold from '@/components/FailedTurnHold';
+import PageBack from '@/components/PageBack';
 import SectionHeading from '@/components/SectionHeading';
-import { ICON } from '@/lib/icons';
+import Button from '@/components/Button';
+import { buttonClasses } from '@/components/buttonStyles';
+import { useTooltip } from '@/components/Tooltip';
+import DerpiDescription from './DerpiDescription';
 
 const PER_PAGE = 24;
 
-export default function DerpiUserPage() {
-  const params = useParams();
+function ProfileStats({ profile }: { profile: DerpiProfileUser | undefined }) {
+  const stats = [
+    { label: '上传', icon: MdUpload, value: profile?.uploads_count },
+    { label: '评论', icon: MdChatBubbleOutline, value: profile?.comments_count },
+    { label: '发帖', icon: MdEdit, value: profile?.posts_count },
+  ];
+  return (
+    <Card padding="sm" className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-body-m">
+      {stats.map(({ label, icon: Icon, value }) => (
+        <div key={label} className="flex items-center gap-1.5 text-on-surface-variant">
+          <Icon size={ICON.dense} aria-hidden="true" />
+          {profile ? (
+            <span className="text-title-m tabular-nums text-on-surface">{formatCount(value)}</span>
+          ) : (
+            <Skeleton className="h-6 w-[1ch] text-title-m" />
+          )}
+          <span>{label}</span>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+/**
+ * One award: its picture is the content, so its name is its `alt`; the tooltip shows the name and
+ * Derpibooru's label beside it to a pointer or a long press (R7-022 — forty pictures with no
+ * visible name).
+ */
+function Award({ award }: { award: DerpiProfileAward }) {
+  const src = award.image_url || award.badge_url || award.url || award.image;
+  const title = award.title || '勋章';
+  const label = typeof award.label === 'string' ? award.label.trim() : '';
+  const { anchorRef, anchorProps, tooltip } = useTooltip(label ? `${title} · ${label}` : title);
+  if (!src) return null;
+  return (
+    <li className="flex">
+      {/* eslint-disable-next-line @next/next/no-img-element -- remote award artwork, an SVG off the optimizer's whitelist */}
+      <img
+        ref={anchorRef as React.RefObject<HTMLImageElement | null>}
+        {...anchorProps}
+        src={src}
+        alt={title}
+        className="h-8 rounded-xs"
+      />
+      {tooltip}
+    </li>
+  );
+}
+
+export default function DerpiUserPage({ params }: { params: Promise<{ id: string }> }) {
+  /* Page params belong to this segment even while an image overlays it. */
+  const { id: userId } = use(params);
+  const contentFilter = parseContentFilter(useStoredValue(LS_KEYS.contentFilter, 'safe'));
+  const scope = `${userId}:${contentFilter}`;
+
+  /* A filter change must adopt its own remembered page before starting a read. */
+  return <DerpiUserContent key={scope} scope={scope} userId={userId} contentFilter={contentFilter} />;
+}
+
+/**
+ * A Derpibooru account inside the app — `/derpi/user/[id]`, reached from an uploader link or a
+ * PicPony profile's bound account.
+ *
+ * Every state carries the back affordance and an `<h1>` (R3-042): the loading header draws its
+ * placeholders around the same heading the loaded one fills in. An account that does not exist is
+ * the not-found state with no 重试; a failure says why and offers 重试 when it could help.
+ *
+ * The uploads are the account's `uploader_id:` search inside the viewer's content settings, so
+ * their count is labelled as the filtered one beside the account's own total (R7-022). A numeric
+ * route id is the account id, and the grid's read starts beside the profile's rather than after it.
+ */
+function DerpiUserContent({ userId, contentFilter, scope }: {
+  userId: string;
+  contentFilter: ReturnType<typeof parseContentFilter>;
+  scope: string;
+}) {
   const router = useRouter();
-  const userId = (params.id as string) || '';
+  const pathname = usePathname();
+  const descriptionId = useId();
+  const [uploadsPage, setUploadsPage] = useScreenStateFor('derpi-profile:uploads-page', scope, 1);
+  const profileRead = useResource(derpiUserProfile, { id: userId });
+  const profile = profileRead.data;
+  const numericId = /^[1-9]\d{0,15}$/.test(userId) ? Number(userId) : null;
+  const accountId = profile?.id ?? numericId;
+  const missing = profile === undefined && profileRead.error !== undefined;
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [profile, setProfile] = useState<DerpiProfileUser | null>(null);
-
-  // Uploads tab
-  const [uploads, setUploads] = useState<PonyImage[]>([]);
-  const [uploadsPage, setUploadsPage] = useState(1);
-  const [uploadsTotal, setUploadsTotal] = useState(0);
-  const [isUploadsLoading, setIsUploadsLoading] = useState(false);
-
-  // Fetch profile
-  useEffect(() => {
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (!isMounted) return;
-      setIsLoading(true);
-      setError(null);
-    });
-
-    (async () => {
-      const data = await api.getDerpiProfile(userId);
-      if (!isMounted) return;
-      if (data?.user) {
-        setProfile(data.user);
-        setIsLoading(false);
-      } else {
-        setError('未找到该 Derpibooru 用户');
-        setIsLoading(false);
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [userId]);
-
-  // Fetch uploads
-  useEffect(() => {
-    if (!profile) return;
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (isMounted) setIsUploadsLoading(true);
-    });
-
-    (async () => {
-      const query = `uploader_id:${profile.id}`;
-      const data = await api.searchDerpiImages(query, uploadsPage, PER_PAGE);
-      if (!isMounted) return;
-      if (data) {
-        setUploads(data.images || []);
-        setUploadsTotal(data.total || 0);
-      }
-      setIsUploadsLoading(false);
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [profile, uploadsPage]);
-
-  const totalPages = Math.ceil(uploadsTotal / PER_PAGE);
-
-  const handleUploadClick = useCallback(
-    (id: number) => {
-      router.push(`/pic/${id}`, { scroll: false });
-    },
-    [router],
+  /* The viewer's exclusions wrap the uploader query, so they are part of the key; retention is
+     scoped to them for the same reason the home feed's is. */
+  const fp = useBrowsingFingerprint();
+  const uploadsRead = useResource(
+    derpiUserUploads,
+    accountId !== null && !missing ? { id: accountId, page: uploadsPage, perPage: PER_PAGE, contentFilter, fp } : SKIP,
+    { keepPrevious: `${scope}\n${fp}` },
   );
 
-  // --- Loading skeleton ---
-  /* Not a sidebar destination, so it carries the shared back affordance — see
-     the rule in AGENTS.md. Drawn in all three states, which is what makes the
-     error branch's claim below true: it dropped its own 返回上一页 button on the
-     strength of "the leading back affordance is already chrome on this route",
-     and until now this route never rendered one — so a Derpibooru profile that
-     failed to load had no way out at all. */
-  const handleBack = useCallback(() => router.back(), [router]);
+  const handleBack = useBackOrParent('/');
   useEscapeBack(handleBack);
 
-  if (isLoading) {
+  /* The name, once it is known — the route's metadata could only name the account by number. Re-
+     applied when the route is in the foreground again (an image opened over it names itself). */
+  useEffect(() => {
+    if (!profile || !pathname?.startsWith('/derpi/user/')) return;
+    document.title = `${profile.name} - PicPony`;
+  }, [profile, pathname]);
+
+  const [grid, setGrid] = useState<HTMLDivElement | null>(null);
+  const [rows, setRows] = useState<HTMLDivElement | null>(null);
+  const failureRef = useRef<HTMLDivElement>(null);
+  const [dataPage, setDataPage] = useState(uploadsPage);
+  if (uploadsRead.data !== undefined && !uploadsRead.isPrevious && dataPage !== uploadsPage) setDataPage(uploadsPage);
+
+  const listKey = `derpi-uploads:${accountId ?? userId}:${contentFilter}:${fp}`;
+  const readPage = useCallback(
+    async (target: number) =>
+      accountId === null
+        ? []
+        : (await derpiUserUploads.read({ id: accountId, page: target, perPage: PER_PAGE, contentFilter, fp })).images.map((image) => image.id),
+    [accountId, contentFilter, fp],
+  );
+  const reveal = useListReveal(readPage, uploadsPage, setUploadsPage, () => grid);
+  const images = uploadsRead.data?.images;
+  const total = uploadsRead.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const sequence = useMemo(
+    () =>
+      images && images.length > 0 && accountId !== null
+        ? createPagedSequence({
+            key: listKey,
+            page: dataPage,
+            current: { ids: images.map((image) => image.id), previews: images, totalPages },
+            pageSize: PER_PAGE,
+            fetchPage: async (target) => {
+              const result = await derpiUserUploads.read({ id: accountId, page: target, perPage: PER_PAGE, contentFilter, fp });
+              return {
+                ids: result.images.map((image) => image.id),
+                previews: result.images,
+                totalPages: Math.max(1, Math.ceil(result.total / PER_PAGE)),
+              };
+            },
+            reveal,
+          })
+        : undefined,
+    [images, accountId, listKey, dataPage, totalPages, contentFilter, fp, reveal],
+  );
+
+  if (missing) {
     return (
       <>
-      <PageBack onClick={handleBack} title="返回 (Esc)" />
-      <div>
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-4 pb-6">
-            <Skeleton className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-surface shrink-0" />
-            <div className="flex-1 min-w-0">
-              <Skeleton className="h-8 w-1/3 mb-4" />
-              <Skeleton className="h-4 w-1/4" />
-            </div>
-          </div>
-          <div className="space-y-4">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-            <Skeleton className="h-4 w-4/6" />
-          </div>
-        </div>
-      </div>
+        <PageBack onClick={handleBack} />
+        {isNotFound(profileRead.error) ? (
+          /* No 重试: no retry makes a missing account appear (R7-009's rule, both profiles). */
+          <EmptyState
+            fill
+            icon={<MdPersonOff size={ICON.display} />}
+            title="用户不存在"
+            description="这个 Derpibooru 账户不存在，或者链接本来就不对。"
+            action={
+              <Link scroll={false} href="/" className={buttonClasses({ variant: 'filled' })}>
+                <MdHome aria-hidden="true" />
+                回到首页
+              </Link>
+            }
+          />
+        ) : (
+          /* `fill`: this block is the route's whole content — `PageBack` portals out to a slot
+             beside the scroller — so it lands where the 404 and the error boundary do. 重试
+             when it could help; the original site otherwise. */
+          <ErrorRetry
+            fill
+            title="用户资料加载失败"
+            message={apiErrorMessage(profileRead.error)}
+            onRetry={isRetryable(profileRead.error) ? profileRead.refresh : undefined}
+            action={
+              isRetryable(profileRead.error) ? undefined : (
+                <a
+                  href={`https://derpibooru.org/profiles/${encodeURIComponent(userId)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={buttonClasses({ variant: 'filled' })}
+                >
+                  <MdOpenInNew aria-hidden="true" />
+                  <span className="min-w-0 truncate">在 Derpibooru 查看</span>
+                </a>
+              )
+            }
+          />
+        )}
       </>
     );
   }
 
-  // --- Error state ---
-  if (error || !profile) {
-    /* One action, and it is the one this screen alone can offer — the source
-       profile on Derpibooru. 返回上一页 is dropped because the leading back
-       affordance is already chrome on this route, the same call the forum
-       thread's error state makes. */
-    return (
-      <>
-      <PageBack onClick={handleBack} title="返回 (Esc)" />
-      {/* `ErrorRetry`, not `StatusView` directly: it re-typed the preset's glyph and
-          its default title because `ErrorRetry` took only `onRetry`, and it has an
-          `action` slot now.
-          `fill`, the third and last screen that takes it. `PageBack` portals out to a
-          slot beside the scroller, so this block is the route's entire content — the
-          same case as the 404 and the error boundary, and the three should land in the
-          same place rather than one being centred and two sitting high. */}
-      <ErrorRetry
-        fill
-        message={error || '用户可能不存在'}
-        action={
-          userId && (
-            <a
-              href={`https://derpibooru.org/profiles/${encodeURIComponent(userId)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonClasses({ variant: 'filled' })}
-            >
-              <MdOpenInNew size={ICON.dense} />在 Derpibooru 查看
-            </a>
-          )
-        }
-      />
-      </>
-    );
-  }
-
-  const avatarUrl = profile.avatar_url || profile.avatar;
-  const uploaderQuery = `uploader_id:${profile.id}`;
+  const avatarUrl = profile ? profile.avatar_url || profile.avatar : null;
+  const awards = profile?.awards ?? [];
+  const uploaderQuery = accountId !== null ? `uploader_id:${accountId}` : null;
+  const failedTurn = uploadsRead.isPrevious && Boolean(uploadsRead.error);
 
   return (
     <>
-      <PageBack onClick={handleBack} title="返回 (Esc)" />
-      {/* No entrance animation. The route transition already fades this page in
-          (`playRouteCrossFade`, 400ms `decelerate`); an `animate-fade-in` here was a
-          second 400ms fade nested inside the first, i.e. the arrival happening twice
-          on two clocks. Only two routes in the app did this. */}
-      <div>
-      {/* ===== Main Content ===== */}
-      <div className="max-w-5xl mx-auto">
-        <div className="pb-8 pt-6 sm:pt-8">
-          {/* Avatar + Username row */}
+      <PageBack onClick={handleBack} />
+      {/* No entrance animation: the route transition already fades this page in. */}
+      <div className="@container mx-auto max-w-5xl" data-page-loading={profile ? undefined : ''}>
+        <div className="pb-8 page-back-room-5xl">
           <div className="flex items-center gap-4">
             <div className="shrink-0">
-              {/* The fallback used to be swapped in from an `onError` handler
-                  that hid the `<img>` and stripped `hidden` off its sibling — an
-                  imperative DOM edit React does not know about. `Avatar` keeps the
-                  initial mounted underneath instead, so it is both the error state
-                  and the decode placeholder, and it cannot get out of step with a
-                  re-render. */}
-              <Avatar
-                src={avatarUrl}
-                name={profile.name}
-                size="hero"
-                className="border-4 border-surface"
-              />
+              {profile ? (
+                /* The page's largest early paint: eager, at high priority (R1-028). */
+                <Avatar src={avatarUrl} name={profile.name} size="hero" priority className="border-4 border-surface" />
+              ) : (
+                <Skeleton className="size-24 rounded-full border-4 border-surface sm:size-32" />
+              )}
             </div>
-
-            <div className="min-w-0">
-              <h1 className="text-headline-s sm:text-headline-m text-on-surface flex items-center gap-3">
-                {profile.name}
-                <span className="text-body-m text-on-surface-variant">#{profile.id}</span>
+            <div className="min-w-0 flex-1">
+              {/* One heading for both states, so focus placed on it by a route change survives
+                  the record landing. */}
+              <h1
+                className={
+                  profile
+                    ? 'text-headline-s sm:text-headline-m flex flex-wrap items-baseline gap-x-3 gap-y-1 text-on-surface'
+                    : 'sr-only'
+                }
+              >
+                {profile ? (
+                  <>
+                    <span className="min-w-0 max-w-full wrap-anywhere">{profile.name}</span>
+                    <span className="text-body-m text-on-surface-variant">#{profile.id}</span>
+                  </>
+                ) : (
+                  'Derpibooru 用户'
+                )}
               </h1>
-              <p className="text-body-m text-on-surface-variant mt-1">Derpibooru 用户</p>
+              {!profile && <Skeleton className="h-8 w-1/3 sm:h-9" />}
+              <p className="mt-1 text-body-m text-on-surface-variant">Derpibooru 用户</p>
             </div>
           </div>
 
-          {/* Badges (awards) */}
-          {profile.awards && profile.awards.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-4">
-              {profile.awards.map((award, i) => {
-                const badgeUrl = award.image_url || award.badge_url || award.url || award.image;
-                return badgeUrl ? (
-                  /* The `alt` carries the award's name. It was `alt=""` with the
-                     name in a `title`, and `alt=""` marks an image presentational —
-                     so it leaves the accessibility tree entirely and a `title` on it
-                     is ignored. The image *is* the content here. */
-                  // eslint-disable-next-line @next/next/no-img-element -- remote badge image
-                  <img
-                    key={i}
-                    src={badgeUrl}
-                    className="h-8 rounded-xs"
-                    alt={award.title || '勋章'}
-                  />
-                ) : null;
-              })}
-            </div>
+          {awards.length > 0 && (
+            <ul className="mt-4 flex flex-wrap gap-2" aria-label="Derpibooru 勋章">
+              {awards.map((award, index) => (
+                <Award key={`${award.title ?? ''}-${index}`} award={award} />
+              ))}
+            </ul>
           )}
 
-          {/* Stats row */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-6 bg-surface-container-low rounded-md px-5 py-3 text-body-m">
-            <div className="flex items-center gap-1.5 text-on-surface-variant">
-              <MdUpload size={ICON.dense} />
-              <span className="text-title-m text-on-surface">
-                {(profile.uploads_count ?? 0).toLocaleString()}
-              </span>
-              <span className="text-on-surface-variant">上传</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-on-surface-variant">
-              <MdChatBubbleOutline size={ICON.dense} />
-              <span className="text-title-m text-on-surface">
-                {(profile.comments_count ?? 0).toLocaleString()}
-              </span>
-              <span className="text-on-surface-variant">评论</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-on-surface-variant">
-              <MdEdit size={ICON.dense} />
-              <span className="text-title-m text-on-surface">
-                {(profile.posts_count ?? 0).toLocaleString()}
-              </span>
-              <span className="text-on-surface-variant">发帖</span>
-            </div>
+          <ProfileStats profile={profile} />
+
+          {profile?.description ? (
+            <section className="mt-6" aria-labelledby={`${descriptionId}-title`}>
+              <SectionHeading as="h2" className="mb-2" id={`${descriptionId}-title`}>
+                个人简介
+              </SectionHeading>
+              <DerpiDescription markdown={profile.description} id={`${descriptionId}-body`} />
+            </section>
+          ) : null}
+
+          {/* The sidebar can leave less than half a tablet's width for this page.
+              Pair the actions only once their own container can hold both labels. */}
+          <div className="mt-6 flex flex-col gap-3 @lg:flex-row">
+            {profile ? (
+              <>
+                <Button
+                  onClick={() => uploaderQuery && router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`, { scroll: false })}
+                  variant="filled"
+                  size="lg"
+                  className="@lg:flex-1"
+                  icon={<MdSearch />}
+                >
+                  搜索 TA 的作品
+                </Button>
+                <a
+                  href={`https://derpibooru.org/profiles/${encodeURIComponent(profile.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={buttonClasses({ variant: 'tonal', size: 'lg', className: '@lg:flex-1' })}
+                >
+                  <MdOpenInNew aria-hidden="true" />
+                  <span className="min-w-0 truncate">在 Derpibooru 查看主页</span>
+                </a>
+              </>
+            ) : (
+              <>
+                <Skeleton className="h-14 rounded-full @lg:flex-1" />
+                <Skeleton className="h-14 rounded-full @lg:flex-1" />
+              </>
+            )}
           </div>
 
-          {/* Description */}
-          {profile.description && (
-            <div className="mt-6">
-              <h3 className="text-label-l-emphasized text-on-surface mb-2">个人简介</h3>
-              <div className="text-body-m text-on-surface-variant bg-surface-container-low p-4 rounded-md whitespace-pre-wrap popover-scrollbar max-h-40 overflow-y-auto">
-                {profile.description}
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
-            <Button
-              onClick={() => router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`, { scroll: false })}
-              variant="filled"
-              size="lg"
-              className="flex-1"
-              icon={<MdSearch size={ICON.dense} />}
-            >
-              搜搜 TA 的所有作品
-            </Button>
-            <a
-              href={`https://derpibooru.org/profiles/${encodeURIComponent(profile.name)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonClasses({ variant: 'tonal', className: 'flex-1' })}
-            >
-              <MdOpenInNew size={ICON.dense} />在 Derpibooru 查看主页
-            </a>
-          </div>
-
-          {/* ===== Uploads Tab ===== */}
-          <div className="mt-10">
+          <section className="mt-10">
             <SectionHeading
               icon={<MdImage size={ICON.control} />}
               aside={
-                uploadsTotal > 0 ? `（共 ${uploadsTotal.toLocaleString()} 张）` : undefined
+                /* The account's own total is in the stats above; this one is what the viewer's
+                   content settings leave of it. */
+                uploadsRead.data && total > 0 ? `当前筛选下 ${formatCount(total)} 张` : undefined
               }
             >
               最近上传
             </SectionHeading>
 
-            {isUploadsLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <Skeleton key={i} className="aspect-square rounded-lg" />
-                ))}
-              </div>
-            ) : uploads.length > 0 ? (
+            {uploadsRead.data === undefined ? (
+              uploadsRead.error ? (
+                <ErrorRetry
+                  size="pane"
+                  title="上传记录加载失败"
+                  message={apiErrorMessage(uploadsRead.error)}
+                  onRetry={isRetryable(uploadsRead.error) ? uploadsRead.refresh : undefined}
+                />
+              ) : (
+                <ImageGridSkeleton count={PER_PAGE} />
+              )
+            ) : uploadsRead.data.images.length === 0 && !uploadsRead.isPrevious ? (
+              uploadsPage > 1 ? (
+                <EmptyState
+                  size="pane"
+                  title="这一页没有图片"
+                  action={<Button variant="tonal" onClick={() => setUploadsPage(1)}>回到第一页</Button>}
+                />
+              ) : (
+                <EmptyState
+                  size="pane"
+                  icon={<MdImage size={ICON.display} />}
+                  title="暂无上传"
+                  description={
+                    (profile?.uploads_count ?? 0) > 0
+                      ? '在当前的内容筛选设置下，该用户没有可显示的图片'
+                      : '该用户尚未上传任何图片'
+                  }
+                />
+              )
+            ) : (
               /* The anchor wraps the grid *and* its pager: `Pagination` reaches it with
                  `closest()`, so one that sits beside the pager is one it cannot see. */
-              <div data-pagination-anchor>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                  {uploads.map((img) => {
-                    const thumbUrl =
-                      img.representations?.small || img.representations?.thumb || img.view_url;
-                    return (
-                      /* A `<button>`, not a `<div onClick>`: an image grid is
-                         navigation, and this one could not be reached by keyboard
-                         at all. (`/user/[id]` uses a `<Link>` for the same grid;
-                         here the handler resolves the target id first, so a button
-                         is the honest element.)
-
-                         `rounded-lg` (16dp) is the grid-tile step from the shape
-                         table — and the one pinned to `HERO_TARGET_RADIUS_PX`, so a
-                         tile at 12dp did not match the corner the flight lands on.
-
-                         The caption and score reveal on `sm` and up only. They were
-                         `opacity-0 group-hover:opacity-100`, and there is no hover
-                         on a touch device — so on the majority viewport the image id
-                         and score never appeared at all. */
-                      <button
-                        type="button"
-                        key={img.id}
-                        onClick={() => handleUploadClick(img.id)}
-                        aria-label={img.name || `图片 #${img.id}`}
-                        className="group relative aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-surface-container-high outline-none focus-visible:ring-2 focus-ring"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic derpi thumbnail */}
-                        <img
-                          src={thumbUrl}
-                          alt=""
-                          className="w-full h-full object-cover transition-transform duration-composite ease-[var(--ease-standard)] group-hover:scale-105 no-motion:group-hover:scale-100"
-                          loading="lazy"
-                        />
-                        <div className="media-hover-scrim absolute inset-0" />
-                        <div className="media-caption-gradient absolute bottom-0 left-0 right-0 p-2 opacity-100 transition-opacity duration-composite ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100">
-                          <span className="text-on-media text-label-m">#{img.id}</span>
-                        </div>
-                        {img.score !== undefined && (
-                          /* `Badge tone="media"`, not an inline span naming the
-                             plate/ink pair by hand — the same object as every
-                             other mark in the app, in the one tone that is
-                             legible on a photograph. */
-                          <Badge
-                            tone="media"
-                            icon={<MdStar />}
-                            className="absolute top-2 right-2 opacity-100 transition-opacity duration-composite ease-[var(--ease-standard)] sm:opacity-0 sm:group-hover:opacity-100"
-                          >
-                            {img.score}
-                          </Badge>
-                        )}
-                      </button>
-                    );
-                  })}
+              <div ref={setGrid} data-pagination-anchor aria-busy={uploadsRead.isLoading || undefined}>
+                {failedTurn && (
+                  <div ref={failureRef} className="mb-4">
+                    <ErrorRetry
+                      size="inline"
+                      title={`第 ${uploadsPage} 页加载失败`}
+                      message={apiErrorMessage(uploadsRead.error)}
+                      onRetry={isRetryable(uploadsRead.error) ? uploadsRead.refresh : undefined}
+                    />
+                  </div>
+                )}
+                <div
+                  ref={setRows}
+                  className={`transition-opacity duration-standard ease-[var(--ease-standard)] ${
+                    uploadsRead.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
+                  }`}
+                >
+                  <MasonryGrid images={uploadsRead.data.images} sequence={sequence} listKey={listKey} />
                 </div>
-
                 {totalPages > 1 && (
                   <Pagination
                     currentPage={uploadsPage}
                     totalPages={totalPages}
-                    onPageChange={(next) => {
-                      setIsUploadsLoading(true);
-                      setUploadsPage(next);
-                    }}
+                    onPageChange={setUploadsPage}
+                    onPrefetchPage={(next) =>
+                      accountId !== null &&
+                      derpiUserUploads.prefetch({ id: accountId, page: next, perPage: PER_PAGE, contentFilter, fp })
+                    }
+                    disabled={uploadsRead.isLoading}
                   />
                 )}
+                <FailedTurnHold failed={failedTurn} rows={rows} failure={failureRef} />
               </div>
-            ) : (
-              <EmptyState
-                size="pane"
-                icon={<MdImage size={ICON.display} />}
-                title="暂无上传"
-                description="该用户尚未上传任何图片"
-              />
             )}
-          </div>
+          </section>
         </div>
       </div>
-    </div>
     </>
   );
 }

@@ -22,6 +22,13 @@ interface SectionHeadingProps extends Omit<HTMLAttributes<HTMLElement>, 'childre
    * readers navigate by the outline.
    */
   as?: 'h2' | 'h3';
+  /**
+   * `section` (the default) names a section of the page. `group` names a run of rows *within* a
+   * list — a day of /history, a day of the coin ledger: the quieter `title-s` in
+   * `on-surface-variant`, 8dp above its rows and inset 4dp, so the rows stay the subject and the
+   * day reads as their caption rather than as a section of its own.
+   */
+  level?: 'section' | 'group';
   className?: string;
 }
 
@@ -44,10 +51,12 @@ export default function SectionHeading({
   subtitle,
   actions,
   as: Tag = 'h2',
+  level = 'section',
   className = '',
   ...rest
 }: SectionHeadingProps) {
-  const spacing = cn(!HAS_MARGIN_BOTTOM.test(className) && 'mb-4', className);
+  const group = level === 'group';
+  const spacing = cn(!HAS_MARGIN_BOTTOM.test(className) && (group ? 'mb-2' : 'mb-4'), group && 'px-1', className);
   /* With actions or a subtitle there is a wrapper below and it owns the
      spacing; otherwise the heading itself is the outermost element. */
   const wrapped = Boolean(actions || subtitle);
@@ -55,24 +64,25 @@ export default function SectionHeading({
   const heading = (
     <Tag
       className={cn(
-        'text-title-m-emphasized text-on-surface flex min-w-0 items-center gap-2',
+        group ? 'text-title-s text-on-surface-variant' : 'text-title-m-emphasized text-on-surface',
+        'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1',
         !wrapped && spacing,
       )}
       {...(wrapped ? undefined : rest)}
     >
-      {icon && (
-        /* A fixed, centred cell rather than a bare glyph: an inline <svg> sits
-           on the text baseline and lands a fraction low, by a different amount
-           per glyph. */
-        <span
-          className="text-primary-ink grid shrink-0 place-items-center [&>svg]:block"
-          aria-hidden="true"
-        >
-          {icon}
-        </span>
-      )}
-      <span className="min-w-0">{children}</span>
-      {aside && <span className="text-body-m text-on-surface-variant shrink-0">{aside}</span>}
+      <span className="flex min-w-0 max-w-full items-center gap-2">
+        {icon && (
+          /* The glyph stays with its heading when the count wraps below. */
+          <span
+            className="text-primary-ink grid shrink-0 place-items-center [&>svg]:block"
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+        )}
+        <span className="min-w-0 wrap-anywhere">{children}</span>
+      </span>
+      {aside && <span className="text-body-m max-w-full wrap-anywhere text-on-surface-variant">{aside}</span>}
     </Tag>
   );
 
@@ -82,14 +92,14 @@ export default function SectionHeading({
 
   return (
     <div className={spacing} {...rest}>
-      <div className={cn('flex items-center justify-between', actions && 'gap-4')}>
-        <div className="min-w-0">
+      <div className={cn('flex flex-wrap items-center justify-between', actions && 'gap-x-4 gap-y-3')}>
+        <div className="min-w-0 max-w-full">
           {heading}
           {subtitle && (
-            <p className="text-body-m text-on-surface-variant mt-1">{subtitle}</p>
+            <p className="text-body-m wrap-anywhere text-on-surface-variant mt-1">{subtitle}</p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">{actions}</div>}
       </div>
     </div>
   );

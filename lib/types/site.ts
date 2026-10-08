@@ -22,3 +22,15 @@ export interface SiteStatusResponse {
   /** `auto` | `direct` | `cdn` | `picpony` */
   global_image_route_policy?: string;
 }
+
+/** A row of /about's roster (`get_team_members`). */
+export interface TeamMember {
+  id: number;
+  name: string;
+  role: string;
+  category: 'developer' | 'manager' | 'editor' | 'special';
+  avatar_url: string | null;
+  account_avatar: string | null;
+  link_url: string | null;
+  order_num: number;
+}

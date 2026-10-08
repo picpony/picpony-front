@@ -2,6 +2,7 @@
 
 import { HERO_BACKGROUND_SELECTOR, HERO_GALLERY_ANCHOR_SELECTOR } from './constants';
 import type { HeroHost, HeroRect } from './geometry';
+import { clamp } from '@/lib/utils';
 
 /**
  * A scroll plane pins the flyer into a scroller's own coordinate system.
@@ -26,7 +27,8 @@ export type HeroScrollPlane = {
 };
 
 /**
- * @param host An element whose border box is the plane's origin, defaulting to the scroller.
+ * @param host An element whose border box is the scroller's untransformed border box,
+ *   defaulting to the scroller itself (the origin is then moved to the padding edge, below).
  *   It exists because the scroller may sit **inside the container transform's window**, and a
  *   mid-flight `rebuild` re-creates the plane — at which point the scroller's rect is the
  *   *scaled* box and every later `screenRectToPlane` is wrong by the whole transform. The
@@ -35,6 +37,15 @@ export type HeroScrollPlane = {
  *
  *   Only `top`/`left` are read from it. The client/scroll sizes and offsets are layout
  *   values, unaffected by any ancestor transform.
+ *
+ * The plane's origin is the scroller's **padding** edge, not its border edge: the anchor is
+ * absolutely positioned, and `inset: 0` resolves against the padding box. The two differ by a
+ * border and by a leading scrollbar gutter — the page scroller's `scrollbar-gutter: stable
+ * both-edges` puts one on the left, 10px with a classic scrollbar — which is exactly what
+ * `clientLeft` / `clientTop` measure. Taken from the border edge, every flight planted in the
+ * gallery plane (every return) landed one gutter right of its thumbnail and snapped back at
+ * the handoff. Layout values, so the offset holds for the Stage's overlay host too. The host
+ * box is the padding box — the region the anchor's content is painted and clipped in.
  */
 function createPlane(
   anchor: HTMLElement,
@@ -51,10 +62,10 @@ function createPlane(
     scroller,
     host: {
       element: scroller,
-      top: rect.top,
-      left: rect.left,
-      width: rect.width,
-      height: rect.height,
+      top: rect.top + scroller.clientTop,
+      left: rect.left + scroller.clientLeft,
+      width: viewportWidth,
+      height: viewportHeight,
     },
     originLeft: scrollLeft,
     originTop: scrollTop,
@@ -109,8 +120,8 @@ export function planeRectToScreen(rect: HeroRect, plane: HeroScrollPlane): HeroR
 }
 
 export function sizePlaneLayer(layer: HTMLElement, plane: HeroScrollPlane) {
-  plane.originTop = Math.min(plane.maxScrollTop, Math.max(0, plane.originTop));
-  plane.originLeft = Math.min(plane.maxScrollLeft, Math.max(0, plane.originLeft));
+  plane.originTop = clamp(plane.originTop, 0, plane.maxScrollTop);
+  plane.originLeft = clamp(plane.originLeft, 0, plane.maxScrollLeft);
   layer.style.top = `${plane.originTop}px`;
   layer.style.left = `${plane.originLeft}px`;
   layer.style.width = `${plane.viewportWidth}px`;

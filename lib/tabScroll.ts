@@ -11,28 +11,57 @@ import { getAppScroller } from '@/lib/appScroller';
  */
 
 /**
- * Per-tab scroll offset, so switching back lands where you left that tab. Keyed by the
- * **panel element**, then by tab name — one flat `Map<tabName, offset>` collides between
- * *instances of one screen* (`posts`/`uploads`/… across profiles, `picpony`/`derpibooru`
- * across two `/favorites` visits); tab values are unique app-wide, which is exactly why the
- * flat map looked safe. The panel is the tab group's identity, so nested groups work and the
- * lifetime is free: page content is keyed on the pathname, so `/user/1` → `/user/2` unmounts
- * the panel and the entry goes with it (leaving home and returning drops per-tab offsets;
- * `lib/scrollMemory.ts` restores the scroller itself).
+ * Per-tab scroll offset, so switching back lands where you left that tab. Keyed by **the
+ * page and the tab group's position on it**, then by tab name.
+ *
+ * - Not one flat `Map<tabName, offset>`: that collides between *instances of one screen*
+ *   (`posts`/`uploads`/… across profiles, `picpony`/`derpibooru` across two `/favorites`
+ *   visits). The pathname carries the profile's id, so two profiles are two keys.
+ * - Not the panel element either, which it was: page content is keyed on the pathname, so
+ *   the panel — and its memory — went with every navigation. The forum is a tab on `/`, so
+ *   reading a thread and coming back threw the gallery's place away (900 → 0).
+ * - The group's ordinal among the page's tab panels separates nested groups (the admin
+ *   console has one inside one of its own panes).
+ *
+ * The lifetime mirrors the route memory's own rule (`lib/scrollMemory.ts`): a page reached by
+ * **traversal** keeps its tabs' offsets, a page reached by a **push** starts afresh —
+ * `clearTabScroll` is called for the pathname a push lands on. A session change drops all of
+ * it, since the pages it described re-render for a different account.
  */
-const tabScrollMemory = new WeakMap<HTMLElement, Map<string, number>>();
+const tabScrollMemory = new Map<string, Map<string, number>>();
+
+function groupKey(panel: HTMLElement): string {
+  const pathname = typeof window === 'undefined' ? '' : window.location.pathname;
+  const panels = [...document.querySelectorAll<HTMLElement>('[data-page-content] [data-tab-panel]')];
+  const ordinal = Math.max(0, panels.indexOf(panel));
+  return `${pathname}#${ordinal}`;
+}
 
 export function rememberTabScroll(panel: HTMLElement, tab: string, offset: number) {
-  let group = tabScrollMemory.get(panel);
+  const key = groupKey(panel);
+  let group = tabScrollMemory.get(key);
   if (!group) {
     group = new Map();
-    tabScrollMemory.set(panel, group);
+    tabScrollMemory.set(key, group);
   }
   group.set(tab, offset);
 }
 
 export function recallTabScroll(panel: HTMLElement, tab: string) {
-  return tabScrollMemory.get(panel)?.get(tab);
+  return tabScrollMemory.get(groupKey(panel))?.get(tab);
+}
+
+/** Forget every tab group on `pathname` — a push arrived there. */
+export function clearTabScroll(pathname: string) {
+  const prefix = `${pathname}#`;
+  for (const key of [...tabScrollMemory.keys()]) {
+    if (key.startsWith(prefix)) tabScrollMemory.delete(key);
+  }
+}
+
+/** Forget everything — the session changed. */
+export function clearAllTabScroll() {
+  tabScrollMemory.clear();
 }
 
 /**
@@ -62,16 +91,17 @@ export function applyInstantTabScroll(panel: HTMLElement, to: string) {
   const scroller = getAppScroller();
   if (!scroller) return;
   if (tabPanelTop(panel, scroller) > TAB_SHARED_CHROME_PX) return;
-  /* `?? 0`, matching `applyTabScroll`'s fallback: on a panel that is the page, a tab with no
+  /* `?? 0`, matching the animated switch's fallback (`runTabTransition`, lib/motion.ts): on a
+     panel that is the page, a tab with no
      remembered offset opens at its own top. Returning early instead left the outgoing tab's
      offset, which the browser then clamped to the shorter pane's maximum — landing on the
      destination's *last* row. The preference asks for less movement, not the wrong position. */
   const remembered = recallTabScroll(panel, to) ?? 0;
   const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-  /* No `overflowAnchor` guard, deliberately, and not an omission of `applyTabScroll`'s: that
-     one suspends anchoring because it writes then animates for 500ms with panes re-laying-out
-     underneath; this write is synchronous with nothing laying out after it in the same task,
-     so there is nothing to "correct" — and leaving it on absorbs a late shrink above the
-     viewport, the job `restoreAnchor` hands back to it on the animated path. */
+  /* No `overflowAnchor` guard, deliberately, and not an omission of the animated switch's: that
+     one suspends anchoring because it writes then slides with both panes in layout underneath;
+     this write is synchronous with nothing laying out after it in the same task, so there is
+     nothing to "correct" — and leaving it on absorbs a late shrink above the viewport, the job
+     the animated path hands back to it at settle. */
   scroller.scrollTop = Math.min(remembered, max);
 }

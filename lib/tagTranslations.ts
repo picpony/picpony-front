@@ -1,5 +1,3 @@
-'use client';
-
 import { getTagTranslations } from '@/lib/api/picpony';
 
 /**
@@ -41,8 +39,9 @@ function store(): Map<string, CacheEntry> {
     if (raw) {
       const now = Date.now();
       for (const [tag, entry] of Object.entries(JSON.parse(raw) as Record<string, CacheEntry>)) {
-        const ttl = entry.c ? HIT_TTL_MS : MISS_TTL_MS;
-        if (entry && typeof entry.c === 'string' && now - entry.t < ttl) {
+        if (!entry || (entry.c !== null && typeof entry.c !== 'string') || !Number.isFinite(entry.t)) continue;
+        const ttl = entry.c !== null ? HIT_TTL_MS : MISS_TTL_MS;
+        if (now >= entry.t && now - entry.t < ttl) {
           cache.set(tag, entry);
         }
       }
@@ -71,9 +70,49 @@ function persist() {
 }
 
 /** 剥离命名空间前缀：`artist:xxx` → `xxx` */
-function stripNamespace(tag: string): string {
+export function tagTranslationKey(tag: string): string {
   const colon = tag.indexOf(':');
-  return colon === -1 ? tag : tag.slice(colon + 1);
+  return (colon === -1 ? tag : tag.slice(colon + 1)).toLowerCase();
+}
+
+function fresh(entry: CacheEntry | undefined, now = Date.now()): entry is CacheEntry {
+  if (!entry) return false;
+  const age = now - entry.t;
+  return age >= 0 && age < (entry.c !== null ? HIT_TTL_MS : MISS_TTL_MS);
+}
+
+/**
+ * 缓存里已有的翻译，同步读出（不发请求）：标签列表首次渲染就用它，已见过的标签不必先显示英文
+ * 再换成中文。只返回仍在有效期内的条目；缺席的标签不出现在结果里。服务端没有缓存，返回空对象。
+ */
+export function peekTagTranslations(tags: readonly string[]): Record<string, string | null> {
+  if (typeof window === 'undefined') return {};
+  const entries = store();
+  const now = Date.now();
+  const out: Record<string, string | null> = {};
+  for (const tag of tags) {
+    const key = tagTranslationKey(tag);
+    const hit = entries.get(key);
+    if (fresh(hit, now)) out[key] = hit.c;
+  }
+  return out;
+}
+
+/**
+ * 把别处读到的翻译（服务端随详情首屏带来的那份）记进缓存，下次打开同一批标签时直接命中。
+ * 只写入字符串译名与"词库未收录"的确定答案；已有且仍新鲜的条目不覆盖。
+ */
+export function rememberTagTranslations(translations: Record<string, string | null>) {
+  if (typeof window === 'undefined') return;
+  const entries = store();
+  const now = Date.now();
+  let changed = false;
+  for (const [key, value] of Object.entries(translations)) {
+    if (fresh(entries.get(key), now)) continue;
+    entries.set(key, { c: typeof value === 'string' && value ? value : null, t: now });
+    changed = true;
+  }
+  if (changed) persist();
 }
 
 /** 请求在途的翻译，使并发调用合并到同一次请求。 */
@@ -90,15 +129,16 @@ export async function loadTagTranslations(
   onPartial?: (translations: Record<string, string | null>) => void,
 ): Promise<Record<string, string | null>> {
   const entries = store();
-  const cached: Record<string, string> = {};
+  const cached: Record<string, string | null> = Object.create(null);
   const joined: { tag: string; translation: Promise<string | null> }[] = [];
   const missing: string[] = [];
   const claimed = new Set<string>();
 
   for (const tag of tags) {
-    const key = stripNamespace(tag).toLowerCase();
+    const key = tagTranslationKey(tag);
     const hit = entries.get(key);
-    if (hit?.c) {
+    const age = hit ? Date.now() - hit.t : Infinity;
+    if (hit && age >= 0 && age < (hit.c !== null ? HIT_TTL_MS : MISS_TTL_MS)) {
       cached[key] = hit.c;
       continue;
     }
@@ -126,19 +166,22 @@ export async function loadTagTranslations(
 
   for (let i = 0; i < missing.length; i += BATCH_SIZE) {
     const batch = missing.slice(i, i + BATCH_SIZE);
-    const request = getTagTranslations(batch)
-      .then((data) => (data?.success && data.translations ? data.translations : {}))
-      .catch(() => ({}));
-
-    void request.then((translations) => {
-      const now = Date.now();
-      let stored = false;
-      for (const tag of batch) {
-        entries.set(tag, { c: translations[tag] ?? null, t: now });
-        stored = true;
-      }
-      if (stored) persist();
-    });
+    const misses = () => Object.fromEntries(batch.map((tag) => [tag, null]));
+    const request: Promise<Record<string, string | null>> = getTagTranslations(batch)
+      .then((data) => {
+        // A failed read is settled for this view, but must not persist as a
+        // dictionary miss. A later visit can retry a transient outage.
+        if (!data?.success || !data.translations) return misses();
+        const translations = Object.fromEntries(batch.map((tag) => [
+          tag,
+          typeof data.translations[tag] === 'string' ? data.translations[tag] : null,
+        ]));
+        const now = Date.now();
+        for (const tag of batch) entries.set(tag, { c: translations[tag], t: now });
+        persist();
+        return translations;
+      })
+      .catch(misses);
 
     for (const tag of batch) {
       const settled = request.then(
@@ -154,7 +197,7 @@ export async function loadTagTranslations(
     groups.push(request);
   }
 
-  const result: Record<string, string | null> = {};
+  const result: Record<string, string | null> = Object.create(null);
   const parts = await Promise.all(
     groups.map((group) =>
       group.then((part) => {
@@ -170,7 +213,7 @@ export async function loadTagTranslations(
   }
   /* 每个请求过的拼写都有条目（含 null），与 tagCounts 保持一致。 */
   for (const tag of tags) {
-    const key = stripNamespace(tag).toLowerCase();
+    const key = tagTranslationKey(tag);
     if (!(key in result)) result[key] = entries.get(key)?.c ?? null;
   }
   return result;

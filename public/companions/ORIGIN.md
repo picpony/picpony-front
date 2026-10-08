@@ -1,0 +1,9 @@
+# Original companion assets
+
+`browserponies.js`: copied from the original PicPony frontend snapshot, `https://picpony.top/assets/lib/browserponies.js?v=2`. Browser Ponies by Mathias Panzenböck, copyright 2011–2013, MIT license retained verbatim at the top of the file. One compatibility change: effect images use native images on every browser, avoiding the engine's historical nested-iframe GIF workaround inside the disposable sandbox. The wrapper never passes executable configuration callbacks or external URLs. The original engine's own listeners/timers live only in that sandbox, which is removed when companions rest.
+
+`previews/*.png`: original Desktop Ponies character artwork as served by PicPony's public `get_pony_configs` on 2026-10-03. Each is the source sprite's first frame decoded to PNG without resizing, recoloring, redrawing or other visual modification. Static frames keep a character chooser still for all motion preferences and avoid loading an animation engine. Each source URL, source SHA-256, original dimensions and output path are recorded in `previews/provenance.json`. 36 PNG files total 46,455 bytes.
+
+The public API does not supply the individual sprite artists' names or per-artwork license terms. The Browser Ponies software's MIT license is **not** asserted to license these character artworks. These are the original site's supplied assets reused for the owner's explicitly requested PicPony reproduction; provenance is preserved and no new ownership claim is made. My Little Pony character rights remain with their respective holders.
+
+Reproduction script and read-only config snapshots: `picpony-review/fix/E3/prepare_previews.py` and `preview-configs-1.json` through `preview-configs-6.json`.

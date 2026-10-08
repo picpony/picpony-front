@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; img-src https://picpony.top; style-src 'unsafe-inline'; connect-src 'none'; media-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>桌面小马</title>
+  <style>
+    html,body{margin:0;overflow:hidden;background:transparent}
+    body{font-family:system-ui,sans-serif}
+    /* The engine's overlay is `#browser-ponies` (its own id, hyphenated). These rules were once
+       written against `#browserponies` and matched nothing. */
+    #browser-ponies{pointer-events:none}
+    /* Pixel art stays crisp on a dense screen, and stands on the page in a soft shadow like the
+       mascot. A pony walks in rather than blinking into place (the engine spawns at a random spot). */
+    #browser-ponies>img{image-rendering:pixelated;filter:drop-shadow(0 2px 3px rgb(0 0 0 / 0.18));animation:pony-in calc(200ms * var(--motion, 1)) cubic-bezier(0.05, 0.7, 0.1, 1) backwards}
+    @keyframes pony-in{from{opacity:0;transform:translateY(6px)}}
+    /* A speech bubble stands over its pony (`ponies-frame.js` places it, below only where the top
+       is in the way) with a tail on the sprite: a square of the bubble's own material turned 45°,
+       as the mascot's is. It rises out of that tail on the app's clock (--motion is the speed
+       scale). This sandboxed document is outside the design tokens' reach, like offline.html, so
+       the curve is emphasized-decelerate's values spelled out. */
+    [data-pony-speech]{animation:pony-say calc(180ms * var(--motion, 1)) cubic-bezier(0.05, 0.7, 0.1, 1) backwards}
+    [data-pony-speech]::after{content:'';position:absolute;left:calc(var(--tail, 50%) - 6px);width:12px;height:12px;background:inherit;transform:rotate(45deg)}
+    [data-pony-speech][data-side=above]{transform-origin:var(--tail, 50%) calc(100% + 8px);--rise:4px}
+    [data-pony-speech][data-side=above]::after{bottom:-6px;border-bottom-right-radius:3px}
+    [data-pony-speech][data-side=below]{transform-origin:var(--tail, 50%) -8px;--rise:-4px}
+    [data-pony-speech][data-side=below]::after{top:-6px;border-top-left-radius:3px}
+    @keyframes pony-say{from{opacity:0;transform:translateY(var(--rise, 4px)) scale(0.94)}}
+  </style>
+  <script defer src="browserponies.js"></script>
+  <script defer src="ponies-frame.js"></script>
+</head>
+<body></body>
+</html>

@@ -1,6 +1,6 @@
 'use client';
 
-import { HERO_BACKGROUND_VISUAL_SELECTOR } from './constants';
+import { HERO_BACKGROUND_SELECTOR, HERO_BACKGROUND_VISUAL_SELECTOR } from './constants';
 import type { HeroRect } from './geometry';
 
 export type VisualMedia = HTMLImageElement | HTMLVideoElement;
@@ -126,16 +126,49 @@ export function getHeroRectWithoutAncestorTransform(
 
 export function findImageHeroThumbnail(imageId: number, sourceKey?: string | null) {
   const id = escapeSelector(String(imageId));
-  if (sourceKey) {
-    const exact = document.querySelector<HTMLElement>(
-      `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]` +
-        `[data-image-hero-source-key="${escapeSelector(sourceKey)}"]`,
-    );
-    if (exact) return exact;
-  }
-  return document.querySelector<HTMLElement>(
+  /* Profile uploads and favourites can contain the same image, and TabPanes
+     keeps both trees. Land in the active pane rather than the first DOM match.
+     Check layout, not visibility: the flight itself hides the real thumbnail
+     while its captured frame is on screen. */
+  const candidates = [...document.querySelectorAll<HTMLElement>(
     `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]`,
-  );
+  )].filter((candidate) => {
+    /* Every enclosing pane, not only the nearest: a concealed pane keeps its layout
+       (`content-visibility: hidden`), so a card in the active inner pane of a concealed outer
+       one still has client rects — and reading them would lay the hidden subtree out. */
+    for (let pane = candidate.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
+      if (!pane.hasAttribute('data-tab-pane-active')) return false;
+    }
+    return candidate.getClientRects().length > 0;
+  });
+  return candidates.find((candidate) => candidate.dataset.imageHeroSourceKey === sourceKey) ?? candidates[0] ?? null;
+}
+
+/** The card link around a picture's thumbnail — where focus returns as its detail closes. */
+export function findImageHeroCardLink(imageId: number, sourceKey?: string | null) {
+  return findImageHeroThumbnail(imageId, sourceKey)?.closest<HTMLElement>('a') ?? null;
+}
+
+/**
+ * Whether enough of a gallery card is on screen for a return flight to land on it — half of it,
+ * or half the gallery's height for a card taller than that. A card scrolled off (or, after
+ * 上一张 / 下一张, one the list never scrolled to) would carry the picture out of view instead
+ * of home; the close asks the list to reveal it first.
+ */
+export function isHeroThumbnailInView(thumbnail: HTMLElement | null) {
+  if (!thumbnail?.isConnected) return false;
+  const scroller = document.querySelector<HTMLElement>(HERO_BACKGROUND_SELECTOR);
+  if (!scroller) return false;
+  const card = getHeroRectWithoutAncestorTransform(thumbnail, getHeroBackgroundVisual());
+  const box = scroller.getBoundingClientRect();
+  const top = box.top + scroller.clientTop;
+  const left = box.left + scroller.clientLeft;
+  const bottom = top + scroller.clientHeight;
+  const right = left + scroller.clientWidth;
+  const visibleWidth = Math.min(card.left + card.width, right) - Math.max(card.left, left);
+  const visibleHeight = Math.min(card.top + card.height, bottom) - Math.max(card.top, top);
+  if (visibleWidth <= 0 || visibleHeight <= 0) return false;
+  return visibleHeight >= Math.min(card.height, scroller.clientHeight) / 2;
 }
 
 let backgroundVisual: HTMLElement | null = null;

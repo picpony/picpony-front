@@ -1,350 +1,185 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  MdBook,
-  MdDashboard,
-  MdPeople,
-  MdNotifications,
-  MdMessage,
-  MdEmojiEvents,
-  MdShield,
-  MdBuild,
-  MdStore,
-  MdReport,
-  MdBlock,
-  MdAttachMoney,
-} from 'react-icons/md';
-import dynamic from 'next/dynamic';
-import ErrorRetry from '@/components/ErrorRetry';
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { MdDashboard, MdHome } from 'react-icons/md';
 import Tabs from '@/components/Tabs';
-import { tabId, tabPanelId } from '@/components/TabPanes';
-import Skeleton from '@/components/Skeleton';
-import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
+import TabPanes, { TabPane } from '@/components/TabPanes';
+import EmptyState from '@/components/EmptyState';
+import SignInRequired from '@/components/SignInRequired';
+import { buttonClasses } from '@/components/buttonStyles';
 import { ICON } from '@/lib/icons';
-import { MOTION_SPEED_SCALE } from '@/lib/appearance';
-import { readUserInfo } from '@/lib/hooks';
-
-/* One loading shape for all fourteen lazy tabs — without it, the first switch to a tab
-   rendered an empty well the height of the panel until its chunk arrived. This is the
-   panel's own geometry: a section heading, a header row, a run of grouped rows. */
-function AdminTabFallback() {
-  return (
-    <div className="space-y-6">
-      <Skeleton className="h-7 w-40" />
-      <div>
-        <div className="m3-row bg-surface-container-high px-4 py-3">
-          <Skeleton className="h-4 w-32" />
-        </div>
-        {Array.from({ length: 5 }, (_, i) => (
-          <div key={i} className="m3-row flex flex-col gap-2 bg-surface-container-low p-4">
-            <Skeleton className="h-4 w-2/5" delay={i * 80} />
-            <Skeleton className="h-3.5 w-full" delay={i * 80 + 60} />
-            <Skeleton className="h-3.5 w-3/4" delay={i * 80 + 120} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const WelcomeTab = dynamic(() => import('@/components/admin/WelcomeTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const GlossaryTab = dynamic(() => import('@/components/admin/GlossaryTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const UsersTab = dynamic(() => import('@/components/admin/UsersTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const NotificationsTab = dynamic(() => import('@/components/admin/NotificationsTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const MessagesAuditTab = dynamic(() => import('@/components/admin/MessagesAuditTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const BadgesTab = dynamic(() => import('@/components/admin/BadgesTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const BlockTagsTab = dynamic(() => import('@/components/admin/BlockTagsTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const DeveloperTab = dynamic(() => import('@/components/admin/DeveloperTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const TeamTab = dynamic(() => import('@/components/admin/TeamTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const ShopTab = dynamic(() => import('@/components/admin/ShopTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const ReportsTab = dynamic(() => import('@/components/admin/ReportsTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const BlacklistTab = dynamic(() => import('@/components/admin/BlacklistTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const WealthTab = dynamic(() => import('@/components/admin/WealthTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-const OtherTab = dynamic(() => import('@/components/admin/OtherTab'), {
-  ssr: false,
-  loading: AdminTabFallback,
-});
-
-type TabId =
-  | 'welcome'
-  | 'glossary'
-  | 'users'
-  | 'notifications'
-  | 'messages'
-  | 'reports'
-  | 'blacklist'
-  | 'shop'
-  | 'wealth'
-  | 'other'
-  | 'badges'
-  | 'blocktags'
-  | 'developer'
-  | 'team';
-
-interface TabConfig {
-  id: TabId;
-  label: string;
-  icon: React.ReactNode;
-  adminOnly?: boolean;
-  superAdminOnly?: boolean;
-  editorOnly?: boolean;
-}
-
-const TABS: TabConfig[] = [
-  { id: 'welcome', label: '欢迎', icon: <MdDashboard size={ICON.control} />, editorOnly: true },
-  { id: 'glossary', label: '词库编辑', icon: <MdBook size={ICON.control} />, editorOnly: true },
-  { id: 'users', label: '用户管理', icon: <MdPeople size={ICON.control} />, adminOnly: true },
-  {
-    id: 'notifications',
-    label: '通知管理',
-    icon: <MdNotifications size={ICON.control} />,
-    adminOnly: true,
-  },
-  { id: 'messages', label: '私信审计', icon: <MdMessage size={ICON.control} />, adminOnly: true },
-  { id: 'badges', label: '徽章管理', icon: <MdEmojiEvents size={ICON.control} />, adminOnly: true },
-  { id: 'blocktags', label: '屏蔽标签', icon: <MdShield size={ICON.control} />, adminOnly: true },
-  { id: 'developer', label: '开发者', icon: <MdBuild size={ICON.control} />, adminOnly: true },
-  { id: 'team', label: '团队管理', icon: <MdPeople size={ICON.control} />, adminOnly: true },
-  { id: 'shop', label: '商店管理', icon: <MdStore size={ICON.control} />, adminOnly: true },
-  { id: 'reports', label: '举报处理', icon: <MdReport size={ICON.control} />, adminOnly: true },
-  { id: 'blacklist', label: '屏蔽图库', icon: <MdBlock size={ICON.control} />, adminOnly: true },
-  { id: 'wealth', label: '经验金币', icon: <MdAttachMoney size={ICON.control} />, superAdminOnly: true },
-  { id: 'other', label: '其他功能', icon: <MdBuild size={ICON.control} />, adminOnly: true },
-];
-
-/** The tab bare `/admin` lands on — the one spelled by `?tab=`'s absence, same rule
- *  the home tabs use for 图库. */
-const DEFAULT_TAB: TabId = 'welcome';
+import { useSession } from '@/lib/hooks';
+import type { Role } from '@/lib/roles';
+import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
+import {
+  adminRole,
+  adminTabsFor,
+  DEFAULT_ADMIN_TAB,
+  isAdminTab,
+  landingAdminTab,
+  type AdminTabId,
+} from '@/components/admin/registry';
+import AdminPaneSkeleton from '@/components/admin/AdminPaneSkeleton';
+import { dropQueuedAdminAddress, replaceAdminAddress } from './address';
 
 /**
- * Long enough to sit past the pane's own 400ms fade (`animate-fade-in`), for the same
- * reason the home tab bar defers: an RSC navigation lands as a commit, and mid-swap
- * that is a dropped frame. Nothing waits for the URL — `pendingTab` owns what is on
- * screen — so the only cost of deferring is how soon the address bar agrees. Also
- * swallows a run down the sidebar into a single push rather than one history entry
- * per tab passed through.
+ * /admin — the console.
  *
- * Scaled by the *slowest* speed: the fade's clock goes through `--motion-scale`, so at
- * 缓慢 it runs 560ms and an unscaled figure would push inside it.
+ * Three states, each with a way forward (R9-001). **No session**: the shared 需要登录 block with a
+ * 登录 button (owner decision 4 — a gated page never opens the dialog by itself). **Signed in
+ * without a staff role**: 没有访问权限, an `EmptyState` rather than the failure preset, with a way
+ * back to the app — a refusal, not a broken page. **Staff**: the console.
+ *
+ * The rail is one `Tabs` (`variant="rail"`, `activation="manual"` — R9-004: arrows move focus only,
+ * so arrowing through the sections starts no reads) and the panes are `TabPanes` without `lean`
+ * (decision 25: a work tool). A panel stays mounted once visited, so returning to a section keeps
+ * its half-filled form and its place; a never-visited panel is not mounted at all.
+ *
+ * The section is named in the address with `replaceState` (decision 18, the /settings pattern): a
+ * reload or a shared link opens it, and Back leaves the console rather than walking the sections.
  */
-const TAB_PUSH_COALESCE_MS = Math.round(400 * MOTION_SPEED_SCALE.slow);
-
-function readAdminIdentity(): { userRole: string; token: string } {
-  const user = readUserInfo();
-  return { userRole: (user?.role as string) || 'user', token: user?.token || '' };
+export default function AdminPage() {
+  return (
+    /* `useSearchParams` needs a boundary above it; the fallback is the console's own arrival
+       state, so the shell does not jump. */
+    <Suspense fallback={<ConsoleColumn><AdminPaneSkeleton /></ConsoleColumn>}>
+      <AdminGate />
+    </Suspense>
+  );
 }
 
-function AdminPanel() {
-  const router = useRouter();
-  const searchParams = useBackgroundSearchParams();
-  const [{ userRole, token }] = useState(readAdminIdentity);
-  const [isLoading] = useState(false);
-
-  const isEditor = userRole === 'editor';
-  const isAdmin = ['super_admin', 'admin'].includes(userRole);
-  const isSuperAdmin = userRole === 'super_admin';
-  const visibleTabs = TABS.filter((tab) => {
-    if (isEditor) return tab.editorOnly;
-    if (tab.superAdminOnly) return isSuperAdmin;
-    if (tab.adminOnly) return isAdmin;
-    return true;
-  });
-
-  /* The tab the URL asks for. An unknown name, or one this role cannot see, falls back
-     rather than erroring — a bookmarked `?tab=wealth` kept by someone who has since
-     lost super-admin should still open the panel. */
-  const tabParam = searchParams.get('tab');
-  const urlTab: TabId =
-    visibleTabs.find((tab) => tab.id === tabParam)?.id ?? visibleTabs[0]?.id ?? DEFAULT_TAB;
-
-  /* Optimistic tab, so a click paints immediately. `router.push` only changes the search
-     params, but that is still an RSC navigation, and waiting for it would leave the
-     sidebar highlighting the tab you just left for as long as the round trip takes —
-     made worse by the coalescing window below. */
-  const [pendingTab, setPendingTab] = useState<TabId | null>(null);
-  const [isNavigating, startNavigation] = useTransition();
-  const activeTab = pendingTab ?? urlTab;
-
-  /* Adjust-during-render: hand control back to the URL once it has *finished* catching
-     up. `isNavigating` distinguishes that from the URL merely passing through this tab
-     on its way to a later one in the same burst. */
-  if (pendingTab && pendingTab === urlTab && !isNavigating) setPendingTab(null);
-
-  const pushTimer = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
-    },
-    [],
-  );
-
-  const handleTabChange = (tabId: TabId) => {
-    if (tabId === activeTab) return;
-    setPendingTab(tabId);
-
-    const params = new URLSearchParams(searchParams.toString());
-    if (tabId === DEFAULT_TAB) params.delete('tab');
-    else params.set('tab', tabId);
-    const qs = params.toString();
-    const href = qs ? `/admin?${qs}` : '/admin';
-
-    if (pushTimer.current !== null) window.clearTimeout(pushTimer.current);
-    pushTimer.current = null;
-    /* A burst that comes back to the tab the URL already names needs no push — and has to
-       cancel the one it queued on the way out, or that lands as a second history entry
-       for the page we never left. Only while nothing is in flight: a push that has
-       already started moves the URL off this tab, and then it is exactly the push that
-       has to put it back. */
-    if (tabId === urlTab && !isNavigating) return;
-
-    pushTimer.current = window.setTimeout(() => {
-      pushTimer.current = null;
-      /* `scroll: false`: the panel is one screen with a sidebar beside it, so there is
-         no new segment to scroll to — only the reading position of whatever list you
-         were in to lose. */
-      startNavigation(() => router.push(href, { scroll: false }));
-    }, TAB_PUSH_COALESCE_MS);
-  };
-
-  if (isLoading) {
-    return null;
-  }
-  if (!isAdmin && !isEditor) {
-    return (
-      <ErrorRetry size="page" title="没有访问权限" message="您没有权限访问此页面" />
-    );
-  }
+/**
+ * The console's column, and the route's heading in every state — signed out, refused and loading as
+ * well as staff (G4-005: only the staff branch had it). The rail names the sections, so the page's
+ * own name serves the outline and is where focus lands after a navigation (R3-042).
+ */
+function ConsoleColumn({ children, ref }: { children: React.ReactNode; ref?: React.Ref<HTMLDivElement> }) {
   return (
-    <div className="max-w-6xl mx-auto">
-      {' '}
-      {/* `surface-container-low`, not `surface`: the app scroller behind this is itself
-          `bg-surface`, so a panel painted the same tone was a card the exact colour of
-          the page it sits on. Same fault AGENTS.md's layout note records for /settings'
-          six invisible section wrappers. */}
-      <div className="bg-surface-container-low rounded-md overflow-hidden flex flex-col md:flex-row">
-        
-        <div className="md:w-48 shrink-0 border-b md:border-b-0 border-outline-variant">
-          {/* `Tabs variant="rail"`, not a hand-rolled pill list: this was one of the app's
-              four tab implementations and declared no ARIA roles — fourteen destinations a
-              screen reader read as a run of buttons, no arrow keys, no current-tab
-              statement beyond `aria-current` on a control that is not a link. The icon's
-              active `scale-110` is gone with it: not something M3 does to a navigation
-              item, and the row already says "current" with a container pair. */}
-          <Tabs
-            variant="rail"
-            label="管理面板分区"
-            className="p-2"
-            value={activeTab}
-            onChange={handleTabChange}
-            tabs={visibleTabs.map((tab) => ({
-              value: tab.id,
-              label: tab.label,
-              icon: tab.icon,
-            }))}
-          />
-        </div>
-        <div className="flex-1 p-4 sm:p-6 min-h-96 md:min-h-150 relative">
-          {/* A fade, deliberately not the tab shared axis: `TabPanes` needs both panes
-              alive to slide, and these fourteen are `dynamic(..., { ssr: false })` — keeping
-              them mounted would mount fourteen admin tabs, each with its own fetch. The
-              outgoing pane genuinely cannot survive here.
-
-              What was here was `animate-page-transition` — the *route* animation, a 12px
-              rise with an 80ms backwards-filled delay — which on a lateral move between
-              siblings read as the panel dropping in from above. `animate-fade-in` is the
-              same 400ms `decelerate` without the travel. The `key` stays: it restarts the
-              animation on each switch, and with `{cond && ...}` mounting there is nothing
-              for it to destroy that was not destroyed anyway.
-
-              It carries the panel half of `role="tab"`'s contract itself — one panel,
-              re-identified as the active tab changes, so the selected tab's
-              `aria-controls` always resolves. */}
-          <div
-            key={activeTab}
-            id={tabPanelId(activeTab)}
-            role="tabpanel"
-            aria-labelledby={tabId(activeTab)}
-            tabIndex={0}
-            className="animate-fade-in"
-          >
-            {activeTab === 'welcome' && <WelcomeTab />}
-            {activeTab === 'glossary' && <GlossaryTab />}
-            {activeTab === 'users' && <UsersTab token={token} myRole={userRole} />}
-            {activeTab === 'notifications' && <NotificationsTab token={token} />}
-            {activeTab === 'messages' && <MessagesAuditTab token={token} />}
-            {activeTab === 'badges' && <BadgesTab token={token} />}
-            {activeTab === 'blocktags' && <BlockTagsTab token={token} />}
-            {activeTab === 'developer' && <DeveloperTab token={token} />}
-            {activeTab === 'team' && <TeamTab token={token} />}
-            {activeTab === 'shop' && <ShopTab token={token} />}
-            {activeTab === 'reports' && <ReportsTab token={token} />}
-            {activeTab === 'blacklist' && <BlacklistTab token={token} />}
-            {activeTab === 'wealth' && <WealthTab token={token} />}
-            {activeTab === 'other' && <OtherTab token={token} />}
-          </div>
-        </div>
-      </div>
+    <div ref={ref} className="mx-auto max-w-6xl">
+      <h1 className="sr-only">管理面板</h1>
+      {children}
     </div>
   );
 }
 
-export default function AdminPage() {
+function AdminGate() {
+  const { user, token, ready } = useSession();
+  if (!ready) return <ConsoleColumn><AdminPaneSkeleton /></ConsoleColumn>;
+  if (!token) {
+    return (
+      <ConsoleColumn>
+        <SignInRequired description="登录管理员或小编账号后即可使用管理面板。" />
+      </ConsoleColumn>
+    );
+  }
+  const role = adminRole(user?.role);
+  if (role === 'user') {
+    return (
+      <ConsoleColumn>
+        <EmptyState
+          icon={<MdDashboard size={ICON.display} />}
+          title="没有访问权限"
+          description="管理面板仅对管理员与小编开放。权限刚刚变更的话，重新登录后再试。"
+          action={
+            <Link scroll={false} href="/" className={buttonClasses({ variant: 'filled' })}>
+              <MdHome size={ICON.dense} aria-hidden="true" />
+              回到首页
+            </Link>
+          }
+        />
+      </ConsoleColumn>
+    );
+  }
+  /* One console per account: a sign-in in another tab starts every panel afresh. */
+  return <AdminConsole key={token} token={token} role={role} viewerId={Number(user?.id) || 0} />;
+}
+
+/** 12rem of rail, 3rem of panel insets and 33rem for the panel itself. */
+const SPLIT_MIN_REM = 48;
+
+function AdminConsole({ token, role, viewerId }: { token: string; role: Role; viewerId: number }) {
+  const offered = adminTabsFor(role);
+  const tabParam = useBackgroundSearchParams().get('tab');
+  const requested = isAdminTab(tabParam) ? tabParam : null;
+
+  const [tab, setTab] = useState<AdminTabId>(() => landingAdminTab(requested, role));
+  /* A link followed while the console is up selects its section. */
+  const [seen, setSeen] = useState(requested);
+  if (seen !== requested) {
+    setSeen(requested);
+    setTab(landingAdminTab(requested, role));
+  }
+  /* Never a section the role is not offered: a bookmarked `?tab=wealth` kept by someone who has
+     since lost 创始人 lands on the overview. */
+  const shown = landingAdminTab(tab, role);
+  if (shown !== tab) setTab(shown);
+
+  const [visited, setVisited] = useState<ReadonlySet<AdminTabId>>(() => new Set([shown]));
+  if (!visited.has(shown)) setVisited(new Set([...visited, shown]));
+
+  /* The address names the section on screen: corrected in place when it names one this role is
+     not offered (or nothing it knows), kept bare for the overview. */
+  useEffect(() => {
+    if (tabParam === null && shown === DEFAULT_ADMIN_TAB) return;
+    if (requested === shown) return;
+    replaceAdminAddress(shown);
+  }, [shown, requested, tabParam]);
+  useEffect(() => dropQueuedAdminAddress, []);
+
+  const select = (next: AdminTabId) => {
+    setTab(next);
+    replaceAdminAddress(next);
+  };
+
+  /* The split follows the console's own width — the docked drawer takes width the viewport cannot
+     see — and the rail's orientation is a keyboard contract, so it is decided here rather than by a
+     container query alone. */
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    if (!column) return;
+    const measure = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      setWide(column.clientWidth >= SPLIT_MIN_REM * rem);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    /* `useSearchParams` needs a boundary above it; the fallback is the panel's own
-       loading state so the shell does not jump. */
-    <Suspense
-      fallback={
-        /* `AdminTabFallback`, not a centred dot — it is the panel's own silhouette and
-           already exists two functions up. No padding of its own: `[data-page-content]`
-           is already `p-4 sm:p-6` and the real console takes none, so padding here
-           insetting the fallback 32/48px made the console shift on arrival. */
-        <div className="mx-auto max-w-6xl">
-          <AdminTabFallback />
+    <ConsoleColumn ref={columnRef}>
+      {/* `surface-container-low`, not `surface`: the app scroller behind this is itself
+          `bg-surface`, so a panel of the same tone was a card the colour of the page it sits on.
+          Nothing inside needs clipping — the horizontal rail scrolls its own row. */}
+      <div className={`bg-surface-container-low rounded-md flex ${wide ? 'flex-row' : 'flex-col'}`}>
+        <div className={wide ? 'w-48 shrink-0' : 'min-w-0 border-b border-outline-variant'}>
+          <Tabs
+            variant="rail"
+            orientation={wide ? 'vertical' : 'horizontal'}
+            activation="manual"
+            label="管理面板分区"
+            className="p-2"
+            value={shown}
+            onChange={select}
+            tabs={offered.map((item) => ({ value: item.id, label: item.label, icon: item.icon }))}
+          />
         </div>
-      }
-    >
-      <AdminPanel />
-    </Suspense>
+        <div className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}>
+          <TabPanes value={shown}>
+            {offered.map(({ id, component: Panel }) =>
+              visited.has(id) ? (
+                <TabPane key={id} value={id}>
+                  <Panel token={token} role={role} viewerId={viewerId} openTab={select} />
+                </TabPane>
+              ) : null,
+            )}
+          </TabPanes>
+        </div>
+      </div>
+    </ConsoleColumn>
   );
 }

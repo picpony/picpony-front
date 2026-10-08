@@ -1,553 +1,337 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { showToast } from '@/components/Toast';
-import { default as StatusBadge } from '@/components/Badge';
-import Checkbox from '@/components/Checkbox';
-import RoleBadge from '@/components/RoleBadge';
-import Select from '@/components/Select';
-import { MdPeople, MdEdit, MdDelete, MdCheckCircle, MdBlock } from 'react-icons/md';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { MdBlock, MdCheckCircle, MdDeleteOutline, MdEdit } from 'react-icons/md';
+import Badge from '@/components/Badge';
 import DataTable, { type Column } from '@/components/DataTable';
-import { SectionHeader, SearchInput } from './';
-import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
+import { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
+import RoleBadge from '@/components/RoleBadge';
+import SearchInput from '@/components/SearchInput';
+import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { Input, Textarea } from '@/components/Input';
-import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
-import SectionHeading from '@/components/SectionHeading';
-import { ICON } from '@/lib/icons';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
+import SectionHeader from './SectionHeader';
+import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
+import { useAdminQuery, tableError } from './queries';
+import { usersQuery } from './sharedQueries';
+import { useAdminMutation } from './useAdminMutation';
+import type { AdminPanelProps } from './registry';
+import UserEditor, { userEditorId, type AdminUser } from './users/UserEditor';
+import BadgeEditDialog from './users/BadgeEditDialog';
+import { userBadges, type AdminUserBadge } from './users/rules';
 
-interface Badge {
-  id: number;
-  badge_name: string;
-  badge_color: string;
-}
+const EMPTY: AdminUser[] = [];
 
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-  api_key: string | null;
-  derpi_user_id: string | null;
-  derpi_username: string | null;
-  is_banned: number;
-  created_at: string;
-  experience: number;
-  coins: number;
-  bio?: string;
-  gender?: string;
-  birthday?: string;
-  badges?: Badge[];
-}
+/** 「用户3」（#3） — how a confirm and a toast name an account. */
+const named = (user: { id: number; username: string }) => `「${user.username}」（#${user.id}）`;
 
-interface UserEditForm {
-  username: string;
-  email: string;
-  password: string;
-  role: string;
-  bio: string;
-  gender: string;
-  birthday: string;
-  is_banned: number;
-}
+/**
+ * 用户管理. The list pages client-side (`admin_get_users` answers every account at once — R9-014);
+ * each row opens its editor under itself (`UserEditor`); ban, unban and delete confirm and name the
+ * account (R9-009), and none of them is offered on the viewer's own row, which says 当前账号
+ * instead.
+ *
+ * Every write owns its own pending state: a row's buttons lock while that row has a write in
+ * flight, and only the pressed one spins; the rest of the list stays usable.
+ */
+export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
+  const read = useAdminQuery(usersQuery, token);
+  const users = read.data?.rows ?? EMPTY;
+  const rowMutation = useAdminMutation(token);
+  const saveMutation = useAdminMutation(token);
+  const badgeMutation = useAdminMutation(token);
+  const { confirm, confirmThen, confirmDialog } = useConfirm();
 
-const USER_ROLE_OPTIONS = [
-  { value: 'user', label: '用户' },
-  { value: 'editor', label: '小编' },
-  { value: 'admin', label: '管理员' },
-];
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<{ id: number; closing: boolean } | null>(null);
+  const dirtyRef = useRef(false);
+  /* `session` counts openings, so each one starts from the badge's own values while a closing
+     dialog keeps its key (and its exit). */
+  const [badgeEdit, setBadgeEdit] = useState<
+    { badge: AdminUserBadge; owner: AdminUser; open: boolean; session: number } | null
+  >(null);
+  /* The row an action is running on, and which action — so only the pressed button spins. */
+  const [running, setRunning] = useState<{ id: number; action: 'ban' | 'delete' } | null>(null);
 
-const USER_GENDER_OPTIONS = [
-  { value: '', label: '-- 不修改 --' },
-  { value: 'male', label: '男' },
-  { value: 'female', label: '女' },
-  { value: 'other', label: '其他' },
-  { value: 'secret', label: '保密' },
-];
+  /* The row being edited stays in the results while its editor is open or closing: a rename that
+     no longer matches the search must not unmount the editor mid-animation. */
+  const filtered = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return users;
+    return users.filter((user) =>
+      user.id === editing?.id ||
+      String(user.id) === keyword ||
+      user.username?.toLowerCase().includes(keyword) ||
+      user.email?.toLowerCase().includes(keyword));
+  }, [users, query, editing?.id]);
+  const paged = usePagedRows(filtered, query.trim());
 
-export default function UsersTab({ token, myRole }: { token: string; myRole: string }) {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchKw, setSearchKw] = useState('');
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isInlineEditorClosing, setIsInlineEditorClosing] = useState(false);
-  const [isSavingUser, setIsSavingUser] = useState(false);
-  const [editForm, setEditForm] = useState<UserEditForm>({
-    username: '',
-    email: '',
-    password: '',
-    role: 'user',
-    bio: '',
-    gender: '',
-    birthday: '',
-    is_banned: 0,
-  });
-  const refreshAfterInlineCloseRef = useRef(false);
+  const editingUser = editing ? users.find((user) => user.id === editing.id) ?? null : null;
+  const setDirty = useCallback((dirty: boolean) => {
+    dirtyRef.current = dirty;
+  }, []);
 
-  const handleSaveUser = async () => {
-    if (!editingUser) return;
-    setIsSavingUser(true);
-    try {
-      const payload: Record<string, unknown> = { target_id: editingUser.id };
-
-      if (editForm.username !== editingUser.username) {
-        payload.username = editForm.username;
-      }
-      if (editForm.email !== editingUser.email) {
-        payload.email = editForm.email;
-      }
-      if (editForm.password) {
-        payload.password = editForm.password;
-      }
-      if (editForm.role !== editingUser.role) {
-        payload.role = editForm.role;
-      }
-      if (editForm.is_banned !== editingUser.is_banned) {
-        payload.is_banned = editForm.is_banned;
-      }
-      payload.bio = editForm.bio || '';
-      payload.gender = editForm.gender || '';
-      payload.birthday = editForm.birthday || '';
-
-      const res = await adminApi.adminUpdateUser(token, payload);
-      const data = await res.json();
-
-      if (data.success) {
-        showToast('用户信息已更新', 'success');
-        refreshAfterInlineCloseRef.current = true;
-        closeInlineEditor();
-      } else {
-        showToast(data.error || '保存失败', 'error');
-      }
-    } catch {
-      showToast('网络错误，请稍后再试', 'error');
-    } finally {
-      setIsSavingUser(false);
+  const openEditor = async (user: AdminUser, trigger: HTMLElement) => {
+    /* A save in flight keeps its editor: a second row cannot open over it. */
+    if (editing && saveMutation.isPending(editing.id)) return;
+    if (editing && editing.id !== user.id && !editing.closing && dirtyRef.current) {
+      const current = users.find((row) => row.id === editing.id);
+      const discard = await confirm({
+        title: '确认放弃修改',
+        message: `确定要放弃对${current ? named(current) : '该用户'}的修改吗？`,
+      });
+      if (!discard) return;
     }
+    captureInlineEditorLayout(trigger);
+    dirtyRef.current = false;
+    setEditing({ id: user.id, closing: false });
   };
 
-  const { confirmThen, confirmDialog } = useConfirm();
+  const closeEditor = () => {
+    if (!editing || saveMutation.isPending(editing.id)) return;
+    setEditing({ ...editing, closing: true });
+  };
 
-  const loadUsers = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await adminApi.adminGetUsers(token);
-      if (data.success) {
-        setUsers(data.users || []);
-      }
-    } catch {
-      showToast('用户加载失败', 'error');
-    } finally {
-      setIsLoading(false);
+  const save = (user: AdminUser, payload: Record<string, unknown> | null) => {
+    if (!payload) {
+      showToast('没有需要保存的修改', 'info');
+      setEditing({ id: user.id, closing: true });
+      return;
     }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    adminApi
-      .adminGetUsers(token)
-      .then((data) => {
-        if (data.success) {
-          setUsers(data.users || []);
-        }
-      })
-      .catch(() => showToast('用户加载失败', 'error'))
-      .finally(() => setIsLoading(false));
-  }, [token]);
-
-  const filteredUsers = useMemo(() => {
-    if (!searchKw) return users;
-    const kw = searchKw.toLowerCase();
-    return users.filter(
-      (u) =>
-        String(u.id) === kw ||
-        u.username?.toLowerCase().includes(kw) ||
-        u.email?.toLowerCase().includes(kw),
-    );
-  }, [searchKw, users]);
-
-  const openInlineEditor = (user: User) => {
-    setEditingUser(user);
-    setIsInlineEditorClosing(false);
-    setEditForm({
-      username: user.username || '',
-      email: user.email || '',
-      password: '',
-      role: user.role || 'user',
-      bio: user.bio || '',
-      gender: user.gender || '',
-      birthday: user.birthday || '',
-      is_banned: user.is_banned || 0,
-    });
-  };
-
-  const closeInlineEditor = () => {
-    if (!editingUser) return;
-    setIsInlineEditorClosing(true);
-  };
-
-  const finishInlineEditorClose = () => {
-    setEditingUser(null);
-    setIsInlineEditorClosing(false);
-
-    if (!refreshAfterInlineCloseRef.current) return;
-    refreshAfterInlineCloseRef.current = false;
-    loadUsers();
-  };
-
-  const handleBan = async (userId: number, isBanned: number) => {
-    confirmThen(
-      isBanned ? '确认封禁' : '确认解封',
-      isBanned ? '确定要封禁该用户吗？' : '确定要解封该用户吗？',
-      async () => {
-        try {
-          const res = await adminApi.adminUpdateUser(token, { target_id: userId, is_banned: isBanned });
-          const data = await res.json();
-          if (data.success) {
-            showToast(isBanned ? '已封禁' : '已解封', 'success');
-            loadUsers();
-          } else {
-            showToast(data.error || '操作失败', 'error');
-          }
-        } catch {
-          showToast('操作失败', 'error');
-        }
+    void saveMutation.run(
+      () => adminApi.adminUpdateUser(token, payload),
+      () => {
+        showToast(`已保存${named(user)}的资料`, 'success');
+        setEditing((current) => (current?.id === user.id ? { id: user.id, closing: true } : current));
       },
+      '保存失败',
+      { key: user.id, onCommitted: read.refresh },
     );
   };
 
-  const handleDelete = async (userId: number) => {
+  const runRowAction = (user: AdminUser, action: 'ban' | 'delete', request: () => Promise<Response>, done: string, failure: string, commit: () => void) => {
+    if (rowMutation.isPending(user.id)) return;
+    setRunning({ id: user.id, action });
+    void rowMutation
+      .run(request, () => showToast(done, 'success'), failure, { key: user.id, onCommitted: commit })
+      .finally(() => setRunning((current) => (current?.id === user.id ? null : current)));
+  };
+
+  const toggleBan = (user: AdminUser) => {
+    const banning = !user.is_banned;
     confirmThen(
-      '确认彻底删除账号',
-      '确定要彻底抹除此账号及所有相关数据吗？此操作无法恢复。',
-      async () => {
-        try {
-          const res = await adminApi.adminDeleteUser(token, userId);
-          const data = await res.json();
-          if (data.success) {
-            showToast('已删除', 'success');
-            loadUsers();
-          } else {
-            showToast(data.error || '删除失败', 'error');
-          }
-        } catch {
-          showToast('删除失败', 'error');
-        }
+      banning ? '确认封禁' : '确认解封',
+      banning
+        ? `确定要封禁用户${named(user)}吗？封禁后该用户将在所有设备上退出登录。`
+        : `确定要解封用户${named(user)}吗？`,
+      () => runRowAction(
+        user,
+        'ban',
+        () => adminApi.adminUpdateUser(token, { target_id: user.id, is_banned: banning ? 1 : 0 }),
+        banning ? `已封禁${named(user)}` : `已解封${named(user)}`,
+        banning ? '封禁失败' : '解封失败',
+        () => {
+          usersQuery.write(token, (previous) => ({
+            stats: previous?.stats,
+            rows: previous?.rows.map((row) => (row.id === user.id ? { ...row, is_banned: banning ? 1 : 0 } : row)) ?? [],
+          }));
+          read.refresh();
+        },
+      ),
+      { tone: banning ? 'danger' : 'filled' },
+    );
+  };
+
+  const remove = (user: AdminUser) => {
+    confirmThen(
+      '确认删除用户',
+      `确定要彻底删除用户${named(user)}及其所有数据吗？此操作无法恢复。`,
+      () => runRowAction(
+        user,
+        'delete',
+        () => adminApi.adminDeleteUser(token, user.id),
+        `已删除${named(user)}`,
+        '删除失败',
+        () => {
+          if (editing?.id === user.id) setEditing(null);
+          usersQuery.write(token, (previous) => ({ stats: previous?.stats, rows: previous?.rows.filter((row) => row.id !== user.id) ?? [] }));
+          read.refresh();
+        },
+      ),
+    );
+  };
+
+  const deleteBadge = (owner: AdminUser, badge: AdminUserBadge) => {
+    confirmThen(
+      '确认删除徽章',
+      `确定要删除用户${named(owner)}的徽章「${badge.name}」吗？`,
+      () => void badgeMutation.run(
+        () => adminApi.adminDeleteBadge(token, badge.id),
+        () => showToast(`已删除徽章「${badge.name}」`, 'success'),
+        '删除失败',
+        { key: badge.id, onCommitted: read.refresh },
+      ),
+    );
+  };
+
+  const saveBadge = (values: { name: string; color: string }) => {
+    if (!badgeEdit) return;
+    const { badge } = badgeEdit;
+    void badgeMutation.run(
+      () => adminApi.adminEditBadge(token, { badge_id: badge.id, badge_name: values.name, badge_color: values.color }),
+      () => {
+        showToast(`已更新徽章「${values.name}」`, 'success');
+        setBadgeEdit((current) => (current ? { ...current, open: false } : current));
       },
+      '保存失败',
+      { key: badge.id, onCommitted: read.refresh },
     );
   };
 
-  const renderInlineEditor = (user: User) => {
-    if (editingUser?.id !== user.id) return null;
-
-    const idPrefix = `users-inline-${user.id}`;
-
-    return (
-      <InlineEditorPanel
-        id={`${idPrefix}-editor`}
-        label={`编辑用户 ${user.username}`}
-        isClosing={isInlineEditorClosing}
-        onExitComplete={finishInlineEditorClose}
-      >
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <SectionHeading as="h3" className="mb-0" subtitle={`#${user.id} · ${user.username}`}>
-              编辑用户
-            </SectionHeading>
-          </div>
-          <Button variant="text" size="xs" onClick={closeInlineEditor} disabled={isSavingUser}>
-            取消
-          </Button>
-        </div>
-
-        <div className="popover-scrollbar overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead className="bg-surface-container-high">
-              <tr>
-                <th
-                  scope="col"
-                  className="w-28 px-3 py-2 text-left text-label-l text-on-surface-variant sm:w-36"
-                >
-                  字段
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-label-l text-on-surface-variant">
-                  内容
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-surface-container-low">
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <label htmlFor={`${idPrefix}-username`} className="text-label-l text-on-surface-variant">
-                    用户名
-                  </label>
-                </th>
-                <td className="min-w-48 px-3 py-3">
-                  <Input
-                    id={`${idPrefix}-username`}
-                    value={editForm.username}
-                    onChange={(event) =>
-                      setEditForm((form) => ({ ...form, username: event.target.value }))
-                    }
-                  />
-                </td>
-              </tr>
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <label htmlFor={`${idPrefix}-email`} className="text-label-l text-on-surface-variant">
-                    邮箱
-                  </label>
-                </th>
-                <td className="min-w-48 px-3 py-3">
-                  <Input
-                    id={`${idPrefix}-email`}
-                    type="email"
-                    value={editForm.email}
-                    onChange={(event) =>
-                      setEditForm((form) => ({ ...form, email: event.target.value }))
-                    }
-                  />
-                </td>
-              </tr>
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <label htmlFor={`${idPrefix}-password`} className="text-label-l text-on-surface-variant">
-                    密码
-                  </label>
-                  <span className="mt-1 block text-body-s text-warning">修改后将退出所有设备</span>
-                </th>
-                <td className="min-w-48 px-3 py-3">
-                  <Input
-                    id={`${idPrefix}-password`}
-                    type="password"
-                    value={editForm.password}
-                    onChange={(event) =>
-                      setEditForm((form) => ({ ...form, password: event.target.value }))
-                    }
-                    placeholder="留空则不修改密码"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <span className="text-label-l text-on-surface-variant">角色</span>
-                  {myRole !== 'super_admin' && (
-                    <span className="mt-1 block text-body-s text-on-surface-variant">
-                      仅超管可提升至管理员
-                    </span>
-                  )}
-                </th>
-                <td className="min-w-48 px-3 py-3">
-                  <Select
-                    value={editForm.role}
-                    onChange={(value) => setEditForm((form) => ({ ...form, role: value }))}
-                    className="w-full"
-                    aria-label="用户角色"
-                    options={USER_ROLE_OPTIONS}
-                  />
-                </td>
-              </tr>
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <label htmlFor={`${idPrefix}-bio`} className="text-label-l text-on-surface-variant">
-                    个人简介
-                  </label>
-                </th>
-                <td className="min-w-48 px-3 py-3">
-                  <Textarea
-                    id={`${idPrefix}-bio`}
-                    value={editForm.bio}
-                    onChange={(event) =>
-                      setEditForm((form) => ({ ...form, bio: event.target.value }))
-                    }
-                    rows={2}
-                    className="resize-none"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <span className="text-label-l text-on-surface-variant">性别</span>
-                </th>
-                <td className="min-w-48 px-3 py-3">
-                  <Select
-                    value={editForm.gender}
-                    onChange={(value) => setEditForm((form) => ({ ...form, gender: value }))}
-                    className="w-full"
-                    aria-label="用户性别"
-                    options={USER_GENDER_OPTIONS}
-                  />
-                </td>
-              </tr>
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <label htmlFor={`${idPrefix}-birthday`} className="text-label-l text-on-surface-variant">
-                    生日
-                  </label>
-                </th>
-                <td className="min-w-48 px-3 py-3">
-                  <Input
-                    id={`${idPrefix}-birthday`}
-                    type="date"
-                    value={editForm.birthday}
-                    onChange={(event) =>
-                      setEditForm((form) => ({ ...form, birthday: event.target.value }))
-                    }
-                  />
-                </td>
-              </tr>
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <span className="text-label-l text-on-surface-variant">账号状态</span>
-                </th>
-                <td className="min-w-48 px-3 py-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    {/* `label`, so the visible words are the accessible name and
-                        clicking them toggles the box. It was a sibling `<span>` plus a
-                        differently-worded `aria-label`. */}
-                    <Checkbox
-                      checked={editForm.is_banned === 1}
-                      onChange={(checked) =>
-                        setEditForm((form) => ({ ...form, is_banned: checked ? 1 : 0 }))
-                      }
-                      label="封禁此用户"
-                    />
-                    {editForm.is_banned === 1 && (
-                      <span className="text-body-s text-warning">封禁后将退出该用户的所有设备</span>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <th scope="row" className="px-3 py-3 text-left align-top">
-                  <span className="text-label-l text-on-surface-variant">注册时间</span>
-                </th>
-                <td className="min-w-48 px-3 py-3 text-body-m text-on-surface">
-                  {user.created_at || '未知'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="text" onClick={closeInlineEditor} disabled={isSavingUser}>
-            取消
-          </Button>
-          <Button variant="filled" onClick={handleSaveUser} loading={isSavingUser}>
-            保存修改
-          </Button>
-        </div>
-      </InlineEditorPanel>
-    );
-  };
-
-  const userColumns: Column<User>[] = [
-    { key: 'id', header: 'ID', render: (u) => `#${u.id}` },
+  const columns: Column<AdminUser>[] = [
     {
       key: 'name',
       header: '用户名',
       primary: true,
-      render: (u) => <span className="text-body-m-emphasized text-primary-ink">{u.username}</span>,
-    },
-    {
-      key: 'role',
-      header: '角色',
-      render: (u) => (
-        /* `showUser`: a table column has to say something in every row, which
-           is the one place the neutral "普通用户" pill belongs. */
-        <RoleBadge role={u.role} showUser size="md" />
+      render: (user) => (
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-body-m-emphasized text-on-surface">{user.username}</span>
+          {user.id === viewerId && <Badge size="sm">当前账号</Badge>}
+        </span>
       ),
     },
+    { key: 'id', header: 'ID', width: 'auto', render: (user) => `#${user.id}` },
+    { key: 'role', header: '角色', width: 'auto', render: (user) => <RoleBadge role={user.role} showUser size="md" /> },
     {
       key: 'email',
       header: '邮箱',
-      render: (u) => <span className="text-on-surface-variant">{u.email || '-'}</span>,
+      width: 'minmax(0, 2fr)',
+      className: 'wrap-anywhere',
+      render: (user) => <span className="text-on-surface-variant">{user.email || '未填写'}</span>,
     },
     {
       key: 'state',
       header: '状态',
-      render: (u) => (
-        <StatusBadge tone={u.is_banned ? 'error' : 'success'}>{u.is_banned ? '已封禁' : '正常'}</StatusBadge>
+      width: 'auto',
+      render: (user) => (
+        <Badge tone={user.is_banned ? 'error' : 'success'} size="md">
+          {user.is_banned ? '已封禁' : '正常'}
+        </Badge>
       ),
     },
     {
       key: 'actions',
       header: '操作',
       actions: true,
-      render: (u) => (
-        <>
-          {/* `IconButton`, not an icon-only button stretched to a 36×32 box: the
-              32dp step is square by the token set, and it supplies the state
-              layer, the ripple and the glyph size — plus its own tooltip from
-              `aria-label`. */}
-          <IconButton
-            type="button"
-            size="sm"
-            icon={<MdEdit />}
-            onClick={(event) => {
-              if (editingUser?.id === u.id && !isInlineEditorClosing) {
-                closeInlineEditor();
-                return;
-              }
-              captureInlineEditorLayout(event.currentTarget);
-              openInlineEditor(u);
-            }}
-            className="text-warning"
-            aria-label={`编辑用户 ${u.username}`}
-            aria-expanded={editingUser?.id === u.id && !isInlineEditorClosing}
-            aria-controls={`users-inline-${u.id}-editor`}
-          />
-          <IconButton
-            type="button"
-            size="sm"
-            icon={u.is_banned ? <MdCheckCircle /> : <MdBlock />}
-            onClick={() => handleBan(u.id, u.is_banned ? 0 : 1)}
-            className={u.is_banned ? 'text-success' : 'text-error'}
-            aria-label={`${u.is_banned ? '解封' : '封禁'}用户 ${u.username}`}
-          />
-          <IconButton
-            type="button"
-            size="sm"
-            icon={<MdDelete />}
-            onClick={() => handleDelete(u.id)}
-            className="text-error"
-            aria-label={`删除用户 ${u.username}`}
-          />
-        </>
-      ),
+      render: (user) => {
+        const open = editing?.id === user.id && !editing.closing;
+        const busy = rowMutation.pendingKeys.has(user.id) || saveMutation.pendingKeys.has(user.id);
+        const self = user.id === viewerId;
+        return (
+          <>
+            <IconButton
+              size="sm"
+              icon={<MdEdit />}
+              aria-label={`编辑用户 ${user.username}`}
+              aria-expanded={open}
+              aria-controls={userEditorId(user.id)}
+              disabled={busy && !open}
+              onClick={(event) => {
+                if (open) closeEditor();
+                else void openEditor(user, event.currentTarget);
+              }}
+            />
+            {!self && (
+              <>
+                <IconButton
+                  size="sm"
+                  variant={user.is_banned ? 'standard' : 'danger-text'}
+                  icon={user.is_banned ? <MdCheckCircle /> : <MdBlock />}
+                  aria-label={`${user.is_banned ? '解封' : '封禁'}用户 ${user.username}`}
+                  loading={running?.id === user.id && running.action === 'ban'}
+                  disabled={busy && !(running?.id === user.id && running.action === 'ban')}
+                  onClick={() => toggleBan(user)}
+                />
+                <IconButton
+                  size="sm"
+                  variant="danger-text"
+                  icon={<MdDeleteOutline />}
+                  aria-label={`删除用户 ${user.username}`}
+                  loading={running?.id === user.id && running.action === 'delete'}
+                  disabled={busy && !(running?.id === user.id && running.action === 'delete')}
+                  onClick={() => remove(user)}
+                />
+              </>
+            )}
+          </>
+        );
+      },
     },
   ];
 
+  const renderEditor = (user: AdminUser) => {
+    if (editing?.id !== user.id || !editingUser) return null;
+    return (
+      <UserEditor
+        key={user.id}
+        user={editingUser}
+        viewer={{ id: viewerId, role }}
+        closing={editing.closing}
+        saving={saveMutation.pendingKeys.has(user.id)}
+        badges={userBadges(editingUser.badges)}
+        badgeBusy={(badgeId) => badgeMutation.pendingKeys.has(badgeId)}
+        onSave={(payload) => save(editingUser, payload)}
+        onCancel={closeEditor}
+        onExitComplete={() => setEditing((current) => (current?.id === user.id && current.closing ? null : current))}
+        onDirtyChange={setDirty}
+        onEditBadge={(badge) =>
+          setBadgeEdit((current) => ({ badge, owner: editingUser, open: true, session: (current?.session ?? 0) + 1 }))}
+        onDeleteBadge={(badge) => deleteBadge(editingUser, badge)}
+      />
+    );
+  };
+
+  const keyword = query.trim();
   return (
     <div className="space-y-6">
-      <SectionHeader
-        icon={<MdPeople size={ICON.standard} />}
-        title="用户与权限管理"
-        onRefresh={loadUsers}
+      <SectionHeader section="users"
+        onRefresh={read.refresh}
+        isLoading={read.refreshing}
       />
-
-      <SearchInput
-        value={searchKw}
-        onChange={setSearchKw}
-        placeholder="搜索用户 ID、用户名或邮箱…"
+      <SearchInput value={query} onChange={setQuery} placeholder="搜索用户 ID、用户名或邮箱…" />
+      <AdminListAnchor>
+        <DataTable<AdminUser>
+          columns={columns}
+          rows={paged.rows}
+          listKey={paged.listKey}
+          rowKey={(user) => user.id}
+          expandedRow={renderEditor}
+          loading={read.loading}
+          skeletonRows={8}
+          {...tableError('用户列表加载失败', read.error)}
+          onRetry={read.retryable ? read.refresh : undefined}
+          empty={keyword ? '没有找到匹配的用户' : '暂无用户'}
+        />
+        <AdminPager
+          page={paged.page}
+          totalPages={paged.totalPages}
+          onPageChange={(page) => {
+            setEditing(null);
+            paged.setPage(page);
+          }}
+          summary={read.data ? (keyword ? `找到 ${paged.total} 位用户` : `共 ${paged.total} 位用户`) : undefined}
+        />
+      </AdminListAnchor>
+      <BadgeEditDialog
+        key={badgeEdit ? `${badgeEdit.badge.id}:${badgeEdit.session}` : 'none'}
+        badge={badgeEdit?.badge ?? null}
+        owner={badgeEdit?.owner.username ?? ''}
+        open={Boolean(badgeEdit?.open)}
+        saving={badgeEdit ? badgeMutation.pendingKeys.has(badgeEdit.badge.id) : false}
+        onClose={() => setBadgeEdit((current) => (current ? { ...current, open: false } : current))}
+        onSave={saveBadge}
       />
-
-      <DataTable<User>
-        columns={userColumns}
-        rows={filteredUsers}
-        rowKey={(u) => u.id}
-        expandedRow={renderInlineEditor}
-        loading={isLoading}
-        empty="没有找到匹配的用户"
-      />
-
       {confirmDialog}
     </div>
   );

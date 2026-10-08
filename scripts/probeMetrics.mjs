@@ -69,6 +69,9 @@ const metrics = async () => {
 };
 await send('Runtime.enable');
 await send('Page.enable');
+/* Measure the code, not the service worker (see the same line in netAudit.mjs). */
+await send('Network.enable');
+await send('Network.setBypassServiceWorker', { bypass: true });
 await send('Performance.enable');
 
 const KEYS = ['ScriptDuration', 'RecalcStyleDuration', 'LayoutDuration', 'TaskDuration', 'RecalcStyleCount', 'LayoutCount'];

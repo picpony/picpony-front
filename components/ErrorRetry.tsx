@@ -22,6 +22,8 @@ interface ErrorRetryProps {
   size?: StatusViewSize;
   /** The whole route is this block — fill the scroller and centre. See `StatusView`. */
   fill?: boolean;
+  /** Off where the caller animates the swap that brought this block in. See `StatusView`. */
+  entrance?: boolean;
 }
 
 /**
@@ -42,11 +44,13 @@ export default function ErrorRetry({
   icon,
   size = 'page',
   fill = false,
+  entrance = true,
 }: ErrorRetryProps) {
   return (
     <StatusView
       size={size}
       fill={fill}
+      entrance={entrance}
       title={title}
       description={message}
       /* No glyph at `inline`, matching `EmptyState`: the two are presets over one
@@ -62,7 +66,6 @@ export default function ErrorRetry({
             className="group"
             icon={
               <MdRefresh
-                size={ICON.control}
                 className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
               />
             }

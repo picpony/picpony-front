@@ -149,7 +149,7 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request).catch(() =>
-        caches.match(OFFLINE_URL).then((cached) => cached ?? Response.error()),
+        caches.match(OFFLINE_URL).catch(() => undefined).then((cached) => cached ?? Response.error()),
       ),
     );
     return;
@@ -173,7 +173,7 @@ self.addEventListener('fetch', (event) => {
        either way. What protects a mid-session deploy is the absence of `skipWaiting()`, not this
        branch. Content-hashed URLs are what make the hit branch safe. */
     event.respondWith(
-      caches.match(request).then(
+      caches.match(request).catch(() => undefined).then(
         (cached) =>
           cached ??
           fetch(request).then((response) => {

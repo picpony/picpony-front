@@ -1,0 +1,404 @@
+/* The mascot: one figure standing at the bottom-right of the content area.
+
+   Six nested boxes, each owning one transform so no two clocks ever write the same property:
+   `.lift` (above the route's bottom navigation) › `.stage` (shown / hidden) › `.figure` (expanded /
+   collapsed) › `.pose` (hover lift, silhouette shadow) › `.squash` (the press) › `.react` (the hop
+   when it speaks, WAAPI). A CSS transition outranks a WAAPI animation on the same property, which
+   is why the hop has a box of its own.
+
+   No idle loop. A breath at the feet was written once and never drew (its box was inline, see
+   below); drawn, it would re-run the silhouette shadow's blur every frame for as long as a page is
+   open, beside whatever is being read, for two pixels of movement.
+
+   Every duration goes through the spring tokens or `--motion-scale` (AGENTS: the duration
+   invariant), so the speed setting scales all of it and the off tier collapses it to a cut. */
+
+.dock {
+  position: sticky;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  height: 0;
+  width: 0;
+  margin-left: auto;
+  pointer-events: none;
+}
+
+/* A floating element sits above a navigation bar, never across it (M3). The home route's pill
+   publishes its band's height as `--app-bottom-chrome`; the figure rises by whatever of it its
+   own inset does not already clear. A transform, so the move between routes is composited.
+
+   **On the pill's own legs**, so the two move as one: down on the pill's leaving leg (100ms,
+   accelerate) as the page that had it goes, up on its arriving leg (80ms behind the page, 320ms,
+   decelerate) as `/` fades in — `data-bottom-chrome` says which way the band went. On a spring of
+   its own the figure rose on a different clock from the pill it was making room for. */
+.lift {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: 0;
+  transform: translateY(
+    calc(-1 * max(0px, var(--app-bottom-chrome, 0px) + 4px - max(16px, env(safe-area-inset-bottom))))
+  );
+  transition: transform var(--transition-duration-press) var(--ease-accelerate);
+}
+
+:global(html[data-bottom-chrome]) .lift {
+  transition: transform calc(320ms * var(--motion-scale)) var(--ease-decelerate) calc(80ms * var(--motion-scale));
+}
+
+.stage {
+  position: relative;
+  width: var(--box-w);
+  height: var(--box-h);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    opacity var(--duration-spring-default-effects) var(--ease-spring-effects),
+    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial),
+    visibility 0s;
+}
+
+/* Leaving: on FastEffects, which cannot overshoot back into view, and only then hidden. */
+.stage[data-state='hidden'] {
+  opacity: 0;
+  transform: translateY(16px);
+  visibility: hidden;
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    transform var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    visibility 0s var(--duration-spring-fast-effects);
+}
+
+/* The reduced tier keeps the fade and the weak form's 8px of travel. */
+:global(html[data-motion='reduced']) .stage[data-state='hidden'] {
+  transform: translateY(8px);
+}
+
+/* The first appearance with 入场动画 off: the figure is simply there. */
+.instant,
+.instant * {
+  transition: none !important;
+}
+
+/* The control. It takes no pointer input of its own — `.hit` does — so the transparent margins of
+   the artwork never swallow a tap meant for the page beneath. It stays the focus target and the
+   element whose box the ring follows. */
+.control {
+  position: absolute;
+  inset: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: none;
+  border-radius: var(--radius-md);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The hit region. Expanded, it is the character's own outline — a `clip-path: path()` written
+   inline from the outline the server read off the artwork, which clips hit-testing with the paint,
+   so a pointer over the artwork's transparent margins or between a wing and the tail is the page's,
+   and hover, press and the pointer cursor answer the character alone. Until the outline lands, an
+   ellipse inscribed in the art's box stands in. Collapsed, the whole plate. */
+.hit {
+  position: absolute;
+  inset: 0;
+  /* Above the collapse control, though it paints nothing. That control rises off the character
+     (`--tools-lift`), since its touch target — 48px around a 32dp button under a finger — reached a
+     small figure's ear and a tap there tucked the figure away; wherever the two could still meet,
+     what is drawn under the finger answers. */
+  z-index: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  /* A drag that starts on the figure scrolls the page — the figure lives inside the scroller. */
+  touch-action: pan-y pinch-zoom;
+}
+
+.expanded .hit {
+  clip-path: ellipse(47% 47% at 50% 52%);
+}
+
+/* Collapsed, the plate is the target and the ring follows it: round, both of them, and the plate's
+   size at the stage's bottom-right corner. The stage itself keeps the art's box in both states —
+   it used to switch to the plate's in one frame, which dropped an open bubble 184px onto the
+   figure and showed the plate as a disc the art's size for a frame on the way back. A rounded
+   border box is also a rounded hit-test region, so the plate's corners pass taps through. */
+.collapsed .control {
+  inset: auto 0 0 auto;
+  width: var(--plate);
+  height: var(--plate);
+}
+
+.collapsed .control,
+.collapsed .hit {
+  border-radius: 9999px;
+}
+
+.figure {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: var(--art-w);
+  height: var(--art-h);
+  transform-origin: 100% 100%;
+  /* Opening: DefaultSpatial (the drawer's opening spring). */
+  transition:
+    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial),
+    opacity var(--duration-spring-default-effects) var(--ease-spring-effects);
+}
+
+/* Collapsed: the original's corner peek, given a plate — the character tucked into a round chip
+   at the corner. A translucent figure on its own, the original's form, all but vanished over a
+   busy gallery picture; on the plate it is a clear, quiet control. Closing on FastEffects, the
+   drawer's closing response; the figure travels into the plate's centre as it shrinks. */
+.collapsed .figure {
+  transform: translate(var(--peek-x), var(--peek-y)) scale(var(--peek));
+  transition: transform var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
+/* The plate: M3's FAB shape and elevation, on the quiet surface tone rather than a container
+   colour — it is a resting companion, not the screen's primary action. Behind the figure, so the
+   character's own silhouette shadow stays on top of it. Collapsed it is a FAB in behaviour too:
+   the control's ripple paints into it (`data-ripple-host`, which clips it), and `::before` is its
+   state layer, lit by the control's hover, focus and press. */
+.plate {
+  position: absolute;
+  inset: auto 0 0 auto;
+  width: var(--plate);
+  height: var(--plate);
+  border-radius: 9999px;
+  transform-origin: 50% 50%;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    transform var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
+.plate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--transition-duration-state) var(--ease-standard);
+}
+
+.collapsed .plate {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--duration-spring-default-effects) var(--ease-spring-effects),
+    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial);
+}
+
+@media (hover: hover) {
+  .collapsed .control:hover .plate::before {
+    opacity: var(--md-sys-state-hover-opacity);
+  }
+}
+
+.collapsed .control:focus-visible .plate::before {
+  opacity: var(--md-sys-state-focus-opacity);
+}
+
+/* Last, at the hover rule's specificity: a mouse is always over what it presses. */
+.collapsed[data-pressed] .control .plate::before {
+  opacity: var(--md-sys-state-pressed-opacity);
+}
+
+/* Blocks, all three: they are spans (the button may hold only phrasing content), and a transform
+   does not apply to an inline box — the computed style still reports one, so nothing said so, but
+   the lift, the press and the hop all drew nothing, and the shadow changing with them was the only
+   press feedback left. */
+.pose,
+.squash,
+.react {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+}
+
+/* The silhouette's shadow and the pointer's lift. Grounded at the feet, so a lift reads as the
+   character perking up rather than as a box scaling. */
+.pose {
+  filter: drop-shadow(var(--md-sys-elevation-drop-2));
+  transition:
+    transform var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial),
+    filter var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  /* The outline has gaps — between a wing and the tail — and a pointer crossing one leaves the
+     character for a moment. The lift waits out that moment before it settles (`HOVER_GRACE_MS`),
+     or every gap bobbed the figure down and up again. Only the settling waits. */
+  .expanded .pose {
+    transition-delay: calc(150ms * var(--motion-scale));
+  }
+
+  .expanded .control:hover .pose {
+    transform: translateY(-3px) scale(1.035);
+    filter: drop-shadow(var(--md-sys-elevation-drop-3));
+    transition-delay: 0s;
+  }
+
+  .collapsed .control:hover .pose {
+    transform: translateY(-2px) scale(1.06);
+  }
+
+  /* A press puts the lifted figure back on the ground for the squash below to push into. The rule
+     names `:hover` too because under a mouse the pointer is always over what it presses: without
+     it, the hover rule's extra pseudo-class outranked the press and held the figure up. */
+  .expanded[data-pressed] .control:hover .pose {
+    transform: none;
+    filter: drop-shadow(var(--md-sys-elevation-drop-2));
+  }
+}
+
+/* The press: the character squashed against the ground — wider and lower about its feet, the
+   original's squash given a body rather than a uniform shrink, which read as the figure getting
+   smaller and left its shadow as the only sign of the press. Down on FastSpatial, back on the
+   expressive fast spring, whose small overshoot is the spring in the release (the reduced tier's
+   substitution takes it out). Driven by pointer events rather than `:active`, which a touch screen
+   delays and holds (`ToggleSwitch`'s reasoning); a finger's press waits for the tap timeout, and a
+   tap too quick for it still squashes for its minimum (`MIN_PRESS_MS`). */
+.squash {
+  transition: transform var(--duration-spring-expressive-fast-spatial) var(--ease-spring-expressive-spatial-fast);
+}
+
+.expanded[data-pressed] .squash {
+  transform: scale(1.05, 0.93);
+  transition: transform var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial);
+}
+
+.art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* The collapse control, over the artwork's top-right corner — usually empty, and where a small
+   figure's head reaches it, risen by `--tools-lift` (`Mascot`, from the outline) until its target
+   is off the hair. Mounted in both states and faded with the figure, rather than appearing at the
+   corner in the first frame of an expand. */
+.tools {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  transform: translateY(calc(-1 * var(--tools-lift, 0px)));
+  pointer-events: auto;
+  transition:
+    opacity var(--duration-spring-default-effects) var(--ease-spring-effects),
+    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial),
+    visibility 0s;
+}
+
+/* Under a mouse it is revealed with the figure's hover (`hover-reveal`), and the way to it crosses
+   the artwork's empty corner — no longer the character's — so it stays a beat after the pointer
+   leaves the figure, the grace a tooltip gives (WCAG 1.4.13). Revealed at once. */
+@media (hover: hover) and (pointer: fine) {
+  .tools {
+    transition-delay: calc(240ms * var(--motion-scale));
+  }
+
+  .expanded:hover .tools,
+  .tools:focus-within {
+    transition-delay: 0s;
+  }
+}
+
+.collapsed .tools {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    visibility 0s var(--duration-spring-fast-effects);
+}
+
+/* Under a finger the control is always shown, and a bubble rising out of the head passes over its
+   corner: standing above the control, the bubble's tail ended far off the head on a phone. While
+   the figure speaks the control steps aside instead — the bubble has its own close — and returns
+   when it is done. The query is `MEDIA.pointerCoarse`, which `Mascot` reads to stop clearing it. */
+@media (pointer: coarse) {
+  .stage[data-speaking] .tools {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+      visibility 0s var(--duration-spring-fast-effects);
+  }
+}
+
+/* The speech bubble, rising out of its tail above the character's head. Where it stands is
+   measured for each utterance (`Mascot`): `--bubble-right` from the art's right edge, `--bubble-
+   bottom` from the stage's foot, `--bubble-tail` the tail's centre from the bubble's right end. The
+   shadow is a filter, so the tail casts one with the body. */
+.bubble {
+  position: absolute;
+  right: var(--bubble-right, 0px);
+  bottom: var(--bubble-bottom, calc(100% + 14px));
+  width: max-content;
+  max-width: min(288px, calc(100vw - 32px));
+  pointer-events: auto;
+  filter: var(--md-sys-elevation-filter-2);
+  transform-origin: calc(100% - var(--bubble-tail, 64px)) calc(100% + 8px);
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial),
+    visibility 0s;
+}
+
+.bubble[data-open='false'] {
+  opacity: 0;
+  transform: translateY(6px) scale(0.94);
+  visibility: hidden;
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    transform var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    visibility 0s var(--duration-spring-fast-effects);
+}
+
+/* The tail: a square of the bubble's own material turned 45°, its upper half inside the bubble,
+   its point on the head. */
+.bubble::after {
+  content: '';
+  position: absolute;
+  right: calc(var(--bubble-tail, 64px) - 6px);
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-bottom-right-radius: 3px;
+  transform: rotate(45deg);
+}
+
+.bubbleBody {
+  max-height: min(30dvh, 220px);
+  overflow-y: auto;
+}
+
+/* The hold's countdown: a full-width bar translated in from the left, never a scaled one (a
+   scaled fill squares its own rounded cap — `ProgressBar`'s note). */
+.holdTrack {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+}
+
+.holdFill {
+  height: 100%;
+  border-radius: 9999px;
+  transform: translateX(-100%);
+}
+
+@media (forced-colors: active) {
+  .holdFill {
+    background: Highlight;
+  }
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { clamp01 } from '@/lib/utils';
+import { clamp, clamp01 } from '@/lib/utils';
 
 /**
  * Analytic spring, damped or critically damped.
@@ -35,13 +35,20 @@ export type SpringResponse = {
   damping?: number;
 };
 
-/** Launch speeds outside this band either stall or visibly overshoot. */
-const MIN_VELOCITY = -0.5;
+/**
+ * Launch speeds outside this band either stall or visibly overshoot. The floor is a reversal's:
+ * a caught flyer inherits the speed it was travelling at, which runs −1…−2.5 in these units on
+ * real legs. At −0.5 every one of them saturated, so the promised dip never happened — the
+ * flyer stopped dead for a frame or two and restarted from rest (R10-007). At −3 the dip is
+ * ≈10% of the return travel, the most that still reads as the picture being caught and thrown
+ * back rather than as a second flight.
+ */
+const MIN_VELOCITY = -3;
 const MAX_VELOCITY = 2.5;
 
 export function clampSpringVelocity(velocity: number) {
   if (!Number.isFinite(velocity)) return 0;
-  return Math.min(MAX_VELOCITY, Math.max(MIN_VELOCITY, velocity));
+  return clamp(velocity, MIN_VELOCITY, MAX_VELOCITY);
 }
 
 /** Damped natural frequency, or 0 when the response is critically damped. */
@@ -118,7 +125,10 @@ export function springVelocity(time: number, response: SpringResponse) {
  * @param target desired `p'(0)`, in progress units per normalized time unit
  */
 export function solveSpringVelocity(target: number, response: SpringResponse) {
-  if (!Number.isFinite(target) || target <= 0) return clampSpringVelocity(target);
+  /* Negative targets solve exactly like positive ones — `1 - target · E` only grows when the
+     target is negative, so there is no asymptote on that side. They used to be clamped instead
+     of solved, which launched a reversal slower than the speed it was caught at. */
+  if (!Number.isFinite(target) || target === 0) return clampSpringVelocity(target);
   const { rate } = response;
   const wd = damped(response);
   let base: number;

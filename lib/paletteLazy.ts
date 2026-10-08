@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 
-import type { CustomPaletteInstall, PaletteTone } from '@/lib/appearance';
+import type { CustomPaletteInstall, CustomTones } from '@/lib/appearance';
+import { parseCustomSpec, type CustomSpec } from '@/lib/paletteSpec';
+import type { ImageRecommendation } from '@/lib/imageRecommendations';
 
 /**
  * The palette recipe, behind a dynamic import — the same seam as `lib/motionLazy.tsx`, so HCT
@@ -14,12 +16,6 @@ import type { CustomPaletteInstall, PaletteTone } from '@/lib/appearance';
  */
 
 type PaletteRule = typeof import('@/lib/paletteRule');
-
-/** The two hexes a swatch needs, out of one scheme's role map. */
-const schemeTone = (scheme: Record<string, string>) => ({
-  primary: scheme.primary,
-  onPrimary: scheme['on-primary'],
-});
 
 let rule: PaletteRule | null = null;
 let loading: Promise<PaletteRule> | null = null;
@@ -77,55 +73,107 @@ export function usePaletteTools(active: boolean): PaletteTools | null {
 const SAMPLE_AREA = 112 * 112;
 
 /**
- * One image-derived option: a seed out of the picture, and the two hexes its chip is drawn from.
- * A seed only — **not** a `(seed, style)` pair: a style puts `primary` at M3's P40/P80 and three
- * of the five rotate the hue, so an orange sunset offered a brown, a grey-brown, a rust, a purple
- * and a grey (see `lib/paletteRule.ts`'s header). The seed *is* `primary`, as with a coat Fill.
+ * An image recommendation ready to install: the displayed seed is `primary`, with one
+ * image-derived companion hue or null for automatic. Direction A adapts the recommendation
+ * before display; confirmation and the manual/saved-colour path never transform it again.
  */
 export interface ImageOption {
   seed: string;
-  tones: { light: PaletteTone; dark: PaletteTone };
+  accent: number | null;
+  tones: CustomTones;
 }
 
 /**
- * The colours an image offers: Monet's own ranked seeds, each installed verbatim. `MAX_SEEDS` is
- * AOSP's `MAX_SEED_COLORS` (4), also Monet's hard cap in `ColorScheme.getSeedColors` and the
- * library's default `desired`; it caps *seeds* — AOSP's legacy path then crosses each with four
- * styles, the axis this app does not have. **Up to four, possibly fewer**: `Score` sweeps its
- * hue-difference bar from 90° down to 15° and returns the first passing bar's yield, so a
- * one-colour picture gives one option, not four samples of it. Decoding is `createImageBitmap` —
- * off the main thread, takes any format the browser reads.
+ * Direction A's area-ranked recommendations, with the existing theme derivation and tile.
+ * Recommendation work loads only when reading an image. A file the browser cannot decode
+ * throws ImageDecodeError; an all-transparent image legitimately offers no colours.
  */
 export async function imageOptions(file: File): Promise<ImageOption[]> {
   const recipe = rule ?? (await load());
-  const seeds = await extractFromImage(file, MAX_SEEDS);
-  return seeds.map((seed) => {
-    const derived = recipe.deriveTheme(seed);
-    return {
-      seed,
-      tones: { light: schemeTone(derived.light), dark: schemeTone(derived.dark) },
+  const recommendations = await extractFromImage(file, MAX_OPTIONS);
+  return recommendations.map(({ seed, accent }) => ({
+    seed,
+    accent,
+    tones: recipe.paletteTones(recipe.deriveCustomTheme({ seed, accent })),
+  }));
+}
+
+/** Area-ranked families first, then supported light/deep alternatives, at most eight. */
+const MAX_OPTIONS = 8;
+
+/**
+ * The file is not a picture this browser can read — told apart from a picture with no usable
+ * colour in it, which is an answer rather than a failure. It was reported as the latter: a
+ * text file came back as 「这张图里没有能撑起主题的颜色」.
+ */
+export class ImageDecodeError extends Error {
+  constructor(cause?: unknown) {
+    super('无法读取此图片', { cause });
+    this.name = 'ImageDecodeError';
+  }
+}
+
+/** A picture's natural size, from its header: an `<img>` learns it without decoding the pixels. */
+function naturalSize(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      } else {
+        reject(new ImageDecodeError());
+      }
     };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new ImageDecodeError());
+    };
+    image.src = url;
   });
 }
 
-/** AOSP's `MAX_SEED_COLORS`. */
-const MAX_SEEDS = 4;
+/**
+ * The picture, decoded straight to the sampling size rather than at full resolution first — a
+ * phone photo is twelve million pixels, and the full-size bitmap was held only to be drawn into
+ * a canvas of twelve thousand. The size comes from AOSP's area rule (`SAMPLE_AREA`), so the
+ * header is read first; an engine that refuses the resize options still decodes it whole.
+ */
+async function decodeForSampling(file: File): Promise<ImageBitmap> {
+  const { width, height } = await naturalSize(file);
+  /* AOSP's own rescale: `sqrt(cap / area)`, so the result is aspect-independent. */
+  const area = width * height;
+  const scale = area > SAMPLE_AREA ? Math.sqrt(SAMPLE_AREA / area) : 1;
+  const resizeWidth = Math.max(1, Math.round(width * scale));
+  const resizeHeight = Math.max(1, Math.round(height * scale));
+  try {
+    return await createImageBitmap(file, { resizeWidth, resizeHeight, resizeQuality: 'high' });
+  } catch {
+    try {
+      return await createImageBitmap(file);
+    } catch (error) {
+      throw new ImageDecodeError(error);
+    }
+  }
+}
 
 /**
- * The candidate theme colours in an image, ranked — Monet's own wallpaper extraction. Returns up
- * to `desired` hexes, or an empty array for an image with no opaque pixel; `sourceColorsFromPixels`
- * owns the ranking and the guard that keeps AOSP's Google Blue — a colour not in the picture — out.
+ * Samples the image for direction A's pure recommendation helper. Returns no recommendations
+ * when there are no opaque pixels; grayscale inputs retain their actual tones.
  * **The reduction is smoothed, a stated divergence**: AOSP passes `filter = false` (nearest
  * neighbour) to `createScaledBitmap`, and at a 30× reduction that samples one pixel in nine hundred,
  * so a small saturated subject can vanish, meet `Score`'s 1% cutoff and produce the fallback. The
  * measured thing is the colour *distribution*, so an area average is the honest reducer, requested
- * via `imageSmoothingQuality: 'high'`; Chrome's filter choice is non-contractual, hence the guard.
+ * via `resizeQuality: 'high'` on the decode (and `imageSmoothingQuality: 'high'` on the fallback);
+ * Chrome's filter choice is non-contractual, hence the guard.
  */
-async function extractFromImage(file: File, desired = 4): Promise<string[]> {
-  const recipe = rule ?? (await load());
-  const bitmap = await createImageBitmap(file);
+async function extractFromImage(file: File, desired = MAX_OPTIONS): Promise<ImageRecommendation[]> {
+  const { recommendImageColors } = await import('./imageRecommendations');
+  const bitmap = await decodeForSampling(file);
   try {
-    /* AOSP's own rescale: `sqrt(cap / area)`, so the result is aspect-independent. */
+    /* Normally already at the sampling size; the fallback decode is whole and is reduced here. */
     const area = bitmap.width * bitmap.height;
     const scale = area > SAMPLE_AREA ? Math.sqrt(SAMPLE_AREA / area) : 1;
     const w = Math.max(1, Math.round(bitmap.width * scale));
@@ -138,30 +186,33 @@ async function extractFromImage(file: File, desired = 4): Promise<string[]> {
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = 'high';
     context.drawImage(bitmap, 0, 0, w, h);
-    return recipe.sourceColorsFromPixels(context.getImageData(0, 0, w, h).data, desired);
+    return recommendImageColors(context.getImageData(0, 0, w, h).data, desired);
   } finally {
     bitmap.close();
   }
 }
 
 /**
- * Derive the eleventh palette from a hex — one the user named, or one lifted out of an image.
- * Returns null only for a string that is not a six-digit hex. A near-grey is *not* rejected:
- * `rampChroma` tapers its chroma floor to zero as a fill runs out of hue, so `#808080` lands on a
- * near-monochrome scheme, not a grey bar over a randomly-hued ramp — a grey theme is legitimate.
+ * Derive the eleventh palette from its spec — a hex the user named or one lifted out of an image,
+ * and its 副色相 — or from a stored spec string (a bare seed reads as 自动). Returns null only for
+ * something that is not a spec. A near-grey is *not* rejected: `rampChroma` tapers its chroma
+ * floor to zero as a fill runs out of hue, so `#808080` lands on a near-monochrome scheme, not a
+ * grey bar over a randomly-hued ramp — a grey theme is legitimate, and 自动 gives it grey accents.
  * The built-ins are held to chroma 15 by ASSERTION 4 because a colour guide can insist on a hue.
- * The hex **is** `primary` in the light scheme, as with a coat Fill — one rule, no exceptions; the
- * ten get a second hex from the guide and this cannot (a Shadow Fill), so `deriveTheme` falls back
- * to seven tones down against the dark-page floor.
+ * The hex **is** `primary` in the light scheme, as a built-in's fill is — one rule, no exceptions;
+ * there is no second hex, so `deriveTheme` takes the dark fill seven tones down against the
+ * dark-page floor.
  */
-export async function resolveCustomPalette(seed: string): Promise<CustomPaletteInstall | null> {
+export async function resolveCustomPalette(value: CustomSpec | string): Promise<CustomPaletteInstall | null> {
   const recipe = rule ?? (await load());
-  const normalized = recipe.normalizeCustomSeed(seed);
-  if (!normalized) return null;
-  const derived = recipe.deriveTheme(normalized);
+  const spec = typeof value === 'string' ? parseCustomSpec(value) : value;
+  const seed = spec ? recipe.normalizeCustomSeed(spec.seed) : null;
+  if (!spec || !seed) return null;
+  const derived = recipe.deriveCustomTheme({ seed, accent: spec.accent });
   return {
-    seed: normalized,
+    seed,
+    accent: spec.accent,
     css: recipe.paletteBlocksCss(recipe.CUSTOM_PALETTE, derived),
-    tones: { light: schemeTone(derived.light), dark: schemeTone(derived.dark) },
+    tones: recipe.paletteTones(derived),
   };
 }

@@ -127,18 +127,24 @@ function reverseContainerLeg(
   previous: HeroContainerLeg,
   direction: HeroDirection,
   progress: number,
+  destination: HeroRect,
+  radius: number,
+  host: HeroRect,
 ): HeroContainerLeg {
   const shape = HERO_CONTAINER_SHAPE[direction];
   return {
     ...previous,
     clipFrom: lerpRect(previous.clipFrom, previous.clipTo, progress, previous.bow),
-    clipTo: previous.clipFrom,
+    // A viewport rebuild replaces clipFrom with a mid-flight pose. The endpoint must
+    // still be the actual card/host, never that earlier rebase point.
+    clipTo: destination,
     radiusFrom: interpolate(
       previous.radiusFrom,
       previous.radiusTo,
       intervalProgress(progress, shape.start, shape.end),
     ),
-    radiusTo: previous.radiusFrom,
+    radiusTo: radius,
+    host,
   };
 }
 
@@ -295,7 +301,26 @@ type OverlayContext = {
   content: HTMLElement | null;
   floatingBack: HTMLElement | null;
   choreography: HeroChoreography;
+  fromCurrent?: Map<HTMLElement, OverlayPose>;
 };
+
+type OverlayPose = { opacity: number; transform: string; rise: number };
+
+/** Read all shared presentation before cancelling any track; one reversal, one pose. */
+function readOverlayPoses(overlay: HTMLElement | null, floatingBack: HTMLElement | null) {
+  const poses = new Map<HTMLElement, OverlayPose>();
+  const targets = new Set<HTMLElement>(floatingBack ? [floatingBack] : []);
+  overlay?.querySelectorAll<HTMLElement>(
+    `${HERO_SURFACE_SELECTOR}, ${HERO_CONTENT_SELECTOR}, ${HERO_REVEAL_SELECTOR}`,
+  ).forEach((element) => targets.add(element));
+  targets.forEach((element) => {
+    const style = getComputedStyle(element);
+    const transform = style.transform;
+    const rise = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m42;
+    poses.set(element, { opacity: Number.parseFloat(style.opacity), transform, rise });
+  });
+  return poses;
+}
 
 /**
  * The window, its corner, the counter-scale and the flight layer's inverse — one group.
@@ -393,11 +418,20 @@ function fadeTrack(
 function revealTrack(
   frames: readonly ProgressFrame[],
   role: keyof typeof HERO_REVEAL_WINDOW,
+  continuedDistance?: number,
 ): Keyframe[] {
-  const distance = REVEAL_DISTANCE_PX[role];
-  const { start, end } = HERO_REVEAL_WINDOW[role];
+  const distance = continuedDistance ?? REVEAL_DISTANCE_PX[role];
+  const { end } = HERO_REVEAL_WINDOW[role];
+  const start = continuedDistance === undefined ? HERO_REVEAL_WINDOW[role].start : 0;
   return frames.map(({ offset, progress }) => {
-    const settled = intervalProgress(progress, start, end);
+    const interval = intervalProgress(progress, start, end);
+    // The body starts after the content is already partly visible. Ease the local
+    // gate into motion instead of switching straight from rest to full flight speed.
+    // This is a C1 blend of the shared travel, not a second clock/easing token.
+    // A resumed reveal already has momentum, so it keeps its continuous interval.
+    const settled = role === 'body' && continuedDistance === undefined
+      ? interval * interval * (3 - 2 * interval)
+      : interval;
     return {
       offset,
       transform:
@@ -407,7 +441,7 @@ function revealTrack(
 }
 
 function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
-  const { overlay, content, floatingBack, choreography } = ctx;
+  const { overlay, content, floatingBack, choreography, fromCurrent } = ctx;
   const { direction, duration } = leg;
   const owners: AnimationOwner[] = [];
   const surface = overlay.querySelector<HTMLElement>(HERO_SURFACE_SELECTOR);
@@ -438,20 +472,41 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
      only the closed and open *children* cross-fade. The mask is the reveal. The back leg keeps
      `HERO_CONTAINER_FADE.back`'s 0.60 → 0.90, which hands the plane over to the thumbnail late
      instead of blinking it out and letting the picture travel alone. */
-  if (surface && direction === 'back') {
-    owners.push(animateAt(surface, fadeTrack(frames, fade, fadeFrom, fadeTo), timing));
+  if (surface && (direction === 'back' || fromCurrent)) {
+    const from = fromCurrent?.get(surface)?.opacity ?? 1;
+    owners.push(animateAt(surface, fadeTrack(frames, fade, from, fadeTo), timing));
   }
   if (content) {
     owners.push(
-      animateAt(content, fadeTrack(frames, contentFade, fadeFrom, fadeTo), timing),
+      animateAt(content, fadeTrack(
+        frames,
+        fromCurrent ? { ...contentFade, start: 0 } : contentFade,
+        fromCurrent?.get(content)?.opacity ?? fadeFrom,
+        fadeTo,
+      ), timing),
     );
   }
 
   // Chrome, header and body still arrive in reading order — Flutter stages incoming content the
   // same way, from about a quarter of the way through the morph.
+  // A closing reverse fades the current copy out; moving its already-partially-entered
+  // descendants a second time creates a counter-motion inside the shrinking container.
+  // Only a forward leg owns the reveal staircase, while a forward re-open may continue from
+  // the captured rise instead of restarting it.
   if (direction === 'forward' && !reduced) {
     overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
-      owners.push(animateAt(element, revealTrack(frames, revealRole(element)), timing));
+      owners.push(animateAt(element, revealTrack(
+        frames, revealRole(element), fromCurrent?.get(element)?.rise,
+      ), timing));
+    });
+  } else if (fromCurrent && !reduced) {
+    // Hold the already-present pose while its parent fades. Cancelling the entrance
+    // without replacing this transform snaps a still-visible header/body to y=0.
+    overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
+      const pose = fromCurrent.get(element);
+      if (pose) owners.push(animateAt(element, [
+        { transform: pose.transform }, { transform: pose.transform },
+      ], timing));
     });
   }
 
@@ -464,20 +519,24 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
        at all on that tier. Under `off` the clock is 0 and the distance never renders. */
     const distance = REVEAL_DISTANCE_PX.chrome;
     const pose = `translate3d(0, ${distance}px, 0)`;
+    const current = fromCurrent?.get(floatingBack);
     owners.push(
       animateAt(
         floatingBack,
         direction === 'forward'
           ? [
-              { opacity: 0, transform: pose },
+              { opacity: current?.opacity ?? 0, transform: current?.transform ?? pose },
               { opacity: 1, transform: 'none' },
             ]
           : [
-              { opacity: numericOpacity(floatingBack), transform: 'none' },
+              {
+                opacity: current?.opacity ?? numericOpacity(floatingBack),
+                transform: current?.transform ?? 'none',
+              },
               { opacity: 0, transform: pose },
             ],
         direction === 'forward'
-          ? { duration: scaledMs(REVEAL_CONTENT_DURATION_MS), easing: REVEAL_EASING }
+          ? { duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS)), easing: REVEAL_EASING }
           : {
               duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS)),
               easing: HIDE_EASING,
@@ -492,7 +551,7 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
  * The swipe-down exit: a different motion, not a different duration.
  *
  * No mask and no fit. The finger has already put the surface where it is via
- * `--hero-pull-y` / `--hero-veil`, so this only continues what the gesture was doing —
+ * its live transform / opacity, so this only continues what the gesture was doing —
  * from the live opacity, which is why `numericOpacity` is read rather than assumed — while
  * the picture flies home on its own release ladder.
  */
@@ -543,7 +602,7 @@ export class HeroMotion {
   private readonly overlay: HTMLElement | null;
   private readonly floatingBack: HTMLElement | null;
   private readonly content: HTMLElement | null;
-  private readonly choreography: HeroChoreography;
+  private choreography: HeroChoreography;
   private containerLeg: HeroContainerLeg | null = null;
   private leg: HeroLeg;
   private visual: AnimationOwner[] = [];
@@ -558,6 +617,7 @@ export class HeroMotion {
   private containerTracks: AnimationOwner[] = [];
   private visualRevision = 0;
   private sharedRevision = 0;
+  private sharedReleased = false;
   private pullOffset = 0;
   private retired = false;
   private disposed = false;
@@ -600,7 +660,7 @@ export class HeroMotion {
        (it needs `matchMedia`). The scale also has to be applied at all, because the gallery
        card's chrome fade is asserted to stay inside the flight's clock — an unscaled flight
        at 缓慢 would be 250ms against a 280ms fade. Sample count stays safe across the range
-       (48 × 350ms = 7.3ms a segment), and the reverse floor starts binding at 快速, which is
+       (350ms / 47 intervals = 7.45ms), and the reverse floor starts binding at 快速, which is
        what a floor is for. */
     const duration = Math.round(HERO_DURATIONS[direction] * motionScale());
     this.leg = createHeroLeg({
@@ -629,16 +689,17 @@ export class HeroMotion {
     );
   }
 
-  /** Current visual state — analytic, so no forced layout and no DOM reads. */
+  /** Current visual state — sampled from the emitted tracks, with no layout reads. */
   measurePose(): HeroPose {
-    return { ...evaluateLeg(this.leg, timelineNow()), pullOffset: this.pullOffset };
+    const currentTime = this.visual[0]?.animation.currentTime;
+    // WAAPI's currentTime describes the presented timeline, including a pending first
+    // frame. performance.now() can be a whole task ahead and made an interruption jump.
+    const time = typeof currentTime === 'number'
+      ? this.leg.startedAt + currentTime
+      : timelineNow();
+    return { ...evaluateLeg(this.leg, time), pullOffset: this.pullOffset };
   }
 
-  /**
-   * The flyer canvas's own aspect, which is what the crop budget is measured against.
-   * Constant for the flight's whole life: `base` is sized once in `createHeroFlight` and
-   * `moveFlightToPlane` does not touch it.
-   */
   /**
    * Settle the two bows against each other: the picture keeps its arc, the window gives way.
    *
@@ -673,6 +734,7 @@ export class HeroMotion {
     this.containerLeg = { ...container, bow: bows.outer };
   }
 
+  /** The canvas's fixed aspect; moving between scroll planes never resizes its base. */
   private get baseAspect() {
     const { width, height } = this.flight.base;
     return height > 0 ? width / height : 1;
@@ -701,6 +763,11 @@ export class HeroMotion {
   async reverse(destination?: HeroRect, plane?: HeroScrollPlane, measured?: HeroPose) {
     if (this.disposed || this.retired) return;
     const pose = measured ?? this.measurePose();
+    const sharedPose = readOverlayPoses(this.overlay, this.floatingBack);
+    // The hand has already removed the mask/fit and placed the full surface. Returning
+    // through its stale half-open container would apply a second, discontinuous motion.
+    if (this.sharedReleased && this.leg.direction === 'forward') this.choreography = 'dismiss';
+    this.sharedReleased = false;
 
     this.landedCompletion.resolve();
     this.sharedCompletion.resolve();
@@ -710,9 +777,9 @@ export class HeroMotion {
     this.cancelShared(false, false);
 
     const previous = this.leg;
-      // The drag offset lives on the compensator, outside the flight keyframes: fold it
-      // into the starting box and clear the compensator so the reverse begins exactly
-      // where the flyer visually is, and no later frame stays shifted by a stale gesture.
+    // The drag offset lives on the compensator, outside the flight keyframes: fold it
+    // into the starting box and clear the compensator so the reverse begins exactly
+    // where the flyer visually is, and no later frame stays shifted by a stale gesture.
     const posed: HeroRect = pose.pullOffset
       ? { ...pose.rect, top: pose.rect.top + pose.pullOffset }
       : pose.rect;
@@ -749,10 +816,14 @@ export class HeroMotion {
     // progress — the same instant the flyer is being caught at.
     if (this.containerLeg) {
       const offset = previous.duration > 0 ? pose.elapsed / previous.duration : 1;
+      const host = this.overlay ? readRect(this.overlay) : this.containerLeg.host;
       this.containerLeg = reverseContainerLeg(
         this.containerLeg,
         previous.direction,
         progressAt(previous.progress, offset),
+        direction === 'forward' ? host : destination ?? originScreen,
+        direction === 'forward' ? 0 : this.flight.sourceRadius,
+        host,
       );
     }
 
@@ -774,7 +845,7 @@ export class HeroMotion {
     this.settleBows();
 
     this.startVisual();
-    this.startShared(true);
+    this.startShared(true, sharedPose);
     await this.finished;
   }
 
@@ -786,6 +857,8 @@ export class HeroMotion {
     if (this.disposed || this.retired) return;
     const pose = measured ?? this.measurePose();
     const previous = this.leg;
+    const sharedPose = this.landedCompletion.settled || this.sharedReleased
+      ? undefined : readOverlayPoses(this.overlay, this.floatingBack);
     this.cancelVisual(false);
 
     const currentScreen = planeRectToScreen(pose.rect, this.flight.plane);
@@ -807,6 +880,7 @@ export class HeroMotion {
       previous.progress,
       previous.duration > 0 ? pose.elapsed / previous.duration : 1,
     );
+    if (!this.sharedReleased) this.cancelShared(false, false);
 
     /* Preserve the current speed so a resize mid-flight is not a visible restart — which
        also converts an uninterrupted leg from the curve to a spring here, forced rather
@@ -828,8 +902,9 @@ export class HeroMotion {
     /* Before `startVisual`: the window is rebased and both bows settled in there, and the
        flyer's keyframes read `leg.bow`. One forced layout ahead of the first frame, in the
        same task, so nothing is painted in between. */
-    this.rebuildContainer(destination, containerProgress);
+    if (!this.sharedReleased) this.rebuildContainer(destination, containerProgress);
     this.startVisual();
+    if (!this.sharedReleased) this.startShared(true, sharedPose);
   }
 
   /**
@@ -870,15 +945,6 @@ export class HeroMotion {
     /* The window's endpoints just moved, so its bow is a stale answer to a question about a
        box that no longer exists — and so is the picture's, since the two are solved together. */
     this.settleBows();
-    try {
-      this.containerTracks = buildContainerAnimations(
-        { clip: this.clip, unclip: this.unclip, flightLayer: this.containedFlightLayer() },
-        this.containerLeg,
-        this.leg,
-      );
-    } catch {
-      this.containerTracks = [];
-    }
   }
 
   /**
@@ -911,10 +977,7 @@ export class HeroMotion {
     if (!container || this.choreography === 'dismiss' || this.containerTracks.length === 0) {
       return rect;
     }
-    const elapsed = Math.min(
-      this.leg.duration,
-      Math.max(0, timelineNow() - this.leg.startedAt),
-    );
+    const elapsed = this.measurePose().elapsed;
     const offset = this.leg.duration > 0 ? elapsed / this.leg.duration : 1;
     const box = lerpRect(
       container.clipFrom,
@@ -956,6 +1019,7 @@ export class HeroMotion {
 
   /** Hand the background + chrome tracks to a gesture. */
   releaseShared() {
+    this.sharedReleased = true;
     this.cancelShared(true, true);
   }
 
@@ -1014,7 +1078,7 @@ export class HeroMotion {
     });
   }
 
-  private startShared(continueBackground: boolean) {
+  private startShared(continueBackground: boolean, fromCurrent?: Map<HTMLElement, OverlayPose>) {
     const owners: AnimationOwner[] = [];
     /* Idempotent: every caller reaches here through `cancelShared`, but the container tracks
        live in their own array and are only *assigned* inside the branch below, so a run that
@@ -1034,6 +1098,7 @@ export class HeroMotion {
               content: this.content,
               floatingBack: this.floatingBack,
               choreography: this.choreography,
+              fromCurrent,
             },
             this.leg,
           ),
@@ -1088,7 +1153,11 @@ export class HeroMotion {
        is hidden while the detail is open, so the offset cannot move under the leg. */
     const scroller = element.parentElement;
     const centre = scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0;
-    element.style.transformOrigin = `center ${centre}px`;
+    // A scale matrix excludes transform-origin. Moving the pivot while continuing from
+    // s<1 moves the grid by (1-s) * pivotDelta even though the scale did not change.
+    if (!continueFromCurrent || from <= 0.001 || !element.style.transformOrigin) {
+      element.style.transformOrigin = `center ${centre}px`;
+    }
     element.style.willChange = 'transform';
     /* The sink shares the leg's own table, so depth and travel stay locked — a literal
        sample count here would have forked off the mask's the moment either number moved.

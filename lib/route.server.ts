@@ -1,6 +1,8 @@
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { PICPONY_API_BASE, PICPONY_API_ORIGIN, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
 import { cacheSeconds } from '@/lib/serverMemo';
+import { readBlockFilters, readPublicBlacklist } from '@/lib/blockFilters.server';
+import type { BlockFilters } from '@/lib/blockFilters';
 
 /**
  * The route policy, read on the server so a cold load's first request does not wait for it:
@@ -11,26 +13,29 @@ import { cacheSeconds } from '@/lib/serverMemo';
  * Not a preference in `lib/appearance.ts`'s sense — no cookie, no `<html>` attribute, no
  * pre-paint script; the five appearance preferences are the *device's* and travel in a cookie,
  * this is the *server's* and travels one way. And not allowed to slow the document:
- * `app/layout.tsx` awaits this, so the fetch is bounded and returns `null` on failure — a state
- * the client already handles by fetching the policy itself.
+ * `app/layout.tsx` awaits this, so the fetch is bounded, and on failure the document still
+ * carries the public rules with an empty `api` — which tells the client to fetch the policy
+ * itself, without holding any request longer than `POLICY_WAIT_MS` for it (`lib/route.ts`).
  */
 
 /** How long the document may wait for the policy. Short on purpose: missing the policy costs
  *  one client request, while a slow document costs every visitor the wait. */
 const SERVER_POLICY_TIMEOUT_MS = 1500;
 
-/** How long a fetched policy is reused across visitors. The trade: an administrator's line
- *  change takes up to 30s to reach a new page load — affordable because nothing a user can *see*
- *  reads this document, and a broken line is handled by `proxyFetch`'s failover ladder, not by
- *  the policy being seconds fresher. `refreshRoutePolicy()` remains the immediate read. */
+/** Normal reuse window across visitors. An accepted admin write through this app expires the
+ *  shared status tag immediately; changes made elsewhere are learned on revalidation. The
+ *  saving document also commits its acknowledged policy before cached Back navigation. */
 const SERVER_POLICY_REVALIDATE_S = 30;
 
-/** The four fields `lib/route.ts` consumes, and nothing else from the document. */
+/** The four fields `lib/route.ts` consumes, plus the public rules every query needs before the
+ *  first effect runs — the filter definitions and the public image blacklist. */
 export interface InlineRoutePolicy {
   api: string;
   image: string;
   thirdPartyUrl: string;
   thirdPartyPassApiKey: boolean;
+  blockFilters?: BlockFilters;
+  blacklist?: number[];
 }
 
 /**
@@ -50,7 +55,21 @@ export function inlineRoutePolicyScript(policy: InlineRoutePolicy): string {
  *  stubbing reaches only browser requests, never this one). */
 const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
 
-export async function readRoutePolicy(): Promise<InlineRoutePolicy | null> {
+/**
+ * Always an object, never `null`: on a failed policy read the document still carries the
+ * public rules (an empty `api` asks the browser to load the policy itself — see
+ * `ensureRoutePolicy`, which bounds how long a request waits for it).
+ */
+export async function readRoutePolicy(): Promise<InlineRoutePolicy> {
+  const filters = readBlockFilters();
+  const blacklist = readPublicBlacklist();
+  const fallback = async (): Promise<InlineRoutePolicy> => ({
+    /* An empty API policy asks the browser to retry policy loading; it can still use the
+       server's public filter definitions for the very first resource key. */
+    api: '', image: 'auto', thirdPartyUrl: '', thirdPartyPassApiKey: false,
+    blockFilters: await filters,
+    blacklist: [...await blacklist],
+  });
   try {
     /* The absolute origin, not `PICPONY_API_BASE` alone: that constant is relative (for the
        browser's request path) and Node's `fetch` rejects a relative URL outright. */
@@ -58,22 +77,24 @@ export async function readRoutePolicy(): Promise<InlineRoutePolicy | null> {
       /* Through `cacheSeconds`, like the other server reads, so the memo TTL env knob reaches
          this one too — without it the Data Cache can warm behind an audit's back and every
          measured document reads a warm path while the harness reports cold reads. */
-      next: { revalidate: cacheSeconds(SERVER_POLICY_REVALIDATE_S) },
+      next: { revalidate: cacheSeconds(SERVER_POLICY_REVALIDATE_S), tags: [SITE_STATUS_CACHE_TAG] },
       signal: AbortSignal.timeout(SERVER_POLICY_TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return fallback();
     const data = (await res.json()) as SiteStatusResponse;
-    if (!data?.success) return null;
+    if (!data?.success) return fallback();
     return {
       api: data.global_api_route_policy ?? 'auto',
       image: data.global_image_route_policy ?? 'auto',
       thirdPartyUrl: data.global_api_third_party_url ?? '',
       thirdPartyPassApiKey: data.global_api_third_party_pass_api_key === true,
+      blockFilters: await filters,
+      blacklist: [...await blacklist],
     };
   } catch {
     /* A timeout, an offline upstream, an HTML error page — all mean "no policy", which the
        client already treats as "fetch it yourself". Swallowed rather than logged: this runs on
        every cold load of a site whose backend is briefly unhappy. */
-    return null;
+    return fallback();
   }
 }

@@ -32,8 +32,8 @@ const clean = (raw: string) => raw.replace(/\D/g, '');
  *
  * The parts easy to forget, all handled here:
  *
- * - **Paste fills the row** — a full-length paste distributes from the start
- *   whichever box it landed in; a partial one inserts where you are.
+ * - **Paste and autofill fill the row** — a full-length code distributes from the
+ *   start whichever box it landed in; a partial one inserts where you are.
  * - **Backspace on an empty box steps back** *and* clears the box it lands on.
  * - **Arrow keys move between boxes**; **focus selects**, so typing over a
  *   filled box replaces rather than appends.
@@ -56,13 +56,28 @@ export default function CodeInput({
 }: CodeInputProps) {
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
   const digits = Array.from({ length }, (_, i) => value[i] ?? '');
+  /* True while this component moves focus itself. `focus()` fires the box's `onFocus`
+     synchronously, before the parent has re-rendered with the keystroke's value, so that
+     handler still sees the value from before it. It took the box just advanced to for one
+     past the first empty box, sent focus back, and the next key overwrote the digit before:
+     typing 123456 at a human pace left 246. A move this component makes lands where the
+     value is about to be. Only a focus from the user is redirected. */
+  const steering = useRef(false);
+  const focusBox = (index: number) => {
+    steering.current = true;
+    try {
+      boxes.current[index]?.focus();
+    } finally {
+      steering.current = false;
+    }
+  };
 
   /* On mount only: land on the first empty box, which is the first one unless the
      value arrived prefilled. Deliberately not reactive — moving focus whenever
      the value changes would fight the per-keystroke advance below. */
   useEffect(() => {
     if (!autoFocus || disabled) return;
-    boxes.current[Math.min(value.length, length - 1)]?.focus();
+    focusBox(Math.min(value.length, length - 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -87,32 +102,36 @@ export default function CodeInput({
       if (digits[index]) return; // the box has something to delete itself
       event.preventDefault();
       if (index === 0) return;
-      boxes.current[index - 1]?.focus();
+      focusBox(index - 1);
       setAt(index - 1, '');
       return;
     }
     if (event.key === 'ArrowLeft' && index > 0) {
       event.preventDefault();
-      boxes.current[index - 1]?.focus();
+      focusBox(index - 1);
     }
     if (event.key === 'ArrowRight' && index < length - 1) {
       event.preventDefault();
-      boxes.current[index + 1]?.focus();
+      focusBox(index + 1);
     }
+  };
+
+  /** Several digits at once, landing in box `index`: spread them across the row. */
+  const fill = (digitsIn: string, index: number) => {
+    /* A full-length run fills from the start whichever box it landed in — the user
+       gave "the code", not "the code from here on". A partial one inserts where they
+       are, never past the first empty box (the value is left-packed). */
+    const start = digitsIn.length >= length ? 0 : Math.min(index, value.length);
+    const arr = value.split('');
+    for (let i = 0; i < digitsIn.length && start + i < length; i += 1) arr[start + i] = digitsIn[i];
+    commit(arr.join(''));
+    focusBox(Math.min(start + digitsIn.length, length - 1));
   };
 
   const onPaste = (event: ClipboardEvent<HTMLInputElement>, index: number) => {
     event.preventDefault();
     const pasted = clean(event.clipboardData.getData('text'));
-    if (!pasted) return;
-    /* A full-length paste fills from the start whichever box it landed in — the
-       user pasted "the code", not "the code from here on". A partial one inserts
-       where they are. */
-    const start = pasted.length >= length ? 0 : index;
-    const arr = value.split('');
-    for (let i = 0; i < pasted.length && start + i < length; i += 1) arr[start + i] = pasted[i];
-    commit(arr.join(''));
-    boxes.current[Math.min(start + pasted.length, length - 1)]?.focus();
+    if (pasted) fill(pasted, index);
   };
 
   return (
@@ -129,23 +148,47 @@ export default function CodeInput({
           }}
           type="text"
           inputMode="numeric"
+          /* No `maxLength`. The platform's one-time-code autofill (iOS from Messages
+             and Mail, Android from SMS) writes the *whole* code into the focused box,
+             and a one-character limit cut it to its first digit. */
           autoComplete="one-time-code"
-          maxLength={1}
           value={digit}
           disabled={disabled}
           aria-label={`${ariaLabel} 第 ${i + 1} 位，共 ${length} 位`}
-          onFocus={(event) => event.target.select()}
+          onFocus={(event) => {
+            /* The value is left-packed, so a box past the first empty one has nothing
+               to edit: typing there wrote into that first empty box while the caret
+               stayed where it was. Land on the first empty box instead — for a focus the
+               user gave, never for this component's own advance (`steering`). */
+            if (!steering.current && i > value.length) {
+              focusBox(value.length);
+              return;
+            }
+            event.target.select();
+          }}
           onChange={(event) => {
             const typed = clean(event.target.value);
             if (!typed) {
               setAt(i, '');
               return;
             }
+            const own = digits[i];
+            if (typed.length >= length) {
+              /* A whole code: autofill writes it into the focused box, over that box's
+                 digit (selected on focus) or after it. */
+              fill(typed.length > length && own && typed.startsWith(own) ? typed.slice(own.length) : typed, i);
+              return;
+            }
             /* A key press on a filled box replaces it (`onFocus` selected the
-               contents), and the browser hands us the whole new value — take its
-               last character so an unselected append still reads as a replace. */
-            setAt(i, typed.slice(-1));
-            if (i < length - 1) boxes.current[i + 1]?.focus();
+               contents); an append the caret was not over reads the same. */
+            const appended = own && typed.length > 1 && typed.startsWith(own) ? typed.slice(own.length) : typed;
+            if (appended.length <= 1) {
+              setAt(i, (appended || typed).slice(-1));
+              if (i < length - 1) focusBox(i + 1);
+              return;
+            }
+            // Several digits at once: autofill, a keyboard's suggestion, an IME commit.
+            fill(appended, i);
           }}
           onKeyDown={(event) => onKeyDown(event, i)}
           onPaste={(event) => onPaste(event, i)}
@@ -154,9 +197,11 @@ export default function CodeInput({
              the only indicator. No container fill — an outlined field has none,
              and a fill here shows as six pale plates on any darker surface. */
           className={cn(
-            'text-title-m-emphasized h-14 w-10 rounded-xs border border-outline text-center sm:w-11',
-            'text-on-surface outline-none',
-            'transition-[border-color,border-width] duration-standard ease-[var(--ease-standard)]',
+            // Native fields have an intrinsic width floor; release it so all
+            // six boxes still fit inside a narrow dialog's content column.
+            'text-title-m-emphasized h-14 w-10 min-w-0 rounded-xs border border-outline text-center tabular-nums sm:w-11',
+            'text-on-surface focus-visible:outline-hidden',
+            'spring-fast-effects transition-[border-color]',
             'focus:border-2 focus:border-primary-ink',
             'disabled:cursor-not-allowed disabled:disabled-content',
           )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { TabPanesMotion } from '@/lib/motionLazy';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +13,11 @@ import { cn } from '@/lib/utils';
  * order** — and a conditionally-mounted pane must still hold its place in the
  * sequence, not be appended at the end.
  *
+ * **Each pane moves as one piece** (`playSharedAxis`): whatever a pane holds — a row, a
+ * wrapper with no box of its own, a banner — travels with it by construction, and a pane
+ * that replaces its content on arrival still slides. `lean` adds the layered departure on
+ * top, block by block, without taking anything off the pane.
+ *
  * **Panes are marked, never unmounted.** A pane that has ever been shown keeps
  * its subtree, so switching away and back does not refetch. Callers that want to
  * defer the *first* mount of an expensive pane can still gate it (see the
@@ -22,6 +27,18 @@ import { cn } from '@/lib/utils';
  * pane's scroll and form state.
  */
 const ActiveTabContext = createContext<string | null>(null);
+
+/**
+ * True inside a `TabPane`. A block with an entrance of its own (`StatusView`'s
+ * `Reveal`) stands down there — the pane transition already moves those nodes — and a
+ * context answers that in the first render, where probing the DOM for the pane marker
+ * could only answer after mounting (and then tearing down) the entrance it meant to skip.
+ */
+const InTabPaneContext = createContext(false);
+
+export function useInTabPane() {
+  return useContext(InTabPaneContext);
+}
 
 /**
  * The `id` pair that ties a tab to its panel. Derived from the tab's own value
@@ -47,22 +64,18 @@ export function TabPanes<T extends string = string>({
   children: ReactNode;
   className?: string;
   /**
-   * Sample the wave over each pane's own blocks, so the seam between the two
-   * pages leans over as it sweeps across (see `playSharedAxis`).
-   *
-   * **Default off, and that is the safe default rather than the pretty one.**
-   * The lean holds GSAP references to the blocks *inside* a pane, which requires
-   * them to survive the run — and a pane that fetches when its tab is selected
-   * replaces its whole subtree within a few frames, so GSAP animates detached
-   * nodes while the visible ones sit perfectly still: a switch with no
-   * animation at all, which is worse than the fade it replaces. Turn it on only
-   * for panes whose content is static once mounted.
+   * The layered departure: the blocks on screen follow the strip a little late, top first,
+   * so the page leaves on a shear (`playSharedAxis`). Written on the panel as an attribute, so
+   * the tap path (`startTabTransition`) and the reactive one read the same statement. On the
+   * home route and /policy; it adds a compositor layer per block on screen for the run, and a
+   * pane that replaces its content on arrival loses its lean (the new nodes ride the pane).
    */
   lean?: boolean;
 }) {
   /* Owns the motion flags' lifetime and plays the slide. It covers every route
      into a tab — a tap, the back button, a sidebar link, a deep link — because
-     it reacts to the committed value rather than to the event that caused it.
+     it reacts to the committed value rather than to the event that caused it
+     (and flags the outgoing pane before React's commit can conceal it).
      Screens whose tabs live in local state need nothing else. */
   /* The ref is owned here and the motion is mounted beside it. `TabPanesMotion`
      renders nothing; it exists so the hook that drives the slide can live
@@ -74,7 +87,7 @@ export function TabPanes<T extends string = string>({
   return (
     <>
       {/* No `key` on this element, ever — see the note above. */}
-      <div ref={panelRef} data-tab-panel className={cn(className)}>
+      <div ref={panelRef} data-tab-panel data-tab-lean={lean ? '' : undefined} className={cn(className)}>
         <ActiveTabContext.Provider value={value}>{children}</ActiveTabContext.Provider>
       </div>
       {/* A **sibling after** the panel, not a child of it. React attaches a
@@ -82,15 +95,20 @@ export function TabPanes<T extends string = string>({
           mounted inside the div this read a null panel on every commit that
           mounted the two together — and silently skipped `clearPaneFlags` and
           the `off`-tier instant scroll. Correct by construction now. */}
-      <TabPanesMotion panelRef={panelRef} active={value} lean={lean} />
+      <TabPanesMotion panelRef={panelRef} active={value} />
     </>
   );
 }
 
+/** What can take the keyboard's focus inside a pane. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+
 /**
- * One pane. Renders a box whenever it is active *or* while the motion layer is
- * holding it on screen — the `display: none` rule in globals.css keys on all
- * three flags, which is what lets both panes coexist for the length of a switch.
+ * One pane. Shown whenever it is active *or* while the motion layer is holding it
+ * on screen — the concealment rule in globals.css keys on all three flags, which is
+ * what lets both panes coexist for the length of a switch. Concealed, it keeps its
+ * style and layout (`content-visibility: hidden`), so showing it again is cheap.
  *
  * Never wrap this in a conditional on the active tab. `{active === 'x' && ...}`
  * is the same bug as a `key`: the outgoing pane has to survive the commit or
@@ -107,22 +125,45 @@ export function TabPane({
 }) {
   const active = useContext(ActiveTabContext);
   const isActive = active === value;
+  const pane = useRef<HTMLDivElement>(null);
+  /* A tab stop only while active **and** only when nothing inside can take focus (APG): every
+     tabbed screen here but /policy's prose starts with a control, a row or a card, and a focusable
+     panel in front of it was a dead stop between the tab row and the content (G0-007). Content
+     arrives after the pane does, so the answer is kept current while the pane is shown. Written
+     to the DOM: it is a fact about the content, not something to render. */
+  useLayoutEffect(() => {
+    const el = pane.current;
+    if (!el) return;
+    if (!isActive) {
+      el.removeAttribute('tabindex');
+      return;
+    }
+    const update = () => {
+      if (el.querySelector(FOCUSABLE)) el.removeAttribute('tabindex');
+      else el.tabIndex = 0;
+    };
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(el, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [isActive]);
   return (
     <div
       data-tab-pane={value}
       data-tab-pane-active={isActive ? '' : undefined}
+      ref={pane}
       /* The other half of `role="tab"`'s promise. `aria-labelledby` points back at
          the tab, so the panel announces itself by the tab's own label rather than
-         needing a second copy of it. `tabIndex` only while active: a panel that is
-         `display: none` must not be a tab stop, and giving every pane one would put
-         four dead stops in the order. */
+         needing a second copy of it. Its tab stop is decided above. */
       id={tabPanelId(value)}
       role="tabpanel"
       aria-labelledby={tabId(value)}
-      tabIndex={isActive ? 0 : undefined}
-      className={cn(className)}
+      /* A tab stop needs the app's one focus ring, or Tab from the tab row drew the
+         engine's black outline round the whole section. The section step's corner,
+         since this is the box the ring follows. */
+      className={cn('rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-ring', className)}
     >
-      {children}
+      <InTabPaneContext.Provider value>{children}</InTabPaneContext.Provider>
     </div>
   );
 }

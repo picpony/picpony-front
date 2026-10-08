@@ -404,7 +404,15 @@ export function bindHeroDismissGesture({
   };
 
   const pointerSurface = listenTarget ?? target;
-  syncTouchAction();
+  /* The first read waits for the next frame. The bind lands in the commit that reveals a route
+     (a landing, a step), when the layout is dirty: reading `scrollTop` then forced a layout of
+     the page in the middle of the commit (66ms on a first open, measured in development), only
+     for the frame to lay it out again. A frame later the layout is clean and the read is free;
+     no touch can begin in between that this surface could have claimed. */
+  let initialSync = requestAnimationFrame(() => {
+    initialSync = 0;
+    if (!disposed) syncTouchAction();
+  });
   scroller.addEventListener('scroll', syncTouchAction, { passive: true });
   pointerSurface.addEventListener('pointerdown', handlePointerDown as EventListener, {
     capture: true,
@@ -421,6 +429,7 @@ export function bindHeroDismissGesture({
 
   return () => {
     disposed = true;
+    if (initialSync) cancelAnimationFrame(initialSync);
     settleGeneration += 1;
     pointerSurface.removeEventListener('pointerdown', handlePointerDown as EventListener, true);
     window.removeEventListener('pointerup', handlePostCommitPointerUp, true);

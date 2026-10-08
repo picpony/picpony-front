@@ -1,191 +1,221 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { MdClose, MdReply, MdSend } from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
+import { EditorPlaceholder } from '@/components/RichTextEditorShell';
 import { useAuthModal } from '@/components/AuthModal';
 import { showToast } from '@/components/Toast';
-import { api, type Comment } from '@/lib/api';
+import { postComment } from '@/lib/api/picpony';
+import { readJson } from '@/lib/api/http';
+import { apiErrorMessage } from '@/lib/api/errors';
+import { plainTextOf } from '@/lib/derpiMarkup';
+import { readCommentDraft, writeCommentDraft } from '@/lib/imageComments';
+import { readToken, useSession } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
-import { readToken } from '@/lib/hooks';
 
-const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
+/**
+ * A comment is a reply, so the editor takes the shorter `reply` box. While its chunk loads, the
+ * shell's own placeholder is drawn at that same size, so opening it is one change of height
+ * rather than two. `loading` is what keeps the lazy chunk from suspending to the route's
+ * boundary, which would replace the whole detail with the route skeleton for as long as the chunk
+ * takes (AGENTS, the dynamic-dialog rule).
+ */
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
+  ssr: false,
+  loading: () => <EditorPlaceholder size="reply" />,
+});
 
-type ReplyTarget = {
+/* The chunk is warmed on intent — a pointer arriving, focus landing — so it is usually resident
+   by the time the press lands. `import()` is idempotent. */
+const warmEditor = () => {
+  void import('@/components/RichTextEditor');
+};
+
+export type ReplyTarget = {
   id: number;
   username: string;
   body: string;
+  source: 'picpony' | 'trixiebooru';
+  /** A PicPony author's account; a Derpibooru author has none here. */
+  userId: number | null;
 };
 
 type CommentComposerProps = {
   imageId: number;
   replyTo: ReplyTarget | null;
-  loadComments: () => Promise<Comment[]>;
   onCancelReply: () => void;
-  onCommentsLoaded: (comments: Comment[]) => void;
+  /** The comment was accepted: the thread re-reads. */
+  onPosted: () => void;
 };
 
-export default function CommentComposer({
-  imageId,
-  replyTo,
-  loadComments,
-  onCancelReply,
-  onCommentsLoaded,
-}: CommentComposerProps) {
+/** A quoted name cannot close its own tag. */
+const quotedName = (name: string) => name.replace(/"/g, '＂').replace(/]/g, '］');
+
+/**
+ * The body the backend is sent — the original front end's reply shape, so a reply reads as one in
+ * both front ends: a quote of what it answers (its words, not its markup, the first hundred
+ * characters) above the reply.
+ */
+function replyBody(text: string, replyTo: ReplyTarget | null): string {
+  if (!replyTo) return text;
+  const quote = plainTextOf(replyTo.body, { keepQuotes: false, max: 100 });
+  return `[quote="${quotedName(replyTo.username)}"]\n${quote}\n[/quote]\n\n${text}`;
+}
+
+type SendOutcome = { ok: true } | { ok: false; message: string };
+
+/** The post itself, at module scope (the React Compiler cannot lower a `finally` in a component). */
+async function send(token: string, imageId: number, text: string, replyTo: ReplyTarget | null): Promise<SendOutcome> {
+  try {
+    const response = await postComment(token, imageId, replyBody(text, replyTo), {
+      userId: replyTo?.source === 'picpony' ? replyTo.userId : 0,
+      commentId: replyTo?.id ?? null,
+    });
+    const data = await readJson<{ success?: unknown; message?: string; error?: string }>(response);
+    if (data.success === true) return { ok: true };
+    return { ok: false, message: data.error || data.message || '评论发送失败' };
+  } catch (error) {
+    return { ok: false, message: apiErrorMessage(error, '评论发送失败') };
+  }
+}
+
+/**
+ * Writing a comment: a one-line field until you go to write (the rich-text editor is the app's
+ * largest chunk, and most readers never write), then the editor, a reply's quote above it, and
+ * 发送.
+ *
+ * **Signed out it asks you to sign in, and only that** — one piece of feedback (it used to toast
+ * 请先登录 *and* open the dialog), and before anything can be typed. **Nothing typed is thrown
+ * away**: the draft is kept per picture for the life of the page (a step to the next picture and
+ * back, a session that expires mid-sentence, a failed send), and the editor reopens on it.
+ */
+export default function CommentComposer({ imageId, replyTo, onCancelReply, onPosted }: CommentComposerProps) {
   const { openAuth } = useAuthModal();
-  const [comment, setComment] = useState('');
+  const session = useSession();
+  const signedIn = Boolean(session.token);
+  const [draft, setDraft] = useState(() => ({ imageId, text: readCommentDraft(imageId) }));
+  const comment = draft.imageId === imageId ? draft.text : readCommentDraft(imageId);
   const [editorRevision, setEditorRevision] = useState(0);
-  /* Whether the visitor has asked to write. See the placeholder below for why the
-     editor is not mounted until they have. Derived (`editorOpen`) rather than
-     synced — pressing 回复 *is* asking to write, and an effect mirroring `replyTo`
-     into this would be a setState in an effect. */
-  const [pressedWrite, setPressedWrite] = useState(false);
-  const editorOpen = pressedWrite || replyTo !== null;
-
-  /* Warm the chunk on intent rather than on press, so the editor is already in
-     the module cache by the time the click lands. Same ladder as
-     `useIntentPrefetch`, minus the timers; `import()` is idempotent. */
-  const warmEditor = () => {
-    void import('@/components/RichTextEditor');
-  };
+  /* Whether the visitor has asked to write — pressing 回复 is asking too, so it is derived rather
+     than synced from `replyTo` by an effect. */
+  const [pressedWrite, setPressedWrite] = useState<number | null>(null);
+  const editorOpen = signedIn && (pressedWrite === imageId || replyTo !== null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isMountedRef = useRef(true);
-  const trimmedComment = comment.trim();
+  const trimmed = comment.trim();
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+  const setComment = (text: string) => {
+    setDraft({ imageId, text });
+    writeCommentDraft(imageId, text);
+  };
 
-
-  const handleSubmit = async () => {
-    if (!trimmedComment || isSubmitting) return;
-
+  const handleSubmit = () => {
+    if (!trimmed || isSubmitting) return;
     const token = readToken();
     if (!token) {
-      showToast('请先登录', 'error');
       openAuth('login');
       return;
     }
-
     setIsSubmitting(true);
-    try {
-      const replyPrefix = replyTo ? `@${replyTo.username} ` : '';
-      const response = await api.postComment(token, imageId, replyPrefix + comment);
-      const data = await response.json();
-      if (!isMountedRef.current) return;
-
-      if (!data.success) {
-        showToast(data.message || '发送失败', 'error');
+    void send(token, imageId, comment, replyTo).then((outcome) => {
+      setIsSubmitting(false);
+      if (!outcome.ok) {
+        showToast(outcome.message, 'error');
         return;
       }
-
-      showToast('评论发送成功', 'success');
+      showToast('评论已发送', 'success');
       setComment('');
       setEditorRevision((revision) => revision + 1);
+      setPressedWrite(null);
       onCancelReply();
-      const comments = await loadComments();
-      if (isMountedRef.current) onCommentsLoaded(comments);
-    } catch (error) {
-      console.error('Post comment error:', error);
-      showToast('发送失败', 'error');
-    } finally {
-      if (isMountedRef.current) setIsSubmitting(false);
-    }
+      onPosted();
+    });
   };
 
+  const collapse = () => {
+    setPressedWrite(null);
+    onCancelReply();
+  };
+
+  if (!signedIn) {
+    return (
+      <button
+        type="button"
+        /* Before hydration the session is unknown; pressing it then does nothing wrong. */
+        onClick={() => openAuth('login')}
+        className="flex h-14 w-full cursor-pointer items-center rounded-sm bg-surface-container-highest px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+      >
+        {trimmed ? '登录后继续编辑评论' : '登录后发表评论'}
+      </button>
+    );
+  }
+
+  if (!editorOpen) {
+    return (
+      /* A real `<button>` shaped as the filled field it opens into: it starts the editor, so it
+         has to be reachable by keyboard and announce itself. 56dp, the field's own height — the
+         354px box it used to reserve put most of a phone screen of nothing above the thread. */
+      <button
+        type="button"
+        onClick={() => setPressedWrite(imageId)}
+        onPointerEnter={warmEditor}
+        onFocus={warmEditor}
+        className="flex h-14 w-full cursor-text items-center rounded-sm bg-surface-container-highest px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+      >
+        <span className="truncate">{trimmed ? '继续编辑评论…' : '写下你的评论…'}</span>
+      </button>
+    );
+  }
+
   return (
-    <>
+    <div className="flex flex-col gap-2">
       {replyTo && (
-        <div className="mb-2 flex items-center gap-2 rounded-md border border-outline-variant bg-surface-container-low px-3 py-2 text-body-m text-on-surface-variant">
-          <MdReply size={ICON.dense} />
-          <span>
-            回复 <strong className="text-primary-ink">{replyTo.username}</strong>：
+        <div className="flex min-w-0 items-center gap-2 rounded-sm bg-surface-container px-3 py-1 text-body-m text-on-surface-variant">
+          <MdReply size={ICON.dense} className="shrink-0" aria-hidden="true" />
+          <span className="shrink-0">
+            回复 <span className="text-body-m-emphasized text-on-surface">{replyTo.username}</span>：
           </span>
-          {/* Quieter by *size*, not by a dimmed copy of the same role: `body-s`
-              against the bar's `body-m` says "supporting" through the type
-              scale instead. */}
-          <span className="flex-1 truncate text-body-s">
-            {replyTo.body.slice(0, 80)}
-            {replyTo.body.length > 80 ? '…' : ''}
+          {/* Its words, not its markup: a Derpibooru comment opens with a link in Markdown, and
+              the bar used to print `[@name](/images/…` raw. */}
+          <span className="min-w-0 flex-1 truncate text-body-s">
+            {plainTextOf(replyTo.body, { keepQuotes: false, max: 80 })}
           </span>
-          {/* `IconButton`, not a bare glyph with a hover opacity: this is the
-              same 取消回复 control the forum thread renders, and that one is
-              already an `IconButton`. The hand-rolled version had no focus ring,
-              no state layer and a 16px hit area. */}
           <IconButton
             size="sm"
+            dismiss
             onClick={onCancelReply}
             aria-label="取消回复"
-            className="-me-1.5 ml-auto shrink-0 text-error"
-            icon={<MdClose size={ICON.dense} />}
+            className="-me-1.5 shrink-0"
+            icon={<MdClose />}
           />
         </div>
       )}
-      {/* The editor loads when you go to write, not when the comments scroll into view.
-       *
-       * `RichTextEditor` is `@wangeditor/editor` plus its Uppy upload stack: **774KB raw,
-       * 176KB brotli**, the largest chunk in the app by a factor of three. It used to mount as
-       * soon as `mounted` went true — which `PicDetail` sets from an IntersectionObserver with
-       * a 500px root margin — so scrolling anywhere near the comments on *any* picture
-       * downloaded and instantiated a full rich-text editor, whether or not the visitor had
-       * any intention of typing. Most do not.
-       *
-       * The placeholder is a real `<button>` rather than a styled div: it is the control that
-       * starts the editor, so it has to be reachable by keyboard and announce itself. Pressing
-       * it (or focusing it and pressing Enter/Space, which a button gives for free) swaps in
-       * the editor and the `autoFocus`-equivalent is handled by wangEditor's own mount.
-       *
-       * **`mounted` no longer gates this, and must not.** It comes from an
-       * IntersectionObserver in `PicDetail`, and its entire purpose was to defer the heavy
-       * mount until the composer was near the viewport — which pressing the placeholder now
-       * does explicitly and far more precisely. Leaving it in the condition made the button
-       * `disabled` until the observer happened to fire, so the first press on a composer the
-       * user had scrolled straight to did nothing at all. */}
-      {editorOpen ? (
-        <RichTextEditor
-          key={editorRevision}
-          value={comment}
-          onChange={setComment}
-          placeholder={replyTo ? `回复 @${replyTo.username}…` : '写下你的评论…'}
-          disabled={isSubmitting}
-        />
-      ) : (
-        /* Roughly a 52px toolbar (6px padding + 40px buttons) + a 300px body +
-           2×1px border. `min-h` rather than a fixed height because the toolbar
-           wraps to a second row on narrow screens, and under-reserving is much
-           less disruptive than over-reserving: the editor grows into the space
-           instead of the page collapsing around it.
-
-           The same box in both states, so opening the editor does not move the page. */
-        <button
-          type="button"
-          onClick={() => setPressedWrite(true)}
-          onPointerEnter={warmEditor}
-          onFocus={warmEditor}
-          className="min-h-[354px] w-full cursor-text rounded-sm border border-outline-variant bg-surface-container-low p-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:ring-2 focus-visible:focus-ring"
-        >
-          {/* Always the plain prompt: `editorOpen` is true whenever `replyTo` is
-              set, so this branch only ever renders with no reply target. */}
-          写下你的评论…
-        </button>
-      )}
-      <div className="mt-2 flex justify-end">
+      <RichTextEditor
+        key={`${imageId}:${editorRevision}`}
+        value={comment}
+        onChange={setComment}
+        placeholder={replyTo ? `回复 ${replyTo.username}…` : '写下你的评论…'}
+        disabled={isSubmitting}
+        size="reply"
+        label={replyTo ? `回复 ${replyTo.username}` : '评论'}
+      />
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="text" onClick={collapse} disabled={isSubmitting}>
+          收起
+        </Button>
         <Button
           type="button"
           onClick={handleSubmit}
           variant="filled"
           loading={isSubmitting}
-          disabled={!trimmedComment}
-          icon={<MdSend size={ICON.dense} />}
+          disabled={!trimmed}
+          icon={<MdSend />}
         >
-          {isSubmitting ? '发送中…' : replyTo ? '发送回复' : '发送评论'}
+          {replyTo ? '发送回复' : '发送评论'}
         </Button>
       </div>
-    </>
+    </div>
   );
 }

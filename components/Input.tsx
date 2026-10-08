@@ -3,10 +3,13 @@
 import {
   forwardRef,
   useId,
+  useState,
   type InputHTMLAttributes,
   type TextareaHTMLAttributes,
   type ReactNode,
 } from 'react';
+import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
+import IconButton from './IconButton';
 import { cn } from '@/lib/utils';
 
 /**
@@ -17,8 +20,9 @@ import { cn } from '@/lib/utils';
  * outline — an empty field and a filled one stop being different objects. An
  * *unlabelled* field is not a form slot (search box, admin filter, composer); its
  * placeholder is its whole identity, so it gets the filled treatment: a tone
- * step, no border, no shadow. Same 4dp corner, same 56dp box — one family, two
- * boundary treatments. Geometry, notch and float live in `.m3-field`
+ * step, no border, no shadow. Outlined fields keep 4dp corners; filled fields
+ * use 8dp, matching the default Select shape. Their ordinary 56dp box stays
+ * shared. Geometry, notch and float live in `.m3-field`
  * (globals.css), which turns on `:focus-within`/`:placeholder-shown` against a
  * *sibling* and a real `<legend>` to cut the notch.
  *
@@ -26,14 +30,19 @@ import { cn } from '@/lib/utils';
  * not an overlay, so any number of controls fit with no hand-typed width reserve.
  *
  * **One height for a form slot, 56dp** (`OutlinedTextFieldTokens.ContainerHeight`
- * is 56 and M3 gives no other). The two variants differ in exactly one thing: the
- * boundary. `Textarea` follows through block padding, since it grows.
+ * is 56 and M3 gives no other). Boundary and corner follow the field's role;
+ * `Textarea` follows the height through block padding, since it grows.
  *
  * **One height for chrome, 40dp** — `size="sm"`, the app's own step (M3 offers
- * no 40dp field), matching `Select size="sm"` and the dense row it sits in. Two
- * fences: unlabelled only (the notch geometry is derived from 56dp), and no
- * `trailing` slot (the 8dp inset is `(56 - 40) / 2`; a 40dp box has no room to
- * centre a 40dp control).
+ * no 40dp field), matching `Select size="sm"` and the dense row it sits in. It is
+ * unlabelled only (the notch geometry is derived from 56dp), and its `trailing` slot
+ * holds one **32dp** control (`IconButton size="sm"` — a filter's clear button) on
+ * the same inset formula as every size, `(40 - 32) / 2` = 4px; a 40dp control has
+ * no room there.
+ *
+ * **A password field brings its own visibility toggle** (`revealable`, on by default):
+ * one drawn by this system, in the trailing slot — Edge's native eye is hidden in
+ * globals.css, so there is exactly one, the same in every engine.
  */
 
 /** `OutlinedTextFieldTokens.ContainerHeight`. The only height M3 gives a field. */
@@ -45,26 +54,32 @@ const LABELLED_HEIGHT = 'h-14';
 const BARE_HEIGHT = 'h-14';
 /**
  * `size="sm"` — the dense step, and the one height in this file M3 does not name.
- * 40dp matches `Select size="sm"`'s box, with `body-m` ink to match; a field and a
- * dropdown in one filter bar are the same height *and* the same size of type. See
- * the docblock above for the two fences: unlabelled only, and no `trailing`.
+ * 40dp matches `Select size="sm"`'s box. Both use 14px type and a 16dp inset;
+ * typed text is body-m, while the dropdown's chosen label is label-l. See the
+ * docblock above for the two fences: unlabelled only, and a trailing slot of one
+ * 32dp control.
  */
 const DENSE_HEIGHT = 'h-10';
 /**
  * `size="lg"` — M3's *search bar* (`SearchBarTokens`): the same 56dp, but fully
- * rounded rather than the field's 4dp. Exists for the one field on /search, which
- * is the page — cornered like a filter it read as a filter. The 4dp corner stays
- * the default precisely so this cannot spread. The pill is also what makes the
+ * rounded rather than the ordinary filled field's 8dp. Exists for the one field
+ * on /search that is the point of the page. The pill also makes the
  * buttons inside it work: a centred pill inside a pill is concentric for free at
  * any size (40dp button, 56dp box, 8px gap ⇒ half the button's height), where a
- * 4dp enclosure would need a remembered corner value.
+ * small-cornered enclosure would need a remembered corner value.
  */
 const HERO_HEIGHT = 'h-14';
 
 /** The control's own ink and placeholder, shared by both primitives. */
 const CONTROL = 'text-body-l placeholder:text-on-surface-variant';
-/** The dense field's ink — `body-m`, matching `Select size="sm"`'s trigger exactly. */
-const DENSE_CONTROL = 'text-body-m placeholder:text-on-surface-variant';
+/**
+ * Dense typed text uses body-m; Select's same-size value uses the label-l role.
+ * **Under a finger it is body-l, 16px**: iOS Safari zooms the page into any focused
+ * field set smaller and leaves it zoomed — the fix is the type size, never a viewport
+ * `maximum-scale`, which would take pinch zoom away from everyone. The 28px body-l
+ * line box still sits inside the 40dp box.
+ */
+const DENSE_CONTROL = 'text-body-m pointer-coarse:text-body-l placeholder:text-on-surface-variant';
 
 /* Same guard as `Skeleton`'s conditional radius: `cn` is a plain join, so a
  * textarea asking for `resize-none` used to emit that *and* the default
@@ -82,6 +97,9 @@ interface FieldProps {
   className?: string;
 }
 
+/** Only an unconditional width replaces the default; `sm:w-*` keeps mobile full width. */
+const HAS_WIDTH = /(?:^|\s)w-\S+/;
+
 /**
  * The supporting row under a control — helper text or an error, and a counter.
  * Renders no label (the label lives inside the control now). Inset 16dp, where
@@ -93,15 +111,16 @@ export function Field({
   count,
   className = '',
   children,
-}: Pick<FieldProps, 'helper' | 'error' | 'count' | 'className'> & { children: ReactNode }) {
+  supportId,
+}: Pick<FieldProps, 'helper' | 'error' | 'count' | 'className'> & { children: ReactNode; supportId?: string }) {
   const overLimit = count ? count.value > count.max : false;
 
   return (
-    <div className={cn('flex w-full min-w-0 flex-col gap-1.5', className)}>
+    <div className={cn('flex min-w-0 flex-col gap-1.5', !HAS_WIDTH.test(className) && 'w-full', className)}>
       {children}
 
       {(error || helper || count) && (
-        <div className="flex items-start justify-between gap-3 px-4">
+        <div id={supportId} className="flex items-start justify-between gap-3 px-4">
           <p
             className={cn('text-body-s min-w-0', error ? 'text-error' : 'text-on-surface-variant')}
             // Errors announce themselves; helper text is static and must not.
@@ -173,16 +192,14 @@ function FieldLabel({
 }
 
 /**
- * Focus, on both fields, is the app's one indicator — painted twice, in the two
- * places the two boundaries leave room for it.
+ * Focus follows the boundary each field already has.
  *
- * An *outlined* field has no focus ring: the focused outline is `primary` at 2px
- * — the ring's colour at the ring's weight, drawn as the control's boundary
- * rather than as a second boundary 2px outside the first. A field whose entire
+ * An *outlined* field has no outer ring: its outline becomes `primary-ink` at
+ * 2px, rather than drawing a second boundary outside the first. A field whose entire
  * identity *is* a 1px outline cannot wear a ring around it without reading as
  * two nested boxes; M3 specifies the thickened outline for that reason.
  *
- * A *filled* field takes the ordinary ring — no outline to nest inside. Both key
+ * A *filled* field takes the ordinary focus ring — no outline to nest inside. Both key
  * off `:focus-within` (not `:focus-visible`): the element wearing the indicator
  * is the container, reporting on the control inside it.
  */
@@ -213,14 +230,22 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> &
   FieldProps & {
     /** Leading adornment — an icon, not a control. */
     icon?: ReactNode;
-    /** Trailing adornment; may be interactive (clear button, visibility toggle). */
+    /**
+     * Trailing controls, inside the box. 40dp controls in a 56dp field; one 32dp
+     * control in a `sm` field. A password field's visibility toggle comes after them.
+     */
     trailing?: ReactNode;
     /**
      * `lg` is M3's search bar — 56dp and fully rounded. `sm` is the dense step,
-     * 40dp with `body-m`, for a filter bar or a row. Both are **unlabelled only**,
-     * and `sm` additionally takes no `trailing`. See the docblock above.
+     * 40dp with `body-m`, for a filter bar or a row. Both are **unlabelled only**.
+     * See the docblock above.
      */
     size?: 'sm' | 'md' | 'lg';
+    /**
+     * A `type="password"` field's show/hide toggle. On by default; pass `false` only
+     * where the value must never be shown on screen.
+     */
+    revealable?: boolean;
     fieldClassName?: string;
   };
 
@@ -234,34 +259,57 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     icon,
     trailing,
     size = 'md',
+    revealable = true,
+    type,
     className = '',
     fieldClassName = '',
     id,
     placeholder,
+    'aria-describedby': describedBy,
     ...rest
   },
   ref,
 ) {
   const autoId = useId();
   const inputId = id ?? autoId;
+  const supportId = helper || error || count ? `${autoId}-support` : undefined;
   const labelled = hasLabel(label);
   const hero = !labelled && size === 'lg';
   /* Both size branches are gated on `!labelled` rather than trusting the call site,
      because a labelled field's whole notch geometry is derived from 56dp. A `sm`
      on a labelled field is a no-op rather than an error, the same way `lg` is. */
   const dense = !labelled && size === 'sm';
+  const [revealed, setRevealed] = useState(false);
+  const reveal = type === 'password' && revealable;
+  /* The toggle names the action (显示密码 / 隐藏密码), as its icon does. It keeps the
+     caret where it is: a press that moved focus onto the button would drop a phone
+     keyboard mid-password, so the pointer press does not take focus; Tab still
+     reaches it. */
+  const revealToggle = reveal && (
+    <IconButton
+      size={dense ? 'sm' : 'md'}
+      aria-label={revealed ? '隐藏密码' : '显示密码'}
+      icon={revealed ? <MdVisibilityOff /> : <MdVisibility />}
+      onPointerDown={(event) => event.preventDefault()}
+      onClick={() => setRevealed((shown) => !shown)}
+      disabled={rest.disabled}
+    />
+  );
+  const trailingSlot = (trailing || revealToggle) && (
+    <>
+      {trailing}
+      {revealToggle}
+    </>
+  );
 
   return (
-    <Field helper={helper} error={error} count={count} className={fieldClassName}>
+    <Field helper={helper} error={error} count={count} className={fieldClassName} supportId={supportId}>
       <div
         {...shellProps({
           labelled,
           invalid: Boolean(error),
           icon: Boolean(icon),
-          /* The dense field has no room for a control: the 8dp inset either side is
-             `(56 - 40) / 2`, so at 40dp there is nothing left to centre. Dropped
-             here rather than left to the call site, so the inset stays one value. */
-          trailing: Boolean(trailing) && !dense,
+          trailing: Boolean(trailingSlot),
           hero,
           dense,
         })}
@@ -274,6 +322,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           id={inputId}
+          type={reveal && revealed ? 'text' : type}
+          aria-describedby={[describedBy, supportId].filter(Boolean).join(' ') || undefined}
           aria-invalid={error ? true : undefined}
           required={required}
           /* `:placeholder-shown` is what tells the label whether the field is
@@ -290,7 +340,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         />
         {labelled && <FieldLabel label={label} required={required} htmlFor={inputId} />}
         {!labelled && <fieldset aria-hidden="true" />}
-        {trailing && !dense && <span className="m3-field-trail">{trailing}</span>}
+        {trailingSlot && <span className="m3-field-trail">{trailingSlot}</span>}
       </div>
     </Field>
   );
@@ -323,17 +373,19 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     placeholder,
     rows = 4,
     size = 'md',
+    'aria-describedby': describedBy,
     ...rest
   },
   ref,
 ) {
   const autoId = useId();
   const areaId = id ?? autoId;
+  const supportId = helper || error || count ? `${autoId}-support` : undefined;
   const labelled = hasLabel(label);
   const dense = !labelled && size === 'sm';
 
   return (
-    <Field helper={helper} error={error} count={count} className={fieldClassName}>
+    <Field helper={helper} error={error} count={count} className={fieldClassName} supportId={supportId}>
       <div
         {...shellProps({
           labelled,
@@ -346,6 +398,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         <textarea
           ref={ref}
           id={areaId}
+          aria-describedby={[describedBy, supportId].filter(Boolean).join(' ') || undefined}
           rows={rows}
           aria-invalid={error ? true : undefined}
           required={required}
@@ -409,11 +462,10 @@ export const ColorSwatch = forwardRef<HTMLInputElement, ColorSwatchProps>(functi
       type="color"
       aria-label={ariaLabel}
       className={cn(
-        /* 4dp and 56dp, matching the unlabelled text field it stands beside in the
-           admin console — same kind of object, same box (the field token's shape
-           and the only height M3 gives a field). */
+        /* The native colour swatch keeps its 4dp corner and the form family's
+           56dp height; the ordinary filled text field has the softer 8dp corner. */
         'h-14 w-14 shrink-0 cursor-pointer rounded-xs border border-outline p-0.5',
-        'outline-none transition-ui focus-visible:ring-2 focus-ring',
+        'focus-visible:outline-hidden transition-ui focus-visible:ring-2 focus-ring',
         'disabled:cursor-not-allowed disabled:disabled-content',
         className,
       )}

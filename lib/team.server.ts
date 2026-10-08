@@ -48,14 +48,10 @@ export interface TeamSeed {
 }
 
 /**
- * A process-local memo in front of Next's Data Cache, and it is not redundant: Next honours an
- * upstream `Cache-Control: no-store` by declining to cache, and these backends' headers are not
- * ours to guarantee, so `next: { revalidate }` below is a request, not a promise.
- *
- * That distinction is load-bearing because the footer links to /about from **every** route, Next
- * prefetches the RSC payload of every visible `<Link>`, and rendering that payload calls this —
- * without a cache that cannot be overruled from outside, one page view anywhere in the app
- * becomes one upstream fetch of the roster.
+ * A process-local memo in front of Next's Data Cache. Explicit `next: { revalidate }` retains
+ * responses despite upstream `no-store`; the memo also joins concurrent reads and keeps the
+ * original generatedAt timestamp when the same seed is handed to another visitor. The footer
+ * links to /about from every route, and prefetching that RSC payload runs this read too.
  *
  * Deliberately one entry, no invalidation: it holds a public list that changes when somebody
  * joins the team, and the worst case of a stale one is a name appearing half an hour late.

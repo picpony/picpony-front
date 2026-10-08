@@ -2,20 +2,33 @@
 
 import Image, { getImageProps } from 'next/image';
 import {
+  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type CSSProperties,
   type SyntheticEvent,
 } from 'react';
-import { MdFullscreen } from 'react-icons/md';
+import { MdFullscreen, MdRefresh } from 'react-icons/md';
 import IconButton from './IconButton';
+import Skeleton from './Skeleton';
+import ErrorRetry from './ErrorRetry';
 import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
 import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
-import { getRawImageUrl } from '@/lib/imageLoader';
+import {
+  getRawImageUrl,
+  OPTIMIZER_ACTIVE,
+  resolveNextAttempt,
+  type ImageTier,
+  type LoadAttempt,
+} from '@/lib/imageLoader';
+import { IMAGE_CDN_BASE, IMAGE_WORKER_BASE } from '@/lib/constants';
+import { DURATION } from '@/lib/motionTokens';
+import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { warmImageHeroFrame } from '@/lib/hero';
-import { ICON } from '@/lib/icons';
+import { cn } from '@/lib/utils';
 
 type DetailMediaTargetCallback = (surfaceId: string, target: HTMLDivElement | null) => void;
 
@@ -45,6 +58,15 @@ type DetailImageProps = {
   /** Neither layer will ever paint. The terminal answer the handoff waits for. */
   onMediaUnavailable?: (surfaceId: string) => void;
   onOpen: () => void;
+  /**
+   * The picture's translation (the one-click image translation), laid over the original while
+   * `showTranslation` holds. It cross-fades in once decoded, and while it is shown it is the
+   * layer the hero flies home, since it is what the reader is looking at.
+   */
+  translationSrc?: string | null;
+  showTranslation?: boolean;
+  /** The translated picture could not be shown. */
+  onTranslationError?: () => void;
 };
 
 type ImagePrefetchLease = {
@@ -72,11 +94,54 @@ const CDN_DERIVATIVE = /\/(?:large|medium|small|tall|thumb|thumb_small|thumb_tin
  * cards keep the optimizer, where a small card from a large source is a real saving.
  */
 function shouldBypassImageOptimization(src: string) {
-  const pathname = getRawImageUrl(src).split(/[?#]/, 1)[0].toLowerCase();
+  const raw = getRawImageUrl(src);
+  /* A URL the image line has wrapped is the line's to deliver, never the optimizer's:
+     `remotePatterns` admits only the raw hosts, so `/_next/image` answers it with a 400. It
+     reaches here only for a record with no `large`/`medium` rendition — the `full` / `view_url`
+     fallback, the one detail source that is not a derivative. */
+  if (raw !== src) return true;
+  const pathname = raw.split(/[?#]/, 1)[0].toLowerCase();
   if (pathname.endsWith('.gif') || pathname.endsWith('.svg') || pathname.endsWith('.apng')) {
     return true;
   }
   return CDN_DERIVATIVE.test(pathname);
+}
+
+/** The line a URL is already on: the worker's, the CDN's, or none (direct). */
+function tierOf(src: string): ImageTier {
+  if (src.startsWith(IMAGE_WORKER_BASE)) return 0;
+  if (src.startsWith(IMAGE_CDN_BASE)) return 1;
+  return 2;
+}
+
+/**
+ * The final layer's first attempt is the URL it was handed, exactly — the one the prefetch lease
+ * warmed and the one the hero expects — and only a failure walks the image-line ladder from it
+ * (`lib/imageLoader.ts`): the line's own retry, then the next line, then direct with a backoff.
+ */
+function firstAttempt(src: string): LoadAttempt {
+  return {
+    url: src,
+    optimized: OPTIMIZER_ACTIVE && !shouldBypassImageOptimization(src),
+    tier: tierOf(src),
+    retries: 0,
+    giveUp: false,
+    delayMs: 0,
+  };
+}
+
+interface FinalLadder {
+  src: string;
+  attempt: LoadAttempt;
+  /** The attempt on screen — behind `attempt` only while a backoff runs. */
+  shown: LoadAttempt;
+  /** Bumped to re-issue the shown attempt (a retry, the network coming back). */
+  generation: number;
+}
+
+function freshLadder(src: string, generation = 0): FinalLadder {
+  const attempt = firstAttempt(src);
+  return { src, attempt, shown: attempt, generation };
 }
 
 function getPrefetchCandidate(
@@ -127,6 +192,11 @@ function createImagePrefetchLease(source: string, href: string): ImagePrefetchLe
   };
 }
 
+/** Decoded and on screen: `complete` alone is also true for an image that failed. */
+function decodedIn(element: HTMLImageElement) {
+  return element.complete && element.naturalWidth > 0;
+}
+
 export default function DetailImage({
   imageId,
   previewSrc,
@@ -144,6 +214,9 @@ export default function DetailImage({
   onPreviewFailed,
   onMediaUnavailable,
   onOpen,
+  translationSrc = null,
+  showTranslation = false,
+  onTranslationError,
 }: DetailImageProps) {
   const targetRef = useRef<HTMLDivElement>(null);
   const prefetchLeaseRef = useRef<ImagePrefetchLease | null>(null);
@@ -166,10 +239,55 @@ export default function DetailImage({
   const mountFinal = Boolean(finalSrc) && (!heroActive || !hasPreview || preloadFinal);
   const responsiveSizes = getHeroMediaResponsiveSizes({ width, height });
 
+  /* The final layer's ladder, reset when the picture changes (during render, so a new picture
+     never paints a frame with the previous one's attempt). */
+  const [ladder, setLadder] = useState<FinalLadder>(() => freshLadder(finalSrc));
+  const current = ladder.src === finalSrc ? ladder : freshLadder(finalSrc);
+  if (ladder.src !== finalSrc) setLadder(current);
+  const finalGivenUp = current.attempt.giveUp;
+  /* A failure while the device is offline says nothing about the picture: the attempt is held
+     and re-issued when the connection returns, instead of walking the ladder into the plate. */
+  const [heldOffline, setHeldOffline] = useState(false);
+
+  /* Whether anything is on screen yet — the placeholder shimmers until then, and leaves one
+     fade later (the wall-clock rule: a timer bounding a motion takes the slowest speed). */
+  const [painted, setPainted] = useState<{ src: string; at: 'preview' | 'final' } | null>(null);
+  const isPainted = painted?.src === finalSrc;
+  const [placeholderGone, setPlaceholderGone] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isPainted) return;
+    const timer = window.setTimeout(
+      () => startTransition(() => setPlaceholderGone(finalSrc)),
+      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+    );
+    return () => window.clearTimeout(timer);
+  }, [finalSrc, isPainted]);
+  const showPlaceholder = placeholderGone !== finalSrc && !finalGivenUp;
+
+  /* The translation layer: decoded before it is shown, so the swap is a fade, not a load. */
+  const [translationDecoded, setTranslationDecoded] = useState<string | null>(null);
+  const translationVisible = Boolean(
+    translationSrc && showTranslation && translationDecoded === translationSrc,
+  );
+  /* The original stands down once the translation has faded in over it — not before, or the fade
+     would dip to the empty box, and not never, or a translation with transparent parts would show
+     the original through them. Going back, it is there at once, under the fade out. The timer
+     bounds the fade at the slowest speed (the wall-clock rule). */
+  const [coveredBy, setCoveredBy] = useState<string | null>(null);
+  useEffect(() => {
+    if (!translationVisible || !translationSrc) return;
+    const timer = window.setTimeout(
+      () => setCoveredBy(translationSrc),
+      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+    );
+    return () => window.clearTimeout(timer);
+  }, [translationSrc, translationVisible]);
+  const originalCovered = translationVisible && coveredBy === translationSrc;
+
   /* The preview layer needs no resolution ladder of its own. It paints the bitmap
      the gallery card already decoded — instant, and soft, because that bitmap was
-     picked for a small slot — and the final layer arrives as the CDN's own file in
-     one hop, so there is nothing for a middle rung to be faster than. */
+     picked for a small slot — or, on a direct load, the record's thumbnail, and the
+     final layer arrives as the CDN's own file in one hop. */
 
   const publishPreviewReady = useCallback(() => {
     const readySurfaceId = surfaceIdRef.current;
@@ -241,7 +359,8 @@ export default function DetailImage({
     }
   }, [clearPreviewFallback, markPreviewReady]);
 
-  /** A paintable preview is still a handoff target, so only escalate when there is none. */
+  /** Every line has failed. A paintable preview is still a handoff target, so only escalate
+   *  when there is none. */
   const markFinalFailed = useCallback(() => {
     finalFailedRef.current = true;
     const failedSurfaceId = surfaceIdRef.current;
@@ -364,6 +483,50 @@ export default function DetailImage({
     };
   }, [alt, finalSrc, height, heroActive, mountFinal, preloadFinal, responsiveSizes, width]);
 
+  /* The backoff: the next attempt goes on screen once its wait has passed. */
+  useEffect(() => {
+    const { attempt, shown } = current;
+    if (attempt === shown || attempt.giveUp) return;
+    const timer = window.setTimeout(() => {
+      setLadder((state) => (state.src === finalSrc && state.attempt === attempt ? { ...state, shown: attempt } : state));
+    }, attempt.delayMs);
+    return () => window.clearTimeout(timer);
+  }, [current, finalSrc]);
+
+  /* Every rung spent: the flight (if any) hears it once, and the box shows why. */
+  useEffect(() => {
+    if (finalGivenUp) markFinalFailed();
+  }, [finalGivenUp, markFinalFailed]);
+
+  /* Offline: re-issue the held attempt, or start over after a give-up, when the network is back. */
+  useEffect(() => {
+    if (!heldOffline && !finalGivenUp) return;
+    const onOnline = () => {
+      setHeldOffline(false);
+      finalFailedRef.current = false;
+      setLadder((state) => (state.attempt.giveUp ? freshLadder(state.src, state.generation + 1) : { ...state, generation: state.generation + 1 }));
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [finalGivenUp, heldOffline]);
+
+  const handleFinalError = useCallback(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setHeldOffline(true);
+      return;
+    }
+    setLadder((state) => {
+      if (state.src !== finalSrc || state.attempt !== state.shown || state.attempt.giveUp) return state;
+      const next = resolveNextAttempt(getRawImageUrl(state.src), state.attempt);
+      return { ...state, attempt: next, shown: next.delayMs > 0 && !next.giveUp ? state.shown : next };
+    });
+  }, [finalSrc]);
+
+  const retryFinal = useCallback(() => {
+    finalFailedRef.current = false;
+    setLadder((state) => freshLadder(state.src, state.generation + 1));
+  }, []);
+
   const markFinalDecoded = useCallback(
     (event: SyntheticEvent<HTMLImageElement>) => {
       const element = event.currentTarget;
@@ -372,7 +535,7 @@ export default function DetailImage({
         try {
           await element.decode();
         } catch {
-          if (!element.complete || element.naturalWidth === 0) return;
+          if (!decodedIn(element)) return;
         }
         requestAnimationFrame(() => {
           if (
@@ -387,6 +550,7 @@ export default function DetailImage({
             lease.release();
           }
           markFinalReady();
+          setPainted({ src: finalSrc, at: 'final' });
         });
       })();
     },
@@ -402,7 +566,7 @@ export default function DetailImage({
         try {
           await element.decode();
         } catch {
-          if (!element.complete || element.naturalWidth === 0) return;
+          if (!decodedIn(element)) return;
         }
         requestAnimationFrame(() => {
           if (
@@ -412,11 +576,32 @@ export default function DetailImage({
           )
             return;
           markPreviewReady();
+          setPainted((state) => (state?.src === finalSrc ? state : { src: finalSrc, at: 'preview' }));
         });
       })();
     },
-    [markPreviewReady, previewSrc],
+    [finalSrc, markPreviewReady, previewSrc],
   );
+
+  const markTranslationDecoded = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      const element = event.currentTarget;
+      const loadedSrc = translationSrc;
+      void element
+        .decode()
+        .catch(() => undefined)
+        .then(() => {
+          if (!loadedSrc || !element.isConnected || !decodedIn(element)) return;
+          setTranslationDecoded(loadedSrc);
+        });
+    },
+    [translationSrc],
+  );
+
+  const failedWithNothing = finalGivenUp && !isPainted;
+  /* The shown attempt, keyed so a retry is a fresh element: `next/image` re-fires a lost error on
+     its own element, but a new URL on the same element keeps the old one's load state. */
+  const shown = current.shown;
 
   return (
     <div
@@ -424,13 +609,22 @@ export default function DetailImage({
       data-image-hero-role="detail"
       data-image-hero-id={imageId}
       data-image-detail-hero-active={heroActive ? 'true' : 'false'}
-      className="group relative flex-none cursor-zoom-in overflow-hidden rounded-lg bg-surface-container-low"
+      className={cn(
+        'group relative flex-none overflow-hidden rounded-lg bg-surface-container-low',
+        failedWithNothing ? 'cursor-default' : 'cursor-zoom-in',
+      )}
       style={style}
-      onClick={onOpen}
+      onClick={failedWithNothing ? undefined : onOpen}
     >
-      {finalSrc && mountFinal && (
+      {showPlaceholder && (
+        /* The destination's own shape while nothing is on screen — the box is already at the
+           picture's aspect ratio — rather than a flat plate that pops into a picture. */
+        <Skeleton aria-hidden="true" className="absolute inset-0 rounded-lg" />
+      )}
+      {finalSrc && mountFinal && !finalGivenUp && (
         <Image
-          src={finalSrc}
+          key={`${current.generation}:${shown.url}`}
+          src={shown.url}
           alt={alt}
           width={Math.max(1, width)}
           height={Math.max(1, height)}
@@ -440,14 +634,20 @@ export default function DetailImage({
           // A confirmed detail route owns the final image request even while
           // its preview is still the visual authority. Deferring this behind
           // input activity made a held touch/wheel appear to stop loading.
-          fetchPriority="high"          unoptimized={shouldBypassImageOptimization(finalSrc)}
+          fetchPriority="high"
+          unoptimized={!shown.optimized}
           onLoad={markFinalDecoded}
-          /* `next/image` re-assigns `src` to itself so a lost error re-fires, and
-             there was nothing here to receive it — so a final that 404s was
-             indistinguishable from one still in flight. */
-          onError={markFinalFailed}
-          data-image-detail-layer="final"
-          className="image-detail-final pointer-events-none absolute inset-0 z-0 block h-full w-full object-contain"
+          /* `next/image` re-assigns `src` to itself so a lost error re-fires; this is what
+             walks the ladder, so a final that 404s on one line is asked for on the next. */
+          onError={handleFinalError}
+          data-image-detail-layer={translationVisible ? 'original' : 'final'}
+          style={originalCovered ? { opacity: 0 } : undefined}
+          className={cn(
+            'image-detail-final pointer-events-none absolute inset-0 z-0 block h-full w-full object-contain',
+            /* With nothing under it but the placeholder, the final fades in; over a preview it
+               appears at once and the preview fades out above it, so no frame shows neither. */
+            !previewSrc && 'transition-opacity spring-default-effects',
+          )}
         />
       )}
       {previewSrc && (
@@ -463,36 +663,75 @@ export default function DetailImage({
           onLoad={markPreviewDecoded}
           onError={markPreviewFailed}
           data-image-detail-layer="preview"
+          style={originalCovered ? { opacity: 0 } : undefined}
           // Absolute so preloading final never shifts the box.
-          className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain"
+          className="image-detail-preview-native pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain transition-opacity spring-fast-effects"
         />
+      )}
+      {translationSrc && (
+        /* After the preview in the tree, so at the same layer it paints above it. A plain image:
+           the translation service's own host, delivered as it is — neither a Derpibooru
+           rendition nor on an image line, so there is nothing for the optimizer to do. */
+        /* eslint-disable-next-line @next/next/no-img-element -- see above */
+        <img
+          src={translationSrc}
+          alt={translationVisible ? `${alt}（译图）` : ''}
+          aria-hidden={translationVisible ? undefined : true}
+          decoding="async"
+          onLoad={markTranslationDecoded}
+          onError={onTranslationError}
+          data-image-detail-layer={translationVisible ? 'final' : 'translation'}
+          className="pointer-events-none absolute inset-0 z-10 block h-full w-full object-contain transition-opacity spring-default-effects"
+          style={{ opacity: translationVisible ? 1 : 0 }}
+        />
+      )}
+      {failedWithNothing && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
+          <ErrorRetry size="inline" title="图片加载失败" onRetry={retryFinal} />
+        </div>
       )}
       {/* Hover veil, and nothing else — `pointer-events-none` so it never eats
           the press the media box below it is listening for. */}
-      <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />
+      {!failedWithNothing && <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />}
+      {finalGivenUp && isPainted && (
+        /* The full-size file failed on every line, but a softer version is on screen: say so,
+           and offer it again, without taking the picture away. */
+        <IconButton
+          variant="media"
+          icon={<MdRefresh />}
+          aria-label="原图加载失败，重新加载"
+          onClick={(event) => {
+            event.stopPropagation();
+            retryFinal();
+          }}
+          className="absolute bottom-3 left-3 z-30"
+        />
+      )}
       {/* The zoom affordance is a real control on the media plate, in the corner
-          rather than over the picture, present by default and hover-revealed from
-          `sm` up — the same rule the gallery tiles' captions follow. The box click
+          rather than over the picture, present on compact and touch screens and
+          hover-revealed on desktop — the same rule the gallery captions follow. The box click
           stays as a pointer convenience; this button is what makes the action
           reachable from a keyboard (and present on touch, where there is no
           hover). */}
-      <IconButton
-        variant="media"
-        icon={<MdFullscreen size={ICON.standard} />}
-        aria-label="放大查看原图"
-        /* Stops the press reaching the media box's own handler underneath, which
-           would open the lightbox a second time in the same tick. */
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpen();
-        }}
-        /* Hidden for the length of a hero flight — see the rule in globals.css. Below `sm`
-           this control is `opacity-100` rather than hover-revealed, and `HeroStage`'s
-           landing target renders no children at all, so on a phone the handoff frame was
-           conjuring a 40dp button into the picture's corner out of nothing. */
-        data-image-detail-zoom
-        className="absolute right-3 bottom-3 z-30 cursor-zoom-in opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
-      />
+      {!failedWithNothing && (
+        <IconButton
+          variant="media"
+          icon={<MdFullscreen />}
+          aria-label="放大查看原图"
+          /* Stops the press reaching the media box's own handler underneath, which
+             would open the lightbox a second time in the same tick. */
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+          /* Hidden for the length of a hero flight — see the rule in globals.css. On touch
+             this control stays visible, and `HeroStage`'s
+             landing target renders no children at all, so on a phone the handoff frame was
+             conjuring a 40dp button into the picture's corner out of nothing. */
+          data-image-detail-zoom
+          className="hover-reveal absolute right-3 bottom-3 z-30 cursor-zoom-in"
+        />
+      )}
     </div>
   );
 }

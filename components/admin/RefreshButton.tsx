@@ -26,6 +26,7 @@ export default function RefreshButton({
        one-attribute form is shared with the dismiss icon button and
        `Pagination`. */
     <Button
+      type="button"
       variant="accent"
       className="group"
       onClick={onClick}
@@ -38,7 +39,6 @@ export default function RefreshButton({
           className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
         />
       }
-      data-ripple
     >
       {label}
     </Button>

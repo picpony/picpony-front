@@ -287,31 +287,34 @@ export function waitForHeroInputRelease(signal?: AbortSignal) {
   });
 }
 
+export type HeroInteractionQuietResult = 'quiet' | 'expired' | 'aborted';
+
 /**
  * Resolves once input has been quiet continuously for `quietFor` ms.
  *
  * `budget` is a wall-clock ceiling on the *wait*, and without one this cannot be bounded from
  * outside: a wheel stream refreshes `wheelActive` every `WHEEL_RELEASE_MS`, so `quietFor` may
  * never elapse and a caller that checks a deadline around its `await` never gets to check it.
- * Expiry resolves `false`, i.e. the same answer as an abort — the caller distinguishes them by
- * looking at its own deadline, which is what `waitForInputTransfer` does.
+ * Expiry and abort are distinct outcomes. Browsers truncate a fractional timeout to whole
+ * milliseconds, so a budget timer can fire just before a caller's floating-point deadline;
+ * comparing the clock again would mistake a normal expiry for a cancelled handoff.
  */
 export function waitForHeroInteractionQuiet(
   signal?: AbortSignal,
   quietFor = QUIET_AFTER_MS,
   budget?: number,
-) {
-  if (signal?.aborted) return Promise.resolve(false);
+): Promise<HeroInteractionQuietResult> {
+  if (signal?.aborted) return Promise.resolve('aborted');
   if (isHeroInteractionQuiet() && now() - lastActivityAt >= quietFor) {
-    return Promise.resolve(true);
+    return Promise.resolve('quiet');
   }
-  if (typeof budget === 'number' && budget <= 0) return Promise.resolve(false);
+  if (typeof budget === 'number' && budget <= 0) return Promise.resolve('expired');
 
-  return new Promise<boolean>((resolve) => {
+  return new Promise<HeroInteractionQuietResult>((resolve) => {
     let timer = 0;
     let expiry = 0;
     let finished = false;
-    const finish = (value: boolean) => {
+    const finish = (value: HeroInteractionQuietResult) => {
       if (finished) return;
       finished = true;
       if (timer) window.clearTimeout(timer);
@@ -322,12 +325,12 @@ export function waitForHeroInteractionQuiet(
     };
     const check = () => {
       if (signal?.aborted) {
-        finish(false);
+        finish('aborted');
         return;
       }
       const remaining = quietFor - (now() - lastActivityAt);
       if (isHeroInteractionQuiet() && remaining <= 0) {
-        finish(true);
+        finish('quiet');
         return;
       }
       if (timer) window.clearTimeout(timer);
@@ -336,12 +339,12 @@ export function waitForHeroInteractionQuiet(
       // is live starves the very scroll events this waiter observes.
       timer = hasActiveHeroInput() ? 0 : window.setTimeout(check, Math.max(1, remaining));
     };
-    const abort = () => finish(false);
+    const abort = () => finish('aborted');
     activityListeners.add(check);
     signal?.addEventListener('abort', abort, { once: true });
     /* The ceiling is its own timer rather than a check inside `check`, because a live wheel
        stream is exactly the case where `check` stops being scheduled. */
-    if (typeof budget === 'number') expiry = window.setTimeout(() => finish(false), budget);
+    if (typeof budget === 'number') expiry = window.setTimeout(() => finish('expired'), budget);
     check();
   });
 }

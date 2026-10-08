@@ -1,619 +1,312 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { api } from '@/lib/api';
-import { showToast } from '@/components/Toast';
-import Modal from '@/components/Modal';
-import Skeleton from '@/components/Skeleton';
-import EmptyState from '@/components/EmptyState';
-import {
-  MdAdd,
-  MdShield,
-  MdSearch,
-  MdEdit,
-  MdDelete,
-  MdBlock,
-  MdVisibility,
-} from 'react-icons/md';
+import { useCallback, useRef, useState } from 'react';
+import { MdAdd, MdDownload, MdShield } from 'react-icons/md';
 import Button from '@/components/Button';
-import IconButton from '@/components/IconButton';
-import ToggleSwitch from '@/components/ToggleSwitch';
-import { Input } from '@/components/Input';
-import { useAuthModal } from '@/components/AuthModal';
+import { useConfirm } from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
+import { GroupRowsSkeleton } from '@/components/groups/GroupRow';
 import PageHeader from '@/components/PageHeader';
-import Radio from '@/components/Radio';
-import Chip from '@/components/Chip';
-import Popover from '@/components/Popover';
+import PresenceList from '@/components/PresenceList';
+import SignInRequired from '@/components/SignInRequired';
+import { showToast } from '@/components/Toast';
+import PresenceBlock from '@/components/PresenceBlock';
+import {
+  deleteBlockGroup,
+  MAX_BLOCK_GROUPS,
+  saveBlockGroup,
+  toggleBlockGroup,
+  type BlockGroup,
+  type BlockGroupInput,
+} from '@/lib/api/blockGroups';
+import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
+import { mirrorBlockGroups } from '@/lib/blockGroupMirror';
+import { readToken, useSession } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
-import { readUserInfo } from '@/lib/hooks';
-import { useResource, SKIP } from '@/lib/resource';
-import { blockGroups, type BlockGroup } from '@/lib/resources';
+import { SKIP, useResource } from '@/lib/resource';
+import { blockGroups, shareableGroups, syncBrowsingCookie } from '@/lib/resources';
+import { settle } from '@/lib/settle';
+import { cn } from '@/lib/utils';
+import BlockGroupRow from './BlockGroupRow';
+import BlockGroupEditor, { draftOf, type BlockGroupDraft } from './BlockGroupEditor';
+import DerpiFilterImport, { type FilterImport } from './DerpiFilterImport';
 
-const MAX_GROUPS = 50;
-const MAX_TAGS_PER_GROUP = 100;
-
-/* `BlockGroup` is imported from `lib/resources` rather than re-declared: two
-   structurally-identical types is one type and a copy that can drift. */
-
-type UserInfo = {
-  id: number;
-  token: string;
-  username: string;
-  role: string;
-  avatar: string | null;
-};
+/**
+ * Write the list in place and put it in force on this device at once — a switch or a save must
+ * not wait for a re-read to change what the gallery hides (`lib/blockGroupMirror.ts`). The forum's
+ * list of the user's own groups changes with it.
+ */
+function writeGroups(token: string, update: (groups: BlockGroup[]) => BlockGroup[]) {
+  blockGroups.write({ token }, (previous) => {
+    const next = update(previous ?? []);
+    if (readToken() === token && mirrorBlockGroups(next)) syncBrowsingCookie();
+    return next;
+  });
+  shareableGroups.invalidate({ token });
+}
 
 export default function BlockGroupsPage() {
-  const { openAuth } = useAuthModal();
-  const [userInfo] = useState<UserInfo | null>(() => readUserInfo() as UserInfo | null);
+  const { user, token, ready } = useSession();
+  const { confirm, confirmDialog } = useConfirm();
+  const read = useResource(blockGroups, token ? { token } : SKIP);
+  const groups = read.data;
+  const count = groups?.length ?? 0;
+  const full = count >= MAX_BLOCK_GROUPS;
+  const apiKey = typeof user?.api_key === 'string' && user.api_key ? user.api_key : null;
 
-  /* The list comes from the resource layer rather than its own `useState` + effect — that
-     is what makes the sidebar's hover prefetch (`lib/prefetchRoute.ts`) worth anything:
-     it warmed `blockGroups` and this screen then fetched independently, so the hover cost
-     a request nobody read. `SKIP` while signed out — no token to key on. */
-  const read = useResource(blockGroups, userInfo?.token ? { token: userInfo.token } : SKIP);
-  const groups = useMemo(() => read.data?.groups ?? [], [read.data]);
-  /* The placeholder branches on having nothing at all, never on `isLoading` — a
-     revalidation under a warm screen has both, and dimming that to a skeleton is what
-     makes a cache not worth having. */
-  const loading = read.data === undefined && read.error === undefined;
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [draft, setDraft] = useState<BlockGroupDraft>(() => draftOf(null));
+  const [saving, setSaving] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [deleting, setDeleting] = useState<ReadonlySet<number>>(() => new Set());
+  const toggles = useRef(new Map<number, { confirmed: boolean; wanted: boolean }>());
+  const presence = useRef<PresenceList<BlockGroup>>(null);
+  const listBox = useRef<HTMLDivElement>(null);
 
-  /* Local edits go through the resource's own store so a refresh cannot resurrect a value
-     the user just changed. `write` is the optimistic path: `fetchedAt` stays put, so the
-     next read still confirms against the server. */
-  const setGroups = useCallback(
-    (update: (previous: BlockGroup[]) => BlockGroup[]) => {
-      const token = userInfo?.token;
-      if (!token) return;
-      blockGroups.write({ token }, (previous) => ({
-        ...(previous ?? {}),
-        success: true,
-        groups: update(previous?.groups ?? []),
-      }));
-    },
-    [userInfo?.token],
+  /* An empty state that replaces the last row answers the press that removed it: it arrives on
+     the pane-swap clock rather than with an entrance of its own (whose staggered start holds its
+     heading hidden — the very element the removed row's focus lands on). Only one that is there
+     from the start enters as the screen's own. */
+  const [hadRows, setHadRows] = useState(false);
+  if (!hadRows && groups && groups.length > 0) setHadRows(true);
+  const emptyAfterRows = hadRows && groups !== undefined && groups.length === 0;
+
+  const openEditor = useCallback((group: BlockGroup | null) => {
+    setDraft(draftOf(group));
+    setEditorOpen(true);
+  }, []);
+
+  /** After a create or an import: the list as the server now has it (its fetch puts it in force). */
+  const reread = useCallback(async (owner: string) => {
+    await blockGroups.read({ token: owner }, { force: true }).catch(() => blockGroups.expire({ token: owner }));
+    shareableGroups.invalidate({ token: owner });
+  }, []);
+
+  const save = async (input: BlockGroupInput) => {
+    if (!token || saving || readToken() !== token) return;
+    setSaving(true);
+    const saved = await settle(saveBlockGroup(token, input));
+    if (!saved.ok) {
+      if (readToken() === token) showToast(apiErrorMessage(saved.error, '保存失败'), 'error');
+    } else if (readToken() === token) {
+      if (input.id) {
+        /* An edit is written through at once; a new group waits for the list (its default
+           state is the server's to say), so the card arrives as the dialog leaves. */
+        const hidden = [...input.hidden];
+        const spoilered = [...input.spoilered];
+        writeGroups(token, (list) => list.map((group) => (group.id === input.id
+          ? { ...group, name: input.name, hidden_tags: hidden, spoilered_tags: spoilered, tags: [...new Set([...hidden, ...spoilered])] }
+          : group)));
+        blockGroups.expire({ token });
+      } else {
+        await reread(token);
+      }
+      if (readToken() !== token) { setSaving(false); return; }
+      setEditorOpen(false);
+      showToast(input.id ? '已保存屏蔽组' : '已创建屏蔽组', 'success');
+    }
+    setSaving(false);
+  };
+
+  /**
+   * A switch flips at once and its request follows. Presses while one is out are not dropped —
+   * the switch stays a live control meanwhile (G4-002) — and the latest one is what is sent next,
+   * so the server ends where the switch does; a refusal puts the switch back where the server last
+   * agreed and says why.
+   */
+  const toggle = useCallback((group: BlockGroup, active: boolean) => {
+    if (!token || readToken() !== token) return;
+    const flip = (value: boolean) =>
+      writeGroups(token, (list) => list.map((item) => (item.id === group.id ? { ...item, is_active: value ? 1 : 0 } : item)));
+    const current = toggles.current.get(group.id);
+    const state = current ?? { confirmed: group.is_active === 1, wanted: active };
+    state.wanted = active;
+    flip(active);
+    if (current) return;
+    toggles.current.set(group.id, state);
+    void (async () => {
+      while (readToken() === token && state.confirmed !== state.wanted) {
+        const sending = state.wanted;
+        const sent = await settle(toggleBlockGroup(token, group.id, sending));
+        if (!sent.ok) {
+          state.wanted = state.confirmed;
+          if (readToken() === token) {
+            flip(state.confirmed);
+            showToast(apiErrorMessage(sent.error, '切换失败'), 'error');
+          }
+          break;
+        }
+        state.confirmed = sending;
+      }
+      toggles.current.delete(group.id);
+    })();
+  }, [token]);
+
+  const remove = useCallback(async (group: BlockGroup) => {
+    if (!token || readToken() !== token || deleting.has(group.id)) return;
+    /* The question comes first; nothing on the card changes until it is answered (R5-039). */
+    if (!(await confirm({
+      title: '确认删除',
+      message: `确定要删除屏蔽组「${group.name}」吗？`,
+      tone: 'danger',
+    }))) return;
+    if (readToken() !== token) return;
+    setDeleting((previous) => new Set(previous).add(group.id));
+    const deleted = await settle(deleteBlockGroup(token, group.id));
+    if (readToken() === token) {
+      if (deleted.ok) {
+        /* The user's removal: if the confirmation has not given the focus back to the row by the
+           time it leaves, the list still places it (`PresenceList`'s `claimFocus`). */
+        presence.current?.claimFocus([group.id]);
+        writeGroups(token, (list) => list.filter((item) => item.id !== group.id));
+        blockGroups.expire({ token });
+        showToast('已删除屏蔽组', 'success');
+      } else {
+        showToast(apiErrorMessage(deleted.error, '删除失败'), 'error');
+      }
+    }
+    setDeleting((previous) => {
+      const next = new Set(previous);
+      next.delete(group.id);
+      return next;
+    });
+  }, [token, confirm, deleting]);
+
+  const importFilter = async (result: FilterImport) => {
+    if (!token || readToken() !== token) return;
+    await saveBlockGroup(token, { name: result.name, hidden: result.hidden, spoilered: result.spoilered });
+    if (readToken() !== token) return;
+    await reread(token);
+    if (readToken() !== token) return;
+    setImportOpen(false);
+    showToast(
+      result.dropped > 0 ? `已导入屏蔽组，有 ${result.dropped} 个标签超出上限未导入` : '已导入屏蔽组',
+      result.dropped > 0 ? 'warning' : 'success',
+    );
+  };
+
+  const signedIn = ready && Boolean(token);
+  const header = (
+    <PageHeader
+      title="屏蔽组"
+      subtitle={
+        signedIn && groups
+          ? full
+            ? `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组，已达上限`
+            : `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组。开启后，图库与搜索会自动处理包含这些标签的图片`
+          : undefined
+      }
+      actions={
+        signedIn && groups ? (
+          <>
+            <Button variant="tonal" icon={<MdDownload />} responsiveLabel onClick={() => setImportOpen(true)}>
+              从 Derpibooru 导入
+            </Button>
+            {/* While empty, the empty state carries 新建 — one primary action, not two (R5-041). */}
+            {count > 0 && (
+              <Button variant="filled" icon={<MdAdd />} disabled={full} onClick={() => openEditor(null)}>
+                新建
+              </Button>
+            )}
+          </>
+        ) : undefined
+      }
+    />
   );
 
-  // Edit modal state
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editGroupId, setEditGroupId] = useState<number | null>(null);
-  const [groupName, setGroupName] = useState('');
-  const [hiddenTags, setHiddenTags] = useState<string[]>([]);
-  const [spoileredTags, setSpoileredTags] = useState<string[]>([]);
-  const [tagActionType, setTagActionType] = useState<'hide' | 'spoiler'>('hide');
-
-  // Tag autocomplete
-  const [searchQuery, setSearchQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<{ name: string; images: number }[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  /* Anchors the suggestion popover: `Popover` measures this to place itself and decide
-     which way to open. */
-  const searchFieldRef = useRef<HTMLDivElement>(null);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Confirm delete
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const deleteTargetRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!userInfo) {
-      openAuth('login');
-    }
-  }, [userInfo, openAuth]);
-
-  /* `refresh` rather than a hand-rolled reload: the resource owns the request, the dedup
-     and the in-flight state. Mutations below call this to reconcile with the server. */
-  const loadGroups = useCallback(() => {
-    void read.refresh();
-  }, [read]);
-
-  /* The localStorage mirror that `lib/api/client.ts`'s browsing settings read from. It has
-     to follow whatever the list currently is — server or optimistic write — so it keys off
-     the rendered value rather than off the fetch. */
-  useEffect(() => {
-    if (read.data?.groups) updateLocalStorageCache(read.data.groups);
-  }, [read.data]);
-
-  useEffect(() => {
-    if (read.error) showToast('网络错误，请稍后再试', 'error');
-  }, [read.error]);
-
-  function updateLocalStorageCache(groups: BlockGroup[]) {
-    const hidden = new Set<string>();
-    const spoilered = new Set<string>();
-    groups.forEach((g) => {
-      if (g.is_active) {
-        (g.hidden_tags || g.tags || []).forEach((t) => {
-          if (t) hidden.add(t.trim().toLowerCase());
-        });
-        (g.spoilered_tags || []).forEach((t) => {
-          if (t) spoilered.add(t.trim().toLowerCase());
-        });
-      }
-    });
-    localStorage.setItem('trixie_active_hidden_tags', JSON.stringify(Array.from(hidden)));
-    localStorage.setItem('trixie_active_spoilered_tags', JSON.stringify(Array.from(spoilered)));
+  let body;
+  if (!ready || (token && groups === undefined && read.error === undefined)) {
+    body = <GroupRowsSkeleton control="switch" />;
+  } else if (!token) {
+    body = <SignInRequired description="登录后即可创建和管理屏蔽组。" />;
+  } else if (!groups) {
+    /* A failed read is a failure, never 还没有任何屏蔽组 (R5-035): the adapter throws on a refusal. */
+    body = (
+      <ErrorRetry
+        title="屏蔽组加载失败"
+        message={apiErrorMessage(read.error)}
+        onRetry={isRetryable(read.error) ? read.refresh : undefined}
+      />
+    );
+  } else {
+    body = (
+      /* One run of the grouped list (D1-009: a list page, as AGENTS' column table has it — the
+         three-up grid cut names to 118px). The rows come and go in place (M1-023): a deleted row
+         fades where it stood while the ones under it close the gap, and a created one arrives in
+         its own place as the dialog that made it leaves. The list stays mounted while it is
+         empty, so the first row has somewhere to arrive into; the last one leaving fades over the
+         empty state rising in its place. */
+      <PresenceList
+        ref={presence}
+        items={groups}
+        getKey={(group) => group.id}
+        variant="list"
+        resetKey={token}
+        /* The last row's focus lands on the empty state taking its place: its heading, a landing,
+           with 新建屏蔽组 the next Tab stop. */
+        fallbackFocus={() => listBox.current?.querySelector<HTMLElement>(':scope > div h2') ?? null}
+      >
+        {(entries, ref) => (
+          /* Positioned for the empty state, which leaves where it stood as the first row arrives. */
+          <div ref={listBox} className="relative">
+            <ul ref={ref}>
+              {entries.map(({ item: group, key, leaving }) => (
+                <BlockGroupRow
+                  key={key}
+                  data-presence-key={key}
+                  group={group}
+                  deleting={leaving || deleting.has(group.id)}
+                  onToggle={toggle}
+                  onEdit={openEditor}
+                  onDelete={remove}
+                />
+              ))}
+            </ul>
+            <PresenceBlock show={groups.length === 0}>
+              <div className={cn(emptyAfterRows && 'animate-page-transition')}>
+                <EmptyState
+                  entrance={!emptyAfterRows}
+                  icon={<MdShield size={ICON.display} />}
+                  title="还没有任何屏蔽组"
+                  description="创建一个后，图库与搜索会自动处理包含这些标签的图片。"
+                  action={
+                    <Button variant="filled" icon={<MdAdd />} onClick={() => openEditor(null)}>
+                      新建屏蔽组
+                    </Button>
+                  }
+                />
+              </div>
+            </PresenceBlock>
+          </div>
+        )}
+      </PresenceList>
+    );
   }
 
-  // ================= Tag Autocomplete =================
-  useEffect(() => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(
-      async () => {
-        if (searchQuery.length < 2) {
-          setShowSuggestions(false);
-          return;
-        }
-        try {
-          /* `searchDerpiTags`, not a bare `fetch` on a locally re-declared base.
-             The shared wrapper goes through `proxyFetch`, so this autocomplete
-             gets the accelerator fallback and its health degradation like every
-             other Derpibooru call — and it escapes quotes and whitespace before
-             interpolating, which a raw query does not: a `"` in the box broke the
-             Philomena expression and returned nothing. It asks for 30 rows where
-             this list shows 10, hence the slice. */
-          const data = await api.searchDerpiTags(searchQuery);
-          const tags = (data?.tags ?? []) as { name: string; images: number }[];
-          if (tags.length > 0) {
-            setSuggestions(tags.slice(0, 10).map((t) => ({ name: t.name, images: t.images })));
-            setShowSuggestions(true);
-          } else {
-            setShowSuggestions(false);
-          }
-        } catch {
-          /* ignore */
-        }
-      },
-      searchQuery.length < 2 ? 0 : 300,
-    );
-    return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
-  }, [searchQuery]);
-
-  /* The outside-click listener that used to live here is `Popover`'s now — it
-     already knows both the panel and the anchor, which is what this had to be
-     handed two refs to reconstruct. */
-
-  const addTag = useCallback(
-    (tagName: string) => {
-      const currentTotal = hiddenTags.length + spoileredTags.length;
-      if (currentTotal >= MAX_TAGS_PER_GROUP) {
-        showToast(`每个屏蔽组最多只能添加 ${MAX_TAGS_PER_GROUP} 个标签`, 'warning');
-        return;
-      }
-      if (tagActionType === 'hide') {
-        setHiddenTags((prev) =>
-          prev.includes(tagName) ? prev : [...prev.filter((t) => t !== tagName), tagName],
-        );
-        setSpoileredTags((prev) => prev.filter((t) => t !== tagName));
-      } else {
-        setSpoileredTags((prev) =>
-          prev.includes(tagName) ? prev : [...prev.filter((t) => t !== tagName), tagName],
-        );
-        setHiddenTags((prev) => prev.filter((t) => t !== tagName));
-      }
-      setSearchQuery('');
-      setShowSuggestions(false);
-    },
-    [hiddenTags.length, spoileredTags.length, tagActionType],
-  );
-
-  const removeTag = useCallback((tagName: string, type: 'hide' | 'spoiler') => {
-    if (type === 'hide') setHiddenTags((prev) => prev.filter((t) => t !== tagName));
-    else setSpoileredTags((prev) => prev.filter((t) => t !== tagName));
-  }, []);
-
-  // ================= Edit / Create =================
-  const openEditModal = useCallback(
-    (group?: BlockGroup) => {
-      if (!group && groups.length >= MAX_GROUPS) {
-        showToast(`最多只能创建 ${MAX_GROUPS} 个屏蔽组`, 'warning');
-        return;
-      }
-      setEditGroupId(group?.id ?? null);
-      setGroupName(group?.name ?? '');
-      setHiddenTags([...(group?.hidden_tags || group?.tags || [])]);
-      setSpoileredTags([...(group?.spoilered_tags || [])]);
-      setSearchQuery('');
-      setShowSuggestions(false);
-      setEditModalOpen(true);
-    },
-    [groups],
-  );
-
-  const handleSaveGroup = useCallback(async () => {
-    if (!groupName.trim()) {
-      showToast('请输入屏蔽组名称', 'warning');
-      return;
-    }
-    if (hiddenTags.length === 0 && spoileredTags.length === 0) {
-      showToast('请至少添加一个标签', 'warning');
-      return;
-    }
-    if (!userInfo?.token) return;
-
-    try {
-      const payload = {
-        id: editGroupId ?? undefined,
-        name: groupName.trim(),
-        tags: [...hiddenTags, ...spoileredTags],
-        hidden_tags: hiddenTags,
-        spoilered_tags: spoileredTags,
-      };
-      const res = await api.saveBlockGroup(userInfo.token, payload);
-      const data = await res.json();
-      if (data.success) {
-        showToast(editGroupId ? '已更新' : '已创建', 'success');
-        setEditModalOpen(false);
-        loadGroups();
-      } else {
-        showToast(data.error || '保存失败', 'error');
-      }
-    } catch {
-      showToast('网络错误，请稍后再试', 'error');
-    }
-  }, [editGroupId, groupName, hiddenTags, spoileredTags, userInfo?.token, loadGroups]);
-
-  const handleToggleGroup = useCallback(
-    async (id: number, isActive: boolean) => {
-      if (!userInfo?.token) return;
-      // Optimistic update
-      setGroups((prev) => {
-        const updated = prev.map((g) => (g.id === id ? { ...g, is_active: isActive ? 1 : 0 } : g));
-        updateLocalStorageCache(updated);
-        return updated;
-      });
-      try {
-        const res = await api.toggleBlockGroup(userInfo.token, id, isActive ? 1 : 0);
-        const data = await res.json();
-        if (!data.success) {
-          showToast(data.error || '切换失败', 'error');
-          loadGroups();
-        }
-      } catch {
-        showToast('网络错误，请稍后再试', 'error');
-        loadGroups();
-      }
-    },
-    [userInfo?.token, loadGroups, setGroups],
-  );
-
-  const confirmDeleteGroup = useCallback((id: number) => {
-    deleteTargetRef.current = id;
-    setDeleteConfirmOpen(true);
-  }, []);
-
-  const handleDeleteGroup = useCallback(async () => {
-    const id = deleteTargetRef.current;
-    if (!id || !userInfo?.token) return;
-    setDeleteConfirmOpen(false);
-    try {
-      const res = await api.deleteBlockGroup(userInfo.token, id);
-      const data = await res.json();
-      if (data.success) {
-        showToast('已删除', 'success');
-        loadGroups();
-      } else {
-        showToast(data.error || '删除失败', 'error');
-      }
-    } catch {
-      showToast('网络错误，请稍后再试', 'error');
-    }
-  }, [userInfo?.token, loadGroups]);
-  if (!userInfo) return null;
   return (
-    <div className="max-w-4xl mx-auto">
-      <PageHeader
-        title="屏蔽组"
-        subtitle={`已创建屏蔽组 ${groups.length} / ${MAX_GROUPS}`}
-        actions={
-          <Button
-            variant="filled"
-            size="xs"
-            onClick={() => openEditModal()}
-            icon={<MdAdd size={ICON.dense} />}
-          >
-            新建
-          </Button>
-        }
-      />
-      {/* Loading */}{' '}
-      {loading ? (
-        /* Cards in the grid they will land in, rather than one centred spinner
-           that then reflows into a three-column layout. */
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              /* The outlined card's own recipe: `surface` + `outline-variant` at
-                 elevation 0. This was `surface-container` + a border *and* an
-                 `e1` shadow — a tone from no row of the colour table plus both
-                 separators at once, written out twice in this file (here and on
-                 the real row below, byte-identical). */
-              className="bg-surface border-outline-variant flex flex-col gap-3 rounded-md border p-4"
-            >
-              <div className="border-outline-variant flex items-center justify-between border-b border-dashed pb-3">
-                <Skeleton className="h-4 w-24" delay={i * 90} />
-                <Skeleton className="h-8 w-28 rounded-full" delay={i * 90 + 60} />
-              </div>
-              <Skeleton className="h-3.5 w-3/4" delay={i * 90 + 120} />
-              <Skeleton className="h-3.5 w-1/2" delay={i * 90 + 180} />
-            </div>
-          ))}
-        </div>
-      ) : groups.length === 0 ? (
-        /* The shared empty state. This was the sixteenth hand-rolled one — a
-           64px glyph at 30% opacity over two untyped paragraphs — and the only
-           one of the sixteen with an opacity on its icon. */
-        <EmptyState
-          icon={<MdShield size={ICON.display} />}
-          title="还没有任何屏蔽组"
-          description="创建一个后，主页会自动处理包含这些标签的图片。"
-          action={
-            <Button variant="filled" icon={<MdAdd size={ICON.dense} />} onClick={() => openEditModal()}>
-              新建屏蔽组
-            </Button>
-          }
-        />
-      ) : (
-        /* Group grid */ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          
-          {groups.map((group) => {
-            const hTags = group.hidden_tags || group.tags || [];
-            const sTags = group.spoilered_tags || [];
-            const isActive = group.is_active === 1;
-            return (
-              <div
-                key={group.id}
-                /* One signal per meaning — the note on the switch below says
-                   exactly this, and the card was doing the opposite four times:
-                   a soft 40%-alpha error edge, a card-wide 60% opacity, an
-                   `outline` name colour, and then a *nested* 40% opacity on the
-                   tag preview. The two opacities multiply, so an inactive
-                   group's tags rendered at 24% — unreadable, and the one part of
-                   the card that says what the rule actually does.
-
-                   What is left: the switch is the control, the name colour is
-                   the state, and the border is `error` only while the rule is in
-                   force. The tag lines below drop to `on-surface-variant` when
-                   it is not, because the red and amber *mean* "being blocked
-                   right now"; off, they are just a list of words. */
-                className={`bg-surface flex flex-col gap-3 rounded-md border p-4 transition-ui ${isActive ? 'border-error' : 'border-outline-variant'}`}
-              >
-                
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-dashed border-outline-variant pb-3">
-                  
-                  <span
-                    className={`text-label-l-emphasized truncate ${isActive ? 'text-error' : 'text-on-surface-variant'}`}
-                  >
-                    {group.name}
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* The real switch. This was a hand-rolled 36x20 box — an
-                        `opacity-0` checkbox under a `peer-checked:` span with an
-                        `after:` pseudo-element for the handle — sitting two routes
-                        away from the settings page's full M3 switches, which have
-                        the spec's two handle clocks, a press swell, a state layer
-                        and a check glyph. Same control, two levels of finish.
-
-                        Its track was `error-fill` when on. That is dropped rather
-                        than ported: an M3 switch is `primary` when enabled, and
-                        error on a *track* reads as "this control is in an error
-                        state" rather than "this rule is active". The row already
-                        says blocking three times over — the group name goes
-                        `text-error`, and the hidden-tag line under it is error
-                        too. One signal per meaning. */}
-                    <ToggleSwitch
-                      checked={isActive}
-                      onChange={(v) => handleToggleGroup(group.id, v)}
-                      aria-label={`启用屏蔽组 ${group.name}`}
-                    />
-                    {/* `IconButton size="sm"` is the sanctioned 32dp box. The
-                        pair used to be `p-1.5 rounded` with `touch-target` — a
-                        a bare 4dp corner on a control whose role is
-                        `rounded-full`, and a hit-area shim standing in for a box
-                        the primitive already gives. */}
-                    <IconButton
-                      size="sm"
-                      onClick={() => openEditModal(group)}
-                      aria-label={`编辑屏蔽组 ${group.name}`}
-                      icon={<MdEdit size={ICON.dense} />}
-                    />
-                    <IconButton
-                      size="sm"
-                      onClick={() => confirmDeleteGroup(group.id)}
-                      aria-label={`删除屏蔽组 ${group.name}`}
-                      className="hover:text-error"
-                      icon={<MdDelete size={ICON.dense} />}
-                    />
-                  </div>
-                </div>
-                {/* Tags preview */}
-                <div className="text-body-s space-y-1">
-                  {hTags.length > 0 && (
-                    <div className={isActive ? 'text-error' : 'text-on-surface-variant'}>
-                      <MdBlock size={ICON.dense} className="inline mr-0.5" /> 隐藏：{hTags.join(', ')}
-                    </div>
-                  )}
-                  {sTags.length > 0 && (
-                    <div className={isActive ? 'text-warning' : 'text-on-surface-variant'}>
-                      <MdVisibility size={ICON.dense} className="inline mr-0.5" /> 遮挡：{sTags.join(', ')}
-                    </div>
-                  )}
-                  {hTags.length === 0 && sTags.length === 0 && (
-                    <span className="text-on-surface-variant">空屏蔽组</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    <div className="mx-auto max-w-4xl">
+      {header}
+      {body}
+      {token && (
+        <>
+          <BlockGroupEditor
+            isOpen={editorOpen}
+            initial={draft}
+            saving={saving}
+            onSave={(input) => void save(input)}
+            onClose={() => setEditorOpen(false)}
+          />
+          <DerpiFilterImport
+            isOpen={importOpen}
+            onClose={() => setImportOpen(false)}
+            apiKey={apiKey}
+            canCreate={!full}
+            onImport={importFilter}
+          />
+        </>
       )}
-      {/* ================= Edit / Create Modal ================= */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        title={editGroupId ? '编辑屏蔽组' : '创建新屏蔽组'}
-        maxWidth="lg"
-        /* The action row goes through `footer`, which is what the app's other nineteen
-           dialogs do — including the delete confirm forty lines below. It was two
-           full-width buttons in a 12px-gap flex row of its own, and that is broken rather
-           than merely unconventional: `buttonClasses` always emits a no-shrink rule, so two
-           buttons at 100% came to 200% plus the gap with neither allowed to give, and
-           `Modal`'s panel clips its overflow — 保存屏蔽组 was cut off the right edge of the
-           dialog. `cn` is a plain join and resolves no Tailwind conflict, so nothing was
-           going to drop that rule.
-           The footer also pins the row outside the body's scroller, where it belongs: this
-           dialog is tall enough to scroll, and the buttons used to scroll away with the
-           tag wells. */
-        footer={
-          <>
-            <Button variant="text" onClick={() => setEditModalOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleSaveGroup}>
-              保存屏蔽组
-            </Button>
-          </>
-        }
-      >
-        {' '}
-        <div className="space-y-4">
-          {' '}
-          <div>
-            {' '}
-            <Input
-              label="屏蔽组名称"
-              type="text"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              placeholder="例如：重口味屏蔽、黑名单画师…"
-              maxLength={30}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <Radio
-              name="tagActionType"
-              value="hide"
-              checked={tagActionType === 'hide'}
-              onChange={() => setTagActionType('hide')}
-              tone="error"
-              label={
-                <span className="flex items-center gap-1.5">
-                  <MdBlock size={ICON.dense} /> 彻底隐藏
-                </span>
-              }
-            />
-            <Radio
-              name="tagActionType"
-              value="spoiler"
-              checked={tagActionType === 'spoiler'}
-              onChange={() => setTagActionType('spoiler')}
-              tone="warning"
-              label={
-                <span className="flex items-center gap-1.5">
-                  <MdVisibility size={ICON.dense} /> 遮挡打码
-                </span>
-              }
-            />
-          </div>
-          <div className="relative" ref={searchFieldRef}>
-            {/* The caption is the field's own `label`, not a bare `<label>` next
-                to it. Without `htmlFor` a `<label>` labels nothing: clicking it
-                did not focus the input, and the input's only accessible name was
-                its placeholder, which disappears the moment you type. */}
-            <Input
-              ref={searchInputRef}
-              label="搜索并添加标签（支持联想）"
-              type="text"
-              icon={<MdSearch size={ICON.dense} />}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="输入英文标签…"
-            />
-            {/* `Popover` — the app's one floating surface. This was a fourth
-                hand-rolled recipe (an outline on top of the tonal step and the
-                elevation, which is a third signal for one edge) and it was
-                clipped by any scrolling ancestor because it was absolutely
-                positioned rather than portalled. */}
-            <Popover
-              open={showSuggestions && suggestions.length > 0}
-              onClose={() => setShowSuggestions(false)}
-              anchorRef={searchFieldRef}
-              maxHeight={192}
-              estimatedHeight={suggestions.length * 40}
-            >
-                {suggestions.map((s) => (
-                  <button
-                    key={s.name}
-                    onClick={() => addTag(s.name)}
-                    className="w-full text-left px-3 py-2 text-body-m state-layer flex justify-between items-center border-b border-outline-variant last:border-0 outline-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
-                  >
-                    
-                    <span className="text-on-surface">{s.name}</span>
-                    <span className="text-body-s text-on-surface-variant">{s.images}</span>
-                  </button>
-                ))}{' '}
-            </Popover>
-          </div>
-          <div>
-            {' '}
-            <p className="block text-body-m text-error mb-1">
-              <MdBlock size={ICON.dense} className="inline mr-0.5" /> 隐藏标签列表：
-            </p>
-            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-10 max-h-30 overflow-y-auto">
-              {hiddenTags.length === 0 ? (
-                <EmptyState size="inline" title="暂无标签" />
-              ) : (
-                hiddenTags.map((tag) => (
-                  <Chip key={tag} onRemove={() => removeTag(tag, 'hide')} removeLabel={`移除 ${tag}`}>
-                    {tag}
-                  </Chip>
-                ))
-              )}
-            </div>
-          </div>
-          <div>
-            {' '}
-            <p className="block text-body-m text-warning mb-1">
-              <MdVisibility size={ICON.dense} className="inline mr-0.5" /> 遮挡标签列表：
-            </p>
-            <div className="flex flex-wrap gap-2 p-3 border border-outline-variant rounded-md bg-surface-container-low popover-scrollbar min-h-10 max-h-30 overflow-y-auto">
-              {spoileredTags.length === 0 ? (
-                <EmptyState size="inline" title="暂无标签" />
-              ) : (
-                spoileredTags.map((tag) => (
-                  <Chip key={tag} onRemove={() => removeTag(tag, 'spoiler')} removeLabel={`移除 ${tag}`}>
-                    {tag}
-                  </Chip>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </Modal>
-      {/* ================= Delete Confirm Modal ================= */}
-      <Modal
-        isOpen={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
-        title="确认删除"
-        maxWidth="sm"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setDeleteConfirmOpen(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleDeleteGroup}>
-              确认删除
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body-m text-on-surface-variant">确定要删除这个屏蔽组吗？</p>
-      </Modal>
+      {confirmDialog}
     </div>
   );
 }

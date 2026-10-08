@@ -22,22 +22,24 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: 'zh-CN',
     dir: 'ltr',
     orientation: 'any',
-    /**
-     * **Only 128px, and that is a gap rather than a decision.** The app has no 192/512
-     * or `maskable` icon: its only marks are a 128×128 PNG and a 2851×1001 wordmark,
-     * and cropping that into a square is a design decision, not a build step. Adding
-     * the two PNGs makes this installable with no other change.
-     */
+    // Generated from the existing square mark by scripts/pwaIcons.mjs.
+    // The maskable variant keeps the whole mark inside the circular safe area.
     icons: [
       {
-        src: '/icon-128.png',
-        sizes: '128x128',
+        src: '/icon-192.png',
+        sizes: '192x192',
         type: 'image/png',
       },
       {
-        src: '/favicon.ico',
-        sizes: '128x128',
-        type: 'image/x-icon',
+        src: '/icon-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+      },
+      {
+        src: '/icon-maskable-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
       },
     ],
   };

@@ -22,6 +22,17 @@ export const DURATION = {
 } as const;
 
 /**
+ * The page fade is one enter duration, including its overlap delay. Keep this
+ * split in step with the page-transition token in globals.css: adding the delay
+ * to a full enter leg made client navigation take 480ms while a cold mount took
+ * 400ms. Values are seconds, like DURATION.
+ */
+export const PAGE_FADE_TIMING = {
+  delay: 0.08,
+  duration: DURATION.long - 0.08,
+} as const;
+
+/**
  * The M3 curves as literal cubic-bezier() strings, for the Web Animations API.
  *
  * A WAAPI easing is a string the engine parses, not a CSS property — a failed var() would
@@ -41,4 +52,15 @@ export const EASE = {
   accelerate: 'cubic-bezier(0.3, 0, 0.8, 0.15)',
   /** Symmetric, eases at both ends; for a loop, which has no arrival. */
   loop: 'cubic-bezier(0.4, 0, 0.6, 1)',
+} as const;
+
+/**
+ * Vuetify's VMenu/VDialogTransition supplies the anchored expansion pattern;
+ * its clock uses this app's existing short/state steps and standard curve family.
+ * CSS arrow twins live in globals.css. Durations here are milliseconds for WAAPI.
+ * https://github.com/vuetifyjs/vuetify/blob/01c9e9115898118535865197660dd7399ae1626c/packages/vuetify/src/components/transitions/dialog-transition.tsx
+ */
+export const MENU_TRANSITION = {
+  enter: { duration: DURATION.short * 1000, easing: EASE.standardDecelerate },
+  exit: { duration: DURATION.state * 1000, easing: EASE.standardAccelerate },
 } as const;

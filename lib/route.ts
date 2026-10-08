@@ -14,6 +14,7 @@
 
 import {
   COOKIE_KEYS,
+  DERPIBOORU_API_BASE,
   IMAGE_CDN_BASE,
   IMAGE_PROBE_URL,
   IMAGE_WORKER_BASE,
@@ -23,6 +24,14 @@ import {
   PROXY_API_BASE,
 } from '@/lib/constants';
 import type { SiteStatusResponse } from '@/lib/types/site';
+import { publishObservedSiteStatus, savedSiteStatusRevision } from '@/lib/siteStatus';
+import {
+  installBlockFilters,
+  installPublicBlacklist,
+  parseBlockFilters,
+  parsePublicBlacklist,
+  type BlockFilters,
+} from '@/lib/blockFilters';
 
 // --- The catalogue ----------------------------------------------------------
 
@@ -68,15 +77,13 @@ interface LinePrefs {
 }
 
 function readLinePrefs(): LinePrefs {
-  if (typeof localStorage === 'undefined') {
-    return {
-      useCdn: false,
-      usePicponyProxy: true,
-      useApiAccel: true,
-      useHongKongRelay: true,
-    };
-  }
-  const ls = (k: string, def: string) => localStorage.getItem(k) ?? def;
+  const ls = (k: string, def: string) => {
+    try {
+      return typeof localStorage === 'undefined' ? def : localStorage.getItem(k) ?? def;
+    } catch {
+      return def;
+    }
+  };
   return {
     useCdn: ls(LS_KEYS.useCdn, 'false') === 'true',
     usePicponyProxy: ls(LS_KEYS.usePicponyProxy, 'true') !== 'false',
@@ -126,7 +133,11 @@ const listeners = new Set<() => void>();
 function mirrorImageLineCookie() {
   if (typeof document === 'undefined') return;
   const line = resolveImageLine();
-  document.cookie = `${COOKIE_KEYS.imageLine}=${line};path=/;max-age=${IMAGE_LINE_COOKIE_MAX_AGE};samesite=lax`;
+  try {
+    document.cookie = `${COOKIE_KEYS.imageLine}=${line};path=/;max-age=${IMAGE_LINE_COOKIE_MAX_AGE};samesite=lax`;
+  } catch {
+    /* A blocked cookie must not prevent the request policy from becoming ready. */
+  }
 }
 
 /** A year, matching the appearance cookies. */
@@ -162,6 +173,19 @@ export function setLineNotifier(fn: (message: string, tone: LineNotice) => void)
 /* One severity per direction — a recovery arriving as a warning misreports itself. */
 function announce(message: string | null, tone: LineNotice = 'warning') {
   if (message) notifier?.(message, tone);
+}
+
+/**
+ * The API line's notices, each at most once per session. A visitor whose direct line is blocked
+ * used to get a pair of snackbars every forty seconds for as long as they browsed — the switch
+ * is worth saying once; after that it is the app's business, and /settings shows the live line.
+ */
+const announcedOnce = new Set<string>();
+
+function announceOnce(message: string, tone: LineNotice = 'warning') {
+  if (announcedOnce.has(message)) return;
+  announcedOnce.add(message);
+  announce(message, tone);
 }
 
 // --- The policy, from the server --------------------------------------------
@@ -208,6 +232,26 @@ function applyRoutePolicy(status: SiteStatusResponse) {
 }
 
 let ready: Promise<void> | null = null;
+let policyReadGeneration = 0;
+
+/**
+ * How long a request may wait for a policy the document did not carry. The client fetch has a
+ * 10s ceiling of its own, and every `proxyFetch` awaits this — so a failed server read used to hold
+ * the first Derpibooru request of the page for up to ten seconds. Past this the request goes out
+ * on the defaults, and the policy re-routes everything after it the moment it lands.
+ */
+const POLICY_WAIT_MS = 2_000;
+
+function boundedWait(load: Promise<void>): Promise<void> {
+  if (typeof window === 'undefined') return load;
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, POLICY_WAIT_MS);
+    void load.finally(() => {
+      window.clearTimeout(timer);
+      resolve();
+    });
+  });
+}
 
 /** Where the server left the policy, if the server read one. Inlined by `app/layout.tsx` as a
  *  head script, so it is in force before the first effect in the tree runs. */
@@ -218,6 +262,9 @@ declare global {
       image?: string;
       thirdPartyUrl?: string;
       thirdPartyPassApiKey?: boolean;
+      blockFilters?: BlockFilters;
+      /** The public image blacklist, sorted ids (`lib/blockFilters.ts`). */
+      blacklist?: number[];
     };
   }
 }
@@ -232,10 +279,11 @@ declare global {
  * fallback for a server read that timed out or failed.
  *
  * **It never rejects**: any failure leaves the `auto` defaults in place, because a rejection
- * would lock every Derpibooru request behind one dead fetch.
+ * would lock every Derpibooru request behind one dead fetch. And it never holds a request longer
+ * than `POLICY_WAIT_MS` for a policy the document lacked (see there).
  */
 export function ensureRoutePolicy(): Promise<void> {
-  ready ??= adoptInlinePolicy() ?? loadRoutePolicy();
+  ready ??= adoptInlinePolicy() ?? boundedWait(loadRoutePolicy());
   return ready;
 }
 
@@ -245,6 +293,9 @@ function adoptInlinePolicy(): Promise<void> | null {
   if (typeof window === 'undefined') return null;
   const inline = window.__picponyRoutePolicy;
   if (!inline) return null;
+  if (inline.blockFilters) installBlockFilters(inline.blockFilters);
+  if (Array.isArray(inline.blacklist)) installPublicBlacklist(inline.blacklist);
+  if (!inline.api) return null;
   applyRoutePolicy({
     success: true,
     global_api_route_policy: inline.api,
@@ -264,23 +315,74 @@ export function refreshRoutePolicy(): Promise<void> {
   return ready;
 }
 
+/** Apply only the acknowledged fields, preserving the other axis and superseding older reads. */
+export function applySavedRoutePolicy(patch: Partial<SiteStatusResponse>): void {
+  if (typeof window === 'undefined') return;
+  // A save may precede the first request: the document still supplies the untouched axis.
+  if (!ready) adoptInlinePolicy();
+  delete window.__picponyRoutePolicy;
+  policyReadGeneration += 1;
+  const merged: SiteStatusResponse = {
+    success: true,
+    global_api_route_policy: policy.api,
+    global_image_route_policy: policy.image,
+    global_api_third_party_url: policy.thirdPartyUrl,
+    global_api_third_party_pass_api_key: policy.thirdPartyPassApiKey,
+  };
+  for (const key of ['global_api_route_policy', 'global_image_route_policy', 'global_api_third_party_url'] as const) {
+    if (typeof patch[key] === 'string') merged[key] = patch[key];
+  }
+  if (typeof patch.global_api_third_party_pass_api_key === 'boolean') {
+    merged.global_api_third_party_pass_api_key = patch.global_api_third_party_pass_api_key;
+  }
+  applyRoutePolicy(merged);
+  ready = Promise.resolve();
+}
+
+/** `AbortSignal.timeout` where the engine has it; older Safari simply waits (the read still
+ *  cannot hold a request past `POLICY_WAIT_MS`). */
+function timeout(ms: number): AbortSignal | undefined {
+  return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+    ? AbortSignal.timeout(ms)
+    : undefined;
+}
+
 async function loadRoutePolicy(): Promise<void> {
   if (typeof window === 'undefined') return;
+  const generation = ++policyReadGeneration;
+  const featureRevision = savedSiteStatusRevision();
   try {
     /* No `Authorization` header: the four route fields are served to anyone, and sending one
        would mean reaching into `lib/hooks.ts` — a `'use client'` module — from the request layer. */
-    const res = await fetch(`${PICPONY_API_BASE}?action=get_maintenance_status&_t=${Date.now()}`, {
-      cache: 'no-store',
-    });
-    const data = JSON.parse(await res.text()) as SiteStatusResponse;
-    if (data?.success) applyRoutePolicy(data);
+    const inlineFilters = window.__picponyRoutePolicy?.blockFilters;
+    const inlineBlacklist = window.__picponyRoutePolicy?.blacklist;
+    /* Each read settles on its own — started inside a promise, so even a transport that throws
+       synchronously cannot abort its siblings and settle the policy before its own read lands. */
+    const read = <T,>(action: string, parse: (body: unknown) => T | null): Promise<T | null> =>
+      Promise.resolve()
+        .then(() => fetch(`${PICPONY_API_BASE}?action=${action}&_t=${Date.now()}`, {
+          cache: 'no-store', signal: timeout(10_000),
+        }))
+        .then(async (response) => response.ok ? parse(await response.json()) : null)
+        .catch(() => null);
+    const [data, filters, blacklist] = await Promise.all([
+      read('get_maintenance_status', (body) => body as SiteStatusResponse),
+      inlineFilters ? Promise.resolve(inlineFilters) : read('get_block_tags', parseBlockFilters),
+      Array.isArray(inlineBlacklist) ? Promise.resolve(inlineBlacklist) : read('get_public_blacklist', parsePublicBlacklist),
+    ]);
+    if (filters && generation === policyReadGeneration) installBlockFilters(filters);
+    if (blacklist && generation === policyReadGeneration) installPublicBlacklist(blacklist);
+    if (data?.success && generation === policyReadGeneration) {
+      applyRoutePolicy(data);
+      publishObservedSiteStatus(data, featureRevision);
+    }
   } catch {
     /* Offline, an HTML error page, a renamed action — all mean "no policy", which is what the
        defaults already say. Swallowed rather than logged loudly; this runs on every cold load. */
   }
   /* Unconditional, so the failure path still brings the runtime line into step with what the
      device has stored; the emit also wakes /settings. */
-  syncLinePrefs();
+  if (generation === policyReadGeneration) syncLinePrefs();
 }
 
 // --- Resolution -------------------------------------------------------------
@@ -361,8 +463,8 @@ export function currentLineLabels() {
 
 /** Read inline rather than through `readUserInfo`, to keep `lib/hooks.ts` out of here. */
 function currentUsername(): string {
-  if (typeof localStorage === 'undefined') return '';
   try {
+    if (typeof localStorage === 'undefined') return '';
     const raw = localStorage.getItem(LS_KEYS.userInfo);
     if (!raw) return '';
     const info = JSON.parse(raw) as { username?: string };
@@ -435,8 +537,14 @@ export const API_FAILOVER_STATUSES: readonly number[] = [500, 502, 504, 403, 503
 const COOLDOWN_MS = 30_000;
 /** A backup line answering 403/503 is overloaded, not broken; keep off it for longer. */
 const COOLDOWN_BUSY_MS = 600_000;
-/** How long `auto` is allowed to sit on the backup line before trying home again. */
+/** How long `auto` first sits on the backup line before checking whether home works again. */
 const BACKUP_TTL_MS = 10_000;
+/** Each failed check doubles the wait, up to this. */
+const BACKUP_TTL_MAX_MS = 600_000;
+/** The check's own ceiling. */
+const DIRECT_PROBE_TIMEOUT_MS = 5_000;
+
+let backupTtl = BACKUP_TTL_MS;
 
 function cancelApiRevert() {
   if (apiState.revertTimer) {
@@ -445,16 +553,56 @@ function cancelApiRevert() {
   }
 }
 
+/**
+ * Whether the direct line answers at all — one tiny tag search, which any working route to
+ * Derpibooru returns in milliseconds.
+ */
+async function probeDirectApi(): Promise<boolean> {
+  try {
+    const response = await fetch(`${DERPIBOORU_API_BASE}/search/tags?q=name:safe&per_page=1`, {
+      cache: 'no-store',
+      signal: timeout(DIRECT_PROBE_TIMEOUT_MS),
+    });
+    void response.body?.cancel().catch(() => {});
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Leave the backup line only once home is proven to work. The timed revert it replaces switched
+ * back blind every ten seconds, so a visitor whose direct line was blocked spent the next thirty
+ * seconds of every cycle on failing requests — and got a snackbar pair each time. Now a failed
+ * check doubles the wait (10s, 20s, 40s … 10min) and nothing the user asked for is spent on it.
+ */
 function scheduleApiRevert() {
   cancelApiRevert();
   if (typeof window === 'undefined') return;
   apiState.revertTimer = window.setTimeout(() => {
     apiState.revertTimer = 0;
-    apiState.derpi = false;
-    apiState.cooldownUntil = Date.now() + COOLDOWN_MS;
-    emit();
-    announce('备用 API 到期，已切回直连');
-  }, BACKUP_TTL_MS);
+    void checkDirectThenRevert();
+  }, backupTtl);
+}
+
+async function checkDirectThenRevert() {
+  if (!apiState.derpi || policy.api !== 'auto') return;
+  /* A hidden tab does not need a line; check when it is looked at again. */
+  if (typeof document !== 'undefined' && document.hidden) {
+    scheduleApiRevert();
+    return;
+  }
+  const home = await probeDirectApi();
+  if (!apiState.derpi || policy.api !== 'auto') return;
+  if (!home) {
+    backupTtl = Math.min(backupTtl * 2, BACKUP_TTL_MAX_MS);
+    scheduleApiRevert();
+    return;
+  }
+  apiState.derpi = false;
+  backupTtl = BACKUP_TTL_MS;
+  emit();
+  announceOnce('直连已恢复', 'success');
 }
 
 /**
@@ -481,12 +629,12 @@ export function stepApiFailover(status?: number): boolean {
     if (prefs.useHongKongRelay) {
       apiState.hongKong = true;
       emit();
-      announce('API 加速异常，已切换至香港服务器中转');
+      announceOnce('API 加速异常，已切换至香港服务器中转');
       return true;
     }
     apiState.cooldownUntil = Date.now() + (busy ? COOLDOWN_BUSY_MS : COOLDOWN_MS);
     emit();
-    announce(busy ? '备用 API 压力过大，已切回直连' : '备用 API 异常，已切回直连');
+    announceOnce(busy ? '备用 API 压力过大，已切回直连' : '备用 API 异常，已切回直连');
     return true;
   }
 
@@ -501,7 +649,7 @@ export function stepApiFailover(status?: number): boolean {
     apiState.derpi = true;
     scheduleApiRevert();
     emit();
-    announce('直连异常，已切换至备用 API');
+    announceOnce('直连异常，已切换至备用 API');
     return true;
   }
 
@@ -545,7 +693,7 @@ function announceThrottled(message: string, tone: LineNotice = 'success') {
  * and a `no-cors` fetch yields an opaque response that resolves on a 500 as readily as a 200,
  * so only a decoded bitmap is evidence the line actually works.
  */
-function probeImage(url: string, timeout = PROBE_TIMEOUT_MS): Promise<void> {
+export function probeImage(url: string, timeout = PROBE_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {
     if (typeof Image === 'undefined') {
       reject(new Error('no Image'));

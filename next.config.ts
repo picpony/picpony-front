@@ -12,12 +12,35 @@ import type { NextConfig } from "next";
  */
 const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID ?? Date.now().toString(36);
 
+/**
+ * What every document and asset says about itself. The session is a bearer token in
+ * `localStorage`, so a page that frames PicPony gets a signed-in UI to clickjack (delete, send,
+ * admin actions): no origin but ours may frame it — `frame-ancestors` for current browsers,
+ * `X-Frame-Options` for older ones. `nosniff` keeps a response from being reinterpreted as
+ * another type; `strict-origin-when-cross-origin` sends other sites the origin only (what
+ * browsers default to, stated so an older one cannot leak a full URL with a query in it).
+ *
+ * Deliberately not a full CSP: the app talks to four image hosts, Derpibooru, the relay and
+ * reCAPTCHA, and a policy that drifts from that list fails as broken pictures and a dead sign-in.
+ */
+const SECURITY_HEADERS = [
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+];
+
 const nextConfig: NextConfig = {
   output: 'standalone',
+  /* `X-Powered-By: Next.js` tells a scanner which framework's advisories to try. */
+  poweredByHeader: false,
+  // Dependencies and source live in this checkout; unrelated parent lockfiles must
+  // not change Turbopack's resolution or its file-watching boundary.
+  turbopack: { root: __dirname },
   /**
    * Automatic memoisation. Enabled last on purpose, so anything it breaks is attributable to it.
    *
-   * Risk surface: three render-phase writes exist on purpose and are guarded by *identity*
+   * Risk surface: render-phase writes exist on purpose and are guarded by *identity*
    * comparisons (`lib/resource.ts`'s `setRetained`, `AppLayout`'s drawer state) — a memoised
    * snapshot that changed identity for an unchanged value would loop. And `useGSAP`'s
    * `dependencies` is a runtime argument the compiler does not model while still memoising the
@@ -65,7 +88,8 @@ const nextConfig: NextConfig = {
     'dev.muyni.dpdns.org',
     '192.168.31.153',
     '100.104.103.23',
-    '192.168.31.36'
+    '192.168.31.36',
+    '223.109.140.237'
   ],
   // /api.php is proxied by app/api.php/[[...path]]/route.ts rather than a
   // rewrite: the backend's session cookie is marked Secure, and only a route
@@ -90,6 +114,14 @@ const nextConfig: NextConfig = {
    */
   async headers() {
     return [
+      {
+        /* Everything except the three proxy route handlers, which answer with a stricter policy
+           of their own (`sandbox; default-src 'none'; frame-ancestors 'none'`). A policy set here
+           does not add to a handler's own, it replaces it (measured on `share.php`: only this
+           block's `frame-ancestors 'self'` survived), so a proxy left inside it loses its sandbox. */
+        source: '/:path((?!api\\.php|relay|share\\.php).*)',
+        headers: SECURITY_HEADERS,
+      },
       {
         source: '/sw.js',
         headers: [
@@ -127,22 +159,27 @@ const nextConfig: NextConfig = {
      * variant a step off; the call sites span 32px avatars to a 1216px banner, nearly the
      * default range already.
      */
+    /*
+     * **No image line is on this list, and that is the security of the optimizer** (R8-026).
+     * The PicPony worker (147052.xyz) and the CDN (wsrv.nl) are open `?url=` image proxies, and
+     * `search` is an exact match, so allowing their hosts at all let
+     * `/_next/image?url=https://wsrv.nl/?url=<anything>` make this server fetch, re-encode and
+     * keep (for `minimumCacheTTL`) any image on the internet. The optimizer runs on the server's
+     * network, where the visitor's line means nothing, so `FadeInImage` hands it the picture's
+     * raw Derpibooru URL (`lib/imageLoader.ts`) and a line is only ever used browser-direct.
+     * Derpibooru is pinned to its image paths with no query string (a retry's cache-bust only
+     * ever goes browser-direct); PicPony's own assets keep theirs.
+     */
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'derpicdn.net',
+        pathname: '/img/**',
+        search: '',
       },
       {
         protocol: 'https',
         hostname: 'picpony.top',
-      },
-      {
-        protocol: 'https',
-        hostname: 'wsrv.nl',
-      },
-      {
-        protocol: 'https',
-        hostname: '147052.xyz',
       },
       {
         protocol: 'https',

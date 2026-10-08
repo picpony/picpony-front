@@ -1,6 +1,6 @@
 'use client';
 
-import { cn } from '@/lib/utils';
+import { clamp, cn } from '@/lib/utils';
 
 interface SpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -52,8 +52,8 @@ export default function Spinner({
   track = false,
 }: SpinnerProps) {
   const cfg = sizeConfig[size];
-  const determinate = typeof value === 'number';
-  const pct = determinate ? Math.min(100, Math.max(0, value)) : 0;
+  const determinate = typeof value === 'number' && Number.isFinite(value);
+  const pct = determinate ? clamp(value, 0, 100) : 0;
 
   // Inset by half the stroke so the ring is not clipped by the viewBox.
   const r = 50 - ((cfg.ring / cfg.width) * 100) / 2;
@@ -78,7 +78,7 @@ export default function Spinner({
       width={cfg.width}
       height={cfg.width}
       viewBox="0 0 100 100"
-      className={cn(!determinate && 'm3-progress-spin', determinate && '-rotate-90')}
+      className={cn('shrink-0', !determinate && 'm3-progress-spin', determinate && '-rotate-90')}
       role="progressbar"
       aria-label={label || '加载中'}
       aria-valuenow={determinate ? pct : undefined}
@@ -119,7 +119,7 @@ export default function Spinner({
       <div
         className={cn(
           'flex items-center justify-center gap-2',
-          tone === 'on-primary' ? 'text-on-primary' : 'text-on-surface-variant',
+          tone === 'on-primary' ? 'text-on-primary' : tone === 'primary' && 'text-on-surface-variant',
           className,
         )}
       >

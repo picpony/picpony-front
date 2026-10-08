@@ -1,6 +1,7 @@
-/* Does the lazily-loaded motion actually play? Three things the module split could have broken
-   silently: the tab indicator's glide (WAAPI), the route cross-fade's clone (dynamic import
-   warmed on idle), and `Reveal`'s cascade (WAAPI). Scratch probe. */
+/* Does the lazily-loaded motion actually play? Four things the module split could have broken
+   silently: the tab indicator's glide (WAAPI), the tab strip it moves with (one WAAPI transform
+   per pane, printed beside it), the route cross-fade's clone (dynamic import warmed on idle), and
+   `Reveal`'s cascade (WAAPI). Scratch probe. */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -65,6 +66,9 @@ const evalIn = async (expr) => {
 };
 await send('Runtime.enable');
 await send('Page.enable');
+/* Measure the code, not the service worker (see the same line in netAudit.mjs). */
+await send('Network.enable');
+await send('Network.setBypassServiceWorker', { bypass: true });
 
 /* Headless Edge reports `prefers-reduced-motion: reduce`; the app resolves that to 减弱 unless a
    tier is stored, and 减弱 changes the shapes being measured. Pin it. */await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
@@ -87,7 +91,7 @@ const chunks = await evalIn(`(() => {
 })()`);
 console.log('  ', JSON.stringify(chunks));
 
-console.log('\n2. tab indicator glide (WAAPI)');
+console.log('\n2. tab indicator glide and the pane strip (WAAPI)');
 const indicator = await evalIn(`(async () => {
   const bar = document.querySelector('[role="tablist"]');
   if (!bar) return 'no tablist';
@@ -97,6 +101,19 @@ const indicator = await evalIn(`(async () => {
   if (!forum) return 'no forum tab';
   const before = getComputedStyle(pill).transform;
   if (!window.__skipTab) forum.click();
+  /* The same tap starts the pane strip: one Web Animations transform per pane, on the compositor. */
+  const strip = [...document.querySelectorAll('[data-tab-panel] > [data-tab-pane]')].map((pane) => ({
+    pane: pane.dataset.tabPane,
+    anims: pane.getAnimations().map((a) => {
+      const frame = a.effect.getKeyframes()[0] || {};
+      const timing = a.effect.getTiming();
+      return {
+        props: Object.keys(frame).filter((k) => !['offset', 'easing', 'composite', 'computedOffset'].includes(k)),
+        duration: Math.round(timing.duration),
+        easing: String(timing.easing).slice(0, 10),
+      };
+    }),
+  }));
   const samples = [];
   await new Promise((done) => {
     let n = 0;
@@ -107,7 +124,7 @@ const indicator = await evalIn(`(async () => {
     requestAnimationFrame(step);
   });
   const anims = pill.getAnimations().length;
-  return { before, distinct: [...new Set(samples)].length, samples: samples.slice(0, 3), last: samples.at(-1), anims };
+  return { before, distinct: [...new Set(samples)].length, samples: samples.slice(0, 3), last: samples.at(-1), anims, strip };
 })()`);
 console.log('  ', JSON.stringify(indicator));
 

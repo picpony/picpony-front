@@ -201,7 +201,10 @@ export class HeroRouteRegistry {
   /** Make a route non-interactive while it is still visually present. */
   freeze(route: HeroRoute, owner: symbol): DomLease {
     route.interaction?.release();
-    const interaction = leaseAttribute(route.overlay, 'inert', '');
+    const interaction = combineHeroLeases(
+      leaseAttribute(route.overlay, 'inert', ''),
+      route.floatingBack ? leaseAttribute(route.floatingBack, 'inert', '') : null,
+    );
     route.interaction = interaction;
     route.interactionOwner = owner;
     return combineHeroLeases(

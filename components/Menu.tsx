@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
-import Popover, { estimateMenuHeight } from './Popover';
+import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';
+import { moveFocusFrom } from '@/lib/overlay';
 
 /* The row's height estimate comes from `estimateMenuHeight` in `Popover`, which owns
    the placement decision. The one copy of the row arithmetic. */
@@ -57,18 +58,26 @@ export default function Menu({
      that unmounts), so there is no remount to reset state. */
   const [chosenIndex, setChosenIndex] = useState(-1);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const popoverRef = useRef<PopoverHandle | null>(null);
 
   const firstEnabled = Math.max(0, items.findIndex((i) => !i.disabled));
   const activeIndex = chosenIndex < 0 ? firstEnabled : chosenIndex;
 
   /* Closing forgets the caret, so the next open starts at the top again. In the
-     close handler rather than an effect, because closing is an event. */
+     close handler rather than an effect, because closing is an event.
+
+     **The menu returns focus itself**, before the caller hears about it. Focus is on
+     an item inside the panel, and the panel goes inert the moment it starts leaving —
+     so a caller that ignored `refocus` (the only one did) dropped a keyboard user
+     onto the body after Escape or after running an item. Owning it here makes the
+     docblock's promise true for every caller. */
   const handleClose = useCallback(
     (refocus: boolean) => {
       setChosenIndex(-1);
+      if (refocus) anchorRef.current?.focus();
       onClose(refocus);
     },
-    [onClose],
+    [onClose, anchorRef],
   );
 
   /* Focus follows the active index, which is what makes this a menu rather than
@@ -126,13 +135,16 @@ export default function Menu({
         /* Tab dismisses rather than moving through the items. A menu is a
            transient layer over the page, so the next Tab stop belongs to the
            page, not to the menu's fourth entry. */
+        event.preventDefault();
         handleClose(false);
+        moveFocusFrom(anchorRef.current, event.shiftKey, popoverRef.current?.element);
         break;
     }
   };
 
   return (
     <Popover
+      handleRef={popoverRef}
       open={open}
       onClose={handleClose}
       anchorRef={anchorRef}
@@ -143,15 +155,10 @@ export default function Menu({
       /* A menu is as wide as its longest label, not as wide as the icon button
          that opened it — unlike `Select`, whose trigger states the value. */
       matchAnchorWidth={false}
-      className={cn('min-w-40 py-2', className)}
+      className={cn('min-w-40 p-2', className)}
     >
-      {/* No wrapper element. `Popover`'s entrance fades the panel's *direct
-          children* in behind the container morph, so a wrapper here would be the
-          only child and the per-row cascade would collapse into one block — and
-          a `display: contents` wrapper is worse still, because it generates no
-          box and `opacity` therefore does not apply to it at all. The keydown
-          handler lives on each row instead, which is where the event originates
-          anyway: focus is always on an item. */}
+      {/* The panel and its rows enter together. Keyboard handling remains on
+          each row, where focus and the key event both originate. */}
       {items.map((item, index) => (
         <button
           key={item.value}
@@ -166,22 +173,19 @@ export default function Menu({
           onClick={() => run(item)}
           onKeyDown={onKeyDown}
           onPointerEnter={() => !item.disabled && setChosenIndex(index)}
-          data-ripple={item.disabled ? undefined : ''}
-          /* M3 menu item: 16dp inline / 4dp block padding, label-large, and NO
-             corner radius — rows are full-bleed, which is what makes a menu read
-             as a menu rather than as a stack of chips. 40dp under a pointer,
-             growing to the 48dp touch floor via `touch-size` (a real box, since
-             `data-ripple` clips a hit-area pseudo-element). */
+          data-ripple=""
+          /* An 8dp row corner inside the panel's 16dp corner and 8dp inset.
+             The explicit pointer variant keeps the 40dp / 48dp density without
+             two min-height utilities competing in the generated stylesheet. */
           className={cn(
-            'flex min-h-10 touch-size w-full cursor-pointer items-center gap-3 px-4 py-1 text-left text-label-l outline-none',
+            'flex min-h-10 pointer-coarse:min-h-12 w-full items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l',
+            'focus-visible:outline-hidden select-none touch-manipulation',
             /* The *inset* ring. The panel scrolls, and `overflow-y-auto` clips a
-               box-shadow — a full-bleed row's outset ring would be cut off on
-               both sides and at the ends of the scroll area. Same form as the
-               gallery card's, which clips for the same reason. */
-            'transition-ui focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
+               row's outset ring at the ends of its scroll area. */
+            'spring-fast-effects transition-[color,box-shadow,opacity] focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
             item.disabled
               ? 'cursor-not-allowed disabled-content'
-              : cn('state-layer', item.destructive ? 'text-error' : 'text-on-surface'),
+              : cn('cursor-pointer state-layer', item.destructive ? 'text-error' : 'text-on-surface'),
           )}
         >
           {item.icon && (

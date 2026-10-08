@@ -1,5 +1,5 @@
-/* `npm run net:tabnav` — tap a tab, open a thread after a configurable gap, press back. Prints
-   the URL, the selected tab, the showing pane, history calls and console output at each step. */
+/* `npm run net:tabnav` — fixture-backed tab → thread → Back regression, with a configurable gap.
+   A missing control or an incorrect landing fails instead of merely being printed. */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -52,7 +52,9 @@ await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pending = new Map();
 const logs = [];
-ws.onmessage = (m) => {
+const failures = [];
+const check = (condition, message) => { if (!condition) failures.push(message); };
+ws.onmessage = async (m) => {
   const msg = JSON.parse(m.data);
   if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
   if (msg.method === 'Runtime.consoleAPICalled') {
@@ -60,6 +62,23 @@ ws.onmessage = (m) => {
   }
   if (msg.method === 'Runtime.exceptionThrown') {
     logs.push('EXC: ' + (msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text));
+  }
+  if (msg.method === 'Fetch.requestPaused') {
+    const { requestId, request } = msg.params;
+    const stub = stubFor(request.url);
+    if (!stub) {
+      await send('Fetch.continueRequest', { requestId });
+      return;
+    }
+    await send('Fetch.fulfillRequest', {
+      requestId,
+      responseCode: 200,
+      responseHeaders: [
+        { name: 'content-type', value: stub.contentType },
+        { name: 'access-control-allow-origin', value: '*' },
+      ],
+      body: stub.binary ? stub.body : Buffer.from(stub.body).toString('base64'),
+    });
   }
 };
 const send = (method, params = {}) =>
@@ -71,6 +90,10 @@ const evalIn = async (expr) => {
 };
 await send('Runtime.enable');
 await send('Page.enable');
+/* Measure the code, not the service worker (see the same line in netAudit.mjs). */
+await send('Network.enable');
+await send('Network.setBypassServiceWorker', { bypass: true });
+await send('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
 
 const STATE = `(() => {
   const tabs = [...document.querySelectorAll('[role="tab"], [role="tablist"] [data-tab]')]
@@ -122,8 +145,7 @@ await evalIn(`(() => {
   if (!window.__control) t?.click();
   return 1;
 })()`);
-/* Gap between the tab tap and opening a thread. `TAB_PUSH_COALESCE_MS` is 728ms at the slow
-   speed scale, so a shorter gap opens the thread before the coalesced tab push has landed. */
+/* The gap lets the same journey cover navigation during or after the pane transition. */
 await new Promise((r) => setTimeout(r, Number(process.argv[4] ?? 2500)));
 console.log('B. tapped 论坛        ', JSON.stringify(await evalIn(STATE)));
 
@@ -135,6 +157,7 @@ const opened = await evalIn(`(() => {
   return row.getAttribute('href');
 })()`);
 console.log('C. clicked row        ', opened);
+check(typeof opened === 'string' && /^\/forum\/\d+$/.test(opened), 'No actual forum row was opened');
 console.log('   history calls       ', JSON.stringify(await evalIn('window.__hist')));
 console.log('   clicks              ', JSON.stringify(await evalIn('window.__clicks')));
 console.log('   offline banner?     ', await evalIn(
@@ -149,21 +172,28 @@ for (let i = 0; i < 8; i += 1) {
 const backKind = process.argv[3] ?? 'button';
 if (backKind === 'button') {
   const clicked = await evalIn(`(() => {
-    const b = [...document.querySelectorAll('button, a')].find((e) =>
-      (e.getAttribute('aria-label') || e.textContent || '').includes('返回论坛'));
+    const b = document.querySelector('[data-page-back-slot] button[aria-keyshortcuts="Escape"]');
     if (!b) return 'no back control';
     b.click();
     return b.tagName + ':' + (b.getAttribute('aria-label') || b.textContent || '').trim().slice(0, 12);
   })()`);
   console.log('   back control       ', clicked);
+  check(clicked !== 'no back control', 'The thread never offered its return control');
 } else {
   await evalIn(`history.back(); 1`);
 }
 await new Promise((r) => setTimeout(r, 3500));
-console.log('D. after back        ', JSON.stringify(await evalIn(STATE)));
+const returned = await evalIn(STATE);
+console.log('D. after back        ', JSON.stringify(returned));
+const address = new URL(returned.url, 'http://fixture.invalid');
+check(address.pathname === '/' && address.searchParams.get('tab') === 'forum', 'Back did not restore the forum URL');
+check(returned.tabs.some((tab) => tab.tab === 'forum' && tab.selected === 'true'), 'Back did not select the forum tab');
+check(returned.panes.some((pane) => pane.pane === 'forum' && pane.active && pane.h > 0), 'Back did not reveal the forum list');
+check(!logs.some((line) => line.startsWith('EXC:')), 'The journey threw a page exception');
 
 console.log('\nconsole:');
 for (const l of logs.slice(0, 12)) console.log('  ' + l.slice(0, 200));
+for (const failure of failures) console.error('FAIL ' + failure);
 
 ws.close(); browser.kill(); server.kill(); upstream.close();
-setTimeout(() => { try { rmSync(profile, { recursive: true, force: true }); } catch {} process.exit(0); }, 500);
+setTimeout(() => { try { rmSync(profile, { recursive: true, force: true }); } catch {} process.exit(failures.length ? 1 : 0); }, 500);

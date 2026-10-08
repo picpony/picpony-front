@@ -5,7 +5,7 @@ import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from 'react-icons/md';
 import Button from './Button';
 import { scrollAppToTop, scrollAppToElement } from '@/lib/scrollTo';
-import { cn } from '@/lib/utils';
+import { clamp, cn } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
 
 interface PaginationProps {
@@ -128,12 +128,20 @@ export default function Pagination({
     else if (!scroller) scrollAppToTop();
   };
 
-  // Centre the window on the current page and clamp it to the known range.
+  /* The last page there is to offer. A known count says; a cursor source can only
+     promise the page after this one, and only while it has more — it offered five
+     numbers regardless, so a two-card result showed 2 to 5 as live buttons leading
+     to empty pages, beside a disabled 下一页. */
+  const last = known ? totalPages : currentPage + (hasMore ? 1 : 0);
+  // Centre the window on the current page and clamp it to that range.
   const span = siblings * 2 + 1;
-  let start = Math.max(1, currentPage - siblings);
-  if (known) start = Math.min(start, Math.max(1, totalPages - span + 1));
-  const count = known ? Math.min(span, totalPages) : span;
+  const start = clamp(currentPage - siblings, 1, Math.max(1, last - span + 1));
+  const count = Math.max(1, Math.min(span, last - start + 1));
   const pages = Array.from({ length: count }, (_, i) => start + i);
+  // Keep a consecutive three-page window when the *container* is narrow.
+  // At either end, centre-on-current alone would leave holes in that window.
+  const compactCount = Math.min(count, 3);
+  const compactStart = clamp(currentPage - 1, start, start + count - compactCount);
 
   const navBtn = cn(
     /* **40dp, with `touch-size` for the floor.** The 40 is the button step; the
@@ -141,8 +149,8 @@ export default function Pagination({
        `touch-size` rather than `touch-target` because `data-ripple` sets
        `overflow: hidden` and would clip a hit-area pseudo-element out of
        hit-testing with it — this control's floor has to be a real box. */
-    'inline-flex h-10 min-w-10 touch-size cursor-pointer items-center justify-center rounded-full px-2',
-    'text-on-surface-variant state-layer outline-none',
+    'inline-flex h-10 w-10 touch-size cursor-pointer items-center justify-center rounded-full px-2',
+    'text-on-surface-variant state-layer focus-visible:outline-hidden select-none touch-manipulation',
     'transition-ui',
     'focus-visible:ring-2 focus-ring',
     'disabled:pointer-events-none disabled:disabled-content',
@@ -152,15 +160,12 @@ export default function Pagination({
     <nav
       ref={rootRef}
       aria-label="分页"
-      /* Takes part in the tab shared-axis cascade; see `paneRows`. Harmless
-         outside a tab pane, which is the only place that attribute is read. */
-      data-tab-row
       className={cn(
         /* The default top margin stands down when the call site names its own,
            same guard as `Skeleton`'s radius: `cn` is a plain join, so both would
            be emitted and the stylesheet's order — not the caller — would pick. */
         !HAS_TOP_MARGIN.test(className) && 'mt-12',
-        'flex items-center justify-center gap-1',
+        '@container/pagination flex items-center justify-center gap-1',
         className,
       )}
     >
@@ -170,7 +175,7 @@ export default function Pagination({
           disabled={!canPrev || disabled}
           aria-label="第一页"
           data-ripple
-          className={cn(navBtn, 'max-sm:hidden')}
+          className={cn(navBtn, '@max-xl/pagination:hidden')}
         >
           <MdFirstPage size={ICON.control} />
         </button>
@@ -182,10 +187,10 @@ export default function Pagination({
         disabled={!canPrev || disabled}
         aria-label="上一页"
         data-ripple
-        className={navBtn}
+        className={cn(navBtn, '@xl/pagination:w-auto')}
       >
         <MdChevronLeft size={ICON.control} />
-        <span className="max-sm:hidden text-label-l pr-1">上一页</span>
+        <span className="@max-xl/pagination:hidden text-label-l pr-1">上一页</span>
       </button>
 
       <div className="flex items-center gap-1">
@@ -204,7 +209,10 @@ export default function Pagination({
                 /* 40dp with `touch-size`, for the reason on `navBtn` above:
                    most-tapped chrome in the app, and `data-ripple` rules out a
                    hit-area pseudo-element. */
-                'inline-flex h-10 w-10 touch-size cursor-pointer items-center justify-center rounded-full outline-none',
+                'inline-flex h-10 w-10 touch-size cursor-pointer items-center justify-center rounded-full',
+                /* Chrome: a quick second tap on the next number must not zoom the
+                   page, nor a long press select the digit. */
+                'focus-visible:outline-hidden select-none touch-manipulation',
                 'transition-ui',
                 'focus-visible:ring-2 focus-ring',
                 'disabled:pointer-events-none disabled:disabled-content',
@@ -213,11 +221,14 @@ export default function Pagination({
                    the current page is still a button. No elevation: M3 gives a
                    pagination item level 0. */
                 active
-                  ? 'bg-primary text-on-primary text-label-l-emphasized state-layer'
+                  ? 'bg-primary text-on-primary text-label-l-emphasized state-layer forced-selected'
                   : 'text-label-l text-on-surface-variant state-layer',
-                // Beyond five numbers the row overflows a 390px viewport, so
-                // the outer two collapse instead of wrapping to a second line.
-                Math.abs(page - currentPage) === siblings && 'max-sm:hidden',
+                // A dialog and a column beside the app drawer can both be
+                // narrow on a wide viewport. The pager owns this breakpoint.
+                (page < compactStart || page >= compactStart + compactCount) && '@max-xl/pagination:hidden',
+                // Three numbers plus two 48dp touch targets need 256px.
+                // Below that, keep the current page between the two arrows.
+                !active && '@max-3xs/pagination:hidden',
               )}
             >
               {page}
@@ -232,9 +243,9 @@ export default function Pagination({
         disabled={!canNext || disabled}
         aria-label="下一页"
         data-ripple
-        className={navBtn}
+        className={cn(navBtn, '@xl/pagination:w-auto')}
       >
-        <span className="max-sm:hidden text-label-l pl-1">下一页</span>
+        <span className="@max-xl/pagination:hidden text-label-l pl-1">下一页</span>
         <MdChevronRight size={ICON.control} />
       </button>
 
@@ -244,7 +255,7 @@ export default function Pagination({
           disabled={!canNext || disabled}
           aria-label="最后一页"
           data-ripple
-          className={cn(navBtn, 'max-sm:hidden')}
+          className={cn(navBtn, '@max-xl/pagination:hidden')}
         >
           <MdLastPage size={ICON.control} />
         </button>
@@ -265,11 +276,15 @@ interface LoadMoreButtonProps {
  * `Button`, not a hand-rolled one — `variant="tonal" size="lg"` (the M3 medium
  * step), the size this button's job asks for: it is the only control on its row.
  *
- * The three bouncing dots stay. They are not a `Spinner` and should not be one —
- * `loading` on `Button` swaps in the circular indicator, which is right for a
- * submit that blocks and wrong for appending to a list you are still reading.
- * They ride in the `icon` slot so the label keeps its place instead of being
- * replaced.
+ * **Busy, not disabled, while it works** (`loading`): it keeps its container and ink
+ * and a second press does nothing, where `disabled` faded it to 38% exactly while it
+ * was working — and dropped a keyboard user's focus onto the page body, so the next
+ * Enter loaded nothing. `disabled` is for a list that cannot load more right now.
+ *
+ * The three bouncing dots stay, as its `busyIcon`. They are not a `Spinner` and should
+ * not be one — the circular indicator is right for a submit that blocks and wrong for
+ * appending to a list you are still reading. They ride in the icon slot so the label
+ * keeps its place instead of being replaced.
  */
 export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonProps) {
   return (
@@ -278,25 +293,24 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
         variant="tonal"
         size="lg"
         onClick={onClick}
-        disabled={isLoading || disabled}
+        loading={isLoading}
+        disabled={disabled}
         className="group"
+        busyIcon={
+          <span className="flex items-center gap-1">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="bg-primary-ink animate-dot-bounce h-1.5 w-1.5 rounded-full forced-mark"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </span>
+        }
         icon={
-          isLoading ? (
-            <span className="flex items-center gap-1">
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  className="bg-primary-ink animate-dot-bounce h-1.5 w-1.5 rounded-full"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
-            </span>
-          ) : (
-            <MdRefresh
-              size={ICON.control}
-              className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
-            />
-          )
+          <MdRefresh
+            className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
+          />
         }
       >
         {isLoading ? '正在加载' : '加载更多'}

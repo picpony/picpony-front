@@ -1,8 +1,9 @@
 'use client';
 
-import { ReactNode, useLayoutEffect, useRef } from 'react';
+import { type ReactNode, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { DURATION, EASE } from '@/lib/motionTokens';
 import { entranceMotion, motionTier, scaledMs } from '@/lib/appearance';
+import { routeTransitActive } from '@/lib/pageTransit';
 
 interface RevealProps {
   children: ReactNode;
@@ -14,6 +15,11 @@ interface RevealProps {
   /** Delay in seconds before the sequence starts. */
   delay?: number;
 }
+
+/* A hydration probe: the server snapshot answers while React hydrates server HTML. */
+const subscribeNothing = () => () => {};
+const onClient = () => true;
+const onServer = () => false;
 
 /**
  * Staggered entrance for its direct children, played once on mount.
@@ -31,6 +37,11 @@ interface RevealProps {
  * `backwards` only, so nothing is pinned once the run lands. `scaledMs` is
  * required because WAAPI has no time-scale equivalent — without it the 快速 and
  * 缓慢 speeds would not reach this.
+ *
+ * **Not on content the server rendered.** Hydrating is not arriving: the block has been on
+ * screen since the first paint, so an entrance played at hydration hid it and faded it back —
+ * the 404 painted at rest, vanished half a second later and rose in again. Only an instance
+ * the client mounts plays; one that hydrates server HTML is already where it belongs.
  */
 export default function Reveal({
   children,
@@ -40,15 +51,21 @@ export default function Reveal({
   delay = 0,
 }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
+  /* The first render's answer, kept: a hydrating render reads the server snapshot (false),
+     a client mount the client one. React re-renders after hydration with `true`, which must
+     not turn a hydrated block into one that plays. */
+  const clientMounted = useSyncExternalStore(subscribeNothing, onClient, onServer);
+  const playable = useRef(clientMounted);
 
   /* Layout effect, so the start state lands in the same frame the children
      first paint; a passive effect would show them at rest, then snap back. */
   useLayoutEffect(() => {
+    if (!playable.current) return;
     const root = ref.current;
     /* `entranceMotion()` is the harder stop: this component *is* an entrance,
        so with the switch off there is nothing to reduce. Read once at mount —
        that is when the whole animation happens. */
-    if (!root || !entranceMotion()) return;
+    if (!root || !entranceMotion() || routeTransitActive(root)) return;
     const tier = motionTier();
     if (tier === 'off') return;
 

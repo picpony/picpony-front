@@ -116,8 +116,8 @@ const hex = (s) => {
 /* The three glass tokens. They live in globals.css and are spelled here rather than imported —
    a mismatch shows up as a plate the wrong colour, which is what this tool is for looking at. */
 const BODY = {
-  light: { a: '#ffffff', b: '#f0e8ea', sheen: '#ffffff', hue: '#e06c9f' },
-  dark: { a: '#312a2d', b: '#4c4447', sheen: '#ffe3ee', hue: '#cb5b8d' },
+  light: { a: '#ffffff', b: '#f0e8ea', sheen: '#ffffff', hue: '#fdcad3' },
+  dark: { a: '#312a2d', b: '#4c4447', sheen: '#ffe3ee', hue: '#fdaebe' },
 };
 const body = BODY[SCHEME];
 const fluteSpeed = num('fluteSpeed', FLUTE_DEFAULTS.speed);

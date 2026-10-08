@@ -1,0 +1,152 @@
+/* The chooser is its own query container: the grid's column count follows the row it sits in,
+   not the viewport (the settings column is 4xl, and a docked drawer takes from it). */
+.chooser {
+  container-type: inline-size;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 176px;
+  height: 100%;
+  text-align: center;
+  /* `Card` transitions its keyline and shadow only; a choice also changes its container, and the
+     selection should arrive on the same FastEffects clock rather than in one frame. The duration
+     and curve stay the card's own (`spring-fast-effects`). */
+  transition-property: background-color, color, border-color;
+}
+
+.choice[aria-pressed='true'] {
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+/* The tick: a selection control's mark at the card's corner, concentric with it (12dp card,
+   12px inset). Empty, a ring on the card's own tone; chosen, the container pair inverted. */
+.mark {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 50%;
+  color: transparent;
+  transition:
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    color var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
+.choice[aria-pressed='true'] .mark {
+  border-color: transparent;
+  background: var(--md-sys-color-on-secondary-container);
+  color: var(--md-sys-color-secondary-container);
+}
+
+.preview {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 104px;
+  flex-shrink: 0;
+}
+
+.preview > * {
+  grid-area: 1 / 1;
+}
+
+.sprite {
+  width: 112px;
+  height: 96px;
+  max-width: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.name {
+  display: block;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.variant {
+  display: block;
+  min-height: 20px;
+}
+
+/* The six places. Square, up to 56dp, and as many as fit a phone's row in one line: on a 390px
+   screen the row holds 326px, six places and five 8px gaps. */
+.lineup {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 56px));
+  gap: 8px;
+}
+
+.slot {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--md-sys-color-surface-container);
+}
+
+.slot[data-filled] {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.slotSprite {
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+@container (min-width: 30rem) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 40rem) {
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (forced-colors: active) {
+  .choice[aria-pressed='true'] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  .mark {
+    border-color: ButtonText;
+  }
+
+  .choice[aria-pressed='true'] .mark {
+    color: HighlightText;
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+
+  .slot {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+}

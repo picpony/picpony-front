@@ -1,213 +1,216 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { showToast } from '@/components/Toast';
-import { MdShield, MdAdd } from 'react-icons/md';
-import { SectionHeader } from './';
+import { useState } from 'react';
+import { MdAdd } from 'react-icons/md';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Chip from '@/components/Chip';
-import Skeleton from '@/components/Skeleton';
 import EmptyState from '@/components/EmptyState';
+import ErrorRetry from '@/components/ErrorRetry';
 import { Input } from '@/components/Input';
-import { ICON } from '@/lib/icons';
+import SectionHeading from '@/components/SectionHeading';
+import Skeleton from '@/components/Skeleton';
+import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-/* A namespace import, and it is the point: `lib/api.ts`'s `api` is a runtime
-   spread and therefore un-tree-shakeable, so while the admin surface was in it
-   every gallery route shipped all 48 of these. Only the eleven admin tabs
-   import it now, and each is already its own `dynamic` chunk. */
 import * as adminApi from '@/lib/api/admin';
+import { BLOCK_FILTER_KEYS, installBlockFilters, parseBlockFilters, type BlockFilterKey } from '@/lib/blockFilters';
+import SectionHeader from './SectionHeader';
+import { AdminNote } from './AdminForm';
+import { adminData, defineAdminQuery, retryError, useAdminQuery } from './queries';
+import { useAdminMutation } from './useAdminMutation';
+import type { AdminPanelProps } from './registry';
 
 interface BlockTag {
   id: number;
   tag_name: string;
+  filter_key?: BlockFilterKey;
 }
 
-interface BlockTagsGroup {
-  [key: string]: BlockTag[];
-}
+type BlockTagsGroup = Partial<Record<BlockFilterKey, BlockTag[]>>;
 
-const filterKeys = ['safe', 'spoilers', 'banAnthro', 'banDiscomfort', 'onlyPony'];
-
-const filterLabels: Record<string, string> = {
-  safe: '安全模式 (safe) — 排除项',
-  spoilers: '剧透模式 (spoilers) — 排除项',
-  banAnthro: '屏蔽拟人 (banAnthro) — 排除项',
-  banDiscomfort: '屏蔽不适内容 (banDiscomfort) — 排除项',
-  onlyPony: '只看小马 (onlyPony) — 可选物种范围 (OR 关系)',
+/** Each rule's name, and what its tags do to a search. */
+const RULES: Record<BlockFilterKey, { name: string; role: string }> = {
+  safe: { name: '安全模式', role: '排除的标签' },
+  spoilers: { name: '剧透模式', role: '排除的标签' },
+  banAnthro: { name: '屏蔽拟人', role: '排除的标签' },
+  banDiscomfort: { name: '屏蔽不适内容', role: '排除的标签' },
+  onlyPony: { name: '只看小马', role: '允许的物种（任一即可）' },
 };
 
-export default function BlockTagsTab({ token }: { token: string }) {
-  const [blockTags, setBlockTags] = useState<BlockTagsGroup>({});
-  const [loading, setLoading] = useState(false);
-  const [addingKey, setAddingKey] = useState<string | null>(null);
-  const [newTagName, setNewTagName] = useState('');
+const blockTagsQuery = defineAdminQuery<BlockTagsGroup>('block-tags', async (token, signal) => {
+  const data = await adminApi.getBlockTags(token, signal);
+  adminData(data, undefined, '屏蔽标签');
+  const filters = parseBlockFilters(data);
+  if (!filters) throw new Error('屏蔽标签加载失败');
+  installBlockFilters(filters);
+  const grouped: BlockTagsGroup = {};
+  if (Array.isArray(data.tags)) {
+    for (const tag of data.tags as BlockTag[]) {
+      if (tag.filter_key && BLOCK_FILTER_KEYS.includes(tag.filter_key)) (grouped[tag.filter_key] ??= []).push(tag);
+    }
+  } else if (data.grouped && typeof data.grouped === 'object') {
+    for (const key of BLOCK_FILTER_KEYS) grouped[key] = Array.isArray(data.grouped[key]) ? data.grouped[key] : [];
+  }
+  return grouped;
+});
 
-  /* `useConfirm`, not a `Modal` plus an open flag and a ref. Five admin tabs
-     converted to the shared dialog and five — this among them — kept their own,
-     which is also why their copy drifted: every hand-rolled body dropped the
-     sentence-final 吗 that every converted one kept. */
+/** A tag as Derpibooru spells it: trimmed, lower-case, single spaces. */
+function blockTagName(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * 屏蔽标签 — the site-wide rules every visitor's searches carry. One verb for taking a tag out of
+ * a rule, 移除, on the chip, in the confirm and in its failure (R9-019: it said 删除 in the
+ * confirm and named neither the tag nor the rule); a new tag is lower-cased and trimmed, and one
+ * the rule already has is refused on the field.
+ */
+export default function BlockTagsTab({ token }: AdminPanelProps) {
+  const read = useAdminQuery(blockTagsQuery, token);
+  const groups = read.data ?? {};
+  const addMutation = useAdminMutation(token);
+  const removeMutation = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
+  const [adding, setAdding] = useState<BlockFilterKey | null>(null);
+  const [draft, setDraft] = useState('');
+  const [draftError, setDraftError] = useState<string | null>(null);
 
-  const loadBlockTags = async () => {
-    setLoading(true);
-    try {
-      const data = await adminApi.getBlockTags(token);
-      if (data.success) {
-        setBlockTags(data.tags || {});
-      }
-    } catch {
-      showToast('加载失败', 'error');
-    } finally {
-      setLoading(false);
+  const add = (key: BlockFilterKey) => {
+    if (addMutation.isPending()) return;
+    const name = blockTagName(draft);
+    if (!name) {
+      setDraftError('请输入标签名');
+      return;
     }
-  };
-
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await adminApi.getBlockTags(token);
-        if (!cancelled && data.success) {
-          setBlockTags(data.tags || {});
-        }
-      } catch {
-        if (!cancelled) showToast('加载失败', 'error');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
-
-  const handleAddTag = async (key: string) => {
-    if (!newTagName.trim()) return;
-    try {
-      const res = await adminApi.adminAddBlockTag(token, {
-        filter_key: key,
-        tag_name: newTagName.trim(),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast('已添加', 'success');
-        setNewTagName('');
-        setAddingKey(null);
-        loadBlockTags();
-      } else {
-        showToast(data.error || '添加失败', 'error');
-      }
-    } catch {
-      showToast('添加失败', 'error');
+    if ((groups[key] ?? []).some((tag) => blockTagName(tag.tag_name) === name)) {
+      setDraftError(`「${RULES[key].name}」中已有标签 ${name}`);
+      return;
     }
+    void addMutation.run(
+      () => adminApi.adminAddBlockTag(token, { filter_key: key, tag_name: name }),
+      () => {
+        showToast(`已将 ${name} 加入「${RULES[key].name}」`, 'success');
+        setDraft('');
+        setAdding(null);
+      },
+      '添加失败',
+      { onCommitted: read.refresh },
+    );
   };
 
-  const handleRemoveTag = (_key: string, tagId: number) => {
-    confirmThen('确认删除', '确定要删除此标签吗？', async () => {
-      try {
-        const res = await adminApi.adminRemoveBlockTag(token, tagId);
-        const data = await res.json();
-        if (data.success) {
-          showToast('已删除', 'success');
-          loadBlockTags();
-        } else {
-          showToast(data.error || '移除失败', 'error');
-        }
-      } catch {
-        showToast('移除失败', 'error');
-      }
-    });
+  const remove = (key: BlockFilterKey, tag: BlockTag) =>
+    confirmThen('确认移除标签', `确定要从「${RULES[key].name}」中移除 ${tag.tag_name} 吗？`, () =>
+      void removeMutation.run(
+        () => adminApi.adminRemoveBlockTag(token, tag.id),
+        () => showToast(`已从「${RULES[key].name}」中移除 ${tag.tag_name}`, 'success'),
+        '移除失败',
+        {
+          key: tag.id,
+          onCommitted: () => {
+            blockTagsQuery.write(token, (previous) => ({
+              ...(previous ?? {}),
+              [key]: (previous?.[key] ?? []).filter((row) => row.id !== tag.id),
+            }));
+            read.refresh();
+          },
+        },
+      ));
+
+  const toggleAdding = (key: BlockFilterKey) => {
+    setDraft('');
+    setDraftError(null);
+    setAdding((current) => (current === key ? null : key));
   };
+
   return (
     <div className="space-y-6">
-      {' '}
-      <SectionHeader
-        icon={<MdShield size={ICON.standard} />}
-        title="底层屏蔽标签管理"
-        onRefresh={loadBlockTags}
-      />
-      <Card variant="filled" padding="sm" className="text-body-s text-on-surface-variant">
-        此处管理网站全局底层屏蔽规则，影响所有用户的搜索过滤结果。 <b>safe</b> 与 <b>spoilers</b>{' '}
-        中的标签会作为排除项（-标签）加入搜索。 <b>onlyPony</b> 中的标签会作为可选物种范围（OR
-        关系）。
-      </Card>
-      {loading ? (
-        /* The destination's own shape — section cards with heading rows and tag
-           chips — not a spinner, which reflowed three cards' worth of layout in
-           when the list landed. */
-        <div className="space-y-6">
-          {filterKeys.map((key, i) => (
-            <Card key={key} variant="filled">
-              <div className="mb-3 flex items-center justify-between">
-                <Skeleton className="h-5 w-24" delay={i * 90} />
-                <Skeleton className="h-8 w-16 rounded-full" delay={i * 90 + 40} />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[64, 88, 72, 96, 56].map((w, j) => (
-                  <Skeleton
-                    key={j}
-                    className="h-8 rounded-sm"
-                    style={{ width: w }}
-                    delay={i * 90 + 80 + j * 40}
-                  />
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
+      <SectionHeader section="blocktags" onRefresh={read.refresh} isLoading={read.refreshing} />
+      <AdminNote>
+        这些规则作用于全站所有用户的搜索结果：前四项中的标签会作为排除项加入搜索，「只看小马」中的标签是允许的物种范围，满足其中任一即可。
+      </AdminNote>
+      {read.error && !read.data ? (
+        <ErrorRetry size="pane" {...retryError('屏蔽标签加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} />
       ) : (
-        <div className="space-y-6">
-          {filterKeys.map((key) => {
-            const tags = blockTags[key] || [];
+        <div className="space-y-4">
+          {BLOCK_FILTER_KEYS.map((key, index) => {
+            const tags = groups[key] ?? [];
+            const open = adding === key;
             return (
-              <Card key={key} variant="filled">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-label-l text-on-surface">{filterLabels[key]}</h3>
-                  <Button
-                    icon={<MdAdd size={ICON.dense} />}
-                    variant="accent"
-                    size="xs"
-                    onClick={() => setAddingKey(addingKey === key ? null : key)}
-                  >
-                    添加
-                  </Button>
-                </div>
-                {addingKey === key && (
-                  <div className="flex items-center gap-2 mb-3">
-                    
-                    <Input
-                      type="text"
-                      value={newTagName}
-                      onChange={(e) => setNewTagName(e.target.value)}
-                      placeholder="输入标签名…"
-                      fieldClassName="flex-1"
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag(key)}
-                    />
-                    <Button onClick={() => handleAddTag(key)} variant="filled" size="xs">
-                      确认
+              <Card key={key} variant="filled" className="space-y-3">
+                <SectionHeading
+                  as="h3"
+                  className="mb-3"
+                  subtitle={`${RULES[key].role}（${key}）`}
+                  actions={
+                    <Button
+                      type="button"
+                      variant="tonal"
+                      size="xs"
+                      icon={<MdAdd />}
+                      aria-expanded={open}
+                      disabled={!read.data}
+                      onClick={() => toggleAdding(key)}
+                    >
+                      添加标签
                     </Button>
-                  </div>
+                  }
+                >
+                  {RULES[key].name}
+                </SectionHeading>
+                {open && (
+                  <form
+                    noValidate
+                    aria-label={`向「${RULES[key].name}」添加标签`}
+                    className="flex items-start gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      add(key);
+                    }}
+                  >
+                    <Input
+                      size="sm"
+                      aria-label="标签名"
+                      placeholder="输入英文标签名，例如 grimdark"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      autoFocus
+                      value={draft}
+                      readOnly={addMutation.busy}
+                      error={draftError ?? undefined}
+                      fieldClassName="min-w-0 flex-1"
+                      onChange={(event) => {
+                        setDraft(event.target.value);
+                        setDraftError(null);
+                      }}
+                    />
+                    <Button type="submit" variant="filled" loading={addMutation.busy}>
+                      添加
+                    </Button>
+                  </form>
                 )}
-                {tags.length === 0 ? (
-                  <EmptyState size="inline" title="暂无标签" />
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {tags.map((tag: BlockTag) => (
-                      /* `Chip` with `onRemove`, not a hand-rolled pill with a
-                         literal `×` in it: a chip is 8dp, not a pill, and the
-                         unlabelled button was read out as "times". */
-                      <Chip
-                        key={tag.id}
-                        onRemove={() => handleRemoveTag(key, tag.id)}
-                        removeLabel={`移除标签 ${tag.tag_name}`}
-                      >
-                        {tag.tag_name}
-                      </Chip>
+                {!read.data ? (
+                  <div className="flex flex-wrap gap-2" aria-hidden="true">
+                    {[64, 88, 72, 96, 56].map((width, chip) => (
+                      <Skeleton key={chip} className="h-8 rounded-sm" style={{ width }} delay={index * 90 + chip * 40} />
                     ))}
                   </div>
+                ) : tags.length === 0 ? (
+                  <EmptyState size="inline" title="这条规则还没有标签" />
+                ) : (
+                  <ul className="flex flex-wrap gap-2" aria-label={`「${RULES[key].name}」的标签`}>
+                    {tags.map((tag) => (
+                      <li key={tag.id}>
+                        <Chip
+                          disabled={removeMutation.pendingKeys.has(tag.id)}
+                          onRemove={() => remove(key, tag)}
+                          removeLabel={`从「${RULES[key].name}」中移除 ${tag.tag_name}`}
+                        >
+                          {tag.tag_name}
+                        </Chip>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </Card>
             );

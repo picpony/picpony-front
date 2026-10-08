@@ -4,8 +4,10 @@ import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import {
   commitCustomPalette,
   commitPalette,
+  commitPaletteHues,
   commitScheme,
   type CustomPaletteInstall,
+  type PaletteHues,
   type PaletteId,
   type SchemeSetting,
 } from '@/lib/appearance';
@@ -85,21 +87,26 @@ export function changeCustomPalette(
   void load();
 }
 
+/** 配色方案, as a wipe — same contract as `changePalette`. */
+export function changePaletteHues(hues: PaletteHues, origin?: { x: number; y: number }): void {
+  if (motion) {
+    motion.changePaletteHues(hues, origin);
+    return;
+  }
+  commitPaletteHues(hues);
+  void load();
+}
+
 /** The optimistic tab, while the URL catches up. No engine involved — it lives in
  *  `lib/tabIntent.ts`; re-exported so the shell's motion imports stay one import. */
 export { setTabIntent } from '@/lib/tabIntent';
 
 /** Starts a tab switch on the tap, ahead of the route push. Without the engine the fallback is
  *  the 关闭 branch, line for line: record the outgoing offset against the panel and return; the
- *  switch then happens in `useTabPanes`'s layout effect when the URL commits, without animating. */
-export function startTabTransition(
-  from: string,
-  to: string,
-  direction: 1 | -1,
-  lean = false,
-): void {
+ *  switch then happens when the URL commits, without animating. */
+export function startTabTransition(from: string, to: string, direction: 1 | -1): void {
   if (motion) {
-    motion.startTabTransition(from, to, direction, lean);
+    motion.startTabTransition(from, to, direction);
     return;
   }
   void load();
@@ -113,11 +120,13 @@ export function startTabTransition(
 /**
  * The drawer's edge-swipe, on a phone.
  *
- * A hook cannot live behind an `import()`, so this is a **component** rendering nothing, rendered
- * only once the engine has arrived — the hook call stays unconditional for its whole life. The
- * load is gated on `enabled`: above 768px the drawer is docked, so a desktop never fetches the
- * chunk. What is lost while it arrives is one swipe; the drawer's button, scrim and Escape key
- * are untouched, because none of them is this hook's.
+ * A hook cannot live behind an `import()`, so this renders the engine's own **component**
+ * (`DrawerSwipeHost`, rendering nothing) once the engine has arrived — the hook call stays
+ * unconditional for its whole life, and it is called by name inside the engine rather than
+ * handed down as a value, which the React Compiler refuses to compile. The load is gated on
+ * `enabled`: above 768px the drawer is docked, so a desktop never fetches the chunk. What is lost
+ * while it arrives is one swipe; the drawer's button, scrim and Escape key are untouched, because
+ * none of them is this hook's.
  */
 export function DrawerSwipe(options: DrawerSwipeOptions) {
   const [ready, setReady] = useState(motion !== null);
@@ -135,27 +144,19 @@ export function DrawerSwipe(options: DrawerSwipeOptions) {
   }, [enabled, ready]);
 
   if (!ready || !motion) return null;
-  return <DrawerSwipeImpl impl={motion.useDrawerSwipe} options={options} />;
-}
-
-function DrawerSwipeImpl({
-  impl,
-  options,
-}: {
-  impl: Motion['useDrawerSwipe'];
-  options: DrawerSwipeOptions;
-}) {
-  impl(options);
-  return null;
+  const Host = motion.DrawerSwipeHost;
+  return <Host {...options} />;
 }
 
 /* ---------------------------------------------------------------------------
- * The two hooks that gate most of the app's routes
+ * The two that gate most of the app's routes
  *
- * `useTabPanes`/`useStaggerGrid` return a **ref**, so the caller keeps the `useRef` and hands it
- * down — the ref must exist in the caller's first render, before the engine does — while the
- * hook runs inside a child mounted only once the module has arrived (as in `DrawerSwipe`), the
- * only arrangement that keeps the hook call order unconditional.
+ * The caller keeps the `useRef` and hands it down — the ref must exist in the caller's first
+ * render, before the engine does — while the motion runs inside a child mounted only once the
+ * module has arrived (as in `DrawerSwipe`), the only arrangement that keeps a hook's call order
+ * unconditional. The children are the engine's own components, read off the module once it is
+ * resident. The tab switch's is a class (`TabPanesDriver`): it needs the one lifecycle that runs
+ * before React's DOM mutations.
  * ------------------------------------------------------------------------ */
 
 /** The shared-axis tab switch, once the engine is resident. Until then the fallback applies an
@@ -164,11 +165,9 @@ function DrawerSwipeImpl({
 export function TabPanesMotion({
   panelRef,
   active,
-  lean,
 }: {
   panelRef: RefObject<HTMLElement | null>;
   active: string;
-  lean: boolean;
 }) {
   const [ready, setReady] = useState(motion !== null);
 
@@ -184,22 +183,8 @@ export function TabPanesMotion({
   }, [ready]);
 
   if (!ready || !motion) return <TabPanesFallback panelRef={panelRef} active={active} />;
-  return <TabPanesImpl impl={motion.useTabPanesOn} panelRef={panelRef} active={active} lean={lean} />;
-}
-
-function TabPanesImpl({
-  impl,
-  panelRef,
-  active,
-  lean,
-}: {
-  impl: Motion['useTabPanesOn'];
-  panelRef: RefObject<HTMLElement | null>;
-  active: string;
-  lean: boolean;
-}) {
-  impl(panelRef, active, { lean });
-  return null;
+  const Driver = motion.TabPanesDriver;
+  return <Driver panelRef={panelRef} active={active} />;
 }
 
 function TabPanesFallback({
@@ -237,20 +222,6 @@ export function StaggerGrid({
   const [ready] = useState(motion !== null);
 
   if (!ready || !motion) return null;
-  return <StaggerGridImpl impl={motion.useStaggerGridOn} gridRef={gridRef} selector={selector} deps={deps} />;
-}
-
-function StaggerGridImpl({
-  impl,
-  gridRef,
-  selector,
-  deps,
-}: {
-  impl: Motion['useStaggerGridOn'];
-  gridRef: RefObject<HTMLElement | null>;
-  selector: string;
-  deps: unknown[];
-}) {
-  impl(gridRef, selector, deps);
-  return null;
+  const Host = motion.StaggerGridHost;
+  return <Host gridRef={gridRef} selector={selector} deps={deps} />;
 }

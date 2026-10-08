@@ -47,4 +47,4 @@ export default function Error({
       onRetry={reset}
     />
   );
-}
+}

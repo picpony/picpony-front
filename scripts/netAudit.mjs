@@ -38,6 +38,9 @@ const KEEP = process.argv.includes('--keep');
  * property of the code. Use for a payload-shape check; never to record a baseline.
  */
 const LIVE = process.argv.includes('--live');
+/** `--media` prints each step's image requests, grouped by line and path with repeats counted —
+ * the media column is reported and asserted nowhere, so this is how a jump in it is read. */
+const MEDIA_DETAIL = process.argv.includes('--media');
 const ONLY = (() => {
   const flag = process.argv.find((a) => a.startsWith('--only='));
   return flag ? flag.slice('--only='.length) : null;
@@ -139,7 +142,9 @@ const JOURNEYS = [
     why: 'the forum pane is mounted on idle, so the switch should cost nothing',
     steps: [
       { label: 'GET /', navigate: '/', content: GALLERY },
-      { label: 'tap 论坛', click: '[data-tab-row] [role="tab"]:nth-of-type(2), a[href="/?tab=forum"]' },
+      /* The pill itself, not the drawer's 论坛 row (the old first alternative matched nothing once the
+         lean's row marks went, so the step had quietly been clicking the drawer link). */
+      { label: 'tap 论坛', click: '[role="tablist"][aria-label="首页分区"] [role="tab"]:nth-of-type(2)' },
     ],
   },
   {
@@ -154,7 +159,7 @@ const JOURNEYS = [
   {
     name: 'cold profile',
     why: 'the waterfall: profile → shared faves → images, plus two requests for an unopened tab',
-    steps: [{ label: 'GET /user/1', navigate: '/user/1', content: /get_user_uploads/ }],
+    steps: [{ label: 'GET /user/1', navigate: '/user/1', content: /uploader_id/ }],
   },
   {
     /**
@@ -166,7 +171,7 @@ const JOURNEYS = [
     name: 'profile → back → profile',
     why: 'a second visit to the same profile must cost nothing',
     steps: [
-      { label: 'GET /user/1', navigate: '/user/1', content: /get_user_uploads/ },
+      { label: 'GET /user/1', navigate: '/user/1', content: /uploader_id/ },
       { label: '→ /', click: 'a[href="/"]', content: GALLERY },
       { label: '← back', back: true },
     ],
@@ -183,7 +188,7 @@ const JOURNEYS = [
   },
   {
     name: 'cold favorites',
-    why: 'two panes, and the unselected one should not fetch',
+    why: 'folder covers only; unopened folders, Derpibooru and privacy must not fetch',
     auth: true,
     steps: [{ label: 'GET /favorites', navigate: '/favorites', content: GALLERY }],
   },
@@ -217,6 +222,29 @@ const JOURNEYS = [
     why: 'reads for three tabs when one is selected, and the shell polls unread four times',
     auth: true,
     steps: [{ label: 'GET /messages', navigate: '/messages', content: /get_announcement_history/ }],
+  },
+  {
+    name: 'cold shop',
+    why: 'public catalogue; browsing without an account must not read a private cart',
+    steps: [{ label: 'GET /shop', navigate: '/shop', content: /get_shop_items/ }],
+  },
+  {
+    name: 'cold subscriptions',
+    why: 'the screen and drawer share one subscription read',
+    auth: true,
+    steps: [{ label: 'GET /subscriptions', navigate: '/subscriptions', content: /get_tag_subscriptions/ }],
+  },
+  {
+    name: 'cold tag groups',
+    why: 'one group-list read, without opening an editor or searching its pictures',
+    auth: true,
+    steps: [{ label: 'GET /tag-groups', navigate: '/tag-groups', content: /get_tag_groups/ }],
+  },
+  {
+    name: 'cold coin ledger',
+    why: 'one ledger read, without fetching the parent task screen',
+    auth: true,
+    steps: [{ label: 'GET /tasks/coins', navigate: '/tasks/coins', content: /get_coin_transactions/ }],
   },
 ];
 
@@ -345,9 +373,19 @@ class Cdp {
  * whatever it is doing, so leaving them in made `contentRound` race (the same code read 1, 2 or
  * 3 across runs). `get_maintenance_status` is deliberately NOT here — `proxyFetch` awaits it
  * before sending anything, so it is a real ancestor of every Derpibooru read and the number has
- * to show that dependency.
+ * to show that dependency. `get_tag_subscriptions` is chrome too: the drawer's 标签订阅 row reads
+ * it on every signed-in document for its count of new pictures, beside the screen's own reads.
  */
-const CHROME_READS = new Set(['get_user', 'get_unread_counts', 'get_announcement']);
+const CHROME_READS = new Set(['get_user', 'get_unread_counts', 'get_announcement', 'get_tag_subscriptions']);
+
+/**
+ * Not counted at all, on either layer: `track_visitor`, the visit count a production build sends
+ * (`components/VisitorTracker.tsx`). It is a statistics POST on an idle callback that nothing
+ * waits on and no screen owns, so whether it lands inside a step's window is timing, not code —
+ * counting it would move a signed-out step's total from run to run. The tracker already stands
+ * down in this headless browser; this keeps the ledger honest if it ever does not.
+ */
+const UNCOUNTED = new Set(['track_visitor']);
 
 /**
  * The critical path, in rounds: a request is in round `n + 1` if any request in round `n` had
@@ -392,7 +430,7 @@ async function runStep(cdp, step, origin, serverReads) {
     if (message.method === 'Network.requestWillBeSent') {
       const { requestId, request, timestamp } = message.params;
       const hit = classify(request.url);
-      if (!hit) return;
+      if (!hit || UNCOUNTED.has(requestName(hit))) return;
       const entry = {
         ...hit,
         id: requestId,
@@ -419,7 +457,10 @@ async function runStep(cdp, step, origin, serverReads) {
     }
     if (message.method === 'Network.responseReceived') {
       const entry = byId.get(message.params.requestId);
-      if (entry) entry.status = message.params.response.status;
+      if (entry) {
+        entry.status = message.params.response.status;
+        entry.fromServiceWorker = message.params.response.fromServiceWorker === true;
+      }
     }
   });
 
@@ -456,6 +497,20 @@ async function runStep(cdp, step, origin, serverReads) {
 
   const api = entries.filter((e) => e.kind === 'api');
   const media = entries.filter((e) => e.kind === 'media');
+  if (MEDIA_DETAIL && media.length) {
+    const groups = new Map();
+    for (const e of media) {
+      const inner = e.url.searchParams.get('url');
+      const key = `${e.label} ${e.failed ? 'failed' : e.status ?? '…'}${e.fromServiceWorker ? ' via-sw' : ''} ${e.url.pathname}${inner ? ` <- ${inner.slice(0, 90)}` : ''}${e.url.searchParams.get('w') ? ` w=${e.url.searchParams.get('w')}` : ''}`;
+      groups.set(key, (groups.get(key) ?? 0) + 1);
+    }
+    const byLabel = new Map();
+    for (const e of media) byLabel.set(e.label, (byLabel.get(e.label) ?? 0) + 1);
+    console.log(`      media by line: ${[...byLabel].map(([k, v]) => `${k} ${v}`).join(', ')}`);
+    for (const [key, count] of [...groups].sort((a, b) => b[1] - a[1]).slice(0, 12)) {
+      console.log(`      ${String(count).padStart(3)}x ${key}`);
+    }
+  }
   const rounds = computeRounds(api);
   /* Matched on the *name* as well as the href: a request on the relay or accel line carries its
      target percent-encoded inside `?url=`, so the pattern appears nowhere in the href. */
@@ -636,8 +691,13 @@ const upstream = createHttpServer((req, res) => {
   const action = /[?&]action=([^&]+)/.exec(req.url ?? '')?.[1] ?? req.url ?? '';
   /* `get_maintenance_status` excluded for the same reason `CHROME_READS` excludes `get_user`:
      the server does it on every route, so counting it would make `serverApi` a function of how
-     many navigations a journey contains rather than of what moved to the server. */
-  if (action !== 'get_maintenance_status') serverReads.push(action);
+     many navigations a journey contains rather than of what moved to the server.
+     `get_public_blacklist` is read beside it for the same inline policy and is excluded too, so
+     adding it did not move a baseline that already counts `get_block_tags` once per document.
+     `UNCOUNTED` is excluded here as everywhere. */
+  if (action !== 'get_maintenance_status' && action !== 'get_public_blacklist' && !UNCOUNTED.has(action)) {
+    serverReads.push(action);
+  }
   res.writeHead(200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
@@ -727,6 +787,13 @@ try {
   cdp = await Cdp.connect(target);
   await cdp.send('Page.enable');
   await cdp.send('Network.enable');
+  /* The ledger measures the code, not the worker. `ServiceWorker.tsx` opts out under
+     `navigator.webdriver`, but this browser is driven over plain CDP without the automation flag,
+     so the worker registered during `resetSession`'s warm-up and controlled every "cold" load after
+     it: it answers `/_next/image` itself, from its own thread, where `Fetch` interception never
+     sees the request — the stub was bypassed and the real optimizer answered 400 for fixture
+     pictures (measured: every card's image three times, 235 media on a cold `/`). */
+  await cdp.send('Network.setBypassServiceWorker', { bypass: true });
   if (!LIVE) await installStubs(cdp);
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width: VIEWPORT.width,
@@ -761,6 +828,13 @@ try {
          asserted. */
       serverReads.length = 0;
       const result = await runStep(cdp, step, origin, LIVE ? null : serverReads);
+      if (!LIVE) {
+        const filterReads = serverReads.filter((name) => name === 'get_block_tags').length;
+        if (filterReads > 1) fail(journey.name, `${result.label} duplicated the public filter-definition read`);
+        if (step.navigate && filterReads === 0) {
+          fail(journey.name, `${result.label} did not read the public filter definitions`);
+        }
+      }
       steps.push(result);
       console.log(
         `  ${result.label.padEnd(20)} ${String(result.api).padStart(3)}  ${String(result.serverApi).padStart(3)}  ${String(result.media).padStart(5)}  ` +
@@ -863,9 +937,10 @@ try {
            `srv` deliberately cannot satisfy the floor on its own: a step's server tally picks up
            reads no part of that screen asked for (Next prefetches the sidebar's account link, so
            unrelated screens carry a `get_user_profile`). Keyed on `api + srv` those steps could
-           stop fetching entirely and still pass — measured. So the browser layer carries the floor
-           unless the step genuinely had no browser reads to begin with. */
-        if (was.api > 0 && step.api === 0) {
+           stop fetching entirely and still pass — measured. A matching content read at r0 is
+           different: it proves this very screen loaded its content on the server. In that case
+           an idle announcement missing the observation window cannot make the screen fail. */
+        if (was.api > 0 && step.api === 0 && step.contentRound !== 0) {
           fail(name, `${step.label} now sends no browser requests at all — the screen is not loading`);
         } else if (wasTotal > 0 && stepTotal === 0) {
           fail(name, `${step.label} now sends no requests at all — the screen is not loading`);

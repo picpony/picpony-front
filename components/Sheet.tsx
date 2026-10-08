@@ -4,33 +4,44 @@
    one path where a change in memoised identity changes when the GSAP context is torn down. Lift
    it with the tab and hero probes as guardrails. */'use no memo';
 
-import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Observer, gsap, spring, useGSAP } from '@/lib/motion';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
 import {
-  useEscapeToClose,
   useExitAnimation,
-  useFocusTrap,
+  useOverlayLayer,
   useMounted,
   useScrollLock,
+  OverlayLayerContext,
 } from '@/lib/overlay';
 
 interface SheetProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
+  /** The sheet's name when it shows no `title`. */
+  'aria-label'?: string;
   children: ReactNode;
   /** Cap the panel's height. A sheet taller than this is a dialog. */
   maxHeight?: string;
   closeOnOverlayClick?: boolean;
+  /** Esc — and the system Back, which follows the same rule. */
   closeOnEscape?: boolean;
+  /** Whether the system/browser Back closes the sheet (`lib/historyLayers.ts`). On by default. */
+  closeOnBack?: boolean;
   bodyClassName?: string;
   className?: string;
   /** Hide the drag handle for a sheet that is not draggable (rare). */
   hideHandle?: boolean;
+  /**
+   * Fires once the panel has left — `Modal`'s twin. For content that must hold still while the
+   * sheet goes (a cart that was just checked out keeps its lines on the way down) and only then
+   * reset.
+   */
+  onExited?: () => void;
 }
 
 /** Fraction of the panel's height you must cross for a slow drag to dismiss. */
@@ -61,31 +72,50 @@ const EXIT_MS = SPRING_MS.defaultEffects;
  * the body is at the top, so a long list scrolls normally and only pulls the sheet
  * once it has nothing left to scroll.
  *
- * Focus, Escape and the refcounted scroll lock come from `lib/overlay.ts`, shared
- * with `Modal`.
+ * Focus, Escape, Back and the refcounted scroll lock come from `lib/overlay.ts`,
+ * shared with `Modal`.
  */
 export default function Sheet({
   isOpen,
   onClose,
   title,
+  'aria-label': ariaLabel,
   children,
   maxHeight = 'max-h-[85dvh]',
   closeOnOverlayClick = true,
   closeOnEscape = true,
+  closeOnBack = true,
   bodyClassName = '',
   className = '',
   hideHandle = false,
+  onExited,
 }: SheetProps) {
   const mounted = useMounted();
   const rendering = useExitAnimation(isOpen, EXIT_MS);
+  const exited = useRef(onExited);
+  useLayoutEffect(() => {
+    exited.current = onExited;
+  });
+  /* The exit hold is the wall-clock bound at the slowest speed (`useExitAnimation`), so the panel
+     is off screen by the time `rendering` falls. */
+  const wasRendering = useRef(rendering);
+  useEffect(() => {
+    if (wasRendering.current && !rendering) exited.current?.();
+    wasRendering.current = rendering;
+  }, [rendering]);
   const panelRef = useRef<HTMLDivElement>(null);
+  const placedPanel = useRef<HTMLDivElement | null>(null);
+  const enterFrame = useRef(0);
   const scrimRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
   useScrollLock(isOpen);
-  useFocusTrap(isOpen, panelRef);
-  useEscapeToClose(isOpen, onClose, closeOnEscape);
+  const layer = useOverlayLayer(isOpen && mounted && rendering, panelRef, {
+    onClose,
+    closeOnEscape,
+    history: closeOnBack,
+  });
 
   const handleClose = useCallback(() => onClose(), [onClose]);
   /* Read through a ref inside the Observer, for the reason `useDrawerSwipe`
@@ -98,6 +128,19 @@ export default function Sheet({
   useEffect(() => {
     onCloseRef.current = onClose;
   });
+  /* `isOpen` for the drag, `useDrawerSwipe`'s shape: written in a layout effect, in the commit
+     that changes it, and a change made elsewhere while a finger holds the panel — Back, Esc, the
+     caller — handed to the gesture there (`interrupt`). The enter/exit tween already carries the
+     panel from where it is to React's state, so the gesture only has to end: it used to follow
+     the finger for the rest of the exit hold, the panel jumping back up under it with the scrim
+     returning, and its release then sprang the leaving sheet open or asked to close it again. */
+  const openRef = useRef(isOpen);
+  const interrupt = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const changed = openRef.current !== isOpen;
+    openRef.current = isOpen;
+    if (changed) interrupt.current?.();
+  });
 
   /* Enter and exit, on `default-effects` both ways — the spring
    * `ModalBottomSheet.kt` assigns.
@@ -106,12 +149,30 @@ export default function Sheet({
    * panel to its unanimated position — which for the enter tween is off-screen —
    * in the same frame the exit is trying to start from rest. */
   useGSAP(
-    () => {
+    (_context, contextSafe) => {
+      /* This hook does not revert on update (see above), so a returned cleanup would only
+         run at unmount: the pending start is cancelled here, by the next run. */
+      cancelAnimationFrame(enterFrame.current);
+      enterFrame.current = 0;
       const panel = panelRef.current;
       const scrim = scrimRef.current;
-      if (!panel || !rendering) return;
+      if (!rendering) {
+        placedPanel.current = null;
+        return;
+      }
+      if (!panel) return;
+
+      /* Seed only a newly mounted surface. Reopening during its exit keeps the
+         current pose; a fromTo here sent it back to the bottom edge first. */
+      if (placedPanel.current !== panel) {
+        placedPanel.current = panel;
+        gsap.set(panel, { y: '100%' });
+        if (scrim) gsap.set(scrim, { opacity: 0 });
+      }
 
       if (motionTier() === 'off') {
+        gsap.killTweensOf(panel);
+        if (scrim) gsap.killTweensOf(scrim);
         gsap.set(panel, { y: isOpen ? 0 : '100%' });
         if (scrim) gsap.set(scrim, { opacity: isOpen ? 1 : 0 });
         return;
@@ -120,26 +181,26 @@ export default function Sheet({
       /* The reduced tier rises like the standard one. `defaultEffects` is
          critically damped (no overshoot to remove), and a panel that appears in
          the middle of the screen without arriving from anywhere reads as a
-         dialog — the travel *is* what says which edge it belongs to. */
-      if (isOpen) {
-        gsap.fromTo(panel, { y: '100%' }, { y: 0, ...spring('defaultEffects'), overwrite: true });
+         dialog — the travel *is* what says which edge it belongs to.
+
+         Started from the next frame, not from this effect: the sheet mounts in the
+         same commit as whatever opened it, and a tween created here took its start
+         time before that commit's work — a 380ms stall was consumed as elapsed
+         motion, so the first frame drawn was the panel already docked. From the
+         first frame the browser can produce, a stall only delays the travel. */
+      const start = contextSafe!(() => {
+        enterFrame.current = 0;
+        gsap.to(panel, { y: isOpen ? 0 : '100%', ...spring('defaultEffects'), overwrite: true });
+        /* The panel's clock: the scrim is the other half of this same movement. */
         if (scrim)
-          gsap.fromTo(
-            scrim,
-            { opacity: 0 },
-            /* The panel's clock, not a shorter one of its own: the scrim is the
-               other half of the sheet arriving, so finishing first left the sheet
-               still rising over an already-settled dim. */
-            { opacity: 1, ...spring('defaultEffects'), overwrite: true },
-          );
-      } else {
-        gsap.to(panel, { y: '100%', ...spring('defaultEffects'), overwrite: true });
-        if (scrim)
-          gsap.to(scrim, { opacity: 0, ...spring('defaultEffects'), overwrite: true });
-      }
+          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...spring('defaultEffects'), overwrite: true });
+      });
+      if (isOpen) enterFrame.current = requestAnimationFrame(start);
+      else start();
     },
     { dependencies: [isOpen, rendering] },
   );
+  useEffect(() => () => cancelAnimationFrame(enterFrame.current), []);
 
   /* Drag to dismiss. Separate hook from the tweens above because this one has a
      real teardown — an Observer on the panel — and therefore genuinely needs
@@ -157,6 +218,7 @@ export default function Sheet({
       if (!panel || !rendering) return;
 
       let height = 0;
+      let originY = 0;
       let active = false;
       let pending = false;
 
@@ -214,6 +276,14 @@ export default function Sheet({
         });
       });
 
+      /* Closed (or reopened) from elsewhere mid-gesture: the drag is over, and its release, when
+         the finger lifts, finds nothing to do. A release already springing is turned round by
+         the exit tween's `overwrite`. */
+      interrupt.current = () => {
+        active = false;
+        pending = false;
+      };
+
       const observer = Observer.create({
         target: panel,
         // Touch only, like the drawer. A pointer-drag on desktop would fight
@@ -223,13 +293,14 @@ export default function Sheet({
         lockAxis: true,
         tolerance: 4,
         ignore: '[data-no-sheet-drag]',
-        onDragStart: () => {
+        onDragStart: (self) => {
           /* A sheet whose body is scrolled is being read, not dragged. Only once
              it has nothing left to scroll does a downward pull belong to the
              sheet. Anything outside the scroller — the handle, the header — can
-             always start a drag. */
+             always start a drag. A leaving sheet takes none. */
           const body = bodyRef.current;
-          pending = !body || body.scrollTop <= 0;
+          const fromBody = self.event.target instanceof Node && body?.contains(self.event.target);
+          pending = openRef.current && (!fromBody || !body || body.scrollTop <= 0);
         },
         onDrag: (self) => {
           if (pending) {
@@ -237,6 +308,12 @@ export default function Sheet({
             if (self.axis === 'y') {
               height = panel.offsetHeight;
               if (height <= 0) return;
+              /* The finger takes over from an entrance or a previous release.
+                 Stop those clocks before writing positions, and preserve the
+                 current offset so grabbing a moving sheet does not snap it home. */
+              originY = Number(gsap.getProperty(panel, 'y')) || 0;
+              gsap.killTweensOf(panel);
+              if (scrimRef.current) gsap.killTweensOf(scrimRef.current);
               active = true;
               pending = false;
             } else if (self.axis === 'x') {
@@ -249,7 +326,7 @@ export default function Sheet({
           if (!active) return;
           // Downward only. Clamped at 0 so an upward drag does not lift the
           // sheet off its dock and expose the page beneath it.
-          place(gsap.utils.clamp(0, height, (self.y ?? 0) - (self.startY ?? 0)));
+          place(gsap.utils.clamp(0, height, originY + (self.y ?? 0) - (self.startY ?? 0)));
         },
         onDragEnd: (self) => {
           pending = false;
@@ -260,7 +337,10 @@ export default function Sheet({
         },
       });
 
-      return () => observer.kill();
+      return () => {
+        observer.kill();
+        interrupt.current = null;
+      };
     },
     { dependencies: [rendering], revertOnUpdate: true },
   );
@@ -268,7 +348,9 @@ export default function Sheet({
   if (!mounted || !rendering) return null;
 
   return createPortal(
+    <OverlayLayerContext.Provider value={layer}>
     <div
+      style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
       /* A sheet is a dialog that docks to the bottom edge, so it shares the
          dialog layer — see the stacking-order block in globals.css. */
       className={cn('fixed inset-0 flex flex-col justify-end z-dialog')}
@@ -288,9 +370,10 @@ export default function Sheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : (ariaLabel ?? '对话框')}
         tabIndex={-1}
         className={cn(
-          'relative flex w-full flex-col overflow-hidden outline-none',
+          'relative flex w-full flex-col overflow-hidden focus-visible:outline-hidden',
           /* `shadow-e1`, not `e3`: M3 puts the modal bottom sheet at elevation
              level 1. Level 3 is the dialog/FAB/search step — a heavier shadow
              than the thing a sheet is a quieter alternative to. */
@@ -307,12 +390,15 @@ export default function Sheet({
              touch strip — the spec's unmodified `OnSurfaceVariant` (no alpha) at
              the touch-target floor, so the one affordance telling a phone user
              this panel can be pushed back down is at full strength. */
-          <div className="flex h-12 shrink-0 items-center justify-center" aria-hidden="true">
+          /* No browser touch action on the strip or the title: the drag is the
+             sheet's, and a downward pan that reached the browser as well would start
+             its overscroll glow or pull-to-refresh under the finger. */
+          <div className="flex h-12 shrink-0 touch-none items-center justify-center" aria-hidden="true">
             <span className="bg-on-surface-variant h-1 w-8 rounded-full" />
           </div>
         )}
         {title && (
-          <h2 id={titleId} className="text-title-l text-on-surface shrink-0 px-6 pt-1 pb-3">
+          <h2 id={titleId} className="text-title-l text-on-surface shrink-0 touch-none px-6 pt-1 pb-3">
             {title}
           </h2>
         )}
@@ -322,7 +408,12 @@ export default function Sheet({
              scrolls, so anything inside that wants to scroll to an element has to
              find this rather than the page behind the sheet. */
           data-app-scroll-container
-          className={cn('popover-scrollbar min-h-0 flex-1 overflow-y-auto', bodyClassName || 'px-6')}
+          /* Overscroll is contained: a list that reaches its end keeps the rest of
+             the fling rather than handing it to the page (or the browser) beneath. */
+          className={cn(
+            'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
+            bodyClassName || 'px-6',
+          )}
         >
           {children}
         </div>
@@ -331,7 +422,8 @@ export default function Sheet({
             the sheet would otherwise carry 34px of dead space. */}
         <div className="h-[max(1rem,env(safe-area-inset-bottom))] shrink-0" />
       </div>
-    </div>,
+    </div>
+    </OverlayLayerContext.Provider>,
     document.body,
   );
 }

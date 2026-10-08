@@ -1,14 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MdRotateRight, MdZoomIn, MdZoomOut, MdRestartAlt } from 'react-icons/md';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import Slider from '@/components/Slider';
 import Spinner from '@/components/Spinner';
+import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
+import { apiErrorMessage } from '@/lib/api/errors';
 import { ICON } from '@/lib/icons';
+import { clamp } from '@/lib/utils';
 
 export type CropShape = 'circle' | 'rect';
 
@@ -30,6 +33,16 @@ interface ImageCropperProps {
 
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.2;
+/**
+ * Wheel zoom is proportional to the distance scrolled, not a fixed step per event: a mouse
+ * notch (about 100px) is roughly one button step, and a trackpad's stream of small deltas
+ * glides instead of slamming to the limit in one swipe — twelve 3px ticks used to add 2.4.
+ * A trackpad pinch arrives as wheel events with `ctrlKey` and much smaller deltas.
+ */
+const WHEEL_ZOOM_RATE = 0.002;
+const PINCH_WHEEL_ZOOM_RATE = 0.01;
+/** Arrow-key pan, in CSS pixels; Shift moves five times as far. */
+const KEY_PAN = 10;
 /** JPEG fallback quality. WebP is tried first and is ~30% smaller at parity. */
 const QUALITY = 0.9;
 
@@ -38,6 +51,12 @@ interface View {
   x: number;
   y: number;
   rotation: number;
+}
+
+/** A point on the stage, relative to the crop window's centre (the geometry's origin). */
+interface Point {
+  x: number;
+  y: number;
 }
 
 const INITIAL: View = { zoom: 1, x: 0, y: 0, rotation: 0 };
@@ -56,7 +75,14 @@ const INITIAL: View = { zoom: 1, x: 0, y: 0, rotation: 0 };
  *
  * Pointer handling is hand-rolled rather than GSAP Draggable: the bounds are a
  * function of zoom and rotation and change on every wheel tick, and pinch needs
- * two-pointer tracking.
+ * two-pointer tracking. Zoom is anchored where it is asked for — under the cursor for
+ * the wheel, between the fingers for a pinch — so the point being looked at stays put;
+ * zooming about the window's centre pushed it out of view.
+ *
+ * **What is on screen outlives the file.** Closing clears `file` at the start of the
+ * dialog's exit, and the picture used to go with it: every exit frame showed the
+ * loading spinner where the image had been, including after each successful upload.
+ * The last file (and its object URL) is kept until the dialog has finished leaving.
  */
 export default function ImageCropper({
   file,
@@ -72,6 +98,22 @@ export default function ImageCropper({
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [view, setView] = useState<View>(INITIAL);
   const [exporting, setExporting] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  /* The file being shown: `file` while open, and the last one through the exit. A new file
+     is a new subject, so the framing is dropped with it — adjusted during render, the
+     supported way to reset on a prop change (an effect would paint one frame of the
+     previous image's zoom). */
+  const [shownFile, setShownFile] = useState(file);
+  if (file && file !== shownFile) {
+    setShownFile(file);
+    setView(INITIAL);
+    setNatural(null);
+    setImageError(false);
+  }
+  const latestFile = useRef(file);
+  useLayoutEffect(() => {
+    latestFile.current = file;
+  });
 
   // Callback ref, not `useRef`: the stage is rendered through Modal's portal,
   // which mounts a tick after `file` is set. A plain ref meant the measuring
@@ -85,28 +127,24 @@ export default function ImageCropper({
   // must not each schedule a render.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const panFrom = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
-  const pinchFrom = useRef<{ dist: number; zoom: number } | null>(null);
+  const pinchFrom = useRef<{ dist: number; zoom: number; mid: Point; x: number; y: number } | null>(null);
 
   const outH = outputHeight ?? Math.round(outputWidth / aspect);
 
   /* ---- source ---------------------------------------------------------- */
-  // Derived, not synced through an effect, so `src` is never briefly stale
-  // against `file`. The URL is revoked by the effect below once it is replaced.
-  const src = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  /* The object URL lives exactly as long as the file on screen: made when a file arrives,
+     revoked when it is replaced or the cropper goes. Made in an effect, not during render —
+     a render can run twice (and does, in development), and a URL made there leaks. It is
+     handed to state a microtask later, the effect body itself setting none; a URL for a
+     file that has already been replaced is never used (`src` checks whose it is). */
+  const [source, setSource] = useState<{ file: File; url: string } | null>(null);
   useEffect(() => {
-    if (!src) return;
-    return () => URL.revokeObjectURL(src);
-  }, [src]);
-
-  // A new file is a new subject: drop the old framing. Adjusting state during
-  // render is the supported way to reset on a prop change — an effect here
-  // would render one frame with the previous image's zoom applied.
-  const [lastFile, setLastFile] = useState(file);
-  if (file !== lastFile) {
-    setLastFile(file);
-    setView(INITIAL);
-    setNatural(null);
-  }
+    if (!shownFile) return;
+    const url = URL.createObjectURL(shownFile);
+    queueMicrotask(() => setSource({ file: shownFile, url }));
+    return () => URL.revokeObjectURL(url);
+  }, [shownFile]);
+  const src = source && source.file === shownFile ? source.url : null;
 
   /* ---- crop window size ------------------------------------------------ */
   useEffect(() => {
@@ -133,7 +171,7 @@ export default function ImageCropper({
   const effH = natural ? (quarterTurned ? natural.w : natural.h) : 0;
   const base = effW && effH && cropBox.w ? Math.max(cropBox.w / effW, cropBox.h / effH) : 1;
 
-  const clamp = useCallback(
+  const constrainView = useCallback(
     (next: View): View => {
       if (!effW || !effH || !cropBox.w) return next;
       const turned = next.rotation % 180 !== 0;
@@ -143,8 +181,8 @@ export default function ImageCropper({
       const maxY = Math.max(0, (h - cropBox.h) / 2);
       return {
         ...next,
-        x: Math.min(maxX, Math.max(-maxX, next.x)),
-        y: Math.min(maxY, Math.max(-maxY, next.y)),
+        x: clamp(next.x, -maxX, maxX),
+        y: clamp(next.y, -maxY, maxY),
       };
     },
     [effW, effH, cropBox.w, cropBox.h, base, natural],
@@ -153,11 +191,46 @@ export default function ImageCropper({
   // Rotation changes `base`, so a pan that was legal a moment ago may not be.
   // Clamping on read rather than in an effect means the displayed value is
   // always in range without a reconciliation pass that could paint out of it.
-  const v = clamp(view);
+  const v = constrainView(view);
   const scale = base * v.zoom;
 
-  const nudgeZoom = (delta: number) =>
-    setView((prev) => clamp({ ...prev, zoom: Math.min(MAX_ZOOM, Math.max(1, prev.zoom + delta)) }));
+  /**
+   * Zoom to `next(zoom)`, keeping the picture point under `anchor` where it is. With
+   * `screen = t + S·R·p`, holding `p` under `anchor` while `S` becomes `S·ratio` needs
+   * `t' = anchor − ratio·(anchor − t)`; no anchor zooms about the window's centre.
+   */
+  const zoomAt = useCallback(
+    (next: (zoom: number) => number, anchor?: Point) => {
+      setView((prev) => {
+        const from = constrainView(prev);
+        const zoom = clamp(next(from.zoom), 1, MAX_ZOOM);
+        if (!anchor || zoom === from.zoom) return constrainView({ ...from, zoom });
+        const ratio = zoom / from.zoom;
+        return constrainView({
+          ...from,
+          zoom,
+          x: anchor.x - (anchor.x - from.x) * ratio,
+          y: anchor.y - (anchor.y - from.y) * ratio,
+        });
+      });
+    },
+    [constrainView],
+  );
+
+  const nudgeZoom = useCallback(
+    (delta: number) => zoomAt((zoom) => zoom + delta),
+    [zoomAt],
+  );
+
+  /** A client position as a point relative to the crop window's centre. */
+  const toStagePoint = useCallback(
+    (clientX: number, clientY: number): Point => {
+      const rect = stage?.getBoundingClientRect();
+      if (!rect) return { x: 0, y: 0 };
+      return { x: clientX - rect.left - rect.width / 2, y: clientY - rect.top - rect.height / 2 };
+    },
+    [stage],
+  );
 
   /* ---- pointer: pan + pinch -------------------------------------------- */
   const onPointerDown = (e: React.PointerEvent) => {
@@ -167,7 +240,13 @@ export default function ImageCropper({
       panFrom.current = { px: e.clientX, py: e.clientY, x: v.x, y: v.y };
     } else if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
-      pinchFrom.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), zoom: v.zoom };
+      pinchFrom.current = {
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        zoom: v.zoom,
+        mid: toStagePoint((a.x + b.x) / 2, (a.y + b.y) / 2),
+        x: v.x,
+        y: v.y,
+      };
       panFrom.current = null;
     }
   };
@@ -178,12 +257,19 @@ export default function ImageCropper({
 
     if (pointers.current.size >= 2 && pinchFrom.current) {
       const [a, b] = [...pointers.current.values()];
+      const start = pinchFrom.current;
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      const ratio = pinchFrom.current.dist > 0 ? dist / pinchFrom.current.dist : 1;
+      const zoom = clamp(start.zoom * (start.dist > 0 ? dist / start.dist : 1), 1, MAX_ZOOM);
+      const ratio = zoom / start.zoom;
+      /* The point that was between the fingers stays between them — wherever they have
+         moved to, so a pinch can pan as it zooms. */
+      const mid = toStagePoint((a.x + b.x) / 2, (a.y + b.y) / 2);
       setView((prev) =>
-        clamp({
+        constrainView({
           ...prev,
-          zoom: Math.min(MAX_ZOOM, Math.max(1, pinchFrom.current!.zoom * ratio)),
+          zoom,
+          x: mid.x - (start.mid.x - start.x) * ratio,
+          y: mid.y - (start.mid.y - start.y) * ratio,
         }),
       );
       return;
@@ -192,7 +278,7 @@ export default function ImageCropper({
     const from = panFrom.current;
     if (!from) return;
     setView((prev) =>
-      clamp({ ...prev, x: from.x + (e.clientX - from.px), y: from.y + (e.clientY - from.py) }),
+      constrainView({ ...prev, x: from.x + (e.clientX - from.px), y: from.y + (e.clientY - from.py) }),
     );
   };
 
@@ -214,24 +300,51 @@ export default function ImageCropper({
     if (!stage || !src) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      nudgeZoom(e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP);
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage.clientHeight : 1;
+      const rate = e.ctrlKey ? PINCH_WHEEL_ZOOM_RATE : WHEEL_ZOOM_RATE;
+      zoomAt((zoom) => zoom * Math.exp(-e.deltaY * unit * rate), toStagePoint(e.clientX, e.clientY));
     };
     stage.addEventListener('wheel', onWheel, { passive: false });
     return () => stage.removeEventListener('wheel', onWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, src, clamp]);
+  }, [stage, src, zoomAt, toStagePoint]);
+
+  /* The keyboard's way to frame the picture: arrows pan it, + and − zoom. The window stays
+     still and the picture moves, as with a drag — an arrow moves the picture that way. */
+  const onStageKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? KEY_PAN * 5 : KEY_PAN;
+    const pan: Record<string, Point> = {
+      ArrowLeft: { x: -step, y: 0 },
+      ArrowRight: { x: step, y: 0 },
+      ArrowUp: { x: 0, y: -step },
+      ArrowDown: { x: 0, y: step },
+    };
+    if (pan[e.key]) {
+      e.preventDefault();
+      const { x, y } = pan[e.key]!;
+      setView((prev) => {
+        const from = constrainView(prev);
+        return constrainView({ ...from, x: from.x + x, y: from.y + y });
+      });
+    } else if (e.key === '+' || e.key === '=') {
+      e.preventDefault();
+      nudgeZoom(ZOOM_STEP);
+    } else if (e.key === '-' || e.key === '_') {
+      e.preventDefault();
+      nudgeZoom(-ZOOM_STEP);
+    }
+  };
 
   /* ---- export ---------------------------------------------------------- */
   const confirm = async () => {
     const img = imgRef.current;
-    if (!img || !natural || !cropBox.w) return;
+    if (!img || !natural || !cropBox.w || imageError || exporting || busy) return;
     setExporting(true);
     try {
       const canvas = document.createElement('canvas');
       canvas.width = outputWidth;
       canvas.height = outH;
       const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('canvas unavailable');
+      if (!ctx) throw new Error('浏览器无法处理此图片');
 
       ctx.imageSmoothingQuality = 'high';
       // Same matrix as the preview, expressed from the crop window's centre.
@@ -253,13 +366,13 @@ export default function ImageCropper({
       if (!blob) throw new Error('导出失败');
       await onCropped(blob);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '裁剪失败', 'error');
+      showToast(apiErrorMessage(err, '裁剪失败'), 'error');
     } finally {
       setExporting(false);
     }
   };
 
-  const ready = Boolean(src && natural && cropBox.w > 0);
+  const ready = Boolean(src && natural && cropBox.w > 0 && !imageError);
   const working = exporting || busy;
 
   return (
@@ -271,25 +384,36 @@ export default function ImageCropper({
       bodyClassName="p-0"
       closeOnOverlayClick={!working}
       closeOnEscape={!working}
+      // The picture has gone with the dialog; its URL can go too (unless a new file arrived).
+      onExited={() => {
+        if (!latestFile.current) setShownFile(null);
+      }}
       footer={
         <>
           <Button variant="text" onClick={onClose} disabled={working}>
             取消
           </Button>
-          <Button variant="filled" onClick={confirm} disabled={!ready || working}>
-            {working ? <Spinner size="sm" tone="on-primary" /> : null}
-            {working ? '处理中…' : '确认'}
+          {/* One label throughout: busy is the spinner inside the same footprint. */}
+          <Button variant="filled" onClick={confirm} disabled={!ready} loading={working}>
+            确认
           </Button>
         </>
       }
     >
       <div
         ref={setStage}
+        role="application"
+        aria-roledescription="裁剪区域"
+        aria-label="拖动或用方向键移动图片，滚轮、双指或加减键缩放"
+        tabIndex={ready ? 0 : -1}
+        onKeyDown={ready ? onStageKeyDown : undefined}
         onPointerDown={ready ? onPointerDown : undefined}
         onPointerMove={ready ? onPointerMove : undefined}
         onPointerUp={ready ? onPointerUp : undefined}
         onPointerCancel={ready ? onPointerUp : undefined}
-        className="relative h-[46vh] min-h-[260px] touch-none overflow-hidden bg-media-stage select-none"
+        /* The stage is a photograph's plate and clips its content, so its focus ring is
+           drawn inward, in the media ring. */
+        className="relative h-[46vh] min-h-[260px] touch-none overflow-hidden bg-media-stage select-none focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-on-media"
         style={{ cursor: ready ? 'grab' : 'default' }}
       >
         {src && (
@@ -299,12 +423,15 @@ export default function ImageCropper({
             src={src}
             alt=""
             draggable={false}
-            onLoad={(e) =>
-              setNatural({
-                w: e.currentTarget.naturalWidth,
-                h: e.currentTarget.naturalHeight,
-              })
-            }
+            onLoad={(e) => {
+              const { naturalWidth, naturalHeight } = e.currentTarget;
+              if (!naturalWidth || !naturalHeight) {
+                setImageError(true);
+                return;
+              }
+              setNatural({ w: naturalWidth, h: naturalHeight });
+            }}
+            onError={() => setImageError(true)}
             className="pointer-events-none absolute top-1/2 left-1/2 max-w-none origin-center"
             style={{
               width: natural?.w,
@@ -315,9 +442,13 @@ export default function ImageCropper({
           />
         )}
 
-        {!ready && (
-          <div className="absolute inset-0 grid place-items-center">
-            <Spinner size="lg" tone="on-primary" />
+        {imageError ? (
+          <div className="absolute inset-0 grid place-items-center bg-surface-container-low">
+            <ErrorRetry size="inline" title="图片无法读取，请选择其他图片" onRetry={onClose} retryLabel="重新选择" />
+          </div>
+        ) : !ready && (
+          <div className="text-on-media absolute inset-0 grid place-items-center">
+            <Spinner size="lg" tone="inherit" />
           </div>
         )}
 
@@ -371,7 +502,7 @@ export default function ImageCropper({
             disabled={!ready}
             aria-label="缩放"
             valueText={(z) => `缩放 ${z.toFixed(2)} 倍`}
-            onValueChange={(zoom) => setView((prev) => clamp({ ...prev, zoom }))}
+            onValueChange={(zoom) => setView((prev) => constrainView({ ...prev, zoom }))}
             className="min-w-32 flex-1 sm:w-40"
           />
           <IconButton
@@ -386,10 +517,10 @@ export default function ImageCropper({
           <Button
             variant="text"
             size="xs"
-            icon={<MdRotateRight size={ICON.dense} />}
+            icon={<MdRotateRight />}
             disabled={!ready}
             onClick={() =>
-              setView((prev) => clamp({ ...prev, rotation: (prev.rotation + 90) % 360 }))
+              setView((prev) => constrainView({ ...prev, rotation: (prev.rotation + 90) % 360 }))
             }
           >
             旋转
@@ -397,7 +528,7 @@ export default function ImageCropper({
           <Button
             variant="text"
             size="xs"
-            icon={<MdRestartAlt size={ICON.dense} />}
+            icon={<MdRestartAlt />}
             disabled={!ready}
             onClick={() => setView(INITIAL)}
           >

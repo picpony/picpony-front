@@ -1,372 +1,169 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
-import { MdCollectionsBookmark, MdKey } from 'react-icons/md';
-import { PonyImage } from '@/lib/api';
-import { useAuth, useDeferredLoading } from '@/lib/hooks';
-import { useAuthModal } from '@/components/AuthModal';
-import MasonryGrid from '@/components/MasonryGrid';
-import ImageGridSkeleton from '@/components/ImageGridSkeleton';
-import ErrorRetry from '@/components/ErrorRetry';
-import EmptyState from '@/components/EmptyState';
-import Button from '@/components/Button';
-import { LoadMoreButton } from '@/components/Pagination';
+import { Suspense, useEffect, useState } from 'react';
+import { SKIP, useResource } from '@/lib/resource';
+import { faveFolders, faveIds, sessionUser } from '@/lib/resources';
+import { isFavoritesTab, type FavoritesTab } from '@/lib/favorites';
+import { useSession } from '@/lib/hooks';
+import { useSyncedSetting } from '@/lib/settingsSync';
+import { formatCount } from '@/lib/format';
+import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
+import PageHeader from '@/components/PageHeader';
+import SignInRequired from '@/components/SignInRequired';
+import Skeleton from '@/components/Skeleton';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
-import { useRouter } from 'next/navigation';
-import { applyImageLine, proxyFetch, readJson } from '@/lib/api/client';
-import { faveIds as faveIdsResource, imagesByIds, sessionUser } from '@/lib/resources';
-import { DERPIBOORU_API_BASE } from '@/lib/constants';
-import PageHeader from '@/components/PageHeader';
-import { ICON } from '@/lib/icons';
+import { FolderGridSkeleton } from '@/components/favorites/FolderCard';
+import FoldersPane from './FoldersPane';
+import DerpiPane from './DerpiPane';
+import PrivacyPane from './PrivacyPane';
+import { dropQueuedFavoritesAddress, favoritesTabs, landingTab, replaceFavoritesAddress } from './tabs';
+import { useShowPrivacyTab } from './privacyTabHint';
 
-const PAGE_SIZE = 50;
-const DERPI_SEARCH = `${DERPIBOORU_API_BASE}/search/images`;
-const DERPI_FAVES_QUERY =
-  '(my:faves), -explicit, -questionable, -suggestive, -grotesque, -grimdark, -spoiler, -anthro, -humanized, pony';
-
-type FaveSource = 'picpony' | 'derpibooru';
-
-/** Shared chrome, so the loading, error and content states cannot drift apart. */
-function PageShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto max-w-7xl">
-      <PageHeader title="我的收藏" />
-      {children}
-    </div>
-  );
-}
+const TAB_ROW_LABEL = '收藏';
 
 /**
- * One tab's worth of favourites, with its own fetch state.
+ * 我的收藏 — one screen, three tabs: **收藏夹** (your folders, each its own page), **Derpibooru**
+ * (`my:faves`) and **隐私空间** (offered while 显示隐私空间 is on). The header counts what you have.
  *
- * Parameterising by `source` and mounting it twice is what makes the shared-axis tab
- * transition possible: with one shared `images` array, switching tabs replaced the old
- * content before the slide could show it leaving. Each pane keeps its own images, page
- * number and error — so switching back no longer refetches, and no longer re-reads
- * `/user` for the API key.
+ * Signed out it is the one sign-in state (decision 4, R5-021): nothing opens by itself, and no
+ * tab claims an empty list. While the session is unknown the screen shows its own shape — the
+ * header, the tab row, the folder cards — with nothing in between (R5-022).
+ *
+ * The panes lean (decision 25): each is static once its first read is in, and a pane still on its
+ * first-load placeholder marks it (`data-page-loading`), which the lean stands down for.
  */
-function FavoritesPane({ source }: { source: FaveSource }) {
-  const [images, setImages] = useState<PonyImage[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const [faveIds, setFaveIds] = useState<number[]>([]);
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const router = useRouter();
-  const { getUserInfo } = useAuth();
-  const { openAuth } = useAuthModal();
-
-  /* Every request carries the generation it was issued in. A tab switch, a retry or an
-     unmount bumps it, so a slow response from a previous generation is discarded rather
-     than racing the current one on `setImages` — both loaders used to write
-     unconditionally, so switching tabs twice quickly could leave Derpibooru results
-     under the PicPony tab. */
-  const generation = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const isStale = useCallback((run: number) => generation.current !== run, []);
-
-  const searchDerpi = useCallback(
-    async (query: string, targetPage: number, key: string | null, signal: AbortSignal) => {
-      const params = new URLSearchParams({
-        q: query,
-        page: String(targetPage),
-        per_page: String(PAGE_SIZE),
-      });
-      if (key) {
-        params.set('sf', 'created_at');
-        params.set('sd', 'desc');
-        params.set('key', key);
-      }
-      /* Through `proxyFetch` so a forced API line reaches this list too — the one
-         Derpibooru read on a page of its own, and the last one still going direct. */
-      const res = await proxyFetch(`${DERPI_SEARCH}?${params}`, { cache: 'no-store', signal });
-      if (!res.ok) {
-        const err = new Error(
-          res.status === 429 ? '您的请求次数过快，超出原站限制' : `HTTP Error ${res.status}`,
-        );
-        throw err;
-      }
-      const data = (await readJson(res)) as { images: PonyImage[] };
-      return { images: (data.images ?? []).map(applyImageLine) };
-    },
-    [],
-  );
-
-  /** Appends without duplicating; page 1 replaces. */
-  const commit = useCallback((next: PonyImage[], targetPage: number) => {
-    if (targetPage === 1) {
-      setImages(next);
-      return;
-    }
-    setImages((prev) => {
-      const seen = new Set(prev.map((img) => img.id));
-      return [...prev, ...next.filter((img) => !seen.has(img.id))];
-    });
-  }, []);
-
-  const loadDerpibooruFaves = useCallback(
-    async (key: string, targetPage: number, run: number, signal: AbortSignal) => {
-      try {
-        const data = await searchDerpi(DERPI_FAVES_QUERY, targetPage, key, signal);
-        if (isStale(run)) return;
-        commit(data.images, targetPage);
-        setPage(targetPage);
-        setHasMore(data.images.length === PAGE_SIZE);
-      } catch (err) {
-        if (signal.aborted || isStale(run)) return;
-        console.error('Failed to load Derpibooru favorites:', err);
-        if (targetPage === 1) setError(err as Error);
-      } finally {
-        if (!isStale(run)) {
-          setIsLoading(false);
-          setIsLoadingMore(false);
-        }
-      }
-    },
-    [searchDerpi, commit, isStale],
-  );
-
-  const loadImages = useCallback(
-    async (ids: number[], targetPage: number, run: number, signal: AbortSignal) => {
-      try {
-        const idsForPage = ids.slice((targetPage - 1) * PAGE_SIZE, targetPage * PAGE_SIZE);
-        if (idsForPage.length === 0) {
-          if (!isStale(run)) setHasMore(false);
-          return;
-        }
-
-        /* Through the shared resource rather than a bare search, so a second visit to this
-           screen costs nothing — the same `id:X OR id:Y` query `searchImagesByIds` builds.
-           The favourite order is restored below because the API answers in its own. */
-        const data = await imagesByIds.read({ ids: idsForPage, page: 1, perPage: PAGE_SIZE });
-        if (isStale(run)) return;
-
-        // The API returns them in its own order; restore the favourite order.
-        const rank = new Map(idsForPage.map((id, index) => [id, index]));
-        const sorted = [...data.images].sort(
-          (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
-        );
-
-        commit(sorted, targetPage);
-        setPage(targetPage);
-        setHasMore(targetPage * PAGE_SIZE < ids.length);
-      } catch (err) {
-        if (signal.aborted || isStale(run)) return;
-        console.error('Failed to load image details:', err);
-        if (targetPage === 1) setError(err as Error);
-      } finally {
-        if (!isStale(run)) {
-          setIsLoading(false);
-          setIsLoadingMore(false);
-        }
-      }
-    },
-    [commit, isStale],
-  );
-
-  useEffect(() => {
-    const run = (generation.current += 1);
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const { signal } = controller;
-
-    const fetchFaves = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const userInfo = getUserInfo();
-        if (!userInfo) {
-          // Without this the flag stayed true and the page sat on a skeleton for as
-          // long as the redirect took — or forever, if it was blocked.
-          setIsLoading(false);
-          openAuth('login');
-          return;
-        }
-
-        /* The shared session, not a second `get_user`: the shell already reads it and
-           holds it for five minutes, so this is a cache hit and the Derpibooru key
-           arrives without a request (this screen used to send `get_user` twice on every
-           cold load, the second a whole round in front of the list). */
-        const sessionResult = await sessionUser.read({ token: userInfo.token });
-        if (isStale(run)) return;
-        const currentApiKey =
-          sessionResult.kind === 'ok'
-            ? ((sessionResult.user as { api_key?: string }).api_key ?? null)
-            : null;
-        setApiKey(currentApiKey);
-
-        if (source === 'picpony') {
-          /* Shared with the profile page's favourites tab, so opening one after the
-             other costs one read rather than two. */
-          const ids = await faveIdsResource.read({ token: userInfo.token });
-          if (isStale(run)) return;
-          setFaveIds(ids);
-          if (ids.length === 0) {
-            setImages([]);
-            setHasMore(false);
-            setIsLoading(false);
-            return;
-          }
-          await loadImages(ids, 1, run, signal);
-          return;
-        }
-
-        if (!currentApiKey) {
-          setImages([]);
-          setHasMore(false);
-          setIsLoading(false);
-          return;
-        }
-        await loadDerpibooruFaves(currentApiKey, 1, run, signal);
-      } catch (err) {
-        if (signal.aborted || isStale(run)) return;
-        setError(err as Error);
-        setIsLoading(false);
-      }
-    };
-
-    void fetchFaves();
-
-    return () => {
-      // Bumping the generation is what actually silences in-flight writes; the
-      // abort only saves the network round trip.
-      generation.current += 1;
-      controller.abort();
-    };
-  }, [retryCount, source, router, getUserInfo, openAuth, isStale, loadImages, loadDerpibooruFaves]);
-
-  const loadMore = () => {
-    if (isLoadingMore || !hasMore) return;
-    const controller = abortRef.current;
-    if (!controller || controller.signal.aborted) return;
-    setIsLoadingMore(true);
-    if (source === 'picpony') {
-      void loadImages(faveIds, page + 1, generation.current, controller.signal);
-    } else if (apiKey) {
-      void loadDerpibooruFaves(apiKey, page + 1, generation.current, controller.signal);
-    }
-  };
-
-  const hasContent = images.length > 0;
-  // Held back so a warm response never flashes the placeholder, and held on so
-  // it cannot appear for a single frame.
-  const showSkeleton = useDeferredLoading(isLoading);
-
-  /* Every branch below returns pane content only — no `PageShell`, no tab bar. Those are
-     the parent's, and they have to be: both panes are mounted at once, so rendering the
-     shell per branch would put two page headings and two tab bars on screen for the
-     length of a switch. `size="pane"` on the two status blocks for the same reason. */
-  if (error && !hasContent) {
-    return (
-      <ErrorRetry
-        size="pane"
-        title="收藏加载失败"
-        message={error.message}
-        onRetry={() => setRetryCount((c) => c + 1)}
-      />
-    );
-  }
-
-  // Only a first load swaps in the placeholder. Once there is content it stays mounted
-  // and dims, so the grid never unmounts mid-session — unmounting it collapses the
-  // scroll container and the browser clamps scrollTop.
-  if (!hasContent && isLoading) {
-    return showSkeleton ? <ImageGridSkeleton /> : null;
-  }
-
-  if (source === 'derpibooru' && !apiKey) {
-    return (
-      <EmptyState
-        size="pane"
-        icon={<MdKey size={ICON.display} />}
-        title="未绑定 API Key"
-        description="您需要绑定 Derpibooru API Key 才能查看 Derpibooru 的收藏数据"
-        action={
-          <Button variant="filled" onClick={() => router.push('/settings', { scroll: false })}>
-            去绑定
-          </Button>
-        }
-      />
-    );
-  }
-
-  if (!hasContent) {
-    return (
-      <EmptyState
-        size="pane"
-        icon={<MdCollectionsBookmark size={ICON.display} />}
-        title="还没有收藏任何图片"
-        description="在图片详情页点一下收藏，就会出现在这里"
-      />
-    );
-  }
-
+export default function FavoritesPage() {
   return (
-    <div
-      aria-busy={isLoading || undefined}
-      className={`transition-opacity duration-standard ease-[var(--ease-standard)] ${
-        isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
-      }`}
-    >
-      <MasonryGrid images={images} />
-      {hasMore && <LoadMoreButton onClick={loadMore} isLoading={isLoadingMore} />}
+    <Suspense fallback={<FavoritesSkeleton />}>
+      <FavoritesSession />
+    </Suspense>
+  );
+}
+
+function FavoritesSession() {
+  const { ready, token } = useSession();
+  if (!ready) return <FavoritesSkeleton />;
+  if (!token) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <PageHeader title="我的收藏" />
+        <SignInRequired size="pane" description="登录后即可查看和管理你的收藏" />
+      </div>
+    );
+  }
+  /* One instance per account: another account starts with its own tabs and panes. */
+  return <FavoritesScreen key={token} token={token} />;
+}
+
+/* The tab labels' own widths at `title-s`: three Han characters, ten Latin letters, four Han. */
+const TAB_LABEL_WIDTHS = ['w-10', 'w-19', 'w-14'] as const;
+
+/**
+ * The screen's own shape while the session is unknown: the header, the tab row, the cards. The
+ * row is the tabs' own — a label per tab, 48dp tall over the divider — not a filled box: an
+ * underline row has no container, and the box became three words and a line when it landed
+ * (G3-028).
+ */
+function FavoritesSkeleton() {
+  /* The server's count until hydration has run: the row it drew is the row that stays. */
+  const showPrivacy = useShowPrivacyTab(useSyncedSetting('showPrivacyFaves'));
+  return (
+    <div className="mx-auto max-w-7xl" data-page-loading="">
+      <div className="mb-6 flex flex-col gap-2">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-4 w-48" />
+      </div>
+      <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
+        {TAB_LABEL_WIDTHS.slice(0, favoritesTabs(showPrivacy).length).map((width) => (
+          <span key={width} className="px-4">
+            <Skeleton className={`h-4 ${width}`} />
+          </span>
+        ))}
+      </div>
+      <FolderGridSkeleton />
     </div>
   );
 }
 
-function FavoritesTabs() {
-  const [activeTab, setActiveTab] = useState<FaveSource>('picpony');
-  /* The Derpibooru pane is mounted on first use rather than up front, so a page load
-     costs one list request instead of two — and then stays mounted, which keeps its
-     results and scroll position across later switches. Its place in the sequence is
-     fixed either way: `useTabPanes` derives the slide's direction from DOM order. */
-  const [derpiMounted, setDerpiMounted] = useState(false);
+function FavoritesScreen({ token }: { token: string }) {
+  const showPrivacy = useSyncedSetting('showPrivacyFaves');
+  const account = useResource(sessionUser, { token });
+  const tabParam = useBackgroundSearchParams().get('tab');
+  const requested = isFavoritesTab(tabParam) ? tabParam : null;
+  const [tab, setTab] = useState<FavoritesTab>(() => landingTab(requested ?? 'folders', showPrivacy));
+
+  /* A link followed while the screen is up selects its tab. */
+  const [seen, setSeen] = useState(requested);
+  if (seen !== requested) {
+    setSeen(requested);
+    if (requested && requested !== tab) setTab(landingTab(requested, showPrivacy));
+  }
+  /* 隐私空间 switched off while it was on screen: the row no longer offers it. A request for it
+     kept from before the setting was read (a cold load) opens it once it is offered. */
+  if (landingTab(tab, showPrivacy) !== tab) setTab(landingTab(tab, showPrivacy));
+  const [pending, setPending] = useState<FavoritesTab | null>(() =>
+    requested && landingTab(requested, showPrivacy) !== requested ? requested : null,
+  );
+  if (pending && account.data && !showPrivacy) setPending(null);
+  if (pending && landingTab(pending, showPrivacy) === pending) {
+    setPending(null);
+    setTab(pending);
+  }
+  const shown = landingTab(tab, showPrivacy);
+
+  /* The address names the tab on screen; corrected in place when it names one not offered. */
+  useEffect(() => {
+    if (tabParam === null && shown === 'folders') return;
+    if (requested === shown) return;
+    if (pending) return;
+    replaceFavoritesAddress(shown);
+  }, [shown, tabParam, requested, pending]);
+  useEffect(() => dropQueuedFavoritesAddress, []);
+
+  /* A pane is read the first time it is shown, and kept. */
+  const [visited, setVisited] = useState<ReadonlySet<FavoritesTab>>(() => new Set([shown]));
+  if (!visited.has(shown)) setVisited(new Set([...visited, shown]));
+
+  const select = (next: FavoritesTab) => {
+    setPending(null);
+    setTab(next);
+    replaceFavoritesAddress(next);
+  };
+
+  const index = useResource(faveIds, { token });
+  const folders = useResource(faveFolders, visited.has('folders') ? { token } : SKIP);
+  const total = index.data?.ids.length;
+  const folderCount = folders.data?.folders.length;
 
   return (
-    <PageShell>
-      <Tabs
-        className="mb-4"
-        value={activeTab}
-        onChange={(next) => {
-          if (next === 'derpibooru') setDerpiMounted(true);
-          setActiveTab(next);
-        }}
-        label="收藏来源"
-        tabs={[
-          { value: 'picpony' as const, label: 'PicPony' },
-          { value: 'derpibooru' as const, label: 'Derpibooru' },
-        ]}
+    <div className="mx-auto max-w-7xl">
+      <PageHeader
+        title="我的收藏"
+        subtitle={
+          total === undefined ? (
+            <span>正在读取收藏…</span>
+          ) : (
+            <span className="tabular-nums">
+              共 {formatCount(total)} 张收藏{folderCount !== undefined ? `，${formatCount(folderCount)} 个收藏夹` : ''}
+            </span>
+          )
+        }
       />
-      <TabPanes value={activeTab}>
-        <TabPane value="picpony">
-          <FavoritesPane source="picpony" />
+      <Tabs tabs={favoritesTabs(showPrivacy)} value={shown} onChange={select} label={TAB_ROW_LABEL} className="mb-6" />
+      <TabPanes value={shown} lean>
+        <TabPane value="folders">
+          {visited.has('folders') && <FoldersPane token={token} active={shown === 'folders'} />}
         </TabPane>
-        {(derpiMounted || activeTab === 'derpibooru') && (
-          <TabPane value="derpibooru">
-            <FavoritesPane source="derpibooru" />
+        <TabPane value="derpibooru">
+          {visited.has('derpibooru') && <DerpiPane token={token} active={shown === 'derpibooru'} />}
+        </TabPane>
+        {showPrivacy && (
+          <TabPane value="privacy">
+            {visited.has('privacy') && <PrivacyPane token={token} active={shown === 'privacy'} />}
           </TabPane>
         )}
       </TabPanes>
-    </PageShell>
-  );
-}
-
-export default function Favorites() {
-  return (
-    <Suspense
-      fallback={
-        <PageShell>
-          <ImageGridSkeleton />
-        </PageShell>
-      }
-    >
-      <FavoritesTabs />
-    </Suspense>
+    </div>
   );
 }

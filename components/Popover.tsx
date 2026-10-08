@@ -14,46 +14,79 @@ import { createPortal } from 'react-dom';
 import { cn, clamp } from '@/lib/utils';
 import { MEDIA } from '@/lib/constants';
 import { motionTier, scaledMs } from '@/lib/appearance';
-import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
-import { useEscapeToClose, useExitAnimation, useMounted } from '@/lib/overlay';
+import { MENU_TRANSITION } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
+import { springTiming } from '@/lib/springTiming';
+import { OverlayLayerContext, useOverlayLayer, useExitAnimation, useMounted } from '@/lib/overlay';
 
 const MENU_MARGIN = 8;
 const VIEWPORT_PADDING = 12;
 /** 18rem — past this the panel scrolls no matter how much room it has. */
 export const POPOVER_MAX_HEIGHT = 288;
+/**
+ * Below this share of its trigger still on screen, a panel has lost the thing it hangs
+ * off and closes. Half, not "any": a trigger half under the app bar is still the control
+ * you pressed; a sliver is not, and an upward panel above it would be over the bar.
+ */
+const DETACH_BELOW = 0.5;
+
+/**
+ * Every ancestor that clips the anchor — the region it has to stay visible in. The
+ * app scroller is one (it starts below the app bar, so "scrolled under the bar" is
+ * "clipped"), and so is a dialog's scrolling body. A fixed ancestor pins everything
+ * below it to the viewport, so the walk stops there.
+ */
+function clippingAncestors(element: HTMLElement): HTMLElement[] {
+  const found: HTMLElement[] = [];
+  for (let node = element.parentElement; node && node !== document.body; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (style.overflowX !== 'visible' || style.overflowY !== 'visible') found.push(node);
+    if (style.position === 'fixed') break;
+  }
+  return found;
+}
+
+/** How much of `element`'s box is inside the viewport and every one of `clippers`. */
+function visibleFraction(element: HTMLElement, clippers: HTMLElement[]): number {
+  const rect = element.getBoundingClientRect();
+  const area = rect.width * rect.height;
+  if (area <= 0) return 0;
+  let left = Math.max(rect.left, 0);
+  let top = Math.max(rect.top, 0);
+  let right = Math.min(rect.right, window.innerWidth);
+  let bottom = Math.min(rect.bottom, window.innerHeight);
+  for (const clipper of clippers) {
+    const box = clipper.getBoundingClientRect();
+    left = Math.max(left, box.left);
+    top = Math.max(top, box.top);
+    right = Math.min(right, box.right);
+    bottom = Math.min(bottom, box.bottom);
+  }
+  return (Math.max(0, right - left) * Math.max(0, bottom - top)) / area;
+}
 
 /**
  * The height a list of `rows` menu rows will come out at, for `estimatedHeight`.
  *
- * A menu row is M3's 40dp item under a pointer and grows to the 48dp touch floor under
- * a finger (`touch-size` on the row), so the estimate has to read the same axis or
+ * A menu row has a 40dp minimum under a fine pointer and 48dp under a coarse one,
+ * so the estimate has to read the same density axis or
  * `Popover` picks its side against the wrong number and flips the panel on the way in.
- * The 8px is the container's own vertical padding. The one place this arithmetic lives.
+ * Include the 2dp row gaps and the 8dp padding at each end of the container.
  */
-export function estimateMenuHeight(rows: number): number {
+export function estimateMenuHeight(rows: number, rowHeight?: number): number {
   const coarse =
     typeof window !== 'undefined' && window.matchMedia(MEDIA.pointerCoarse).matches;
-  return rows * (coarse ? 48 : 40) + 8 * 2;
+  return rows * (rowHeight ?? (coarse ? 48 : 40)) + Math.max(0, rows - 1) * 2 + 8 * 2;
 }
 
-/* Container-transform timings.
+/* The list opens out of its trigger, like Vuetify's VMenu. Its clock remains
+ * the application's shared short/state pair: 200ms enter, 150ms exit, with the
+ * user's speed scale. The arrangement is borrowed; the literal durations are not.
  *
- * The **fast** tier, both halves — what `Menu.kt` reaches for: `FastSpatial` for the
- * container, `FastEffects` for what is inside it. A menu is the fastest floating
- * surface in the system; the default tier opened every menu one step slower.
- * The exit is the same `FastEffects` spring, not a curve: component motion, not a
- * screen transition, and ζ=1 guarantees no bounce back into view.
- *
- * Spelled out as literals rather than CSS tokens because they are handed to Web
- * Animations as `easing:` strings, where a failed `var()` silently falls back to
- * `ease`. `lib/spring.ts` generates them from the same closed form as the CSS
- * tables, so the two cannot drift. */
-const ENTER_MS = SPRING_MS.fastSpatial;
-const ENTER_EASING = springToLinear(SPRINGS.fastSpatial);
-const ROW_MS = SPRING_MS.fastEffects;
-const ROW_EASING = springToLinear(SPRINGS.fastEffects);
-const EXIT_MS = SPRING_MS.fastEffects;
-const EXIT_EASING = springToLinear(SPRINGS.fastEffects);
+ * Menu duration and easing are one pair; the search view keeps FastEffects.
+ * Reduced motion removes the travel. The exit hold uses the
+ * unscaled duration because useExitAnimation applies the maximum speed itself. */
+const EXIT_MS = MENU_TRANSITION.exit.duration;
 
 export interface PopoverHandle {
   /** The panel element, for callers that need to measure or scroll it. */
@@ -76,13 +109,12 @@ interface PopoverProps {
   estimatedHeight?: number;
   /** Cap on the panel's height. */
   maxHeight?: number;
-  /** Panel takes at least the anchor's width. On by default — a menu hanging
-   *  off a control narrower than itself reads as detached. */
+  /** Match the anchor exactly. Intrinsically sized panels are centred on it. */
   matchAnchorWidth?: boolean;
   /** Extra classes on the panel, for width and inner padding. */
   className?: string;
-  /** Fade the panel's direct children in behind the container morph. */
-  animateChildren?: boolean;
+  /** Search suggestions extend the search bar's material and 28dp silhouette. */
+  variant?: 'menu' | 'search';
   handleRef?: RefObject<PopoverHandle | null>;
   id?: string;
   role?: string;
@@ -92,10 +124,10 @@ interface PopoverProps {
 /**
  * A floating panel anchored to a control.
  *
- * The one recipe for the app's floating surfaces: 4dp corner and `surface-container`
- * (`MenuTokens.ContainerShape` / `ContainerColor`), elevation level 2 (`ContainerElevation`)
- * — the shape-scale and elevation rows "menus" name. No border: the tonal step plus
- * elevation is the whole M3 separation recipe.
+ * Menu surfaces use a 16dp corner, `surface-container` and level 2. The search
+ * variant extends the search bar's 28dp corner and highest container tone,
+ * keeping a restrained level 1 shadow only to explain its overlap with the page.
+ * Both recipes live here so width, material and motion cannot drift at call sites.
  *
  * **What this owns**: the surface, where it goes, how it arrives and leaves, and how
  * it is dismissed. **What it does not own**: the content, or any roving focus inside
@@ -110,7 +142,7 @@ export default function Popover({
   maxHeight = POPOVER_MAX_HEIGHT,
   matchAnchorWidth = true,
   className = '',
-  animateChildren = true,
+  variant = 'menu',
   handleRef,
   id,
   role,
@@ -118,11 +150,15 @@ export default function Popover({
 }: PopoverProps) {
   const mounted = useMounted();
   const panelRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   /* Kept in the tree past `open` so the exit has something to play on. The
      shared hook rather than a hand-rolled flag; `Modal` and `Sheet` hold
      themselves open the same way. */
-  const rendering = useExitAnimation(open, EXIT_MS);
-  const closingRef = useRef(false);
+  const rendering = useExitAnimation(open, variant === 'search' ? SPRING_MS.fastEffects : EXIT_MS);
+  const placedPanel = useRef<HTMLDivElement | null>(null);
+  // measure() runs before placement's state update commits. The entrance needs
+  // that freshly chosen side even on the first upward opening.
+  const opensUp = useRef(false);
   const [placement, setPlacement] = useState({
     top: 0,
     left: 0,
@@ -154,14 +190,19 @@ export default function Popover({
        Testing the space below alone left a six-row panel clamped to two rows
        with a scrollbar over an empty upper half. */
     const up = estimate > spaceBelow && spaceAbove > spaceBelow;
+    opensUp.current = up;
+    const panelWidth = panelRef.current?.offsetWidth;
+    const left = !matchAnchorWidth && panelWidth
+      ? rect.left + (rect.width - panelWidth) / 2
+      : rect.left;
     setPlacement({
       top: up ? rect.top - MENU_MARGIN : rect.bottom + MENU_MARGIN,
-      left: rect.left,
+      left,
       width: rect.width,
       up,
       available: clamp(up ? spaceAbove : spaceBelow, 0, maxHeight),
     });
-  }, [anchorRef, estimatedHeight, maxHeight]);
+  }, [anchorRef, estimatedHeight, maxHeight, matchAnchorWidth]);
 
   /* Measure before the first paint of an opening panel, never after. Writing
      layout back as state from a layout effect is the documented React pattern
@@ -169,7 +210,6 @@ export default function Popover({
      frame. */
   useLayoutEffect(() => {
     if (!open) return;
-    closingRef.current = false;
     measure();
   }, [open, measure]);
 
@@ -182,125 +222,135 @@ export default function Popover({
   useLayoutEffect(() => {
     if (!open || !rendering) return;
     const panel = panelRef.current;
-    if (!panel) return;
+    const anchor = anchorRef.current;
+    if (!panel || !anchor) return;
     const width = panel.offsetWidth;
     const rightLimit = window.innerWidth - VIEWPORT_PADDING - width;
-    const clamped = clamp(placement.left, VIEWPORT_PADDING, rightLimit);
+    const rect = anchor.getBoundingClientRect();
+    const aligned = matchAnchorWidth ? rect.left : rect.left + (rect.width - width) / 2;
+    const clamped = clamp(aligned, VIEWPORT_PADDING, rightLimit);
     if (Math.abs(clamped - placement.left) > 0.5) {
       setPlacement((prev) => ({ ...prev, left: clamped }));
     }
-  }, [open, rendering, placement.left]);
+  }, [open, rendering, placement.left, placement.width, anchorRef, matchAnchorWidth]);
 
-  /* Exit: the reverse container transform, shrinking back into the anchor rather
-     than blinking out. `closingRef` guards it — Escape, an outside press and a
-     commit can all land in one gesture. */
-  useEffect(() => {
-    if (open || !rendering || closingRef.current) return;
-    const panel = panelRef.current;
-    const anchor = anchorRef.current;
-    if (!panel || !anchor || motionTier() === 'off') return;
+  /* One layout effect owns both directions. Cancelling the
+     entrance in a layout cleanup and starting the exit in a passive effect
+     exposed the full-sized panel for a frame. Commit the current pose before
+     cancellation so an interrupted morph and its content keep their place.
 
-    const anchorRect = anchor.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    if (panelRect.width === 0 || panelRect.height === 0) return;
-
-    closingRef.current = true;
-    /* `useExitAnimation` already holds the panel and drops it, so this only has to
-       draw those milliseconds.
-
-       It does have to be cancellable — that is what the cleanup is for. `fill:
-       'forwards'` keeps the last keyframe applied after the animation ends, and
-       `useExitAnimation` reuses the same node when the panel reopens inside the hold:
-       without the cancel, the still-live forwards fill would reassert hidden state on
-       a panel that is now open, so a fast close-then-open left an invisible menu
-       holding the focus trap.
-
-       The reduced tier collapses into the anchor like the standard one. It briefly
-       faded instead, but the shape change *is* the menu — one composited scale on one
-       small panel — and what the tier removes is distance, overshoot and cascade,
-       none of which are here. */
-    const exit = panel.animate(
-      [
-        {},
-        {
-          transform: `scale(${Math.min(1, anchorRect.width / panelRect.width)}, ${Math.min(
-            1,
-            anchorRect.height / panelRect.height,
-          )})`,
-          opacity: 0,
-        },
-      ],
-      { duration: scaledMs(EXIT_MS), easing: EXIT_EASING, fill: 'forwards' },
-    );
-    return () => exit.cancel();
-  }, [open, rendering, anchorRef]);
-
-  /* Enter: an M3 container transform. The panel starts at the anchor's own box
-     — scaled down to it and transparent — and grows into place, while its rows
-     stay invisible for the first third and then fade in behind the morph. That
-     "container morphs, then content arrives" split is the character of an MD3
-     menu opening; a plain fade throws it away.
-
-     Web Animations rather than GSAP: this starts from a measured box, and the
-     backwards fill guarantees the first painted frame is already the scaled one.
-     A tween beginning on the next rAF tick flashes the panel at full size. */
+     The transform is resolved from real trigger and panel geometry. Content
+     becomes visible once the expanding surface is nearly full size and finishes
+     on the same clock; it does not trail after the container. Reduced/search
+     keep one fade, with no independent content animation. */
   useLayoutEffect(() => {
+    if (!mounted || !rendering) {
+      placedPanel.current = null;
+      return;
+    }
     const panel = panelRef.current;
+    const content = contentRef.current;
     const anchor = anchorRef.current;
-    if (!open || !rendering || !panel || !anchor) return;
+    if (!panel || !content || !anchor) return;
+    // Padding gives an unmeasured width: 0 panel a nonzero offsetWidth. Wait
+    // for the anchor width before seeding the first collapsed pose.
+    if (matchAnchorWidth && placement.width <= 0) return;
+
+    const width = panel.offsetWidth;
+    const height = panel.offsetHeight;
+    if (width === 0 || height === 0) return;
     const tier = motionTier();
+    const morph = variant === 'menu' && tier === 'standard';
+    let collapsed = 'none';
+    if (morph) {
+      const target = anchor.getBoundingClientRect();
+      const rawX = target.width / width;
+      const rawY = target.height / height;
+      const normalization = Math.max(1, rawX, rawY);
+      const sx = rawX / normalization;
+      const sy = rawY / normalization;
+      const aligned = matchAnchorWidth ? target.left : target.left + (target.width - width) / 2;
+      const left = clamp(aligned, VIEWPORT_PADDING, window.innerWidth - VIEWPORT_PADDING - width);
+      const x = target.left + target.width / 2 - left - width * sx / 2;
+      const y = opensUp.current ? height + MENU_MARGIN - height * sy : -MENU_MARGIN;
+      collapsed = `translate(${x}px, ${y}px) scale(${sx}, ${sy})`;
+    }
+    const firstPlacement = placedPanel.current !== panel;
+    placedPanel.current = panel;
+    const panelStyle = getComputedStyle(panel);
+    const fromTransform = firstPlacement && open ? collapsed : panelStyle.transform;
+    const fromOpacity = firstPlacement && open ? '0' : panelStyle.opacity;
+    const fromContentOpacity = firstPlacement && open && morph ? '0' : getComputedStyle(content).opacity;
+    const transform = open ? 'none' : collapsed;
+    const opacity = open ? '1' : '0';
+    panel.style.transform = transform;
+    panel.style.opacity = opacity;
+    // One stable origin also makes an in-flight above/below flip continuous.
+    panel.style.transformOrigin = '0 0';
+    content.style.opacity = morph && !open ? '0' : '1';
+
     if (tier === 'off') return;
 
-    const anchorRect = anchor.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    if (panelRect.width === 0 || panelRect.height === 0) return;
+    if (fromOpacity === opacity && fromTransform === transform && fromContentOpacity === content.style.opacity) return;
+    const menu = MENU_TRANSITION[open ? 'enter' : 'exit'];
+    const timing = variant === 'search'
+      ? springTiming('fastEffects')
+      : { duration: scaledMs(menu.duration), easing: menu.easing };
+    const from: Keyframe = { opacity: fromOpacity };
+    const to: Keyframe = { opacity };
+    if (fromTransform !== transform) {
+      from.transform = fromTransform;
+      to.transform = transform;
+    }
+    const running = [panel.animate([from, to], { ...timing, fill: 'both' })];
+    if (morph) {
+      const effects = springTiming('fastEffects');
+      // Only hidden content waits for the surface to expand. A reversal with
+      // visible text picks up its opacity immediately from the current frame.
+      const delay = open && Number(fromContentOpacity) < 0.05
+        ? Math.max(0, timing.duration - effects.duration)
+        : 0;
+      running.push(content.animate(
+        [{ opacity: fromContentOpacity }, { opacity: content.style.opacity }],
+        { ...effects, delay, fill: 'both' },
+      ));
+    }
 
-    // Never scale up — the panel is at least as wide as its anchor.
-    const sx = Math.min(1, anchorRect.width / panelRect.width);
-    const sy = Math.min(1, anchorRect.height / panelRect.height);
-
-    // Already anchored to the trigger's edge, so scaling about that edge
-    // reproduces the translate half of the reference for free.
-    panel.style.transformOrigin = placement.up ? 'bottom left' : 'top left';
-
-    /* Reduced keeps the morph and drops the rows' own leg: the stagger is the
-       flourish, and with rows on the same clock as the plate there is one
-       entrance rather than two — what this tier wants. */
-    const reduced = tier === 'reduced';
-    const container = panel.animate(
-      [{ transform: `scale(${sx}, ${sy})`, opacity: 0 }, { transform: 'none', opacity: 1 }],
-      {
-        duration: scaledMs(ENTER_MS),
-        easing: ENTER_EASING,
-        fill: 'backwards',
-      },
-    );
-
-    /* The rows wait out the container's morph and then fade on their **own**
-       clock (the effects spring's settle time) rather than being stretched over a
-       doubled span. A spring's shape and duration are one object: replayed longer,
-       the same ζ=1 curve is not a slower fade, it is a different one. The wait is
-       a `delay` because that is what a delay is for. */
-    const rows =
-      animateChildren && !reduced
-        ? [...panel.children].map((row) =>
-            row.animate([{ opacity: 0 }, { opacity: 1 }], {
-              duration: scaledMs(ROW_MS),
-              delay: scaledMs(ENTER_MS * 0.5),
-              easing: ROW_EASING,
-              fill: 'backwards',
-            }),
-          )
-        : [];
+    let active = true;
+    Promise.all(running.map((animation) => animation.finished)).then(() => {
+      if (!active) return;
+      running.forEach((animation) => animation.cancel());
+    }, () => {});
 
     return () => {
-      container.cancel();
-      rows.forEach((row) => row.cancel());
+      active = false;
+      for (const animation of running) {
+        if (animation.playState !== 'idle') {
+          try {
+            animation.commitStyles();
+          } catch {
+            // A detached panel has no pose to preserve.
+          }
+        }
+        animation.cancel();
+      }
     };
-  }, [open, rendering, placement.up, anchorRef, animateChildren]);
+  }, [open, mounted, rendering, placement.up, placement.width, anchorRef, variant, matchAnchorWidth]);
+
+  /* The latest close handler, for listeners that must not re-subscribe on every
+     render of a caller passing an inline function. */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   /* Reposition against scroll and resize rather than trapping the page: a
-     popover is not modal, the page behind it stays live.
+     popover is not modal, the page behind it stays live — until the trigger it
+     hangs off scrolls out from under it. Then it closes, as a native menu does:
+     it used to keep repositioning against a trigger that had gone under the app
+     bar, a panel painted over the chrome and attached to nothing. Closing moves
+     focus that was inside the panel back to the trigger *without scrolling to it*,
+     so the page stays where the user put it and the keyboard is not dropped.
 
      Passive and rAF-coalesced. `measure` reads `getBoundingClientRect`, so a
      non-passive capture listener made every scroll event wait on a layout read
@@ -308,11 +358,19 @@ export default function Popover({
      guards re-entry and the cleanup cancels a pending one. */
   useEffect(() => {
     if (!open) return;
+    const clippers = anchorRef.current ? clippingAncestors(anchorRef.current) : [];
     let frame = 0;
     const onReflow = () => {
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
+        const anchor = anchorRef.current;
+        if (anchor && visibleFraction(anchor, clippers) < DETACH_BELOW) {
+          const panel = panelRef.current;
+          if (panel && panel.contains(document.activeElement)) anchor.focus({ preventScroll: true });
+          onCloseRef.current(false);
+          return;
+        }
         measure();
       });
     };
@@ -323,7 +381,7 @@ export default function Popover({
       window.removeEventListener('scroll', onReflow, true);
       window.removeEventListener('resize', onReflow);
     };
-  }, [open, measure]);
+  }, [open, measure, anchorRef]);
 
   useEffect(() => {
     if (!open) return;
@@ -339,11 +397,12 @@ export default function Popover({
   }, [open, onClose, anchorRef]);
 
   const closeAndRefocus = useCallback(() => onClose(true), [onClose]);
-  useEscapeToClose(open, closeAndRefocus);
+  const layer = useOverlayLayer(open && mounted && rendering, panelRef, { onClose: closeAndRefocus, modal: false });
 
   if (!mounted || !rendering) return null;
 
   return createPortal(
+    <OverlayLayerContext.Provider value={layer}>
     <div
       ref={panelRef}
       id={id}
@@ -359,11 +418,12 @@ export default function Popover({
        * inert. */
       inert={!open}
       style={{
+        zIndex: layer.depth ? `calc(var(--z-popover) + ${layer.depth})` : undefined,
         position: 'fixed',
         top: placement.up ? undefined : placement.top,
         bottom: placement.up ? window.innerHeight - placement.top : undefined,
         left: placement.left,
-        minWidth: matchAnchorWidth ? placement.width : undefined,
+        width: matchAnchorWidth ? placement.width : undefined,
         /* A panel wider than the screen has to shrink, not merely be pushed
            inward — the clamp above can only move it. */
         maxWidth: `calc(100vw - ${VIEWPORT_PADDING * 2}px)`,
@@ -378,16 +438,24 @@ export default function Popover({
          few pixels past the estimate was judged to fit and clipped its last row.
          `auto` already means "a scrollbar only when one is needed".
 
-         **4dp**, from `MenuTokens.ContainerShape = CornerExtraSmall` — menus are
-         4dp and so are text fields (read the token file, not the summary table).
-         The tone and elevation are `MenuTokens` and were already right. */
+         Menu rows sit 8dp inside the 16dp outer corner. Both variants lay out
+         at final dimensions before animating. Menu content fades in as its
+         surface expands; search suggestions keep only the single panel fade. */
       className={cn(
-        'popover-scrollbar bg-surface-container text-on-surface z-popover overflow-y-auto rounded-xs shadow-e2',
+        /* `forced-boundary`: forced colors flattens the surface tone and drops the
+           shadow, the panel's only two separations from the page under it. */
+        'popover-scrollbar text-on-surface z-popover overflow-y-auto forced-boundary',
+        variant === 'search'
+          ? 'rounded-2xl bg-surface-container-highest p-2 shadow-e1'
+          : 'rounded-lg bg-surface-container shadow-e2',
         className,
       )}
     >
-      {children}
-    </div>,
+      <div ref={contentRef} role="presentation" className="space-y-0.5">
+        {children}
+      </div>
+    </div>
+    </OverlayLayerContext.Provider>,
     document.body,
   );
 }

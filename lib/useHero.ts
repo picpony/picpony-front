@@ -10,17 +10,18 @@ import {
   type RefObject,
 } from 'react';
 import type Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import type { PonyImage } from '@/lib/types/image';
+import type { ImagePreview } from '@/lib/types/image';
 import { cancelImageDetailPrefetch } from '@/lib/detail';
 import {
   canAnimateImageHero,
+  getImageHeroNavigation,
   isScrollLikelyActive,
   prepareImageHero,
   requestImageHeroOpen,
   warmImageHero,
   warmImageHeroSource,
   warmImageHeroFrame,
+  type HeroNavigation,
   type ImageHeroSnapshot,
 } from '@/lib/hero';
 
@@ -31,6 +32,13 @@ const HOVER_INTENT_DELAY_MS = 70;
 const FOCUS_INTENT_DELAY_MS = 120;
 const SNAPSHOT_REUSE_MS = 1500;
 
+/* Before the shell has handed its router over (it does in its first effect, long before a press):
+   the document's own navigation, as the controller's own fallback does. */
+const LOCATION_NAVIGATION: HeroNavigation = {
+  push: (href) => window.location.assign(href),
+  replace: (href) => window.location.replace(href),
+};
+
 export function useHeroLink<T extends HTMLElement>({
   image,
   sourceRef,
@@ -38,13 +46,15 @@ export function useHeroLink<T extends HTMLElement>({
   canAnimate,
   kind,
 }: {
-  image: PonyImage | null;
+  image: ImagePreview | null;
   sourceRef: RefObject<T | null>;
   previewSrc: string;
   canAnimate: boolean;
   kind: HeroLinkKind;
 }) {
-  const router = useRouter();
+  /* No `useRouter()` here: it reads `LayoutRouterContext`, a new object on every router change, so
+     every mounted card re-rendered on every URL write. The shell's router is read when it is
+     used (`getImageHeroNavigation`), and a card renders only when its own props change. */
   const preparedRef = useRef<ImageHeroSnapshot | null>(null);
   const expiryTimerRef = useRef(0);
   const intentTimerRef = useRef(0);
@@ -73,7 +83,7 @@ export function useHeroLink<T extends HTMLElement>({
   const warmRouteAndMedia = useCallback(
     (priority: 'background' | 'immediate') => {
       if (!image) return;
-      router.prefetch(href);
+      getImageHeroNavigation()?.prefetch?.(href);
       void warmImageHero(image.id, priority);
       /* The detail-sized bytes, on the same ladder: the exact bytes the final layer will
          request. `prepareImageHero` uses them only once decoded, so a warm that has not
@@ -87,7 +97,7 @@ export function useHeroLink<T extends HTMLElement>({
         immediate: priority === 'immediate',
       });
     },
-    [href, image, router, sourceRef],
+    [href, image, sourceRef],
   );
 
   const scheduleIntent = useCallback(
@@ -139,12 +149,9 @@ export function useHeroLink<T extends HTMLElement>({
       source,
       detailHref: href,
       background,
-      navigation: {
-        push: (nextHref) => router.push(nextHref, { scroll: false }),
-        replace: (nextHref) => router.replace(nextHref, { scroll: false }),
-      },
+      navigation: getImageHeroNavigation() ?? LOCATION_NAVIGATION,
     });
-  }, [href, image, router, sourceRef, takePrepared]);
+  }, [href, image, sourceRef, takePrepared]);
 
   const handleNavigate: NavigateHandler = useCallback(
     (event) => {

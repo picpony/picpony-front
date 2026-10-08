@@ -1,58 +1,74 @@
 'use client';
 
-import { useState, useEffect, memo, useRef } from 'react';
+import { memo, useCallback, useDeferredValue, useRef, useState, type MouseEvent } from 'react';
 import Link from 'next/link';
+import { MdThumbUp, MdComment, MdVisibilityOff, MdBrokenImage, MdRefresh } from 'react-icons/md';
 import FadeInImage from './FadeInImage';
 import ImageCardVideo from './ImageCardVideo';
-import { MdThumbUp, MdComment, MdVisibility } from 'react-icons/md';
-import { PonyImage } from '@/lib/api';
+import Button from './Button';
+import Skeleton from './Skeleton';
+import type { ImagePreview } from '@/lib/types/image';
 import { useHeroLink } from '@/lib/useHero';
 import { ICON } from '@/lib/icons';
-import Badge from './Badge';
-import { useSsrSpoilerTags } from './ImageLineProvider';
-import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
+import { MediaBadge } from './Badge';
+import { useSpoilerMatch } from '@/lib/spoilers';
+import { describeImage } from '@/lib/imageDescription';
+import { openFromSequence, type ImageSequenceSource } from '@/lib/imageSequence';
+import { pickRendition } from '@/lib/imageLoader';
+import { estimateCardWidth, MASONRY_CARD_SIZES } from '@/lib/masonry';
+import { useMounted } from '@/lib/overlay';
 
 interface ImageCardProps {
-  image: PonyImage;
+  image: ImagePreview;
+  /** Position in the list, from 0 — the first screen's cards are the only ones the server paints. */
+  index: number;
+  /** The list 上一张 / 下一张 walk through once this card is opened (`lib/imageSequence.ts`). */
+  sequence: ImageSequenceSource;
+  /** PicPony's own comment count, shown beside Derpibooru's as `+n`. */
+  siteComments?: number;
 }
 
-let spoilerTagsRaw: string | null = null;
-let spoilerTags = new Set<string>();
+/**
+ * How many cards the server renders an `<img>` for. The rest render their frame (the aspect box
+ * and its shimmer) and mount the picture after hydration.
+ *
+ * On a slow phone the seeded page used to start 49 card images before the first-document JS had
+ * arrived, taking the link from the scripts that make the page usable and from the banner that
+ * is the page's LCP (R12-002). Eight is two rows at four columns and four at two — past the
+ * first screen at every width, where the banner above takes most of the viewport.
+ */
+const SERVER_PAINTED_CARDS = 8;
 
-function getActiveSpoilerTags() {
-  if (typeof window === 'undefined') return spoilerTags;
-  try {
-    const nextRaw = localStorage.getItem(LS_KEYS.spoilerTags) || '[]';
-    if (nextRaw === spoilerTagsRaw) return spoilerTags;
-    spoilerTagsRaw = nextRaw;
-    const values: unknown = JSON.parse(nextRaw);
-    spoilerTags = new Set(
-      Array.isArray(values)
-        ? values
-            .filter((value): value is string => typeof value === 'string')
-            .map((value) => value.trim().toLowerCase())
-        : [],
-    );
-     /* Mirrored to a cookie for the *next* document, so the server can draw the
-        cover before hydration. Written here because this is the one place that
-        already parses the list. */
-    try {
-      const joined = [...spoilerTags].join(',');
-      document.cookie = `${COOKIE_KEYS.spoilerTags}=${encodeURIComponent(joined)};path=/;max-age=${
-        60 * 60 * 24 * 365
-      };samesite=lax`;
-    } catch {
-      /* Cookies blocked. The effect still covers the card; only the first frame is exposed. */
-    }
-  } catch {
-    spoilerTagsRaw = null;
-    spoilerTags = new Set();
-  }
-  return spoilerTags;
+/** A still frame at this density does not read soft in motion; past it the bytes are wasted. */
+const ANIMATED_MAX_DENSITY = 1.5;
+
+function formatOf(image: ImagePreview): string {
+  const fullUrl = image.representations?.full || image.view_url || '';
+  return (image.format || fullUrl.split(/[?#]/)[0].split('.').pop() || 'UNKNOWN').toUpperCase();
 }
 
-export default memo(function ImageCard({ image }: ImageCardProps) {
+/**
+ * An animated picture: the optimizer passes animations through unresized, so these take a
+ * Derpibooru rendition sized for the card instead (R12-001). `animated` where the row carries it,
+ * the GIF format where it does not.
+ */
+function isAnimated(image: ImagePreview, format: string): boolean {
+  return (image as { animated?: unknown }).animated === true || format === 'GIF';
+}
+
+/** The animated rendition for this device's card width and density, or `''` for none. */
+function animatedRendition(image: ImagePreview): string {
+  return pickRendition(
+    image.representations as unknown as Record<string, string>,
+    image.width || 0,
+    image.height || 0,
+    estimateCardWidth(window.innerWidth) * Math.min(window.devicePixelRatio || 1, ANIMATED_MAX_DENSITY),
+  );
+}
+
+export default memo(function ImageCard({ image, index, sequence, siteComments }: ImageCardProps) {
   const heroElementRef = useRef<HTMLDivElement>(null);
+  const linkRef = useRef<HTMLAnchorElement>(null);
   const fullUrl = image.representations?.full || image.view_url || '';
   const thumbUrl =
     image.representations?.medium ||
@@ -69,57 +85,95 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
     image.representations?.thumb_small ||
     image.representations?.thumb_tiny ||
     fullUrl;
-  const format = (
-    image.format ||
-    fullUrl.split(/[?#]/)[0].split('.').pop() ||
-    'UNKNOWN'
-  ).toUpperCase();
-  const isWebm = format === 'WEBM' || format === 'MP4';
+  const format = formatOf(image);
+  const isVideo = format === 'WEBM' || format === 'MP4';
+  const animated = !isVideo && isAnimated(image, format);
+  const name = describeImage(image);
 
-  /* **Covered from the very first render when the server knew to cover it.**
-     The server emits `<img>` tags the browser paints before any effect runs, so
-     a user who spoilered a tag saw exactly the pictures they asked to hide on
-     every cold load. The cookie carries the list so this render can ask the
-     same question the effect will; the effect still runs and still wins, so a
-     stale or absent cookie costs one frame rather than a wrong answer. */
-  const ssrSpoilerTags = useSsrSpoilerTags();
-  const [isSpoilered, setIsSpoilered] = useState(() =>
-    ssrSpoilerTags.length === 0
-      ? false
-      : (image.tags || []).some((tag) => ssrSpoilerTags.includes(tag.trim().toLowerCase())),
-  );
-  const [isRevealed, setIsRevealed] = useState(false);
-  const { sourceKey: heroSourceKey, ...heroLinkProps } = useHeroLink({
+  /* **Covered from the very first render when the server knew to cover it** — the cookie
+     mirror of the device's spoiler tags (`lib/spoilers.ts`) — so a cold load never paints a
+     picture the user asked to hide, and the live list takes over after hydration. */
+  const spoilers = useSpoilerMatch(image.tags);
+  const [revealed, setRevealed] = useState(false);
+  const covered = spoilers.length > 0 && !revealed;
+
+  /* The server paints the first screen's pictures; the rest — and every animated one, whose
+     rendition depends on this device's width and density — mount once the page has hydrated,
+     in a deferred render so fifty `<img>`s do not land in one task. A client-mounted card (a
+     page turn, a navigation) is past hydration and shows its picture at once. */
+  const hydrated = useDeferredValue(useMounted());
+  const paintMedia = hydrated || (index < SERVER_PAINTED_CARDS && !animated);
+
+  /* A failed picture is re-tried from the top by remounting it. */
+  const [attemptKey, setAttemptKey] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const markFailed = useCallback(() => setFailed(true), []);
+  const retry = () => {
+    setFailed(false);
+    setAttemptKey((key) => key + 1);
+  };
+
+  /* Two statements rather than one conditional with a fallback inside it: that shape is one the
+     React Compiler cannot lower, and it skipped the whole card for it — so every re-render of a
+     card (a router update reaches all fifty through `useHeroLink`) rebuilt its whole subtree,
+     about 18ms a card at 4× CPU (R12-010). */
+  const rendition = animated && hydrated ? animatedRendition(image) : '';
+  const animatedSrc = rendition || thumbUrl;
+
+  const { sourceKey: heroSourceKey, onClick: heroClick, ...heroLinkProps } = useHeroLink({
     image,
     sourceRef: heroElementRef,
-    previewSrc: isWebm ? mediaUrl : thumbUrl,
-    canAnimate: !isSpoilered || isRevealed,
+    previewSrc: isVideo ? mediaUrl : animatedSrc,
+    canAnimate: !covered,
     kind: 'card',
   });
 
-  useEffect(() => {
-    const activeTags = getActiveSpoilerTags();
-    const next = (image.tags || []).some((tag) => activeTags.has(tag.trim().toLowerCase()));
-    setIsSpoilered((current) => (current === next ? current : next));
-  }, [image.tags]);
+  /* **Every activation names the list first**, synchronously and before the hero launches, so
+     the detail's 上一张 / 下一张 walk this list. A click is every activation there is: a tap, a
+     press and Enter on the link all arrive as one. A modified click opens a new tab and leaves
+     this one's list alone. */
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+      openFromSequence(sequence);
+    }
+    heroClick(event);
+  };
 
-  /* No `preventDefault`/`stopPropagation` any more: this button is a sibling of
-     the link, not a child of it, so there is no navigation to suppress. */
-  const handleReveal = () => setIsRevealed(true);
+  /* Focus moves to the link *before* the cover goes: the cover is the focused element, and a
+     control that turns inert drops focus to the page body (R4-024). The link is itself inert
+     until this render commits, so it is released first — the value the render then writes. */
+  const handleReveal = () => {
+    const link = linkRef.current;
+    if (link) {
+      link.inert = false;
+      link.focus({ preventScroll: true });
+    }
+    setRevealed(true);
+  };
 
   const aspectW = image.width || 1;
   const aspectH = image.height || 1;
   const intrinsicH = Math.round(300 * (aspectH / aspectW));
+  const comments = typeof image.comment_count === 'number' ? image.comment_count : null;
+  const onSite = siteComments && siteComments > 0 ? siteComments : 0;
 
   return (
     <div
-      data-tab-row
       className="image-card relative w-full"
       style={{ containIntrinsicSize: `auto ${intrinsicH}px` }}
     >
       <Link
         {...heroLinkProps}
-        className="image-hero-card-link block relative rounded-lg group bg-surface-container-high w-full text-left cursor-pointer"
+        ref={linkRef}
+        onClick={handleClick}
+        /* Named by what is in the picture (R11-001, R11-002): the video branch has no `<img>` to
+           lend it a name, and the image branch's `alt` was the upload's file name. */
+        aria-label={isVideo ? `视频：${name}` : name}
+        /* Covered, the link is out of reach entirely: the cover is the one control, and Enter
+           on a link hidden under it opened the very picture it hides. */
+        inert={covered}
+        draggable={false}
+        className="image-hero-card-link block relative rounded-lg group bg-surface-container-high w-full text-left cursor-pointer select-none [-webkit-touch-callout:none]"
       >
         {/* Media only — hero hides this node while the flyer flies. */}
         <div
@@ -130,17 +184,13 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           className="relative w-full overflow-hidden rounded-lg"
           style={{ aspectRatio: `${aspectW} / ${aspectH}` }}
         >
-          {isWebm ? (
-            <div
-              className="relative w-full overflow-hidden"
-              style={{ paddingBottom: `${((image.height || 1) / (image.width || 1)) * 100}%` }}
-            >
-              <ImageCardVideo src={mediaUrl} />
-            </div>
-          ) : (
+          {isVideo ? (
+            <ImageCardVideo key={attemptKey} src={mediaUrl} onGiveUp={markFailed} />
+          ) : paintMedia ? (
             <FadeInImage
-              src={thumbUrl}
-              alt={image.name || `图片 #${image.id}`}
+              key={`${attemptKey}:${animatedSrc}`}
+              src={animatedSrc}
+              alt={name}
               /* Fall back to the card's own aspect box rather than 0 — `0` is
                  not a valid next/image dimension, and the API omits width and
                  height on some records. */
@@ -148,11 +198,20 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
               height={aspectH}
               quality={82}
               className="w-full h-auto"
-              sizes="(max-width: 767px) 50vw, (max-width: 1023px) 33vw, (min-width: 1536px) 304px, 25vw"
-              /* 分层加载：加速代理→CDN→直连，失败自动降级（画廊缩略图） */
-              resilient
+              draggable={false}
+              sizes={MASONRY_CARD_SIZES}
+              /* Below the first row the picture is not what the page is waiting for. */
+              fetchPriority={index < 4 ? undefined : 'low'}
+              /* Animated renditions are already sized for the card; the optimizer would pass
+                 them through untouched anyway. */
+              unoptimized={animated}
               proxyThumb
+              onGiveUp={markFailed}
             />
+          ) : (
+            /* The frame the server paints for a picture it leaves to the client: the same
+               shimmer the picture's own loading state starts with, so hydration is seamless. */
+            <Skeleton className="absolute inset-0 block rounded-none" />
           )}
         </div>
 
@@ -163,64 +222,73 @@ export default memo(function ImageCard({ image }: ImageCardProps) {
           aria-hidden="true"
         >
           <div className="media-hover-scrim absolute inset-0 rounded-lg" />
-          {/* `Badge tone="media"`, which owns the plate, the `on-media` ink,
-              the blur, the 4dp corner and the glyph size — these three marks
-              wrote all of that out by hand and dropped the blur, so a score
-              over a pale photograph lost its plate.
-
-              The one corner that cannot come from the primitive is the one
-              hugging the card's: concentric means `outer - gap`, so at a 16dp
-              card corner with an 8px inset that corner is 8dp. */}
-          <Badge tone="media" className="absolute top-2 right-2 rounded-tr-sm">
-            {format}
-          </Badge>
+          {/* Same corner marks on profile thumbnails: MediaBadge owns their
+              plate, type size, inset and the corner concentric with the tile. */}
+          <MediaBadge corner="top-right">{format}</MediaBadge>
           {/* No `title` on either count. This whole chrome layer is
               `pointer-events-none aria-hidden`, so a native tooltip could never be
               hovered and the name could never be read — two dead attributes. */}
-          <Badge
-            tone="media"
-            icon={<MdThumbUp />}
-            className="absolute bottom-2 left-2 rounded-bl-sm"
-          >
-            {image.score}
-          </Badge>
-          <Badge
-            tone="media"
-            icon={<MdComment />}
-            className="absolute bottom-2 right-2 rounded-br-sm"
-          >
-            {image.comment_count}
-          </Badge>
+          {typeof image.score === 'number' && (
+            <MediaBadge corner="bottom-left" icon={<MdThumbUp />}>
+              {image.score}
+            </MediaBadge>
+          )}
+          {(comments !== null || onSite > 0) && (
+            /* Derpibooru's count, then PicPony's own as `+n` — the original front end's
+               reading, and the one the detail's merged comment list adds up to. */
+            <MediaBadge corner="bottom-right" icon={<MdComment />}>
+              {comments ?? 0}
+              {onSite > 0 && `+${onSite}`}
+            </MediaBadge>
+          )}
         </div>
       </Link>
 
-      {/* The spoiler cover is a sibling of the link, not a child of it:
-          interactive content nested inside an `<a>` is invalid HTML, and it
-          behaved as such — the cover was a `<div onClick>`, so Tab landed on
-          the link and Enter navigated straight to the picture the cover exists
-          to hide. As a sibling it is a real `<button>` in its own right, in
-          front of the link in both paint order and tab order.
+      {failed && !covered && (
+        /* The give-up plate is drawn here rather than inside the image: a 重试 control inside
+           the card's link would be a button nested in an anchor. The plate itself passes the
+           pointer through, so a press anywhere else still opens the picture. */
+        <div className="card-failure pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-surface-container-high px-2 text-center text-on-surface-variant">
+          <MdBrokenImage size={ICON.standard} aria-hidden="true" />
+          <span className="card-failure-caption text-label-m">图片加载失败</span>
+          <Button
+            variant="tonal"
+            size="xs"
+            icon={<MdRefresh />}
+            onClick={retry}
+            aria-label="重新加载图片"
+            className="pointer-events-auto"
+          >
+            重试
+          </Button>
+        </div>
+      )}
 
-          Kept mounted through the reveal so the cover can dissolve; unmounting
-          on click swapped a fully-opaque plate for the image in one frame.
-          `inert` (React 19) takes the faded remains out of the tab order and
-          the accessibility tree together.
+      {spoilers.length > 0 && (
+        /* The spoiler cover (C2): opaque, so nothing of the picture shows through it (a 55%
+           tint over a two-pixel blur left every character recognisable, R4-023); it names the
+           tags that caused it; one press or Enter reveals the picture, which has been mounted
+           underneath all along, so the reveal is instant; and focus stays on the card.
 
-          No per-element motion guard, deliberately: the off tier's global rule
-          already does the right thing here — it keeps `opacity` and drops
-          `backdrop-filter`, so the cover fades without the blur animating. */}
-      {isSpoilered && (
+           A sibling of the link, never a child: interactive content nested inside an `<a>` is
+           invalid, and as a `<div onClick>` inside it Enter used to navigate straight to the
+           hidden picture. Kept mounted through the reveal so it can fade on the effects clock;
+           `inert` then takes it out of the tab order and the accessibility tree together. */
         <button
           type="button"
           onClick={handleReveal}
-          inert={isRevealed}
-          aria-label="显示被剧透标签遮住的图片"
-          className={`absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-lg bg-media-plate backdrop-blur-[2px] transition-[opacity,backdrop-filter] duration-composite ease-[var(--ease-standard)] outline-none select-none focus-visible:inset-ring-2 focus-visible:focus-ring-inset ${
-            isRevealed ? 'pointer-events-none opacity-0 backdrop-blur-0' : 'opacity-100'
+          inert={revealed}
+          aria-label={`显示剧透图片：${spoilers.join('、')}`}
+          className={`card-spoiler absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg bg-surface-container-highest px-3 text-center text-on-surface-variant select-none focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset forced-boundary transition-opacity spring-fast-effects ${
+            revealed ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >
-          <MdVisibility size={ICON.large} className="text-on-media mb-2" />
-          <span className="text-on-media-variant text-label-l">点击查看</span>
+          <MdVisibilityOff size={ICON.standard} aria-hidden="true" />
+          <span className="text-label-l text-on-surface">剧透</span>
+          <span className="card-spoiler-tags line-clamp-2 max-w-full text-body-s break-words">
+            {spoilers.join('、')}
+          </span>
+          <span className="card-spoiler-hint text-label-m">点按显示</span>
         </button>
       )}
     </div>

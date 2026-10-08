@@ -52,7 +52,7 @@ export default function Radio({
   return (
     <label
       className={cn(
-        'group flex items-center gap-2 select-none',
+        'group/radio flex items-center gap-2 select-none',
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
         className,
       )}
@@ -82,15 +82,16 @@ export default function Radio({
             'pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity duration-state ease-[var(--ease-standard)]',
             checked ? 'text-primary-ink' : 'text-on-surface',
             !disabled &&
-              'group-hover:opacity-[var(--md-sys-state-hover-opacity)] group-active:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]',
+              'group-hover/radio:opacity-[var(--md-sys-state-hover-opacity)] group-active/radio:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]',
           )}
         />
         <span
           aria-hidden="true"
           className={cn(
-            'relative h-5 w-5 rounded-full border-2 transition-ui pointer-events-none',
-            'peer-focus-visible:ring-2 peer-focus-visible:focus-ring',
-            checked ? 'border-primary-ink' : 'border-on-surface-variant',
+            'relative h-5 w-5 rounded-full border-2 spring-fast-effects transition-[border-color] pointer-events-none',
+            /* The outline half comes back under forced colors, where the ring is not painted. */
+            'peer-focus-visible:ring-2 peer-focus-visible:focus-ring peer-focus-visible:outline-hidden',
+            checked ? 'border-primary-ink forced-colors:border-[color:Highlight]' : 'border-on-surface-variant',
           )}
         />
         {/* The dot is 12dp (`RadioButtonDotSize`).
@@ -106,16 +107,20 @@ export default function Radio({
         <span
           aria-hidden="true"
           className={cn(
-            'bg-primary-ink pointer-events-none absolute h-3 w-3 rounded-full',
+            /* A painted mark, so forced colors repaints it in the system highlight
+               rather than flattening it — and the selection with it. */
+            'bg-primary-ink pointer-events-none absolute h-3 w-3 rounded-full forced-mark',
             '[transition:scale_var(--duration-spring-expressive-fast-spatial)_var(--ease-spring-expressive-spatial-fast),opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]',
             checked ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
           )}
         />
       </span>
+      {/* `min-w-0 flex-1`, as `Checkbox`'s: a long label truncates inside its row, and a
+          label with a trailing part puts it on the row's trailing edge. */}
       {label && (
         <span
           className={cn(
-            'text-label-l',
+            'min-w-0 flex-1 text-label-l',
             tone === 'error' ? 'text-error' : tone === 'warning' ? 'text-warning' : 'text-on-surface',
           )}
         >
