@@ -758,6 +758,37 @@ function pendingChangedElsewhere(oldValue: string | null, newValue: string | nul
   if (!touched) return;
   baseStaleBefore = now;
   if (base) base = { ...base, at: 0 };
+  /* Review P5-F1: another tab's write carried this tab's change. That tab only drops an entry
+     from the shared record once a write that sent it — the stored value at or after its time —
+     was acknowledged (`persistPending(sent)`), so an entry that left the record holding this
+     tab's timestamp or a newer one is confirmed here too. Kept, it held 有设置尚未同步到账号 on
+     screen until the backoff (up to five minutes) ran out, re-sent a confirmed value, and put
+     the entry back into the shared record on this tab's next change. Only a record that is gone
+     or still names this account counts: a record re-keyed for a renamed or another account says
+     nothing about these entries. */
+  if (newValue !== null && !recordOwnedBy(newValue, session.account)) return;
+  let confirmed = false;
+  for (const [id, at] of before) {
+    if (after.has(id)) continue;
+    const mine = pending.get(id);
+    if (mine === undefined || mine > at) continue;
+    pending.delete(id);
+    confirmed = true;
+  }
+  if (!confirmed || pending.size > 0) return;
+  clearTimer();
+  failures = 0;
+  if (!flushing) setState('idle');
+}
+
+/** Whether a persisted pending record belongs to `account` (an unreadable one does not). */
+function recordOwnedBy(raw: string, account: string): boolean {
+  try {
+    const record: unknown = JSON.parse(raw);
+    return Boolean(record && typeof record === 'object' && (record as { account?: unknown }).account === account);
+  } catch {
+    return false;
+  }
 }
 
 function clearTimer() {

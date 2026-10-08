@@ -41,6 +41,7 @@ import Button from '@/components/Button';
 import { buttonClasses } from '@/components/buttonStyles';
 import { useTooltip } from '@/components/Tooltip';
 import DerpiDescription from './DerpiDescription';
+import { derpiFallbackUrl, derpiProfileUrl } from './derpiLinks';
 
 const PER_PAGE = 24;
 
@@ -219,7 +220,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
             action={
               isRetryable(profileRead.error) ? undefined : (
                 <a
-                  href={`https://derpibooru.org/profiles/${encodeURIComponent(userId)}`}
+                  href={derpiFallbackUrl(userId)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={buttonClasses({ variant: 'filled' })}
@@ -313,7 +314,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                   搜索 TA 的作品
                 </Button>
                 <a
-                  href={`https://derpibooru.org/profiles/${encodeURIComponent(profile.name)}`}
+                  href={derpiProfileUrl(profile)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={buttonClasses({ variant: 'tonal', size: 'lg', className: '@lg:flex-1' })}

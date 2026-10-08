@@ -389,6 +389,7 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     '@/components/Tooltip': { useTooltip: () => ({ anchorRef: null, anchorProps: {}, tooltip: null }) },
     '@/components/SectionHeading': { default: 'SectionHeading' },
     './DerpiDescription': { default: 'DerpiDescription' },
+    './derpiLinks': { derpiProfileUrl: () => 'https://derpibooru.org/profiles/x', derpiFallbackUrl: () => 'https://derpibooru.org/profiles/x' },
     '@/lib/icons': { ICON: {} },
   });
   let instance;

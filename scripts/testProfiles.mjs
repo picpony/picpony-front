@@ -67,7 +67,7 @@ test('uploads are the bound account’s: by id, else by an escaped name, never w
   assert.equal(profiles.uploaderTerm({ id: 1, username: 'a', derpi_user_id: '583672', has_api_key: true }), 'uploader_id:583672');
   assert.equal(
     profiles.uploaderTerm({ id: 1, username: 'a', derpi_username: 'A (B):C', has_api_key: true }),
-    'uploader:A \\(B\\)\\:C',
+    'uploader:A\\ \\(B\\)\\:C',
   );
   assert.equal(profiles.uploaderTerm({ id: 1, username: 'a', derpi_user_id: '5', has_api_key: false }), null,
     'a name typed without a key to prove it lists nothing');

@@ -28,6 +28,9 @@ import RoleBadge from '@/components/RoleBadge';
 import Skeleton from '@/components/Skeleton';
 import UserBadge from '@/components/UserBadge';
 import { buttonClasses } from '@/components/buttonStyles';
+/* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
+   偏好 (review P5-F3). */
+import { settingsHref } from '@/app/settings/tabs';
 import { birthdayLabel, formatDate, lastOnlineStatus } from '@/lib/format';
 import { genderLabel, normalizeGender, raceLabel } from '@/lib/profileFields';
 import { bioOf, derpiProfileHref, ipLocationOf } from '@/lib/profiles';
@@ -95,7 +98,7 @@ function DerpiAccountCard({ profile, own }: { profile: ProfileUser; own: boolean
   const derpiHref = derpiProfileHref(profile);
   if (!derpiHref) return null;
   const verified = profile.has_api_key === true;
-  const href = own && !verified ? '/settings' : derpiHref;
+  const href = own && !verified ? settingsHref('account') : derpiHref;
   const navigate = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
@@ -182,7 +185,7 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
             that was already there (48dp band, 40dp control; 64dp from `sm`). */}
         <div className="absolute right-0 top-1 flex gap-2 sm:top-3">
           {profile && own && (
-            <Link scroll={false} href="/settings" className={buttonClasses({ variant: 'tonal' })}>
+            <Link scroll={false} href={settingsHref('account')} className={buttonClasses({ variant: 'tonal' })}>
               <MdEdit aria-hidden="true" />
               编辑资料
             </Link>

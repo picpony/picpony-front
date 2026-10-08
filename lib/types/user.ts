@@ -13,6 +13,8 @@ export interface DerpiProfileAward {
 export interface DerpiProfileUser {
   id: number;
   name: string;
+  /** The site's profile address is keyed by this, not the name (`derpiLinks.ts`). */
+  slug?: string;
   avatar: string | null;
   avatar_url: string | null;
   description: string;

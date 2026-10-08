@@ -20,6 +20,9 @@ import ErrorRetry from '@/components/ErrorRetry';
 import FailedTurnHold from '@/components/FailedTurnHold';
 import Button from '@/components/Button';
 import { buttonClasses } from '@/components/buttonStyles';
+/* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
+   偏好 (review P5-F3). */
+import { settingsHref } from '@/app/settings/tabs';
 import { OwnerHiddenNote, PaneFailure, PaneHidden, useVisited, type ProfilePaneProps } from './ProfilePaneStates';
 
 /** A page of the grid — also `lib/prefetchRoute.ts`'s `PROFILE_PER_PAGE`, which warms page 1. */
@@ -100,7 +103,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
         title="你还没有绑定 API Key"
         description="绑定 Derpibooru 的 API Key 后，你上传的作品会显示在这里"
         action={
-          <Link scroll={false} href="/settings" className={buttonClasses({ variant: 'tonal' })}>
+          <Link scroll={false} href={settingsHref('account')} className={buttonClasses({ variant: 'tonal' })}>
             <MdSettings aria-hidden="true" />
             前往设置
           </Link>
