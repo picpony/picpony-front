@@ -328,9 +328,13 @@ export default function TasksPage() {
     if (readToken() === token) {
       if (claimed.ok) {
         const paid = claimed.value;
+        /* The document on screen *now* (review P5-O12): the closure's `doc` is the one from when
+           this claim was pressed, and a second claim landing after a re-read started a receipt of
+           its own, so the first row flashed back to 领取 until the next read. */
+        const shownDoc = tasks.peek({ token }).data;
         setReceipt((previous) => ({
-          document: doc,
-          ids: new Set(previous && previous.document === doc ? previous.ids : []).add(task.claimId),
+          document: shownDoc,
+          ids: new Set(previous && previous.document === shownDoc ? previous.ids : []).add(task.claimId),
         }));
         const parts = [
           paid.experience !== null ? `经验 +${paid.experience}` : null,

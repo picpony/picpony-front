@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MdClose, MdReply, MdSend } from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
@@ -100,7 +100,15 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
      than synced from `replyTo` by an effect. */
   const [pressedWrite, setPressedWrite] = useState<number | null>(null);
   const editorOpen = signedIn && (pressedWrite === imageId || replyTo !== null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  /* Which picture's comment is on its way (review P3-O5). A plain flag kept the next picture's
+     发送 disabled until the previous picture's request ended, and the success path then cleared
+     the reply target the visitor had just picked on the new picture. */
+  const [submittingFor, setSubmittingFor] = useState<number | null>(null);
+  const isSubmitting = submittingFor === imageId;
+  const shownImage = useRef(imageId);
+  useEffect(() => {
+    shownImage.current = imageId;
+  }, [imageId]);
   const trimmed = comment.trim();
 
   const setComment = (text: string) => {
@@ -115,15 +123,20 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
       openAuth('login');
       return;
     }
-    setIsSubmitting(true);
-    void send(token, imageId, comment, replyTo).then((outcome) => {
-      setIsSubmitting(false);
+    const sentFor = imageId;
+    setSubmittingFor(sentFor);
+    void send(token, sentFor, comment, replyTo).then((outcome) => {
+      setSubmittingFor((current) => (current === sentFor ? null : current));
       if (!outcome.ok) {
         showToast(outcome.message, 'error');
         return;
       }
       showToast('评论已发送', 'success');
-      setComment('');
+      /* The sent picture's draft is spent wherever the visitor is now; the editor, the reply
+         target and the list refresh belong to the picture on screen, so only that one's. */
+      writeCommentDraft(sentFor, '');
+      if (shownImage.current !== sentFor) return;
+      setDraft({ imageId: sentFor, text: '' });
       setEditorRevision((revision) => revision + 1);
       setPressedWrite(null);
       onCancelReply();

@@ -143,6 +143,8 @@ ${duplicatePage.listKey}` : pageKey;
 
   // ---- Selection, editing, dialogs ----
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  /** Every selected row's English tag as it was seen, for the delete confirmation (review P6-O7). */
+  const selectedNames = useRef(new Map<number, string>());
   const [editing, setEditing] = useState<{ id: number; closing: boolean } | null>(null);
   const dirtyRef = useRef(false);
   const setDirty = useCallback((dirty: boolean) => {
@@ -294,7 +296,14 @@ ${duplicatePage.listKey}` : pageKey;
   const removeSelected = () => {
     const ids = [...selected];
     if (ids.length === 0 || bulkMutation.isPending('delete')) return;
-    confirmThen('确认批量删除', `确定要永久删除选中的 ${ids.length} 个标签吗？此操作无法恢复。`, () =>
+    /* The selection survives paging and filtering, so the confirmation names what it deletes
+       (review P6-O7) — the count alone hid entries on pages no longer in view. */
+    const shownIds = new Set(rows.map((row) => row.id));
+    const names = ids.map((id) => selectedNames.current.get(id) ?? `#${id}`);
+    const listed = names.slice(0, 12).join('、') + (names.length > 12 ? ` 等 ${names.length} 个` : '');
+    const offscreen = ids.filter((id) => !shownIds.has(id)).length;
+    const note = offscreen > 0 ? `其中 ${offscreen} 个不在当前页。` : '';
+    confirmThen('确认批量删除', `确定要永久删除选中的 ${ids.length} 个标签吗？${listed}。${note}此操作无法恢复。`, () =>
       void bulkMutation.run(
         () => adminApi.batchDeleteDictionaryTags(token, ids),
         /* A count the backend did not send is not 0 (G4-015's rule, in a toast): the deletion is
@@ -457,26 +466,30 @@ ${duplicatePage.listKey}` : pageKey;
         <Checkbox
           checked={allSelected}
           disabled={pageIds.length === 0}
-          onChange={() =>
+          onChange={() => {
+            rows.forEach((row) => selectedNames.current.set(row.id, row.en));
             setSelected((previous) => {
               if (allSelected) return without(previous, pageIds);
               const next = new Set(previous);
               pageIds.forEach((id) => next.add(id));
               return next;
-            })}
+            });
+          }}
           aria-label="全选本页标签"
         />
       ),
       render: (tag) => (
         <Checkbox
           checked={selected.has(tag.id)}
-          onChange={() =>
+          onChange={() => {
+            selectedNames.current.set(tag.id, tag.en);
             setSelected((previous) => {
               const next = new Set(previous);
               if (next.has(tag.id)) next.delete(tag.id);
               else next.add(tag.id);
               return next;
-            })}
+            });
+          }}
           aria-label={`选择 ${tag.en}`}
         />
       ),

@@ -33,10 +33,10 @@
  * against this backend in production — reads exactly these three as UTC and no other stamp:
  *
  *   浏览历史 `view_time` / `last_view_time`  `new Date(view_time + " UTC")`
- *       (picpony-review/coord/oldfe-live-main-20261002.js:498; oldfe/main-D7X40lKR.js)
+ *       (the original front end's live `main` bundle, as served by picpony.top on 2026-10-02)
  *   词库编辑历史 `created_at`                  `formatHistoryTime` appends `Z` (picpony.top/ciku.html)
  *   维护密码 `updated_at`                      `new Date(updatedAt + 'Z')`, shown in Asia/Shanghai
- *       (picpony-review/coord/admin-live-20261003.html:5027; oldfe/admin.html:4998)
+ *       (the original admin console's live page, as served on 2026-10-03)
  *
  * No row of any of the three could be checked live: each needs a real staff or user session
  * (`get_dictionary_tag_history` answers 403 to anything else). They were read three different

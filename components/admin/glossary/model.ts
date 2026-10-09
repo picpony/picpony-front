@@ -52,6 +52,18 @@ export interface TagForm {
   cat: string;
   count: number;
   description: string;
+  /**
+   * The three marks the original editor let an operator set (review P6-O6): 限制级, 原创译名,
+   * 敏感. Absent means "as the row has them" — a form built before this field existed, or by a
+   * caller that does not show them, still carries the row's own flags through.
+   */
+  flags?: TagFlags;
+}
+
+export interface TagFlags {
+  restricted: boolean;
+  originalTranslation: boolean;
+  sensitive: boolean;
 }
 
 export const TAG_CATEGORIES: { value: string; label: string }[] = [
@@ -127,6 +139,8 @@ export function parseTranslations(text: string): { cn: string; aliases: string[]
   return { cn: unique[0] ?? '', aliases: unique.slice(1) };
 }
 
+const flag = (value: unknown) => (value === true || Number(value) === 1 ? 1 : 0);
+
 export function emptyTagForm(prefill?: Partial<DerpiTagRow>): TagForm {
   return {
     en: prefill?.name ?? '',
@@ -134,6 +148,7 @@ export function emptyTagForm(prefill?: Partial<DerpiTagRow>): TagForm {
     cat: prefill?.category || 'general',
     count: Number(prefill?.images) || 0,
     description: '',
+    flags: { restricted: false, originalTranslation: false, sensitive: false },
   };
 }
 
@@ -144,10 +159,13 @@ export function tagFormOf(tag: GlossaryTag): TagForm {
     cat: tag.cat || 'general',
     count: Number(tag.count) || 0,
     description: tag.description ?? '',
+    flags: {
+      restricted: flag(tag.is_restricted) === 1,
+      originalTranslation: flag(tag.is_original_translation) === 1,
+      sensitive: flag(tag.is_sensitive) === 1,
+    },
   };
 }
-
-const flag = (value: unknown) => (value === true || Number(value) === 1 ? 1 : 0);
 
 /**
  * The `save_dictionary_tag` body: the original editor's, flags carried through on an edit.
@@ -169,9 +187,9 @@ export function tagSavePayload(form: TagForm, tag?: GlossaryTag | null): Record<
     cat: form.cat || 'general',
     count: Number(form.count) || 0,
     description: form.description.trim(),
-    is_restricted: flag(tag?.is_restricted),
-    is_original_translation: flag(tag?.is_original_translation),
-    is_sensitive: flag(tag?.is_sensitive),
+    is_restricted: form.flags ? Number(form.flags.restricted) : flag(tag?.is_restricted),
+    is_original_translation: form.flags ? Number(form.flags.originalTranslation) : flag(tag?.is_original_translation),
+    is_sensitive: form.flags ? Number(form.flags.sensitive) : flag(tag?.is_sensitive),
   };
   if (tag) payload.id = tag.id;
   return payload;
@@ -185,6 +203,9 @@ export function savedTag(tag: GlossaryTag, payload: Record<string, unknown>): Gl
     aliases: Array.isArray(payload.aliases) ? (payload.aliases as string[]) : [],
     cat: String(payload.cat ?? tag.cat),
     description: String(payload.description ?? ''),
+    is_restricted: Number(payload.is_restricted ?? tag.is_restricted),
+    is_original_translation: Number(payload.is_original_translation ?? tag.is_original_translation),
+    is_sensitive: Number(payload.is_sensitive ?? tag.is_sensitive),
   };
 }
 

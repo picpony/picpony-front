@@ -302,3 +302,9 @@ test('G2-019: the site tools derive from the shared documents; a view keeps its 
   assert.throws(() => view(broken)); assert.throws(() => view(broken));
   assert.equal(runs, 3, 'a failure is remembered too');
 });
+
+test('review P6-O3: announcement breaks are kept in text and left out beside block tags', () => {
+  assert.equal(model.announcementHtml('第一行\n第二行'), '第一行<br>第二行');
+  assert.equal(model.announcementHtml('<ul>\n<li>一</li>\n<li>二</li>\n</ul>\n结尾'), '<ul>\n<li>一</li>\n<li>二</li>\n</ul>\n结尾');
+  assert.equal(model.announcementHtml('a\r\nb'), 'a<br>b');
+});

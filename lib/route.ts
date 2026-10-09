@@ -503,6 +503,11 @@ export function buildApiLineUrl(url: string, line: ApiLine): string {
   const derpiUrl = canonicalDerpiUrl(url);
   switch (line) {
     case 'api_accel':
+      /* Key policy (review P1-F11 / P2-O1): the accel worker is a third party's, so a user's
+         Derpibooru key never travels through it. A keyed read takes our own relay instead — the
+         same `?url=` shape, operated by PicPony — so the answer is still the user's own (their
+         filter, `my:faves`) rather than an anonymous one. */
+      if (carriesApiKey(derpiUrl)) return buildApiLineUrl(derpiUrl, 'picpony_api');
       return PROXY_API_BASE + encodeURIComponent(derpiUrl);
     case 'picpony_api': {
       /* Our own path, not `cdn.picpony.top` — `app/relay/route.ts` explains why the browser
@@ -538,7 +543,21 @@ export function buildApiLineUrl(url: string, line: ApiLine): string {
  * Derpibooru itself.
  */
 export function applyApiLineToWrite(url: string): string {
-  return policy.api === 'third_party' ? buildApiLineUrl(url, 'third_party') : url;
+  /* A write is the key's whole point: a third-party line that is not trusted with keys would strip
+     it and turn every write into a certain 401 (review P2-O1). Such a write goes to Derpibooru
+     itself — the policy withholds the key from the third party, not from Derpibooru. */
+  if (policy.api !== 'third_party') return url;
+  if (!policy.thirdPartyPassApiKey && carriesApiKey(url)) return url;
+  return buildApiLineUrl(url, 'third_party');
+}
+
+/** Whether a Derpibooru URL carries a user's API key (`key=` in its query). */
+export function carriesApiKey(url: string): boolean {
+  try {
+    return new URL(url).searchParams.has('key');
+  } catch {
+    return /[?&]key=/.test(url);
+  }
 }
 
 // --- API failover — `auto` only ---------------------------------------------

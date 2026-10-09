@@ -127,7 +127,11 @@ export function derpiProfileHref(profile: ProfileUser): string | null {
   const id = derpiId(profile);
   if (id !== null) return `/derpi/user/${id}`;
   const name = derpiName(profile);
-  return name ? `/derpi/user/${encodeURIComponent(name)}` : null;
+  /* A binding with only a name (old data) cannot open `/derpi/user/<name>`: Derpibooru's JSON API
+     finds a profile by id alone, so that page always said 用户不存在 (review P5-O4). The search
+     for the name's uploads is what such a card can honestly lead to. */
+  const term = name ? uploaderTerm(profile) : null;
+  return term ? `/search?q=${encodeURIComponent(term)}` : null;
 }
 
 /** The profile's bio as it is printed: trimmed, or `''` when there is none. */

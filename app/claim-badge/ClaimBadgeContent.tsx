@@ -287,7 +287,7 @@ function ClaimForm({ token, claimToken, profileHref }: { token: string; claimTok
         size="pane"
         entrance={!pressed}
         title="未能确认领取结果"
-        message={`${outcome.message}。重试时如果提示已经领取过，徽章就已在你的账号里。`}
+        message={`${outcome.message.replace(/[。.！!]+$/, '')}。重试时如果提示已经领取过，徽章就已在你的账号里。`}
         onRetry={outcome.retryable ? () => void submit() : undefined}
         action={outcome.retryable ? undefined : home}
       />

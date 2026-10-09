@@ -5,6 +5,7 @@ import type { DerpiProfileResponse } from '@/lib/types/user';
 import { proxyFetch, fetchDerpiImages, applyImageLine, buildSearchQuery } from './client';
 import { listOf, readObject } from './http';
 import { ApiError } from './errors';
+import { withoutOverflowBlacklisted } from '@/lib/searchQuery';
 
 /*
  * Derpibooru reads. Every one resolves with a validated payload or throws `ApiError`
@@ -24,7 +25,8 @@ function isImage(value: unknown): value is PonyImage {
 /** Map an `{ total, images }` envelope onto the current image line, dropping malformed rows. */
 function withImageLine(data: { total?: unknown; images?: unknown }): ApiResponse {
   if (!Array.isArray(data.images)) throw new ApiError('invalid');
-  const images = data.images.filter(isImage).map(applyImageLine);
+  /* A query carries the newest hundred blacklisted ids; the rest are filtered here (review P3-O3). */
+  const images = withoutOverflowBlacklisted(data.images.filter(isImage), currentPublicBlacklist()).map(applyImageLine);
   const total = Number(data.total);
   return { total: Number.isFinite(total) && total >= 0 ? total : images.length, images };
 }

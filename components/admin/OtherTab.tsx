@@ -56,6 +56,8 @@ function statText(value: unknown): string {
 
 /** The longest notice the maintenance screen shows; the server cuts anything past it. */
 const MESSAGE_MAX = 500;
+/* By character, as `mb_strlen` counts (review P6-O11; the same rule as the profile bio, P5-O8). */
+const messageLength = (text: string) => Array.from(text).length;
 
 /**
  * A settings row while its value is unknown: the row's own shape, the switch's slot a placeholder.
@@ -100,7 +102,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
 
   const current = status.data;
   const message = draft ?? current?.maintenanceMessage ?? '';
-  const messageError = message.length > MESSAGE_MAX ? `提示文字最多 ${MESSAGE_MAX} 字` : undefined;
+  const messageError = messageLength(message) > MESSAGE_MAX ? `提示文字最多 ${MESSAGE_MAX} 字` : undefined;
 
   const commitMaintenance = (enabled: boolean) => {
     if (!current || messageError) return;
@@ -190,7 +192,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
                 value={message}
                 readOnly={maintenanceMutation.busy}
                 error={messageError}
-                count={{ value: message.length, max: MESSAGE_MAX }}
+                count={{ value: messageLength(message), max: MESSAGE_MAX }}
                 helper="留空则显示默认的维护提示"
                 placeholder="例如：服务器正在升级维护，预计一小时后恢复…"
                 onChange={(event) => setDraft(event.target.value)}

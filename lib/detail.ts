@@ -40,6 +40,8 @@ type DetailEntry = {
   controller?: AbortController;
   value?: DetailResult;
   publishedValue?: DetailResult;
+  /** When a stale-while-watched refresh was last started (review P3-O2), so it runs once a TTL. */
+  refreshedAt?: number;
 };
 
 const detailCache = new Map<number, DetailEntry>();
@@ -193,6 +195,47 @@ async function runEntry(imageId: number, entry: DetailEntry) {
   }
 }
 
+/**
+ * Review P3-O2: the open picture's record went stale and stayed so — an entry somebody is watching
+ * is never evicted, and `prefetchImageDetail` handed it back as it was, so votes and faves showed
+ * the first read for as long as the picture stayed open. A watched, expired entry now gets one
+ * background re-read per TTL **in place**: the record on screen stays until the answer lands, and
+ * a failed refresh changes nothing (the user did not ask for it, and the old record is still
+ * right about everything but the counts).
+ */
+function refreshWatchedEntry(imageId: number, entry: DetailEntry) {
+  const now = Date.now();
+  if (entry.status !== 'resolved' || entry.controller) return;
+  if (entry.refreshedAt !== undefined && now - entry.refreshedAt < CACHE_TTL) return;
+  entry.refreshedAt = now;
+  const controller = new AbortController();
+  entry.controller = controller;
+  scheduleLaneJob(LANE, {
+    key: `${jobKey(imageId)}:refresh`,
+    priority: 'background',
+    keep: true,
+    cancel: () => {
+      controller.abort();
+      if (entry.controller === controller) entry.controller = undefined;
+    },
+    run: async () => {
+      try {
+        if (detailCache.get(imageId) !== entry || controller.signal.aborted) return;
+        const result = await getImage(String(imageId), controller.signal);
+        if (detailCache.get(imageId) !== entry || controller.signal.aborted) return;
+        entry.value = result;
+        entry.promise = Promise.resolve(result);
+        entry.createdAt = Date.now();
+        notifyImageDetail(imageId);
+      } catch {
+        /* Left as it was. */
+      } finally {
+        if (entry.controller === controller) entry.controller = undefined;
+      }
+    },
+  });
+}
+
 function scheduleEntry(imageId: number, entry: DetailEntry) {
   scheduleLaneJob(LANE, {
     key: jobKey(imageId),
@@ -245,6 +288,7 @@ export function prefetchImageDetail(
       cached.priority = 'immediate';
       if (cached.status === 'queued') promoteLaneJob(LANE, jobKey(imageId));
     }
+    if (isExpired(cached) && detailListeners.has(imageId)) refreshWatchedEntry(imageId, cached);
     touchEntry(imageId, cached);
     return cached.promise;
   }

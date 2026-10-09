@@ -212,9 +212,9 @@ function AgreementPolicy({ onOpen }: { onOpen: (tab: PolicyKey) => void }) {
         <P>5.2 本站展示的画作、图片及相关衍生内容的著作权归属原作者及原发布平台所有。本站不主张对任何通过 API 抓取的图片拥有所有权。</P>
         <P>5.3 您在使用本站时，须尊重原画师的劳动成果。如需转载、商用本站展示的作品，请务必前往原站（Derpibooru）查阅原作者的许可声明，本站无权代表作者授予任何许可。</P>
         <P>
-          5.4 桌面小马（Desktop Ponies）功能的素材和部分代码来源于 Desktop Ponies 项目，并严格遵守{' '}
-          <OutLink href="https://creativecommons.org/licenses/by-nc-sa/3.0/">知识共享 署名-非商业性使用-相同方式共享 3.0</OutLink>
-          ，GitHub 仓库：<OutLink href="https://github.com/RoosterDragon/Desktop-Ponies">RoosterDragon/Desktop-Ponies</OutLink>。
+          5.4 桌面小马功能的动画引擎为 Browser Ponies（Mathias Panzenböck，MIT 许可证，许可声明随代码保留）；角色素材来源于 Desktop Ponies 社区项目（GitHub 仓库：
+          <OutLink href="https://github.com/RoosterDragon/Desktop-Ponies">RoosterDragon/Desktop-Ponies</OutLink>
+          ），各素材的著作权归原作者所有，本站不主张任何所有权，也不代表原作者授予任何许可。My Little Pony 角色的相关权利归其权利人所有。
         </P>
         <H2>6. 免责声明</H2>
         <P>6.1 <strong>数据来源免责：</strong> 本站展示的大部分内容由 Derpibooru 平台 API 提供，本站无法对所有抓取内容的合法性、准确性、真实性进行 100% 的实时事前审查。如您发现有漏网的违规图片或侵权内容，请通过「举报」功能联系我们，我们将积极在本地客户端层面进行屏蔽处理，但本站对 Derpibooru 数据源的内容本身不承担法律责任。</P>
@@ -251,6 +251,7 @@ function PrivacyPolicy() {
           <li><strong>Derpibooru API Key：</strong> 本站允许您绑定 Derpibooru 的 API Key，以便同步您的黑名单过滤、解锁特定内容以及验证真实身份。为保障安全，您的 API Key 在本站服务器数据库中采用强加密算法（对称加密）存储，且在管理员面板等全部界面中进行了脱敏处理（显示为 <Code>abc********rst</Code>）。它仅用于代表您向原站服务器发起数据同步，我们不会在本地进行其他用途的保留。</li>
           <li><strong>本地人机验证滑动轨迹：</strong> 当您在登录、注册或重置密码时拖动滑块人机验证，系统会在您本地浏览器短暂收集拖动轨迹信息（包含每次坐标采样与对应的时间戳偏移量），并使用 XOR 简易算法加密上传。<strong>该轨迹数据仅用于后端即时的生物行为特征防机器脚本检测（计算速度不连贯性及 Y 轴抖动），完成安全判别后即时在内存中销毁，本站绝对不会将轨迹数据写入持久化数据库。</strong></li>
           <li><strong>用户互动数据：</strong> 当您使用云端收藏、发布评论、反馈标签或上传新作品时，相关数据（如图片 ID、评论内容、反馈说明、上传的媒体文件及其标签和描述）将被收集，并提交至本站后台或直接上传至 Derpibooru 原站。评论与反馈在存储前将经过自动 HTML 净化器防注入过滤。</li>
+          <li><strong>彩彩 AI 对话：</strong> 当您使用彩彩 AI 助手时，您输入的对话内容、当前页面的基本信息（页面地址与可用入口），以及助手为完成您的请求而读取的站内信息（如收藏夹、任务进度、最近联系人与私信摘要），会发送至本站后台，并由后台转交所配置的大语言模型服务（可能为第三方模型服务商）生成回复。写入类操作须经您逐条确认或您在设置中授予的权限方可执行。请勿在对话中输入密码、API Key 等敏感信息。</li>
           <li><strong>以图搜图文件：</strong> 当您使用「以图搜图」功能上传本地图片时，图片仅用于发送至服务器进行即时的相似度比对，服务器不会保存您所上传的图片。</li>
           <li><strong>本地偏好与缓存数据：</strong> 我们会将您的部分使用偏好（如内容分级过滤器状态、是否播放视频预览、图片 CDN 加速和 picpony 加速服务器开关、屏蔽或打码的自定义标签组、搜索历史及 API Key 记录等）以 localStorage 的形式直接存储在您的设备浏览器中，不会上传至我们的服务器。此外，会话 Session 数据（以 Cookie <Code>PHPSESSID</Code> 指向）用于存储暂时的 CSRF 校验令牌及限流统计次数。</li>
         </UL>
@@ -259,6 +260,7 @@ function PrivacyPolicy() {
         <UL>
           <li><strong>Derpibooru / Trixiebooru：</strong> 本站的核心图片、标签库、评论数据均通过 API 直接来源于 trixiebooru.org。您的搜索请求、API Key 核验以及作品上传行为均会直接与该服务器产生数据交互。</li>
           <li><strong>图片与资源加速服务：</strong> 当您在设置中开启「启用图片 CDN 加速」或「启用 picpony 加速服务器」时，本站会通过加速节点与第三方代理服务（如 <Code>wsrv.nl</Code>）为您拉取并加速资源。</li>
+          <li><strong>大语言模型服务：</strong> 彩彩 AI 的回复由后台配置的大语言模型服务生成，您的对话及上一条所述的站内信息会经本站后台发送至该服务。</li>
           <li><strong>第三方翻译引擎：</strong> 当您点击评论区的「翻译」按钮时，您的评论原文将被发送至第三方翻译接口（如 Lingva API 或 MyMemory API）以获取中文翻译结果。</li>
         </UL>
         <H2>3. 数据存储与安全</H2>

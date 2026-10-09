@@ -22,13 +22,17 @@ import { assistantQuery, quotaQuery } from './queries';
 
 function Provider({ token }: { token: string }) {
   const read = useAdminQuery(assistantQuery, token);
-  const [draft, setDraft] = useState<Values | null>(null);
+  /* `savedFrom` is `ConfigEditor`'s rule (review P6-O4): a draft just saved stays on screen while
+     the read is still the one from before the save — clearing it showed the old model until the
+     re-read landed — and gives way as soon as a new read arrives. */
+  const [draft, setDraftState] = useState<{ values: Values; savedFrom?: Values } | null>(null);
+  const setDraft = (next: Values | null) => setDraftState(next ? { values: next } : null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [models, setModels] = useState<api.ModelList | null>(null);
   const [notice, setNotice] = useState('');
   const save = useAdminMutation(token), list = useAdminMutation(token), discover = useAdminMutation(token), test = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
-  const values = draft ?? read.data?.values;
+  const values = draft && (!draft.savedFrom || !read.data || draft.savedFrom === read.data.values) ? draft.values : read.data?.values;
   const catalog = models ?? read.data;
   const candidates = Array.isArray(values?.model_candidates) ? values.model_candidates : [];
   const sameProvider = Boolean(values && read.data && String(values.base_url).replace(/\/+$/, '') === String(read.data.values.base_url).replace(/\/+$/, '') && String(values.models_url).replace(/\/+$/, '') === String(read.data.values.models_url).replace(/\/+$/, ''));
@@ -51,7 +55,7 @@ function Provider({ token }: { token: string }) {
     if (busy || !values || !validate()) return;
     const snapshot = { ...values };
     confirmThen('确认保存助手配置', `确定要保存彩彩 AI 的模型配置吗？${values.clear_key ? '已保存的助手密钥将被清除。' : '之后的对话将使用新配置。'}`, () => void save.run(
-      () => api.saveAssistantConfig(token, snapshot), () => { setDraft(null); setModels(null); setNotice(''); showToast('已保存助手配置', 'success'); }, '助手配置保存失败', { onCommitted: () => { assistantQuery.invalidate(); assistantQuota.invalidate({ token }); } },
+      () => api.saveAssistantConfig(token, snapshot), () => { setDraftState({ values: { ...snapshot, api_key: '', clear_key: false }, savedFrom: read.data?.values }); setModels(null); setNotice(''); showToast('已保存助手配置', 'success'); }, '助手配置保存失败', { onCommitted: () => { assistantQuery.invalidate(); assistantQuota.invalidate({ token }); } },
     ));
   };
   const fetchModels = () => {

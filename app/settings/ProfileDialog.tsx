@@ -16,6 +16,9 @@ import { useFieldErrors } from '@/lib/useFieldErrors';
 import { saveAccountFields, text } from './useAccount';
 
 const BIO_MAX = 500;
+/* By character, as PHP's `mb_strlen` counts (review P5-O8): `.length` counted an emoji as two.
+   The backend's own unit could not be measured without an account; this is the usual one. */
+const bioLength = (text: string) => Array.from(text).length;
 
 export interface ProfileValues {
   bio: string;
@@ -59,7 +62,7 @@ export default function ProfileDialog({
   const [busy, setBusy] = useState(false);
   const today = todayOnBeijingCalendar();
   const form = useFieldErrors<'bio' | 'birthday'>(() => [
-    ['bio', draft.bio.length > BIO_MAX ? `简介最多 ${BIO_MAX} 个字符` : null],
+    ['bio', bioLength(draft.bio) > BIO_MAX ? `简介最多 ${BIO_MAX} 个字符` : null],
     ['birthday', draft.birthday && draft.birthday > today ? '生日不能晚于今天' : null],
   ]);
   const dirty =
@@ -131,7 +134,7 @@ export default function ProfileDialog({
             form.clear('bio');
           }}
           rows={3}
-          count={{ value: draft.bio.length, max: BIO_MAX }}
+          count={{ value: bioLength(draft.bio), max: BIO_MAX }}
           className="resize-none"
           placeholder="介绍一下你自己…"
           readOnly={busy}

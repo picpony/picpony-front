@@ -283,7 +283,27 @@ export function cloudPayload(values: Values): Row {
 }
 export function announcementPayload(values: Values): { version: string; title: string; content: string } {
   const p = fieldsPayload([{ key: 'version', label: '版本' }, { key: 'title', label: '标题' }, { key: 'content', label: '公告正文' }], values);
-  return { version: text(p.version), title: text(p.title), content: text(p.content).replace(/\r\n?/g, '\n').replace(/\n/g, '<br>') };
+  return { version: text(p.version), title: text(p.title), content: announcementHtml(text(p.content)) };
+}
+
+const BLOCK_TAG = '(?:ul|ol|li|p|div|h[1-6]|table|thead|tbody|tr|td|th|blockquote|pre|hr|br)';
+const AFTER_BLOCK = new RegExp(`<\\/?${BLOCK_TAG}\\b[^>]*>[ \\t]*$`, 'i');
+const BEFORE_BLOCK = new RegExp(`^[ \\t]*<\\/?${BLOCK_TAG}\\b`, 'i');
+
+/**
+ * The body's line breaks as `<br>` — except a break beside a block tag (review P6-O3): a list
+ * written over several lines became `<ul><br><li>…`, invalid markup that sanitizers and browsers
+ * repair differently. Text lines keep their breaks, as 「换行会保留」 promises; markup lines are
+ * left to the markup.
+ */
+export function announcementHtml(content: string): string {
+  const lines = content.replace(/\r\n?/g, '\n').split('\n');
+  let out = lines[0] ?? '';
+  for (let i = 1; i < lines.length; i += 1) {
+    const beside = AFTER_BLOCK.test(lines[i - 1]) || BEFORE_BLOCK.test(lines[i]);
+    out += (beside ? '\n' : '<br>') + lines[i];
+  }
+  return out;
 }
 export interface RateRule { action: string; label: string; max: string; window: string; key_type: string }
 export function ratePayload(rules: RateRule[]): Row {

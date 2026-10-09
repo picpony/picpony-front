@@ -100,6 +100,28 @@ function transmit(token: string, key: string, item: OutboxItem) {
   });
 }
 
+/**
+ * Send a message that has no bubble of its own — a share from outside the conversation — **in
+ * line** with that conversation's queued messages (review P4-O8): it used to go out beside the
+ * chain, so a card could land before text typed earlier. Rejects with an `AbortError` when the
+ * session changed while it waited, so the caller says nothing about another account's send.
+ */
+export function sendInLine(token: string, contactId: number, content: string): Promise<void> {
+  const key = keyOf(token, contactId);
+  const run = async () => {
+    if (readToken() !== token) throw new DOMException('会话已变化', 'AbortError');
+    await sendMessage(token, contactId, content);
+  };
+  const result = (chains.get(key) ?? Promise.resolve()).then(run, run);
+  /* The chain itself never rejects: a failed share must not fail the messages behind it. */
+  const chain = result.then(() => {}, () => {});
+  chains.set(key, chain);
+  void chain.finally(() => {
+    if (chains.get(key) === chain) chains.delete(key);
+  });
+  return result;
+}
+
 /** Queue a message. It appears in the thread at once and goes out after the ones before it. */
 export function queueMessage(token: string, contactId: number, content: string, afterId: number) {
   listen();

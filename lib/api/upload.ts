@@ -81,7 +81,10 @@ export function stageUpload(
         reject(new ApiError('http', {
           status: xhr.status,
           serverMessage,
-          message: xhr.status === 413 ? '文件太大，服务器拒绝了这次上传' : undefined,
+          message: xhr.status === 413 ? '文件太大，服务器拒绝了这次上传'
+            /* Our hop's answer for a body that stopped arriving (review P4-O2): the visitor's
+               network, not an outage. Nothing was staged, so trying again is safe. */
+            : xhr.status === 408 ? '上传中断，请检查网络后重试' : undefined,
         }));
         return;
       }

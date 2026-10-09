@@ -180,7 +180,9 @@ export function createAssistantSession(token: string, accountId: string, env: { 
       return run(async () => {
         if (decision === 'confirm' && task.actions.some(action => !actionSupported(action))) throw new Error('此操作需要到对应页面手动完成，未提交确认');
         // Persist the human's exact reviewed plan before the confirmation response can be lost.
-        approvals = approvals.filter(record => record.taskId !== task.id);
+        /* Merged with what storage holds now (review P5-O3): another tab's confirmation written
+           since this one last read would otherwise be overwritten by this tab's older copy. */
+        approvals = parseApprovals(readJournalText(accountId, 'approved-tasks')).filter(record => record.taskId !== task.id);
         approvals.push(approvalFor(task.id, task.actions, decision));
         approvals = approvals.slice(-64);
         writeJournalText(accountId, 'approved-tasks', JSON.stringify(approvals));

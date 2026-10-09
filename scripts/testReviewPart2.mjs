@@ -50,7 +50,8 @@ test('P2-F3: only the host is canonicalised, never a query that mentions trixieb
   assert.equal(route.canonicalDerpiUrl(queryFirst), queryFirst, 'a canonical URL is left exactly as it is');
   assert.equal(route.canonicalDerpiUrl('https://www.trixiebooru.org/api/v1/json/images/1'), 'https://derpibooru.org/api/v1/json/images/1');
   assert.equal(route.canonicalDerpiUrl('/relative/trixiebooru.org'), '/relative/trixiebooru.org');
-  const accel = route.buildApiLineUrl(searched, 'api_accel');
+  /* Keyless: a keyed read never takes the third-party worker (review P1-F11 / P2-O1). */
+  const accel = route.buildApiLineUrl(searched.replace('&key=k', ''), 'api_accel');
   const inner = decodeURIComponent(accel.slice(accel.indexOf('?url=') + 5));
   assert.equal(new URL(inner).hostname, 'derpibooru.org');
   assert.match(new URL(inner).searchParams.get('q'), /trixiebooru\.org/, 'the search the user typed reaches the worker intact');

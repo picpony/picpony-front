@@ -31,7 +31,9 @@ const NOISE = new Set([
 ]);
 
 /** Emoticon tags (`:d`, `>:c`, `:3`, `x3`) describe an expression, not a subject. */
-const EMOTICON = /^(?:[:;=>][-']?|x)[a-z0-9()<>|:\/]{1,3}$/;
+/* `x` faces are `x3`, `xd`, `x(`: digits, symbols, or a `d` — never letters in general, or a
+   short ordinary tag like `xbox` lost its place in the alt text (review P3-O6). */
+const EMOTICON = /^(?:[:;=>][-']?[a-z0-9()<>|:\/]{1,3}|x[0-9d()<>|:\/]{1,2})$/;
 
 /**
  * The characters a gallery is most often of, in their canonical Derpibooru spelling. Only an
