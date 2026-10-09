@@ -1,6 +1,7 @@
 'use client';
 
 import type { PonyImage } from '@/lib/types/image';
+import { readToken } from '@/lib/hooks';
 
 /**
  * 以图搜图 result sets for this session, by the key their URL carries (`?image=`).
@@ -13,7 +14,7 @@ import type { PonyImage } from '@/lib/types/image';
  */
 
 export interface ImageSearchResult {
-  /** The results that pass this device's content settings, in the service's order. */
+  /** Every result, in the service's order; the screen filters them by the current settings. */
   images: PonyImage[];
   /** How many the service found in all, before the content settings. */
   found: number;
@@ -24,7 +25,9 @@ export interface ImageSearchResult {
 /** A handful: each holds a preview picture, and Back rarely walks further than that. */
 const MAX_ENTRIES = 6;
 
-const store = new Map<string, ImageSearchResult>();
+/** Each set remembers the session it was made in (review P4-O9): signing out or switching
+ *  accounts leaves another person's search behind, so it reads as expired. */
+const store = new Map<string, { result: ImageSearchResult; token: string | null }>();
 
 function newKey(): string {
   let key = '';
@@ -36,11 +39,17 @@ function newKey(): string {
 
 export function saveImageSearch(result: ImageSearchResult): string {
   const key = newKey();
-  store.set(key, result);
+  store.set(key, { result, token: readToken() });
   while (store.size > MAX_ENTRIES) store.delete(store.keys().next().value as string);
   return key;
 }
 
 export function readImageSearch(key: string | null): ImageSearchResult | undefined {
-  return key ? store.get(key) : undefined;
+  const entry = key ? store.get(key) : undefined;
+  if (!entry) return undefined;
+  if (entry.token !== readToken()) {
+    store.delete(key as string);
+    return undefined;
+  }
+  return entry.result;
 }

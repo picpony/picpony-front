@@ -7,6 +7,9 @@ import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import Skeleton from '@/components/Skeleton';
 import { buttonClasses } from '@/components/buttonStyles';
+/* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
+   偏好 (review P5-F3). */
+import { settingsHref } from '@/app/settings/tabs';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { ICON } from '@/lib/icons';
 import type { ProfileUser } from '@/lib/types/user';
@@ -60,7 +63,7 @@ export function OwnerHiddenNote({ tab }: { tab: ProfileTab }) {
         <MdVisibilityOff size={ICON.dense} aria-hidden="true" />
         你的{what}已对其他人隐藏
       </span>
-      <Link scroll={false} href="/settings" className={buttonClasses({ variant: 'text', size: 'xs' })}>
+      <Link scroll={false} href={settingsHref('account')} className={buttonClasses({ variant: 'text', size: 'xs' })}>
         前往设置
       </Link>
     </div>

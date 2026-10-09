@@ -464,6 +464,7 @@ function loadMaintenance({ respond, env = {}, cookie } = {}) {
     'next/headers': { cookies: async () => ({ get: (name) => (name === 'devMaintenancePreview' && cookie !== undefined ? { value: cookie } : undefined) }) },
     '@/lib/constants': { PICPONY_API_BASE: '/api.php', PICPONY_API_ORIGIN: 'https://picpony.top' },
     '@/lib/serverMemo': { cacheSeconds: (s) => s },
+    '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
   }, { fetch, AbortSignal, process: { env: { NODE_ENV: 'production', ...env } } });
   return { readMaintenance: module.readMaintenance, requests };
 }

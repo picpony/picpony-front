@@ -58,6 +58,7 @@ import {
   isUntranslated,
   pageSizeOf,
   reportedCount,
+  sameTag,
   savedTag,
   tagSavePayload,
   translatedShare,
@@ -142,6 +143,8 @@ ${duplicatePage.listKey}` : pageKey;
 
   // ---- Selection, editing, dialogs ----
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  /** Every selected row's English tag as it was seen, for the delete confirmation (review P6-O7). */
+  const selectedNames = useRef(new Map<number, string>());
   const [editing, setEditing] = useState<{ id: number; closing: boolean } | null>(null);
   const dirtyRef = useRef(false);
   const setDirty = useCallback((dirty: boolean) => {
@@ -187,9 +190,15 @@ ${duplicatePage.listKey}` : pageKey;
     else openCreate({ name: pendingTag, category: 'general', images: 0 });
   }
 
-  const completeWorkOrder = () => {
+  /**
+   * Close the feedback being handled — only when the tag just saved is the one it names (review
+   * P6-F2). A work order stays open while the operator saves other rows (the search it opened is a
+   * substring match, so neighbours are on screen) or adds an unrelated tag; marking it 已采纳并写入词库
+   * on any save closed a user's request that nobody had acted on.
+   */
+  const completeWorkOrder = (en: string) => {
     const order = workOrder;
-    if (!order) return;
+    if (!order || !sameTag(order.tag_name, en)) return;
     setWorkOrder(null);
     void (async () => {
       try {
@@ -211,7 +220,7 @@ ${duplicatePage.listKey}` : pageKey;
       () => saveDictionaryTag(token, payload as SaveBody),
       () => {
         showToast(`已保存标签「${tag.en}」`, 'success');
-        completeWorkOrder();
+        completeWorkOrder(tag.en);
         setEditing((current) => (current?.id === tag.id ? { id: tag.id, closing: true } : current));
       },
       '保存失败',
@@ -253,7 +262,7 @@ ${duplicatePage.listKey}` : pageKey;
       },
       () => {
         showToast(`已添加标签「${en}」`, 'success');
-        completeWorkOrder();
+        completeWorkOrder(en);
         setCreate((current) => ({ ...current, open: false }));
       },
       '添加失败',
@@ -287,7 +296,14 @@ ${duplicatePage.listKey}` : pageKey;
   const removeSelected = () => {
     const ids = [...selected];
     if (ids.length === 0 || bulkMutation.isPending('delete')) return;
-    confirmThen('确认批量删除', `确定要永久删除选中的 ${ids.length} 个标签吗？此操作无法恢复。`, () =>
+    /* The selection survives paging and filtering, so the confirmation names what it deletes
+       (review P6-O7) — the count alone hid entries on pages no longer in view. */
+    const shownIds = new Set(rows.map((row) => row.id));
+    const names = ids.map((id) => selectedNames.current.get(id) ?? `#${id}`);
+    const listed = names.slice(0, 12).join('、') + (names.length > 12 ? ` 等 ${names.length} 个` : '');
+    const offscreen = ids.filter((id) => !shownIds.has(id)).length;
+    const note = offscreen > 0 ? `其中 ${offscreen} 个不在当前页。` : '';
+    confirmThen('确认批量删除', `确定要永久删除选中的 ${ids.length} 个标签吗？${listed}。${note}此操作无法恢复。`, () =>
       void bulkMutation.run(
         () => adminApi.batchDeleteDictionaryTags(token, ids),
         /* A count the backend did not send is not 0 (G4-015's rule, in a toast): the deletion is
@@ -428,7 +444,7 @@ ${duplicatePage.listKey}` : pageKey;
         tag={current}
         closing={editing.closing}
         saving={saveMutation.pendingKeys.has(tag.id)}
-        workOrder={workOrder && workOrder.tag_name.trim().toLowerCase() === current.en.toLowerCase() ? workOrder : null}
+        workOrder={workOrder && sameTag(workOrder.tag_name, current.en) ? workOrder : null}
         onSave={(payload) => saveEdit(current, payload)}
         onCancel={closeEditor}
         onExitComplete={() => finishClose(tag.id)}
@@ -450,26 +466,30 @@ ${duplicatePage.listKey}` : pageKey;
         <Checkbox
           checked={allSelected}
           disabled={pageIds.length === 0}
-          onChange={() =>
+          onChange={() => {
+            rows.forEach((row) => selectedNames.current.set(row.id, row.en));
             setSelected((previous) => {
               if (allSelected) return without(previous, pageIds);
               const next = new Set(previous);
               pageIds.forEach((id) => next.add(id));
               return next;
-            })}
+            });
+          }}
           aria-label="全选本页标签"
         />
       ),
       render: (tag) => (
         <Checkbox
           checked={selected.has(tag.id)}
-          onChange={() =>
+          onChange={() => {
+            selectedNames.current.set(tag.id, tag.en);
             setSelected((previous) => {
               const next = new Set(previous);
               if (next.has(tag.id)) next.delete(tag.id);
               else next.add(tag.id);
               return next;
-            })}
+            });
+          }}
           aria-label={`选择 ${tag.en}`}
         />
       ),
@@ -749,7 +769,7 @@ ${duplicatePage.listKey}` : pageKey;
         open={create.open}
         prefill={create.prefill}
         saving={saveMutation.pendingKeys.has('create')}
-        workOrder={workOrder && create.open ? workOrder : null}
+        workOrder={workOrder && create.open && create.prefill?.name && sameTag(workOrder.tag_name, create.prefill.name) ? workOrder : null}
         duplicate={duplicate}
         onClose={() => {
           if (saveMutation.isPending('create')) return;

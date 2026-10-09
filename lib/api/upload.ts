@@ -1,6 +1,6 @@
 import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
 import { ApiError, FAILURE_MESSAGES, statusMessage, toApiError } from './errors';
-import { envelopeMessage } from './http';
+import { envelopeMessage, noteUnauthorized } from './http';
 
 /**
  * 发布图片 — a picture goes to Derpibooru in two steps, the original front end's contract:
@@ -74,11 +74,17 @@ export function stageUpload(
         data = null;
       }
       const serverMessage = envelopeMessage(data);
+      /* A bare XHR bypasses `picponyRequest`, so its 401 must report itself (review P1-F10):
+         otherwise a dead session failed the upload and left the app signed in. */
+      if (xhr.status === 401) noteUnauthorized(token);
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new ApiError('http', {
           status: xhr.status,
           serverMessage,
-          message: xhr.status === 413 ? '文件太大，服务器拒绝了这次上传' : undefined,
+          message: xhr.status === 413 ? '文件太大，服务器拒绝了这次上传'
+            /* Our hop's answer for a body that stopped arriving (review P4-O2): the visitor's
+               network, not an outage. Nothing was staged, so trying again is safe. */
+            : xhr.status === 408 ? '上传中断，请检查网络后重试' : undefined,
         }));
         return;
       }
@@ -108,6 +114,9 @@ export function stageUpload(
       done();
       reject(toApiError(new TypeError('Failed to fetch')));
     };
+    /* No `xhr.timeout`: a 50MB file on a slow line legitimately takes minutes, and the server
+       hop bounds a stalled body by its pace instead (`app/api.php/…/route.ts`). Kept for a
+       platform that imposes its own. */
     xhr.ontimeout = () => {
       done();
       reject(new ApiError('timeout'));

@@ -5,6 +5,7 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { Input, Textarea } from '@/components/Input';
 import Select from '@/components/Select';
+import ToggleSwitch from '@/components/ToggleSwitch';
 import { FormGrid } from '../AdminForm';
 import { TAG_CATEGORIES, type DerpiTagRow, type TagForm } from './model';
 import type { Feedback } from './resources';
@@ -74,6 +75,27 @@ export default function TagFields({
         placeholder="例如：该角色首次登场于第一季…"
         onChange={(event) => onChange({ description: event.target.value })}
       />
+      {/* The original editor's three marks, in its words (ciku.html; review P6-O6) — they used to be
+          carried through only. Its automatic 限制级 suggestion is not reproduced. */}
+      {form.flags && (
+        <div className="flex flex-col">
+          {([
+            ['restricted', '限制级标签', '是否是限制级标签'],
+            ['originalTranslation', '原创翻译', '适用于作品名、OC、艺术家'],
+            ['sensitive', '敏感标签', '已标记为敏感的标签会在主站显示为感叹号'],
+          ] as const).map(([key, label, description]) => (
+            <ToggleSwitch
+              key={key}
+              layout="row"
+              label={label}
+              description={description}
+              checked={form.flags![key]}
+              disabled={busy}
+              onChange={(checked) => onChange({ flags: { ...form.flags!, [key]: checked } })}
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }

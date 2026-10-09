@@ -83,7 +83,7 @@ import {
   seedImageDetail,
   subscribeImageDetail,
 } from '@/lib/detail';
-import { downloadOriginal } from '@/lib/download';
+import { downloadCandidates, downloadOriginal } from '@/lib/download';
 import { describeImage } from '@/lib/imageDescription';
 import { getRawImageUrl } from '@/lib/imageLoader';
 import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
@@ -1117,7 +1117,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
       showToast('原图下载失败', 'error', {
         action: {
           label: '在新标签页打开',
-          onClick: () => window.open(getRawImageUrl(source.url), '_blank', 'noopener,noreferrer'),
+          /* The visitor's own line first (review P3-O4): with an image line forced site-wide
+             the raw derpicdn address is the one this visitor cannot reach. */
+          onClick: () => window.open(downloadCandidates(source.url)[0] ?? getRawImageUrl(source.url), '_blank', 'noopener,noreferrer'),
         },
       });
     });

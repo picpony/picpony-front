@@ -1,6 +1,7 @@
 import { PONY_EMOJI, type PonyEmoji } from '@/lib/generated/emoji';
 import { parseShare, shareSummary } from '@/lib/api/messages';
 import { subscriptionHref } from '@/components/subscriptions/href';
+import { getRawImageUrl } from '@/lib/imageLoader';
 
 /*
  * What a message's text *is*, as tokens — pure, so it can be tested without a DOM.
@@ -96,6 +97,30 @@ export function resolveLink(raw: string, origin?: string): { href: string; inter
   return { href: url.href, internal: false };
 }
 
+/** Where a share card's picture may come from: Derpibooru's own image hosts, and PicPony's. */
+const SHARE_THUMB_HOSTS = /^(?:[a-z0-9-]+\.)*(?:derpicdn\.net|derpibooru\.org|trixiebooru\.org|picpony\.top)$/i;
+
+/**
+ * The picture a share card may draw, or `''` for none (the card then shows its placeholder).
+ *
+ * The thumbnail rides in the message itself (`[image_share:<id>:<url>]`), so it is whatever the
+ * sender wrote — and the card draws it through the reader's image line: a sender could make every
+ * reader's browser fetch an address of their choosing, directly or through PicPony's worker and
+ * CDN, the moment the conversation opened (review P4-F7). A real card's picture is a Derpibooru
+ * rendition of the shared picture (`shareThumbUrl`), so only those hosts are drawn.
+ */
+export function shareThumbSrc(url: string): string {
+  const raw = getRawImageUrl(url.trim());
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'https:' && !parsed.username && !parsed.password && SHARE_THUMB_HOSTS.test(parsed.hostname)
+      ? parsed.href
+      : '';
+  } catch {
+    return '';
+  }
+}
+
 /** Plain text into text and link tokens. */
 export function linkify(text: string, origin?: string): MessageToken[] {
   const tokens: MessageToken[] = [];
@@ -159,7 +184,17 @@ export function legacyTokens(content: string, origin?: string): MessageToken[] {
   let text = content
     .replace(/\[img\]([\s\S]*?)\[\/img\]/gi, (whole, src: string) => {
       const value = src.trim();
-      return /^https?:\/\//i.test(value) ? hole({ type: 'image', src: value }) : '';
+      if (!/^https?:\/\//i.test(value)) return '';
+      /* Review P4-O1: anyone can send `[br]`, which makes a message "legacy" — so `[img]` was any
+         sender's way to make the recipient's browser fetch any address the moment the
+         conversation opened (their IP, the time they read it). The original editor's pictures
+         live on PicPony's own upload host or Derpibooru's; those are drawn, anything else is a
+         link the reader can choose to open. Not a date cut-off: the original front end is still
+         live and still writes this format. */
+      const drawable = shareThumbSrc(value);
+      if (drawable) return hole({ type: 'image', src: drawable });
+      const link = resolveLink(value, origin);
+      return link ? hole({ type: 'link', text: '[图片] ' + value, href: link.href, internal: link.internal }) : '';
     })
     .replace(/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi, (whole, href: string, label: string) => {
       const link = resolveLink(href.trim(), origin);

@@ -37,15 +37,15 @@ import { api } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { envelopeMessage, readJson } from '@/lib/api/http';
 import { sessionUser } from '@/lib/resources';
-import { readToken, updateUserInfo, useMediaQuery, writeUserInfo } from '@/lib/hooks';
+import { readToken, resolveDerpiCredentials, updateUserInfo, useMediaQuery, writeUserInfo } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { LS_KEYS, MEDIA } from '@/lib/constants';
 import { startCooldown, useCooldown } from '@/lib/useCooldown';
+import { focusField, useFieldErrors } from '@/lib/useFieldErrors';
 import {
   CODE_LENGTH,
   PASSWORD_HINT,
   USERNAME_HINT,
-  collectErrors,
   validateAccount,
   validateCode,
   validateEmail,
@@ -474,68 +474,6 @@ function useAuthOperation(isCurrentFlow: () => boolean) {
   };
 }
 
-type Rules<F extends string> = () => ReadonlyArray<readonly [F, string | null]>;
-
-/**
- * A form's field errors, shown in each field's own supporting line rather than in a toast
- * three hundred pixels away (or in the browser's own bubble — the forms are `noValidate`).
- * Checked on submit, which focuses the first field at fault; after that, a field is checked
- * again when it loses focus, and an error clears as soon as its field is edited.
- */
-function useFieldErrors<F extends string>(rules: Rules<F>) {
-  const [errors, setErrors] = useState<Partial<Record<F, string>>>({});
-  const [attempted, setAttempted] = useState(false);
-  const targets = useRef<Partial<Record<F, HTMLElement | null>>>({});
-
-  const recheck = (field: F) => {
-    const message = rules().find(([name]) => name === field)?.[1] ?? undefined;
-    setErrors((prev) => (prev[field] === message ? prev : { ...prev, [field]: message }));
-  };
-
-  return {
-    errors,
-    /** Props for the field: its error, where focus goes, and the re-check on blur. */
-    field(field: F) {
-      return {
-        ref: (element: HTMLElement | null) => {
-          targets.current[field] = element;
-        },
-        error: errors[field],
-        onBlur: () => {
-          if (attempted) recheck(field);
-        },
-      };
-    },
-    clear(field: F) {
-      setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
-    },
-    /** Validate everything; false (and the first bad field focused) if anything failed. */
-    check(): boolean {
-      const { errors: next, first } = collectErrors(rules());
-      setAttempted(true);
-      setErrors(next);
-      if (first) focusField(targets.current[first]);
-      return first === null;
-    },
-    /** A server's answer about one field (a wrong code). */
-    set(field: F, message: string) {
-      setErrors((prev) => ({ ...prev, [field]: message }));
-      focusField(targets.current[field]);
-    },
-  };
-}
-
-/** A code row is a group of boxes: focus lands on its first empty one. */
-function focusField(target: HTMLElement | null | undefined) {
-  if (!target) return;
-  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-    target.focus();
-    return;
-  }
-  const boxes = Array.from(target.querySelectorAll<HTMLInputElement>('input'));
-  (boxes.find((box) => !box.value) ?? boxes.at(-1))?.focus();
-}
-
 /** Report the form's own dirtiness to the dialog after each change. */
 function useReportDirty(dirty: boolean, onDirtyChange: (dirty: boolean) => void) {
   useEffect(() => {
@@ -607,13 +545,16 @@ async function establishSession(
     const result = await sessionUser.read({ token: base.token });
     if (!isCurrent(pending)) return false;
     if (result.kind === 'ok') {
+      /* The sign-in response's Derpibooru binding is the newer word — but only where it says
+         something: a response without `api_key` used to overwrite the account read's key with
+         `undefined`, and `writeUserInfo` then deleted the stored key until the shell's next
+         read put it back (review P2-F9). `resolveDerpiCredentials` is that rule, shared with the
+         shell's own merge. */
       updateUserInfo(base.token, {
         ...base,
         ...result.user,
         token: base.token,
-        api_key: base.api_key,
-        derpi_user_id: base.derpi_user_id,
-        derpi_username: base.derpi_username,
+        ...resolveDerpiCredentials(base as unknown as Record<string, unknown>, result.user as unknown as Record<string, unknown>),
       });
     }
   } catch {

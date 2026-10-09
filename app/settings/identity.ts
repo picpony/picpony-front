@@ -35,8 +35,15 @@ export function isRealIdentity(id: unknown, name: unknown): boolean {
   return key !== '' && key !== INVENTED_ID && typeof name === 'string' && name.trim() !== '';
 }
 
-/** Derpibooru's API key: twenty characters, no whitespace. */
-export const API_KEY_PATTERN = /^\S{20}$/;
+/**
+ * Derpibooru's API key: twenty URL-safe Base64 characters — Philomena mints it as
+ * `:crypto.strong_rand_bytes(15) |> Base.url_encode64()` (`Users.User.put_api_key`), and the
+ * Rails-era Devise token was the same alphabet and length. The upload hop accepts only
+ * `[A-Za-z0-9_-]` (`app/upload/submit/route.ts`'s `KEY_OK`), so a key this field once let through
+ * with any other character (`/^\S{20}$/`) was bound here and then refused at publishing with
+ * 「API Key 无效」 (review P5-F2).
+ */
+export { API_KEY_PATTERN } from '@/lib/validation';
 
 async function search<T extends object>(path: string, key: string, signal?: AbortSignal): Promise<T | 'invalid'> {
   try {

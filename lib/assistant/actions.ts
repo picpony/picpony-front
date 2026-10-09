@@ -41,18 +41,25 @@ export function actionSupported(action: AssistantAction): boolean {
   if (action.name === 'interact_page') return controlHref(action.arguments.control_id) !== null && action.arguments.action === 'click';
   return !actionIsWrite(action);
 }
-export function actionLabel(action: AssistantAction): string {
+/**
+ * What the confirmation card says an action does. `folderName` (review P5-O2) turns a folder id
+ * into its name where the account's folder list is at hand: 「删除收藏夹：12、15」 asked somebody to
+ * confirm an irreversible delete without saying what it deleted.
+ */
+export function actionLabel(action: AssistantAction, folderName?: (id: number) => string | undefined): string {
+  const folders = (value: unknown) => foldersLabel(value, folderName);
+  const folder = (value: unknown) => foldersLabel([value], folderName);
   const args = action.arguments;
   const params = obj(args.parameters);
   if (action.name === 'call_site_api') {
     const labels: Record<string, string> = {
       claim_task: `领取任务奖励（${str(params.task_type, 40) === 'login' ? '每日签到' : str(params.task_type, 40)}）`,
       send_message: `向用户 ${positiveId(params.receiver_id)} 发送私信：${str(params.content, 4000)}`,
-      create_fave_folder: `创建收藏夹「${str(params.name, 80)}」`, delete_fave_folders: `删除收藏夹及其中记录：${idsLabel(params.folder_ids)}`,
-      merge_fave_folders: `将收藏夹 ${idsLabel(params.source_folder_ids)} 合并至 ${positiveId(params.target_folder_id)}`,
-      set_image_fave_folders: `调整图片 ${positiveId(params.image_id)} 的收藏夹：${idsLabel(params.folder_ids)}`,
+      create_fave_folder: `创建收藏夹「${str(params.name, 80)}」`, delete_fave_folders: `删除收藏夹及其中记录：${folders(params.folder_ids)}`,
+      merge_fave_folders: `将收藏夹 ${folders(params.source_folder_ids)} 合并至 ${folder(params.target_folder_id)}`,
+      set_image_fave_folders: `调整图片 ${positiveId(params.image_id)} 的收藏夹：${folders(params.folder_ids)}`,
       toggle_fave: `${params.fave === false ? '取消收藏' : '收藏'}图片 ${positiveId(params.image_id)}`,
-      batch_transfer_faves: `${params.mode === 'move' ? '移动' : '复制'}图片 ${idsLabel(params.image_ids)} 至收藏夹 ${idsLabel(params.target_folder_ids)}`,
+      batch_transfer_faves: `${params.mode === 'move' ? '移动' : '复制'}图片 ${idsLabel(params.image_ids)} 至收藏夹 ${folders(params.target_folder_ids)}`,
       add_tag_subscription: `订阅标签「${str(params.tag_name, 120)}」`, remove_tag_subscription: `取消订阅标签「${str(params.tag_name, 120)}」`,
       save_my_ponies: `保存桌面小马：${Array.isArray(params.ponies) ? params.ponies.filter(v => typeof v === 'string').join('、').slice(0, 500) : ''}`,
     };
@@ -61,6 +68,13 @@ export function actionLabel(action: AssistantAction): string {
   if (action.name === 'interact_page') return PAGE_CONTROLS.find(c => c.id === args.control_id)?.label ?? '此控件需要手动操作';
   const labels: Record<string, string> = { search_images: '查找图片', set_search_filters: '调整搜索条件', navigate: '打开站内页面', open_settings: '打开设置', open_folder: '打开收藏夹', open_main_folder: '打开主收藏夹', start_folder_slideshow: '放映收藏夹', open_image: '打开图片', get_capabilities: '查看支持的功能', get_page_controls: '查看页面入口', get_account_info: '读取账户摘要', get_tasks: '读取任务进度', get_favorite_folders: '读取收藏夹', get_favorite_contents: '读取收藏内容', get_recent_contacts: '读取最近联系人', get_private_messages: '读取私信' };
   return labels[action.name] ?? '此操作需要手动完成';
+}
+function foldersLabel(value: unknown, name?: (id: number) => string | undefined): string {
+  if (!Array.isArray(value)) return '';
+  return value.map(positiveId).filter(Boolean).map((id) => {
+    const known = name?.(id);
+    return known ? `「${known.slice(0, 40)}」(${id})` : String(id);
+  }).join('、');
 }
 function idsLabel(value: unknown): string {
   return Array.isArray(value) ? value.map(positiveId).filter(Boolean).join('、') : '';

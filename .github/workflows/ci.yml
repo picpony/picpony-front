@@ -1,9 +1,12 @@
 # Every push to dev / master and every pull request: the checks that need no browser.
 #
-# No lockfile is committed (it was removed on purpose), so dependencies resolve from package.json
-# on each run; the npm cache keeps that quick. Node 24 matches development, and the TS-importing
-# scripts (`scripts/tsResolve.mjs`) need 22.18 or later for synchronous module hooks and type
-# stripping.
+# Dependencies install from the committed `bun.lock` with `--frozen-lockfile` (review P1-F3): the
+# README already makes bun the project's installer, so the lockfile it maintains is the one CI
+# reproduces, and a package.json change without its lockfile update fails here instead of
+# resolving differently on different days. bun only installs; every script still runs on Node.
+# Node 24 matches development (`.nvmrc`), and the TS-importing scripts
+# (`scripts/tsResolve.mjs`) need 22.18 or later for synchronous module hooks and type stripping
+# (`engines` in package.json).
 name: CI
 
 on:
@@ -37,18 +40,19 @@ jobs:
         with:
           node-version: 24
 
-      - name: Cache npm downloads
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Cache bun downloads
         uses: actions/cache@v4
         with:
-          path: ~/.npm
-          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
-          restore-keys: npm-${{ runner.os }}-
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install
-        run: npm install --no-audit --no-fund
-
-      - name: Production dependency security
-        run: npm audit --omit=dev --audit-level=high
+        run: bun install --frozen-lockfile
 
       - name: Changed-line whitespace
         env:
@@ -63,6 +67,8 @@ jobs:
       - name: Test and tooling syntax
         run: |
           for script in scripts/*.mjs; do node --check "$script" || exit 1; done
+          # The browser suites' Python is otherwise only compiled on the Windows job.
+          python3 -m compileall -q scripts
 
       - name: Typecheck
         run: npm run typecheck

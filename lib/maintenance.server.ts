@@ -1,8 +1,9 @@
 import { cache } from 'react';
 import { cookies } from 'next/headers';
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
+import { PICPONY_API_BASE, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 import { cacheSeconds } from '@/lib/serverMemo';
 import type { SiteStatusResponse } from '@/lib/types/site';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * Whether the site is in maintenance, read on the server so a visitor's first byte is the
@@ -33,7 +34,7 @@ const SERVER_STATUS_REVALIDATE_S = 30;
 /** The message is typed into an admin field; a runaway one is cut rather than trusted. */
 const MAX_MESSAGE_LENGTH = 500;
 
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const UPSTREAM_ORIGIN = upstreamOrigin();
 
 /** Development only: a browser carrying this cookie is shown maintenance with the cookie's
  *  value as the message (empty for the default), so the screen and the staff path can be

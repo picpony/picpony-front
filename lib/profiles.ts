@@ -84,8 +84,13 @@ export function uploaderTerm(profile: ProfileUser): string | null {
   if (id !== null) return `uploader_id:${id}`;
   const name = derpiName(profile);
   if (!name) return null;
-  /* A name is a literal term: every character the grammar treats as syntax is escaped. */
-  return `uploader:${name.replace(/([+\-=&|><!(){}[\]^"~*?:\\/])/g, '\\$1')}`;
+  /* A name is one literal term: every character the grammar treats as syntax is escaped — and so
+     are the comma and whitespace (review P5-F4). A Derpibooru name is any text up to 50
+     characters (`Users.User.validate_name` trims it and checks nothing else), and Philomena reads
+     `,` as AND and ` OR ` / ` AND ` / ` || ` / ` && ` as operators even inside what was meant as
+     one term: `uploader:a, b` listed `a`'s pictures tagged `b`, and `uploader:x OR y` everything
+     tagged `y`. An escaped character is a literal one to the lexer, so `\ ` keeps a space. */
+  return `uploader:${name.replace(/([+\-=&|><!(){}[\]^"~*?:\\/,\s])/g, '\\$1')}`;
 }
 
 /** Whether the profile has a Derpibooru account whose uploads can be listed. */
@@ -122,7 +127,11 @@ export function derpiProfileHref(profile: ProfileUser): string | null {
   const id = derpiId(profile);
   if (id !== null) return `/derpi/user/${id}`;
   const name = derpiName(profile);
-  return name ? `/derpi/user/${encodeURIComponent(name)}` : null;
+  /* A binding with only a name (old data) cannot open `/derpi/user/<name>`: Derpibooru's JSON API
+     finds a profile by id alone, so that page always said 用户不存在 (review P5-O4). The search
+     for the name's uploads is what such a card can honestly lead to. */
+  const term = name ? uploaderTerm(profile) : null;
+  return term ? `/search?q=${encodeURIComponent(term)}` : null;
 }
 
 /** The profile's bio as it is printed: trimmed, or `''` when there is none. */

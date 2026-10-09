@@ -1,6 +1,7 @@
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { PICPONY_API_BASE } from '@/lib/constants';
 import type { TeamMember } from '@/lib/resources';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * /about's roster, read on the server so the page arrives with its content in it; the island
@@ -39,7 +40,7 @@ const TIMEOUT_MS = 2500;
  */
 const REVALIDATE_S = 30 * 60;
 
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const UPSTREAM_ORIGIN = upstreamOrigin();
 
 export interface TeamSeed {
   key: string;

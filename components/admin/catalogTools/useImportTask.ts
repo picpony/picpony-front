@@ -4,7 +4,8 @@ import { readToken } from '@/lib/hooks';
 import { randomId } from '@/lib/utils';
 import { LS_KEYS } from '@/lib/constants';
 import { ApiError, apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import { readImport, writeImport } from '@/lib/adminCatalogTools/importClient';
+import { CatalogOutcomeUnknown } from '@/lib/api/adminCatalogTools';
+import { ImportNotSent, readImport, sendWithRetry, writeImport } from '@/lib/adminCatalogTools/importClient';
 import { CHUNK_BYTES, fingerprint, finalForm, importStatus, importUrl, parseJob, uploadChunks, validatePackage, type Dataset, type ImportJob } from '@/lib/adminCatalogTools/importModel';
 
 /**
@@ -71,8 +72,20 @@ export function useImportTask(token: string, viewerId: number, dataset: Dataset,
       if (isCurrent()) {
         const state = currentJob.current;
         if (state?.phase === 'done' || state?.phase === 'error') return;
+        /* A chunk is reconciled against the server's own list on resume (`chunk_status`), so a
+           chunk whose answer was lost only pauses the upload: the shared 勿重复提交 sentence was
+           wrong advice for the one write that is safe to repeat (review P6-F1). */
+        if (state?.phase === 'uploading') {
+          commit({ ...state, phase: 'paused' });
+          setError(failure instanceof CatalogOutcomeUnknown ? '上传中断，请重新选择同一文件，核对分片后继续上传' : apiErrorMessage(failure));
+          return;
+        }
+        /* Refused by the import route before the PHP service was asked: `submit` has already put
+           back the job as it stood (nothing, or the staged upload), and the same press may be
+           made again — it is neither 导入未全部完成 nor 提交结果待核对 (review P6-F1). */
+        if (failure instanceof ImportNotSent) { setError(apiErrorMessage(failure)); return; }
         const refused = failure instanceof ApiError && (failure.kind === 'envelope' || (failure.kind === 'http' && (failure.status ?? 500) < 500));
-        if (state) commit({ ...state, phase: state.phase === 'uploading' ? 'paused' : refused ? 'error' : ['submitted', 'processing', 'unknown'].includes(state.phase) ? 'unknown' : state.phase });
+        if (state) commit({ ...state, phase: refused ? 'error' : ['submitted', 'processing', 'unknown'].includes(state.phase) ? 'unknown' : state.phase });
         setError(apiErrorMessage(failure));
       }
     }, () => { if (isCurrent()) { locked.current = false; setBusy(false); } });
@@ -105,7 +118,7 @@ export function useImportTask(token: string, viewerId: number, dataset: Dataset,
       const state: ImportJob = saved ?? { id: randomId(), dataset, filename: file.name, size: file.size, totalChunks: Math.ceil(file.size / CHUNK_BYTES), chunks: [], fingerprint: sig, phase: 'uploading', percent: 0 };
       if (dataset !== 'images') return;
       commit({ ...state, phase: 'uploading' });
-      await uploadChunks(state, file, { status: () => saved ? readImport(dataset, token, 'chunk_status', state.id) : Promise.resolve({ chunks: [] }), send: (body) => writeImport(dataset, token, body), current: isCurrent, stop: () => stopping.current, progress: commit });
+      await uploadChunks(state, file, { status: () => saved ? readImport(dataset, token, 'chunk_status', state.id) : Promise.resolve({ chunks: [] }), send: (body) => sendWithRetry(() => writeImport(dataset, token, body), { stop: () => stopping.current || !isCurrent() }), current: isCurrent, stop: () => stopping.current, progress: commit });
     });
   }
   async function submit(file?: File, url?: string) {
@@ -128,8 +141,13 @@ export function useImportTask(token: string, viewerId: number, dataset: Dataset,
         body = finalForm(state);
       }
       if (!isCurrent()) return;
+      /* What the job was before this press: nothing (a package or a link) or the staged upload. */
+      const before = currentJob.current;
       state = { ...state, phase: 'submitted', percent: 0 }; commit(state); setWatching(true);
-      const data = await writeImport(dataset, token, body);
+      const data = await writeImport(dataset, token, body).catch((failure: unknown) => {
+        if (failure instanceof ImportNotSent && isCurrent() && currentJob.current?.id === state?.id) commit(before);
+        throw failure;
+      });
       if (isCurrent()) commit(importStatus(data, currentJob.current?.id === state.id ? currentJob.current : state, false));
     });
   }

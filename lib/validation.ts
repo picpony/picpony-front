@@ -59,11 +59,31 @@ export function validateAccount(value: string): string | null {
   return account.includes('@') ? validateEmail(account) : validateUsername(account);
 }
 
+/**
+ * How long the backend thinks a password is: its rule is a PCRE pattern without `/u`, so `.` is a
+ * **byte** (review P2-O3, measured against `reset_password`: seven characters 「中中a1234」 — 11
+ * bytes — pass there, and eight 「中文中文中文中a」 — 22 bytes — are refused). Counting UTF-16
+ * units here accepted passwords the server then refused, and refused ones it would take.
+ */
+export function passwordLength(value: string): number {
+  /* Counted by code point rather than with `TextEncoder`, so this module stays free of globals. */
+  let bytes = 0;
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  }
+  return bytes;
+}
+
 /** A password being chosen: sign-up, reset, change. Not trimmed — a space is a character. */
 export function validateNewPassword(value: string): string | null {
   if (!value) return '请输入密码';
-  if (value.length < PASSWORD_MIN || value.length > PASSWORD_MAX) {
-    return `密码需为 ${PASSWORD_MIN} 到 ${PASSWORD_MAX} 位`;
+  const length = passwordLength(value);
+  if (length < PASSWORD_MIN || length > PASSWORD_MAX) {
+    /* Only a password with a non-ASCII character can be surprised by the byte count. */
+    return length === value.length
+      ? `密码需为 ${PASSWORD_MIN} 到 ${PASSWORD_MAX} 位`
+      : `密码需为 ${PASSWORD_MIN} 到 ${PASSWORD_MAX} 位（中文等字符每个按 3 位计）`;
   }
   if (!/[A-Za-z]/.test(value) || !/[^A-Za-z]/.test(value)) return '密码需包含字母和数字或符号';
   return null;
@@ -96,6 +116,19 @@ export function validatePasswordConfirmation(password: string, confirmation: str
 }
 
 /** Only presence: see the module note on login passwords. */
+/**
+ * A Derpibooru API key: 20 characters of `[A-Za-z0-9_-]`, exactly what Philomena mints and what
+ * the upload hop (`app/upload/submit/route.ts`'s `KEY_OK`) accepts. One rule for the user's own
+ * 账户 dialog (review P5-F2) and the administrator's user editor (review P6-F4), so a key either
+ * can save is one publishing takes.
+ */
+export const API_KEY_PATTERN = /^[A-Za-z0-9_-]{20}$/;
+export const API_KEY_MESSAGE = 'API Key 应为 20 位字母、数字、- 或 _，请检查是否多复制或漏复制了字符';
+
+export function validateApiKey(value: string): string | null {
+  return API_KEY_PATTERN.test(value.trim()) ? null : API_KEY_MESSAGE;
+}
+
 export function validateRequired(value: string, message: string): string | null {
   return value.trim() ? null : message;
 }

@@ -13,6 +13,7 @@ import { MdCheckCircle, MdCancel, MdConstruction } from 'react-icons/md';
 import { ICON } from '@/lib/icons';
 import { readToken, useSession } from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
+import { enforceContentGate } from '@/lib/settingsSync';
 
 interface DevPrerequisites {
   logged_in?: boolean;
@@ -131,6 +132,10 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       }
       window.dispatchEvent(new Event('settings_updated'));
       window.dispatchEvent(new Event('developer_mode_changed'));
+      /* Turning it off takes the developer filter with it, now: left as it was, the filter that
+         admits questionable and explicit pictures kept serving them until the next account read
+         happened to re-check the gate (review P2-F11). */
+      if (!enabled) enforceContentGate();
       // The accepted device setting outlives a closed form; UI feedback does not.
       if (!isCurrent()) return;
       setIsDeveloper(enabled);

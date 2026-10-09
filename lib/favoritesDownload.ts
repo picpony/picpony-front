@@ -14,7 +14,9 @@
  *   5xx on it) once left no line at all, and every picture of the batch "failed" without a single
  *   fetch (G3-008).
  * - **One picture at a time**, so a slow line holds one transfer, and the caller can stop between
- *   any two. A transfer that stalls fails (no bytes for 20 s), and so does one over 45 s in all.
+ *   any two. A transfer that stalls fails (no bytes for 20 s), and so does one that crawls: past
+ *   45 s, one averaging under 128 KiB/s (review P4-F6 — a flat 45 s failed every original over
+ *   ~30MB on a 5 Mbit/s line however steadily it arrived, then fetched it again on the next line).
  * - **At most a page an archive** (`ARCHIVE_LIMIT`): a whole privacy space is several archives,
  *   each saved as it is finished, so what a download holds in memory is bounded by one archive of
  *   originals rather than by the size of the space — a phone tab packing a few hundred pictures
@@ -34,6 +36,8 @@ import { ZipWriter, uniqueEntryName } from '@/lib/zip';
 
 const STALL_MS = 20_000;
 const TRANSFER_MS = 45_000;
+/** The slowest average a transfer may keep once past `TRANSFER_MS`: each byte buys this much time. */
+const MIN_RATE_BYTES_PER_MS = 128 * 1024 / 1000;
 const PROBE_MS = 8_000;
 
 type Line = 'worker' | 'cdn' | 'direct';
@@ -97,13 +101,23 @@ function isMedia(response: Response): boolean {
   return type.startsWith('image/') || type.startsWith('video/') || type === 'application/octet-stream';
 }
 
-/** The body as bytes, failing if no bytes arrive for `STALL_MS` or the whole takes `TRANSFER_MS`. */
+/**
+ * How long a transfer that has received `bytes` may have taken in all: `TRANSFER_MS`, plus the time
+ * those bytes would take at `MIN_RATE_BYTES_PER_MS`. Exported for the tests.
+ */
+export function transferBudgetMs(bytes: number): number {
+  return TRANSFER_MS + bytes / MIN_RATE_BYTES_PER_MS;
+}
+
+/** The body as bytes, failing if no bytes arrive for `STALL_MS` or it falls behind `transferBudgetMs`. */
 async function readBytes(url: string, signal?: AbortSignal): Promise<Uint8Array> {
   signal?.throwIfAborted();
   const controller = new AbortController();
   const forward = () => controller.abort(signal?.reason);
   signal?.addEventListener('abort', forward, { once: true });
-  const overall = setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), TRANSFER_MS);
+  const started = Date.now();
+  const timeout = () => controller.abort(new DOMException('timeout', 'TimeoutError'));
+  let overall = setTimeout(timeout, transferBudgetMs(0));
   let stall = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
   try {
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', signal: controller.signal });
@@ -121,6 +135,8 @@ async function readBytes(url: string, signal?: AbortSignal): Promise<Uint8Array>
       if (done) break;
       chunks.push(value);
       length += value.length;
+      clearTimeout(overall);
+      overall = setTimeout(timeout, Math.max(0, started + transferBudgetMs(length) - Date.now()));
       stall = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
     }
     const bytes = new Uint8Array(length);
@@ -196,6 +212,37 @@ export async function packFavourites(
 /** At most this many pictures in one archive: a grid page, the most a selection holds. */
 export const ARCHIVE_LIMIT = FAVE_PAGE_SIZE;
 
+/**
+ * And at most about this many bytes (review P4-O5): an archive is built in memory, and fifty
+ * videos of up to 50MB each made one of 2.5GB — past what a phone's tab survives. Derpibooru
+ * reports each picture's `size`, so the split is planned before anything is fetched and the
+ * archives keep their `1of3` names. A picture of unknown size counts as `UNKNOWN_SIZE`; one
+ * picture larger than the budget is an archive of its own.
+ */
+export const ARCHIVE_BYTES = 300 * 1024 * 1024;
+const UNKNOWN_SIZE = 5 * 1024 * 1024;
+
+type Packable = Pick<PonyImage, 'id' | 'view_url' | 'representations'> & { size?: unknown };
+
+/** `images` cut into archives: at most `ARCHIVE_LIMIT` pictures and `ARCHIVE_BYTES` each. */
+export function planArchives<T extends Packable>(images: readonly T[]): T[][] {
+  const plan: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+  for (const image of images) {
+    const size = typeof image.size === 'number' && Number.isFinite(image.size) && image.size > 0 ? image.size : UNKNOWN_SIZE;
+    if (current.length > 0 && (current.length >= ARCHIVE_LIMIT || bytes + size > ARCHIVE_BYTES)) {
+      plan.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(image);
+    bytes += size;
+  }
+  if (current.length > 0) plan.push(current);
+  return plan;
+}
+
 export interface ArchivesOutcome {
   packed: number;
   failed: number;
@@ -205,13 +252,13 @@ export interface ArchivesOutcome {
 }
 
 /**
- * Fetch and pack `images` in archives of at most `ARCHIVE_LIMIT`, each handed to `onArchive` as
+ * Fetch and pack `images` in the archives `planArchives` cuts (a count and a byte budget), each handed to `onArchive` as
  * soon as it is finished — so it can be saved and let go before the next one is fetched — with
  * its place among them (`part` of `parts`). Progress counts across the whole batch. A cancel ends
  * the run; archives already handed over stay handed over, and the one in progress is dropped.
  */
 export async function packArchives(
-  images: readonly Pick<PonyImage, 'id' | 'view_url' | 'representations'>[],
+  images: readonly Packable[],
   {
     signal,
     onProgress,
@@ -226,10 +273,13 @@ export async function packArchives(
   const result: ArchivesOutcome = { packed: 0, failed: 0, cancelled: false, archives: 0 };
   if (images.length === 0) return result;
   const lines = await batchLines(signal);
-  const parts = Math.ceil(images.length / ARCHIVE_LIMIT);
+  const plan = planArchives(images);
+  const parts = plan.length;
+  let doneBefore = 0;
   for (let part = 0; part < parts; part += 1) {
-    const slice = images.slice(part * ARCHIVE_LIMIT, (part + 1) * ARCHIVE_LIMIT);
-    const before = { done: part * ARCHIVE_LIMIT, failed: result.failed };
+    const slice = plan[part];
+    const before = { done: doneBefore, failed: result.failed };
+    doneBefore += slice.length;
     const outcome = await packFavourites(slice, {
       signal,
       lines,

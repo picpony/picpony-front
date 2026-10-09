@@ -83,7 +83,7 @@ export async function sendReply(
 // Sharing — the image detail's two actions, for a post
 // ---------------------------------------------------------------------------
 
-const shareLinks = new Map<number, string>();
+const shareLinks = new Map<string, string>();
 
 function shareTextOf(post: ForumPost): string {
   return forumTeaser(post, 40) || '点击链接查看帖子';
@@ -91,9 +91,12 @@ function shareTextOf(post: ForumPost): string {
 
 /** The short link for the post (the long one when the backend cannot make one). */
 async function postShareLink(post: ForumPost, token: string | null): Promise<string> {
-  const cached = shareLinks.get(post.id);
-  if (cached) return cached;
   const picture = post.cover_image ?? firstImageOf(post.content);
+  /* Keyed by what the card shows, not only the post (review P4-O10): after an edit, a share used
+     to hand out the short link minted with the old title and teaser until the page reloaded. */
+  const cacheKey = JSON.stringify([post.id, post.title, shareTextOf(post), picture ?? '']);
+  const cached = shareLinks.get(cacheKey);
+  if (cached) return cached;
   const link = await createShareLink(
     {
       targetUrl: new URL(`/forum/${post.id}`, window.location.origin).href,
@@ -103,7 +106,7 @@ async function postShareLink(post: ForumPost, token: string | null): Promise<str
     },
     { token },
   );
-  if (link.short) shareLinks.set(post.id, link.url);
+  if (link.short) shareLinks.set(cacheKey, link.url);
   return link.url;
 }
 

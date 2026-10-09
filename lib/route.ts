@@ -475,14 +475,39 @@ function currentUsername(): string {
 }
 
 /**
+ * The canonical spelling of a Derpibooru URL: its **host** moved from `trixiebooru.org` (or
+ * `www.trixiebooru.org`) to `derpibooru.org`, and nothing else touched. A bare string replace
+ * used to rewrite the first occurrence anywhere — inside a query (`q=source_url:*trixiebooru.org*`,
+ * a search a user typed) as readily as in the host — and to leave the host alone when the query
+ * came first (review P1-F17 / P2-F3). A string that is not an absolute URL is returned as it is.
+ */
+export function canonicalDerpiUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host !== 'trixiebooru.org' && host !== 'www.trixiebooru.org') return url;
+  parsed.hostname = 'derpibooru.org';
+  return parsed.toString();
+}
+
+/**
  * Rewrite a Derpibooru URL for one line. Every line starts from the canonical `derpibooru.org`
  * spelling: `trixiebooru.org` is the same site, and the accel worker and the relay both key
  * their caches on the canonical one.
  */
 export function buildApiLineUrl(url: string, line: ApiLine): string {
-  const derpiUrl = url.replace('trixiebooru.org', 'derpibooru.org');
+  const derpiUrl = canonicalDerpiUrl(url);
   switch (line) {
     case 'api_accel':
+      /* Key policy (review P1-F11 / P2-O1): the accel worker is a third party's, so a user's
+         Derpibooru key never travels through it. A keyed read takes our own relay instead — the
+         same `?url=` shape, operated by PicPony — so the answer is still the user's own (their
+         filter, `my:faves`) rather than an anonymous one. */
+      if (carriesApiKey(derpiUrl)) return buildApiLineUrl(derpiUrl, 'picpony_api');
       return PROXY_API_BASE + encodeURIComponent(derpiUrl);
     case 'picpony_api': {
       /* Our own path, not `cdn.picpony.top` — `app/relay/route.ts` explains why the browser
@@ -518,7 +543,21 @@ export function buildApiLineUrl(url: string, line: ApiLine): string {
  * Derpibooru itself.
  */
 export function applyApiLineToWrite(url: string): string {
-  return policy.api === 'third_party' ? buildApiLineUrl(url, 'third_party') : url;
+  /* A write is the key's whole point: a third-party line that is not trusted with keys would strip
+     it and turn every write into a certain 401 (review P2-O1). Such a write goes to Derpibooru
+     itself — the policy withholds the key from the third party, not from Derpibooru. */
+  if (policy.api !== 'third_party') return url;
+  if (!policy.thirdPartyPassApiKey && carriesApiKey(url)) return url;
+  return buildApiLineUrl(url, 'third_party');
+}
+
+/** Whether a Derpibooru URL carries a user's API key (`key=` in its query). */
+export function carriesApiKey(url: string): boolean {
+  try {
+    return new URL(url).searchParams.has('key');
+  } catch {
+    return /[?&]key=/.test(url);
+  }
 }
 
 // --- API failover — `auto` only ---------------------------------------------
@@ -647,6 +686,11 @@ export function stepApiFailover(status?: number): boolean {
 
   if (prefs.useApiAccel && Date.now() >= apiState.cooldownUntil) {
     apiState.derpi = true;
+    /* A fresh stay on the backup line starts the home check from its first step. The doubling
+       belongs to one stay: left by a failure of the backup itself, the wait it had reached (up
+       to ten minutes) used to carry into the next stay, which then sat on the backup that long
+       before checking home even once (review P2-F4). */
+    backupTtl = BACKUP_TTL_MS;
     scheduleApiRevert();
     emit();
     announceOnce('直连异常，已切换至备用 API');

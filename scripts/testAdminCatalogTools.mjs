@@ -12,7 +12,7 @@ function load(file, overrides = {}, globals = {}, cache = new Map()) {
   if (cache.has(file)) return cache.get(file);
   const exports = {}; cache.set(file, exports);
   const code = ts.transpileModule(readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
-  vm.runInNewContext(code, { exports, console, Error, TypeError, Response, Request, File, Blob, FormData, URL, URLSearchParams, AbortController, AbortSignal, TextDecoder, Uint8Array, crypto: webcrypto, setTimeout, clearTimeout, ...globals,
+  vm.runInNewContext(code, { exports, console, Error, TypeError, Response, Request, File, Blob, FormData, URL, URLSearchParams, AbortController, AbortSignal, TextDecoder, Uint8Array, crypto: webcrypto, setTimeout, clearTimeout, process: { env: {} }, ...globals,
     require: (name) => {
       if (name in overrides) return overrides[name];
       const target = name.startsWith('@/') ? name.slice(2) : path.join(path.dirname(file), name);
@@ -334,4 +334,28 @@ test('saved imports retain fractional progress and completed counters on reload'
   const done = { ...job, phase: 'done', percent: 100, counts: { image_count: 42, failed_count: 0 } };
   assert.deepEqual(plain(model.parseJob(done, 'images').counts), done.counts);
   for (const percent of [NaN, Infinity, -1, 101, null]) assert.throws(() => model.parseJob({ ...job, percent }, 'images'));
+});
+
+test('P1-F6: the body slot is held until the upstream answers, and a large package gets a longer budget', async () => {
+  const { handleImport, upstreamTimeout } = load('lib/adminCatalogTools/importProxy.ts');
+  assert.equal(upstreamTimeout('GET', 0), 15_000);
+  assert.equal(upstreamTimeout('POST', 0), 90_000);
+  assert.equal(upstreamTimeout('POST', 256 * 1024 * 1024), 90_000 + 256_000, 'a 256 MB package is not held to 90s');
+  let release;
+  const up = importUpstream();
+  const fetcher = async (url, init) => {
+    if (String(url).includes('action=get_user')) return up.fetcher(url, init);
+    await new Promise((resolve) => { release = resolve; });
+    return json({ success: true, stage: 'done', upload_id: 'fixture-import-1' });
+  };
+  const form = () => { const f = new FormData(); f.set('upload_id', 'fixture-import-1'); f.set('package', new File(['data'], 'package.ppsync')); return f; };
+  const first = handleImport(post('dictionary', form()), 'dictionary', fetcher);
+  for (let i = 0; i < 20 && !release; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(release, 'the first import reached the upstream');
+  const busy = await handleImport(post('dictionary', form()), 'dictionary', up.fetcher);
+  assert.equal(busy.status, 503, 'the package is still held in memory, so the slot is too');
+  release();
+  assert.equal((await first).status, 200);
+  const after = await handleImport(post('dictionary', form()), 'dictionary', up.fetcher);
+  assert.equal(after.status, 200, 'the slot went back once the upstream answered');
 });

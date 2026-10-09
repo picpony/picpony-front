@@ -99,7 +99,8 @@ export function teamPayload(
   const userId = boundUser(uidText);
   if (uidText && (!/^\d+$/.test(uidText) || !userId)) errors.userId = '站内用户 ID 须为正整数';
   const orderText = values.order.trim();
-  if (orderText && !/^-?\d+$/.test(orderText)) errors.order = '排序号须为整数';
+  /* And a safe one (review P6-O10): past 2^53 the number sent is not the number typed. */
+  if (orderText && (!/^-?\d+$/.test(orderText) || !Number.isSafeInteger(Number(orderText)))) errors.order = '排序号须为整数';
   if (Object.keys(errors).length > 0) return { errors };
   const payload: Record<string, unknown> = {
     name,

@@ -498,7 +498,8 @@ test('PHP proxy streams request bodies, preserves captcha cookie policy and reje
     signal: controller.signal, headers: { Connection: 'x-request-hop', 'x-request-hop': 'remove' } });
   incoming.arrayBuffer = () => { throw new Error('request must not be buffered'); };
   const response = await php.POST(incoming, context());
-  assert.equal(fetched.init.body, incoming.body);
+  /* Re-streamed (not buffered) so the body's pace can be watched — review P1-F1. */
+  assert.ok(fetched.init.body instanceof ReadableStream, 'the body is still a stream');
   assert.equal(fetched.init.duplex, 'half');
   assert.equal(await new Request(fetched.url, fetched.init).text(), 'payload');
   assert.equal(fetched.init.headers.has('x-request-hop'), false);
@@ -805,6 +806,8 @@ test('only accepted block-tag mutations expire both Next tags and the process me
       clearBlockFiltersMemo: () => { memoClears += 1; }, clearPublicBlacklistMemo: () => {},
     },
     '@/lib/constants': { COOKIE_KEYS },
+    '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
+    '@/lib/proxyHeaders': await import('../lib/proxyHeaders.ts'),
   };
   vm.runInNewContext(transpiled, { exports, require: (name) => {
     assert.ok(name in dependencies, name);
@@ -966,4 +969,45 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
   assert.equal(find(tree, (node) => node.type === 'ToggleSwitch').length, 0,
     'an unknown site state shows no switch at all — never a default value that later flips');
   assert.equal(find(tree, (node) => node.type === 'Button' && node.props.children === '保存提示文字').length, 0);
+});
+
+/* Review P1-F17: a typed tag search is literal, a long count list is batched, and an existing
+   glossary entry past the fuzzy search's first page is still found. */
+test('tag search escapes query syntax, tag counts batch past 50, and an exact entry on page 2 exists', async () => {
+  const seen = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input instanceof Request ? input.url : input);
+    seen.push(url);
+    if (url.includes('get_dictionary')) {
+      const page = Number(new URL(url, 'https://app.invalid').searchParams.get('page'));
+      const tags = page === 1
+        ? Array.from({ length: 50 }, (_, i) => ({ en: `pony ${i}` }))
+        : [{ en: 'Pony' }];
+      return json({ success: true, tags });
+    }
+    if (url.includes('search/tags')) {
+      const inner = url.includes('url=') ? new URL(url, 'https://app.invalid').searchParams.get('url') : url;
+      const q = new URL(inner).searchParams.get('q') ?? '';
+      const names = [...q.matchAll(/name:(\S+)/g)].map((m) => m[1].replace(/\\(.)/g, '$1'));
+      return json({ tags: names.map((name) => ({ name, images: 1 })), total: names.length });
+    }
+    return json({});
+  };
+  await derpi.searchDerpiTags('oc (pony) artist:foo');
+  const search = seen.find((url) => url.includes('search/tags'));
+  const inner = search.includes('url=') ? new URL(search, 'https://app.invalid').searchParams.get('url') : search;
+  assert.equal(new URL(inner).searchParams.get('q'), 'name:*oc* *\\(pony\\)* *artist\\:foo*');
+
+  seen.length = 0;
+  const many = Array.from({ length: 120 }, (_, i) => `tag${i}`);
+  const counts = await derpi.getDerpiTagCounts(many);
+  assert.equal(seen.filter((url) => url.includes('search/tags')).length, 3, '120 names are three requests of ≤ 50');
+  assert.equal(Object.keys(counts).length, 120, 'no name past the 50th is lost');
+
+  seen.length = 0;
+  assert.equal(await admin.checkTagExists('fixture', 'pony'), true, 'the exact entry on page 2 is found');
+  assert.equal(seen.filter((url) => url.includes('get_dictionary')).length, 2);
+  seen.length = 0;
+  assert.equal(await admin.checkTagExists('fixture', 'absent'), false);
+  assert.equal(seen.filter((url) => url.includes('get_dictionary')).length, 2, 'a short page ends the search');
 });

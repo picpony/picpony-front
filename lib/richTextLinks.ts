@@ -22,9 +22,16 @@ function isAppPath(path: string): boolean {
  * agree on it (the answer decides an attribute). Root-relative, or on the site's own host.
  */
 export function isInternalHref(href: string): boolean {
-  if (href.startsWith('/') && !href.startsWith('//')) return isAppPath(href.split(/[?#]/)[0]);
+  /* Resolved the way the browser will resolve it, never judged by its first characters: the URL
+     parser reads `\` as `/` and drops tabs and newlines, so `/\evil.example` and `/\t/evil.example`
+     are protocol-relative links to another host. A prefix test called them internal, and the
+     renderer then left off `target` and `rel` — a same-tab navigation off the site, with
+     `window.opener` and the referrer intact (review P2-F5). A relative href resolves against the
+     site's own origin, so the answer stays deterministic between server and browser. */
+  /* A document-relative href (`foo`, `../x`) depends on the page it sits on: never internal. */
+  if (!href.startsWith('/') && !/^[a-z][a-z0-9+.-]*:/i.test(href)) return false;
   try {
-    const url = new URL(href);
+    const url = new URL(href, 'https://picpony.top');
     return /^https?:$/.test(url.protocol) && SITE_HOSTS.has(url.hostname) && isAppPath(url.pathname);
   } catch {
     return false;

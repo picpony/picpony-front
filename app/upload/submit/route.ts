@@ -1,5 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { PICPONY_API_ORIGIN, PICPONY_RELAY_UPSTREAM } from '@/lib/constants';
+import { forwardableResponseHeaders } from '@/lib/proxyHeaders';
+import { clientAddress, createRateLimiter, rateLimited } from '@/lib/rateLimit.server';
+import {
+  UPLOAD_MAX_DESCRIPTION_BYTES,
+  UPLOAD_MAX_TAG_INPUT,
+  uploadSourceUrl,
+  utf8Length,
+} from '@/lib/uploadLimits';
 
 /**
  * 发布图片's second step: hand Derpibooru a staged picture, through the relay.
@@ -36,63 +44,50 @@ const KEY_OK = /^[A-Za-z0-9_-]{8,64}$/;
 /** The relay's per-user accounting label — `app/relay/route.ts`'s rule, verbatim. */
 const XP_USER_MAX = 64;
 const XP_USER_OK = /^[\w.-]+$/;
-const MAX_URL = 2048;
-const MAX_TAG_INPUT = 10_000;
-/** Derpibooru's own description limit. */
-const MAX_DESCRIPTION = 50_000;
-/** The body is a handful of short strings; a larger one is not a form. */
-const MAX_BODY_BYTES = 128 * 1024;
+const MAX_TAG_INPUT = UPLOAD_MAX_TAG_INPUT;
+/**
+ * The body is a handful of strings; a larger one is not a form. Sized to hold every body the
+ * field limits allow (`lib/uploadLimits.ts`), JSON escaping included — a 50,000-byte description
+ * of line breaks doubles as it is escaped — so the cap never refuses a valid form (review P4-F2:
+ * at 128KB it refused a long Chinese description the form had accepted, as 「请求过大」).
+ */
+const MAX_BODY_BYTES = 512 * 1024;
 
-const SKIP_RESPONSE_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'transfer-encoding',
-  'upgrade',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'content-encoding',
-  'content-length',
-  'cdn-cache-control',
-  'vercel-cdn-cache-control',
-  'x-powered-by',
-  'server',
+/* Beyond the shared hop-by-hop set (`lib/proxyHeaders.ts`): no cookie of the relay's, and no CORS
+   header echoing our server's own Origin. */
+const EXTRA_SKIPPED_HEADERS: ReadonlySet<string> = new Set([
   'set-cookie',
   'access-control-allow-origin',
   'access-control-allow-credentials',
   'vary',
 ]);
 
+/**
+ * Review P1-F11: anybody can post here and have this server upload to Derpibooru, so the hop gets
+ * a ceiling — far above what a person publishing pictures does in ten minutes.
+ */
+const takeSubmit = createRateLimiter({ limit: 30, windowMs: 10 * 60_000 });
+
 function answer(status: number, message: string): Response {
   return Response.json({ success: false, message }, { status, headers: { 'Cache-Control': 'private, no-store' } });
 }
 
-/** An absolute http(s) URL with no credentials, within `max` characters — or `null`. */
-function webUrl(value: unknown, max = MAX_URL): string | null {
-  if (typeof value !== 'string') return null;
-  const text = value.trim();
-  if (!text || text.length > max) return null;
-  try {
-    const url = new URL(text);
-    if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password || !url.hostname) {
-      return null;
-    }
-    return url.href;
-  } catch {
-    return null;
-  }
-}
+/** An absolute http(s) URL with no credentials, within `UPLOAD_MAX_SOURCE_URL` characters — or `null`. The
+ *  form checks a source with the same function, so it cannot accept one this refuses. */
+const webUrl = uploadSourceUrl;
 
-function optionalText(value: unknown, max: number): string | undefined | null {
+/** Optional text within `maxBytes` UTF-8 bytes — Derpibooru's own unit for the description. */
+function optionalText(value: unknown, maxBytes: number): string | undefined | null {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value !== 'string') return null;
   const text = value.trim();
   if (!text) return undefined;
-  return text.length > max ? null : text;
+  return utf8Length(text) > maxBytes ? null : text;
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
+  const wait = takeSubmit(clientAddress(request.headers));
+  if (wait) return rateLimited(wait);
   const declared = Number(request.headers.get('content-length') ?? '0');
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return answer(413, '请求过大');
   if (!(request.headers.get('content-type') ?? '').toLowerCase().includes('application/json')) {
@@ -140,7 +135,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const sourceRaw = body.source_url;
   const source = sourceRaw === undefined || sourceRaw === null || sourceRaw === '' ? undefined : webUrl(sourceRaw);
   if (source === null) return answer(400, '来源链接无效');
-  const description = optionalText(body.description, MAX_DESCRIPTION);
+  const description = optionalText(body.description, UPLOAD_MAX_DESCRIPTION_BYTES);
   if (description === null) return answer(400, '作品描述无效');
 
   const target = new URL(UPLOAD_TARGET);
@@ -196,10 +191,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return answer(502, '上传线路返回了非 JSON 内容');
   }
 
-  const headers = new Headers();
-  response.headers.forEach((value, name) => {
-    if (!SKIP_RESPONSE_HEADERS.has(name)) headers.set(name, value);
-  });
+  const headers = forwardableResponseHeaders(response.headers, EXTRA_SKIPPED_HEADERS);
   headers.set('Cache-Control', 'private, no-store');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");

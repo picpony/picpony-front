@@ -233,7 +233,7 @@ function AccountSections({ account }: { account: Account }) {
       <SettingsSection title="个人主页" icon={<MdPerson size={ICON.control} />} subtitle="他人访问你的主页时看到的内容">
         <SettingsRow
           label="头像"
-          supporting="JPG、PNG 或 GIF，不超过 5 MB"
+          supporting="JPG、PNG 或 WebP，不超过 5 MB（裁剪后保存为静态图片）"
           leading={
             <div className="relative shrink-0">
               <Avatar size={56} src={avatar} name={username} />

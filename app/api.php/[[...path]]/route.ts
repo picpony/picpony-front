@@ -7,6 +7,8 @@ import {
   clearPublicBlacklistMemo,
 } from '@/lib/blockFilters.server';
 import { COOKIE_KEYS, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
+import { forwardableResponseHeaders } from '@/lib/proxyHeaders';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * Reverse proxy for the PicPony PHP backend.
@@ -27,7 +29,7 @@ import { COOKIE_KEYS, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 
 // The same server-controlled staging/fixture origin used by the server readers. Never a
 // request parameter: the public proxy still has one fixed backend and one fixed API path.
-const UPSTREAM_ORIGIN = process.env.PICPONY_UPSTREAM_ORIGIN || 'https://picpony.top';
+const UPSTREAM_ORIGIN = upstreamOrigin();
 const UPSTREAM_PATH = '/api.php';
 
 /**
@@ -38,6 +40,22 @@ const UPSTREAM_PATH = '/api.php';
  * turn a slow answer into a failover.
  */
 const UPSTREAM_TIMEOUT_MS = 30_000;
+
+/**
+ * A request **body** is not bounded by `UPSTREAM_TIMEOUT_MS` (review P1-F1). PHP answers only
+ * after the whole multipart has arrived, so a single 30s budget for body + answer meant a 50MB
+ * `upload_temp_upload` needed ≥ 13.3 Mbit/s of upstream bandwidth, and every slower phone saw a
+ * 502 that read as an outage. Instead:
+ *
+ * - while the body is streaming, it must make progress: no chunk for `BODY_IDLE_MS` aborts;
+ * - once it has been sent, the answer gets the usual `UPSTREAM_TIMEOUT_MS`;
+ * - and the whole exchange is capped at `BODY_TOTAL_MS`, so a trickle cannot hold a connection
+ *   forever (Node's own `server.requestTimeout`, 300s by default, may end it sooner).
+ */
+const BODY_IDLE_MS = 30_000;
+const BODY_TOTAL_MS = 15 * 60_000;
+/** The abort reason a stalled body carries, so the answer can tell it from a dead upstream. */
+const BODY_STALLED = 'request body stalled';
 
 /** Hop-by-hop headers, plus ones `fetch` must recompute for the new request. */
 const SKIP_REQUEST_HEADERS = new Set([
@@ -55,28 +73,6 @@ const SKIP_REQUEST_HEADERS = new Set([
   'accept-encoding',
 ]);
 
-/**
- * Hop-by-hop headers, plus the framing headers that describe the *upstream*
- * body. fetch hands us an already-decoded stream, so passing `content-encoding`
- * through would tell the browser to inflate plain bytes.
- */
-const SKIP_RESPONSE_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'transfer-encoding',
-  'upgrade',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'content-encoding',
-  'content-length',
-  'cdn-cache-control',
-  'vercel-cdn-cache-control',
-  /* The upstream's software banner is not ours to advertise. */
-  'x-powered-by',
-  'server',
-]);
 
 /**
  * The app's own cookies, which the backend never reads. They are this origin's (theme, motion,
@@ -114,6 +110,30 @@ function downgradeCookie(cookie: string): string {
   );
 }
 
+/**
+ * The incoming body, re-streamed so its pace can be watched: aborts `controller` when no chunk
+ * arrives for `BODY_IDLE_MS`, and once the last chunk is through, gives the upstream
+ * `UPSTREAM_TIMEOUT_MS` to answer. `done()` clears whichever timer is pending.
+ */
+function pacedBody(body: ReadableStream<Uint8Array>, controller: AbortController) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = (ms: number, reason: string) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(new DOMException(reason, 'TimeoutError')), ms);
+  };
+  arm(BODY_IDLE_MS, BODY_STALLED);
+  const stream = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, sink) {
+      arm(BODY_IDLE_MS, BODY_STALLED);
+      sink.enqueue(chunk);
+    },
+    flush() {
+      arm(UPSTREAM_TIMEOUT_MS, 'upstream did not answer');
+    },
+  }));
+  return { stream, done: () => clearTimeout(timer) };
+}
+
 async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> },
@@ -142,24 +162,41 @@ async function proxy(
     headers.set(key, value);
   });
 
-  const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  const hasBody = request.method !== 'GET' && request.method !== 'HEAD' && request.body !== null;
+  /* Bounded: without a signal the handler inherits the platform's socket timeout, so a hung
+     upstream hangs this route with it, holding a Node connection open. A bodyless request gets
+     one budget; a body gets a pace instead (see `BODY_IDLE_MS`). */
+  const paceController = hasBody ? new AbortController() : null;
+  const paced = hasBody && paceController ? pacedBody(request.body!, paceController) : null;
   let upstream: Response;
   try {
     const init: RequestInit & { duplex: 'half' } = {
       method: request.method,
       headers,
       /* Stream uploads with backpressure instead of buffering an unauthenticated request of
-         unbounded size in Node. The timeout now also bounds the incoming body transfer. */
-      body: hasBody ? request.body : undefined,
+         unbounded size in Node. */
+      body: paced ? paced.stream : undefined,
       duplex: 'half',
       redirect: 'manual',
       cache: 'no-store',
-      /* Bounded: without this the handler inherits the platform's socket timeout, so a
-         hung upstream hangs this route with it, holding a Node connection open. */
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
+      signal: paceController
+        ? AbortSignal.any([request.signal, paceController.signal, AbortSignal.timeout(BODY_TOTAL_MS)])
+        : AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
     };
     upstream = await fetch(target, init);
   } catch {
+    paced?.done();
+    /* The client's own body stopped arriving while its connection stayed open (review P4-O2): that
+       is the visitor's network, not ours, and a 502 read as 「服务暂时不可用」. A 408 is the honest
+       status — the request never finished — and `stageUpload` words it as an interrupted upload.
+       Nothing reached PHP as a complete request, so nothing happened there. */
+    const reason: unknown = paceController?.signal.reason;
+    if (reason instanceof DOMException && reason.message === BODY_STALLED) {
+      return Response.json(
+        { success: false, message: '上传中断，请检查网络后重试' },
+        { status: 408, headers: { 'Cache-Control': 'private, no-store' } },
+      );
+    }
     /* Same shape `app/relay/route.ts` returns for the same condition: `proxyFetch`
        (lib/api/client.ts) treats 502 as a failover trigger, which is exactly what it
        would have concluded from the network throw this is standing in for. A timeout
@@ -169,6 +206,9 @@ async function proxy(
       { status: 502 },
     );
   }
+
+  /* Headers are in: the answer's own body is bounded by the total cap, not the pace. */
+  paced?.done();
 
   /* Only a write the backend has actually authorised and accepted may invalidate the public
      search definitions or the public image blacklist. Expire immediately: showing old rules after
@@ -197,15 +237,9 @@ async function proxy(
   }
 
   const secure = isSecureRequest(request);
-  const responseHeaders = new Headers();
-  const upstreamConnectionHeaders = new Set(
-    upstream.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
-  );
-  upstream.headers.forEach((value, key) => {
-    // Set-Cookie can repeat, so it is copied separately via getSetCookie().
-    if (key === 'set-cookie') return;
-    if (!SKIP_RESPONSE_HEADERS.has(key) && !upstreamConnectionHeaders.has(key)) responseHeaders.set(key, value);
-  });
+  /* The shared hop-by-hop rules (`lib/proxyHeaders.ts`); Set-Cookie can repeat, so it is copied
+     separately via getSetCookie(). */
+  const responseHeaders = forwardableResponseHeaders(upstream.headers);
   for (const cookie of upstream.headers.getSetCookie()) {
     responseHeaders.append('set-cookie', secure ? cookie : downgradeCookie(cookie));
   }

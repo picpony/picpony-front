@@ -17,6 +17,7 @@ import { AdminNote } from './AdminForm';
 import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
 import { adminList, tableError } from './queries';
 import type { AdminPanelProps } from './registry';
+import { flag } from '@/lib/flag';
 
 type AuditQuery = { token: string; userId?: number };
 
@@ -57,7 +58,7 @@ const COLUMNS: Column<AuditMessage>[] = [
     header: '状态',
     width: 'auto',
     render: (message) => (
-      <Badge tone={message.is_read ? 'neutral' : 'primary'} size="md">{message.is_read ? '已读' : '未读'}</Badge>
+      <Badge tone={flag(message.is_read) ? 'neutral' : 'primary'} size="md">{flag(message.is_read) ? '已读' : '未读'}</Badge>
     ),
   },
   {

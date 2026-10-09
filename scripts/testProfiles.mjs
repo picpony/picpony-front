@@ -67,7 +67,7 @@ test('uploads are the bound account’s: by id, else by an escaped name, never w
   assert.equal(profiles.uploaderTerm({ id: 1, username: 'a', derpi_user_id: '583672', has_api_key: true }), 'uploader_id:583672');
   assert.equal(
     profiles.uploaderTerm({ id: 1, username: 'a', derpi_username: 'A (B):C', has_api_key: true }),
-    'uploader:A \\(B\\)\\:C',
+    'uploader:A\\ \\(B\\)\\:C',
   );
   assert.equal(profiles.uploaderTerm({ id: 1, username: 'a', derpi_user_id: '5', has_api_key: false }), null,
     'a name typed without a key to prove it lists nothing');
@@ -112,7 +112,8 @@ test('a birthday prints its month and day, never its year', () => {
 
 test('the Derpibooru card links in the app, by id or by name', () => {
   assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_user_id: '583672' }), '/derpi/user/583672');
-  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_username: 'Nocturne Rain' }), '/derpi/user/Nocturne%20Rain');
+  /* Review P5-O4: a name-only binding leads to the search for its uploads, not a page that cannot open. */
+  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_username: 'Nocturne Rain' }), `/search?q=${encodeURIComponent('uploader:Nocturne\\ Rain')}`);
   assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a' }), null);
 });
 

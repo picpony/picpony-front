@@ -1,9 +1,10 @@
-import { DERPIBOORU_API_BASE, PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { DERPIBOORU_API_BASE, PICPONY_API_BASE } from '@/lib/constants';
 import type { DetailSeed, PonyImage } from '@/lib/types/image';
 import type { ImageLine } from '@/lib/route';
 import { buildImageUrl, getRawImageUrl } from '@/lib/imageLoader';
 import { createServerMemo } from '@/lib/serverMemo';
 import { tagTranslationKey } from '@/lib/tagTranslations';
+import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * The opened picture's record, read on the server for a direct `/pic/:id` — a shared link, a
@@ -68,7 +69,7 @@ function backoffFrom(response: Response): number {
 
 const DERPI_UPSTREAM = process.env.PICPONY_DERPI_ORIGIN || DERPIBOORU_API_BASE;
 /** The absolute origin: `PICPONY_API_BASE` is relative, and Node's `fetch` rejects that. */
-const PICPONY_UPSTREAM = process.env.PICPONY_UPSTREAM_ORIGIN || PICPONY_API_ORIGIN;
+const PICPONY_UPSTREAM = upstreamOrigin();
 
 /**
  * The record fields the detail reads. Derpibooru sends about twice as many (hashes, tag ids,

@@ -13,7 +13,7 @@ import type { ImageSearchOutcome } from '@/components/ImageSearchModal';
 import { isApiError, isRetryable } from '@/lib/api/errors';
 import { getAppScroller } from '@/lib/appScroller';
 import { canGoBackInApp, useBackOrParent } from '@/lib/backNavigation';
-import { currentBlockFilters, currentPublicBlacklist } from '@/lib/blockFilters';
+import { currentBlockFilters } from '@/lib/blockFilters';
 import { LS_KEYS, MEDIA } from '@/lib/constants';
 import { useEscapeBack } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
@@ -27,7 +27,6 @@ import {
   countSearchFilters,
   excludedTagsFrom,
   excludedTermsIn,
-  imageFilterFor,
   isSemanticText,
   isSingleTagQuery,
   normalizeSearchText,
@@ -538,10 +537,11 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       runQuery(outcome.query);
       return;
     }
-    /* The service knows nothing of this device's content settings; the rules are the query's. */
-    const allowed = imageFilterFor(settings, currentBlockFilters(), currentPublicBlacklist());
+    /* Stored as the service answered: the results screen applies this device's content settings
+       as it draws (`imageFilterFor`), so a setting changed afterwards — looser or stricter — is
+       honoured (review P4-O9) rather than the set being fixed at the settings it was saved under. */
     const key = saveImageSearch({
-      images: outcome.images.filter(allowed),
+      images: outcome.images,
       found: outcome.images.length,
       preview: outcome.preview,
     });

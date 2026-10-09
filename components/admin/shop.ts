@@ -11,6 +11,7 @@
  */
 
 import { figureField } from './figures';
+import { assetUrl } from '@/lib/adminCatalogTools/model';
 
 export interface ShopItemRow {
   id: number;
@@ -31,7 +32,7 @@ export interface ShopFormValues {
   active: boolean;
 }
 
-export type ShopFormErrors = Partial<Record<'name' | 'price' | 'stock', string>>;
+export type ShopFormErrors = Partial<Record<'name' | 'imageUrl' | 'price' | 'stock', string>>;
 
 export function isActive(value: unknown): boolean {
   return value === true || Number(value) === 1;
@@ -67,13 +68,20 @@ export function shopPayload(
   if (price === null) errors.price = '价格须为不小于 0 的整数';
   const stock = count(values.stock);
   if (stock === null) errors.stock = '库存须为不小于 0 的整数';
+  /* The mascot's and the ponies' rule (review P6-O2): an `http://` or credentialed address would be
+     mixed content on the shop's HTTPS page, or hand a password to every buyer's browser. Empty is
+     a product without a picture. */
+  const imageUrl = values.imageUrl.trim();
+  if (imageUrl) {
+    try { assetUrl(imageUrl); } catch (error) { errors.imageUrl = error instanceof Error ? error.message : '请输入有效的图片链接'; }
+  }
   if (Object.keys(errors).length > 0) return { errors };
   return {
     payload: {
       id: item?.id ?? 0,
       name,
       description: values.description.trim(),
-      image_url: values.imageUrl.trim(),
+      image_url: imageUrl,
       price,
       stock,
       active: values.active ? 1 : 0,

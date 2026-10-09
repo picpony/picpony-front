@@ -54,11 +54,27 @@ export function mirrorBlockGroups(groups: readonly BlockGroup[]): boolean {
     }
   };
   if (same(LS_KEYS.activeHiddenTags, nextHidden) && same(LS_KEYS.activeSpoileredTags, nextSpoilered)) return false;
+  /* Both or neither (review P4-O6): with the hidden list written and the spoilered one refused,
+     the device's filter had changed while no `settings_updated` went out, so the cookie and the
+     fingerprint the server reads stayed on the old list. The first write is rolled back. */
+  let previousHidden: string | null = null;
   try {
+    previousHidden = localStorage.getItem(LS_KEYS.activeHiddenTags);
     localStorage.setItem(LS_KEYS.activeHiddenTags, nextHidden);
-    localStorage.setItem(LS_KEYS.activeSpoileredTags, nextSpoilered);
   } catch {
     /* Storage blocked: the groups still save on the account; this device just cannot apply them. */
+    return false;
+  }
+  try {
+    localStorage.setItem(LS_KEYS.activeSpoileredTags, nextSpoilered);
+  } catch {
+    try {
+      if (previousHidden === null) localStorage.removeItem(LS_KEYS.activeHiddenTags);
+      else localStorage.setItem(LS_KEYS.activeHiddenTags, previousHidden);
+    } catch {
+      /* Cannot even put it back: announce what storage now holds rather than leave the mirrors behind. */
+      window.dispatchEvent(new Event('settings_updated'));
+    }
     return false;
   }
   window.dispatchEvent(new Event('settings_updated'));

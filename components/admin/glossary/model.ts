@@ -52,6 +52,18 @@ export interface TagForm {
   cat: string;
   count: number;
   description: string;
+  /**
+   * The three marks the original editor let an operator set (review P6-O6): 限制级, 原创译名,
+   * 敏感. Absent means "as the row has them" — a form built before this field existed, or by a
+   * caller that does not show them, still carries the row's own flags through.
+   */
+  flags?: TagFlags;
+}
+
+export interface TagFlags {
+  restricted: boolean;
+  originalTranslation: boolean;
+  sensitive: boolean;
 }
 
 export const TAG_CATEGORIES: { value: string; label: string }[] = [
@@ -94,6 +106,11 @@ export function pageSizeOf(value: unknown): number {
   return (PAGE_SIZES as readonly number[]).includes(number) ? number : DEFAULT_PAGE_SIZE;
 }
 
+/** Whether two spellings name one dictionary entry: the dictionary keys tags lower-cased and trimmed. */
+export function sameTag(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
 export function isUntranslated(cn: string | null | undefined): boolean {
   const value = (cn ?? '').trim();
   return value === '' || value === '未翻译';
@@ -105,15 +122,24 @@ export function translationsText(tag: Pick<GlossaryTag, 'cn' | 'aliases'>): stri
   return [tag.cn, ...(tag.aliases ?? [])].join(', ');
 }
 
-/** The field's text as `cn` and `aliases`: commas of either width separate, blanks drop out. */
+/**
+ * The field's text as `cn` and `aliases`: commas of either width separate, blanks drop out.
+ *
+ * `、` is **not** a separator (review P6-F3): the field's own helper says 用逗号分隔, the original
+ * editor's batch import splits on commas alone (`cnRaw.replace(/，/g, ',').split(',')`), and a
+ * Chinese name may well contain an enumeration comma — splitting on it turned one name into a name
+ * and an alias.
+ */
 export function parseTranslations(text: string): { cn: string; aliases: string[] } {
   const parts = text
-    .split(/[,，、]/)
+    .split(/[,，]/)
     .map((part) => part.trim())
     .filter((part) => part && part !== '未翻译');
   const unique = parts.filter((part, index) => parts.indexOf(part) === index);
   return { cn: unique[0] ?? '', aliases: unique.slice(1) };
 }
+
+const flag = (value: unknown) => (value === true || Number(value) === 1 ? 1 : 0);
 
 export function emptyTagForm(prefill?: Partial<DerpiTagRow>): TagForm {
   return {
@@ -122,6 +148,7 @@ export function emptyTagForm(prefill?: Partial<DerpiTagRow>): TagForm {
     cat: prefill?.category || 'general',
     count: Number(prefill?.images) || 0,
     description: '',
+    flags: { restricted: false, originalTranslation: false, sensitive: false },
   };
 }
 
@@ -132,14 +159,27 @@ export function tagFormOf(tag: GlossaryTag): TagForm {
     cat: tag.cat || 'general',
     count: Number(tag.count) || 0,
     description: tag.description ?? '',
+    flags: {
+      restricted: flag(tag.is_restricted) === 1,
+      originalTranslation: flag(tag.is_original_translation) === 1,
+      sensitive: flag(tag.is_sensitive) === 1,
+    },
   };
 }
 
-const flag = (value: unknown) => (value === true || Number(value) === 1 ? 1 : 0);
-
-/** The `save_dictionary_tag` body: the original editor's, flags carried through on an edit. */
+/**
+ * The `save_dictionary_tag` body: the original editor's, flags carried through on an edit.
+ *
+ * **An untouched translations field sends the stored names as they are** (review P6-F3). The
+ * original editor gives each name its own input, so a stored name may contain a comma; this one
+ * joins them into one comma-separated field, and re-parsing that on every save split such a name in
+ * two — on a save that only changed the description. Only a field the operator edited is parsed.
+ */
 export function tagSavePayload(form: TagForm, tag?: GlossaryTag | null): Record<string, unknown> {
-  const { cn, aliases } = parseTranslations(form.translations);
+  const untouched = tag && !isUntranslated(tag.cn) && form.translations === translationsText(tag);
+  const { cn, aliases } = untouched
+    ? { cn: tag.cn, aliases: Array.isArray(tag.aliases) ? [...tag.aliases] : [] }
+    : parseTranslations(form.translations);
   const payload: Record<string, unknown> = {
     en: tag ? tag.en : form.en.trim().toLowerCase(),
     cn,
@@ -147,9 +187,9 @@ export function tagSavePayload(form: TagForm, tag?: GlossaryTag | null): Record<
     cat: form.cat || 'general',
     count: Number(form.count) || 0,
     description: form.description.trim(),
-    is_restricted: flag(tag?.is_restricted),
-    is_original_translation: flag(tag?.is_original_translation),
-    is_sensitive: flag(tag?.is_sensitive),
+    is_restricted: form.flags ? Number(form.flags.restricted) : flag(tag?.is_restricted),
+    is_original_translation: form.flags ? Number(form.flags.originalTranslation) : flag(tag?.is_original_translation),
+    is_sensitive: form.flags ? Number(form.flags.sensitive) : flag(tag?.is_sensitive),
   };
   if (tag) payload.id = tag.id;
   return payload;
@@ -163,6 +203,9 @@ export function savedTag(tag: GlossaryTag, payload: Record<string, unknown>): Gl
     aliases: Array.isArray(payload.aliases) ? (payload.aliases as string[]) : [],
     cat: String(payload.cat ?? tag.cat),
     description: String(payload.description ?? ''),
+    is_restricted: Number(payload.is_restricted ?? tag.is_restricted),
+    is_original_translation: Number(payload.is_original_translation ?? tag.is_original_translation),
+    is_sensitive: Number(payload.is_sensitive ?? tag.is_sensitive),
   };
 }
 

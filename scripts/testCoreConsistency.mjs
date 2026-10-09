@@ -389,6 +389,7 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     '@/components/Tooltip': { useTooltip: () => ({ anchorRef: null, anchorProps: {}, tooltip: null }) },
     '@/components/SectionHeading': { default: 'SectionHeading' },
     './DerpiDescription': { default: 'DerpiDescription' },
+    './derpiLinks': { derpiProfileUrl: () => 'https://derpibooru.org/profiles/x', derpiFallbackUrl: () => 'https://derpibooru.org/profiles/x' },
     '@/lib/icons': { ICON: {} },
   });
   let instance;
@@ -470,6 +471,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
     '@/lib/api/errors': load('lib/api/errors.ts', {}, { Error, TypeError }),
     '@/lib/hooks': { useSession: () => ({ token, ready: true }), readToken: () => token },
     '@/lib/constants': { LS_KEYS: { developer: 'developer' } },
+    '@/lib/settingsSync': { enforceContentGate: () => {} },
     '@/lib/icons': { ICON: {} },
     'react-icons/md': {},
     '@/lib/api/picpony': {

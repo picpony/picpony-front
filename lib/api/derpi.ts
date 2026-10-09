@@ -5,6 +5,7 @@ import type { DerpiProfileResponse } from '@/lib/types/user';
 import { proxyFetch, fetchDerpiImages, applyImageLine, buildSearchQuery } from './client';
 import { listOf, readObject } from './http';
 import { ApiError } from './errors';
+import { withoutOverflowBlacklisted } from '@/lib/searchQuery';
 
 /*
  * Derpibooru reads. Every one resolves with a validated payload or throws `ApiError`
@@ -24,7 +25,8 @@ function isImage(value: unknown): value is PonyImage {
 /** Map an `{ total, images }` envelope onto the current image line, dropping malformed rows. */
 function withImageLine(data: { total?: unknown; images?: unknown }): ApiResponse {
   if (!Array.isArray(data.images)) throw new ApiError('invalid');
-  const images = data.images.filter(isImage).map(applyImageLine);
+  /* A query carries the newest hundred blacklisted ids; the rest are filtered here (review P3-O3). */
+  const images = withoutOverflowBlacklisted(data.images.filter(isImage), currentPublicBlacklist()).map(applyImageLine);
   const total = Number(data.total);
   return { total: Number.isFinite(total) && total >= 0 ? total : images.length, images };
 }
@@ -196,7 +198,9 @@ function tagsOf(data: { tags?: unknown }): DerpiTag[] {
 }
 
 export async function searchDerpiTags(query: string, signal?: AbortSignal): Promise<{ tags: DerpiTag[]; total: number }> {
-  const safeName = query.replace(/"/g, '').split(/\s+/).join('* *');
+  /* Each word is a literal (review P1-F17): only `"` used to be removed, so a name with `(`, `:`,
+     `,` or `\\` — `artist:foo`, `oc (pony)` — was read as query syntax and answered 400. */
+  const safeName = query.trim().split(/\s+/).filter(Boolean).map(escapePhilomenaTerm).join('* *');
   const url = `${DERPIBOORU_API_BASE}/search/tags?q=name:*${encodeURIComponent(safeName)}*&per_page=30`;
   const data = await readObject<{ tags?: unknown; total?: unknown }>(await proxyFetch(url, { signal }));
   const tags = tagsOf(data);
@@ -232,6 +236,15 @@ function escapePhilomenaTerm(tag: string): string {
  */
 export async function getDerpiTagCounts(tags: string[], signal?: AbortSignal): Promise<Record<string, number>> {
   if (tags.length === 0) return {};
+  /* Philomena answers at most `TAG_COUNT_BATCH` rows, so a longer list is split here rather than
+     trusted to every caller (review P1-F17): the rows past 50 used to come back as "not found". */
+  if (tags.length > TAG_COUNT_BATCH) {
+    const counts: Record<string, number> = {};
+    for (let start = 0; start < tags.length; start += TAG_COUNT_BATCH) {
+      Object.assign(counts, await getDerpiTagCounts(tags.slice(start, start + TAG_COUNT_BATCH), signal));
+    }
+    return counts;
+  }
   const query = tags.map((tag) => `name:${escapePhilomenaTerm(tag)}`).join(' OR ');
   const url = `${DERPIBOORU_API_BASE}/search/tags?q=${encodeURIComponent(query)}&per_page=${TAG_COUNT_BATCH}`;
   const data = await readObject<{ tags?: { name?: string; images?: number; image_count?: number }[] }>(
