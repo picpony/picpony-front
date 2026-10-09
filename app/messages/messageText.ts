@@ -184,7 +184,17 @@ export function legacyTokens(content: string, origin?: string): MessageToken[] {
   let text = content
     .replace(/\[img\]([\s\S]*?)\[\/img\]/gi, (whole, src: string) => {
       const value = src.trim();
-      return /^https?:\/\//i.test(value) ? hole({ type: 'image', src: value }) : '';
+      if (!/^https?:\/\//i.test(value)) return '';
+      /* Review P4-O1: anyone can send `[br]`, which makes a message "legacy" — so `[img]` was any
+         sender's way to make the recipient's browser fetch any address the moment the
+         conversation opened (their IP, the time they read it). The original editor's pictures
+         live on PicPony's own upload host or Derpibooru's; those are drawn, anything else is a
+         link the reader can choose to open. Not a date cut-off: the original front end is still
+         live and still writes this format. */
+      const drawable = shareThumbSrc(value);
+      if (drawable) return hole({ type: 'image', src: drawable });
+      const link = resolveLink(value, origin);
+      return link ? hole({ type: 'link', text: '[图片] ' + value, href: link.href, internal: link.internal }) : '';
     })
     .replace(/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi, (whole, href: string, label: string) => {
       const link = resolveLink(href.trim(), origin);

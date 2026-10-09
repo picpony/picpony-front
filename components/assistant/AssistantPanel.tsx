@@ -21,6 +21,7 @@ import { formatExactCount } from '@/lib/format';
 import { createAssistantSession } from '@/lib/assistant/session';
 import { actionLabel, actionSupported } from '@/lib/assistant/actions';
 import { assistantQuota } from '@/lib/assistant/queries';
+import { faveFolders } from '@/lib/resources';
 import { MAX_MESSAGE } from '@/lib/assistant/protocol';
 import { useResource, SKIP } from '@/lib/resource';
 import { cn } from '@/lib/utils';
@@ -58,6 +59,10 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     },
   }));
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+  /* The folder names a confirmation card shows instead of bare ids (review P5-O2), read only while
+     a card is waiting for an answer. */
+  const folderList = useResource(faveFolders, state.task?.confirmation_token ? { token } : SKIP);
+  const folderName = (id: number) => folderList.data?.folders.find((folder) => folder.id === id)?.name;
   const quota = useResource(assistantQuota, state.available ? { token } : SKIP);
   const desktop = useMediaQuery(MEDIA.sm, true);
   const [history, setHistory] = useState(false);
@@ -172,7 +177,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         </Card>}
         {state.task?.confirmation_token && <Card padding="sm">
           <p className="mb-2 text-title-s text-on-surface">请确认操作</p>
-          <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">{state.task.actions.map((action, index) => <li key={action.call_id || index}>{actionLabel(action)}</li>)}</ul>
+          <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">{state.task.actions.map((action, index) => <li key={action.call_id || index}>{actionLabel(action, folderName)}</li>)}</ul>
           <div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="text" disabled={state.busy} onClick={() => void session.decide('reject')}>取消</Button><Button variant="filled" loading={state.busy} disabled={state.task.actions.some(action => !actionSupported(action))} onClick={() => void session.decide('confirm')}>确认执行</Button></div>
         </Card>}
         {state.receipts.length > 0 && <ul className="space-y-2 text-body-s text-on-surface-variant" aria-label="操作结果">{state.receipts.slice(-8).map((receipt, index) => <li key={`${receipt.task_id}:${receipt.call_id}:${index}`}>{receipt.summary}</li>)}</ul>}

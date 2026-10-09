@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono, Noto_Sans_SC } from 'next/font/google';
 import './globals.css';
 import { cookies, headers } from 'next/headers';
-import Script from 'next/script';
 import AppLayout from '@/components/AppLayout';
 import MaintenanceScreen from '@/components/MaintenanceScreen';
 import { AuthProvider } from '@/components/AuthModal';
@@ -330,9 +329,6 @@ export default async function RootLayout({
           type="text/javascript"
           dangerouslySetInnerHTML={{ __html: inlineRoutePolicyScript(routePolicy) }}
         />
-        <Script id="recaptcha-options" strategy="beforeInteractive" type="text/javascript">
-          {`window.recaptchaOptions = { useRecaptchaNet: true };`}
-        </Script>
       </head>
 
       {/* **No splash.** What the server rendered is what the first paint shows: an opaque

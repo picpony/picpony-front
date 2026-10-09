@@ -1,5 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { PICPONY_API_ORIGIN, PICPONY_RELAY_UPSTREAM } from '@/lib/constants';
+import { forwardableResponseHeaders } from '@/lib/proxyHeaders';
+import { clientAddress, createRateLimiter, rateLimited } from '@/lib/rateLimit.server';
 import {
   UPLOAD_MAX_DESCRIPTION_BYTES,
   UPLOAD_MAX_TAG_INPUT,
@@ -51,26 +53,20 @@ const MAX_TAG_INPUT = UPLOAD_MAX_TAG_INPUT;
  */
 const MAX_BODY_BYTES = 512 * 1024;
 
-const SKIP_RESPONSE_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'transfer-encoding',
-  'upgrade',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'content-encoding',
-  'content-length',
-  'cdn-cache-control',
-  'vercel-cdn-cache-control',
-  'x-powered-by',
-  'server',
+/* Beyond the shared hop-by-hop set (`lib/proxyHeaders.ts`): no cookie of the relay's, and no CORS
+   header echoing our server's own Origin. */
+const EXTRA_SKIPPED_HEADERS: ReadonlySet<string> = new Set([
   'set-cookie',
   'access-control-allow-origin',
   'access-control-allow-credentials',
   'vary',
 ]);
+
+/**
+ * Review P1-F11: anybody can post here and have this server upload to Derpibooru, so the hop gets
+ * a ceiling — far above what a person publishing pictures does in ten minutes.
+ */
+const takeSubmit = createRateLimiter({ limit: 30, windowMs: 10 * 60_000 });
 
 function answer(status: number, message: string): Response {
   return Response.json({ success: false, message }, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -90,6 +86,8 @@ function optionalText(value: unknown, maxBytes: number): string | undefined | nu
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
+  const wait = takeSubmit(clientAddress(request.headers));
+  if (wait) return rateLimited(wait);
   const declared = Number(request.headers.get('content-length') ?? '0');
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return answer(413, '请求过大');
   if (!(request.headers.get('content-type') ?? '').toLowerCase().includes('application/json')) {
@@ -193,15 +191,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return answer(502, '上传线路返回了非 JSON 内容');
   }
 
-  const headers = new Headers();
-  /* Headers the upstream's `Connection` names are hop-by-hop too — the other proxies drop them,
-     and this one did not (review P1-F12). */
-  const connectionHeaders = new Set(
-    response.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
-  );
-  response.headers.forEach((value, name) => {
-    if (!SKIP_RESPONSE_HEADERS.has(name) && !connectionHeaders.has(name)) headers.set(name, value);
-  });
+  const headers = forwardableResponseHeaders(response.headers, EXTRA_SKIPPED_HEADERS);
   headers.set('Cache-Control', 'private, no-store');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");

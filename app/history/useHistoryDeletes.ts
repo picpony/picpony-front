@@ -45,6 +45,9 @@ export function useHistoryDeletes(
   const sent = useRef<{ token: string; entries: HistoryEntry[] } | null>(null);
   const sending = useRef<Promise<void> | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** Bumped by 清空记录 (review P5-O9): a batch in flight then must not arm 撤销, which would put
+   *  its rows back into the history that was just emptied. */
+  const generation = useRef(0);
   const viewRef = useRef(view);
   const restoredRef = useRef(onRestored);
   useEffect(() => {
@@ -63,6 +66,7 @@ export function useHistoryDeletes(
     const batch = [...held.current.values()];
     held.current.clear();
     if (batch.length === 0) return;
+    const startedIn = generation.current;
     const work = (async () => {
       const done: Held[] = [];
       const failed: Held[] = [];
@@ -86,7 +90,7 @@ export function useHistoryDeletes(
         browsingHistory.invalidate();
         if (shown) browsingHistory.write(args, { ...shown, entries: shown.entries.filter((entry) => !gone.has(entry.id)) });
         browsingHistory.expire(args);
-        sent.current = { token: current, entries: owned.map((item) => item.entry) };
+        if (generation.current === startedIn) sent.current = { token: current, entries: owned.map((item) => item.entry) };
       }
       show([...done, ...failed].map((item) => item.entry.id));
       if (failed.length > 0 && failed.some((item) => item.token === current)) {
@@ -138,6 +142,7 @@ export function useHistoryDeletes(
 
   /** 清空记录 makes every held delete moot: forget them without sending. */
   const forget = useCallback(() => {
+    generation.current += 1;
     clearTimeout(timer.current);
     held.current.clear();
     sent.current = null;

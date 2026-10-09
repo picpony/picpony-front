@@ -37,7 +37,7 @@ import { api } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { envelopeMessage, readJson } from '@/lib/api/http';
 import { sessionUser } from '@/lib/resources';
-import { readToken, updateUserInfo, useMediaQuery, writeUserInfo } from '@/lib/hooks';
+import { readToken, resolveDerpiCredentials, updateUserInfo, useMediaQuery, writeUserInfo } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { LS_KEYS, MEDIA } from '@/lib/constants';
 import { startCooldown, useCooldown } from '@/lib/useCooldown';
@@ -548,14 +548,13 @@ async function establishSession(
       /* The sign-in response's Derpibooru binding is the newer word — but only where it says
          something: a response without `api_key` used to overwrite the account read's key with
          `undefined`, and `writeUserInfo` then deleted the stored key until the shell's next
-         read put it back (review P2-F9). The same rule as `resolveDerpiCredentials`. */
+         read put it back (review P2-F9). `resolveDerpiCredentials` is that rule, shared with the
+         shell's own merge. */
       updateUserInfo(base.token, {
         ...base,
         ...result.user,
         token: base.token,
-        api_key: base.api_key ?? result.user.api_key,
-        derpi_user_id: base.derpi_user_id ?? result.user.derpi_user_id,
-        derpi_username: base.derpi_username ?? result.user.derpi_username,
+        ...resolveDerpiCredentials(base as unknown as Record<string, unknown>, result.user as unknown as Record<string, unknown>),
       });
     }
   } catch {

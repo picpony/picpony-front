@@ -387,6 +387,7 @@ function ShopItemForm({
           value={values.imageUrl}
           readOnly={busy}
           helper="留空则显示礼物图标"
+          error={errors.imageUrl}
           onChange={(event) => set('imageUrl', event.target.value)}
         />
         <Input

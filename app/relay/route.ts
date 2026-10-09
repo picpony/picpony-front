@@ -1,5 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { PICPONY_API_ORIGIN, PICPONY_RELAY_UPSTREAM } from '@/lib/constants';
+import { forwardableResponseHeaders } from '@/lib/proxyHeaders';
+import { clientAddress, createRateLimiter, rateLimited } from '@/lib/rateLimit.server';
 
 /**
  * Server-side hop for the `picpony_api` request line.
@@ -33,28 +35,21 @@ const RELAY_TIMEOUT_MS = 30_000;
 const XP_USER_MAX = 64;
 const XP_USER_OK = /^[\w.-]+$/;
 
-const SKIP_RESPONSE_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'transfer-encoding',
-  'upgrade',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'content-encoding',
-  'content-length',
-  'cdn-cache-control',
-  'vercel-cdn-cache-control',
-  /* The upstream's software banner is not ours to advertise. */
-  'x-powered-by',
-  'server',
-  /* Our server's Origin echoed back by the relay; re-emitting it would describe a
-     cross-origin exchange the browser is not making. */
+/* What this hop refuses beyond the shared hop-by-hop set (`lib/proxyHeaders.ts`): our server's
+   Origin echoed back by the relay — re-emitting it would describe a cross-origin exchange the
+   browser is not making. */
+const EXTRA_SKIPPED_HEADERS: ReadonlySet<string> = new Set([
   'access-control-allow-origin',
   'access-control-allow-credentials',
   'vary',
 ]);
+
+/**
+ * Review P1-F11: an anonymous forwarder from this server's address needs a ceiling. Generous — a
+ * gallery page is dozens of reads, and a NAT puts many visitors behind one address — so it only
+ * stops volume. 429 is a rate limit to `proxyFetch`, never a failover trigger.
+ */
+const takeRelay = createRateLimiter({ limit: 600, windowMs: 60_000 });
 
 function badRequest(message: string): Response {
   return Response.json({ success: false, message }, { status: 400 });
@@ -86,6 +81,9 @@ async function relay(request: NextRequest): Promise<Response> {
   ) {
     return badRequest('url 参数不在允许的范围内');
   }
+
+  const wait = takeRelay(clientAddress(request.headers));
+  if (wait) return rateLimited(wait);
 
   const upstream = new URL(PICPONY_RELAY_UPSTREAM);
   upstream.searchParams.set('url', target.toString());
@@ -145,14 +143,7 @@ async function relay(request: NextRequest): Promise<Response> {
     return Response.json({ success: false, message: 'PicPony API 线路返回了非 JSON 内容' }, { status: 502 });
   }
 
-  const headers = new Headers();
-  const connectionHeaders = new Set(
-    response.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
-  );
-  response.headers.forEach((value, key) => {
-    if (key === 'set-cookie') return;
-    if (!SKIP_RESPONSE_HEADERS.has(key) && !connectionHeaders.has(key)) headers.set(key, value);
-  });
+  const headers = forwardableResponseHeaders(response.headers, EXTRA_SKIPPED_HEADERS);
   headers.set('Cache-Control', 'private, no-store');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");

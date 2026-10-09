@@ -807,6 +807,7 @@ test('only accepted block-tag mutations expire both Next tags and the process me
     },
     '@/lib/constants': { COOKIE_KEYS },
     '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
+    '@/lib/proxyHeaders': await import('../lib/proxyHeaders.ts'),
   };
   vm.runInNewContext(transpiled, { exports, require: (name) => {
     assert.ok(name in dependencies, name);

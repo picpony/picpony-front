@@ -20,6 +20,17 @@ import ts from 'typescript';
 const root = path.resolve(import.meta.dirname, '..');
 const require = createRequire(import.meta.url);
 
+/* The shared header rules the route imports (review P1-F12) — pure, so the real module is loaded. */
+function loadPure(relative) {
+  const code = ts.transpileModule(readFileSync(path.join(root, relative), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const exports = {};
+  vm.runInNewContext(code, { exports, Headers, Set });
+  return exports;
+}
+const proxyHeaders = loadPure('lib/proxyHeaders.ts');
+
 function loadProxy(fetchImpl) {
   const source = readFileSync(path.join(root, 'app/api.php/[[...path]]/route.ts'), 'utf8');
   const code = ts.transpileModule(source, {
@@ -42,6 +53,7 @@ function loadProxy(fetchImpl) {
       },
       '@/lib/constants': { COOKIE_KEYS: {}, SITE_STATUS_CACHE_TAG: 'c' },
       '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
+      '@/lib/proxyHeaders': proxyHeaders,
     })[name],
     process: { env: {} },
     Response, Headers, URL, AbortController, DOMException, TransformStream,
@@ -107,7 +119,7 @@ test('P1-F1: a body is bounded by its pace, then the answer by 30s, never by one
   assert.equal(signal.aborted, false);
 });
 
-test('P1-F1: a stalled body aborts the upstream call and answers 502', async () => {
+test('P1-F1 / P4-O2: a stalled body aborts the upstream call and answers 408, not an outage', async () => {
   const body = new ReadableStream({ start() {} });
   const proxy = loadProxy((_url, init) => new Promise((_, reject) => {
     init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
@@ -120,6 +132,15 @@ test('P1-F1: a stalled body aborts the upstream call and answers 502', async () 
   assert.equal(idle.ms, 30_000);
   idle.fn();
   const response = await pending;
+  assert.equal(response.status, 408);
+  assert.match((await response.json()).message, /上传中断/);
+});
+
+test('P4-O2: an upstream that fails on its own is still a 502', async () => {
+  const proxy = loadProxy(async () => { throw new TypeError('fetch failed'); });
+  const response = await proxy.exports.POST(request('https://app.invalid/api.php?action=upload_temp_upload', {
+    method: 'POST', body: 'x', duplex: 'half',
+  }), context());
   assert.equal(response.status, 502);
 });
 

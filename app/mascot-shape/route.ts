@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { PICPONY_API_ORIGIN } from '@/lib/constants';
 import { createServerMemo } from '@/lib/serverMemo';
+import { upstreamOrigin } from '@/lib/upstream.server';
 import { MASCOT_SHAPE_GRID, shapeRows, type MascotShape } from '@/lib/mascot/shapeModel';
 
 /**
@@ -113,9 +114,84 @@ const shapeOf = createServerMemo<[string], MascotShape>({
   },
 });
 
+/**
+ * The artworks the site is configured with (review P1-F8): the public `get_mascot_config` names
+ * every mascot, and each one's image comes from asking for it by id. Only those addresses are read,
+ * so the endpoint stops being a decoder for any picture on the asset host.
+ *
+ * `null` when the configuration cannot be read — the route then falls back to the host-pinned rule
+ * above rather than taking the figure's shape away with the backend. A configured mascot that is
+ * newer than the memo (an administrator just uploaded it) is found by one forced re-read, at most
+ * once a minute, so a spray of misses cannot turn into a spray of configuration reads.
+ */
+const MASCOT_LIST_MAX = 20;
+const CONFIG_TIMEOUT_MS = 8_000;
+
+function assetHref(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const raw = value.trim();
+  try {
+    const url = /^https?:\/\//.test(raw) ? new URL(raw) : new URL(`${PICPONY_API_ORIGIN}/${raw.replace(/^\/+/, '')}`);
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+async function readMascotConfig(selected?: string): Promise<Record<string, unknown> | null> {
+  const address = new URL('/api.php', upstreamOrigin());
+  address.searchParams.set('action', 'get_mascot_config');
+  if (selected) address.searchParams.set('selected_id', selected);
+  try {
+    const response = await fetch(address, { cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS) });
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    return data && typeof data === 'object' && (data as { success?: unknown }).success === true ? data as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+const configuredImages = createServerMemo<[], Set<string>>({
+  ttlMs: 10 * 60 * 1000,
+  keyOf: () => 'all',
+  load: async () => {
+    const first = await readMascotConfig();
+    if (!first) return null;
+    const images = new Set<string>();
+    const own = assetHref(first.mascot_image);
+    if (own) images.add(own);
+    const ids = (Array.isArray(first.mascots) ? first.mascots : [])
+      .map((row) => (row && typeof row === 'object' ? Number((row as { id?: unknown }).id) : NaN))
+      .filter((id) => Number.isSafeInteger(id) && id > 0 && String(id) !== String(first.id))
+      .slice(0, MASCOT_LIST_MAX);
+    const others = await Promise.all(ids.map((id) => readMascotConfig(String(id))));
+    for (const other of others) {
+      const href = other && assetHref(other.mascot_image);
+      if (href) images.add(href);
+    }
+    return images;
+  },
+});
+
+const RECHECK_MS = 60_000;
+let lastRecheck = 0;
+
+/** Whether `href` is a configured artwork — `true` too when the configuration cannot be read. */
+async function isConfigured(href: string): Promise<boolean> {
+  const images = await configuredImages();
+  if (!images) return true;
+  if (images.has(href)) return true;
+  if (Date.now() - lastRecheck < RECHECK_MS) return false;
+  lastRecheck = Date.now();
+  configuredImages.clear();
+  const fresh = await configuredImages();
+  return !fresh || fresh.has(href);
+}
+
 export async function GET(request: NextRequest): Promise<Response> {
   const url = target(request.nextUrl.searchParams.get('src'));
-  if (!url) {
+  if (!url || !(await isConfigured(url.href))) {
     return Response.json({ success: false, message: '不是可读取的吉祥物图片' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
   }
   const shape = await shapeOf(url.href);

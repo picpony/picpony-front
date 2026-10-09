@@ -18,7 +18,7 @@ import { readJson } from '@/lib/api/http';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { MEDIA } from '@/lib/constants';
 import { readToken, useMediaQuery, useSession } from '@/lib/hooks';
-import { addPendingTag } from '@/lib/pendingTags';
+import { addPendingTag, MAX_PENDING } from '@/lib/pendingTags';
 import { SKIP, useResource } from '@/lib/resource';
 import { tagEntry } from '@/lib/resources';
 import { tagCategory } from '@/lib/tagCategories';
@@ -213,6 +213,7 @@ export default function TagInfoModal({ tag, onClose }: { tag: string | null; onC
                   const outcome = addPendingTag(shown);
                   if (outcome === 'added') showToast('已添加到待定标签库', 'success');
                   else if (outcome === 'exists') showToast('此标签已在待定标签库中', 'info');
+                  else if (outcome === 'full') showToast(`待定标签库已满（最多 ${MAX_PENDING} 个），请先整理后再添加`, 'error');
                   else showToast('待定标签保存失败，请检查浏览器是否允许本地存储', 'error');
                 }}>
                   添加到待定标签

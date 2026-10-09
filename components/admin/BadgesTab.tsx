@@ -26,9 +26,10 @@ import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
 import { defineAdminQuery, useAdminQuery, adminList, tableError } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
-import { grantPayload, parseUserIds, type GrantForm } from './badges';
+import { badgeDateProblems, grantPayload, parseUserIds, type GrantForm } from './badges';
 import BadgeDictionaryPane from './catalogTools/BadgeDictionaryPane';
 import DeleteBadgeLinkAction from './catalogTools/DeleteBadgeLinkAction';
+import { flag } from '@/lib/flag';
 
 interface BadgeLink {
   id: number;
@@ -132,6 +133,7 @@ function GrantPane({ token }: { token: string }) {
       if (form.startDate && form.endDate && form.startDate > form.endDate) next.endDate = '截止日期不能早于起始日期';
     }
     if (!form.permanent && !form.expiresAt) next.expiresAt = '请选择徽章的到期日期';
+    else if (!form.permanent) next.expiresAt = badgeDateProblems({ badgeExpiresAt: form.expiresAt }).badgeExpiresAt ?? next.expiresAt;
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
 
@@ -280,7 +282,7 @@ function LinksPane({
   const { confirmThen, confirmDialog } = useConfirm();
   const { prompt, promptDialog } = usePrompt();
   const [form, setForm] = useState<LinkForm>(EMPTY_LINK);
-  const [errors, setErrors] = useState<{ name?: string; color?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; color?: string; badgeExpiresAt?: string; linkExpiresAt?: string }>({});
   const creating = createMutation.busy;
   const paged = usePagedRows(links.data ?? [], token);
 
@@ -294,9 +296,10 @@ function LinksPane({
     const next = {
       name: form.name.trim() ? undefined : '请输入徽章名称',
       color: isHexColor(form.color) ? undefined : '请输入 #RRGGBB 格式的颜色',
+      ...badgeDateProblems({ badgeExpiresAt: form.badgeExpiresAt, linkExpiresAt: form.linkExpiresAt }),
     };
     setErrors(next);
-    if (next.name || next.color) return;
+    if (next.name || next.color || next.badgeExpiresAt || next.linkExpiresAt) return;
     void createMutation.run(
       () => adminApi.adminCreateBadgeLink(token, {
         badge_name: form.name.trim(),
@@ -316,7 +319,7 @@ function LinksPane({
   };
 
   const toggle = (link: BadgeLink) => {
-    const enabling = !link.is_active;
+    const enabling = !flag(link.is_active);
     const run = () => void toggleMutation.run(
       () => adminApi.adminToggleBadgeLink(token, link.id, enabling ? 1 : 0),
       () => showToast(enabling ? '已启用领取链接' : '已停用领取链接', 'success'),
@@ -358,8 +361,8 @@ function LinksPane({
       header: '状态',
       width: 'auto',
       render: (link) => (
-        <Badge tone={link.is_active ? 'success' : 'neutral'} size="md">
-          {link.is_active ? '生效中' : '已停用'}
+        <Badge tone={flag(link.is_active) ? 'success' : 'neutral'} size="md">
+          {flag(link.is_active) ? '生效中' : '已停用'}
         </Badge>
       ),
     },
@@ -385,11 +388,11 @@ function LinksPane({
           />
           <Button
             size="xs"
-            variant={link.is_active ? 'danger-text' : 'text'}
+            variant={flag(link.is_active) ? 'danger-text' : 'text'}
             loading={toggleMutation.pendingKeys.has(link.id)}
             onClick={() => toggle(link)}
           >
-            {link.is_active ? '停用' : '启用'}
+            {flag(link.is_active) ? '停用' : '启用'}
           </Button>
           <DeleteBadgeLinkAction token={token} id={link.id} name={link.badge_name} disabled={toggleMutation.busy} onDeleted={links.refresh} />
         </>
@@ -416,6 +419,7 @@ function LinksPane({
             value={form.badgeExpiresAt}
             readOnly={creating}
             helper="留空则领取的徽章永久有效"
+            error={errors.badgeExpiresAt}
             onChange={(event) => set('badgeExpiresAt', event.target.value)}
           />
           <DateInput
@@ -424,6 +428,7 @@ function LinksPane({
             value={form.linkExpiresAt}
             readOnly={creating}
             helper="留空则链接长期有效"
+            error={errors.linkExpiresAt}
             onChange={(event) => set('linkExpiresAt', event.target.value)}
           />
           <Input

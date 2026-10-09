@@ -89,7 +89,7 @@ import {
   writeHomeTab,
   type HomeTab,
 } from '@/lib/homeTabs';
-import { clearUserInfo, readToken, readUserInfo, updateUserInfo, useMediaQuery, useSession } from '@/lib/hooks';
+import { clearUserInfo, readToken, readUserInfo, resolveDerpiCredentials, updateUserInfo, useMediaQuery, useSession } from '@/lib/hooks';
 import { ensureRoutePolicy, setLineNotifier } from '@/lib/route';
 import { showToast } from '@/components/Toast';
 import { cn, runWhenIdle } from '@/lib/utils';
@@ -673,9 +673,9 @@ export default function AppLayout({
       ...stored,
       ...result.user,
       token: stored.token,
-      api_key: result.user.api_key ?? stored.api_key,
-      derpi_user_id: result.user.derpi_user_id ?? stored.derpi_user_id,
-      derpi_username: result.user.derpi_username ?? stored.derpi_username,
+      /* One rule for every merge of a Derpibooru binding (review P2-F9's follow-up): absent or
+         null keeps what is stored, only an explicit empty string clears it. */
+      ...resolveDerpiCredentials(result.user as unknown as Record<string, unknown>, stored as unknown as Record<string, unknown>),
     };
     updateUserInfo(stored.token, merged);
   }, [session.data, token]);

@@ -5,7 +5,7 @@ import { randomId } from '@/lib/utils';
 import { LS_KEYS } from '@/lib/constants';
 import { ApiError, apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { CatalogOutcomeUnknown } from '@/lib/api/adminCatalogTools';
-import { ImportNotSent, readImport, writeImport } from '@/lib/adminCatalogTools/importClient';
+import { ImportNotSent, readImport, sendWithRetry, writeImport } from '@/lib/adminCatalogTools/importClient';
 import { CHUNK_BYTES, fingerprint, finalForm, importStatus, importUrl, parseJob, uploadChunks, validatePackage, type Dataset, type ImportJob } from '@/lib/adminCatalogTools/importModel';
 
 /**
@@ -118,7 +118,7 @@ export function useImportTask(token: string, viewerId: number, dataset: Dataset,
       const state: ImportJob = saved ?? { id: randomId(), dataset, filename: file.name, size: file.size, totalChunks: Math.ceil(file.size / CHUNK_BYTES), chunks: [], fingerprint: sig, phase: 'uploading', percent: 0 };
       if (dataset !== 'images') return;
       commit({ ...state, phase: 'uploading' });
-      await uploadChunks(state, file, { status: () => saved ? readImport(dataset, token, 'chunk_status', state.id) : Promise.resolve({ chunks: [] }), send: (body) => writeImport(dataset, token, body), current: isCurrent, stop: () => stopping.current, progress: commit });
+      await uploadChunks(state, file, { status: () => saved ? readImport(dataset, token, 'chunk_status', state.id) : Promise.resolve({ chunks: [] }), send: (body) => sendWithRetry(() => writeImport(dataset, token, body), { stop: () => stopping.current || !isCurrent() }), current: isCurrent, stop: () => stopping.current, progress: commit });
     });
   }
   async function submit(file?: File, url?: string) {

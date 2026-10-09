@@ -100,7 +100,10 @@ const plainModules = {
   '@/lib/roles': load('lib/roles.ts'),
   '@/lib/profileFields': load('lib/profileFields.ts'),
   '@/lib/validation': load('lib/validation.ts'),
+  '@/lib/flag': load('lib/flag.ts'),
 };
+/* The shop's picture rule is the catalog tools' (review P6-O2). */
+plainModules['@/lib/adminCatalogTools/model'] = load('lib/adminCatalogTools/model.ts', { '@/lib/api/errors': load('lib/api/errors.ts') });
 
 /**
  * Renders the panel's own local components (a dialog, a sub-pane) inline, as React would: they
@@ -987,7 +990,7 @@ for (const operation of ['import', 'delete', 'sync']) {
     } else if (operation === 'delete') {
       byType(tree, 'DataTable').props.columns.find((column) => column.key === 'select').header.props.onChange();
       button(fx.render(), '批量删除（2）').props.onClick();
-      assert.equal(fx.asked.at(-1).message, '确定要永久删除选中的 2 个标签吗？此操作无法恢复。');
+      assert.equal(fx.asked.at(-1).message, '确定要永久删除选中的 2 个标签吗？tag-1、tag-2。此操作无法恢复。', 'it names what it deletes (review P6-O7)');
       await settle();
       assert.deepEqual(JSON.parse(JSON.stringify(writes)), [[[1, 2]]], 'one request names every id');
       assert.equal(button(fx.render(), '批量删除（2）'), undefined, 'the selection is gone with the rows');

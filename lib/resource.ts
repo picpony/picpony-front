@@ -51,6 +51,13 @@ export type Job = {
   priority: Priority;
   key: string;
   cancel: () => void;
+  /**
+   * A refresh of something on screen (review P3-O1). The queue's overflow drops *guesses*; a
+   * mounted entry's revalidation is the refresh the tab return promised, and dropping it left that
+   * screen on its old value until the next return. Never chosen for dropping — the queue may run
+   * past its cap by the number of mounted entries, which is bounded by what is on screen.
+   */
+  keep?: boolean;
 };
 
 interface LaneState {
@@ -90,7 +97,12 @@ function enqueue(lane: Lane, job: Job) {
        work too: the most recent activation is the one the user is looking at. */
     state.immediate.unshift(job);
   } else {
-    if (state.background.length >= MAX_BACKGROUND_QUEUE) state.background.shift()?.cancel();
+    if (state.background.length >= MAX_BACKGROUND_QUEUE) {
+      const oldest = state.background.findIndex((queued) => !queued.keep);
+      if (oldest !== -1) state.background.splice(oldest, 1)[0].cancel();
+      /* With every queued job a kept refresh, a new guess is the one that goes. */
+      else if (!job.keep) { job.cancel(); return; }
+    }
     state.background.push(job);
   }
   pump(lane);
@@ -672,6 +684,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     enqueue(lane, {
       key: `${name}:${key}:revalidate`,
       priority: 'background',
+      keep: stale.listeners.size > 0,
       cancel: () => {
         controller.abort();
         if (stale.controller === controller) stale.controller = undefined;

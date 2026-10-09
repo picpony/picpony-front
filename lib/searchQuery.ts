@@ -197,6 +197,24 @@ function scanQueryText(chars: readonly string[]): { badQuote: number; unmatched:
 export const MAX_BLACKLIST_TERMS = 100;
 
 /**
+ * The blacklisted ids a query could not carry — everything older than its newest
+ * `MAX_BLACKLIST_TERMS` (review P3-O3 / P1-F16). Past a hundred entries those pictures came back
+ * in the feed and the searches while `searchImagesByIds` filtered all of them; the results are now
+ * filtered against this rest, so the blacklist means the same thing everywhere. A page may come
+ * back a few pictures short, which is the price of not growing the request line.
+ */
+export function blacklistBeyondQuery(blacklist: PublicBlacklist): Set<number> {
+  if (blacklist.length <= MAX_BLACKLIST_TERMS) return new Set();
+  return new Set([...blacklist].sort((a, b) => a - b).slice(0, -MAX_BLACKLIST_TERMS));
+}
+
+/** `images` without the blacklisted ids the query could not carry. Same array when none apply. */
+export function withoutOverflowBlacklisted<T extends { id: number }>(images: T[], blacklist: PublicBlacklist): T[] {
+  const rest = blacklistBeyondQuery(blacklist);
+  return rest.size ? images.filter((image) => !rest.has(image.id)) : images;
+}
+
+/**
  * Every tag this device's settings exclude: the content filter's group (none in developer
  * mode), the two ban toggles and the hidden tags. One definition for the query's `-tag`
  * terms, the image-search results' client-side check and /search's quick tags, so a tag the

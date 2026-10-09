@@ -15,6 +15,14 @@ import * as api from '@/lib/api/adminCatalogTools';
 import { readImport } from '@/lib/adminCatalogTools/importClient';
 import { validatePackage, type Dataset, type ImportPhase } from '@/lib/adminCatalogTools/importModel';
 import { integer } from '@/lib/adminCatalogTools/model';
+import { epochStamp } from '@/lib/adminSiteTools/model';
+
+/** 上次成功更新, its unit read from the magnitude like every other stamp from this backend
+ *  (`epochStamp`; review P6-O9) rather than assumed to be seconds. */
+function updatedLabel(value: unknown): string {
+  const stamp = epochStamp(value);
+  return typeof stamp === 'number' ? formatDateTime(stamp) : stamp ?? '暂无更新记录';
+}
 import type { AdminPanelProps } from '../registry';
 import SectionHeader from '../SectionHeader';
 import RefreshButton from '../RefreshButton';
@@ -53,7 +61,7 @@ function DatasetPane({ token, viewerId, dataset, active }: AdminPanelProps & { d
   const stage = () => { if (file) { setStopRequested(false); void task.stage(file); } };
   return <div ref={paneRef} className="space-y-6">
     <AdminNote>{dataset === 'images' ? '上传图片标签数据库，或让服务器从公开文件直链下载。上传完成后需确认校验并替换现有数据。' : '导入 PPSync 词库更新包，新增或更新其中的词条。已提交的导入会在服务器继续执行。'}</AdminNote>
-    <div className="flex flex-wrap items-center gap-3"><p className="text-body-m text-on-surface-variant">上次成功更新：{read.data === undefined ? read.loading ? '读取中…' : '读取失败' : read.data ? formatDateTime(read.data * 1000) : '暂无更新记录'}</p><RefreshButton onClick={read.refresh} label="刷新更新时间" loading={read.refreshing} /></div>
+    <div className="flex flex-wrap items-center gap-3"><p className="text-body-m text-on-surface-variant">上次成功更新：{read.data === undefined ? read.loading ? '读取中…' : '读取失败' : read.data ? updatedLabel(read.data) : '暂无更新记录'}</p><RefreshButton onClick={read.refresh} label="刷新更新时间" loading={read.refreshing} /></div>
     {read.error && <ErrorRetry size="inline" {...retryError('更新时间加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} />}
     <DropZone size="md" aria-label={dataset === 'images' ? '选择图片标签数据文件' : '选择词库更新包'} accept={dataset === 'images' ? '.db,.sqlite,.zip,.gz' : '.ppsync'} disabled={task.busy || submitted || job?.phase === 'staged'} filled={Boolean(file)} onFile={select} onReject={select}><p className="text-body-m break-words">{file ? `${file.name} · ${formatBytes(file.size)}` : dataset === 'images' ? '选择 DB、SQLite、ZIP 或 GZ 文件（最多 8 GB）' : '选择 PPSync 更新包（最多 256 MB）'}</p></DropZone>
     {fileError && <ErrorRetry size="inline" title="文件未选中" message={fileError} />}

@@ -13,7 +13,7 @@ import { LS_KEYS } from '@/lib/constants';
  */
 
 /** The original's own bound, applied on read so a hand-edited value cannot flood an editor. */
-const MAX_PENDING = 200;
+export const MAX_PENDING = 200;
 
 const EMPTY: readonly string[] = Object.freeze([]);
 const listeners = new Set<() => void>();
@@ -64,13 +64,18 @@ function write(tags: readonly string[]): boolean {
   return true;
 }
 
-/** Set a tag aside. `exists` when it already is; `failed` when this browser blocks storage. */
-export function addPendingTag(tag: string): 'added' | 'exists' | 'failed' {
+/**
+ * Set a tag aside. `exists` when it already is; `full` when the library holds `MAX_PENDING` tags
+ * (review P4-O11 — the oldest used to be dropped without a word while the answer said `added`);
+ * `failed` when this browser blocks storage.
+ */
+export function addPendingTag(tag: string): 'added' | 'exists' | 'full' | 'failed' {
   const name = tag.trim().toLowerCase();
   if (!name) return 'failed';
   const current = readPendingTags();
   if (current.includes(name)) return 'exists';
-  return write([...current, name].slice(-MAX_PENDING)) ? 'added' : 'failed';
+  if (current.length >= MAX_PENDING) return 'full';
+  return write([...current, name]) ? 'added' : 'failed';
 }
 
 /**

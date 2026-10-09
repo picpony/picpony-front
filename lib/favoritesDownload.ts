@@ -212,6 +212,37 @@ export async function packFavourites(
 /** At most this many pictures in one archive: a grid page, the most a selection holds. */
 export const ARCHIVE_LIMIT = FAVE_PAGE_SIZE;
 
+/**
+ * And at most about this many bytes (review P4-O5): an archive is built in memory, and fifty
+ * videos of up to 50MB each made one of 2.5GB — past what a phone's tab survives. Derpibooru
+ * reports each picture's `size`, so the split is planned before anything is fetched and the
+ * archives keep their `1of3` names. A picture of unknown size counts as `UNKNOWN_SIZE`; one
+ * picture larger than the budget is an archive of its own.
+ */
+export const ARCHIVE_BYTES = 300 * 1024 * 1024;
+const UNKNOWN_SIZE = 5 * 1024 * 1024;
+
+type Packable = Pick<PonyImage, 'id' | 'view_url' | 'representations'> & { size?: unknown };
+
+/** `images` cut into archives: at most `ARCHIVE_LIMIT` pictures and `ARCHIVE_BYTES` each. */
+export function planArchives<T extends Packable>(images: readonly T[]): T[][] {
+  const plan: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+  for (const image of images) {
+    const size = typeof image.size === 'number' && Number.isFinite(image.size) && image.size > 0 ? image.size : UNKNOWN_SIZE;
+    if (current.length > 0 && (current.length >= ARCHIVE_LIMIT || bytes + size > ARCHIVE_BYTES)) {
+      plan.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(image);
+    bytes += size;
+  }
+  if (current.length > 0) plan.push(current);
+  return plan;
+}
+
 export interface ArchivesOutcome {
   packed: number;
   failed: number;
@@ -221,13 +252,13 @@ export interface ArchivesOutcome {
 }
 
 /**
- * Fetch and pack `images` in archives of at most `ARCHIVE_LIMIT`, each handed to `onArchive` as
+ * Fetch and pack `images` in the archives `planArchives` cuts (a count and a byte budget), each handed to `onArchive` as
  * soon as it is finished — so it can be saved and let go before the next one is fetched — with
  * its place among them (`part` of `parts`). Progress counts across the whole batch. A cancel ends
  * the run; archives already handed over stay handed over, and the one in progress is dropped.
  */
 export async function packArchives(
-  images: readonly Pick<PonyImage, 'id' | 'view_url' | 'representations'>[],
+  images: readonly Packable[],
   {
     signal,
     onProgress,
@@ -242,10 +273,13 @@ export async function packArchives(
   const result: ArchivesOutcome = { packed: 0, failed: 0, cancelled: false, archives: 0 };
   if (images.length === 0) return result;
   const lines = await batchLines(signal);
-  const parts = Math.ceil(images.length / ARCHIVE_LIMIT);
+  const plan = planArchives(images);
+  const parts = plan.length;
+  let doneBefore = 0;
   for (let part = 0; part < parts; part += 1) {
-    const slice = images.slice(part * ARCHIVE_LIMIT, (part + 1) * ARCHIVE_LIMIT);
-    const before = { done: part * ARCHIVE_LIMIT, failed: result.failed };
+    const slice = plan[part];
+    const before = { done: doneBefore, failed: result.failed };
+    doneBefore += slice.length;
     const outcome = await packFavourites(slice, {
       signal,
       lines,

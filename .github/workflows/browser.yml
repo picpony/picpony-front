@@ -2,13 +2,24 @@
 # against stubbed upstreams and driving Microsoft Edge (Python Playwright's `msedge` channel, and
 # CDP for the request ledger and the probes). They are written for Windows — the Edge paths the
 # CDP scripts look in are Windows paths — so they run on `windows-latest`, which has Edge
-# installed. Runs for pull requests, dev/master pushes, nightly, and on demand.
+# installed. Runs for pull requests and dev/master pushes that touch the app (review P1-F14:
+# documentation-only changes do not spend two hours of a Windows runner), nightly, and on demand.
+# A draft pull request waits until it is marked ready.
 name: Browser suites
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
   push:
     branches: [dev, master]
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
   schedule:
     # 03:17 Beijing time.
     - cron: '17 19 * * *'
@@ -29,6 +40,7 @@ env:
 jobs:
   browser:
     name: Production suites (Edge)
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: windows-latest
     timeout-minutes: 120
     defaults:
@@ -53,15 +65,19 @@ jobs:
       - name: Python packages
         run: python -m pip install --disable-pip-version-check playwright pillow opencv-python-headless numpy
 
-      - name: Cache npm downloads
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Cache bun downloads
         uses: actions/cache@v4
         with:
-          path: ~/AppData/Local/npm-cache
-          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
-          restore-keys: npm-${{ runner.os }}-
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install
-        run: npm install --no-audit --no-fund
+        run: bun install --frozen-lockfile
 
       # Needs no app build: bundles `lib/motion.ts` itself and serves it to Edge.
       - name: Drawer swipe
@@ -107,6 +123,11 @@ jobs:
       - name: Routes and profiles
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run test:browser
+      # Review P6-O12: its own cases (the profile gallery's grid, paging and empty states) only ran
+      # as a module the hero suite imports.
+      - name: Profile gallery
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:profile-gallery
       - name: Hero interactions
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run test:hero

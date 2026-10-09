@@ -14,9 +14,10 @@ import Skeleton, { SkeletonCircle } from './Skeleton';
 import Spinner from './Spinner';
 import { showToast } from './Toast';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import { encodeShare, sendMessage, type ShareTarget } from '@/lib/api/messages';
+import { encodeShare, type ShareTarget } from '@/lib/api/messages';
+import { sendInLine } from '@/app/messages/outbox';
 import { trackShare } from '@/lib/api/share';
-import { useSession } from '@/lib/hooks';
+import { readToken, useSession } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { SKIP, useResource } from '@/lib/resource';
 import { conversationPage, recentContacts, userSearch } from '@/lib/resources';
@@ -120,7 +121,9 @@ function ShareToContactDialog({
     if (!token || rows.has(person.id)) return;
     setRows((previous) => new Map(previous).set(person.id, 'sending'));
     try {
-      await sendMessage(token, person.id, encodeShare(target));
+      await sendInLine(token, person.id, encodeShare(target));
+      /* Another account by now (review P4-O8): its dialog is not this send's to report on. */
+      if (readToken() !== token) return;
       trackShare(token);
       setRows((previous) => new Map(previous).set(person.id, 'sent'));
       showToast('已发送');
@@ -128,6 +131,7 @@ function ShareToContactDialog({
       conversationPage.invalidate({ token, withUserId: person.id, page: 1 });
       recentContacts.expire({ token });
     } catch (error) {
+      if (readToken() !== token) return;
       setRows((previous) => {
         const next = new Map(previous);
         next.delete(person.id);

@@ -33,8 +33,12 @@ export function safeUrl(raw: string): string | null {
      the original. */
   const url = raw.trim().replace(/[\s\x00-\x1F\x7F]/g, '');
   if (!url) return null;
+  /* A browser reads `\` as `/` in a URL, so `/\evil.example` is protocol-relative — another host
+     — while it looks root-relative (review P2-F5's follow-up). Normalised here, the one boundary
+     every rich-text link passes, so what is emitted says what the browser will do. */
+  const normalised = /^[/\\]/.test(url) ? url.replace(/^[/\\]+/, (lead) => '/'.repeat(Math.min(lead.length, 2))) : url;
   // Root-relative (`/foo`) and protocol-relative (`//host/foo`) carry no scheme.
-  if (url.startsWith('/')) return url;
+  if (normalised.startsWith('/')) return normalised;
   const scheme = /^([a-z][a-z0-9+.\-]*):/i.exec(url);
   if (!scheme) return url; // schemeless — a relative path
   return /^https?$/i.test(scheme[1]) ? url : null;

@@ -258,7 +258,7 @@ The basis is **HCT**, because that is the space M3 quotes its own numbers in: "n
 
 ### The palette axis: eleven themes, two 配色方案, and `primary` is decided with the artwork beside it
 
-`data-palette` on `<html>` selects one of ten built-in themes or the user's own; `data-palette-hues='mono'` selects **单色**, and its absence is **多色**, the default (decision 27). A built-in theme's `primary` is **the character's own hue from the MLP-VectorClub colour guide, at a tone and a chroma chosen for the largest area on screen** — the refinement in `fix/K1/DIRECTIONS.md` §2, recorded per theme with its guide row in `THEMES` in `scripts/palette.mjs`. Everything else is shared: the role→tone map, the harmony (M3's own, see below), the semantic ramps, and the three things still solved from the two fills.
+`data-palette` on `<html>` selects one of ten built-in themes or the user's own; `data-palette-hues='mono'` selects **单色**, and its absence is **多色**, the default (decision 27). A built-in theme's `primary` is **the character's own hue from the MLP-VectorClub colour guide, at a tone and a chroma chosen for the largest area on screen** — a refinement made during the palette review, recorded per theme with its guide row in `THEMES` in `scripts/palette.mjs`. Everything else is shared: the role→tone map, the harmony (M3's own, see below), the semantic ramps, and the three things still solved from the two fills.
 
 **Direction A governs built-in fills and new image recommendations (decisions 33–34).**
 
@@ -1588,6 +1588,10 @@ The scheme, the motion tier, the speed and entrance motion stay on the device; t
 | `api_accel` | `PROXY_API_BASE` + the encoded `derpibooru.org` URL — a Worker, `GET`/`HEAD`/`OPTIONS` only |
 | `picpony_api` | our own `/relay?url=…&xp_user=…` |
 | `third_party` | an admin-supplied origin, with the Derpibooru path and search copied onto it |
+
+**A user's API key has one rule per line** (review P1-F11 / P2-O1). The accel Worker is a third party's, so a read carrying `key=` never takes it: `buildApiLineUrl` sends a keyed read on `api_accel` to our own relay instead (same `?url=` shape, our server). `third_party` strips the key unless `global_api_third_party_pass_api_key` is on — and a **write** on such a line goes to Derpibooru itself (`applyApiLineToWrite`), because a write without its key is a certain 401. `/relay` and `/upload/submit` are anonymous forwarders from this server's address, so each has a per-address ceiling (`lib/rateLimit.server.ts`: 600 reads a minute, 30 submissions per ten minutes), answered with 429. `xp_user` is the relay's accounting label and is never authority for anything.
+
+**Deployment is one process.** Every server memo (`lib/serverMemo.ts`), the rate limits and `revalidateTag` act on the process they run in. Behind several replicas, a write accepted on one leaves the others on their memo until it expires (the public blacklist five minutes, the block filters thirty), and each replica counts its own rate limit; running more than one needs a shared `cacheHandler` and a shared limiter first (review P1-F5).
 
 | Image line | URL |
 | --- | --- |

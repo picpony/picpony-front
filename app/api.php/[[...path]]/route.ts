@@ -7,6 +7,7 @@ import {
   clearPublicBlacklistMemo,
 } from '@/lib/blockFilters.server';
 import { COOKIE_KEYS, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
+import { forwardableResponseHeaders } from '@/lib/proxyHeaders';
 import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
@@ -53,6 +54,8 @@ const UPSTREAM_TIMEOUT_MS = 30_000;
  */
 const BODY_IDLE_MS = 30_000;
 const BODY_TOTAL_MS = 15 * 60_000;
+/** The abort reason a stalled body carries, so the answer can tell it from a dead upstream. */
+const BODY_STALLED = 'request body stalled';
 
 /** Hop-by-hop headers, plus ones `fetch` must recompute for the new request. */
 const SKIP_REQUEST_HEADERS = new Set([
@@ -70,28 +73,6 @@ const SKIP_REQUEST_HEADERS = new Set([
   'accept-encoding',
 ]);
 
-/**
- * Hop-by-hop headers, plus the framing headers that describe the *upstream*
- * body. fetch hands us an already-decoded stream, so passing `content-encoding`
- * through would tell the browser to inflate plain bytes.
- */
-const SKIP_RESPONSE_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'transfer-encoding',
-  'upgrade',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'content-encoding',
-  'content-length',
-  'cdn-cache-control',
-  'vercel-cdn-cache-control',
-  /* The upstream's software banner is not ours to advertise. */
-  'x-powered-by',
-  'server',
-]);
 
 /**
  * The app's own cookies, which the backend never reads. They are this origin's (theme, motion,
@@ -140,10 +121,10 @@ function pacedBody(body: ReadableStream<Uint8Array>, controller: AbortController
     clearTimeout(timer);
     timer = setTimeout(() => controller.abort(new DOMException(reason, 'TimeoutError')), ms);
   };
-  arm(BODY_IDLE_MS, 'request body stalled');
+  arm(BODY_IDLE_MS, BODY_STALLED);
   const stream = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, sink) {
-      arm(BODY_IDLE_MS, 'request body stalled');
+      arm(BODY_IDLE_MS, BODY_STALLED);
       sink.enqueue(chunk);
     },
     flush() {
@@ -205,6 +186,17 @@ async function proxy(
     upstream = await fetch(target, init);
   } catch {
     paced?.done();
+    /* The client's own body stopped arriving while its connection stayed open (review P4-O2): that
+       is the visitor's network, not ours, and a 502 read as 「服务暂时不可用」. A 408 is the honest
+       status — the request never finished — and `stageUpload` words it as an interrupted upload.
+       Nothing reached PHP as a complete request, so nothing happened there. */
+    const reason: unknown = paceController?.signal.reason;
+    if (reason instanceof DOMException && reason.message === BODY_STALLED) {
+      return Response.json(
+        { success: false, message: '上传中断，请检查网络后重试' },
+        { status: 408, headers: { 'Cache-Control': 'private, no-store' } },
+      );
+    }
     /* Same shape `app/relay/route.ts` returns for the same condition: `proxyFetch`
        (lib/api/client.ts) treats 502 as a failover trigger, which is exactly what it
        would have concluded from the network throw this is standing in for. A timeout
@@ -245,15 +237,9 @@ async function proxy(
   }
 
   const secure = isSecureRequest(request);
-  const responseHeaders = new Headers();
-  const upstreamConnectionHeaders = new Set(
-    upstream.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
-  );
-  upstream.headers.forEach((value, key) => {
-    // Set-Cookie can repeat, so it is copied separately via getSetCookie().
-    if (key === 'set-cookie') return;
-    if (!SKIP_RESPONSE_HEADERS.has(key) && !upstreamConnectionHeaders.has(key)) responseHeaders.set(key, value);
-  });
+  /* The shared hop-by-hop rules (`lib/proxyHeaders.ts`); Set-Cookie can repeat, so it is copied
+     separately via getSetCookie(). */
+  const responseHeaders = forwardableResponseHeaders(upstream.headers);
   for (const cookie of upstream.headers.getSetCookie()) {
     responseHeaders.append('set-cookie', secure ? cookie : downgradeCookie(cookie));
   }

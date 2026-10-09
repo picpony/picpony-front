@@ -1,6 +1,7 @@
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import {
   buildSearchQueryFrom,
+  withoutOverflowBlacklisted,
   parseBrowsingFingerprint,
   parseSortField,
   UNMIRRORABLE_FINGERPRINT,
@@ -149,6 +150,8 @@ const read = createServerMemo<[string, string, number, BlockFilters, PublicBlack
       }
       const data = (await res.json()) as ApiResponse;
       if (!Array.isArray(data?.images)) return null;
+      /* The ids the query could not carry (review P3-O3), filtered the way the client does. */
+      data.images = withoutOverflowBlacklisted(data.images, blacklist);
       return { key, data, generatedAt: Date.now(), fp, sort };
     } catch {
       /* Timeout, offline upstream, HTML error page — all mean "no seed", which the island already

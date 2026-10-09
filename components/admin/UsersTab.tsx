@@ -20,6 +20,7 @@ import type { AdminPanelProps } from './registry';
 import UserEditor, { userEditorId, type AdminUser } from './users/UserEditor';
 import BadgeEditDialog from './users/BadgeEditDialog';
 import { userBadges, type AdminUserBadge } from './users/rules';
+import { flag } from '@/lib/flag';
 
 const EMPTY: AdminUser[] = [];
 
@@ -119,7 +120,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
   };
 
   const toggleBan = (user: AdminUser) => {
-    const banning = !user.is_banned;
+    const banning = !flag(user.is_banned);
     confirmThen(
       banning ? '确认封禁' : '确认解封',
       banning
@@ -154,7 +155,8 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
         `已删除${named(user)}`,
         '删除失败',
         () => {
-          if (editing?.id === user.id) setEditing(null);
+          /* The editor as it is now, not as it was when the confirmation opened (review P6-O14). */
+          setEditing((current) => (current?.id === user.id ? null : current));
           usersQuery.write(token, (previous) => ({ stats: previous?.stats, rows: previous?.rows.filter((row) => row.id !== user.id) ?? [] }));
           read.refresh();
         },
@@ -215,8 +217,8 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
       header: '状态',
       width: 'auto',
       render: (user) => (
-        <Badge tone={user.is_banned ? 'error' : 'success'} size="md">
-          {user.is_banned ? '已封禁' : '正常'}
+        <Badge tone={flag(user.is_banned) ? 'error' : 'success'} size="md">
+          {flag(user.is_banned) ? '已封禁' : '正常'}
         </Badge>
       ),
     },
@@ -246,9 +248,9 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
               <>
                 <IconButton
                   size="sm"
-                  variant={user.is_banned ? 'standard' : 'danger-text'}
-                  icon={user.is_banned ? <MdCheckCircle /> : <MdBlock />}
-                  aria-label={`${user.is_banned ? '解封' : '封禁'}用户 ${user.username}`}
+                  variant={flag(user.is_banned) ? 'standard' : 'danger-text'}
+                  icon={flag(user.is_banned) ? <MdCheckCircle /> : <MdBlock />}
+                  aria-label={`${flag(user.is_banned) ? '解封' : '封禁'}用户 ${user.username}`}
                   loading={running?.id === user.id && running.action === 'ban'}
                   disabled={busy && !(running?.id === user.id && running.action === 'ban')}
                   onClick={() => toggleBan(user)}
