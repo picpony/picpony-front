@@ -23,6 +23,121 @@ function load(file, dependencies = {}, globals = {}) {
 
 const constants = { PICPONY_API_ORIGIN: 'https://picpony.top', LS_KEYS: {}, MEDIA: {} };
 
+function videoPreviewHarness() {
+  const events = () => {
+    const listeners = new Map();
+    return {
+      listeners,
+      addEventListener(name, listener) {
+        if (!listeners.has(name)) listeners.set(name, new Set());
+        listeners.get(name).add(listener);
+      },
+      removeEventListener(name, listener) { listeners.get(name)?.delete(listener); },
+      emit(name) { for (const listener of [...(listeners.get(name) ?? [])]) listener(); },
+      count() { return [...listeners.values()].reduce((sum, set) => sum + set.size, 0); },
+    };
+  };
+  const appearance = new Set(), hero = new Set();
+  const subscribe = (set) => (listener) => { set.add(listener); return () => set.delete(listener); };
+  const state = { tier: 'standard', saveData: false, imageId: null, covered: false };
+  const document = { ...events(), visibilityState: 'visible' };
+  const connection = events();
+  const observers = [];
+  class Observer {
+    constructor(callback) { this.callback = callback; this.targets = []; this.live = true; observers.push(this); }
+    observe(target, options) { this.targets.push({ target, options }); }
+    disconnect() { this.live = false; }
+  }
+  const requests = [];
+  const video = {
+    ...events(), isConnected: true, paused: true, readyState: 2, currentTime: 0.1, plays: 0, pauses: 0,
+    parentElement: { parentElement: { parentElement: null } },
+    closest: () => state.covered ? {} : null,
+    play() {
+      this.plays += 1; this.paused = false;
+      return new Promise((resolve, reject) => requests.push({ resolve, reject }));
+    },
+    pause() { this.pauses += 1; this.paused = true; this.emit('pause'); },
+  };
+  const { startCardVideoPreview } = load('lib/cardVideoPreview.ts', {
+    '@/lib/appearance': { motionTier: () => state.tier, subscribeAppearance: subscribe(appearance) },
+    '@/lib/hero/runtime': { getImageHeroRuntime: () => state, subscribeImageHeroRuntime: subscribe(hero) },
+    '@/lib/imageLoader': { saveDataRequested: () => state.saveData },
+  }, { document, navigator: { connection }, MutationObserver: Observer, IntersectionObserver: Observer });
+  const activeSubscriptions = () => appearance.size + hero.size + document.count() + video.count() + connection.count();
+  return {
+    state, document, connection, video, requests, observers, appearance, hero, activeSubscriptions,
+    start: () => startCardVideoPreview(video),
+    emit(set) { for (const listener of [...set]) listener(); },
+  };
+}
+
+test('hover video stops on reduced motion, a hidden document/pane, a hero, data saver or leaving the viewport', async () => {
+  const cases = {
+    reduced: (h) => { h.state.tier = 'reduced'; h.emit(h.appearance); },
+    off: (h) => { h.state.tier = 'off'; h.emit(h.appearance); },
+    hidden: (h) => { h.document.visibilityState = 'hidden'; h.document.emit('visibilitychange'); },
+    pane: (h) => { h.state.covered = true; h.observers[0].callback([]); },
+    hero: (h) => { h.state.imageId = 42; h.emit(h.hero); },
+    saver: (h) => { h.state.saveData = true; h.connection.emit('change'); },
+    offscreen: (h) => h.observers[1].callback([{ isIntersecting: false }]),
+  };
+  for (const [reason, hide] of Object.entries(cases)) {
+    const h = videoPreviewHarness();
+    const stop = h.start();
+    h.requests[0].resolve();
+    await Promise.resolve();
+    h.video.currentTime = 3;
+    hide(h);
+    assert.equal(h.video.paused, true, reason);
+    assert.equal(h.video.currentTime, 0.1, `${reason}: back to the still`);
+    assert.equal(h.activeSubscriptions(), 0, `${reason}: nothing listens after stopping`);
+    assert.ok(h.observers.every((observer) => !observer.live), reason);
+    h.state.tier = 'standard'; h.state.covered = false; h.state.imageId = null; h.state.saveData = false;
+    h.document.visibilityState = 'visible';
+    h.document.emit('visibilitychange'); h.connection.emit('change'); h.emit(h.appearance); h.emit(h.hero);
+    assert.equal(h.video.plays, 1, `${reason}: restoring visibility never resumes on its own`);
+    stop();
+    assert.equal(h.video.pauses, 1, `${reason}: cleanup is idempotent`);
+  }
+});
+
+test('video preview guards exist only during a hover, and observe ancestor attributes without a subtree', async () => {
+  const h = videoPreviewHarness();
+  assert.equal(h.activeSubscriptions(), 0);
+  h.state.tier = 'reduced'; h.start()();
+  assert.equal(h.video.plays, 0);
+  assert.equal(h.observers.length, 0);
+  h.state.tier = 'standard';
+  const stop = h.start();
+  assert.equal(h.observers.length, 2, 'one ancestor observer and one visibility observer for the playing card');
+  assert.equal(h.observers[0].targets.length, 2);
+  for (const { options } of h.observers[0].targets) {
+    assert.equal(options.attributes, true);
+    assert.equal(options.subtree, undefined, 'decoding every other card is irrelevant');
+    assert.deepEqual([...options.attributeFilter], ['inert', 'hidden', 'data-tab-pane-active']);
+  }
+  stop();
+  h.requests[0].reject(new Error('The play request was interrupted'));
+  await Promise.resolve();
+  assert.equal(h.video.paused, true, 'leaving also cancels a pending play request');
+  assert.equal(h.activeSubscriptions(), 0);
+});
+
+test('a refused play releases the hover guard, and a previous pause cannot stop a new hover', async () => {
+  const h = videoPreviewHarness();
+  h.start();
+  h.requests[0].reject(new Error('Playback refused'));
+  await Promise.resolve();
+  assert.equal(h.activeSubscriptions(), 0);
+  const stop = h.start();
+  h.video.emit('pause');
+  assert.equal(h.video.paused, false, 'queued pause from the previous hover has no authority over new playback');
+  assert.ok(h.activeSubscriptions() > 0);
+  stop();
+  assert.equal(h.activeSubscriptions(), 0);
+});
+
 test('hero return targets the active profile pane and preserves the flight-hidden source', () => {
   let candidates = [];
   const { findImageHeroThumbnail } = load('lib/hero/dom.ts', {

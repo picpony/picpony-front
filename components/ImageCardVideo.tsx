@@ -2,9 +2,10 @@
 
 import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Skeleton from '@/components/Skeleton';
-import { useMotionTier, MOTION_SPEED_SCALE } from '@/lib/appearance';
+import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { DURATION } from '@/lib/motionTokens';
-import { LOAD_TIMEOUT_MS, saveDataRequested } from '@/lib/imageLoader';
+import { LOAD_TIMEOUT_MS } from '@/lib/imageLoader';
+import { startCardVideoPreview } from '@/lib/cardVideoPreview';
 
 type ImageCardVideoProps = {
   src: string;
@@ -33,13 +34,23 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
   const [near, setNear] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
   const [placeholderGone, setPlaceholderGone] = useState(false);
-  const tier = useMotionTier();
+  const preview = useRef<(() => void) | null>(null);
+
+  /* A changed source or an unmounted card ends both playing and still-pending previews. */
+  useEffect(() => () => {
+    preview.current?.();
+    preview.current = null;
+  }, [src, near]);
 
   /* Attach the source once the card is within a screen of the viewport — the app scroller,
      or the overlay's own scroller when the grid sits behind an open picture. */
   useEffect(() => {
     const video = videoRef.current;
     if (!video || near) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      queueMicrotask(() => setNear(true));
+      return;
+    }
     const root = video.closest<HTMLElement>('[data-image-detail-background]');
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -75,23 +86,17 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
     return () => window.clearTimeout(timer);
   }, [frameReady]);
 
-  const previewAllowed = () => tier === 'standard' && !saveDataRequested();
-
   const startPreview = (event: React.PointerEvent<HTMLVideoElement>) => {
-    if (event.pointerType === 'touch' || !previewAllowed()) return;
+    if (event.pointerType === 'touch') return;
     const video = videoRef.current;
-    if (!video || !frameReady) return;
-    video.loop = true;
-    void video.play().catch(() => {
-      /* A refused play (a policy, a decode hiccup) leaves the still in place. */
-    });
+    if (!video || !near || !frameReady) return;
+    preview.current?.();
+    preview.current = startCardVideoPreview(video);
   };
 
   const stopPreview = () => {
-    const video = videoRef.current;
-    if (!video || video.paused) return;
-    video.pause();
-    video.currentTime = 0.1;
+    preview.current?.();
+    preview.current = null;
   };
 
   return (
@@ -103,7 +108,7 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
            frames of an arriving still are never a blank card. */
         <Skeleton
           className={`absolute inset-0 block rounded-none transition-opacity duration-standard ease-[var(--ease-standard)] ${
-            frameReady ? 'opacity-0' : 'opacity-100'
+            frameReady ? 'opacity-0 after:animate-none' : near ? 'opacity-100' : 'opacity-100 after:[animation-play-state:paused]'
           }`}
         />
       )}

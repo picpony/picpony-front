@@ -4,6 +4,7 @@ import { Component, type ReactNode } from 'react';
 import { motionTier } from '@/lib/appearance';
 import { focusLanding } from '@/lib/focusLanding';
 import { springTiming } from '@/lib/springTiming';
+import { insideConcealedPane } from '@/lib/tabPaneVisibility';
 
 export interface PresenceEntry<T> {
   item: T;
@@ -63,7 +64,10 @@ interface FocusPlan {
   slot: number;
 }
 
-type Snapshot = { rects: Map<Element, DOMRect> | null; focus: FocusPlan | null } | null;
+type Snapshot =
+  | { concealed: true }
+  | { concealed: false; rects: Map<Element, DOMRect> | null; followers: HTMLElement[]; focus: FocusPlan | null }
+  | null;
 
 /** One running move per element across every list on the page, so nested lists hand over. */
 const moving = new WeakMap<Element, Animation>();
@@ -237,17 +241,19 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
 
   getSnapshotBeforeUpdate(_props: Props<T>, previous: State<T>): Snapshot {
     if (!this.state.animate || previous.shape === this.state.shape || !this.container) return null;
+    if (insideConcealedPane(this.container)) return { concealed: true };
     const focus = this.planFocus(previous);
     if (motionTier() === 'off') {
       /* Nothing moves; but an entry that comes back while it is still pinned — the tier went off
          during its fade — is unpinned, or it stays an invisible, inert box in the list. */
       const back = previous.entries.some((entry) => entry.leaving && this.state.entries.some((now) => now.key === entry.key && !now.leaving));
-      return focus || back ? { rects: null, focus } : null;
+      return focus || back ? { concealed: false, rects: null, followers: [], focus } : null;
     }
     const rects = new Map<Element, DOMRect>();
     for (const el of this.elements()) rects.set(el, el.getBoundingClientRect());
-    for (const el of this.followers()) rects.set(el, el.getBoundingClientRect());
-    return { rects, focus };
+    const followers = this.followers();
+    for (const el of followers) rects.set(el, el.getBoundingClientRect());
+    return { concealed: false, rects, followers, focus };
   }
 
   componentDidUpdate(_props: Props<T>, previous: State<T>, snapshot: Snapshot) {
@@ -261,6 +267,33 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     const before = new Set(previous.entries.map((entry) => entry.key));
     const byKey = new Map<string, HTMLElement>();
     for (const el of this.elements()) byKey.set(el.dataset.presenceKey ?? '', el);
+
+    if (snapshot.concealed) {
+      /* A retained pane can receive a request's answer while another tab is on screen. Reading
+         its rows would defeat content-visibility; none of these changes needs an animation or
+         a focus handoff. Also release a row restored during an earlier fade. */
+      for (const animation of this.running) animation.cancel();
+      this.running.clear();
+      /* Under off, removed entries are absent already, rather than marked leaving. Spend the
+         claims from the before/after key sets on every tier, without reading a hidden control. */
+      const present = new Set(this.state.entries.filter((entry) => !entry.leaving).map((entry) => entry.key));
+      for (const entry of previous.entries) {
+        if (!entry.leaving && !present.has(entry.key)) this.claims.delete(entry.key);
+      }
+      for (const entry of this.state.entries) {
+        if (!entry.leaving && wasLeaving.has(entry.key)) {
+          const el = byKey.get(entry.key);
+          if (el) this.unpin(el, [], false);
+        }
+      }
+      if (this.state.entries.some((entry) => entry.leaving)) {
+        this.setState((state) => {
+          const entries = state.entries.filter((entry) => !entry.leaving);
+          return { entries, shape: shapeOf(entries), animate: false };
+        });
+      }
+      return;
+    }
 
     /* Focus first, while a leaver still holding it is neither pinned nor inert. */
     if (snapshot.focus) {
@@ -279,23 +312,42 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     }
     const grid = this.props.variant === 'grid';
 
-    /* Writes: pin what has just left, unpin what came back, and drop every running move so the
-       boxes read next are the layout's own. */
-    const leavers: HTMLElement[] = [];
-    let origin: DOMRect | null = null;
+    /* Read every leaving row's corners before taking any row out of the grouped run. Interleaved
+       reads/writes restyled the list once per leaver, and made every later leaver look like its
+       new first row. Returning rows' animations are collected here too: getAnimations can flush
+       style, so cancelling them belongs with the writes, not between those writes. */
+    const frozen = new Map<HTMLElement, { rect: DOMRect; radius: string | null }>();
+    const returning = new Map<HTMLElement, Animation[]>();
     for (const entry of this.state.entries) {
       const el = byKey.get(entry.key);
       if (!el) continue;
       if (entry.leaving && !wasLeaving.has(entry.key)) {
         const rect = rects.get(el);
         if (!rect) continue;
-        origin ??= this.originOf(container);
+        const style = el.classList.contains('m3-row') ? getComputedStyle(el) : null;
+        const radius = style ? `${style.borderTopLeftRadius} ${style.borderTopRightRadius} ${style.borderBottomRightRadius} ${style.borderBottomLeftRadius}` : null;
+        frozen.set(el, { rect, radius });
+      } else if (!entry.leaving && wasLeaving.has(entry.key)) {
+        returning.set(el, el.getAnimations());
+      }
+    }
+    const origin = frozen.size > 0 ? this.originOf(container) : null;
+
+    /* Writes: pin what has just left, unpin what came back, and drop every running move so the
+       boxes read next are the layout's own. */
+    const leavers = new Set<HTMLElement>();
+    for (const entry of this.state.entries) {
+      const el = byKey.get(entry.key);
+      if (!el) continue;
+      if (entry.leaving && !wasLeaving.has(entry.key)) {
+        const held = frozen.get(el);
+        if (!held || !origin) continue;
+        const { rect, radius } = held;
         /* Out of the grouped list's run as it leaves (`.m3-row`'s corners and seams are counted
            among siblings), so the rows either side take their final shape as they move rather
            than snapping to it when the leaver is removed. Its own corners stay as they were. */
-        if (el.classList.contains('m3-row')) {
-          const style = getComputedStyle(el);
-          el.style.borderRadius = `${style.borderTopLeftRadius} ${style.borderTopRightRadius} ${style.borderBottomRightRadius} ${style.borderBottomLeftRadius}`;
+        if (radius !== null) {
+          el.style.borderRadius = radius;
           el.classList.remove('m3-row');
           el.dataset.presenceRow = '';
         }
@@ -309,12 +361,14 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
           pointerEvents: 'none',
         });
         el.inert = true;
-        leavers.push(el);
+        leavers.add(el);
       } else if (!entry.leaving && wasLeaving.has(entry.key)) {
-        this.unpin(el);
+        this.unpin(el, returning.get(el));
       }
     }
-    const movers = [...this.elements().filter((el) => !leavers.includes(el) && !el.inert), ...this.followers()];
+    /* Only followers with a before-box can glide. Reuse that set instead of measuring them
+       again between pinning the rows and cancelling their previous transforms. */
+    const movers = [...this.elements().filter((el) => !leavers.has(el) && !el.inert), ...snapshot.followers.filter((el) => el.isConnected)];
     for (const el of movers) moving.get(el)?.cancel();
 
     /* Reads: where everything is now. */
@@ -353,15 +407,15 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
   }
 
   /** An entry that came back while leaving (撤销): back in the flow and the run, live, fading in. */
-  private unpin(el: HTMLElement) {
+  private unpin(el: HTMLElement, animations = el.getAnimations(), fade = true) {
     for (const prop of ['position', 'left', 'top', 'width', 'height', 'margin', 'pointerEvents', 'borderRadius'] as const) el.style[prop] = '';
     if (el.dataset.presenceRow !== undefined) {
       el.classList.add('m3-row');
       delete el.dataset.presenceRow;
     }
     el.inert = false;
-    el.getAnimations().forEach((animation) => animation.cancel());
-    this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects')));
+    animations.forEach((animation) => animation.cancel());
+    if (fade) this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects')));
   }
 
   /** The entries' elements, in document order. */
@@ -435,6 +489,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     while (node && !node.hasAttribute('data-page-content')) {
       for (let sibling = node.nextElementSibling; sibling; sibling = sibling.nextElementSibling) {
         if (!(sibling instanceof HTMLElement)) continue;
+        if (sibling.hasAttribute('data-tab-pane') && insideConcealedPane(sibling)) continue;
         const rect = sibling.getBoundingClientRect();
         if (rect.height > 0 && rect.top < bottom + 200 && rect.bottom > -200) result.push(sibling);
       }

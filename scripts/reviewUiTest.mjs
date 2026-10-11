@@ -17,7 +17,7 @@ const virtual = {
   'next/dynamic': `const React=require('react');module.exports=()=>props=>props.isOpen?React.createElement('button',{onClick:()=>props.onVerify('fixture-captcha')},'Pass captcha'):null;`,
   'next/navigation': `exports.useRouter=()=>({push:(...args)=>window.navigations.push(args)});`,
   './CaptchaModal': `module.exports=()=>null;`,
-  './LottieIcon': `module.exports=()=>null;`,
+  './LottieIcon': `const React=require('react');module.exports=()=>{React.useEffect(()=>{window.authArtworkMounts+=1;},[]);return React.createElement('span',{'data-auth-artwork':''});};`,
   './Logo': `module.exports=()=>null;`,
   './FadeInImage': `const React=require('react');module.exports=({src,alt})=>React.createElement('img',{src,alt});`,
   '@/components/Spinner': `const React=require('react');module.exports=()=>React.createElement('span',{'role':'status'},'Loading');`,
@@ -53,11 +53,12 @@ import ImageCropper from '@/components/ImageCropper';
 import {useConfirm,usePrompt} from '@/components/ConfirmDialog';
 import {writeUserInfo,clearUserInfo,readToken} from '@/lib/hooks';
 window.requests=[];window.toasts=[];window.editorChanges=[];window.navigations=[];
+window.authConsumerRenders=0;window.authArtworkMounts=0;
 window.fixtureRequest=(name,args)=>new Promise(resolve=>window.requests.push({name,args,resolve}));
 window.respond=(index,data,status=200)=>window.requests[index].resolve(Response.json(data,{status}));
 window.fixtureUser=async()=>({kind:'ok',user:{username:'Fixture'}});
 window.changeSession=(token)=>token?writeUserInfo({token,username:token}):clearUserInfo(readToken());
-function Controls(){const auth=useAuthModal();window.auth=auth;window.openAuthNow=()=>flushSync(()=>auth.openAuth('login'));return null;}
+function Controls(){const auth=useAuthModal();window.authConsumerRenders+=1;window.auth=auth;window.openAuthNow=()=>flushSync(()=>auth.openAuth('login'));return null;}
 function Questions(){const c=useConfirm(),p=usePrompt();window.askConfirm=()=>c.confirm({title:'Confirm fixture',message:'Fixture'}).then(x=>window.confirmResult=x);window.askPrompt=()=>p.prompt({title:'Prompt fixture',label:'Fixture'}).then(x=>window.promptResult=x);return <>{c.confirmDialog}{p.promptDialog}</>;}
 function App(){
  const [searchOpen,setSearchOpen]=useState(false),[questions,setQuestions]=useState(true);
@@ -176,6 +177,25 @@ with sync_playwright() as p:
   def response(index,token):
    page.evaluate('([i,t])=>window.respond(i,{success:true,token:t,username:t})',[index,token])
 
+  # A phone's CSS-hidden illustration must not mount, load or build its player. Crossing the
+  # actual layout breakpoint while the form is open shows it without replacing the form.
+  auth_renders=page.evaluate('window.authConsumerRenders')
+  page.set_viewport_size({'width':390,'height':900})
+  page.evaluate("window.auth.openAuth('login')")
+  login=page.get_by_role('dialog',name='登录',exact=True)
+  expect(login).to_be_visible()
+  expect(page.locator('[data-auth-artwork]')).to_have_count(0)
+  assert page.evaluate('window.authArtworkMounts')==0
+  login.locator('#auth-login-f1').fill('Preserved through resize')
+  page.set_viewport_size({'width':1440,'height':900})
+  expect(page.locator('[data-auth-artwork]')).to_have_count(1)
+  expect(login.locator('#auth-login-f1')).to_have_value('Preserved through resize')
+  page.set_viewport_size({'width':390,'height':900})
+  expect(page.locator('[data-auth-artwork]')).to_have_count(0)
+  page.evaluate('window.auth.closeAuth()')
+  expect(login).not_to_be_visible()
+  page.set_viewport_size({'width':1440,'height':900})
+
   # Closing invalidates synchronously, even before the exit animation unmounts.
   dialog=open_login()
   page.wait_for_function('window.requests.length===1')
@@ -254,6 +274,9 @@ with sync_playwright() as p:
   response(6,'cancelled-verification')
   page.wait_for_timeout(50)
   assert page.evaluate("localStorage.getItem('user_info')")==None
+  # Context changes bypass memoization: commands remain identical through all of the open,
+  # close and view-switch flows above, so the unrelated consumer must never render again.
+  assert page.evaluate('window.authConsumerRenders')==auth_renders
   # Image-search results cannot navigate after its dialog has been dismissed.
   page.evaluate('window.setSearchOpen(true)')
   search=page.get_by_role('dialog',name='以图搜图',exact=True)
@@ -274,7 +297,7 @@ with sync_playwright() as p:
   page.evaluate('window.hideQuestions()')
   page.wait_for_function('window.confirmResult===false&&window.promptResult===null')
   assert not errors,errors
-  print(json.dumps({'ok':True,'checks':['auth-close','auth-focus-after-reopen','auth-replacement','auth-session-aba','auth-email-cancel','editor-initial-disabled','editor-controlled-clear','editor-current-callback','editor-remount','editor-accessible-dom','field-descriptions','select-disabled-options','select-disabled-while-open','progress-nonfinite','image-search-cancel','image-cropper-corrupt-file','confirm-prompt-unmount']},ensure_ascii=False))
+  print(json.dumps({'ok':True,'checks':['auth-stable-actions','auth-artwork-visibility','auth-close','auth-focus-after-reopen','auth-replacement','auth-session-aba','auth-email-cancel','editor-initial-disabled','editor-controlled-clear','editor-current-callback','editor-remount','editor-accessible-dom','field-descriptions','select-disabled-options','select-disabled-while-open','progress-nonfinite','image-search-cancel','image-cropper-corrupt-file','confirm-prompt-unmount']},ensure_ascii=False))
  finally:browser.close()
 `;
 try {

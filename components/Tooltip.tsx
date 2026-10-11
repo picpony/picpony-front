@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import { clamp, cn } from '@/lib/utils';
 import { SPRING_MS } from '@/lib/spring';
 import { useExitAnimation, useMounted } from '@/lib/overlay';
+import { observeAnchorReflow } from '@/lib/anchorReflow';
 import { trackPress } from '@/lib/ripple';
 
 /** Gap between the anchor and the bubble, per M3. */
@@ -138,25 +139,10 @@ export function Tooltip({
      never calls `preventDefault`. `Popover` solves the same problem. */
   useEffect(() => {
     if (!open || !rendering) return;
-    /* Match Popover's one read per frame. Scroll events can arrive faster than
-       paint; measuring the anchor and bubble on each one only blocks that same
-       scroll without producing an extra visible position. */
-    let frame = 0;
-    const onReflow = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        measure();
-      });
-    };
-    window.addEventListener('scroll', onReflow, { capture: true, passive: true });
-    window.addEventListener('resize', onReflow, { passive: true });
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onReflow, { capture: true });
-      window.removeEventListener('resize', onReflow);
-    };
-  }, [open, rendering, measure]);
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    return observeAnchorReflow(anchor, measure);
+  }, [open, rendering, measure, anchorRef]);
 
   if (!mounted || !rendering) return null;
 

@@ -208,7 +208,8 @@ function loadDataTable(tier = 'standard') {
     '@/lib/utils': { cn: (...names) => names.filter(Boolean).join(' ') },
     '@/lib/appearance': { motionTier: () => tier },
     '@/lib/springTiming': { springTiming: () => ({ duration: 100, easing: 'linear' }) },
-    '@/components/admin/tableMotion': { dropMove: stub, followersOf: () => [], insideConcealedPane: () => false, precedersOf: () => [], startMove: stub },
+    '@/lib/tabPaneVisibility': { insideConcealedPane: () => false },
+    '@/components/admin/tableMotion': { dropMove: stub, followersOf: () => [], precedersOf: () => [], startMove: stub },
     './Skeleton': stub, './EmptyState': stub, './ErrorRetry': stub,
   };
   vm.runInNewContext(code, { exports, document: {}, require: (name) => {

@@ -9,6 +9,8 @@
  * with them instead of replacing them.
  */
 
+import { insideConcealedPane } from '@/lib/tabPaneVisibility';
+
 /** One running move per element, across the table's presence and the inline editor. */
 const moves = new WeakMap<Element, Animation>();
 
@@ -43,27 +45,6 @@ export function dropMove(el: Element, animation?: Animation) {
   if (!current || (animation && current !== animation)) return;
   moves.delete(el);
   current.cancel();
-}
-
-/**
- * Whether `el` sits in a concealed tab pane — the attributes the stylesheet conceals by (the rule
- * `isConcealedPane` in `lib/motion.ts` reads), never geometry: reading a box inside a
- * `content-visibility: hidden` subtree makes the engine lay that subtree out just to answer. A
- * change in a pane nobody can see is not animated at all.
- */
-export function insideConcealedPane(el: Element): boolean {
-  for (let node: Element | null = el; node; node = node.parentElement) {
-    if (!node.hasAttribute('data-tab-pane')) continue;
-    if (node.hasAttribute('data-tab-pane-done')) return true;
-    if (
-      !node.hasAttribute('data-tab-pane-active') &&
-      !node.hasAttribute('data-tab-pane-leaving') &&
-      !node.hasAttribute('data-tab-pane-entering')
-    ) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /**

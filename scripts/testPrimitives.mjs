@@ -59,6 +59,7 @@ import SignInRequired from '@/components/SignInRequired';
 import SearchInput from '@/components/SearchInput';
 import {Input} from '@/components/Input';
 import Popover from '@/components/Popover';
+import {Tooltip} from '@/components/Tooltip';
 import {useCombobox} from '@/lib/useCombobox';
 window.log=[];
 const WORDS=['apple','apricot','banana'];
@@ -71,6 +72,19 @@ function Combo(){
       {options.map((o,i)=><div key={o} {...box.getOptionProps(i)} className={box.optionClassName(i)}>{o}</div>)}
     </Popover><button id="after-combo">之后</button></div>;
 }
+function Positioning(){
+  const anchor=useRef(null);const [open,setOpen]=useState(true);
+  return <>
+    <div id="anchor-scroll" style={{position:'fixed',right:8,top:80,width:220,height:240,overflow:'auto'}}>
+      <div style={{height:900,paddingTop:80}}><button ref={anchor} id="position-anchor" style={{width:200,height:40}}>定位控件</button></div>
+    </div>
+    <div id="unrelated-scroll" style={{position:'fixed',left:8,top:80,width:180,height:100,overflow:'auto'}}><div style={{height:1000}}>旁边的列表</div></div>
+    <Popover open={open} anchorRef={anchor} onClose={()=>setOpen(false)} matchAnchorWidth={false} estimatedHeight={160} maxHeight={160} role="listbox" aria-label="定位选项" className="position-panel">
+      {Array.from({length:30},(_,i)=><div role="option" aria-selected={false} key={i} style={{height:24}}>选项 {i}</div>)}
+    </Popover>
+    <Tooltip label="定位提示" anchorRef={anchor} open id="position-tooltip"/>
+  </>;
+}
 function Fixture(){
   const [busy,setBusy]=useState(false),[faved,setFaved]=useState(false),[sex,setSex]=useState('');
   const [menuOpen,setMenuOpen]=useState(false);const menuAnchor=useRef(null);
@@ -78,8 +92,10 @@ function Fixture(){
   const [code,setCode]=useState(''),[code2,setCode2]=useState('12');
   const [count,setCount]=useState(3),[checked,setChecked]=useState(true),[on,setOn]=useState(false);
   const [q,setQ]=useState(''),[pw,setPw]=useState(''),[avatar,setAvatar]=useState('http://127.0.0.1:9/broken.png');
-  window.fx={setBusy:v=>flushSync(()=>setBusy(v)),setCount:v=>flushSync(()=>setCount(v)),setChecked:v=>flushSync(()=>setChecked(v)),setAvatar:v=>flushSync(()=>setAvatar(v)),code:()=>code};
+  const [positioning,setPositioning]=useState(false);
+  window.fx={setBusy:v=>flushSync(()=>setBusy(v)),setCount:v=>flushSync(()=>setCount(v)),setChecked:v=>flushSync(()=>setChecked(v)),setAvatar:v=>flushSync(()=>setAvatar(v)),code:()=>code,positioning:()=>flushSync(()=>setPositioning(true))};
   window.codeValue=code;
+  if(positioning)return <Positioning/>;
   return <main>
     <form onSubmit={e=>{e.preventDefault();window.log.push('submit');}}><input id="field" aria-label="字段"/>
       <Button id="busy" type="submit" loading={busy} onClick={()=>window.log.push('busy-click')}>保存</Button></form>
@@ -145,6 +161,7 @@ const server = createServer((req, res) => {
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(`<!doctype html><html lang="zh-CN"><body><style>
     .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
     [role=listbox],[role=menu]{background:white;border:1px solid #888}
+    .position-panel{width:280px}
   </style><div id="root"></div><script src="/app.js"></script></body></html>`);
 });
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
@@ -251,6 +268,38 @@ with sync_playwright() as p:
   assert log()[-1]=='pick:apricot', log(); expect(page.locator('#after-combo')).to_be_focused()
   c.focus(); c.fill(''); page.keyboard.type('b'); expect(page.get_by_role('listbox',name='建议')).to_be_visible(); page.keyboard.press('Escape')
   expect(page.get_by_role('listbox',name='建议')).to_have_count(0); ok('combobox-contract')
+  # 18. Floating panels follow only their anchor's scroll chain. Scrolling their own
+  # options or an unrelated list must not measure the anchor or undo its edge clamp.
+  page.evaluate('window.fx.positioning()')
+  panel=page.get_by_role('listbox',name='定位选项'); expect(panel).to_be_visible()
+  tip=page.get_by_role('tooltip',name='定位提示'); expect(tip).to_be_visible()
+  page.wait_for_timeout(100)
+  page.evaluate('''()=>{const a=document.getElementById('position-anchor');const rect=a.getBoundingClientRect.bind(a);
+    window.anchorReads=0;a.getBoundingClientRect=()=>{window.anchorReads++;return rect();};}''')
+  before=panel.bounding_box()
+  assert before['x']+before['width']<=page.viewport_size['width']-11
+  panel.evaluate('e=>{e.scrollTop=80;}'); page.locator('#unrelated-scroll').evaluate('e=>{e.scrollTop=80;}')
+  page.wait_for_timeout(100)
+  assert page.evaluate('window.anchorReads')==0, page.evaluate('window.anchorReads')
+  assert panel.bounding_box()==before
+  tip_before=tip.bounding_box()
+  page.locator('#anchor-scroll').evaluate('e=>{e.scrollTop=20;}')
+  page.wait_for_function('window.anchorReads>0')
+  page.wait_for_timeout(100)
+  assert abs(panel.bounding_box()['y']-(before['y']-20))<1
+  assert abs(tip.bounding_box()['y']-(tip_before['y']-20))<1
+  page.locator('#anchor-scroll').evaluate('e=>{e.style.top="480px";window.dispatchEvent(new Event("resize"));}')
+  page.wait_for_timeout(100)
+  anchor_top=page.locator('#position-anchor').bounding_box()['y']
+  upper=panel.bounding_box()
+  assert abs(upper['y']+upper['height']-(anchor_top-8))<1
+  # Above the anchor, the bottom inset depends on viewport height even when every
+  # other measured field is unchanged and the available height is already capped.
+  page.set_viewport_size({'width':1280,'height':740}); page.wait_for_timeout(100)
+  resized=panel.bounding_box()
+  assert abs(resized['y']+resized['height']-(anchor_top-8))<1, (upper,resized)
+  page.locator('#anchor-scroll').evaluate('e=>{e.scrollTop=200;}')
+  expect(panel).to_have_count(0); ok('floating-panels-ignore-unrelated-scroll-and-follow-anchor')
   assert not errors, errors
   print(json.dumps({'ok':True,'checks':checks},ensure_ascii=False))
  finally: browser.close()

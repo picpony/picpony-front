@@ -20,8 +20,6 @@ const AuthForms = lazy(() => import('./AuthForms'));
 export type AuthView = 'login' | 'register' | 'reset';
 
 interface AuthContextValue {
-  isOpen: boolean;
-  view: AuthView;
   openAuth: (view?: AuthView) => void;
   closeAuth: () => void;
   switchView: (view: AuthView) => void;
@@ -132,9 +130,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPending(value);
   }, []);
 
+  /* Consumers open the dialog; its local view does not affect them. Keeping the actions stable
+     avoids re-rendering the shell and the page beneath it on every open, close or view switch. */
   const value = useMemo(
-    () => ({ isOpen, view, openAuth, closeAuth, switchView }),
-    [isOpen, view, openAuth, closeAuth, switchView],
+    () => ({ openAuth, closeAuth, switchView }),
+    [openAuth, closeAuth, switchView],
   );
 
   return (
@@ -206,6 +206,7 @@ function AuthModal({
 }) {
   const headingId = useId();
   const finePointer = useMediaQuery(MEDIA.pointerFine);
+  const artworkVisible = useMediaQuery(MEDIA.md);
   /* Keyed on the flow, so a fresh form never inherits the last one's answer: each form
      reports its own state after it mounts. */
   const [dirtyFlow, setDirtyFlow] = useState<number | null>(null);
@@ -253,18 +254,22 @@ function AuthModal({
           aria-hidden="true"
           className="hidden md:flex md:w-3/5 items-center justify-center bg-surface-container-low"
         >
-          <LottieIcon
-            className="w-4/5 max-w-md"
-            load={() => import('@/lib/lottie/login.json').then((m) => m.default)}
-            /* 3257×2148, the composition's own box. Reserving it matters more here
-               than on /search: this pane is 60% of a 640px-tall dialog, so an
-               unreserved host let the form column decide the height and then
-               resized it when the chunk landed. */
-            aspect={3257 / 2148}
-            /* The wordmark, which is what /about already falls back to under
-               reduced motion — so this pane is never empty. */
-            fallback={<Logo className="h-auto w-2/3" />}
-          />
+          {/* CSS hides this column on a phone, but does not stop a mounted player from loading
+              its artwork and building an SVG. Mount it only at the column's own breakpoint. */}
+          {artworkVisible && (
+            <LottieIcon
+              className="w-4/5 max-w-md"
+              load={() => import('@/lib/lottie/login.json').then((m) => m.default)}
+              /* 3257×2148, the composition's own box. Reserving it matters more here
+                 than on /search: this pane is 60% of a 640px-tall dialog, so an
+                 unreserved host let the form column decide the height and then
+                 resized it when the chunk landed. */
+              aspect={3257 / 2148}
+              /* The wordmark, which is what /about already falls back to under
+                 reduced motion — so this pane is never empty. */
+              fallback={<Logo className="h-auto w-2/3" />}
+            />
+          )}
         </div>
         {/* flex-col + my-auto：内容短时垂直居中。The dialog's body is the one scroller;
             pretty wrapping reaches every helper line under the fields, so no rule

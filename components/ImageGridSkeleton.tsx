@@ -1,8 +1,9 @@
 'use client';
 
-import { useLayoutEffect, useMemo, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 import { masonryLayout, noteSkeletonReplaced } from '@/lib/masonry';
+import { getAppScroller } from '@/lib/appScroller';
 import Skeleton from '@/components/Skeleton';
 
 /**
@@ -15,6 +16,8 @@ const RATIOS = [
   1.06, 0.62, 1.2, 0.8, 0.94, 0.58, 1.13, 0.76, 1, 1.3, 0.67, 0.88, 1.1, 0.72, 1.24, 0.84, 0.64,
   1.02, 0.9, 1.17, 0.7, 1.08, 0.82, 1.26,
 ];
+
+const PAUSED_SWEEP = 'after:[animation-play-state:paused]';
 
 /**
  * The grid's placeholder, placed by the grid's own rule (`lib/masonry.ts`) and the same CSS —
@@ -34,6 +37,7 @@ export default function ImageGridSkeleton({
   count?: number;
   entrance?: boolean;
 }) {
+  const gridRef = useRef<HTMLDivElement>(null);
   const layout = useMemo(
     () =>
       masonryLayout(
@@ -46,19 +50,36 @@ export default function ImageGridSkeleton({
      from a placeholder that was already saying "arriving" — and skips its own entrance. */
   useLayoutEffect(() => () => noteSkeletonReplaced(), []);
 
+  /* One observer for the whole loading page. Off-screen sweeps cannot be composited and
+     otherwise restyle dozens of tiles per frame; the quiet placeholder keeps its exact
+     geometry and colour. No observer support means the same static placeholders. */
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) entry.target.classList.toggle(PAUSED_SWEEP, !entry.isIntersecting);
+    }, {
+      root: grid.closest('[data-app-scroll-container]') ?? getAppScroller(),
+      rootMargin: '240px 0px',
+    });
+    for (const placeholder of grid.querySelectorAll('[data-grid-placeholder]')) observer.observe(placeholder);
+    return () => observer.disconnect();
+  }, [layout]);
+
   return (
     <div
       data-page-loading
       className={cn('masonry', entrance && 'animate-fade-in')}
       aria-hidden="true"
     >
-      <div className="masonry-grid" style={layout.grid as CSSProperties}>
+      <div ref={gridRef} className="masonry-grid" style={layout.grid as CSSProperties}>
         {layout.items.map((placement, index) => (
           /* The slot is its own box, as it is for a card: the placeholder's own class positions
              it relatively for the sweep, and the slot must be the absolutely placed one. */
           <div key={index} className="masonry-item" style={placement as CSSProperties}>
             <Skeleton
-              className="w-full rounded-lg"
+              data-grid-placeholder
+              className={cn('w-full rounded-lg', PAUSED_SWEEP)}
               style={{
                 aspectRatio: `1 / ${RATIOS[index % RATIOS.length]}`,
                 /* Diagonal stagger so the shimmer sweeps the grid as one wave; capped — a slow

@@ -87,13 +87,15 @@ const chunks = await evalIn(`(() => {
   const fetched = performance.getEntriesByType('resource')
     .filter((r) => r.name.indexOf('/_next/static/chunks/') !== -1)
     .map((r) => r.name);
-  return { inDoc: inDoc.size, fetched: fetched.length, extra: fetched.filter((n) => !inDoc.has(n)).length };
+  return { inDoc: inDoc.size, fetched: fetched.length, extra: fetched.filter((n) => !inDoc.has(n)).length,
+    tier: document.documentElement.dataset.motion, visibility: document.visibilityState };
 })()`);
 console.log('  ', JSON.stringify(chunks));
 
 console.log('\n2. tab indicator glide and the pane strip (WAAPI)');
 const indicator = await evalIn(`(async () => {
-  const bar = document.querySelector('[role="tablist"]');
+  // The gallery's filter tabs precede the home navigation in document order.
+  const bar = document.querySelector('[role="tablist"][aria-label="首页分区"]');
   if (!bar) return 'no tablist';
   const tabs = [...bar.querySelectorAll('[data-tab]')];
   const pill = bar.querySelector('span[class*="absolute"], span');

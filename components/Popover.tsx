@@ -17,6 +17,7 @@ import { motionTier, scaledMs } from '@/lib/appearance';
 import { MENU_TRANSITION } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
 import { springTiming } from '@/lib/springTiming';
+import { observeAnchorReflow } from '@/lib/anchorReflow';
 import { OverlayLayerContext, useOverlayLayer, useExitAnimation, useMounted } from '@/lib/overlay';
 
 const MENU_MARGIN = 8;
@@ -165,6 +166,7 @@ export default function Popover({
     width: 0,
     up: false,
     available: maxHeight,
+    viewportHeight: 0,
   });
 
   /* A live getter rather than a snapshot, so a caller reading `.element` always
@@ -192,16 +194,27 @@ export default function Popover({
     const up = estimate > spaceBelow && spaceAbove > spaceBelow;
     opensUp.current = up;
     const panelWidth = panelRef.current?.offsetWidth;
-    const left = !matchAnchorWidth && panelWidth
+    const aligned = !matchAnchorWidth && panelWidth
       ? rect.left + (rect.width - panelWidth) / 2
       : rect.left;
-    setPlacement({
+    // Preserve the horizontal clamp while scrolling, rather than undoing it and
+    // asking the next layout effect for a second state update and geometry pass.
+    const left = panelWidth
+      ? clamp(aligned, VIEWPORT_PADDING, window.innerWidth - VIEWPORT_PADDING - panelWidth)
+      : aligned;
+    const next = {
       top: up ? rect.top - MENU_MARGIN : rect.bottom + MENU_MARGIN,
       left,
       width: rect.width,
       up,
       available: clamp(up ? spaceAbove : spaceBelow, 0, maxHeight),
-    });
+      viewportHeight: window.innerHeight,
+    };
+    setPlacement((prev) =>
+      prev.top === next.top && prev.left === next.left && prev.width === next.width &&
+      prev.up === next.up && prev.available === next.available &&
+      prev.viewportHeight === next.viewportHeight ? prev : next,
+    );
   }, [anchorRef, estimatedHeight, maxHeight, matchAnchorWidth]);
 
   /* Measure before the first paint of an opening panel, never after. Writing
@@ -352,35 +365,22 @@ export default function Popover({
      focus that was inside the panel back to the trigger *without scrolling to it*,
      so the page stays where the user put it and the keyboard is not dropped.
 
-     Passive and rAF-coalesced. `measure` reads `getBoundingClientRect`, so a
-     non-passive capture listener made every scroll event wait on a layout read
-     before the compositor could scroll. One frame requested at most: `frame`
-     guards re-entry and the cleanup cancels a pending one. */
+     The shared listener is passive and coalesced to one frame. It ignores scrolls
+     outside the anchor's ancestor chain, including this panel's own options. */
   useEffect(() => {
     if (!open) return;
-    const clippers = anchorRef.current ? clippingAncestors(anchorRef.current) : [];
-    let frame = 0;
-    const onReflow = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        const anchor = anchorRef.current;
-        if (anchor && visibleFraction(anchor, clippers) < DETACH_BELOW) {
-          const panel = panelRef.current;
-          if (panel && panel.contains(document.activeElement)) anchor.focus({ preventScroll: true });
-          onCloseRef.current(false);
-          return;
-        }
-        measure();
-      });
-    };
-    window.addEventListener('scroll', onReflow, { capture: true, passive: true });
-    window.addEventListener('resize', onReflow, { passive: true });
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onReflow, true);
-      window.removeEventListener('resize', onReflow);
-    };
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const clippers = clippingAncestors(anchor);
+    return observeAnchorReflow(anchor, () => {
+      if (visibleFraction(anchor, clippers) < DETACH_BELOW) {
+        const panel = panelRef.current;
+        if (panel && panel.contains(document.activeElement)) anchor.focus({ preventScroll: true });
+        onCloseRef.current(false);
+        return;
+      }
+      measure();
+    });
   }, [open, measure, anchorRef]);
 
   useEffect(() => {
@@ -421,7 +421,7 @@ export default function Popover({
         zIndex: layer.depth ? `calc(var(--z-popover) + ${layer.depth})` : undefined,
         position: 'fixed',
         top: placement.up ? undefined : placement.top,
-        bottom: placement.up ? window.innerHeight - placement.top : undefined,
+        bottom: placement.up ? placement.viewportHeight - placement.top : undefined,
         left: placement.left,
         width: matchAnchorWidth ? placement.width : undefined,
         /* A panel wider than the screen has to shrink, not merely be pushed
