@@ -915,8 +915,8 @@ export default function AppLayout({
               className="relative mr-2 flex shrink-0 touch-size items-center rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-ring-on-primary"
             >
               {/* One wordmark component for header and footer; `keyline` is the part that is
-                  genuinely header-specific, and so is the one-time boot signature. */}
-              <Logo className="h-auto w-20 max-[359px]:w-16 sm:w-25" keyline introOnce />
+                  genuinely header-specific. */}
+              <Logo className="h-auto w-20 max-[359px]:w-16 sm:w-25" keyline />
             </Link>
             <IconButton
               ref={themeButtonRef}

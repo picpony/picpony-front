@@ -128,6 +128,8 @@ export const LS_KEYS = {
   paletteHues: 'picpony_palette_hues',
   motion: 'picpony_motion',
   motionSpeed: 'picpony_motion_speed',
+  /** 入场动画: `blocking`, `non-blocking` or `off` (`EntranceMode`); `on`, what builds before the
+   *  three modes wrote, reads as `non-blocking`. */
   entranceMotion: 'picpony_entrance_motion',
   mascotVisible: 'picpony_show_mascot',
   mascotId: 'picpony_mascot_id',
@@ -197,6 +199,7 @@ export const COOKIE_KEYS = {
   showPrivacyFaves: 'showPrivacyFaves',
   motion: 'motion',
   motionSpeed: 'motionSpeed',
+  /** 入场动画, for the server: anything but `off` renders the splash into the first byte. */
   entranceMotion: 'entranceMotion',
   /**
    * The browsing fingerprint, for the server to compute the same feed key the client

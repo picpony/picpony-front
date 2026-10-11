@@ -15,10 +15,18 @@ import {
   useScheme,
   useSchemeSetting,
   type ColorScheme,
+  type EntranceMode,
   type MotionSetting,
   type MotionSpeed,
 } from '@/lib/appearance';
-import { ROW_CLASS, SettingsRow, SettingsSection, SwitchRow } from './SettingsRow';
+import { ROW_CLASS, SettingsRow, SettingsSection } from './SettingsRow';
+
+/** What each 入场动画 does, under the row. */
+const ENTRANCE_DESCRIPTIONS: Record<EntranceMode, string> = {
+  blocking: '全屏播放标志动画，播放完毕再显示页面',
+  'non-blocking': '全屏播放标志动画，页面加载完成即结束',
+  off: '不播放入场动画',
+};
 
 /**
  * 主题配色 — one self-contained block around `PaletteSwatches`, the colour system's own section:
@@ -63,7 +71,7 @@ export function ModeAndMotionSection() {
   const motionSetting = useMotionSetting();
   const motionSpeed = useMotionSpeed();
   const motionTier = useMotionTier();
-  const entrances = useSyncedSetting('introAnimationEnabled');
+  const entrances = useSyncedSetting('introAnimation');
 
   /* Speed applies to every tier that has a length: the tier decides the form, the speed decides
      the clock. Disabled rather than hidden when 动画效果 is off — a control that vanishes is a
@@ -135,14 +143,33 @@ export function ModeAndMotionSection() {
           />
         }
       />
-      {/* The one row here that follows the account (the original front end's `introAnimationEnabled`):
-          under a section headed 仅保存在本设备 it says so itself (review P5-F7). */}
-      <SwitchRow
+      {/* The one row here that follows the account (the original front end's `introAnimationEnabled`,
+          and `introAnimationBlocking` beside it): under a section headed 仅保存在本设备 it says so
+          itself (review P5-F7). Three ways rather than a switch: 阻塞 and 不阻塞 both play the
+          full-screen splash — the first leaves once the mark has landed, the second (the default)
+          as soon as the page has loaded — and 关闭 turns every entrance off. */}
+      <SettingsRow
         label="入场动画"
-        description="此项随账号同步到你登录的设备"
-        checked={entrances}
-        onChange={(value) => changeSyncedSetting('introAnimationEnabled', value)}
-        disabled={motionTier === 'off'}
+        supporting={
+          <>
+            <span className="block">{ENTRANCE_DESCRIPTIONS[entrances]}</span>
+            <span className="block">此项随账号同步到你登录的设备</span>
+          </>
+        }
+        action={
+          <Select
+            size="sm"
+            value={entrances}
+            disabled={motionTier === 'off'}
+            onChange={(value) => changeSyncedSetting('introAnimation', value)}
+            aria-label="入场动画"
+            options={[
+              { value: 'blocking', label: '阻塞' },
+              { value: 'non-blocking', label: '不阻塞' },
+              { value: 'off', label: '关闭' },
+            ]}
+          />
+        }
       />
     </SettingsSection>
   );

@@ -8,6 +8,7 @@ import { AuthProvider } from '@/components/AuthModal';
 import NextTopLoader from 'nextjs-toploader';
 import { ToastContainer } from '@/components/Toast';
 import RippleLayer from '@/components/RippleLayer';
+import SplashScreen from '@/components/SplashScreen';
 import { ImageLineProvider, SpoilerTagsProvider } from '@/components/ImageLineProvider';
 import ServiceWorker from '@/components/ServiceWorker';
 import SettingsSync from '@/components/SettingsSync';
@@ -166,7 +167,7 @@ var m=get('picpony_motion');
 if(m!=='off'&&m!=='reduced'&&m!=='standard')m=q('(prefers-reduced-motion:reduce)')?'reduced':'standard';
 d.dataset.motion=m;
 var v=get('picpony_motion_speed');d.dataset.motionSpeed=(v==='fast'||v==='slow')?v:'default';
-if(get('picpony_entrance_motion')==='off')d.dataset.entrance='off';else delete d.dataset.entrance;
+var e=get('picpony_entrance_motion');if(e==='off'||e==='blocking')d.dataset.entrance=e;else delete d.dataset.entrance;
 var P=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.userAgent||'';
 if(/Windows/i.test(P))d.dataset.os='windows';else delete d.dataset.os;
 try{var t=document.querySelector('meta[name="theme-color"]');
@@ -248,9 +249,11 @@ export default async function RootLayout({
   const motion = MOTION_TIERS.includes(motionCookie ?? '') ? motionCookie! : 'standard';
   const speedCookie = cookieStore.get(COOKIE_KEYS.motionSpeed)?.value;
   const motionSpeed = MOTION_SPEEDS.includes(speedCookie ?? '') ? speedCookie! : 'default';
-  /* Only `'off'` turns entrances off, so a corrupt cookie means "on" — the direction a
-     default should fail in for something whose absence is the normal state. */
-  const entranceOff = cookieStore.get(COOKIE_KEYS.entranceMotion)?.value === 'off';
+  /* 入场动画: only `off` and `blocking` are anything but the default, so a corrupt cookie means
+     不阻塞 — the direction a default should fail in for something whose absence is the normal
+     state, and the one that holds the page back least. */
+  const entranceCookie = cookieStore.get(COOKIE_KEYS.entranceMotion)?.value;
+  const entrance = entranceCookie === 'off' || entranceCookie === 'blocking' ? entranceCookie : undefined;
   /* 单色 only on an explicit `mono`: a corrupt cookie means 多色, the default and the CSS's own
      attribute-free state. */
   const mono = cookieStore.get(COOKIE_KEYS.paletteHues)?.value === 'mono';
@@ -268,7 +271,7 @@ export default async function RootLayout({
       data-palette-hues={mono ? 'mono' : undefined}
       data-motion={motion}
       data-motion-speed={motionSpeed}
-      data-entrance={entranceOff ? 'off' : undefined}
+      data-entrance={entrance}
       data-os={isWindows ? 'windows' : undefined}
       suppressHydrationWarning
     >
@@ -309,9 +312,10 @@ export default async function RootLayout({
             `:not([data-motion])` rule could never match. "The OS asks for less and nothing
             asks for even less than that." One blunt rule rather than a copy of the tier
             block: without JS there is no hero flight, shared axis or theme wipe to degrade,
-            so what is left to stop is the CSS. */}
+            so what is left to stop is the CSS. And no splash: there is no mark to write on
+            without a script, so holding the page back would hold it for nothing. */}
         <noscript>
-          <style>{`@media (prefers-reduced-motion: reduce){html[data-motion='standard'] *,html[data-motion='standard'] *::before,html[data-motion='standard'] *::after{animation-duration:1ms!important;animation-delay:0ms!important;transition-duration:1ms!important;transition-delay:0ms!important}}`}</style>
+          <style>{`@media (prefers-reduced-motion: reduce){html[data-motion='standard'] *,html[data-motion='standard'] *::before,html[data-motion='standard'] *::after{animation-duration:1ms!important;animation-delay:0ms!important;transition-duration:1ms!important;transition-delay:0ms!important}}.app-splash{display:none!important}`}</style>
         </noscript>
         {/* `type` spelled out on both: something in the document (Next's SSR stream or, more
             likely, a script-management extension) hands the server HTML a
@@ -331,12 +335,14 @@ export default async function RootLayout({
         />
       </head>
 
-      {/* **No splash.** What the server rendered is what the first paint shows: an opaque
-          overlay held it back until the shell hydrated — 6–10s on a slow phone, forever with
-          scripting off — although the first page of content was already in the first byte.
-          The app bar's mark writes itself on once instead (`Logo introOnce`), over a screen
-          that is already usable, and client-rendered routes show their own skeletons. */}
+      {/* **The splash is first in the byte stream** unless 入场动画 is 关闭: its mark writes itself
+          on full-screen, and it leaves when the page has loaded (不阻塞, the default) or when the
+          mark has landed (阻塞). Either way it lifts by itself at its deadline when the script is
+          late — it used to wait for the shell to hydrate, 6–10s on a slow phone and for ever with
+          scripting off (`SplashScreen`). Not over the maintenance screen: there is no app behind
+          it to enter. */}
       <body className="h-full flex flex-col overflow-hidden">
+        {entrance !== 'off' && motion === 'standard' && !maintenanceLocked && <SplashScreen />}
         <NextTopLoader
           /* Rides the chrome's bottom edge (`--app-chrome-bottom`, set in globals.css), where
              M3 puts a top app bar's linear indicator — and so below the dev banner and the

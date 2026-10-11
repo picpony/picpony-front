@@ -1,11 +1,44 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useOffline } from 'next/offline';
 import { MdWifiOff } from 'react-icons/md';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 
 const MESSAGE = '当前网络不可用，恢复后会自动重试';
+
+/**
+ * How long Next's offline state has to hold before the banner opens. A failed navigation request
+ * flips it on and Next's own connectivity check — a `HEAD` aborted after 200ms, which counts as
+ * online when the server is reachable — flips it off a fraction of a second later; while a
+ * request keeps failing against a reachable server (a dev server mid-compile, a 5xx proxy) the
+ * two alternate several times a second. Followed directly, the banner opened and closed with each
+ * flip and moved the page under it by its height each time — 14 opens in 4 seconds, measured.
+ * A real outage holds for longer than this.
+ */
+const OPEN_AFTER_MS = 1000;
+/**
+ * How long the state has to hold online before an open banner closes, so a check that succeeds
+ * between two failures does not take it down and put it back.
+ */
+const CLOSE_AFTER_MS = 1500;
+
+/**
+ * Next's offline state, held to a settled answer: on only once it has held on for
+ * `OPEN_AFTER_MS`, off only once it has held off for `CLOSE_AFTER_MS`. Each change restarts the
+ * wait, so a state flickering faster than either never reaches the screen.
+ */
+function useSettledOffline(): boolean {
+  const offline = useOffline();
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (offline === settled) return;
+    const timer = window.setTimeout(() => setSettled(offline), offline ? OPEN_AFTER_MS : CLOSE_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [offline, settled]);
+  return settled;
+}
 
 /**
  * Says so when the network is down — the user-facing half of `useOffline`, which keeps
@@ -19,6 +52,7 @@ const MESSAGE = '当前网络不可用，恢复后会自动重试';
  * content below moves down by one row while it is up, and because it is inside the element
  * `--app-chrome-bottom` measures, toasts hang below it and the navigation progress line —
  * which keeps crawling while a navigation waits for the network — rides its bottom edge.
+ * That move is why it follows a settled answer (`useSettledOffline`), not every flip.
  *
  * It opens and closes by its row's height on DefaultEffects, never over its own content.
  * The strip itself is presentation; the announcement is a separate, always-mounted status
@@ -28,7 +62,7 @@ const MESSAGE = '当前网络不可用，恢复后会自动重试';
  * section gives: a severity must not arrive as one shade in light and another in dark.
  */
 export default function OfflineBanner({ inert }: { inert?: boolean }) {
-  const isOffline = useOffline();
+  const isOffline = useSettledOffline();
 
   return (
     <>

@@ -2,14 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { cn, runWhenIdle } from '@/lib/utils';
-import {
-  MOTION_SPEED_SCALE,
-  entranceMotion,
-  motionScale,
-  motionTier,
-  useMotionSpeed,
-  useMotionTier,
-} from '@/lib/appearance';
+import { motionScale, motionTier, useMotionSpeed, useMotionTier } from '@/lib/appearance';
 import { loadLottiePlayer } from '@/lib/lottieAssets';
 
 interface LogoProps {
@@ -26,14 +19,19 @@ interface LogoProps {
    * weight of the base underneath.
    */
   keyline?: boolean;
-  /** `false` for a mark nobody points at on purpose — the footer's. */
+  /** `false` for a mark nobody points at on purpose — the footer's and the splash's. */
   interactive?: boolean;
   /**
-   * The app's boot signature: the colour mark writes itself on once per document load, then
-   * settles back to the resting wordmark. The app bar's mark only — two marks writing
-   * themselves on at once is a competition rather than an entrance.
+   * The splash's mark (`SplashScreen`), under either 入场动画 mode that plays: write the boot cut on
+   * now and keep it. While false the mark is the ground the trace is drawn onto.
    */
-  introOnce?: boolean;
+  intro?: boolean;
+  /**
+   * Fires once `intro` has finished drawing (`true`), or when it has been given up on (`false`):
+   * too late in the load to read as an arrival, a chunk that failed, a tier that plays no
+   * Lottie. The splash leaves off this rather than off a clock of its own.
+   */
+  onIntroSettled?: (played: boolean) => void;
 }
 
 type TraceKind = 'hover' | 'intro';
@@ -71,20 +69,34 @@ function loadTrace(kind: TraceKind) {
  * is not the place to spend it. At this speed the signature lands in 1.41s.
  */
 const INTRO_SPEED = 1.65;
+/** The boot cut's length at the default speed. */
+export const INTRO_DURATION_MS = Math.round((140 / 60 / INTRO_SPEED) * 1000);
 /**
- * How late after navigation start the boot signature may still begin. It is an arrival, and
- * an arrival that starts several seconds into a visit — a slow phone, a slow chunk — is a
- * logo animating at someone who is already scrolling; past this it is simply not played.
+ * How late after the document's first byte the boot signature may still begin. It is an arrival,
+ * and an arrival that starts several seconds into a visit — a slow phone, a slow chunk — is a
+ * splash holding a page that has been there all along; past this it is simply not played.
  */
-const INTRO_LATEST_START_MS = 2500;
-/** How long the finished signature holds before the colour mark fades back to the base. */
-const INTRO_HOLD_MS = 600;
-/** `.logo-trace`'s exit fade — the exit step of the duration scale (globals.css). */
-const TRACE_EXIT_MS = 200;
+export const INTRO_LATEST_START_MS = 2500;
 
-/* Once per document, whatever remounts: the app bar's mark mounts once per load, but a
-   development double-mount must not play it twice. */
-let introClaimed = false;
+/**
+ * Milliseconds since this document's first byte — the clock `INTRO_LATEST_START_MS` runs on, as
+ * the splash's stylesheet deadline does (it counts from the splash's own parse, a moment later).
+ * Counted from navigation start, a slow first byte — a route compiling on the dev server, a slow
+ * network — spent the deadline before the splash was on screen, and it was dismissed unplayed.
+ */
+export function sinceFirstByte(): number {
+  const entry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  return performance.now() - (entry?.responseStart || 0);
+}
+
+/**
+ * Fetch the player and the boot cut ahead of the mark that plays them — the splash's, while the
+ * rest of the app's script is still evaluating and hydrating — so the trace can start the moment
+ * the splash takes over. Chunks only; the player is built by the mark.
+ */
+export function warmIntro() {
+  void loadTrace('intro').catch(() => {});
+}
 
 /** A pointer that can hover — the only device on which a hover trace can ever be seen. */
 const canHover = () =>
@@ -106,6 +118,8 @@ const canHover = () =>
  * first hover is not the one that pays) — a phone never can, so it never paid for a trace it
  * could not show — and the player is instantiated on the first hover, not while warming.
  *
+ * The boot cut writes the mark on once per cold load, and only on the splash's mark (`intro`).
+ *
  * Below the standard tier nothing is loaded at all and the base simply stays: a colour
  * reveal is decorative where the mark is legible without it, which is exactly what the
  * reduced tier's rule drops (decorative loops, Lottie playback).
@@ -114,34 +128,28 @@ export default function Logo({
   className = 'w-32 h-auto',
   keyline = false,
   interactive = true,
-  introOnce = false,
+  intro = false,
+  onIntroSettled,
 }: LogoProps) {
+  const rootRef = useRef<HTMLSpanElement>(null);
   const hostRef = useRef<HTMLSpanElement>(null);
   const animationRef = useRef<{ kind: TraceKind; animation: TraceAnimation } | null>(null);
-  /* While the boot signature owns the host, a hover neither starts nor stops anything. */
-  const introRunningRef = useRef(false);
   const wantedRef = useRef(false);
   const generationRef = useRef(0);
   const tier = useMotionTier();
   const speed = useMotionSpeed();
-  const traced = interactive || introOnce;
+  const traced = interactive || intro;
+  /* In a ref so the splash's write-on does not restart when its parent re-renders with a new
+     closure — that would replay the cut from frame 0. */
+  const settledRef = useRef(onIntroSettled);
+  useEffect(() => {
+    settledRef.current = onIntroSettled;
+  }, [onIntroSettled]);
 
   const destroy = useCallback(() => {
     animationRef.current?.animation.destroy();
     animationRef.current = null;
   }, []);
-
-  /* The boot cut has done its one job once it has faded; the hover cut is loaded on demand.
-     Destroyed after the fade — `.logo-trace`'s exit transition, at the slowest speed, since a
-     timer that bounds an animation takes the maximum — not during it: removing the SVG
-     mid-fade cut the colour mark off. */
-  const retireIntro = useCallback(
-    () =>
-      window.setTimeout(() => {
-        if (animationRef.current?.kind === 'intro' && !introRunningRef.current) destroy();
-      }, TRACE_EXIT_MS * MOTION_SPEED_SCALE.slow),
-    [destroy],
-  );
 
   /** The player for `kind`, created on demand; null when the tier or the node says no. */
   const ensure = useCallback(async (kind: TraceKind) => {
@@ -169,14 +177,15 @@ export default function Logo({
   /* Whatever cut is loaded goes with a tier change or unmount; the generation also
      invalidates an import that resolves afterwards. */
   useEffect(() => {
+    const root = rootRef.current;
     const host = hostRef.current;
     const generation = generationRef.current;
     return () => {
       generationRef.current = generation + 1;
       wantedRef.current = false;
-      introRunningRef.current = false;
       destroy();
       host?.removeAttribute('data-shown');
+      root?.removeAttribute('data-settled');
     };
   }, [destroy, tier, traced]);
 
@@ -187,46 +196,48 @@ export default function Logo({
     }
   }, [speed, tier]);
 
-  /* The boot signature. Non-occluding by construction — it is drawn over the resting wordmark
-     in the app bar, which is on screen from the first paint — so nothing waits for it: it
-     starts once the browser is idle after hydration, and only on a cold load that is still
-     young enough for it to read as an arrival. An entrance, so it answers to 入场动画 as well
-     as to the tier. */
+  /* The boot signature, the splash's: it starts at once, and the finished mark stays — the splash
+     leaves over it (阻塞), or leaves over it mid-stroke once the page has loaded (不阻塞). A cut that
+     cannot start while the load still reads as an arrival is given up on, and the splash leaves
+     without it rather than holding a page that is already there. It reports once, either way; a
+     cleanup is not an answer (development's double invoke runs this twice, and only the second
+     run is the mark's). */
   useEffect(() => {
-    if (!introOnce || introClaimed || !entranceMotion() || motionTier() !== 'standard') return;
-    introClaimed = true;
-    let cancelled = false;
-    let hold = 0;
-    const cancelIdle = runWhenIdle(() => {
-      if (cancelled || performance.now() > INTRO_LATEST_START_MS) return;
-      void ensure('intro').then((animation) => {
-        if (cancelled || !animation || performance.now() > INTRO_LATEST_START_MS + 1000) {
-          if (animationRef.current?.kind === 'intro') destroy();
-          return;
-        }
-        introRunningRef.current = true;
-        hostRef.current?.setAttribute('data-shown', '');
-        animation.addEventListener('complete', () => {
-          hold = window.setTimeout(() => {
-            introRunningRef.current = false;
-            /* A pointer resting on the mark keeps the finished signature until it leaves,
-               which then retires it the way a hover does. */
-            if (wantedRef.current) return;
-            hostRef.current?.removeAttribute('data-shown');
-            hold = retireIntro();
-          }, INTRO_HOLD_MS * motionScale());
-        });
-        animation.goToAndPlay(0, true);
-      }).catch(() => {
-        /* A decoration that failed to load is simply not played. */
-      });
-    }, INTRO_LATEST_START_MS);
-    return () => {
-      cancelled = true;
-      cancelIdle();
-      window.clearTimeout(hold);
+    if (!intro) return;
+    let answered = false;
+    const answer = (played: boolean) => {
+      if (answered) return;
+      answered = true;
+      settledRef.current?.(played);
     };
-  }, [destroy, ensure, introOnce, retireIntro]);
+    const remaining = INTRO_LATEST_START_MS - sinceFirstByte();
+    if (motionTier() !== 'standard' || remaining <= 0) {
+      answer(false);
+      return;
+    }
+    const late = window.setTimeout(() => answer(false), remaining);
+    void ensure('intro').then((animation) => {
+      window.clearTimeout(late);
+      if (answered) return;
+      if (!animation) return answer(false);
+      hostRef.current?.setAttribute('data-shown', '');
+      /* The base steps aside once the mark is written (`.logo-intro` in globals.css says why),
+         and the splash leaves on the same signal — the player's own completion, not a second
+         copy of the duration, which a chunk arriving late would run ahead of. */
+      animation.addEventListener('complete', () => {
+        rootRef.current?.setAttribute('data-settled', '');
+        answer(true);
+      });
+      animation.goToAndPlay(0, true);
+    }).catch(() => {
+      window.clearTimeout(late);
+      answer(false);
+    });
+    return () => {
+      answered = true;
+      window.clearTimeout(late);
+    };
+  }, [ensure, intro]);
 
   /* Warm the hover cut on idle — only where a hover can happen. The player is a 60KB chunk and
      the first hover would otherwise wait on the network for it: the one moment the animation
@@ -242,13 +253,12 @@ export default function Logo({
        per frame — exactly what the reduced tier's rule names. */
     if (!interactive || motionTier() !== 'standard') return;
     wantedRef.current = true;
-    if (introRunningRef.current) return;
     hostRef.current?.setAttribute('data-shown', '');
     void ensure('hover').then((animation) => {
       // The pointer may have left while the chunk was in flight.
       if (
         animation && animationRef.current?.animation === animation && wantedRef.current &&
-        !introRunningRef.current && motionTier() === 'standard'
+        motionTier() === 'standard'
       ) animation.goToAndPlay(0, true);
     }).catch(() => {
       hostRef.current?.removeAttribute('data-shown');
@@ -257,14 +267,13 @@ export default function Logo({
 
   const onLeave = useCallback(() => {
     wantedRef.current = false;
-    if (introRunningRef.current) return;
     hostRef.current?.removeAttribute('data-shown');
-    if (animationRef.current?.kind === 'intro') retireIntro();
-  }, [retireIntro]);
+  }, []);
 
   return (
     <span
-      className="relative inline-block"
+      ref={rootRef}
+      className={cn('relative inline-block', intro && 'logo-intro')}
       onPointerEnter={interactive ? onEnter : undefined}
       onPointerLeave={interactive ? onLeave : undefined}
       onFocus={interactive ? onEnter : undefined}
