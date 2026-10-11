@@ -58,7 +58,7 @@ export default function PresenceBlock({
         else focusLanding(target);
       }
     }
-    const fade = node.animate([{ opacity: 1 }, { opacity: 0 }], { ...springTiming('fastEffects'), fill: 'forwards' });
+    const fade = node.animate([{ opacity: 1 }, { opacity: 0 }], { ...springTiming('fastEffects', 'list'), fill: 'forwards' });
     fade.finished.then(
       () => {
         setHeld(null);

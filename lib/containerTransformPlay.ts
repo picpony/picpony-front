@@ -289,7 +289,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   /* With no outgoing content the whole container arrives through its fade, surface and all. */
   const fading = run.outgoing ? arriving : layer;
 
-  const full = scaledMs(FORUM_TRANSFORM_MS);
+  const full = scaledMs(FORUM_TRANSFORM_MS, 'page');
   /** The current leg's two ends, for the pose a turn leaves from (`containerPose`). */
   let ends: { a: Surface; b: Surface };
   /**
@@ -375,7 +375,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   };
   const fadeOff = (onEnd: () => void) => {
     const opacity = getComputedStyle(layer).opacity;
-    retiring = layer.animate([{ opacity }, { opacity: 0 }], { ...springTiming('fastEffects'), fill: 'forwards' });
+    retiring = layer.animate([{ opacity }, { opacity: 0 }], { ...springTiming('fastEffects', 'page'), fill: 'forwards' });
     retiring.finished.then(onEnd, () => {});
   };
   let leaving = false;

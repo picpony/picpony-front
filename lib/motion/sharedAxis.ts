@@ -148,8 +148,8 @@ export function playSharedAxis(opts: {
   onSettle?: (reversed: boolean) => void;
 }): SharedAxisHandle {
   const { leaving, entering, axis = 'x', direction, leavingOffsetY = 0, onSettle } = opts;
-  const tier = motionTier();
-  const scale = motionScale();
+  const tier = motionTier('tabs');
+  const scale = motionScale('tabs');
 
   /* The window the strip slides past is the *scroller*, not the pane: the pane is
    * the centred content column, the scroller runs sidebar edge to screen edge. One

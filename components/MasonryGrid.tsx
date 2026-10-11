@@ -180,7 +180,7 @@ function editOf(rendered: MountedRun, images: ImagePreview[]): MountedRun | null
   });
 
   /* Under 关闭 nothing is kept to fade: what left is simply gone, as everything else is a cut. */
-  const motion = typeof document !== 'undefined' && motionTier() !== 'off';
+  const motion = typeof document !== 'undefined' && motionTier('list') !== 'off';
   const live = new Set(images.slice(range.from, range.to).map((image) => image.id));
   const leaving: Leaver[] = [];
   if (motion) {
@@ -312,7 +312,7 @@ function playEdit({
   placement: () => readonly Record<string, string>[];
   onLeft: (id: number) => void;
 }) {
-  const motion = motionTier() !== 'off';
+  const motion = motionTier('list') !== 'off';
   const scroller = grid.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
   const anchoring = scroller?.style.overflowAnchor ?? '';
   if (scroller) scroller.style.overflowAnchor = 'none';
@@ -350,7 +350,7 @@ function playEdit({
   setHold(floor && scroller ? watchFloor(grid, scroller, floor, placement) : null);
   if (!geometry || !motion) return;
 
-  const move = springTiming('defaultSpatial');
+  const move = springTiming('defaultSpatial', 'list');
   const track = (el: HTMLElement, animation: Animation) => {
     moves.get(el)?.cancel();
     moves.set(el, animation);
@@ -371,7 +371,7 @@ function playEdit({
       moves.get(el)?.cancel();
       const fade = el.animate(
         [{ opacity: 1, transform: at || 'none' }, { opacity: 0, transform: `${at} scale(0.92)` }],
-        { ...springTiming('fastEffects'), fill: 'forwards' },
+        { ...springTiming('fastEffects', 'list'), fill: 'forwards' },
       );
       fade.finished.then(() => onLeft(id), () => {});
       continue;
@@ -386,7 +386,7 @@ function playEdit({
     const was = edit.from.get(id);
     if (at === undefined) continue;
     if (!was || returning) {
-      el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects'));
+      el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list'));
       track(el, el.animate([{ transform: 'scale(0.92)' }, { transform: 'none' }], move));
       continue;
     }

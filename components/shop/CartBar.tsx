@@ -54,7 +54,7 @@ export default function CartBar({
   /** Fetch the sheet's chunk on intent. */
   onWarm: () => void;
 }) {
-  const tier = useMotionTier();
+  const tier = useMotionTier('list');
   const roomRef = useRef<HTMLDivElement>(null);
 
   /* What the bar shows: the live cart while it is up, the last of it while it leaves. */
@@ -81,11 +81,11 @@ export default function CartBar({
     const opened = room && !roomWas.current;
     roomWas.current = room;
     const spacer = roomRef.current;
-    if (!opened || !spacer || motionTier() === 'off') return;
+    if (!opened || !spacer || motionTier('list') === 'off') return;
     const height = spacer.getBoundingClientRect().height;
     /* No box at all in the docked layout. */
     if (height === 0) return;
-    spacer.animate([{ height: '0px' }, { height: `${height}px` }], springTiming('defaultEffects'));
+    spacer.animate([{ height: '0px' }, { height: `${height}px` }], springTiming('defaultEffects', 'list'));
   }, [room]);
 
   useLayoutEffect(() => {

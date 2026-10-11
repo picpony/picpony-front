@@ -181,7 +181,7 @@ export function useDrawerSwipe({
          * reduced and standard both spring: the finger has already put the panel
          * most of the way there, and cutting the last few pixels reads as the
          * gesture being dropped, not as less motion. */
-        if (!d || motionTier() === 'off') {
+        if (!d || motionTier('overlay') === 'off') {
           release();
           return;
         }
@@ -192,7 +192,7 @@ export function useDrawerSwipe({
          * assigns them — a gesture and a tap must not land differently. No velocity
          * scaling: a duration scaled by distance double-counts; a spring already
          * covers a shorter remaining distance in less time. */
-        const spec = toOpen ? spring('defaultSpatial') : spring('fastEffects');
+        const spec = toOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
 
         settling = toOpen;
         if (s)
@@ -224,7 +224,7 @@ export function useDrawerSwipe({
         active = false;
         const d = drawer();
         const s = scrim();
-        if (!d || width <= 0 || motionTier() === 'off') {
+        if (!d || width <= 0 || motionTier('overlay') === 'off') {
           settling = null;
           if (d) gsap.killTweensOf(d);
           if (s) gsap.killTweensOf(s);
@@ -232,7 +232,7 @@ export function useDrawerSwipe({
           return;
         }
         settling = openNow;
-        const spec = openNow ? spring('defaultSpatial') : spring('fastEffects');
+        const spec = openNow ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
         if (s) gsap.to(s, { opacity: openNow ? 1 : 0, ...spec, overwrite: true });
         gsap.to(d, {
           x: openNow ? 0 : -width,

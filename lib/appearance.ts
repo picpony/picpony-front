@@ -26,6 +26,14 @@ import { flushSync } from 'react-dom';
 
 import { COOKIE_KEYS, LS_KEYS, MEDIA } from './constants';
 import {
+  MOTION_SPEEDS, MOTION_SPEED_SCALE, formatMotionCustom, motionCustomStyle, motionPreset,
+  parseMotionCustom, type MotionCategory, type MotionCustomSpeeds, type MotionSpeed,
+  MOTION_CATEGORIES, isMotionTier, motionEffectPreset, parseMotionEffects, formatMotionEffects,
+  motionEffectsAttributes, motionEffectsStyle, type MotionCustomEffects, type MotionMode, type MotionTier,
+} from './motionPreferences';
+export { MOTION_SPEED_SCALE } from './motionPreferences';
+export type { MotionSpeed, MotionTier } from './motionPreferences';
+import {
   CUSTOM_PALETTE,
   DEFAULT_PALETTE,
   PALETTES,
@@ -55,9 +63,7 @@ export type ColorScheme = 'light' | 'dark';
 export type SchemeSetting = ColorScheme | 'system';
 
 /** What is actually in force. Never `system` — that is a *setting*, not a tier. */
-export type MotionTier = 'off' | 'reduced' | 'standard';
-export type MotionSetting = MotionTier | 'system';
-export type MotionSpeed = 'fast' | 'default' | 'slow';
+export type MotionSetting = MotionMode | 'system';
 
 /**
  * 入场动画, three ways. `off` (关闭): the app volunteers no motion of its own. The other two play the
@@ -69,22 +75,9 @@ export type MotionSpeed = 'fast' | 'default' | 'slow';
 export type EntranceMode = 'blocking' | 'non-blocking' | 'off';
 export const DEFAULT_ENTRANCE_MODE: EntranceMode = 'non-blocking';
 
-/**
- * The three speeds, as a multiplier on every duration — speed scales everything via `--motion-scale`
- * (0.7/1/1.4, reciprocals, so the rhythm between durations is unchanged; separate tables on M3's
- * 50ms grid would have let it drift). The tier decides the **form** of motion, the speed its
- * **length**; only `off` ignores the speed (zero).
- */
-export const MOTION_SPEED_SCALE: Record<MotionSpeed, number> = {
-  fast: 0.7,
-  default: 1,
-  slow: 1.4,
-};
-
 /* `SchemeSetting` needs no validation list — derived from two booleans, not read as a string;
    the other two come straight out of storage. */
-const MOTION_SETTINGS: readonly MotionSetting[] = ['off', 'reduced', 'standard', 'system'];
-const MOTION_SPEEDS: readonly MotionSpeed[] = ['fast', 'default', 'slow'];
+const MOTION_SETTINGS: readonly MotionSetting[] = ['off', 'reduced', 'standard', 'system', 'custom'];
 
 /* --- Storage: both halves are wrapped (localStorage throws in a private window in some
    engines; a failed persist must not take the page down). --- */
@@ -160,7 +153,7 @@ export function resolveScheme(setting: SchemeSetting): ColorScheme {
 
 /** `reduce` maps to the **reduced** tier, not `off`: the OS asks for less movement — that is the
  * reduced tier; a user who wants nothing picks `off`. */
-export function resolveMotionTier(setting: MotionSetting): MotionTier {
+export function resolveMotionTier(setting: MotionSetting): MotionMode {
   if (setting !== 'system') return setting;
   return systemPrefersReducedMotion() ? 'reduced' : 'standard';
 }
@@ -212,12 +205,43 @@ export function currentScheme(): ColorScheme {
   return root()?.classList.contains('dark') ? 'dark' : 'light';
 }
 
-export function motionTier(): MotionTier {
-  return oneOf(root()?.dataset.motion ?? null, ['off', 'reduced', 'standard'] as const, 'standard');
+export function motionMode(): MotionMode {
+  const value = root()?.dataset.motion;
+  return value === 'custom' || isMotionTier(value) ? value : 'standard';
+}
+
+export function motionTier(category: MotionCategory = 'feedback'): MotionTier {
+  const mode = motionMode();
+  return mode === 'custom' ? motionCustomEffects()[category] : mode;
 }
 
 export function motionSpeed(): MotionSpeed {
   return oneOf(root()?.dataset.motionSpeed ?? null, MOTION_SPEEDS, 'default');
+}
+
+const currentMotionCustomRaw = () => root()?.dataset.motionCustom ?? '';
+let customRaw: string | undefined;
+let customSpeeds = motionPreset('default');
+/** Cache by the root's primitive snapshot: animation reads neither parse storage nor force style. */
+export function motionCustomSpeeds(): MotionCustomSpeeds {
+  const raw = currentMotionCustomRaw();
+  if (raw !== customRaw) {
+    customRaw = raw;
+    customSpeeds = parseMotionCustom(raw);
+  }
+  return customSpeeds;
+}
+
+const currentMotionEffectsRaw = () => root()?.dataset.motionEffects ?? '';
+let effectsRaw: string | undefined;
+let customEffects = motionEffectPreset('standard');
+export function motionCustomEffects(): MotionCustomEffects {
+  const raw = currentMotionEffectsRaw();
+  if (raw !== effectsRaw) {
+    effectsRaw = raw;
+    customEffects = parseMotionEffects(raw);
+  }
+  return customEffects;
 }
 
 /**
@@ -246,13 +270,23 @@ export function entranceMode(): EntranceMode {
  * WAAPI and GSAP take numbers. `off` returns 0: right for a duration, wrong for a `timeScale`
  * (see `setMotionScaleListener`). `reduced` reads the speed like `standard` does.
  */
-export function motionScale(): number {
-  if (motionTier() === 'off') return 0;
-  return MOTION_SPEED_SCALE[motionSpeed()];
+export function motionScale(category: MotionCategory = 'feedback'): number {
+  if (motionTier(category) === 'off') return 0;
+  return motionSpeedScale(category);
+}
+
+function motionSpeedScale(category: MotionCategory = 'feedback'): number {
+  const speed = motionSpeed();
+  return MOTION_SPEED_SCALE[speed === 'custom' ? motionCustomSpeeds()[category] : speed];
 }
 
 /** `ms` at the current speed, for a WAAPI `duration` or a GSAP seconds value. */
-export const scaledMs = (ms: number) => ms * motionScale();
+export const scaledMs = (ms: number, category: MotionCategory = 'feedback') => ms * motionScale(category);
+
+/** GSAP already scales its global clock by feedback; a gesture needs only this relative factor. */
+export function motionRatio(category: MotionCategory): number {
+  return motionScale(category) / motionSpeedScale();
+}
 
 /* --- Applying — DOM only, no persistence: runs inside a View Transition capture, so
    synchronous and must not touch React. --- */
@@ -338,14 +372,37 @@ export function applyCustomPalette(install: CustomPaletteInstall) {
   writeCookie(COOKIE_KEYS.paletteCustom, formatCustomSpec(install));
 }
 
-export function applyMotion(tier: MotionTier, speed: MotionSpeed) {
+export function applyMotion(tier: MotionMode, speed: MotionSpeed) {
   const el = root();
   if (!el) return;
   el.dataset.motion = tier;
   el.dataset.motionSpeed = speed;
   writeCookie(COOKIE_KEYS.motion, tier);
   writeCookie(COOKIE_KEYS.motionSpeed, speed);
-  motionScaleListener?.(motionScale());
+  motionScaleListener?.(motionSpeedScale());
+}
+
+function applyMotionCustom(speeds: MotionCustomSpeeds) {
+  const el = root();
+  if (!el) return;
+  const raw = formatMotionCustom(speeds);
+  el.dataset.motionCustom = raw;
+  for (const [name, value] of Object.entries(motionCustomStyle(parseMotionCustom(raw)))) {
+    el.style.setProperty(name, String(value));
+  }
+  writeCookie(COOKIE_KEYS.motionCustom, raw);
+  motionScaleListener?.(motionSpeedScale());
+}
+
+function applyMotionEffects(effects: MotionCustomEffects) {
+  const el = root();
+  if (!el) return;
+  const raw = formatMotionEffects(effects);
+  const valid = parseMotionEffects(raw);
+  el.dataset.motionEffects = raw;
+  for (const [name, value] of Object.entries(motionEffectsAttributes(valid))) el.setAttribute(name, value);
+  for (const [name, value] of Object.entries(motionEffectsStyle(valid))) el.style.setProperty(name, String(value));
+  writeCookie(COOKIE_KEYS.motionEffects, raw);
 }
 
 export function applyEntranceMode(mode: EntranceMode) {
@@ -422,15 +479,15 @@ export function refreshSystemMotion() {
 /**
  * A seam rather than an import, like `setHeroBusyCheck`: this module is reached by anything that
  * reads a preference, and `lib/motion` drags GSAP with it. `lib/motion` registers a callback that
- * sets `gsap.globalTimeline.timeScale` — one line reaching every GSAP tween and delay in the app.
- * It must not be handed a scale of 0 (a `timeScale` of 0 stops the clock instead of collapsing the
- * duration), so the `off` tier's clamp is handled there, not here.
+ * sets `gsap.globalTimeline.timeScale`. This is the feedback speed before the effect gate:
+ * disabling feedback must not freeze a drawer that still animates. Category springs and
+ * timelines compensate with `motionRatio`; their call sites decide whether motion plays.
  */
 let motionScaleListener: ((scale: number) => void) | null = null;
 
 export function setMotionScaleListener(fn: (scale: number) => void) {
   motionScaleListener = fn;
-  fn(motionScale());
+  fn(motionSpeedScale());
 }
 
 /* --- Committing — persist, apply, then tell React. The order is load-bearing twice over.
@@ -503,9 +560,34 @@ export function recoverCustomPalette(): void {
 }
 
 export function commitMotion(setting: MotionSetting, speed: MotionSpeed) {
+  if (setting === 'custom' && !currentMotionEffectsRaw()) {
+    const previous = motionMode();
+    const effects = motionEffectPreset(previous === 'custom' ? 'standard' : previous);
+    writeStored(LS_KEYS.motionEffects, formatMotionEffects(effects));
+    applyMotionEffects(effects);
+  }
+  /* First custom choice starts from the current preset; subsequent visits keep the edits. */
+  if (speed === 'custom' && !currentMotionCustomRaw()) {
+    const previous = motionSpeed();
+    const speeds = motionPreset(previous === 'custom' ? 'default' : previous);
+    writeStored(LS_KEYS.motionCustom, formatMotionCustom(speeds));
+    applyMotionCustom(speeds);
+  }
   writeStored(LS_KEYS.motion, setting);
   writeStored(LS_KEYS.motionSpeed, speed);
   applyMotion(resolveMotionTier(setting), speed);
+  flushSync(emit);
+}
+
+export function commitMotionCustom(speeds: MotionCustomSpeeds) {
+  writeStored(LS_KEYS.motionCustom, formatMotionCustom(speeds));
+  applyMotionCustom(speeds);
+  flushSync(emit);
+}
+
+export function commitMotionEffects(effects: MotionCustomEffects) {
+  writeStored(LS_KEYS.motionEffects, formatMotionEffects(effects));
+  applyMotionEffects(effects);
   flushSync(emit);
 }
 
@@ -537,6 +619,11 @@ export const useCustomTonesRaw = () => useAppearance(currentCustomTonesRaw, null
 export const usePaletteHues = () => useAppearance(currentPaletteHues, 'multi' as PaletteHues);
 export const useMotionSetting = () => useAppearance(readMotionSetting, 'system' as MotionSetting);
 export const useMotionSpeed = () => useAppearance(motionSpeed, 'default' as MotionSpeed);
+export const useMotionCustom = () => parseMotionCustom(useAppearance(currentMotionCustomRaw, ''));
+export const useMotionEffects = () => parseMotionEffects(useAppearance(currentMotionEffectsRaw, ''));
+export const useMotionMode = () => useAppearance(motionMode, 'standard' as MotionMode);
+export const useMotionEnabled = () => useAppearance(() => MOTION_CATEGORIES.some(({ id }) => motionTier(id) !== 'off'), true);
+export const useMotionScale = (category: MotionCategory) => useAppearance(() => motionScale(category), 1);
 export const useEntranceMotion = () => useAppearance(entranceMotion, true);
 export const useEntranceMode = () => useAppearance(entranceMode, DEFAULT_ENTRANCE_MODE);
 
@@ -546,7 +633,7 @@ export const useEntranceMode = () => useAppearance(entranceMode, DEFAULT_ENTRANC
  * fresher. Server value `standard` matches the CSS, which only opts out under an attribute the
  * server sets, so the first paint cannot disagree.
  */
-export const useMotionTier = () => useAppearance(motionTier, 'standard' as MotionTier);
+export const useMotionTier = (category: MotionCategory = 'feedback') => useAppearance(() => motionTier(category), 'standard' as MotionTier);
 
 /** `version` is exported for tests and for a dev-tools panel; nothing in the app reads it. */
 export const appearanceVersion = () => version;

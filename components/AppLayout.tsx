@@ -314,7 +314,7 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
       inert={!shown || undefined}
       className={`pointer-events-none absolute inset-x-0 bottom-0 z-page-chrome flex select-none items-center justify-center py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[opacity,translate] ${
         shown
-          ? 'translate-y-0 opacity-100 delay-[calc(80ms*var(--motion-scale))] duration-[calc(320ms*var(--motion-scale))] ease-[var(--ease-decelerate)]'
+          ? 'translate-y-0 opacity-100 delay-[calc(80ms*var(--motion-scale-page))] duration-[calc(320ms*var(--motion-scale-page))] ease-[var(--ease-decelerate)]'
           : 'translate-y-2 opacity-0 duration-press ease-[var(--ease-accelerate)]'
       }`}
     >
@@ -982,6 +982,7 @@ export default function AppLayout({
             the panel is on, including the asymmetry. */}
         <div
           ref={scrimRef}
+          data-motion-spring="overlay"
           className={cn(
             'fixed inset-0 z-drawer-scrim bg-scrim-veil transition-opacity md:hidden',
             modalOpen
@@ -995,6 +996,7 @@ export default function AppLayout({
         <div className="relative flex flex-1 overflow-hidden bg-surface-container-low">
           <aside
             ref={sidebarRef}
+            data-motion-spring="overlay"
             id="app-sidebar"
             role={modalDrawerOpen ? 'dialog' : undefined}
             aria-modal={modalDrawerOpen || undefined}

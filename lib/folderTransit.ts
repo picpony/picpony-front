@@ -56,7 +56,7 @@ function fresh(origin: FolderOrigin | null, key: string): FolderOrigin | null {
  * standard tier.
  */
 export function rememberFolderOrigin(href: string, card: HTMLElement) {
-  if (motionTier() !== 'standard') return;
+  if (motionTier('page') !== 'standard') return;
   const rect = card.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return;
   /* The gesture-driven warm, as the forum's: the page is a round trip away. */
@@ -70,7 +70,7 @@ export function rememberFolderOrigin(href: string, card: HTMLElement) {
  */
 export function rememberFolderReturn(href: string, page: HTMLElement) {
   left = { key: href, at: performance.now() };
-  if (motionTier() !== 'standard') return;
+  if (motionTier('page') !== 'standard') return;
   const rect = page.getBoundingClientRect();
   if (rect.top >= window.innerHeight || rect.bottom <= 0) return;
   ensurePlay();

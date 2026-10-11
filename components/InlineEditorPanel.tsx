@@ -206,7 +206,7 @@ export default function InlineEditorPanel({
     const previous = adopt(panel);
     if (previous?.phase === phase) return () => release(panel);
 
-    const tier = motionTier();
+    const tier = motionTier('list');
     if (!previous && !isClosing) {
       const capture = takeCapture(panel);
       holdAnchor(capture, panel);
@@ -313,15 +313,15 @@ function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, captur
   if (tier === 'off') return run;
   const corners = cornerRow(panel);
   if (tier === 'reduced') {
-    const fade = springTiming('fastEffects');
+    const fade = springTiming('fastEffects', 'list');
     run.own.push(panel.animate([{ opacity: 0 }, { opacity: 1 }], fade));
     if (corners) run.corner = cornerTrack(corners.row, corners.end, corners.seam, fade);
     return run;
   }
   const { height, distance } = footprint(panel);
-  const spatial = springTiming('defaultSpatial');
-  const effects = springTiming('defaultEffects');
-  const lag = scaledMs(CONTENT_LAG_MS);
+  const spatial = springTiming('defaultSpatial', 'list');
+  const effects = springTiming('defaultEffects', 'list');
+  const lag = scaledMs(CONTENT_LAG_MS, 'list');
 
   /* Reads first. Each follower starts where it was drawn on the press — or, for an open nothing
      pressed, where it is drawn with the panel taking no room — measured against where the layout
@@ -402,14 +402,14 @@ function turn(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, previo
   if (tier !== 'standard') {
     for (const [el, animation] of previous?.moved ?? []) dropMove(el, animation);
     if (tier === 'reduced') {
-      const fade: KeyframeAnimationOptions = { ...springTiming('fastEffects'), fill: closing ? 'forwards' : 'auto' };
+      const fade: KeyframeAnimationOptions = { ...springTiming('fastEffects', 'list'), fill: closing ? 'forwards' : 'auto' };
       run.own.push(panel.animate([{ opacity: panelPose.opacity }, { opacity: closing ? 0 : 1 }], fade));
       if (corners && cornerFrom) run.corner = cornerTrack(corners.row, cornerFrom, closing ? corners.end : corners.seam, fade);
     }
     return run;
   }
-  const timing: KeyframeAnimationOptions = closing ? { ...springTiming('fastEffects'), fill: 'forwards' } : springTiming('defaultSpatial');
-  const fade: KeyframeAnimationOptions = closing ? timing : springTiming('defaultEffects');
+  const timing: KeyframeAnimationOptions = closing ? { ...springTiming('fastEffects', 'list'), fill: 'forwards' } : springTiming('defaultSpatial', 'list');
+  const fade: KeyframeAnimationOptions = closing ? timing : springTiming('defaultEffects', 'list');
   run.own.push(
     panel.animate([{ translate: panelPose.translate, opacity: panelPose.opacity }, { translate: closing ? `0 ${shift - height}px` : 'none', opacity: 1 }], timing),
     surface.animate([{ translate: surfacePose.translate }, { translate: closing ? `0 ${height}px` : 'none' }], timing),

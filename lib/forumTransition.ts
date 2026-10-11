@@ -68,7 +68,7 @@ export function readForumPreview(id: number | string): ForumPost | null {
  *  transition). The preview is recorded on every tier. */
 export function rememberForumOrigin(id: number | string, row: HTMLElement, preview?: ForumPost) {
   if (preview) rememberForumPreview(preview);
-  if (motionTier() !== 'standard') return;
+  if (motionTier('page') !== 'standard') return;
   /* The gesture-driven warm (see facade). Below the tier guard: on the other tiers the
      transform never runs, so warming there would fetch a chunk that is unreachable. */
   ensurePlay();
@@ -107,7 +107,7 @@ export function readForumOrigin(id: number | string): ForumOrigin | null {
  */
 export function rememberForumReturn(id: number | string, card: HTMLElement) {
   left = { id: String(id), at: performance.now() };
-  if (motionTier() !== 'standard') return;
+  if (motionTier('page') !== 'standard') return;
   const box = boxOf(id, card);
   if (box.top >= window.innerHeight || box.top + box.height <= 0) return;
   ensurePlay();

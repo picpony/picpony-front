@@ -210,7 +210,7 @@ export default function Modal({
 
     const firstPlacement = placedPanel.current !== panel;
     placedPanel.current = panel;
-    const tier = motionTier();
+    const tier = motionTier('overlay');
     const reduced = tier === 'reduced';
     const entryTransform = reduced
       ? 'translateY(8px) scale(0.98)'
@@ -233,7 +233,7 @@ export default function Modal({
     }
 
     const timing = {
-      duration: scaledMs((isOpen ? DURATION.long : DURATION.short) * 1000),
+      duration: scaledMs((isOpen ? DURATION.long : DURATION.short) * 1000, 'overlay'),
       easing: isOpen ? EASE.decelerate : EASE.accelerate,
       fill: 'both' as const,
     };

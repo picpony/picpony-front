@@ -279,7 +279,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
       queueMicrotask(() => setAnnouncement(next.text));
       scheduleDismiss(next.text);
     };
-    const wait = closedAt.current + scaledMs(SPRING_MS.fastEffects) - performance.now();
+    const wait = closedAt.current + scaledMs(SPRING_MS.fastEffects, 'ambient') - performance.now();
     if (wait > 0) pending.current = { timer: window.setTimeout(reveal, wait), kind: next.kind };
     else reveal();
   }
@@ -291,10 +291,10 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
      overshoot and keeps a 6px rise; the off tier keeps the figure still. */
   function leap() {
     const node = reaction.current;
-    if (!node || motionTier() === 'off') return;
+    if (!node || motionTier('ambient') === 'off') return;
     for (const running of node.getAnimations()) running.cancel();
-    const up = springTiming('fastSpatial');
-    const down = springTiming('expressiveFastSpatial');
+    const up = springTiming('fastSpatial', 'ambient');
+    const down = springTiming('expressiveFastSpatial', 'ambient');
     const lift = node.animate([{ transform: 'none' }, { transform: 'translateY(-6px) scale(1.05)' }], { duration: up.duration, easing: up.easing, fill: 'forwards' });
     lift.finished
       .then(() => {
@@ -353,7 +353,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
       if (event.target === node && event.propertyName === 'transform') greet();
     };
     node?.addEventListener('transitionend', onEnd);
-    const bound = window.setTimeout(greet, motionTier() === 'off' ? 0 : SPRING_MS.defaultSpatial * MOTION_SPEED_SCALE.slow + 50);
+    const bound = window.setTimeout(greet, motionTier('ambient') === 'off' ? 0 : SPRING_MS.defaultSpatial * MOTION_SPEED_SCALE.slow + 50);
   }
 
   /* ---- The hold: three seconds to 彩彩 AI ---------------------------------------------------- */
@@ -443,7 +443,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
     }
     if (current && !current.shown) pressIn();
     if (!pressedAt.current) return;
-    const left = pressedAt.current + scaledMs(MIN_PRESS_MS) - performance.now();
+    const left = pressedAt.current + scaledMs(MIN_PRESS_MS, 'ambient') - performance.now();
     if (left <= 0) {
       letGo();
       return;
@@ -492,7 +492,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
       visit. A tap is the way to ask for another. */
   function onPointerEnter(event: PointerEvent<HTMLElement>) {
     if (event.pointerType !== 'mouse' || collapsed) return;
-    if (performance.now() - leftAt.current < scaledMs(HOVER_GRACE_MS)) return;
+    if (performance.now() - leftAt.current < scaledMs(HOVER_GRACE_MS, 'ambient')) return;
     if (pending.current || (openNow.current && bubbleKind.current === 'tip')) return;
     if (window.matchMedia(`(hover: hover) and ${MEDIA.pointerFine}`).matches) speak();
   }
@@ -532,6 +532,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
           ref={stage}
           data-mascot=""
           data-state={shown ? 'shown' : 'hidden'}
+          data-motion-category="ambient"
           data-pressed={pressed ? '' : undefined}
           data-speaking={open ? '' : undefined}
           aria-hidden={!shown || undefined}

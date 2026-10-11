@@ -22,7 +22,7 @@ import ts from 'typescript';
 const root = path.resolve(import.meta.dirname, '..');
 const virtual = {
   '@/lib/appearance': `exports.motionTier=()=>window.__tier||'standard';exports.useMotionTier=()=>window.__tier||'standard';
-    exports.motionScale=()=>1;exports.scaledMs=x=>x;exports.setMotionScaleListener=()=>{};exports.useEntranceMotion=()=>true;
+    exports.motionScale=()=>1;exports.motionRatio=()=>1;exports.scaledMs=x=>x;exports.setMotionScaleListener=()=>{};exports.useEntranceMotion=()=>true;
     exports.MOTION_SPEED_SCALE={fast:0.7,default:1,slow:1.4};exports.CUSTOM_PALETTE='custom';`,
   '@/lib/appScroller': `exports.getAppScroller=()=>null;exports.heroOwnsScreen=()=>false;exports.setHeroBusyCheck=()=>{};`,
   '@/lib/pageTransit': `exports.beginPageTransit=()=>()=>{};exports.notifyThemeWipeStart=()=>{};exports.routeTransitActive=()=>false;exports.setThemeWipeGuard=()=>{};`,

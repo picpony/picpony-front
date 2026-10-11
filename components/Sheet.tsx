@@ -170,7 +170,7 @@ export default function Sheet({
         if (scrim) gsap.set(scrim, { opacity: 0 });
       }
 
-      if (motionTier() === 'off') {
+      if (motionTier('overlay') === 'off') {
         gsap.killTweensOf(panel);
         if (scrim) gsap.killTweensOf(scrim);
         gsap.set(panel, { y: isOpen ? 0 : '100%' });
@@ -190,10 +190,10 @@ export default function Sheet({
          first frame the browser can produce, a stall only delays the travel. */
       const start = contextSafe!(() => {
         enterFrame.current = 0;
-        gsap.to(panel, { y: isOpen ? 0 : '100%', ...spring('defaultEffects'), overwrite: true });
+        gsap.to(panel, { y: isOpen ? 0 : '100%', ...spring('defaultEffects', 'overlay'), overwrite: true });
         /* The panel's clock: the scrim is the other half of this same movement. */
         if (scrim)
-          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...spring('defaultEffects'), overwrite: true });
+          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...spring('defaultEffects', 'overlay'), overwrite: true });
       });
       if (isOpen) enterFrame.current = requestAnimationFrame(start);
       else start();
@@ -241,7 +241,7 @@ export default function Sheet({
            created. Only `off` — under `reduced` a drag release still springs,
            because the finger has already carried the panel most of the way and
            cutting the remainder reads as the gesture being dropped. */
-        if (motionTier() === 'off') {
+        if (motionTier('overlay') === 'off') {
           gsap.set(panel, { y: target });
           if (scrim) gsap.set(scrim, { opacity: dismiss ? 0 : 1 });
           if (dismiss) onCloseRef.current();
@@ -254,7 +254,7 @@ export default function Sheet({
            panel that overshoots on the way out bounces back into view) and
            `default-spatial` on a settle-back, the split `NavigationDrawer.kt`
            makes for a drag release. */
-        const release = spring(dismiss ? 'defaultEffects' : 'defaultSpatial');
+        const release = spring(dismiss ? 'defaultEffects' : 'defaultSpatial', 'overlay');
 
         if (scrim)
           gsap.to(scrim, {

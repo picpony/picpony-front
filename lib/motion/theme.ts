@@ -151,7 +151,7 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
 
   const doc = document as Partial<ViewTransitionDocument>;
   const root = document.documentElement;
-  const tier = motionTier();
+  const tier = motionTier('theme');
 
   if (tier === 'off' || typeof doc.startViewTransition !== 'function') {
     applyChange();
@@ -193,7 +193,7 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
    * unresolved `var()` would silently fall back to `ease`. 550ms goes through
    * `motionScale()`; the reduced tier cross-fades
    * instead and never uses this curve — no radius, so one-sided decelerate fits. */
-  const wipeMs = Math.round(550 * motionScale());
+  const wipeMs = Math.round(550 * motionScale('theme'));
   style.textContent =
     tier === 'reduced'
       ? `
@@ -202,7 +202,7 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
       to { opacity: 1; }
     }
     html:root[data-theme-vt="${id}"]::view-transition-new(root) {
-      animation: ${animationName} ${Math.round(DURATION.long * 1000 * motionScale())}ms ${EASE.decelerate} both;
+      animation: ${animationName} ${Math.round(DURATION.long * 1000 * motionScale('theme'))}ms ${EASE.decelerate} both;
     }
   `
       : `

@@ -204,7 +204,7 @@ export function useDetailStep({
       imageHeroController.settleDetailStep(swap.id);
       motionRef.current?.cancel();
       motionRef.current = null;
-      if (!element || instant || motionTier() === 'off') {
+      if (!element || instant || motionTier('image') === 'off') {
         settleStepMotion(element);
         phaseRef.current = 'idle';
       } else {
@@ -269,7 +269,7 @@ export function useDetailStep({
       pendingSwapRef.current = { id: toId, direction };
       if (phaseRef.current !== 'exit') {
         const element = contentRef.current;
-        if (!element || motionTier() === 'off') {
+        if (!element || motionTier('image') === 'off') {
           commitSwap(true);
         } else {
           phaseRef.current = 'exit';

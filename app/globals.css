@@ -28,7 +28,7 @@
    it. Named so it cannot be mistyped into silence (a variant matching no utility emits
    nothing). Matches the off tier only: reduced keeps its transforms, so its hovers should
    simply run. */
-@custom-variant no-motion (&:is(html[data-motion='off'] *));
+@custom-variant no-motion (&:is(html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off']) *));
 
 /* 单色, at a call site — for the few marks that show 多色 itself rather than reading a token (a
    palette chip's lower quarters, the custom colour's 副色相 line). Keyed on the attribute rather
@@ -1204,7 +1204,8 @@ body {
   );
   /* ζ=0.9. Its first peak falls outside the 1% settle window, so within the window it is
      monotonic — the standard scheme reads as purposeful rather than playful. */
-  --ease-spring-standard-spatial: linear(
+  --ease-spring-standard-spatial: var(--motion-base-standard-spatial);
+  --motion-base-standard-spatial: linear(
     0 0%,
     0.0125 3.23%,
     0.0454 6.45%,
@@ -1239,7 +1240,8 @@ body {
     1 100%
   );
   /* ζ=0.8. Overshoots 0.51% at 82% of the run — a settle you feel rather than see. */
-  --ease-spring-expressive-spatial: linear(
+  --ease-spring-expressive-spatial: var(--motion-base-expressive-spatial);
+  --motion-base-expressive-spatial: linear(
     0 0%,
     0.0186 3.23%,
     0.0667 6.45%,
@@ -1276,7 +1278,8 @@ body {
   /* ζ=0.6, the expressive scheme's *fast* spatial spring and the only visibly bouncy curve
      in the system (8.4% overshoot, peaking at 63% of the run). Reserved for a small mark
      arriving in place — anything large wearing this reads as a wobble. */
-  --ease-spring-expressive-spatial-fast: linear(
+  --ease-spring-expressive-spatial-fast: var(--motion-base-expressive-spatial-fast);
+  --motion-base-expressive-spatial-fast: linear(
     0 0%,
     0.0186 3.23%,
     0.0682 6.45%,
@@ -1332,18 +1335,25 @@ body {
    * declares, and fast/slow scale the whole system equally, keeping the ratios inside one
    * gesture intact.
    * ------------------------------------------------------------------- */
-  --transition-duration-press: calc(100ms * var(--motion-scale));
-  --transition-duration-state: calc(150ms * var(--motion-scale));
-  --transition-duration-standard: calc(200ms * var(--motion-scale));
-  --transition-duration-exit: calc(200ms * var(--motion-scale));
-  --transition-duration-composite: calc(300ms * var(--motion-scale));
-  --transition-duration-enter: calc(400ms * var(--motion-scale));
-  --transition-duration-emphasized: calc(500ms * var(--motion-scale));
+  --motion-base-press: 100ms;
+  --transition-duration-press: calc(var(--motion-base-press) * var(--motion-scale));
+  --motion-base-state: 150ms;
+  --transition-duration-state: calc(var(--motion-base-state) * var(--motion-scale));
+  --motion-base-standard: 200ms;
+  --transition-duration-standard: calc(var(--motion-base-standard) * var(--motion-scale));
+  --motion-base-exit: 200ms;
+  --transition-duration-exit: calc(var(--motion-base-exit) * var(--motion-scale));
+  --motion-base-composite: 300ms;
+  --transition-duration-composite: calc(var(--motion-base-composite) * var(--motion-scale));
+  --motion-base-enter: 400ms;
+  --transition-duration-enter: calc(var(--motion-base-enter) * var(--motion-scale));
+  --motion-base-emphasized: 500ms;
+  --transition-duration-emphasized: calc(var(--motion-base-emphasized) * var(--motion-scale));
 
   /* The menu uses the shared short/state clock. The arrow follows its panel;
      the anchored expansion pattern is independent of these global rates. */
-  --transition-duration-menu-enter: var(--transition-duration-standard);
-  --transition-duration-menu-exit: var(--transition-duration-state);
+  --transition-duration-menu-enter: calc(var(--motion-base-standard) * var(--motion-scale-overlay));
+  --transition-duration-menu-exit: calc(var(--motion-base-state) * var(--motion-scale-overlay));
   --ease-menu-enter: var(--ease-standard-decelerate);
   --ease-menu-exit: var(--ease-standard-accelerate);
 
@@ -1358,15 +1368,24 @@ body {
      with the shape sharing its damping ratio; the spring utilities below do that pairing.
      Scaling these is legitimate: normalised by settle time, a uniform clock scale is the same
      spring at a different speed. */
-  --duration-spring-fast-spatial: calc(137ms * var(--motion-scale)); /* ζ0.9 k1400 */
-  --duration-spring-default-spatial: calc(194ms * var(--motion-scale)); /* ζ0.9 k700  */
-  --duration-spring-slow-spatial: calc(296ms * var(--motion-scale)); /* ζ0.9 k300  */
-  --duration-spring-fast-effects: calc(108ms * var(--motion-scale)); /* ζ1.0 k3800 */
-  --duration-spring-default-effects: calc(166ms * var(--motion-scale)); /* ζ1.0 k1600 */
-  --duration-spring-slow-effects: calc(235ms * var(--motion-scale)); /* ζ1.0 k800  */
-  --duration-spring-expressive-fast-spatial: calc(221ms * var(--motion-scale)); /* ζ0.6 k800  */
-  --duration-spring-expressive-default-spatial: calc(326ms * var(--motion-scale)); /* ζ0.8 k380  */
-  --duration-spring-expressive-slow-spatial: calc(449ms * var(--motion-scale)); /* ζ0.8 k200  */
+  --motion-base-spring-fast-spatial: 137ms;
+  --duration-spring-fast-spatial: calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale)); /* ζ0.9 k1400 */
+  --motion-base-spring-default-spatial: 194ms;
+  --duration-spring-default-spatial: calc(var(--motion-base-spring-default-spatial) * var(--motion-scale)); /* ζ0.9 k700  */
+  --motion-base-spring-slow-spatial: 296ms;
+  --duration-spring-slow-spatial: calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale)); /* ζ0.9 k300  */
+  --motion-base-spring-fast-effects: 108ms;
+  --duration-spring-fast-effects: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale)); /* ζ1.0 k3800 */
+  --motion-base-spring-default-effects: 166ms;
+  --duration-spring-default-effects: calc(var(--motion-base-spring-default-effects) * var(--motion-scale)); /* ζ1.0 k1600 */
+  --motion-base-spring-slow-effects: 235ms;
+  --duration-spring-slow-effects: calc(var(--motion-base-spring-slow-effects) * var(--motion-scale)); /* ζ1.0 k800  */
+  --motion-base-spring-expressive-fast-spatial: 221ms;
+  --duration-spring-expressive-fast-spatial: calc(var(--motion-base-spring-expressive-fast-spatial) * var(--motion-scale)); /* ζ0.6 k800  */
+  --motion-base-spring-expressive-default-spatial: 326ms;
+  --duration-spring-expressive-default-spatial: calc(var(--motion-base-spring-expressive-default-spatial) * var(--motion-scale)); /* ζ0.8 k380  */
+  --motion-base-spring-expressive-slow-spatial: 449ms;
+  --duration-spring-expressive-slow-spatial: calc(var(--motion-base-spring-expressive-slow-spatial) * var(--motion-scale)); /* ζ0.8 k200  */
 
 
   /* What a bare transition utility gets when the call site names no curve. Tailwind's own
@@ -1381,7 +1400,7 @@ body {
      weak form the reveal component and the grid stagger take under the reduced tier.
      Deliberately not gated on the entrance preference — opening a picture is a gesture the
      user asked for, and suppressing it turned the tap into a hard cut. */
-  --animate-detail-arrive: detailArrive var(--transition-duration-enter) var(--ease-decelerate)
+  --animate-detail-arrive: detailArrive calc(var(--motion-base-enter) * var(--motion-scale-image)) var(--ease-decelerate)
     forwards;
   /* The 80ms backwards-filled hold is what makes a cold mount read like the
      scripted path (the cross-fade drives its own entrance and offsets it by the same 80ms;
@@ -1391,8 +1410,8 @@ body {
      blank page for 80ms. Does **not** go through the entrance preference: this keyframe
      serves a cold mount's own fade, the route cross-fade's incoming half and a pane swap, so
      no per-token answer is right for all three — the switch is read at the call sites. */
-  --animate-page-transition: pageIn calc(0.32s * var(--motion-scale)) var(--ease-decelerate)
-    calc(0.08s * var(--motion-scale)) both;
+  --animate-page-transition: pageIn calc(0.32s * var(--motion-scale-page)) var(--ease-decelerate)
+    calc(0.08s * var(--motion-scale-page)) both;
   /* 250ms on **standard**-decelerate: 200 was the *exit* step, and emphasized-decelerate
      covers 62% of its travel in the first tenth, so a 200ms pop was over in 14ms. This is a
      small utility entrance — the standard set's medium-1 pairing. */
@@ -1515,21 +1534,106 @@ html[data-os='windows'] {
  * the form of the motion, not its length.
  */
 :root {
-  --motion-scale: 1;
+  --motion-base-scale: 1;
+  --motion-scale: calc(var(--motion-base-scale) * var(--motion-enabled-feedback));
+  --motion-enabled-feedback: 1;
+  --motion-enabled-page: 1;
+  --motion-enabled-tabs: 1;
+  --motion-enabled-overlay: 1;
+  --motion-enabled-image: 1;
+  --motion-enabled-list: 1;
+  --motion-enabled-entrance: 1;
+  --motion-enabled-theme: 1;
+  --motion-enabled-scroll: 1;
+  --motion-enabled-ambient: 1;
+  --motion-ratio-page: 1;
+  --motion-scale-page: calc(var(--motion-base-scale) * var(--motion-ratio-page) * var(--motion-enabled-page));
+  --motion-ratio-tabs: 1;
+  --motion-scale-tabs: calc(var(--motion-base-scale) * var(--motion-ratio-tabs) * var(--motion-enabled-tabs));
+  --motion-ratio-overlay: 1;
+  --motion-scale-overlay: calc(var(--motion-base-scale) * var(--motion-ratio-overlay) * var(--motion-enabled-overlay));
+  --motion-ratio-image: 1;
+  --motion-scale-image: calc(var(--motion-base-scale) * var(--motion-ratio-image) * var(--motion-enabled-image));
+  --motion-ratio-list: 1;
+  --motion-scale-list: calc(var(--motion-base-scale) * var(--motion-ratio-list) * var(--motion-enabled-list));
+  --motion-ratio-entrance: 1;
+  --motion-scale-entrance: calc(var(--motion-base-scale) * var(--motion-ratio-entrance) * var(--motion-enabled-entrance));
+  --motion-ratio-theme: 1;
+  --motion-scale-theme: calc(var(--motion-base-scale) * var(--motion-ratio-theme) * var(--motion-enabled-theme));
+  --motion-ratio-scroll: 1;
+  --motion-scale-scroll: calc(var(--motion-base-scale) * var(--motion-ratio-scroll) * var(--motion-enabled-scroll));
+  --motion-ratio-ambient: 1;
+  --motion-scale-ambient: calc(var(--motion-base-scale) * var(--motion-ratio-ambient) * var(--motion-enabled-ambient));
 }
 
 html[data-motion-speed='fast'] {
-  --motion-scale: 0.7;
+  --motion-base-scale: 0.7;
 }
-
 html[data-motion-speed='slow'] {
-  --motion-scale: 1.4;
+  --motion-base-scale: 1.4;
+}
+html[data-motion-speed='custom'] {
+  --motion-base-scale: var(--motion-custom-feedback, 1);
+  --motion-ratio-page: calc(var(--motion-custom-page, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-tabs: calc(var(--motion-custom-tabs, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-overlay: calc(var(--motion-custom-overlay, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-image: calc(var(--motion-custom-image, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-list: calc(var(--motion-custom-list, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-entrance: calc(var(--motion-custom-entrance, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-theme: calc(var(--motion-custom-theme, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-scroll: calc(var(--motion-custom-scroll, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-ambient: calc(var(--motion-custom-ambient, 1) / var(--motion-custom-feedback, 1));
 }
 
-/* Zero, not animation-none: multiplying every duration by 0 lands each animation on its
-   own end state in the first frame. Comes last so it beats any stored speed. */
+/* Effects gate each clock independently; speed never re-enables a disabled category. */
+html[data-motion='custom'] {
+  --motion-enabled-feedback: var(--motion-custom-enabled-feedback, 1);
+  --motion-enabled-page: var(--motion-custom-enabled-page, 1);
+  --motion-enabled-tabs: var(--motion-custom-enabled-tabs, 1);
+  --motion-enabled-overlay: var(--motion-custom-enabled-overlay, 1);
+  --motion-enabled-image: var(--motion-custom-enabled-image, 1);
+  --motion-enabled-list: var(--motion-custom-enabled-list, 1);
+  --motion-enabled-entrance: var(--motion-custom-enabled-entrance, 1);
+  --motion-enabled-theme: var(--motion-custom-enabled-theme, 1);
+  --motion-enabled-scroll: var(--motion-custom-enabled-scroll, 1);
+  --motion-enabled-ambient: var(--motion-custom-enabled-ambient, 1);
+}
 html[data-motion='off'] {
-  --motion-scale: 0;
+  --motion-enabled-feedback: 0;
+  --motion-enabled-page: 0;
+  --motion-enabled-tabs: 0;
+  --motion-enabled-overlay: 0;
+  --motion-enabled-image: 0;
+  --motion-enabled-list: 0;
+  --motion-enabled-entrance: 0;
+  --motion-enabled-theme: 0;
+  --motion-enabled-scroll: 0;
+  --motion-enabled-ambient: 0;
+}
+
+/* The moving surface owns this scale. A drawer's controls keep their feedback clock. */
+@property --motion-spring-scale {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --motion-local-standard-spatial {
+  syntax: '*';
+  inherits: false;
+  initial-value: linear;
+}
+@property --motion-local-expressive-spatial {
+  syntax: '*';
+  inherits: false;
+  initial-value: linear;
+}
+@property --motion-local-expressive-spatial-fast {
+  syntax: '*';
+  inherits: false;
+  initial-value: linear;
+}
+[data-motion-spring='overlay'] {
+  --motion-spring-scale: var(--motion-scale-overlay);
 }
 
 /* --- Entrance animations -------------------------------------------------
@@ -1557,10 +1661,33 @@ html[data-motion='off'] {
  * every duration, call site and spring utility untouched. The specificity beats the root
  * declaration regardless of source order. The GSAP side does the same substitution in the
  * spring helper (`lib/motion.ts`); the rest of the tier is per-component at the call sites. */
-html[data-motion='reduced'] {
+html:is([data-motion='reduced'], [data-motion='custom'][data-motion-feedback='reduced']) {
   --ease-spring-standard-spatial: var(--ease-spring-effects);
   --ease-spring-expressive-spatial: var(--ease-spring-effects);
   --ease-spring-expressive-spatial-fast: var(--ease-spring-effects);
+}
+
+
+html[data-motion='custom'] [data-motion-category='ambient'] {
+  --ease-spring-standard-spatial: var(--motion-base-standard-spatial);
+  --ease-spring-expressive-spatial: var(--motion-base-expressive-spatial);
+  --ease-spring-expressive-spatial-fast: var(--motion-base-expressive-spatial-fast);
+}
+html[data-motion='custom'][data-motion-ambient='reduced'] [data-motion-category='ambient'] {
+  --ease-spring-standard-spatial: var(--ease-spring-effects);
+  --ease-spring-expressive-spatial: var(--ease-spring-effects);
+  --ease-spring-expressive-spatial-fast: var(--ease-spring-effects);
+}
+
+html[data-motion='custom'] [data-motion-spring='overlay'] {
+  --motion-local-standard-spatial: var(--motion-base-standard-spatial);
+  --motion-local-expressive-spatial: var(--motion-base-expressive-spatial);
+  --motion-local-expressive-spatial-fast: var(--motion-base-expressive-spatial-fast);
+}
+html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='overlay'] {
+  --motion-local-standard-spatial: var(--ease-spring-effects);
+  --motion-local-expressive-spatial: var(--ease-spring-effects);
+  --motion-local-expressive-spatial-fast: var(--ease-spring-effects);
 }
 
 /* --- Motion primitives --------------------------------------------------- */
@@ -1601,12 +1728,12 @@ html[data-motion='reduced'] {
   margin-top: -0.2314%;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--transition-duration-exit) var(--ease-accelerate);
+  transition: opacity calc(var(--motion-base-exit) * var(--logo-motion-scale, var(--motion-scale-ambient))) var(--ease-accelerate);
 }
 
 .logo-trace[data-shown] {
   opacity: 1;
-  transition: opacity var(--transition-duration-enter) var(--ease-decelerate);
+  transition: opacity calc(var(--motion-base-enter) * var(--logo-motion-scale, var(--motion-scale-ambient))) var(--ease-decelerate);
 }
 
 /* The hairline keeping the colour mark legible where its hues sit close to what is behind
@@ -1660,9 +1787,13 @@ html[data-motion='reduced'] {
  * antialiased renderings do not cancel at the rim (the trace's partial-alpha edge lets the base's
  * grey through as a halo, which reads as out-of-register but is pure antialiasing — a single
  * alternating red/blue pixel along the same edge — so there is nothing to nudge). */
+.logo-intro {
+  --logo-motion-scale: var(--motion-scale-entrance);
+}
+
 .logo-intro[data-settled] .logo-mask {
   opacity: 0;
-  transition: opacity var(--transition-duration-standard) var(--ease-standard);
+  transition: opacity calc(var(--motion-base-standard) * var(--motion-scale-entrance)) var(--ease-standard);
 }
 
 /* --- The splash: 入场动画's 阻塞 and 不阻塞 ------------------------------------
@@ -1687,9 +1818,9 @@ html[data-motion='reduced'] {
   display: none;
 }
 
-:where(html:not([data-entrance='off'])[data-motion='standard']) .app-splash {
+:where(html:not([data-entrance='off']):is([data-motion='standard'], [data-motion='custom'][data-motion-entrance='standard'])) .app-splash {
   display: flex;
-  animation: app-splash-lift var(--transition-duration-exit) var(--ease-emphasized-accelerate)
+  animation: app-splash-lift calc(var(--motion-base-exit) * var(--motion-scale-entrance)) var(--ease-emphasized-accelerate)
     var(--app-splash-deadline, 2500ms) forwards;
 }
 
@@ -1698,7 +1829,7 @@ html[data-motion='reduced'] {
 }
 
 .app-splash[data-leaving] {
-  animation: app-splash-leave var(--transition-duration-exit) var(--ease-emphasized-accelerate)
+  animation: app-splash-leave calc(var(--motion-base-exit) * var(--motion-scale-entrance)) var(--ease-emphasized-accelerate)
     forwards;
 }
 
@@ -1969,10 +2100,14 @@ html[data-motion='off'] {
   }
 }
 
+html[data-motion='custom'][data-motion-feedback='off'] .skeleton::after {
+  display: none;
+}
+
 /* The wave is created and faded by `spawnRipple` in both other tiers, so only the off tier
    hides it — under reduced a wave growing from the point of contact *is* basic press
    feedback. */
-html[data-motion='off'] .ripple {
+html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off']) .ripple {
   display: none;
 }
 
@@ -1980,7 +2115,7 @@ html[data-motion='off'] .ripple {
    never flags a transit; the snapshot declines further upstream); under reduced both run — the
    axis becomes a cross-fade — and the footer's hold-out is part of that, so this must not
    reach it. A placeholder's hold keeps the footer hidden here through its visibility. */
-html[data-motion='off'] .page-chrome {
+html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .page-chrome {
   opacity: 1;
   translate: none;
   transition: none;
@@ -2132,7 +2267,7 @@ html[data-motion='off'] .page-chrome {
 
    **Off only.** The reduced tier leaves all four at their own speed: they carry information
    rather than polish, and slowing them is a concession to "no motion", not to "simple motion". */
-html[data-motion='off'] {
+html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off']) {
   & .m3-progress-spin {
     animation-duration: 3.2s;
   }
@@ -2264,7 +2399,7 @@ html[data-motion='off'] {
   /* Through the token, so the lightbox's fades answer the animation preference with
      everything else. The library's two *loading* keyframes stay unscaled — they are an
      indeterminate progress indicator, which is the documented exception. */
-  --yarl__fade_animation_duration: var(--transition-duration-composite);
+  --yarl__fade_animation_duration: calc(var(--motion-base-composite) * var(--motion-scale-image));
   --yarl__fade_animation_timing_function: var(--ease-standard);
   --yarl__slide_icon_loading_color: var(--md-sys-color-on-media);
   --yarl__slide_icon_error_color: var(--md-sys-color-error-fill);
@@ -2350,7 +2485,7 @@ html[data-motion='off'] {
  * unchanged under reduced (a picture arriving from the side *is* the basic form). */
 .yarl__slide {
   transform-origin: var(--m3-lightbox-origin-x, 50%) var(--m3-lightbox-origin-y, 50%);
-  animation: m3-lightbox-in var(--transition-duration-enter) var(--ease-decelerate) backwards;
+  animation: m3-lightbox-in calc(var(--motion-base-enter) * var(--motion-scale-image)) var(--ease-decelerate) backwards;
 }
 
 @keyframes m3-lightbox-in {
@@ -3081,7 +3216,7 @@ html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detai
  * Keeping the flight out of the reduced tier is deliberate: it is the most expensive thing
  * the app does (measured 36fps on a machine that idles at 60), and the tier's audience is a
  * device that cannot afford it. */
-html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
+html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][data-motion-image='reduced'], [data-motion='custom'][data-motion-image='off']) .image-detail-route {
   animation: var(--animate-detail-arrive);
 }
 
@@ -3195,40 +3330,55 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * starts from rest, and a press is the impulse, so that motion has to begin at speed
  * (easing + duration table instead). */
 @utility spring-fast-spatial {
-  transition-timing-function: var(--ease-spring-standard-spatial);
-  transition-duration: var(--duration-spring-fast-spatial);
+  --motion-spring-scale: var(--motion-scale);
+  --motion-local-standard-spatial: var(--ease-spring-standard-spatial);
+  transition-timing-function: var(--motion-local-standard-spatial);
+  transition-duration: calc(var(--motion-base-spring-fast-spatial) * var(--motion-spring-scale));
 }
 @utility spring-default-spatial {
-  transition-timing-function: var(--ease-spring-standard-spatial);
-  transition-duration: var(--duration-spring-default-spatial);
+  --motion-spring-scale: var(--motion-scale);
+  --motion-local-standard-spatial: var(--ease-spring-standard-spatial);
+  transition-timing-function: var(--motion-local-standard-spatial);
+  transition-duration: calc(var(--motion-base-spring-default-spatial) * var(--motion-spring-scale));
 }
 @utility spring-slow-spatial {
-  transition-timing-function: var(--ease-spring-standard-spatial);
-  transition-duration: var(--duration-spring-slow-spatial);
+  --motion-spring-scale: var(--motion-scale);
+  --motion-local-standard-spatial: var(--ease-spring-standard-spatial);
+  transition-timing-function: var(--motion-local-standard-spatial);
+  transition-duration: calc(var(--motion-base-spring-slow-spatial) * var(--motion-spring-scale));
 }
 @utility spring-fast-effects {
+  --motion-spring-scale: var(--motion-scale);
   transition-timing-function: var(--ease-spring-effects);
-  transition-duration: var(--duration-spring-fast-effects);
+  transition-duration: calc(var(--motion-base-spring-fast-effects) * var(--motion-spring-scale));
 }
 @utility spring-default-effects {
+  --motion-spring-scale: var(--motion-scale);
   transition-timing-function: var(--ease-spring-effects);
-  transition-duration: var(--duration-spring-default-effects);
+  transition-duration: calc(var(--motion-base-spring-default-effects) * var(--motion-spring-scale));
 }
 @utility spring-slow-effects {
+  --motion-spring-scale: var(--motion-scale);
   transition-timing-function: var(--ease-spring-effects);
-  transition-duration: var(--duration-spring-slow-effects);
+  transition-duration: calc(var(--motion-base-spring-slow-effects) * var(--motion-spring-scale));
 }
 @utility spring-expressive-fast-spatial {
-  transition-timing-function: var(--ease-spring-expressive-spatial-fast);
-  transition-duration: var(--duration-spring-expressive-fast-spatial);
+  --motion-spring-scale: var(--motion-scale);
+  --motion-local-expressive-spatial-fast: var(--ease-spring-expressive-spatial-fast);
+  transition-timing-function: var(--motion-local-expressive-spatial-fast);
+  transition-duration: calc(var(--motion-base-spring-expressive-fast-spatial) * var(--motion-spring-scale));
 }
 @utility spring-expressive-default-spatial {
-  transition-timing-function: var(--ease-spring-expressive-spatial);
-  transition-duration: var(--duration-spring-expressive-default-spatial);
+  --motion-spring-scale: var(--motion-scale);
+  --motion-local-expressive-spatial: var(--ease-spring-expressive-spatial);
+  transition-timing-function: var(--motion-local-expressive-spatial);
+  transition-duration: calc(var(--motion-base-spring-expressive-default-spatial) * var(--motion-spring-scale));
 }
 @utility spring-expressive-slow-spatial {
-  transition-timing-function: var(--ease-spring-expressive-spatial);
-  transition-duration: var(--duration-spring-expressive-slow-spatial);
+  --motion-spring-scale: var(--motion-scale);
+  --motion-local-expressive-spatial: var(--ease-spring-expressive-spatial);
+  transition-timing-function: var(--motion-local-expressive-spatial);
+  transition-duration: calc(var(--motion-base-spring-expressive-slow-spatial) * var(--motion-spring-scale));
 }
 
 /* ---------------------------------------------------------------------------
@@ -4294,7 +4444,7 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 }
 
 /* The bar's travel is 16px, and the reduced tier's is 8px, as every travel there is. */
-html[data-motion='reduced'] [data-selection-travel][data-hidden] {
+html:is([data-motion='reduced'], [data-motion='custom'][data-motion-feedback='reduced']) [data-selection-travel][data-hidden] {
   translate: 0 0.5rem;
 }
 

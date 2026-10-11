@@ -60,7 +60,7 @@ export default class SizeSwap extends Component<SizeSwapProps> {
   private fade: Animation | null = null;
 
   getSnapshotBeforeUpdate(previous: SizeSwapProps): number | null {
-    if (previous.contentKey === this.props.contentKey || !this.node || motionTier() === 'off') return null;
+    if (previous.contentKey === this.props.contentKey || !this.node || motionTier('list') === 'off') return null;
     return this.node.getBoundingClientRect().height;
   }
 
@@ -74,7 +74,7 @@ export default class SizeSwap extends Component<SizeSwapProps> {
     if (Math.abs(end - start) >= 1) {
       node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
       const { grow = 'defaultSpatial', shrink = 'fastEffects' } = this.props;
-      const resize = node.animate([{ height: `${start}px` }, { height: `${end}px` }], springTiming(to > from ? grow : shrink));
+      const resize = node.animate([{ height: `${start}px` }, { height: `${end}px` }], springTiming(to > from ? grow : shrink, 'list'));
       const release = () => {
         if (this.resize !== resize) return;
         this.resize = null;
@@ -86,8 +86,8 @@ export default class SizeSwap extends Component<SizeSwapProps> {
     const content = node.firstElementChild;
     if (content instanceof HTMLElement) {
       this.fade = content.animate([{ opacity: 0 }, { opacity: 1 }], {
-        delay: scaledMs(PAGE_FADE_TIMING.delay * 1000),
-        duration: scaledMs(PAGE_FADE_TIMING.duration * 1000),
+        delay: scaledMs(PAGE_FADE_TIMING.delay * 1000, 'list'),
+        duration: scaledMs(PAGE_FADE_TIMING.duration * 1000, 'list'),
         easing: EASE.decelerate,
         fill: 'backwards',
       });

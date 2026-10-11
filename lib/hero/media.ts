@@ -121,7 +121,7 @@ export function warmImageHeroSource(
   /* Nothing to warm for a tier that cannot fly: no snapshot is registered, so the preview
      layer is not rendered and the bytes and canvas would have no consumer whatsoever — unless
      this is a viewer's neighbour, whose step paints this rung as its preview in every tier. */
-  if (!forStep && motionTier() !== 'standard') return;
+  if (!forStep && motionTier('image') !== 'standard') return;
   if (isVideoRecord(image)) return;
   const url = toCurrentImageLine(flightSourceFor(image));
   /* An animated source is excluded rather than captured: the flyer must start on the frame
@@ -278,7 +278,7 @@ export function canAnimateImageHero(snapshot: ImageHeroSnapshot) {
        Read through `motionTier()` rather than `matchMedia` directly: the tier is an
        attribute on `<html>`, already correct before the first paint, so this is a
        synchronous attribute lookup with no listener and no import cycle. */
-    motionTier() === 'standard' &&
+    motionTier('image') === 'standard' &&
     typeof HTMLElement !== 'undefined' &&
     typeof HTMLElement.prototype.animate === 'function' &&
     document.querySelector(HERO_GALLERY_ANCHOR_SELECTOR),

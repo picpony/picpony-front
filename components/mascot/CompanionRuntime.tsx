@@ -35,7 +35,7 @@ export default function CompanionRuntime() {
   const shown = useSyncedSetting('showMascot');
   const { token } = useSession();
   const { present, away } = useCompanionPresence();
-  const tier = useMotionTier();
+  const tier = useMotionTier('ambient');
   const { openAuth } = useAuthModal();
   const [host] = useState(() => getAppScroller() ?? document.body);
   const [chat, setChat] = useState<{ token: string; open: boolean } | null>(null);

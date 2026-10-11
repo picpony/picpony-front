@@ -163,7 +163,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
      settled toast. `components/Reveal.tsx` records the same choice. */
   useLayoutEffect(() => {
     const card = wrapRef.current?.firstElementChild as HTMLElement | null;
-    const tier = motionTier();
+    const tier = motionTier('overlay');
     if (!card || tier === 'off') return;
     /* A short drop from under the app bar, with the shared 8px travel under reduced
        motion. Only the arrival owns these frames. */
@@ -172,7 +172,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
         { transform: `translateY(${tier === 'reduced' ? -8 : -16}px)`, opacity: 0 },
         { transform: 'none', opacity: 1 },
       ],
-      { duration: scaledMs(DURATION.long * 1000), easing: EASE.decelerate, fill: 'backwards' },
+      { duration: scaledMs(DURATION.long * 1000, 'overlay'), easing: EASE.decelerate, fill: 'backwards' },
     );
     running.current.push(enter);
     // The ordinary styles are the resting pose; no layer stays promoted while it is read.
@@ -188,7 +188,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const card = wrap?.firstElementChild as HTMLElement | null;
     if (leaving.current) return;
     leaving.current = true;
-    if (!wrap || !card || motionTier() === 'off') {
+    if (!wrap || !card || motionTier('overlay') === 'off') {
       onGone(toast.id);
       return;
     }
@@ -197,7 +197,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const wrapHeight = wrap.offsetHeight;
     const pose = getComputedStyle(card);
     const from = { transform: pose.transform, opacity: pose.opacity };
-    const exitMs = scaledMs(DURATION.short * 1000);
+    const exitMs = scaledMs(DURATION.short * 1000, 'overlay');
     running.current.forEach((animation) => animation.cancel());
     const exit = card.animate([from, { transform: 'translateY(-8px)', opacity: 0 }], {
       duration: exitMs,
@@ -208,7 +208,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
        It begins 80ms into the fade so the stack closes up smoothly. */
     const collapse = wrap.animate([{ height: `${wrapHeight}px` }, { height: '0px' }], {
       duration: exitMs,
-      delay: scaledMs(80),
+      delay: scaledMs(80, 'overlay'),
       easing: EASE.accelerate,
       fill: 'forwards',
     });
@@ -225,7 +225,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
       return;
     }
     if (held) return;
-    const timer = setTimeout(leave, scaledMs(DURATION.long * 1000) + toast.duration);
+    const timer = setTimeout(leave, scaledMs(DURATION.long * 1000, 'overlay') + toast.duration);
     return () => clearTimeout(timer);
   }, [held, leave, toast.duration, toast.leaving, toast.version]);
 

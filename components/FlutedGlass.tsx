@@ -15,9 +15,8 @@ import {
 } from '@/lib/flutedGlass';
 import { FlutedGlassTrail } from '@/lib/flutedGlassTrail';
 import {
-  MOTION_SPEED_SCALE,
   useCustomSeed,
-  useMotionSpeed,
+  useMotionScale,
   useMotionTier,
   usePalette,
   useScheme,
@@ -418,7 +417,7 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
 
   /* Reactive, not a one-shot read: read once, the branch is decided at mount, and flipping
      the preference mid-session left the loop running. */
-  const tier = useMotionTier();
+  const tier = useMotionTier('ambient');
   const scheme = useScheme();
   /* Not read directly — they are here so the colours are read again when the palette moves:
      the plate samples the primary token through `getComputedStyle`, which no dependency
@@ -426,7 +425,7 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
      changes, so only its seed reports that its colour did. */
   const palette = usePalette();
   const customSeed = useCustomSeed();
-  const speed = useMotionSpeed();
+  const speed = useMotionScale('ambient');
 
   /* The live preferences, in refs, for a loop that outlives renders: changing the speed must
      not re-arm it and reset the phase, and a rebuilt plate starts from the current tier and
@@ -436,7 +435,7 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
   const tierRef = useRef(tier);
   const schemeRef = useRef(scheme);
   useEffect(() => {
-    scaleRef.current = MOTION_SPEED_SCALE[speed] ?? 1;
+    scaleRef.current = speed || 1;
   }, [speed]);
 
   /* The plate's whole life on one context: built once, then sized, coloured and scheduled. */

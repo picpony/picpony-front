@@ -10,7 +10,7 @@ import {
   motionScale,
   motionTier,
   useEntranceMotion,
-  useMotionSpeed,
+  useMotionScale,
   useMotionTier,
 } from '@/lib/appearance';
 import { loadLottiePlayer } from '@/lib/lottieAssets';
@@ -42,8 +42,8 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   /* Reactive, not one-shot: with the one-shot the branch below was decided at mount, so
      turning the preference on mid-session left the animation running until something
      else re-rendered the page. */
-  const tier = useMotionTier();
-  const speed = useMotionSpeed();
+  const tier = useMotionTier('ambient');
+  const speed = useMotionScale('ambient');
   const entrance = useEntranceMotion();
   const staticMark = tier !== 'standard' || !entrance;
   const [traceUnavailable, setTraceUnavailable] = useState(false);
@@ -68,7 +68,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
     let cancelled = false;
     loadTrace().then(([player, data]) => {
       if (
-        cancelled || !hostRef.current || motionTier() !== 'standard' || !entranceMotion()
+        cancelled || !hostRef.current || motionTier('ambient') !== 'standard' || !entranceMotion()
       ) return;
       animation = player.default.loadAnimation({
         container: hostRef.current,
@@ -78,7 +78,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
         animationData: data as object,
       });
       animationRef.current = animation;
-      animation.setSpeed(1 / motionScale());
+      animation.setSpeed(1 / motionScale('ambient'));
     }).catch(() => {
       if (!cancelled) setTraceUnavailable(true);
     });
@@ -90,7 +90,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   }, [staticMark]);
 
   useEffect(() => {
-    if (motionTier() === 'standard') animationRef.current?.setSpeed(1 / motionScale());
+    if (motionTier('ambient') === 'standard') animationRef.current?.setSpeed(1 / motionScale('ambient'));
   }, [speed]);
 
   /* Under the preference an *empty* box used to render: the effect returned before

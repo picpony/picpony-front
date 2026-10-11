@@ -448,7 +448,7 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   if (choreography === 'dismiss') {
     return buildDismissAnimations(overlay, floatingBack, surface, leg);
   }
-  const reduced = motionTier() !== 'standard';
+  const reduced = motionTier('image') !== 'standard';
   const fade = HERO_CONTAINER_FADE[direction];
   /* One table for the whole leg. The LRU in `progress.ts` keys on the model, so the mask, the
      fit, both fades, the staircase and the sink all get the same array for free. */
@@ -536,9 +536,9 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
               { opacity: 0, transform: pose },
             ],
         direction === 'forward'
-          ? { duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS)), easing: REVEAL_EASING }
+          ? { duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')), easing: REVEAL_EASING }
           : {
-              duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS)),
+              duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')),
               easing: HIDE_EASING,
             },
       ),
@@ -662,7 +662,7 @@ export class HeroMotion {
        at 缓慢 would be 250ms against a 280ms fade. Sample count stays safe across the range
        (350ms / 47 intervals = 7.45ms), and the reverse floor starts binding at 快速, which is
        what a floor is for. */
-    const duration = Math.round(HERO_DURATIONS[direction] * motionScale());
+    const duration = Math.round(HERO_DURATIONS[direction] * motionScale('image'));
     this.leg = createHeroLeg({
       from,
       to,
@@ -804,10 +804,10 @@ export class HeroMotion {
       /* Scaled with the product it floors. Absolute, it stopped flooring the *proportion* of
          the leg and became a wall-clock minimum: at 快速 the shortest reverse is 61ms, so an
          unscaled 90 would make a fast reversal *longer* than the same one at default speed. */
-      scaledMs(HERO_REVERSE_MIN_DURATION_MS),
+      scaledMs(HERO_REVERSE_MIN_DURATION_MS, 'image'),
       Math.round(
         HERO_DURATIONS[direction] *
-          motionScale() *
+          motionScale('image') *
           (HERO_REVERSE_BASE_RATIO + HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(ratio)),
       ),
     );
@@ -887,7 +887,7 @@ export class HeroMotion {
        than chosen: only a spring can be solved for a launch slope. The floor is scaled
        like everything else: "too short to sample" is a fraction of the flight's own clock,
        not a wall-clock figure. */
-    const duration = Math.max(scaledMs(FLIGHT_REBUILD_MIN_MS), previous.duration - pose.elapsed);
+    const duration = Math.max(scaledMs(FLIGHT_REBUILD_MIN_MS, 'image'), previous.duration - pose.elapsed);
     this.leg = createHeroLeg({
       from,
       to,
@@ -925,7 +925,7 @@ export class HeroMotion {
     if (!previous || !this.overlay || this.choreography === 'dismiss') return;
     settle(this.containerTracks, false);
     this.containerTracks = [];
-    if (motionTier() !== 'standard') return;
+    if (motionTier('image') !== 'standard') return;
 
     if (!this.clip || !this.unclip) return;
     const host = readRect(this.overlay);
@@ -1001,7 +1001,7 @@ export class HeroMotion {
    * duration scale. Deliberately not pushed into `visual`/`shared` — it has to outlive both
    * tracks — and safe uncancelled because `dispose()` detaches the layer it paints.
    */
-  fadeRetiring(duration = scaledMs(FLIGHT_RETIRE_MS)) {
+  fadeRetiring(duration = scaledMs(FLIGHT_RETIRE_MS, 'image')) {
 
     if (this.disposed) return Promise.resolve();
     try {
@@ -1108,7 +1108,7 @@ export class HeroMotion {
           this.clip &&
           this.unclip &&
           this.choreography !== 'dismiss' &&
-          motionTier() === 'standard'
+          motionTier('image') === 'standard'
         ) {
           this.containerTracks = buildContainerAnimations(
             { clip: this.clip, unclip: this.unclip, flightLayer: this.containedFlightLayer() },

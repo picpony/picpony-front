@@ -1,6 +1,7 @@
 'use client';
 
-import { MdBrightness6, MdPalette } from 'react-icons/md';
+import { useState } from 'react';
+import { MdBrightness6, MdPalette, MdTune } from 'react-icons/md';
 import Select from '@/components/Select';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import PaletteSwatches from '@/components/PaletteSwatches';
@@ -12,6 +13,8 @@ import {
   useMotionSetting,
   useMotionSpeed,
   useMotionTier,
+  useMotionMode,
+  useMotionEnabled,
   useScheme,
   useSchemeSetting,
   type ColorScheme,
@@ -19,7 +22,9 @@ import {
   type MotionSetting,
   type MotionSpeed,
 } from '@/lib/appearance';
-import { ROW_CLASS, SettingsRow, SettingsSection } from './SettingsRow';
+import { ROW_CLASS, RowButton, SettingsRow, SettingsSection } from './SettingsRow';
+import { MOTION_PRESETS, MOTION_EFFECTS } from '@/lib/motionPreferences';
+import { MotionSpeedDialog, MotionEffectsDialog } from './MotionPreferencesDialog';
 
 /** What each 入场动画 does, under the row. */
 const ENTRANCE_DESCRIPTIONS: Record<EntranceMode, string> = {
@@ -70,13 +75,16 @@ export function ModeAndMotionSection() {
   const followsSystem = schemeSetting === 'system';
   const motionSetting = useMotionSetting();
   const motionSpeed = useMotionSpeed();
-  const motionTier = useMotionTier();
+  const motionMode = useMotionMode();
+  const entranceTier = useMotionTier('entrance');
   const entrances = useSyncedSetting('introAnimation');
+  const [speedDialogOpen, setSpeedDialogOpen] = useState(false);
+  const [effectsDialogOpen, setEffectsDialogOpen] = useState(false);
 
   /* Speed applies to every tier that has a length: the tier decides the form, the speed decides
      the clock. Disabled rather than hidden when 动画效果 is off — a control that vanishes is a
      control the user has to rediscover. */
-  const speedAvailable = motionTier !== 'off';
+  const speedAvailable = useMotionEnabled();
 
   return (
     <SettingsSection title="模式与动画" icon={<MdBrightness6 size={ICON.control} />} subtitle="仅保存在本设备">
@@ -107,40 +115,50 @@ export function ModeAndMotionSection() {
         </div>
       </div>
 
-      {/* Three options, not four. 跟随系统 is gone from this list: the OS preference still decides
-          what an unset value resolves to, but the control shows the tier in force — a visitor
-          whose system asks for less motion sees 减弱动画 selected. */}
+      {/* An unset choice still follows the OS; the row shows the resolved tier or 自定义. */}
       <SettingsRow
         label="动画效果"
         action={
-          <Select
-            size="sm"
-            value={motionTier}
-            onChange={(v) => commitMotion(v as MotionSetting, motionSpeed)}
-            aria-label="动画效果"
-            options={[
-              { value: 'off', label: '关闭动画' },
-              { value: 'reduced', label: '减弱动画' },
-              { value: 'standard', label: '标准动画' },
-            ]}
-          />
+          <>
+            {motionMode === 'custom' && (
+              <RowButton label="配置动画效果" icon={<MdTune />} onClick={() => setEffectsDialogOpen(true)}>
+                配置
+              </RowButton>
+            )}
+            <Select
+              size="sm"
+              value={motionMode}
+              onChange={(v) => commitMotion(v as MotionSetting, motionSpeed)}
+              aria-label="动画效果"
+              options={[
+                ...MOTION_EFFECTS.map((option) => ({ ...option, label: `${option.label}动画` })),
+                { value: 'custom', label: '自定义' },
+              ]}
+            />
+          </>
         }
       />
       <SettingsRow
         label="动画速度"
         action={
-          <Select
-            size="sm"
-            value={motionSpeed}
-            disabled={!speedAvailable}
-            onChange={(v) => commitMotion(motionSetting, v as MotionSpeed)}
-            aria-label="动画速度"
-            options={[
-              { value: 'fast', label: '快速' },
-              { value: 'default', label: '默认' },
-              { value: 'slow', label: '缓慢' },
-            ]}
-          />
+          <>
+            {motionSpeed === 'custom' && (
+              <RowButton label="配置动画速度" icon={<MdTune />} disabled={!speedAvailable} onClick={() => setSpeedDialogOpen(true)}>
+                配置
+              </RowButton>
+            )}
+            <Select
+              size="sm"
+              value={motionSpeed}
+              disabled={!speedAvailable}
+              onChange={(v) => commitMotion(motionSetting, v as MotionSpeed)}
+              aria-label="动画速度"
+              options={[
+                ...MOTION_PRESETS,
+                { value: 'custom', label: '自定义' },
+              ]}
+            />
+          </>
         }
       />
       {/* The one row here that follows the account (the original front end's `introAnimationEnabled`,
@@ -160,7 +178,7 @@ export function ModeAndMotionSection() {
           <Select
             size="sm"
             value={entrances}
-            disabled={motionTier === 'off'}
+            disabled={entranceTier === 'off'}
             onChange={(value) => changeSyncedSetting('introAnimation', value)}
             aria-label="入场动画"
             options={[
@@ -171,6 +189,8 @@ export function ModeAndMotionSection() {
           />
         }
       />
+      <MotionSpeedDialog isOpen={speedDialogOpen} onClose={() => setSpeedDialogOpen(false)} />
+      <MotionEffectsDialog isOpen={effectsDialogOpen} onClose={() => setEffectsDialogOpen(false)} />
     </SettingsSection>
   );
 }

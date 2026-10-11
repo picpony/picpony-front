@@ -272,7 +272,7 @@ export default function Popover({
     const width = panel.offsetWidth;
     const height = panel.offsetHeight;
     if (width === 0 || height === 0) return;
-    const tier = motionTier();
+    const tier = motionTier('overlay');
     const morph = variant === 'menu' && tier === 'standard';
     let collapsed = 'none';
     if (morph) {
@@ -307,8 +307,8 @@ export default function Popover({
     if (fromOpacity === opacity && fromTransform === transform && fromContentOpacity === content.style.opacity) return;
     const menu = MENU_TRANSITION[open ? 'enter' : 'exit'];
     const timing = variant === 'search'
-      ? springTiming('fastEffects')
-      : { duration: scaledMs(menu.duration), easing: menu.easing };
+      ? springTiming('fastEffects', 'overlay')
+      : { duration: scaledMs(menu.duration, 'overlay'), easing: menu.easing };
     const from: Keyframe = { opacity: fromOpacity };
     const to: Keyframe = { opacity };
     if (fromTransform !== transform) {
@@ -317,7 +317,7 @@ export default function Popover({
     }
     const running = [panel.animate([from, to], { ...timing, fill: 'both' })];
     if (morph) {
-      const effects = springTiming('fastEffects');
+      const effects = springTiming('fastEffects', 'overlay');
       // Only hidden content waits for the surface to expand. A reversal with
       // visible text picks up its opacity immediately from the current frame.
       const delay = open && Number(fromContentOpacity) < 0.05

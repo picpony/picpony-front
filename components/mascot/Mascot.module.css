@@ -37,11 +37,11 @@
   transform: translateY(
     calc(-1 * max(0px, var(--app-bottom-chrome, 0px) + 4px - max(16px, env(safe-area-inset-bottom))))
   );
-  transition: transform var(--transition-duration-press) var(--ease-accelerate);
+  transition: transform calc(var(--motion-base-press) * var(--motion-scale-ambient)) var(--ease-accelerate);
 }
 
 :global(html[data-bottom-chrome]) .lift {
-  transition: transform calc(320ms * var(--motion-scale)) var(--ease-decelerate) calc(80ms * var(--motion-scale));
+  transition: transform calc(320ms * var(--motion-scale-ambient)) var(--ease-decelerate) calc(80ms * var(--motion-scale-ambient));
 }
 
 .stage {
@@ -52,8 +52,8 @@
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   transition:
-    opacity var(--duration-spring-default-effects) var(--ease-spring-effects),
-    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
     visibility 0s;
 }
 
@@ -63,13 +63,13 @@
   transform: translateY(16px);
   visibility: hidden;
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    transform var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    visibility 0s var(--duration-spring-fast-effects);
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    visibility 0s calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient));
 }
 
 /* The reduced tier keeps the fade and the weak form's 8px of travel. */
-:global(html[data-motion='reduced']) .stage[data-state='hidden'] {
+:global(html:is([data-motion='reduced'], [data-motion='custom'][data-motion-ambient='reduced'])) .stage[data-state='hidden'] {
   transform: translateY(8px);
 }
 
@@ -142,8 +142,8 @@
   transform-origin: 100% 100%;
   /* Opening: DefaultSpatial (the drawer's opening spring). */
   transition:
-    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial),
-    opacity var(--duration-spring-default-effects) var(--ease-spring-effects);
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
 /* Collapsed: the original's corner peek, given a plate — the character tucked into a round chip
@@ -152,7 +152,7 @@
    drawer's closing response; the figure travels into the plate's centre as it shrinks. */
 .collapsed .figure {
   transform: translate(var(--peek-x), var(--peek-y)) scale(var(--peek));
-  transition: transform var(--duration-spring-fast-effects) var(--ease-spring-effects);
+  transition: transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
 /* The plate: M3's FAB shape and elevation, on the quiet surface tone rather than a container
@@ -170,8 +170,8 @@
   opacity: 0;
   transform: scale(0.6);
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    transform var(--duration-spring-fast-effects) var(--ease-spring-effects);
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
 .plate::before {
@@ -181,15 +181,15 @@
   border-radius: inherit;
   background: currentColor;
   opacity: 0;
-  transition: opacity var(--transition-duration-state) var(--ease-standard);
+  transition: opacity calc(var(--motion-base-state) * var(--motion-scale-ambient)) var(--ease-standard);
 }
 
 .collapsed .plate {
   opacity: 1;
   transform: none;
   transition:
-    opacity var(--duration-spring-default-effects) var(--ease-spring-effects),
-    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial);
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial);
 }
 
 @media (hover: hover) {
@@ -225,8 +225,8 @@
 .pose {
   filter: drop-shadow(var(--md-sys-elevation-drop-2));
   transition:
-    transform var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial),
-    filter var(--duration-spring-fast-effects) var(--ease-spring-effects);
+    transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
+    filter calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -234,7 +234,7 @@
      character for a moment. The lift waits out that moment before it settles (`HOVER_GRACE_MS`),
      or every gap bobbed the figure down and up again. Only the settling waits. */
   .expanded .pose {
-    transition-delay: calc(150ms * var(--motion-scale));
+    transition-delay: calc(150ms * var(--motion-scale-ambient));
   }
 
   .expanded .control:hover .pose {
@@ -264,12 +264,12 @@
    delays and holds (`ToggleSwitch`'s reasoning); a finger's press waits for the tap timeout, and a
    tap too quick for it still squashes for its minimum (`MIN_PRESS_MS`). */
 .squash {
-  transition: transform var(--duration-spring-expressive-fast-spatial) var(--ease-spring-expressive-spatial-fast);
+  transition: transform calc(var(--motion-base-spring-expressive-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-expressive-spatial-fast);
 }
 
 .expanded[data-pressed] .squash {
   transform: scale(1.05, 0.93);
-  transition: transform var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial);
+  transition: transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial);
 }
 
 .art {
@@ -292,8 +292,8 @@
   transform: translateY(calc(-1 * var(--tools-lift, 0px)));
   pointer-events: auto;
   transition:
-    opacity var(--duration-spring-default-effects) var(--ease-spring-effects),
-    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
     visibility 0s;
 }
 
@@ -302,7 +302,7 @@
    leaves the figure, the grace a tooltip gives (WCAG 1.4.13). Revealed at once. */
 @media (hover: hover) and (pointer: fine) {
   .tools {
-    transition-delay: calc(240ms * var(--motion-scale));
+    transition-delay: calc(240ms * var(--motion-scale-ambient));
   }
 
   .expanded:hover .tools,
@@ -316,8 +316,8 @@
   visibility: hidden;
   pointer-events: none;
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    visibility 0s var(--duration-spring-fast-effects);
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    visibility 0s calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient));
 }
 
 /* Under a finger the control is always shown, and a bubble rising out of the head passes over its
@@ -330,8 +330,8 @@
     visibility: hidden;
     pointer-events: none;
     transition:
-      opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-      visibility 0s var(--duration-spring-fast-effects);
+      opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+      visibility 0s calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient));
   }
 }
 
@@ -349,8 +349,8 @@
   filter: var(--md-sys-elevation-filter-2);
   transform-origin: calc(100% - var(--bubble-tail, 64px)) calc(100% + 8px);
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    transform var(--duration-spring-default-spatial) var(--ease-spring-standard-spatial),
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
     visibility 0s;
 }
 
@@ -359,9 +359,9 @@
   transform: translateY(6px) scale(0.94);
   visibility: hidden;
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    transform var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    visibility 0s var(--duration-spring-fast-effects);
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    visibility 0s calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient));
 }
 
 /* The tail: a square of the bubble's own material turned 45°, its upper half inside the bubble,

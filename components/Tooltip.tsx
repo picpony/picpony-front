@@ -186,6 +186,7 @@ export function Tooltip({
         'spring-fast-effects transition-opacity',
         open ? 'opacity-100' : 'opacity-0',
       )}
+      data-motion-spring="overlay"
     >
       {label}
     </div>,

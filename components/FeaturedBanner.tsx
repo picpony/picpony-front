@@ -139,7 +139,7 @@ export default function FeaturedBanner({
   const spoilers = useSpoilerMatch(featured?.tags);
   const [revealed, setRevealed] = useState<number | null>(null);
   const covered = spoilers.length > 0 && revealed !== featured?.id;
-  const tier = useMotionTier();
+  const tier = useMotionTier('image');
   /* Decorative playback only at the standard tier and without Data Saver (R4-045). Not in the
      hydrating render: the server renders the still, like a device that asked for less. */
   const playAllowed = mounted && tier === 'standard' && !saveDataRequested();

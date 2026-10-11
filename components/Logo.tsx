@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { cn, runWhenIdle } from '@/lib/utils';
-import { motionScale, motionTier, useMotionSpeed, useMotionTier } from '@/lib/appearance';
+import { motionScale, motionTier, useMotionScale, useMotionTier } from '@/lib/appearance';
 import { loadLottiePlayer } from '@/lib/lottieAssets';
 
 interface LogoProps {
@@ -136,8 +136,8 @@ export default function Logo({
   const animationRef = useRef<{ kind: TraceKind; animation: TraceAnimation } | null>(null);
   const wantedRef = useRef(false);
   const generationRef = useRef(0);
-  const tier = useMotionTier();
-  const speed = useMotionSpeed();
+  const tier = useMotionTier(intro ? 'entrance' : 'ambient');
+  const speed = useMotionScale(intro ? 'entrance' : 'ambient');
   const traced = interactive || intro;
   /* In a ref so the splash's write-on does not restart when its parent re-renders with a new
      closure — that would replay the cut from frame 0. */
@@ -153,13 +153,13 @@ export default function Logo({
 
   /** The player for `kind`, created on demand; null when the tier or the node says no. */
   const ensure = useCallback(async (kind: TraceKind) => {
-    if (motionTier() !== 'standard' || !hostRef.current) return null;
+    if (motionTier(kind === 'intro' ? 'entrance' : 'ambient') !== 'standard' || !hostRef.current) return null;
     if (animationRef.current?.kind === kind) return animationRef.current.animation;
     const generation = generationRef.current;
     const [player, data] = await loadTrace(kind);
     const host = hostRef.current;
     // A second request may have resolved first, or the node may have gone.
-    if (!host || generation !== generationRef.current || motionTier() !== 'standard') return null;
+    if (!host || generation !== generationRef.current || motionTier(kind === 'intro' ? 'entrance' : 'ambient') !== 'standard') return null;
     if (animationRef.current?.kind === kind) return animationRef.current.animation;
     destroy();
     const animation = player.default.loadAnimation({
@@ -169,7 +169,7 @@ export default function Logo({
       autoplay: false,
       animationData: data as object,
     }) as unknown as TraceAnimation;
-    animation.setSpeed((kind === 'intro' ? INTRO_SPEED : 1) / motionScale());
+    animation.setSpeed((kind === 'intro' ? INTRO_SPEED : 1) / motionScale(kind === 'intro' ? 'entrance' : 'ambient'));
     animationRef.current = { kind, animation };
     return animation;
   }, [destroy]);
@@ -191,8 +191,8 @@ export default function Logo({
 
   useEffect(() => {
     const loaded = animationRef.current;
-    if (loaded && motionTier() === 'standard') {
-      loaded.animation.setSpeed((loaded.kind === 'intro' ? INTRO_SPEED : 1) / motionScale());
+    if (loaded && motionTier(loaded.kind === 'intro' ? 'entrance' : 'ambient') === 'standard') {
+      loaded.animation.setSpeed((loaded.kind === 'intro' ? INTRO_SPEED : 1) / motionScale(loaded.kind === 'intro' ? 'entrance' : 'ambient'));
     }
   }, [speed, tier]);
 
@@ -211,7 +211,7 @@ export default function Logo({
       settledRef.current?.(played);
     };
     const remaining = INTRO_LATEST_START_MS - sinceFirstByte();
-    if (motionTier() !== 'standard' || remaining <= 0) {
+    if (motionTier('entrance') !== 'standard' || remaining <= 0) {
       answer(false);
       return;
     }
@@ -244,21 +244,21 @@ export default function Logo({
      has to be instant, because the pointer is already there. Chunks only; the player is built
      on the first hover. */
   useEffect(() => {
-    if (!interactive || motionTier() !== 'standard' || !canHover()) return;
+    if (!interactive || motionTier('ambient') !== 'standard' || !canHover()) return;
     return runWhenIdle(() => void loadTrace('hover').catch(() => {}));
   }, [interactive, tier]);
 
   const onEnter = useCallback(() => {
     /* Standard only. The trace needs a 60KB player and six layers of trim paths rasterised
        per frame — exactly what the reduced tier's rule names. */
-    if (!interactive || motionTier() !== 'standard') return;
+    if (!interactive || motionTier('ambient') !== 'standard') return;
     wantedRef.current = true;
     hostRef.current?.setAttribute('data-shown', '');
     void ensure('hover').then((animation) => {
       // The pointer may have left while the chunk was in flight.
       if (
         animation && animationRef.current?.animation === animation && wantedRef.current &&
-        motionTier() === 'standard'
+        motionTier('ambient') === 'standard'
       ) animation.goToAndPlay(0, true);
     }).catch(() => {
       hostRef.current?.removeAttribute('data-shown');

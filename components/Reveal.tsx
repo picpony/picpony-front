@@ -66,7 +66,7 @@ export default function Reveal({
        so with the switch off there is nothing to reduce. Read once at mount —
        that is when the whole animation happens. */
     if (!root || !entranceMotion() || routeTransitActive(root)) return;
-    const tier = motionTier();
+    const tier = motionTier('entrance');
     if (tier === 'off') return;
 
     /* Reduced tier: half the rise (the same 8px the other entrances take), no
@@ -75,7 +75,7 @@ export default function Reveal({
     const rise = reduced ? distance / 2 : distance;
     const step = reduced ? 0 : stagger;
     /* `long`, the enters-the-screen duration. */
-    const duration = scaledMs(DURATION.long * 1000);
+    const duration = scaledMs(DURATION.long * 1000, 'entrance');
 
     const running = [...root.children].map((child, index) =>
       (child as HTMLElement).animate(
@@ -85,7 +85,7 @@ export default function Reveal({
         ],
         {
           duration,
-          delay: scaledMs((delay + index * step) * 1000),
+          delay: scaledMs((delay + index * step) * 1000, 'entrance'),
           easing: EASE.decelerate,
           /* `backwards`, so the start state holds through the delay — without
              it a staggered child sits at rest until its turn, then jumps. */

@@ -143,7 +143,7 @@ export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot |
   if (!layer) return null;
   /* Only `off` skips the snapshot: under `reduced` there is still a cross-fade (rise dropped,
      shared axis becomes a fade), and skipping here would take that away. */
-  if (motionTier() === 'off') return null;
+  if (motionTier('page') === 'off') return null;
   /* Nothing may be cloned that nothing can animate — a still frame with no tween to remove it
      is worse than no transition. The chunk warms after first paint, so this only bites on a
      navigation inside the first idle window of a cold load. */

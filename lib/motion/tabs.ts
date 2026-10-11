@@ -183,7 +183,7 @@ function runTabTransition(
   live?.finish();
   suspendFloor(panel);
 
-  const instant = motionTier() === 'off';
+  const instant = motionTier('tabs') === 'off';
   const scroller = getAppScroller();
 
   /* The one write before the reads: both panes get a box. They share one grid cell, so
@@ -226,7 +226,7 @@ function runTabTransition(
      cannot disagree about it. Planned here, among the reads, where the panes are already laid
      out; the arriving pane will sit `next − origin` higher once the offset is written. */
   let lean: LeanPlan | undefined;
-  if (scroller && !instant && panel.hasAttribute('data-tab-lean') && motionTier() === 'standard') {
+  if (scroller && !instant && panel.hasAttribute('data-tab-lean') && motionTier('tabs') === 'standard') {
     const view = scroller.getBoundingClientRect();
     if (
       !loadingInView(leaving, view.top, view.bottom, 0) &&
@@ -366,7 +366,7 @@ export function startTabTransition(from: string, to: string, direction: 1 | -1):
   /* Only `off` returns here: the switch then happens when the URL commits, through the
    * driver, with no run. `reduced` runs the transition, which cross-fades the panes
    * instead of sliding them — that branch is inside `playSharedAxis`. */
-  if (motionTier() === 'off') return;
+  if (motionTier('tabs') === 'off') return;
   runTabTransition(panel, from, to, direction);
 }
 

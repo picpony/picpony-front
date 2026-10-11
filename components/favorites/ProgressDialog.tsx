@@ -21,7 +21,7 @@ export { completeProgress, runSummary, type ProgressState } from './progressStat
  * animation's own number). Under 关闭 there is nothing to wait for.
  */
 export function progressLanding(): Promise<void> {
-  if (motionTier() === 'off') return Promise.resolve();
+  if (motionTier('overlay') === 'off') return Promise.resolve();
   return new Promise((resolve) => window.setTimeout(resolve, SPRING_MS.slowEffects * MOTION_SPEED_SCALE.slow));
 }
 

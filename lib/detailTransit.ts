@@ -72,7 +72,7 @@ function heroIdle(): boolean {
  * 减弱 and 关闭 nothing is recorded: the container transform is the standard tier's.
  */
 export function rememberDetailOrigin(id: number | string) {
-  if (motionTier() !== 'standard') return;
+  if (motionTier('image') !== 'standard') return;
   ensurePlay();
   origin = { id: String(id), at: performance.now() };
 }
@@ -93,7 +93,7 @@ export function findDetailOriginLink(id: number | string): HTMLElement | null {
 }
 
 function travel(): number {
-  return motionTier() === 'reduced' ? TRAVEL_PX.reduced : TRAVEL_PX.standard;
+  return motionTier('image') === 'reduced' ? TRAVEL_PX.reduced : TRAVEL_PX.standard;
 }
 
 function adopt(section: HTMLElement, entry: { stop: () => void; timer: number }): () => void {
@@ -120,7 +120,7 @@ export function playDetailEntrance(section: HTMLElement): () => void {
     return adopt(section, running);
   }
   /* 减弱 has its keyframe in globals.css; 关闭 is a cut. */
-  if (motionTier() !== 'standard' || !heroIdle()) return () => {};
+  if (motionTier('image') !== 'standard' || !heroIdle()) return () => {};
   const imageId = section.getAttribute('data-image-hero-route-id') ?? '';
   /* Not consumed by reading: the id and the TTL bound it; a close clears it. */
   const pressed = origin && origin.id === imageId && performance.now() - origin.at <= ORIGIN_TTL_MS;
@@ -132,7 +132,7 @@ export function playDetailEntrance(section: HTMLElement): () => void {
         { opacity: 0, transform: `translateY(${TRAVEL_PX.standard}px)` },
         { opacity: 1, transform: 'none' },
       ],
-      { duration: scaledMs(DURATION.long * 1000), easing: EASE.decelerate },
+      { duration: scaledMs(DURATION.long * 1000, 'image'), easing: EASE.decelerate },
     );
     stop = () => arrival.cancel();
   }
@@ -158,7 +158,7 @@ export interface DetailExitSnapshot {
  */
 export function captureDetailExit(): DetailExitSnapshot | null {
   origin = null;
-  if (motionTier() === 'off' || !heroIdle()) return null;
+  if (motionTier('image') === 'off' || !heroIdle()) return null;
   const section = document.querySelector<HTMLElement>('[data-image-detail-overlay]');
   const parent = section?.parentElement;
   if (!section || !parent || exited.has(section)) return null;
@@ -191,7 +191,7 @@ export function forgetDetailExit() {
  * quicker than arriving.
  */
 export function playDetailExit(exit: DetailExitSnapshot) {
-  const row = motionTier() === 'standard' && play ? findDetailOriginRow(exit.id) : null;
+  const row = motionTier('image') === 'standard' && play ? findDetailOriginRow(exit.id) : null;
   if (row && play && play.playDetailReturn(exit, row)) return;
   const node = exit.snapshot.node;
   node.inert = true;
@@ -205,7 +205,7 @@ export function playDetailExit(exit: DetailExitSnapshot) {
       { opacity: 1, transform: 'none' },
       { opacity: 0, transform: `translateY(${travel()}px)` },
     ],
-    { duration: scaledMs(DURATION.short * 1000), easing: EASE.accelerate, fill: 'forwards' },
+    { duration: scaledMs(DURATION.short * 1000, 'image'), easing: EASE.accelerate, fill: 'forwards' },
   );
   const remove = () => node.remove();
   leaving.finished.then(remove, remove);

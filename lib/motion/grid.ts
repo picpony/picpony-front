@@ -3,7 +3,7 @@
 'use no memo';
 
 import { useRef, type RefObject } from 'react';
-import { useEntranceMotion, useMotionTier } from '@/lib/appearance';
+import { motionRatio, useEntranceMotion, useMotionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { DURATION } from '@/lib/motionTokens';
 import { routeTransitActive } from '@/lib/pageTransit';
@@ -57,7 +57,7 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
 ): void {
   // Reactive: this re-runs on every page of results, so a preference changed
   // mid-session still has work to skip.
-  const tier = useMotionTier();
+  const tier = useMotionTier('entrance');
   const entrances = useEntranceMotion();
   /**
    * Once per mounted grid, not once per page of results. The cascade parks every
@@ -137,7 +137,7 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
             : { each: 0.035, from: 'start', amount: Math.min(ordered.length * 0.035, 0.9) },
           clearProps: 'opacity,visibility,transform',
         },
-      );
+      ).timeScale(1 / motionRatio('entrance'));
 
       // A transform on an ancestor shifts `getBoundingClientRect` for everything
       // under it, and the hero flight reads exactly that off a card the moment you

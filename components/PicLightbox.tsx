@@ -13,7 +13,7 @@ import type { ControllerRef, Slide, SlideshowRef } from 'yet-another-react-light
    open, and this module is the lazily loaded one. */
 import 'yet-another-react-lightbox/styles.css';
 import Spinner from '@/components/Spinner';
-import { MOTION_SPEED_SCALE, useMotionSpeed, useMotionTier } from '@/lib/appearance';
+import { useMotionScale } from '@/lib/appearance';
 import { DURATION, EASE } from '@/lib/motionTokens';
 import { useHistoryLayer } from '@/lib/historyLayers';
 
@@ -63,9 +63,7 @@ export default function PicLightbox({
   onSlideshowStart?: () => void;
   onSlideshowStop?: () => void;
 }) {
-  const tier = useMotionTier();
-  const speed = useMotionSpeed();
-  const scale = tier === 'off' ? 0 : MOTION_SPEED_SCALE[speed];
+  const scale = useMotionScale('image');
 
   /* Back closes the viewer and nothing under it (`lib/historyLayers.ts`). The library owns
      its exit: `close` is only called once its fade has finished, so a Back press asks the

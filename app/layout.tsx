@@ -16,6 +16,10 @@ import TagSubscriptionSync from '@/components/subscriptions/TagSubscriptionSync'
 import VisitorTracker from '@/components/VisitorTracker';
 import LegacySharedSearch from '@/app/search/LegacySharedSearch';
 import { COOKIE_KEYS } from '@/lib/constants';
+import {
+  MOTION_SPEEDS, formatMotionCustom, motionCustomBootScript, motionCustomStyle, parseMotionCustom,
+  formatMotionEffects, motionEffectsAttributes, motionEffectsStyle, parseMotionEffects,
+} from '@/lib/motionPreferences';
 import { CUSTOM_PALETTE, PALETTES } from '@/lib/generated/themeColors';
 import { deriveCustomThemeCached, paletteBlocksCss, paletteTones } from '@/lib/paletteRule';
 import { packTones, parseCustomSpec } from '@/lib/paletteSpec';
@@ -26,8 +30,7 @@ import { readMaintenance } from '@/lib/maintenance.server';
 /* Validation lists for the cookie reads below. Spelled out, not imported from
    `lib/appearance` — that module is client-only (it holds hooks), this is a server
    component. The types live there; these three strings are the whole overlap. */
-const MOTION_TIERS: readonly string[] = ['off', 'reduced', 'standard'];
-const MOTION_SPEEDS: readonly string[] = ['fast', 'default', 'slow'];
+const MOTION_TIERS: readonly string[] = ['off', 'reduced', 'standard', 'custom'];
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -164,9 +167,10 @@ d.classList.toggle('dark',k);
 var p=get('picpony_palette');if(!C[p])p='default';d.dataset.palette=p;
 if(get('picpony_palette_hues')==='mono')d.dataset.paletteHues='mono';else delete d.dataset.paletteHues;
 var m=get('picpony_motion');
-if(m!=='off'&&m!=='reduced'&&m!=='standard')m=q('(prefers-reduced-motion:reduce)')?'reduced':'standard';
+if(m!=='off'&&m!=='reduced'&&m!=='standard'&&m!=='custom')m=q('(prefers-reduced-motion:reduce)')?'reduced':'standard';
 d.dataset.motion=m;
-var v=get('picpony_motion_speed');d.dataset.motionSpeed=(v==='fast'||v==='slow')?v:'default';
+var v=get('picpony_motion_speed');d.dataset.motionSpeed=(v==='fast'||v==='slow'||v==='custom')?v:'default';
+${motionCustomBootScript}
 var e=get('picpony_entrance_motion');if(e==='off'||e==='blocking')d.dataset.entrance=e;else delete d.dataset.entrance;
 var P=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.userAgent||'';
 if(/Windows/i.test(P))d.dataset.os='windows';else delete d.dataset.os;
@@ -248,7 +252,12 @@ export default async function RootLayout({
   const imageLine = ssrImageLine(routePolicy, cookieStore.get(COOKIE_KEYS.imageLine)?.value);
   const motion = MOTION_TIERS.includes(motionCookie ?? '') ? motionCookie! : 'standard';
   const speedCookie = cookieStore.get(COOKIE_KEYS.motionSpeed)?.value;
-  const motionSpeed = MOTION_SPEEDS.includes(speedCookie ?? '') ? speedCookie! : 'default';
+  const motionSpeed = MOTION_SPEEDS.find((speed) => speed === speedCookie) ?? 'default';
+  const motionCustomCookie = cookieStore.get(COOKIE_KEYS.motionCustom)?.value;
+  const motionCustom = parseMotionCustom(motionCustomCookie);
+  const motionEffectsCookie = cookieStore.get(COOKIE_KEYS.motionEffects)?.value;
+  const motionEffects = parseMotionEffects(motionEffectsCookie);
+  const entranceTier = motion === 'custom' ? motionEffects.entrance : motion;
   /* 入场动画: only `off` and `blocking` are anything but the default, so a corrupt cookie means
      不阻塞 — the direction a default should fail in for something whose absence is the normal
      state, and the one that holds the page back least. */
@@ -271,6 +280,10 @@ export default async function RootLayout({
       data-palette-hues={mono ? 'mono' : undefined}
       data-motion={motion}
       data-motion-speed={motionSpeed}
+      data-motion-custom={motionCustomCookie ? formatMotionCustom(motionCustom) : undefined}
+      data-motion-effects={motionEffectsCookie ? formatMotionEffects(motionEffects) : undefined}
+      {...motionEffectsAttributes(motionEffects)}
+      style={{ ...motionCustomStyle(motionCustom), ...motionEffectsStyle(motionEffects) }}
       data-entrance={entrance}
       data-os={isWindows ? 'windows' : undefined}
       suppressHydrationWarning
@@ -342,7 +355,7 @@ export default async function RootLayout({
           scripting off (`SplashScreen`). Not over the maintenance screen: there is no app behind
           it to enter. */}
       <body className="h-full flex flex-col overflow-hidden">
-        {entrance !== 'off' && motion === 'standard' && !maintenanceLocked && <SplashScreen />}
+        {entrance !== 'off' && entranceTier === 'standard' && !maintenanceLocked && <SplashScreen />}
         <NextTopLoader
           /* Rides the chrome's bottom edge (`--app-chrome-bottom`, set in globals.css), where
              M3 puts a top app bar's linear indicator — and so below the dev banner and the

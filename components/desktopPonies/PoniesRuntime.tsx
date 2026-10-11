@@ -6,7 +6,7 @@ import { useResource, SKIP } from '@/lib/resource';
 import { ponyCatalog, myPonies, ponyConfigs } from '@/lib/desktopPonies/queries';
 import { cn, randomId } from '@/lib/utils';
 import { MEDIA } from '@/lib/constants';
-import { MOTION_SPEED_SCALE, motionScale, useMotionSpeed, subscribeAppearance } from '@/lib/appearance';
+import { motionScale, useMotionScale, subscribeAppearance } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { showToast } from '@/components/Toast';
 import type { PonyConfig } from '@/lib/api/desktopPonies';
@@ -94,7 +94,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
   const rects = useRef(new Map<string, Rect>());
   const tracked = useRef(new Set<string>());
   const [channel] = useState(randomId);
-  const speed = useMotionSpeed();
+  const speed = useMotionScale('ambient');
   const initialized = useRef(false);
   const warned = useRef(false);
   const gesture = useRef<{ pointerId: number; name: string; x: number; y: number; moved: boolean } | null>(null);
@@ -231,7 +231,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
         filter: style.getPropertyValue('--md-sys-elevation-filter-2'),
         font,
         tracking,
-        motion: motionScale(),
+        motion: motionScale('ambient'),
       };
     };
     const sendToFrame = (type: string, payload: Record<string, unknown> = {}) => target?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type, ...payload }, '*');
@@ -241,7 +241,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
         if (initialized.current) return; // the frame answers both its own load and the ping
         initialized.current = true;
         sent.current = JSON.stringify(current.current.map(config => config.name));
-        sendToFrame('init', { configs: current.current, speed: BASE_SPEED / MOTION_SPEED_SCALE[speed], theme: theme(), paused: pausedNow.current, stage: stage.current }); return;
+        sendToFrame('init', { configs: current.current, speed: BASE_SPEED / (speed || 1), theme: theme(), paused: pausedNow.current, stage: stage.current }); return;
       }
       if (event.data.channel !== channel) return;
       if (event.data.type === 'error' && !warned.current) { warned.current = true; showToast('桌面小马暂时无法加载，可在设置中重新选择', 'warning'); }
@@ -262,7 +262,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
   }, [channel, place, speed]);
 
   useEffect(() => {
-    if (initialized.current) frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type: 'speed', speed: BASE_SPEED / MOTION_SPEED_SCALE[speed] }, '*');
+    if (initialized.current) frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type: 'speed', speed: BASE_SPEED / (speed || 1) }, '*');
   }, [channel, speed]);
 
   /* Covered, the engine stops where it is and the layer fades on FastEffects; uncovered, it walks

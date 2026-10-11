@@ -58,7 +58,7 @@ export default class FollowHeight extends Component<FollowHeightProps> {
 
   getSnapshotBeforeUpdate(previous: FollowHeightProps): number | null {
     const node = this.node;
-    if (!node || motionTier() === 'off') return null;
+    if (!node || motionTier('list') === 'off') return null;
     if (this.props.watch !== undefined && Object.is(previous.watch, this.props.watch)) return null;
     /* Read with a running change included, then hold it in place of the animation. */
     const from = node.getBoundingClientRect().height;
@@ -74,7 +74,7 @@ export default class FollowHeight extends Component<FollowHeightProps> {
     const to = node.getBoundingClientRect().height;
     if (Math.abs(to - from) < 0.5) return;
     node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
-    const run = node.animate([{ height: `${from}px` }, { height: `${to}px` }], springTiming(this.props.spring ?? 'defaultEffects'));
+    const run = node.animate([{ height: `${from}px` }, { height: `${to}px` }], springTiming(this.props.spring ?? 'defaultEffects', 'list'));
     const release = () => {
       if (this.run !== run) return;
       this.run = null;

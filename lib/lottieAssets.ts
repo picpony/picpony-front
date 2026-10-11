@@ -24,6 +24,6 @@ export function loadSearchArtwork(): Promise<unknown> {
 
 /** A search gesture prepares the illustration before its route mounts. No eager player. */
 export function warmSearchArtwork() {
-  if (motionTier() !== 'standard') return;
+  if (motionTier('ambient') !== 'standard') return;
   void Promise.all([loadLottiePlayer(), loadSearchArtwork()]).catch(() => {});
 }

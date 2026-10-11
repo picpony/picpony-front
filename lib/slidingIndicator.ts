@@ -57,7 +57,7 @@ export function useSlidingIndicator<
         indicator.style.transform = `translateX(${toX}px)`;
       };
 
-      if (!placed.current || motionTier() === 'off') {
+      if (!placed.current || motionTier('tabs') === 'off') {
         running.current?.cancel();
         running.current = null;
         placed.current = true;
@@ -91,7 +91,7 @@ export function useSlidingIndicator<
                   { transform: `translateX(${fromX}px)`, width: `${fromWidth}px` },
                   { transform: `translateX(${toX}px)`, width: `${toWidth}px` },
                 ];
-        const animation = indicator.animate(keyframes, springTiming('defaultSpatial'));
+        const animation = indicator.animate(keyframes, springTiming('defaultSpatial', 'tabs'));
         running.current = animation;
         animation.finished
           .then(() => {

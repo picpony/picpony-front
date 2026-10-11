@@ -64,7 +64,7 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
      a fixed length would instead make the *speed* scale with distance, a whip-pan from the
      bottom of a long gallery and a crawl from near the top. The band keeps even a whole-page
      jump under about a second. There is deliberately no fixed-length escape hatch. */
-  const duration = scaledMs(clamp(280 * Math.sqrt(distance / 300), 360, 1100));
+  const duration = scaledMs(clamp(280 * Math.sqrt(distance / 300), 360, 1100), 'scroll');
 
   /* Scroll anchoring normally keeps the gallery steady as thumbnails decode above the
      viewport; during a deliberate programmatic scroll it fights us — the incoming page
@@ -126,7 +126,7 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
  */
 export function scrollAppToTop({ smooth = true }: { smooth?: boolean } = {}) {
   const scroller = getAppScroller();
-  const jump = !smooth || motionTier() === 'off';
+  const jump = !smooth || motionTier('scroll') === 'off';
 
   if (!scroller) {
     window.scrollTo(jump ? { top: 0 } : { top: 0, behavior: 'smooth' });
@@ -164,7 +164,7 @@ export function scrollAppToElement(
 ) {
   if (!target) return;
   const scroller = override ?? getAppScroller();
-  const jump = !smooth || motionTier() === 'off';
+  const jump = !smooth || motionTier('scroll') === 'off';
 
   if (!scroller) {
     const top = window.scrollY + target.getBoundingClientRect().top - offset;

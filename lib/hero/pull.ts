@@ -149,7 +149,7 @@ export class HeroPullSurface {
       return Promise.resolve();
     }
     const start = Math.max(0, sample.raw);
-    if (start < 0.5 || motionTier() === 'off') {
+    if (start < 0.5 || motionTier('image') === 'off') {
       this.reset();
       return Promise.resolve();
     }
@@ -159,7 +159,7 @@ export class HeroPullSurface {
        reaches it and the multiplication has to be here. The floor is scaled with it rather
        than left absolute: it exists to stop a flick from a near-closed position reading as a
        cut, which is a proportion of the gesture rather than a wall-clock minimum. */
-    const scale = motionScale();
+    const scale = motionScale('image');
     const duration = clamp(
       PULL_RELEASE_DURATION_MS * scale * Math.sqrt(start / DISMISS_DISTANCE_PX),
       PULL_RELEASE_MIN_DURATION_MS * scale,

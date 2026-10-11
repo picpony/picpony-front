@@ -56,7 +56,7 @@ const running = new WeakMap<HTMLElement, Animation[]>();
 const arrivals = new WeakMap<HTMLElement, Animation>();
 
 function stepTravel() {
-  const tier = motionTier();
+  const tier = motionTier('image');
   return tier === 'off' ? 0 : tier === 'reduced' ? REDUCED_STEP_TRAVEL_PX : STEP_TRAVEL_PX;
 }
 
@@ -140,8 +140,8 @@ function releasedKeyframes(
  */
 export function playStepExit(element: HTMLElement, direction: StepDirection, speed = 0): StepMotion {
   const pose = takePose(element);
-  if (motionTier() === 'off') return DONE;
-  const { duration, easing } = springTiming('fastEffects');
+  if (motionTier('image') === 'off') return DONE;
+  const { duration, easing } = springTiming('fastEffects', 'image');
   const along = speed * -direction;
   const distance = Math.max(stepTravel(), (Math.max(0, along) * duration) / 2);
   const to = pose.x - direction * distance;
@@ -168,9 +168,9 @@ export function playStepExit(element: HTMLElement, direction: StepDirection, spe
 /** The incoming half: in from the side the step points to, on the default spatial/effects pair. */
 export function playStepEnter(element: HTMLElement, direction: StepDirection): StepMotion {
   takePose(element);
-  if (motionTier() === 'off') return DONE;
-  const spatial = springTiming('defaultSpatial');
-  const effects = springTiming('defaultEffects');
+  if (motionTier('image') === 'off') return DONE;
+  const spatial = springTiming('defaultSpatial', 'image');
+  const effects = springTiming('defaultEffects', 'image');
   const slide = element.animate(
     [{ transform: translate(direction * stepTravel()) }, { transform: translate(0) }],
     { duration: spatial.duration, easing: spatial.easing },
@@ -192,11 +192,11 @@ export function playStepEnter(element: HTMLElement, direction: StepDirection): S
 export function playStepReturn(element: HTMLElement, speed = 0): StepMotion {
   const pose = takePose(element);
   element.style.opacity = '';
-  if (motionTier() === 'off') return DONE;
+  if (motionTier('image') === 'off') return DONE;
   const animations: Animation[] = [];
   if (Math.abs(pose.x) >= 0.5) {
-    const { duration } = springTiming('fastSpatial');
-    const base = motionTier() === 'reduced' ? EFFECTS_RESPONSE : SPATIAL_RESPONSE;
+    const { duration } = springTiming('fastSpatial', 'image');
+    const base = motionTier('image') === 'reduced' ? EFFECTS_RESPONSE : SPATIAL_RESPONSE;
     const along = pose.x > 0 ? -speed : speed;
     animations.push(
       element.animate(releasedKeyframes(pose.x, 0, along, duration, base), {
@@ -207,7 +207,7 @@ export function playStepReturn(element: HTMLElement, speed = 0): StepMotion {
   }
   let fade: Animation | null = null;
   if (pose.opacity < 0.99) {
-    const effects = springTiming('defaultEffects');
+    const effects = springTiming('defaultEffects', 'image');
     fade = element.animate([{ opacity: pose.opacity }, { opacity: 1 }], {
       duration: effects.duration,
       easing: effects.easing,

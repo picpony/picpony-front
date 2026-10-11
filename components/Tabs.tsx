@@ -156,7 +156,7 @@ export default function Tabs<T extends string = string>({
     if (!list) return;
     const tab = list.querySelector<HTMLElement>(`[data-tab="${CSS.escape(value)}"]`);
     if (tab) {
-      revealTab(list, tab, revealed.current && motionTier() !== 'off');
+      revealTab(list, tab, revealed.current && motionTier('tabs') !== 'off');
       revealed.current = true;
     }
     for (const button of list.querySelectorAll<HTMLElement>('[role="tab"]')) {
@@ -174,7 +174,7 @@ export default function Tabs<T extends string = string>({
     if (!tab) return;
     tab.focus();
     const list = containerRef.current;
-    if (list) revealTab(list, tab, motionTier() !== 'off');
+    if (list) revealTab(list, tab, motionTier('tabs') !== 'off');
   };
 
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {
@@ -250,7 +250,7 @@ export default function Tabs<T extends string = string>({
         onKeyDown={(event) => onKeyDown(event, index)}
         onFocus={(event) => {
           const list = containerRef.current;
-          if (list) revealTab(list, event.currentTarget, motionTier() !== 'off');
+          if (list) revealTab(list, event.currentTarget, motionTier('tabs') !== 'off');
         }}
         className={cn(
           'relative flex shrink-0 cursor-pointer items-center gap-2 spring-fast-effects transition-[color,background-color,box-shadow]',

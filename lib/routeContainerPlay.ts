@@ -47,7 +47,7 @@ export function crossFadeLayer(): HTMLElement | null {
 
 /** Whether a transform may ride this route change at all. */
 export function routePlayable(el: HTMLElement): boolean {
-  return motionTier() === 'standard' && routeTransitActive(el) && supportsLinearEasing();
+  return motionTier('page') === 'standard' && routeTransitActive(el) && supportsLinearEasing();
 }
 
 /** By the wall-clock rule: the slowest speed, the transform or the page fade, whichever ends later. */

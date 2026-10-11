@@ -1,4 +1,5 @@
 import { motionTier, scaledMs } from '@/lib/appearance';
+import type { MotionCategory } from '@/lib/motionPreferences';
 import { SPRINGS, SPRING_MS, springToLinear, type SpringName } from '@/lib/spring';
 
 /**
@@ -13,9 +14,9 @@ import { SPRINGS, SPRING_MS, springToLinear, type SpringName } from '@/lib/sprin
  * easing string falls back to `ease` silently. Both values come out of `lib/spring.ts`'s one
  * closed form — the same form that generates the CSS tables — so they cannot drift.
  */
-export function springTiming(name: SpringName): { duration: number; easing: string } {
-  const shape = motionTier() === 'reduced' ? (SPRING_EFFECTS_FOR[name] ?? name) : name;
-  return { duration: scaledMs(SPRING_MS[name]), easing: springToLinear(SPRINGS[shape]) };
+export function springTiming(name: SpringName, category: MotionCategory = 'feedback'): { duration: number; easing: string } {
+  const shape = motionTier(category) === 'reduced' ? (SPRING_EFFECTS_FOR[name] ?? name) : name;
+  return { duration: scaledMs(SPRING_MS[name], category), easing: springToLinear(SPRINGS[shape]) };
 }
 
 /**

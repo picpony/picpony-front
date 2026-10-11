@@ -5,17 +5,17 @@ import { useGSAP } from '@gsap/react';
 import { CustomEase } from 'gsap/CustomEase';
 import { Flip } from 'gsap/Flip';
 import { Observer } from 'gsap/Observer';
-import { motionTier, setMotionScaleListener } from '@/lib/appearance';
+import { motionRatio, motionTier, setMotionScaleListener } from '@/lib/appearance';
+import type { MotionCategory } from '@/lib/motionPreferences';
 import { DURATION, EASE } from '@/lib/motionTokens';
 import { SPRINGS, SPRING_DURATION, springEase, type SpringName } from '@/lib/spring';
 import { SPRING_EFFECTS_FOR } from '@/lib/springTiming';
 
 gsap.registerPlugin(useGSAP, CustomEase, Flip, Observer);
 
-/* One line reaches every GSAP tween in the app. `off` is *not* a scale of 0 —
- * `timeScale(0)` freezes every tween at its first frame, where `off` means the tween
- * should be over — so the scale is clamped here and the JS branches skip outright.
- * Registering also applies it once, so a cold load does not start at 1x. */
+/* The global clock carries feedback's speed, independently of its effect gate.
+ * Category springs/timelines compensate with motionRatio; an off category skips
+ * its animation. Registering applies it once, including on a cold custom load. */
 setMotionScaleListener((scale) => {
   gsap.globalTimeline.timeScale(scale > 0 ? 1 / scale : 1);
 });
@@ -70,9 +70,9 @@ export const SPRING = SPRING_DURATION;
  * critically damped, mirroring the CSS rule); the table lives in `lib/springTiming.ts`
  * so both renderers share it.
  */
-export function spring(name: SpringName): { duration: number; ease: string } {
-  const shape = motionTier() === 'reduced' ? (SPRING_EFFECTS_FOR[name] ?? name) : name;
-  return { duration: SPRING_DURATION[name], ease: `spring-${shape}` };
+export function spring(name: SpringName, category: MotionCategory = 'feedback'): { duration: number; ease: string } {
+  const shape = motionTier(category) === 'reduced' ? (SPRING_EFFECTS_FOR[name] ?? name) : name;
+  return { duration: SPRING_DURATION[name] * motionRatio(category), ease: `spring-${shape}` };
 }
 
 

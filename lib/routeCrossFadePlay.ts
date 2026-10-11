@@ -79,13 +79,13 @@ export function playRouteCrossFade(
        `handle.finish` is idempotent and the node is discarded at the next navigation. */
     page.addEventListener('pointerdown', () => handle.finish(), { capture: true });
     backLeaves?.animate([{ opacity: 1 }, { opacity: 0 }], {
-      duration: DURATION.press * 1000 * motionScale(),
+      duration: DURATION.press * 1000 * motionScale('page'),
       easing: EASE.accelerate,
       fill: 'forwards',
     });
     backArrives?.animate([{ opacity: 0 }, { opacity: 1 }], {
-      delay: PAGE_FADE_TIMING.delay * 1000 * motionScale(),
-      duration: PAGE_FADE_TIMING.duration * 1000 * motionScale(),
+      delay: PAGE_FADE_TIMING.delay * 1000 * motionScale('page'),
+      duration: PAGE_FADE_TIMING.duration * 1000 * motionScale('page'),
       easing: EASE.decelerate,
       fill: 'backwards',
     });
@@ -98,7 +98,7 @@ export function playRouteCrossFade(
   /* Reduced halves the outgoing leg's rise rather than removing it — 12px was never the
      performative part (the clone is), and a screen that leaves without moving at all reads as
      a cut with a fade on it. */
-  const rise = motionTier() === 'reduced' ? -8 : -12;
+  const rise = motionTier('page') === 'reduced' ? -8 : -12;
   timeline
     .set(snapshot.node, { willChange: 'transform, opacity' })
     /* The outgoing leg is the mirror of `pageIn`: it leaves upward over the full duration

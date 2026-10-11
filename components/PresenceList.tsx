@@ -202,7 +202,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
       return { entries, items: props.items, shape: shapeOf(entries), resetKey: props.resetKey, animate: false };
     }
     if (props.items === state.items) return null;
-    const keepLeavers = typeof document !== 'undefined' && motionTier() !== 'off';
+    const keepLeavers = typeof document !== 'undefined' && motionTier('list') !== 'off';
     const entries = merge(state.entries, props.items, props.getKey, keepLeavers);
     return { entries, items: props.items, shape: shapeOf(entries), animate: true };
   }
@@ -243,7 +243,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     if (!this.state.animate || previous.shape === this.state.shape || !this.container) return null;
     if (insideConcealedPane(this.container)) return { concealed: true };
     const focus = this.planFocus(previous);
-    if (motionTier() === 'off') {
+    if (motionTier('list') === 'off') {
       /* Nothing moves; but an entry that comes back while it is still pinned — the tier went off
          during its fade — is unpinned, or it stays an invisible, inert box in the list. */
       const back = previous.entries.some((entry) => entry.leaving && this.state.entries.some((now) => now.key === entry.key && !now.leaving));
@@ -375,7 +375,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     const now = new Map(movers.map((el) => [el, el.getBoundingClientRect()] as const));
 
     /* Writes: every move, every arrival, every departure. */
-    const move = springTiming(grid ? 'defaultSpatial' : 'defaultEffects');
+    const move = springTiming(grid ? 'defaultSpatial' : 'defaultEffects', 'list');
     for (const el of movers) {
       const was = rects.get(el);
       const is = now.get(el)!;
@@ -383,8 +383,8 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
       if (!was) {
         /* Arriving (an entry that was not there before; followers always have a snapshot). */
         if (key !== undefined && !before.has(key)) {
-          this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects')));
-          if (grid) this.track(el.animate([{ transform: 'scale(0.92)' }, { transform: 'none' }], springTiming('defaultSpatial')));
+          this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list')));
+          if (grid) this.track(el.animate([{ transform: 'scale(0.92)' }, { transform: 'none' }], springTiming('defaultSpatial', 'list')));
         }
         continue;
       }
@@ -399,7 +399,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
       const key = el.dataset.presenceKey ?? '';
       const fade = el.animate(
         grid ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.92)' }] : [{ opacity: 1 }, { opacity: 0 }],
-        { ...springTiming('fastEffects'), fill: 'forwards' },
+        { ...springTiming('fastEffects', 'list'), fill: 'forwards' },
       );
       this.track(fade);
       fade.finished.then(() => this.drop(key), () => {});
@@ -415,7 +415,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     }
     el.inert = false;
     animations.forEach((animation) => animation.cancel());
-    if (fade) this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects')));
+    if (fade) this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list')));
   }
 
   /** The entries' elements, in document order. */

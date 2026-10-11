@@ -269,7 +269,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
     let held = state.held;
     if (state.loading || !Object.is(props.listKey, state.listKey) || rows !== state.rows || status !== state.status) {
       const next = entriesOf(props, rows, status);
-      const keepLeavers = typeof document !== 'undefined' && motionTier() !== 'off';
+      const keepLeavers = typeof document !== 'undefined' && motionTier('list') !== 'off';
       if (state.loading || !Object.is(props.listKey, state.listKey) || disjoint(state.entries, next) || !keepLeavers) {
         entries = next;
         /* Rows that replace the list outright size their own tracks: nothing on screen is held. */
@@ -306,7 +306,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
 
   getSnapshotBeforeUpdate(_props: DataTableProps<T>, previous: State<T>): Snapshot {
     if (!this.state.animate || previous.shape === this.state.shape || !this.body || !this.root) return null;
-    if (motionTier() === 'off' || insideConcealedPane(this.root)) return { skip: true };
+    if (motionTier('list') === 'off' || insideConcealedPane(this.root)) return { skip: true };
     const view = window.innerHeight;
     /* What follows the table moves with its rows; what precedes it moves when the table shrinks at
        the end of the page and the browser clamps the scroll offset — carried down on the same clock
@@ -406,8 +406,8 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
     const held = new Map(frozen.map(({ el }) => [el, el.getBoundingClientRect()] as const));
 
     /* Writes: every glide, every arrival, every departure. */
-    const glide = springTiming('defaultEffects');
-    const fadeIn = springTiming('defaultEffects');
+    const glide = springTiming('defaultEffects', 'list');
+    const fadeIn = springTiming('defaultEffects', 'list');
     const arrived = new Set(this.state.entries.filter((entry) => !entry.leaving && !before.has(entry.key)).flatMap((entry) => groups.get(entry.key) ?? []));
     for (const el of movers) {
       const was = snapshot.rects.get(el);
@@ -422,7 +422,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
       this.track(startMove(el, [{ transform: `translateY(${dy}px)` }, { transform: 'none' }], glide));
     }
     for (const el of coming) el.animate([{ opacity: opacities.get(el) ?? '0' }, { opacity: 1 }], fadeIn);
-    const fadeOut = { ...springTiming('fastEffects'), fill: 'forwards' as const };
+    const fadeOut = { ...springTiming('fastEffects', 'list'), fill: 'forwards' as const };
     for (const { key, els } of leaving) {
       els.forEach((el, index) => {
         const was = snapshot.rects.get(el);

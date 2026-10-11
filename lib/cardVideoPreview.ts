@@ -9,7 +9,7 @@ function canPreview(video: HTMLVideoElement): boolean {
   return (
     video.isConnected &&
     document.visibilityState !== 'hidden' &&
-    motionTier() === 'standard' &&
+    motionTier('image') === 'standard' &&
     !saveDataRequested() &&
     getImageHeroRuntime().imageId === null &&
     !video.closest('[inert], [hidden], [data-tab-pane]:not([data-tab-pane-active])')

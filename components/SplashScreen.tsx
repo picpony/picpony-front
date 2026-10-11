@@ -34,7 +34,7 @@ const splash = { ended: false };
 if (
   typeof document !== 'undefined' &&
   document.documentElement.dataset.entrance !== 'off' &&
-  motionTier() === 'standard'
+  motionTier('entrance') === 'standard'
 ) {
   warmIntro();
 }
@@ -87,7 +87,7 @@ export default function SplashScreen() {
   /* Whether the mark writes itself on: under either mode that plays, at the standard tier. The
      server's defaults are exactly that, so the hydrating render agrees with the first byte. */
   const mode = useEntranceMode();
-  const tier = useMotionTier();
+  const tier = useMotionTier('entrance');
   const play = mode !== 'off' && tier === 'standard';
   const timers = useRef<number[]>([]);
   const leaving = useRef(false);
@@ -123,7 +123,7 @@ export default function SplashScreen() {
     const now = sinceFirstByte();
     const current = entranceMode();
     let cancelLoad = () => {};
-    if (current === 'off' || motionTier() !== 'standard' || now > STALE_AFTER_MS) {
+    if (current === 'off' || motionTier('entrance') !== 'standard' || now > STALE_AFTER_MS) {
       /* The stylesheet never painted it — storage disagreed with the cookie that rendered it — or
          this is not the cold load. */
       el.style.display = 'none';
