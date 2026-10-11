@@ -228,5 +228,7 @@ test('P5-F6: a read left started by a lost page is asked again; a write left sta
 
 test('P5-F7: the one synced row under 仅保存在本设备 says that it follows the account', () => {
   const text = source('app/settings/AppearanceSection.tsx');
-  assert.match(text, /label="入场动画"\s+description="此项随账号同步到你登录的设备"/);
+  /* A three-way select now (阻塞 / 不阻塞 / 关闭): the sync note is the row's own supporting line,
+     under the line that says what the chosen mode does. */
+  assert.match(text, /label="入场动画"\s+supporting=\{\s*<>[^]*?>此项随账号同步到你登录的设备<\/span>\s*<\/>\s*\}\s+action=/);
 });

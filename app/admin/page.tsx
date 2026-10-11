@@ -154,7 +154,7 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
     <ConsoleColumn ref={columnRef}>
       {/* `surface-container-low`, not `surface`: the app scroller behind this is itself
           `bg-surface`, so a panel of the same tone was a card the colour of the page it sits on.
-          Nothing inside needs clipping — the horizontal rail scrolls its own row. */}
+          Nothing inside needs clipping at rest — the horizontal rail scrolls its own row. */}
       <div className={`bg-surface-container-low rounded-md flex ${wide ? 'flex-row' : 'flex-col'}`}>
         <div className={wide ? 'w-48 shrink-0' : 'min-w-0 border-b border-outline-variant'}>
           <Tabs
@@ -168,7 +168,10 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
             tabs={offered.map((item) => ({ value: item.id, label: item.label, icon: item.icon }))}
           />
         </div>
-        <div className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}>
+        {/* The window a section switch slides past (`data-tab-window`): the panel's own region,
+            not the scroller — sliding the scroller's width swept the panes across the rail and out
+            past the card. The sections' own sub-tabs slide past it too. */}
+        <div data-tab-window="" className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}>
           <TabPanes value={shown}>
             {offered.map(({ id, component: Panel }) =>
               visited.has(id) ? (

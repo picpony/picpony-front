@@ -3,18 +3,21 @@
 /**
  * The six appearance preferences, and their only owner — the `LS_KEYS`/`COOKIE_KEYS`
  * mapping lives here: colour scheme, palette, 配色方案 (多色 / 单色), motion tier, motion speed,
- * entrance animations. One module because they are one concern with one shape: a stored setting
- * that may say "follow the system", a resolved value on `<html>` as an attribute or a class, a
- * cookie so the server puts it there before first paint, and a subscription so the app bar glyph
- * and /settings dropdowns cannot disagree. Four stay on the device — the scheme, the motion tier,
- * the speed and entrance motion describe the device, not the person (the original front end never
- * synced `darkMode`). The palette follows the account, as the original front end's `theme` did,
- * and 配色方案 and the custom palette's 副色相 travel with it — they are part of what "my theme"
- * means: `lib/settingsSync.ts` notices a new stored choice through this module's subscription and
- * writes it, and on sign-in commits the account's through `commitPalette` / `commitCustomPalette`
- * / `commitPaletteHues` — this module stays the only writer of the keys.
- * **Read the root, not the store:** `motionTier()`, `currentPalette()`
- * and `entranceMotion()` read the `<html>` attribute, not localStorage — that is what the CSS is
+ * entrance animations (阻塞 / 不阻塞 / 关闭). One module because they are one concern with one
+ * shape: a stored setting that may say "follow the system", a resolved value on `<html>` as an
+ * attribute or a class, a cookie so the server puts it there before first paint, and a
+ * subscription so the app bar glyph and /settings dropdowns cannot disagree. Three stay on the
+ * device — the scheme, the motion tier and the speed describe the device, not the person (the
+ * original front end never synced `darkMode`). The palette follows the account, as the original
+ * front end's `theme` did, and 配色方案 and the custom palette's 副色相 travel with it — they are
+ * part of what "my theme" means: `lib/settingsSync.ts` notices a new stored choice through this
+ * module's subscription and writes it, and on sign-in commits the account's through
+ * `commitPalette` / `commitCustomPalette` / `commitPaletteHues` — this module stays the only
+ * writer of the keys. 入场动画 follows the account too, as the original front end's
+ * `introAnimationEnabled` (its registry entry, in `lib/mascot/settings.ts`, commits through
+ * `commitEntranceMode`).
+ * **Read the root, not the store:** `motionTier()`, `currentPalette()`, `entranceMotion()`
+ * and `entranceMode()` read the `<html>` attribute, not localStorage — that is what the CSS is
  * keyed on and therefore what is in force; a stored setting may say `system`, an attribute never does.
  */
 
@@ -55,6 +58,16 @@ export type SchemeSetting = ColorScheme | 'system';
 export type MotionTier = 'off' | 'reduced' | 'standard';
 export type MotionSetting = MotionTier | 'system';
 export type MotionSpeed = 'fast' | 'default' | 'slow';
+
+/**
+ * 入场动画, three ways. `off` (关闭): the app volunteers no motion of its own. The other two play the
+ * entrances, and a cold load opens on the full-screen splash, the mark writing itself on in the
+ * middle of the screen (`SplashScreen`); they differ in what ends it. `non-blocking` (不阻塞, the
+ * default): the page — the splash leaves as soon as the page has loaded, mid-stroke if need be.
+ * `blocking` (阻塞): the mark — the page waits behind the splash until the signature has landed.
+ */
+export type EntranceMode = 'blocking' | 'non-blocking' | 'off';
+export const DEFAULT_ENTRANCE_MODE: EntranceMode = 'non-blocking';
 
 /**
  * The three speeds, as a multiplier on every duration — speed scales everything via `--motion-scale`
@@ -208,15 +221,24 @@ export function motionSpeed(): MotionSpeed {
 }
 
 /**
- * Whether an entrance may play — the `data-entrance` attribute, present only when the answer is no.
- * Separate from the tier: the tier bounds motion a gesture you asked for may use; this decides
- * whether the app volunteers any (results cascade, `Reveal`, the app bar mark's boot draw-on — motion that
- * happens *to* you). Every reader is a call site, not a token: a `--motion-entrance` multiplier
- * beside `--motion-scale` had to come out — two keyframes serve entrances and gestures at once
- * (see globals.css). Route changes, pane swaps, overlays, status feedback are the tier's business.
+ * Whether an entrance may play — false only when `data-entrance` says `off`. Separate from the
+ * tier: the tier bounds motion a gesture you asked for may use; this decides whether the app
+ * volunteers any (results cascade, `Reveal`, the cold load's signature — motion that happens *to*
+ * you). Every reader is a call site, not a token: a `--motion-entrance` multiplier beside
+ * `--motion-scale` had to come out — two keyframes serve entrances and gestures at once (see
+ * globals.css). Route changes, pane swaps, overlays, status feedback are the tier's business.
  */
 export function entranceMotion(): boolean {
   return root()?.dataset.entrance !== 'off';
+}
+
+/**
+ * Which 入场动画 is in force — the attribute, absent for the default (不阻塞). Only the splash asks
+ * this, for what ends it; everything else asks `entranceMotion()`.
+ */
+export function entranceMode(): EntranceMode {
+  const value = root()?.dataset.entrance;
+  return value === 'off' || value === 'blocking' ? value : 'non-blocking';
 }
 
 /**
@@ -326,15 +348,15 @@ export function applyMotion(tier: MotionTier, speed: MotionSpeed) {
   motionScaleListener?.(motionScale());
 }
 
-export function applyEntranceMotion(on: boolean) {
+export function applyEntranceMode(mode: EntranceMode) {
   const el = root();
   if (!el) return;
-  /* Present only when off, so "on" is the absence of an attribute and there is nothing to
-     write on the overwhelmingly common path. The cookie carries both values because the
-     server has to know which one to render. */
-  if (on) delete el.dataset.entrance;
-  else el.dataset.entrance = 'off';
-  writeCookie(COOKIE_KEYS.entranceMotion, on ? 'on' : 'off');
+  /* Absent for the default, so there is nothing to write on the overwhelmingly common path.
+     The cookie carries all three because the server has to know which one to render — under
+     `blocking` the splash is in the first byte. */
+  if (mode === 'non-blocking') delete el.dataset.entrance;
+  else el.dataset.entrance = mode;
+  writeCookie(COOKIE_KEYS.entranceMotion, mode);
 }
 
 /**
@@ -487,9 +509,9 @@ export function commitMotion(setting: MotionSetting, speed: MotionSpeed) {
   flushSync(emit);
 }
 
-export function commitEntranceMotion(on: boolean) {
-  writeStored(LS_KEYS.entranceMotion, on ? 'on' : 'off');
-  applyEntranceMotion(on);
+export function commitEntranceMode(mode: EntranceMode) {
+  writeStored(LS_KEYS.entranceMotion, mode);
+  applyEntranceMode(mode);
   flushSync(emit);
 }
 
@@ -516,6 +538,7 @@ export const usePaletteHues = () => useAppearance(currentPaletteHues, 'multi' as
 export const useMotionSetting = () => useAppearance(readMotionSetting, 'system' as MotionSetting);
 export const useMotionSpeed = () => useAppearance(motionSpeed, 'default' as MotionSpeed);
 export const useEntranceMotion = () => useAppearance(entranceMotion, true);
+export const useEntranceMode = () => useAppearance(entranceMode, DEFAULT_ENTRANCE_MODE);
 
 /**
  * The reactive tier, for the hook that keeps firing all session (`useStaggerGrid` re-runs on every

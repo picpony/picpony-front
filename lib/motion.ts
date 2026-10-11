@@ -1292,8 +1292,11 @@ export function playSharedAxis(opts: {
   /** +1 = moving forward; the outgoing side exits towards the negative end. */
   direction: 1 | -1;
   /** Width (or height) of the window the strip slides past, gap included. Defaults to
-   *  the scroller's own box plus `AXIS_GAP` — pass it when it was read before a write. */
+   *  the window's own box plus `AXIS_GAP` — pass it when it was read before a write. */
   distance?: number;
+  /** The window itself, clipped for the run: the app scroller unless the caller names a region
+   *  that bounds the panes (`[data-tab-window]`, see `runTabTransition`). */
+  view?: HTMLElement | null;
   /** Vertical compensation for a scroll restore, held by the outgoing pane for the run. */
   leavingOffsetY?: number;
   /** The blocks that lean (`leanPlan`, both panes). The standard tier on the x axis only:
@@ -1311,8 +1314,8 @@ export function playSharedAxis(opts: {
    * column of travel made the incoming page appear mid-page with the two pages edge
    * to edge and no plate; one *window* of travel fixes both — pages enter and leave
    * at the content-area edges, and each being centred in its own window, the side
-   * margins become the gap. */
-  const view = getAppScroller();
+   * margins become the gap. A caller whose panes live in a bounded region names it. */
+  const view = opts.view ?? getAppScroller();
   const distance =
     opts.distance ??
     (axis === 'x'
@@ -1781,7 +1784,13 @@ function runTabTransition(
    * along. There the offset is not touched at all (see `holdFloor`). The threshold is
    * the app bar's 64dp, the smallest chrome this design system treats as a region. */
   const mayRestore = scroller ? tabPanelTop(panel, scroller) <= TAB_SHARED_CHROME_PX : false;
-  const distance = (scroller?.clientWidth || panel.getBoundingClientRect().width) + AXIS_GAP;
+  /* The window the strip slides past: the scroller — or, for panes that live in a bounded region
+   * of the page (the admin console's panel, beside its rail inside one card), that region
+   * (`data-tab-window`). Sliding a scroller's width there swept the outgoing pane across the rail
+   * and out past the card, and brought the incoming one in over the page outside it; one region's
+   * width, clipped to the region, keeps both panes inside the box they belong to. */
+  const stripWindow = panel.closest<HTMLElement>('[data-tab-window]') ?? scroller;
+  const distance = (stripWindow?.clientWidth || panel.getBoundingClientRect().width) + AXIS_GAP;
   let next = origin;
   if (scroller && mayRestore) {
     /* No memory for the destination: on a screen whose panel *is* the page, the
@@ -1883,6 +1892,7 @@ function runTabTransition(
     entering,
     direction,
     distance,
+    view: stripWindow,
     leavingOffsetY: offsetY,
     lean,
     onSettle: land,

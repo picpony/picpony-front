@@ -1647,12 +1647,81 @@ html[data-motion='reduced'] {
   --logo-keyline: 2px;
 }
 
-/* Both cuts — the app bar's one-time boot signature and the hover trace — keep the base
-   underneath and fade back out to it: there is no frame in which the wordmark is missing. */
+/* The app bar's hover trace keeps the base underneath and fades back out to it: there is no frame
+   in which the wordmark is missing. */
 .logo-trace svg {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* The splash's mark is the exception. Once its trace has finished drawing it is opaque and stays,
+ * so the base under it has no job left — and leaving it is not free: two independently
+ * antialiased renderings do not cancel at the rim (the trace's partial-alpha edge lets the base's
+ * grey through as a halo, which reads as out-of-register but is pure antialiasing — a single
+ * alternating red/blue pixel along the same edge — so there is nothing to nudge). */
+.logo-intro[data-settled] .logo-mask {
+  opacity: 0;
+  transition: opacity var(--transition-duration-standard) var(--ease-standard);
+}
+
+/* --- The splash: 入场动画's 阻塞 and 不阻塞 ------------------------------------
+ *
+ * In the server's first byte unless the cookie says 关闭, and painted only while `<html>` agrees
+ * (`SplashScreen`): by first paint the pre-paint script has corrected both attributes from
+ * storage, so a stale cookie can render the splash and never show it. The standard tier only —
+ * 减弱 and 关闭 play no Lottie, and a splash with nothing to animate is only a page held back.
+ *
+ * **Its deadline is the stylesheet's, so it never waits on hydration.** Until the script arrives
+ * nothing but this lifts it: `app-splash-lift`, delayed by `--app-splash-deadline` (the component
+ * writes `INTRO_LATEST_START_MS` into it, so the two clocks cannot drift). A slow phone, a chunk
+ * that failed or scripting off see the page the server sent by then at the latest. A script in
+ * time takes it over (`data-held`) and leaves it (`data-leaving`) when the mark has landed under
+ * 阻塞, or as soon as the page has loaded under 不阻塞. Two keyframe names rather than one: the
+ * leave starts now, and an animation that keeps its name keeps its start time when its delay
+ * changes, which would put it at its end in one frame.
+ *
+ * Not hit-testable from the frame it starts to leave (`pointer-events` in the keyframes), and
+ * `visibility: hidden` once it has, so nothing is left to paint or to hit. */
+.app-splash {
+  display: none;
+}
+
+:where(html:not([data-entrance='off'])[data-motion='standard']) .app-splash {
+  display: flex;
+  animation: app-splash-lift var(--transition-duration-exit) var(--ease-emphasized-accelerate)
+    var(--app-splash-deadline, 2500ms) forwards;
+}
+
+.app-splash[data-held] {
+  animation: none;
+}
+
+.app-splash[data-leaving] {
+  animation: app-splash-leave var(--transition-duration-exit) var(--ease-emphasized-accelerate)
+    forwards;
+}
+
+@keyframes app-splash-lift {
+  from {
+    pointer-events: none;
+  }
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@keyframes app-splash-leave {
+  from {
+    pointer-events: none;
+  }
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
 
 /* Native-control fallback belongs in base. Unlayered transitions overrode the
@@ -2321,7 +2390,10 @@ html[data-motion='off'] {
 /* While a shared-axis run is in flight, the scroller is the window the two pages slide
  * past (see `playSharedAxis`, which sets and clears this). It must be the scroller and not
  * the panel: the panel is the centred column, and clipping there would have the incoming
- * page appear out of the middle of the page.
+ * page appear out of the middle of the page. The one exception is a tab panel that lives in
+ * a bounded region of the page — the admin console's panel, beside its rail in one card —
+ * which marks that region `data-tab-window`: the strip slides the region's width and is
+ * clipped here, so neither pane crosses the rail or leaves the card.
  *
  * Clip, not hidden overflow: hidden overflow-x beside visible overflow-y forces the visible
  * one to compute to auto, making a second scroll container. Scoped to a live run, since a
@@ -3960,6 +4032,9 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
      on the lightbox. Above the popover layer (with which it once tied, resolved by portal
      order) and above the viewer; never interactive, so nothing can be trapped under it. */
   --z-tooltip: 260;
+  /* 入场动画's 阻塞 splash outranks anything the app can put up — but not a toast: a failure
+     raised while the splash shows is the one message that must survive it. */
+  --z-splash: 300;
   --z-toast: 400;
 }
 
@@ -4000,6 +4075,9 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
    other three are consumed from CSS rules in this file. */
 @utility z-hero-stage {
   z-index: var(--z-hero-stage);
+}
+@utility z-splash {
+  z-index: var(--z-splash);
 }
 @utility z-toast {
   z-index: var(--z-toast);
