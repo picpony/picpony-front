@@ -200,7 +200,7 @@ And it has to be **assigned, not raised**: the check runs on every change of the
 
 `Badge` is a *mark* and `Chip` is a *control*. If it has no click handler and no dismiss cross, it is a `Badge`. A `Chip` with only `onRemove` (an input chip) renders its label as text and its cross as the one control, named `移除 {label}` by default — a row of crosses all called 移除 told a screen reader nothing.
 
-**There are two text fields, and the label decides which.** They share the tone vocabulary, 56dp form height and `.m3-field` shell. The outlined field keeps its 4dp corner; the filled field takes an 8dp corner, matching `Select`'s default field shape. The search bar is the separate pill shape. The softer filled boundary is a deliberate project refinement, not a new M3 token claim.
+**There are two text fields, and the label decides which.** They share the tone vocabulary, 56dp form height and `.m3-field` shell. The outlined field takes a 20dp corner (`--radius-xl`, against the token files' `CornerExtraSmall` for a text field); the filled field takes an 8dp corner, matching `Select`'s default field shape. The search bar is the separate pill shape. The softer filled boundary is a deliberate project refinement, not a new M3 token claim.
 
 A **labelled** field is a slot in a form: it has a name that has to survive being filled, and it gets M3's *outlined* field with the label floating into the outline. That is the whole point of the pattern: an empty field and a filled one stop being different objects — with a stacked label, a form of six empty fields is six blank boxes with captions floating between them, the caption belonging to the box below as close as the one above.
 
@@ -513,7 +513,8 @@ The step is decided by the role, never by eye:
 | Card, section surface, palette tile             | `rounded-md`   | 12dp  |
 | Square icon button (the back affordance)        | `rounded-md`   | 12dp  |
 | Chip, small tag                                 | `rounded-sm`   | 8dp   |
-| Outlined text field, colour swatch, one-time-code box | `rounded-xs` | 4dp |
+| Outlined text field (the `.m3-field` outline)   | `rounded-xl`   | 20dp  |
+| Colour swatch, one-time-code box                | `rounded-xs`   | 4dp   |
 | Filled text field, `Select shape="field"`       | `rounded-sm`   | 8dp   |
 | Menu / listbox row, ordinary autocomplete row   | `rounded-sm`   | 8dp   |
 | Menu, popover, ordinary autocomplete panel      | `rounded-lg`   | 16dp  |
@@ -539,7 +540,7 @@ A **chip is 8dp, not a pill.** This table used to say `rounded-full`, contradict
 
 `Select` matches its trigger's width. Its row's 8dp inline padding plus the panel's 8dp inset align labels with the trigger's 16dp inset. The trailing mark reserves a 20dp slot, like the trigger arrow, and draws a 16dp `CheckGlyph weight="light"` inside it; selection changes opacity without adding width. A command menu may be intrinsically wider than its trigger: `matchAnchorWidth={false}` centres it on the trigger, then clamps it within the viewport. Do not widen a `Select` menu independently to hide an alignment problem.
 
-**These corners are deliberate project refinements, not verbatim M3 component mappings.** The token sources still assign `CornerExtraSmall` to `MenuTokens.ContainerShape` and `OutlinedTextFieldTokens.ContainerShape`, and `CornerExtraSmallTop` to filled fields. The outlined field keeps 4dp; this app chooses 8dp filled fields and 16dp menus with inset rows for the rounder, coherent surface requested here. Search suggestions keep their separate 28dp / 20dp / 8dp geometry.
+**These corners are deliberate project refinements, not verbatim M3 component mappings.** The token sources still assign `CornerExtraSmall` to `MenuTokens.ContainerShape` and `OutlinedTextFieldTokens.ContainerShape`, and `CornerExtraSmallTop` to filled fields. The outlined field takes 20dp; this app chooses 8dp filled fields and 16dp menus with inset rows for the rounder, coherent surface requested here. Search suggestions keep their separate 28dp / 20dp / 8dp geometry.
 
 When citing what the specification says, **read the token file, not a summary table**, and distinguish it from these stated divergences. The generated `androidx.compose.material3.tokens` sources are fetchable —
 

@@ -3499,9 +3499,14 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 }
 
 /* The outline. A min-inline-size floor because a fieldset's UA default is min-content, which
-   would stop it ever being narrower than its legend. 4px is the token files' own step for a
-   text field (`CornerExtraSmall`); the lg size keeps its pill (`CornerFull`), genuinely a
-   different shape. */
+   would stop it ever being narrower than its legend. The corner is `--radius-xl` (20px), a
+   project divergence from the token files' own step for a text field (`CornerExtraSmall`);
+   the lg size keeps its pill (`CornerFull`), genuinely a different shape.
+   A 20px top-left arc reaches x≈14 before it meets the top edge, and the notch's hole starts
+   at `--field-lead` − 4 = 12 — so where a floated label sits, the arc is cut ~3px short of the
+   top line. The cut lands under the label's own ink and reads as the outline running into the
+   name; raising a labelled field's `--field-lead` to 20px would close it, and would move every
+   labelled value 4px right with it. */
 .m3-field > fieldset {
   position: absolute;
   inset: calc(var(--field-notch-h) / -2) 0 0;
@@ -3512,7 +3517,7 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   padding-inline: calc(var(--field-lead) - 0.25rem - var(--field-outline-width));
   min-inline-size: 0;
   border: var(--field-outline-width) solid var(--md-sys-color-outline);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-xl);
   pointer-events: none;
   transition-property: border-color;
   transition-duration: var(--duration-spring-fast-effects);

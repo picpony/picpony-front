@@ -20,9 +20,10 @@ import { cn } from '@/lib/utils';
  * outline — an empty field and a filled one stop being different objects. An
  * *unlabelled* field is not a form slot (search box, admin filter, composer); its
  * placeholder is its whole identity, so it gets the filled treatment: a tone
- * step, no border, no shadow. Outlined fields keep 4dp corners; filled fields
- * use 8dp, matching the default Select shape. Their ordinary 56dp box stays
- * shared. Geometry, notch and float live in `.m3-field`
+ * step, no border, no shadow. Outlined fields take the 20dp large corner
+ * (`--radius-xl`, a project divergence from the token files' text-field step);
+ * filled fields use 8dp, matching the default Select shape. Their ordinary 56dp
+ * box stays shared. Geometry, notch and float live in `.m3-field`
  * (globals.css), which turns on `:focus-within`/`:placeholder-shown` against a
  * *sibling* and a real `<legend>` to cut the notch.
  *
