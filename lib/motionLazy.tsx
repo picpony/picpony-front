@@ -16,12 +16,12 @@ import { applyInstantTabScroll, rememberTabScroll } from '@/lib/tabScroll';
 import type { DrawerSwipeOptions } from '@/lib/motion';
 
 /**
- * The four things the app shell asks of `lib/motion`, behind a dynamic import — `lib/motion.ts`
- * registers GSAP and five plugins at module scope and none of the four can run before the user
- * has done something, yet together they pulled the engine into the first document.
+ * The shell's motion operations behind a dynamic import. `lib/motion.ts` exports the owned
+ * implementations from `lib/motion/`; loading it registers the GSAP engine once and installs
+ * the theme, drawer, grid and tab behaviours together, at the existing idle boundary.
  *
- * **GSAP boundary:** the sanctioned lazy entry to the engine; nothing here may be statically
- * imported by a route — zero routes reach `lib/motion` in a first document.
+ * **GSAP boundary:** routes may import this facade; their static graphs must never reach
+ * `lib/motion.ts` or its implementation modules.
  *
  * **Nothing here awaits inside an event handler** — the rule this file exists to keep. An `await`
  * before `preventDefault()` loses the gesture; an `await` before a state write puts a frame of

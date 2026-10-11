@@ -34,7 +34,7 @@ import {
   userProfile,
   userUploads,
 } from '@/lib/resources';
-import { SUBSCRIPTION_PER_PAGE, tagFromSegment } from '@/components/subscriptions/href';
+import { SUBSCRIPTION_PER_PAGE, tagFromSegment } from '@/lib/subscriptionHref';
 
 /** The profile grid's page size, which the screen also declares. Kept in step by being small. */
 const PROFILE_PER_PAGE = 12;

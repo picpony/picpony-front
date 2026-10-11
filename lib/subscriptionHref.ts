@@ -1,6 +1,6 @@
 /**
  * A subscription's address — pure, so the notification parser (`app/messages/messageText.ts`) and
- * the route share it without either pulling in the resource layer.
+ * the route and prefetcher share it without pulling in components or the resource layer.
  *
  * One path segment per tag: `encodeURIComponent` carries any name through it, `/` and `%`
  * included. The router hands the segment back still percent-encoded (measured on this Next: both

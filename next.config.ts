@@ -45,8 +45,9 @@ const nextConfig: NextConfig = {
    * comparisons (`lib/resource.ts`'s `setRetained`, `AppLayout`'s drawer state) — a memoised
    * snapshot that changed identity for an unchanged value would loop. And `useGSAP`'s
    * `dependencies` is a runtime argument the compiler does not model while still memoising the
-   * values fed into it; `lib/motion.ts` and `components/Sheet.tsx` carry `'use no memo'` for the
-   * first release. `RouteCrossFade` is not a risk (a class component, untouched).
+   * values fed into it; `lib/motion/drawer.ts`, `lib/motion/grid.ts` and
+   * `components/Sheet.tsx` retain `'use no memo'`. `RouteCrossFade` is a class component,
+   * untouched by the compiler.
    *
    * Measured (`perf:metrics`, median of 9): a tab switch's script time −18%, a cold load +6% —
    * the usual memoisation shape, and the trade is taken. (A 5-sample run reported the cold

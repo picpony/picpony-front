@@ -1,6 +1,6 @@
 import { PONY_EMOJI, type PonyEmoji } from '@/lib/generated/emoji';
 import { parseShare, shareSummary } from '@/lib/api/messages';
-import { subscriptionHref } from '@/components/subscriptions/href';
+import { subscriptionHref } from '@/lib/subscriptionHref';
 import { getRawImageUrl } from '@/lib/imageLoader';
 
 /*

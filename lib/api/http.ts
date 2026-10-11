@@ -1,5 +1,6 @@
 import { PICPONY_API_BASE } from '@/lib/constants';
 import { clearUserInfo } from '@/lib/hooks';
+import { showToast } from '@/lib/toast';
 import { ApiError, FAILURE_MESSAGES, statusMessage, toApiError } from './errors';
 
 type QueryValue = string | number | boolean | undefined;
@@ -67,9 +68,7 @@ function expireSession(token: string) {
      `clearUserInfo` answering false also means somebody already did it — so the notice below
      is shown once per dead session, however many requests discover it. */
   if (!clearUserInfo(token)) return;
-  void import('@/components/Toast')
-    .then(({ showToast }) => showToast('登录已过期，请重新登录', 'warning'))
-    .catch(() => {});
+  showToast('登录已过期，请重新登录', 'warning');
 }
 
 /**

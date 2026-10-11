@@ -17,7 +17,7 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
-import { useSsrSpoilerTags } from '@/components/ImageLineProvider';
+import { useSsrSpoilerTags } from '@/lib/spoilerContext';
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 

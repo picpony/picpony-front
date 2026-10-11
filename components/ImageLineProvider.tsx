@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { ImageLine } from '@/lib/route';
+import { SpoilerTagsContext } from '@/lib/spoilerContext';
 
 /**
  * The image line the **server** used when it rendered this document's `<img>` tags.
@@ -52,8 +53,6 @@ export function ImageLineProvider({
  * hydrating pass; a spoiler cover has no ladder — `lib/spoilers.ts` answers from
  * `localStorage` once hydrated — and the hydrating render of every cover reads this.
  */
-const SpoilerTagsContext = createContext<readonly string[]>([]);
-
 export function SpoilerTagsProvider({
   value,
   children,
@@ -62,11 +61,6 @@ export function SpoilerTagsProvider({
   children: ReactNode;
 }) {
   return <SpoilerTagsContext.Provider value={value}>{children}</SpoilerTagsContext.Provider>;
-}
-
-/** The tags to assume on the first render, before the effect reads `localStorage`. */
-export function useSsrSpoilerTags(): readonly string[] {
-  return useContext(SpoilerTagsContext);
 }
 
 /**

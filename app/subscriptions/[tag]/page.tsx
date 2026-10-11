@@ -2,7 +2,7 @@
 
 import { use } from 'react';
 import { notFound } from 'next/navigation';
-import { tagFromSegment } from '@/components/subscriptions/href';
+import { tagFromSegment } from '@/lib/subscriptionHref';
 import SubscriptionView from '@/components/subscriptions/SubscriptionView';
 import { LS_KEYS } from '@/lib/constants';
 import { useStoredValue } from '@/lib/hooks';

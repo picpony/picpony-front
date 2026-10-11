@@ -28,7 +28,7 @@ import { useScreenStateFor } from '@/lib/screenState';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import { cn } from '@/lib/utils';
 import { findSubscription, markSubscriptionSeen } from './actions';
-import { SUBSCRIPTION_PER_PAGE, subscriptionPages } from './href';
+import { SUBSCRIPTION_PER_PAGE, subscriptionPages } from '@/lib/subscriptionHref';
 import NameFade from './NameFade';
 import SubscribeButton from './SubscribeButton';
 import { useTagNames } from './useTagNames';

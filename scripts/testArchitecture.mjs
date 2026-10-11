@@ -76,12 +76,51 @@ test('domain libraries do not import route implementations or the retired API ag
   assert.deepEqual(violations, []);
 });
 
+test('libraries do not depend on components except the viewer code warmup', () => {
+  const violations = [];
+  for (const [file, { edges }] of graph) {
+    if (!file.startsWith('lib/')) continue;
+    for (const edge of edges) {
+      if (!edge.target.startsWith('components/')) continue;
+      // This import deliberately preloads the destination's code on gallery intent.
+      // It never renders a component; replacing it with registration would add a
+      // mount-order requirement to the first press. Keep the exception exact.
+      if (file === 'lib/hero/media.ts' && edge.target === 'components/PicDetail.tsx' && edge.dynamic) continue;
+      violations.push(`${file}:${edge.line} -> ${edge.target}`);
+    }
+  }
+  assert.deepEqual(violations, []);
+});
+
+test('motion implementations depend only on their owned collaborators, never the public facade', () => {
+  const allowed = new Map([
+    ['lib/motion/engine.ts', []],
+    ['lib/motion/theme.ts', ['lib/motion/tabs.ts']],
+    ['lib/motion/drawer.ts', ['lib/motion/engine.ts']],
+    ['lib/motion/grid.ts', ['lib/motion/engine.ts']],
+    ['lib/motion/sharedAxis.ts', ['lib/motion/tabGeometry.ts']],
+    ['lib/motion/tabGeometry.ts', []],
+    ['lib/motion/tabs.ts', ['lib/motion/sharedAxis.ts', 'lib/motion/tabGeometry.ts']],
+  ]);
+  const violations = [];
+  for (const [file, { edges }] of graph) {
+    if (!file.startsWith('lib/motion/')) continue;
+    assert.ok(allowed.has(file), `declare the collaborators of ${file}`);
+    for (const { target, line } of edges) {
+      if ((target === 'lib/motion.ts' || target.startsWith('lib/motion/')) && !allowed.get(file).includes(target)) {
+        violations.push(`${file}:${line} -> ${target}`);
+      }
+    }
+  }
+  assert.deepEqual(violations, []);
+});
+
 test('the shared shell keeps motion, hero, Markdown, palette and admin code behind their boundaries', () => {
   const deferred = new Set([
     'lib/motion.ts', 'lib/hero/index.ts', 'lib/hero/controller.ts',
     'components/MarkdownDocument.tsx', 'components/AuthForms.tsx', 'lib/paletteRule.ts',
   ]);
-  const heavy = (file) => deferred.has(file) || /^lib\/api\/admin/.test(file) ||
+  const heavy = (file) => deferred.has(file) || file.startsWith('lib/motion/') || /^lib\/api\/admin/.test(file) ||
     /^(?:gsap|@gsap\/react|react-markdown|@material\/material-color-utilities)(?:\/|$)/.test(file);
   // All client roots installed by the server layout, not the server-only palette derivation.
   const shell = graph.get('app/layout.tsx').edges.filter((edge) => graph.get(edge.target)?.client);

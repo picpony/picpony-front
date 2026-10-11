@@ -1,5 +1,7 @@
 'use client';
 
+import { showToast } from '@/lib/toast';
+
 /**
  * Settings cloud sync: the account's copy of this app's preferences, adopted and written from
  * every screen — not only while /settings is open.
@@ -660,9 +662,7 @@ function appearanceMaybeChanged() {
 
 type Notifier = (message: string) => void;
 let notifier: Notifier = (message) => {
-  void import('@/components/Toast')
-    .then(({ showToast }) => showToast(message, 'warning'))
-    .catch(() => {});
+  showToast(message, 'warning');
 };
 
 /** One notice per run of failures — the settings screen also shows it where the change was made. */

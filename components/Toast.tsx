@@ -15,78 +15,20 @@ import { motionTier, scaledMs } from '@/lib/appearance';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 
-export type ToastType = 'success' | 'error' | 'info' | 'warning';
+import { subscribeToasts, type ToastListener, type ToastNotice, type ToastType } from '@/lib/toast';
 
-/** An explicit action — the only part of a toast that takes a tap (e.g. 撤销). */
-export interface ToastAction {
-  label: string;
-  onClick: () => void;
-}
+export { showToast } from '@/lib/toast';
+export type { ToastAction, ToastOptions, ToastType } from '@/lib/toast';
 
-export interface ToastOptions {
-  /** Reading time in ms. Defaults to the severity's own, lengthened for a long message. */
-  duration?: number;
-  action?: ToastAction;
-}
-
-interface ToastMessage {
-  id: number;
-  message: string;
-  type: ToastType;
-  duration: number;
-  action?: ToastAction;
+interface ToastMessage extends ToastNotice {
   /** Bumped when an identical toast is raised again: restarts its reading time. */
   version: number;
   /** Pushed out by a newer toast before its time was up. */
   leaving: boolean;
 }
 
-type ToastListener = (toast: Omit<ToastMessage, 'version' | 'leaving'>) => void;
-const listeners: ToastListener[] = [];
-/** Raised before the container subscribed (a first-commit effect anywhere in the tree). */
-const pending: Array<Omit<ToastMessage, 'version' | 'leaving'>> = [];
-
-let toastId = 0;
-
 /** At most this many on screen; a newer one sends the oldest away. */
 const MAX_VISIBLE = 3;
-/** M3's snackbar dwell runs 4–10s. A status report reads in four; a problem gets six. */
-const BASE_DWELL: Record<ToastType, number> = { success: 4000, info: 4000, warning: 6000, error: 6000 };
-/** Past twenty characters, each one buys this much more reading time, up to the cap. */
-const PER_CHARACTER_MS = 60;
-const MAX_DWELL = 10000;
-
-function dwellFor(message: string, type: ToastType) {
-  const extra = Math.max(0, Array.from(message).length - 20) * PER_CHARACTER_MS;
-  return Math.min(MAX_DWELL, BASE_DWELL[type] + extra);
-}
-
-/**
- * A transient status report. `options` may be a bare duration (the former signature).
- *
- *     showToast('已保存');
- *     showToast('邮箱地址无效', 'error');
- *     showToast('已删除', 'success', { action: { label: '撤销', onClick: undo } });
- */
-export const showToast = (
-  message: string,
-  type: ToastType = 'success',
-  options?: number | ToastOptions,
-) => {
-  const opts = typeof options === 'number' ? { duration: options } : (options ?? {});
-  const toast = {
-    id: ++toastId,
-    message,
-    type,
-    duration: opts.duration ?? dwellFor(message, type),
-    action: opts.action,
-  };
-  if (!listeners.length) {
-    pending.push(toast);
-    return;
-  }
-  listeners.forEach((listener) => listener(toast));
-};
 
 /* The four severities keep the colours this app has always used — green, red,
    blue, amber — but from the scheme-independent `*-fill` tokens rather than
@@ -168,13 +110,7 @@ export function ToastContainer() {
         });
       });
     };
-    listeners.push(listener);
-    // Anything raised before the container existed, in order.
-    for (const toast of pending.splice(0)) listener(toast);
-    return () => {
-      const index = listeners.indexOf(listener);
-      if (index > -1) listeners.splice(index, 1);
-    };
+    return subscribeToasts(listener);
   }, [mounted]);
 
   const handleGone = useCallback((id: number) => {

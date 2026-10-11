@@ -44,7 +44,7 @@ export function findSubscription(list: readonly TagSubscription[] | undefined, t
   return list?.find((entry) => normaliseTagName(entry.tagName) === wanted);
 }
 
-export { subscriptionHref, tagFromSegment } from './href';
+export { subscriptionHref, tagFromSegment } from '@/lib/subscriptionHref';
 
 /** Σ new pictures across the subscriptions — the drawer row's count. Nothing signed out. */
 export function useSubscriptionUpdates(): number {

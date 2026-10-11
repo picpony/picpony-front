@@ -30,6 +30,7 @@ globalThis.fetch = async () => { throw new Error('Unexpected request during init
 const errors = await import('../lib/api/errors.ts');
 const { ApiError, apiErrorMessage, isRetryable, isNotFound, isAborted, statusMessage, toApiError, FAILURE_MESSAGES } = errors;
 const http = await import('../lib/api/http.ts');
+const { subscribeToasts } = await import('../lib/toast.ts');
 const client = await import('../lib/api/client.ts');
 const derpi = await import('../lib/api/derpi.ts');
 const { balanceUserQuery, buildSearchQueryFrom } = await import('../lib/searchQuery.ts');
@@ -111,13 +112,19 @@ test('a read has a deadline, a write has none, and the caller’s abort is not a
   await assert.rejects(posting);
 });
 
-test('a 401 on get_user ends that session once; other actions confirm before signing anyone out', async () => {
+test('a 401 on get_user ends that session once; other actions confirm before signing anyone out', async (t) => {
+  const notices = [];
+  const stop = subscribeToasts((notice) => notices.push(notice));
+  t.after(stop);
   values.set(LS_KEYS.userInfo, JSON.stringify({ token: 'dead', username: 'pony' }));
   globalThis.fetch = async () => new Response(JSON.stringify({ error: null }), { status: 401 });
   await http.picponyRequest('get_user', { token: 'dead' });
   await flush();
   assert.equal(values.has(LS_KEYS.userInfo), false);
   assert.deepEqual(events, ['user_info_updated']);
+  assert.deepEqual(notices.map(({ message }) => message), ['登录已过期，请重新登录']);
+  await http.picponyRequest('get_user', { token: 'dead' });
+  assert.equal(notices.length, 1, 'concurrent or repeated failures announce one expiry');
 
   /* A newer login is never signed out by an older request's 401. */
   values.set(LS_KEYS.userInfo, JSON.stringify({ token: 'fresh', username: 'pony' }));
@@ -126,6 +133,7 @@ test('a 401 on get_user ends that session once; other actions confirm before sig
   await flush();
   assert.equal(JSON.parse(values.get(LS_KEYS.userInfo)).token, 'fresh');
   assert.deepEqual(events, []);
+  assert.equal(notices.length, 1, 'an old response cannot announce that a newer login expired');
 
   /* Another action's 401 is checked against get_user: a live session survives it. */
   const asked = [];
@@ -146,6 +154,7 @@ test('a 401 on get_user ends that session once; other actions confirm before sig
   await flush();
   await flush();
   assert.equal(values.has(LS_KEYS.userInfo), false, 'a confirmed dead session ends');
+  assert.equal(notices.length, 2, 'the confirmed expiry has its own report');
 });
 
 test('the Derpibooru ladder is bounded and keeps the last status when it runs out', async (t) => {
