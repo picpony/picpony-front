@@ -64,7 +64,7 @@ function RelayErrors({ token }: { token: string }) {
   if (read.data && !read.isPrevious && !read.isLoading && !read.error && args.page > read.data.totalPages) setArgs({ ...args, page: read.data.totalPages });
   return <div className="space-y-4">
     <div className="flex flex-wrap items-start gap-3">
-      <Select label="日志日期" value={args.date} options={[{ value: '', label: '全部日期' }, ...(read.data?.dates ?? []).map((date) => ({ value: date, label: date }))]} onChange={(date) => setArgs({ date, page: 1 })} />
+      <Select size="sm" aria-label="日志日期" value={args.date} options={[{ value: '', label: '全部日期' }, ...(read.data?.dates ?? []).map((date) => ({ value: date, label: date }))]} onChange={(date) => setArgs({ date, page: 1 })} />
       <RefreshButton onClick={read.refresh} label="刷新日志" loading={read.refreshing} />
     </div>
     <AdminNote>{read.data?.available === false ? '尚无错误日志。原站出现错误响应后会自动记录。' : '这里展示最近 5000 条原站错误记录。'}</AdminNote>

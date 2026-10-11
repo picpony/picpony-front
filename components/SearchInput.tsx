@@ -12,20 +12,21 @@ interface SearchInputProps
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  /** A compact toolbar filter, or a standalone 56dp search bar. */
+  variant?: 'filter' | 'search';
   /** Accessible name. Defaults to the placeholder — not a real label, but the
    *  text the sighted user sees is a better fallback than a generic one. */
   'aria-label'?: string;
 }
 
 /**
- * The filter field: a magnifier, a placeholder, and whatever you type applied
- * immediately. `size="sm"` (the 40dp dense step) is baked in rather than
- * offered, because every call site is a filter bar beside a 40dp dropdown and a
- * 32dp chip — the step is what this object *is*, not a per-site choice. A
- * search field that wants the 56dp box is a form slot and should use `Input`
- * directly.
+ * A magnifier, a placeholder, and a clear control. A toolbar's `filter` uses
+ * the 40dp dense field beside its dropdowns. A standalone `search` (finding a
+ * person in the share dialog) uses the 56dp pill and body-l text. The compact
+ * message rail keeps `filter`, matching its adjacent 40dp collapse control.
+ * Both are immediate actions, so neither borrows a form field's outlined label.
  *
- * **It clears itself.** A 32dp clear control sits in the dense field's trailing slot
+ * **It clears itself.** A 32/40dp clear control sits in the matching trailing slot
  * while there is text — the system's own, in place of the engine's cross (hidden in
  * globals.css: an off-token blue glyph with no hit area). Clearing keeps the caret in
  * the field, whether it was pressed or reached by Tab (it is gone once the field is
@@ -35,10 +36,11 @@ interface SearchInputProps
  * a combobox (`useCombobox`'s `inputProps`, a keyboard handler) can be this field too.
  */
 const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
-  { value, onChange, placeholder = '搜索…', className = '', 'aria-label': ariaLabel, ...rest },
+  { value, onChange, placeholder = '搜索…', className = '', variant = 'filter', 'aria-label': ariaLabel, ...rest },
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const search = variant === 'search';
   return (
     <Input
       {...rest}
@@ -48,8 +50,8 @@ const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function Sear
         else if (ref) ref.current = node;
       }}
       type="search"
-      size="sm"
-      icon={<MdSearch size={ICON.control} />}
+      size={search ? 'lg' : 'sm'}
+      icon={<MdSearch size={search ? ICON.standard : ICON.control} />}
       aria-label={ariaLabel ?? placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -58,7 +60,7 @@ const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function Sear
       trailing={
         value ? (
           <IconButton
-            size="sm"
+            size={search ? 'md' : 'sm'}
             dismiss
             aria-label="清除"
             icon={<MdClose />}

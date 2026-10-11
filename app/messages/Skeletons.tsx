@@ -30,7 +30,7 @@ export function ListRowsSkeleton({ rows = 3, badge = false }: { rows?: number; b
 }
 
 /**
- * Contact rows in the contact row's own box: 72dp, a 48dp portrait, a name line and a preview
+ * Contact rows in the contact row's own box: 64dp, a 40dp portrait, a name line and a preview
  * line. `flow` is the phone's list in the page (it holds the footer back like the lists above);
  * in the two-pane frame the rows sit in a fixed-height column and cannot move anything.
  */
@@ -38,8 +38,8 @@ export function ContactRowsSkeleton({ flow, faded }: { flow: boolean; faded?: bo
   return (
     <div data-page-loading={flow || undefined} className="flex flex-col gap-0.5" aria-hidden="true">
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="flex h-18 items-center gap-3 px-3">
-          <SkeletonCircle size={48} delay={i * 80} />
+        <div key={i} className="flex h-16 items-center gap-3 px-3">
+          <SkeletonCircle size={40} delay={i * 80} />
           <div className={cn('flex min-w-0 flex-1 flex-col gap-2', faded && 'opacity-0')}>
             <Skeleton className="h-4 w-3/4" delay={i * 80 + 40} />
             <Skeleton className="h-3 w-1/2" delay={i * 80 + 80} />

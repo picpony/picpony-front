@@ -197,9 +197,7 @@ export function NewFolderRow({
   return (
     <form id={formId} onSubmit={submit} noValidate className="mt-2 flex items-start gap-2">
       <Input
-        size="sm"
-        aria-label="新收藏夹名称"
-        placeholder="新收藏夹名称"
+        label="新收藏夹名称"
         value={name}
         error={error ?? undefined}
         readOnly={busy}
@@ -213,8 +211,10 @@ export function NewFolderRow({
       />
       <Button
         type="submit"
+        size="lg"
         variant="tonal"
         icon={<MdCreateNewFolder />}
+        responsiveLabel
         loading={busy}
         disabled={disabled || !name.trim()}
       >

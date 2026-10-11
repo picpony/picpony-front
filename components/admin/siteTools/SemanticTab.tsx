@@ -60,9 +60,9 @@ function Feedback({ token }: { token: string }) {
     <SectionHeading as="h3" id="admin-search-feedback-heading">搜索反馈</SectionHeading>
     <AdminForm aria-label="筛选搜索反馈" onSubmit={() => setFilter({ ...filter, q: search.trim(), page: 1 })}>
       <div className="flex flex-wrap items-start gap-3">
-        <Select label="反馈状态" value={filter.status} options={[{ value: 'new', label: '待处理' }, { value: 'archived', label: '已归档' }, { value: 'all', label: '全部' }]} onChange={(status) => setFilter({ ...filter, status, page: 1 })} />
+        <Select size="sm" aria-label="反馈状态" value={filter.status} options={[{ value: 'new', label: '待处理' }, { value: 'archived', label: '已归档' }, { value: 'all', label: '全部' }]} onChange={(status) => setFilter({ ...filter, status, page: 1 })} />
         <SearchInput value={search} onChange={setSearch} placeholder="搜索反馈…" className="sm:w-64" />
-        <Button type="submit" size="lg" variant="tonal">搜索</Button>
+        <Button type="submit" variant="surface">搜索</Button>
       </div>
     </AdminForm>
     <div className="flex flex-wrap items-center gap-4">

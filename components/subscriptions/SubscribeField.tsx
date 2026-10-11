@@ -113,6 +113,7 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
         <Input
           ref={inputRef}
           type="text"
+          size="lg"
           value={value}
           onChange={handleChange}
           placeholder="输入标签订阅，例如 rainbow dash"

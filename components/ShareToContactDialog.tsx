@@ -199,6 +199,7 @@ function ShareToContactDialog({
         <SharePreview target={target} />
         {token && (
           <SearchInput
+            variant="search"
             value={query}
             onChange={setQuery}
             placeholder="搜索联系人或用户"

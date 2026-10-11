@@ -3464,6 +3464,25 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   --field-trail: 0.75rem;
 }
 
+/* A form label shares the control's column, excluding the *actual* width of its
+   trailing actions. An absolutely positioned label in the old flex shell used
+   the entire field width, so a long name could run underneath 导入资料 or a pair
+   of password controls. Grid gives its containing block the right width without
+   measuring buttons or reserving a guessed number of pixels. Select's arrow is
+   inside its trigger, so that field keeps its existing inset instead. */
+.m3-field[data-labelled][data-trail]:not([data-trail='icon']) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.m3-field[data-labelled][data-trail]:not([data-trail='icon']) > :is(input, textarea, label) {
+  grid-area: 1 / 1;
+}
+
+.m3-field[data-labelled][data-trail]:not([data-trail='icon']) > .m3-field-trail {
+  grid-area: 1 / 2;
+}
+
 /* The control: a text input, a textarea, or — for the labelled `Select`, M3's exposed
    dropdown — the combobox button that stands where the input would. */
 .m3-field > input,
@@ -3592,8 +3611,19 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   border-radius: var(--radius-xl);
   pointer-events: none;
   transition-property: border-color;
-  transition-duration: var(--duration-spring-fast-effects);
+  transition-duration: var(--duration-spring-default-effects);
   transition-timing-function: var(--ease-spring-effects);
+}
+
+/* Keep both outlines' geometry fixed. A 1px → 2px border-width transition still
+   jumps at device-pixel boundaries; fading the 2px ink over the resting outline
+   makes the focus change continuous, without moving text or closing the notch.
+   The opacity transition reverses from its current value on a quick focus/blur. */
+.m3-field > fieldset[data-field-focus] {
+  --field-outline-width: 2px;
+  border-color: var(--md-sys-color-primary-ink);
+  opacity: 0;
+  transition-property: border-color, opacity;
 }
 
 /* ---------------------------------------------------------------------------
@@ -3603,7 +3633,7 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * — search box, admin filter, chat composer — is not a form slot: its placeholder is its
  * whole identity, and dressed as an outlined field it read as a form control with a missing
  * label. So it is *filled*: a tone step, no border, no shadow. Its 8dp corner matches
- * the default Select; the outlined field keeps 4dp. Their ordinary height stays 56dp.
+ * the default Select; the outlined field keeps 20dp. Their ordinary height stays 56dp.
  *
  * Two mechanical notes. The inset goes back to 0 — the negative top inset above exists
  * only to cancel the UA drawing the top border through the legend's centre, and there is no
@@ -3618,6 +3648,19 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   border-color: transparent;
   background-color: var(--md-sys-color-surface-container-highest);
   transition-property: background-color, box-shadow;
+}
+
+/* Filled fields have no resting outline. Their focus ring fades as a whole,
+   instead of growing a box-shadow from zero spread. DefaultEffects (166ms at
+   normal speed) keeps this state change visible and matches the outlined field. */
+.m3-field:not([data-labelled]) > fieldset::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--md-sys-color-focus);
+  opacity: 0;
+  transition: opacity var(--duration-spring-default-effects) var(--ease-spring-effects);
 }
 
 /* Hover is a **state layer**, not the next tone step — M3 never moves a field's container
@@ -3653,16 +3696,16 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   box-shadow: 0 0 0 2px var(--md-sys-color-error);
 }
 
-/* Last, so it wins over the invalid rule at equal specificity: a focus ring
-   answers "where is the keyboard", never "what is wrong". */
-.m3-field:not([data-labelled]):focus-within > fieldset {
-  box-shadow: 0 0 0 2px var(--md-sys-color-focus);
+/* Painted over the error ring: focus answers "where is the keyboard". On blur
+   it fades away to reveal the error state that still belongs to the field. */
+.m3-field:not([data-labelled]):focus-within > fieldset::after {
+  opacity: 1;
 }
 
 /* ---------------------------------------------------------------------------
  * lg size — M3's search bar. Unlabelled only; see the note in `Input.tsx`.
  *
- * A pill rather than the 12dp step, and the corner is why the controls inside need no
+ * A pill rather than the 8dp step, and the corner is why the controls inside need no
  * compensation: concentric corners want inner = outer − gap, and a centred pill inside a
  * pill satisfies that identically at every size. 9999px rather than a shape token because
  * that is the same step the full-rounded utility compiles to.
@@ -3733,9 +3776,7 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
  * in flow it needs no number at all: the control shrinks by exactly the slot's width,
  * because the slot refuses to shrink and the control's min-width allows it to.
  *
- * (Known limit, unfixed: the label's max-width reserves against the trail inset, so a
- * *labelled* field with a wide trailing control could let a long resting label run under it.
- * No such field exists today.)
+ * A labelled field uses the two grid columns above so its label also yields to the slot.
  */
 .m3-field > .m3-field-lead {
   position: absolute;
@@ -3837,8 +3878,8 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   }
 }
 
-.m3-field[data-labelled]:focus-within {
-  --field-outline-width: 2px;
+.m3-field[data-labelled]:focus-within > fieldset[data-field-focus] {
+  opacity: 1;
 }
 
 .m3-field[data-labelled]:focus-within > fieldset {

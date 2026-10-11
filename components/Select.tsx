@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { MdExpandMore } from 'react-icons/md';
 import CheckGlyph from './CheckGlyph';
+import { FieldLabel } from './Input';
 import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
@@ -327,14 +328,7 @@ export default function Select<T extends string = string>({
             {valueCell}
             {arrow}
           </button>
-          <label id={labelId} htmlFor={triggerId}>
-            {label}
-          </label>
-          <fieldset aria-hidden="true">
-            <legend>
-              <span>{label}</span>
-            </legend>
-          </fieldset>
+          <FieldLabel id={labelId} htmlFor={triggerId} label={label} />
         </div>
       ) : (
         <button

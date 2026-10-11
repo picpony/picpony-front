@@ -95,7 +95,7 @@ export default function UserSearchField({
             setQuery(value);
             setListOpen(value.trim() !== '');
           }}
-          placeholder="搜索用户，发起私信…"
+          placeholder="搜索用户…"
           aria-label="搜索用户"
           autoComplete="off"
           autoCorrect="off"

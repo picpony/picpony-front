@@ -50,10 +50,11 @@ interface ContactListProps {
  * springs per direction (`default-spatial` open, `fast-effects` closed), with every clock of the
  * gesture — width, the header's gap, the search box's width and grow, the labels' fade — on the
  * same one, because they are one movement. Nothing about a row's own layout changes: it keeps
- * its 72dp box and the rail narrows over it, clipping the text. The collapsed width is derived,
- * not chosen: the row's height plus the list's 8px inset either side (88), so the row comes out
- * square and its 48dp portrait centres itself at the row's 12px padding. Three numbers move
- * together — the rail's collapsed width, the row's height, the row's padding.
+ * its 64dp box and the rail narrows over it, clipping the text. The collapsed width is derived,
+ * not chosen: the row's height plus the list's 8px inset either side (80), so the row comes out
+ * square and its 40dp portrait centres itself at the row's 12px padding. This compact two-line
+ * row is a project refinement: the 40dp search and collapse control stay on one scale, and the
+ * contacts match the search results' portraits instead of dwarfing the field above them.
  */
 export default function ContactList({
   token,
@@ -74,7 +75,7 @@ export default function ContactList({
   const rows = (() => {
     if (data === undefined && error === undefined) return <ContactRowsSkeleton flow={!rail} faded={collapsed} />;
     if (data === undefined) {
-      /* Collapsed, the rail is 88px wide and a status block wraps to a column of two-character
+      /* Collapsed, the rail is 80px wide and a status block wraps to a column of two-character
          lines, so the state is the one control it is about: retry, named by the failure. */
       if (collapsed) {
         return (
@@ -133,18 +134,18 @@ export default function ContactList({
         rail && 'transition-[width]',
         rail && spring,
         /* One branch or the other, never both: `cn` is a plain join. */
-        rail ? (collapsed ? 'w-22' : 'w-72') : 'w-full',
+        rail ? (collapsed ? 'w-20' : 'w-72') : 'w-full',
       )}
     >
       <div
         className={cn(
-          'flex items-center gap-2',
+          'flex items-center',
           rail ? 'p-3' : 'pb-3',
           /* The gap is on the rail's clock and reaches 0 collapsed, or the toggle cannot end up
-             centred in the 88px rail. */
+             centred in the 80px rail. */
           rail && 'transition-[gap]',
           rail && spring,
-          collapsed && 'gap-0',
+          collapsed ? 'gap-0' : 'gap-2',
         )}
       >
         {/* Kept mounted and faded rather than unmounted while the rail collapses — pulled out
@@ -213,17 +214,16 @@ function ContactRow({
         aria-current={active ? 'true' : undefined}
         aria-label={name}
         data-ripple=""
-        /* **72dp at every density** (`ItemTwoLineContainerHeight`), a pill like the drawer's
-           rows, the state layer for hover and press and the container pair for the one that is
-           open — "selected" and "hovered" must not look alike. */
+        /* 64dp at every density: a compact two-line row with a 40dp portrait and 12dp insets.
+           The state layer answers hover and press; the container pair marks the open contact. */
         className={cn(
-          'flex h-18 w-full cursor-pointer items-center gap-3 overflow-hidden rounded-full px-3 text-left',
+          'flex h-16 w-full cursor-pointer items-center gap-3 overflow-hidden rounded-full px-3 text-left',
           'transition-ui focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
           active ? 'forced-selected bg-secondary-container text-on-secondary-container' : 'state-layer text-on-surface',
         )}
       >
         <span className="relative shrink-0">
-          <Avatar src={contact.avatar} name={contact.username} size={48} />
+          <Avatar src={contact.avatar} name={contact.username} size={40} />
           <span className="absolute -top-0.5 -right-0.5">
             <CountBadge count={unread} label={`${unread} 条未读`} />
           </span>

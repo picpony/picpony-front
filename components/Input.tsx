@@ -63,8 +63,8 @@ const BARE_HEIGHT = 'h-14';
 const DENSE_HEIGHT = 'h-10';
 /**
  * `size="lg"` — M3's *search bar* (`SearchBarTokens`): the same 56dp, but fully
- * rounded rather than the ordinary filled field's 8dp. Exists for the one field
- * on /search that is the point of the page. The pill also makes the
+ * rounded rather than the ordinary filled field's 8dp. Used for standalone search
+ * and single-action bars, including tag subscription. The pill makes the
  * buttons inside it work: a centred pill inside a pill is concentric for free at
  * any size (40dp button, 56dp box, 8px gap ⇒ half the button's height), where a
  * small-cornered enclosure would need a remembered corner value.
@@ -151,24 +151,25 @@ export function Field({
 const hasLabel = (label: ReactNode) => label != null && label !== '' && label !== false;
 
 /**
- * The visible label, and the invisible copy that cuts the notch.
+ * The visible label, and the decorative outlines whose legends cut its notch.
  *
- * Two elements hold the same words on purpose: the `<label>` is what the user
- * reads and names the control; the `<legend>` exists only to have the right
- * *width*, because a legend is the one thing in CSS that removes a section of a
+ * The `<label>` is what the user reads and names the control; each `<legend>`
+ * exists only to have the right *width*, because a legend removes a section of a
  * `<fieldset>`'s border. They stay in step (legend font-size = 0.75x label's).
- * The outline renders even without a label, but the `<legend>` is omitted
- * entirely rather than left empty — an empty legend reserves its own padding and
- * would leave a permanent nick in the top border.
+ * The 1dp resting and 2dp focused outlines share that geometry. Fading the focused
+ * one in adds the extra ink smoothly: interpolating border-width snaps between
+ * device pixels. Both remain decorative, and Select uses the same label/outline.
  */
-function FieldLabel({
+export function FieldLabel({
   label,
   required,
   htmlFor,
+  id,
 }: {
   label: ReactNode;
   required?: boolean;
   htmlFor: string;
+  id?: string;
 }) {
   const text = (
     <>
@@ -182,8 +183,13 @@ function FieldLabel({
   );
   return (
     <>
-      <label htmlFor={htmlFor}>{text}</label>
+      <label id={id} htmlFor={htmlFor}>{text}</label>
       <fieldset aria-hidden="true">
+        <legend>
+          <span>{text}</span>
+        </legend>
+      </fieldset>
+      <fieldset aria-hidden="true" data-field-focus="">
         <legend>
           <span>{text}</span>
         </legend>
