@@ -12,8 +12,6 @@ const root = path.resolve(import.meta.dirname, '..');
 const virtual = {
   '@/lib/appearance': `exports.MOTION_SPEED_SCALE={slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;`,
   '@/lib/hero': `exports.isImageHeroTransitionRunning=()=>false;exports.waitForImageHeroTransition=()=>Promise.resolve();`,
-  '@/lib/api': `exports.api=new Proxy({}, {get:(_,name)=>(...args)=>window.fixtureRequest(name,args)});`,
-  '../lib/api': `exports.api=new Proxy({}, {get:(_,name)=>(...args)=>window.fixtureRequest(name,args)});`,
   '@/lib/resources': `exports.sessionUser={read:({token})=>window.fixtureUser(token)};`,
   'react-icons/md': `const React=require('react');module.exports=new Proxy({}, {get:()=>props=>React.createElement('svg',props)});`,
   'next/dynamic': `const React=require('react');module.exports=()=>props=>props.isOpen?React.createElement('button',{onClick:()=>props.onVerify('fixture-captcha')},'Pass captcha'):null;`,
@@ -29,9 +27,8 @@ const virtual = {
   './Toast': `exports.showToast=(message)=>window.toasts.push(message);`,
   '@/components/Toast': `exports.showToast=(message)=>window.toasts.push(message);`,
   '@wangeditor/editor': `module.exports=window.wangEditor;`,
-  /* The image-search dialog's two network seams, answered by the page like the `api` proxy above
-     (it imports them directly since F2): a file search and a search by link. */
-  '@/lib/api/picpony': `exports.searchImage=(...args)=>window.fixtureRequest('searchImage',args);`,
+  /* Named API imports for authentication and image search share the same fixture dispatcher. */
+  '@/lib/api/picpony': `for(const name of ['login','register','verifyEmailById','resendVerifyCodeById','resetPasswordRequest','resetPassword','searchImage']) exports[name]=(...args)=>window.fixtureRequest(name,args);`,
   '@/lib/api/semantic': `exports.searchImageByUrl=(...args)=>window.fixtureRequest('searchImageByUrl',args);`,
   'empty': '',
 };
@@ -60,7 +57,7 @@ window.fixtureRequest=(name,args)=>new Promise(resolve=>window.requests.push({na
 window.respond=(index,data,status=200)=>window.requests[index].resolve(Response.json(data,{status}));
 window.fixtureUser=async()=>({kind:'ok',user:{username:'Fixture'}});
 window.changeSession=(token)=>token?writeUserInfo({token,username:token}):clearUserInfo(readToken());
-function Controls(){const auth=useAuthModal();window.auth=auth;return null;}
+function Controls(){const auth=useAuthModal();window.auth=auth;window.openAuthNow=()=>flushSync(()=>auth.openAuth('login'));return null;}
 function Questions(){const c=useConfirm(),p=usePrompt();window.askConfirm=()=>c.confirm({title:'Confirm fixture',message:'Fixture'}).then(x=>window.confirmResult=x);window.askPrompt=()=>p.prompt({title:'Prompt fixture',label:'Fixture'}).then(x=>window.promptResult=x);return <>{c.confirmDialog}{p.promptDialog}</>;}
 function App(){
  const [searchOpen,setSearchOpen]=useState(false),[questions,setQuestions]=useState(true);
@@ -187,6 +184,26 @@ with sync_playwright() as p:
   page.wait_for_timeout(50)
   assert page.evaluate("localStorage.getItem('user_info')")==None
   assert page.evaluate('window.toasts.length')==0
+  # A cached reopen can accept input before its deferred focus frame runs. Hold that
+  # frame, choose the password field, then release it: automatic focus must yield to
+  # the user's choice, or typing intended for the password can enter the username.
+  focus=page.evaluate('''async () => {
+   const request=window.requestAnimationFrame,cancel=window.cancelAnimationFrame;
+   const frames=new Map();let next=-1;
+   window.requestAnimationFrame=callback=>{const id=next--;frames.set(id,callback);return id;};
+   window.cancelAnimationFrame=id=>{if(!frames.delete(id))cancel(id);};
+   try {
+    window.openAuthNow();
+    document.querySelector('#auth-login-f2').focus();
+   } finally {
+    window.requestAnimationFrame=request;window.cancelAnimationFrame=cancel;
+   }
+   await new Promise(resolve=>{for(const callback of frames.values())request(callback);request(resolve);});
+   return {held:frames.size,active:document.activeElement?.id};
+  }''')
+  assert focus['held']>0,focus
+  assert focus['active']=='auth-login-f2',focus
+  page.evaluate('window.auth.closeAuth()')
   # The newer attempt owns the session even if the cancelled one returns later.
   dialog=open_login('Older')
   page.wait_for_function('window.requests.length===2')
@@ -257,7 +274,7 @@ with sync_playwright() as p:
   page.evaluate('window.hideQuestions()')
   page.wait_for_function('window.confirmResult===false&&window.promptResult===null')
   assert not errors,errors
-  print(json.dumps({'ok':True,'checks':['auth-close','auth-replacement','auth-session-aba','auth-email-cancel','editor-initial-disabled','editor-controlled-clear','editor-current-callback','editor-remount','editor-accessible-dom','field-descriptions','select-disabled-options','select-disabled-while-open','progress-nonfinite','image-search-cancel','image-cropper-corrupt-file','confirm-prompt-unmount']},ensure_ascii=False))
+  print(json.dumps({'ok':True,'checks':['auth-close','auth-focus-after-reopen','auth-replacement','auth-session-aba','auth-email-cancel','editor-initial-disabled','editor-controlled-clear','editor-current-callback','editor-remount','editor-accessible-dom','field-descriptions','select-disabled-options','select-disabled-while-open','progress-nonfinite','image-search-cancel','image-cropper-corrupt-file','confirm-prompt-unmount']},ensure_ascii=False))
  finally:browser.close()
 `;
 try {

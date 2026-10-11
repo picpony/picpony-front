@@ -370,7 +370,7 @@ const { testComponent: FeedList } = load('app/HomeContent.tsx', {
      sees the DOM before React mutates it); the page flow under test never mounts it. */
   react: { ...homeHooks.dependencies.react, useDeferredValue: (value) => value, Component: class Component {} },
   'next/navigation': { useRouter: () => ({ push() {} }), usePathname: () => '/' },
-  '@/lib/api': { getBrowsingSettings: () => ({ homeSort: 'created_at' }) },
+  '@/lib/api/client': { getBrowsingSettings: () => ({ homeSort: 'created_at' }) },
   '@/lib/hooks': { useDeferredLoading: () => false },
   '@/lib/overlay': { useMounted: () => true },
   '@/lib/resources': { homeFeed: { read: async () => ({ images: [], total: 0 }), prefetch() {} }, browsingFingerprint: () => browsingFp, syncBrowsingCookie: () => {} },

@@ -32,6 +32,10 @@
  * corrects an answer in place) and the opened picture (`lib/detail.ts`, with its own publication
  * gate — it shares the Derpibooru lane's slots).
  *
+ * Factory calls are marked PURE because `defineResource` registers on first use, not on
+ * construction. Keep that contract: importing the shell's session must not retain every
+ * unused resource and its API adapter just to populate the global refresh registry.
+ *
  * ## What does not move to the server
  *
  * `featuredImage` stays a client read: `getFeatured` puts the user's Derpibooru API key in the
@@ -250,7 +254,7 @@ async function readSession(token: string, signal: AbortSignal): Promise<SessionR
   return data ? { kind: 'ok', user: data } : { kind: 'unreadable' };
 }
 
-export const sessionUser = defineResource<{ token: string }, SessionResult>({
+export const sessionUser = /* @__PURE__ */ defineResource<{ token: string }, SessionResult>({
   name: 'session-user',
   key: ({ token }) => token,
   ttl: 5 * MINUTES,
@@ -303,7 +307,7 @@ export interface UnreadBreakdown {
  * `/messages` force-reads after marking a tab read, and the shell is subscribed to the same
  * entry, so its badge follows in the same publish.
  */
-export const unreadCounts = defineResource<{ token: string }, UnreadBreakdown>({
+export const unreadCounts = /* @__PURE__ */ defineResource<{ token: string }, UnreadBreakdown>({
   name: 'unread-counts',
   key: ({ token }) => token,
   ttl: 1 * MINUTES,
@@ -324,7 +328,7 @@ export const unreadCounts = defineResource<{ token: string }, UnreadBreakdown>({
 // ---------------------------------------------------------------------------
 
 /** 公告, one page. Public (no token) and changed only by an administrator: five minutes. */
-export const announcementHistory = defineResource<{ page: number }, AnnouncementPage>({
+export const announcementHistory = /* @__PURE__ */ defineResource<{ page: number }, AnnouncementPage>({
   name: 'announcement-history',
   key: ({ page }) => String(page),
   ttl: 5 * MINUTES,
@@ -337,7 +341,7 @@ export const announcementHistory = defineResource<{ page: number }, Announcement
  * list; the interaction list is only ever read with a token. A minute: other people's actions
  * put rows here, and the screen re-reads underneath whenever its tab is selected again.
  */
-export const notificationPage = defineResource<
+export const notificationPage = /* @__PURE__ */ defineResource<
   { token: string | null; type: 'system' | 'interaction'; page: number },
   NotificationPage
 >({
@@ -352,7 +356,7 @@ export const notificationPage = defineResource<
  * 私信's contact list. Thirty seconds, and the screen polls it at that rate while the tab is on
  * screen (owner decision 13); the share dialog reads the same entry.
  */
-export const recentContacts = defineResource<{ token: string }, Contact[]>({
+export const recentContacts = /* @__PURE__ */ defineResource<{ token: string }, Contact[]>({
   name: 'recent-contacts',
   key: ({ token }) => token,
   ttl: 30 * SECONDS,
@@ -365,7 +369,7 @@ export const recentContacts = defineResource<{ token: string }, Contact[]>({
  * seconds while the conversation is open (decision 13); older pages are read as the thread is
  * scrolled back. Every argument is in the key: a page of one conversation is its own record.
  */
-export const conversationPage = defineResource<
+export const conversationPage = /* @__PURE__ */ defineResource<
   { token: string; withUserId: number; page: number },
   ConversationPage
 >({
@@ -377,7 +381,7 @@ export const conversationPage = defineResource<
 });
 
 /** `search_users`, for starting a conversation — the contact search and the share dialog. */
-export const userSearch = defineResource<{ token: string; keyword: string }, ChatUser[]>({
+export const userSearch = /* @__PURE__ */ defineResource<{ token: string; keyword: string }, ChatUser[]>({
   name: 'user-search',
   key: ({ token, keyword }) => JSON.stringify([token, keyword]),
   ttl: 1 * MINUTES,
@@ -397,7 +401,7 @@ export const userSearch = defineResource<{ token: string; keyword: string }, Cha
  * answered from the cache with the previous results. Two minutes — a feed changes, but not while
  * you look at a picture and come back.
  */
-export const homeFeed = defineResource<{ page: number; sort: string; fp: string }, ApiResponse>({
+export const homeFeed = /* @__PURE__ */ defineResource<{ page: number; sort: string; fp: string }, ApiResponse>({
   name: 'home-feed',
   lane: 'derpi',
   /* The fingerprint is an *argument*, not something the key function reads for itself: a key that
@@ -418,7 +422,7 @@ export const homeFeed = defineResource<{ page: number; sort: string; fp: string 
  * `fp` makes the key pure when the screen passes it (`useBrowsingFingerprint`); without it the
  * key reads the fingerprint itself, which is right only because this read is never seeded.
  */
-export const searchFeed = defineResource<
+export const searchFeed = /* @__PURE__ */ defineResource<
   { query: string; page: number; sortField?: string; sortDir: 'asc' | 'desc'; fp?: string },
   ApiResponse
 >({
@@ -440,7 +444,7 @@ export const searchFeed = defineResource<
  * part of the answer, so it is not in the key. A superseded query's parse is released with its
  * key (`release`), which is what cancels it when the query is edited.
  */
-export const semanticQuery = defineResource<{ text: string; timeoutMs: number }, semantic.SemanticParse>({
+export const semanticQuery = /* @__PURE__ */ defineResource<{ text: string; timeoutMs: number }, semantic.SemanticParse>({
   name: 'semantic-query',
   key: ({ text }) => text,
   ttl: 30 * MINUTES,
@@ -449,7 +453,7 @@ export const semanticQuery = defineResource<{ text: string; timeoutMs: number },
 });
 
 /** /search's quick tags, by category. Changed only by an administrator. */
-export const quickTags = defineResource<Record<string, never>, Record<semantic.QuickTagGroup, semantic.QuickTag[]>>({
+export const quickTags = /* @__PURE__ */ defineResource<Record<string, never>, Record<semantic.QuickTagGroup, semantic.QuickTag[]>>({
   name: 'quick-tags',
   key: () => 'all',
   ttl: 30 * MINUTES,
@@ -461,7 +465,7 @@ export const quickTags = defineResource<Record<string, never>, Record<semantic.Q
  * Suggestions for the term being typed, keyed on the term exactly as sent. Many small entries:
  * typing and deleting walks back over keys it has already read, and those answers are instant.
  */
-export const tagSuggestions = defineResource<{ keyword: string }, semantic.TagSuggestion[]>({
+export const tagSuggestions = /* @__PURE__ */ defineResource<{ keyword: string }, semantic.TagSuggestion[]>({
   name: 'tag-suggestions',
   key: ({ keyword }) => keyword,
   ttl: 10 * MINUTES,
@@ -470,7 +474,7 @@ export const tagSuggestions = defineResource<{ keyword: string }, semantic.TagSu
 });
 
 /** The dictionary entry for one tag (its Chinese name and category), or `null` if it has none. */
-export const tagEntry = defineResource<{ tag: string }, semantic.TagSuggestion | null>({
+export const tagEntry = /* @__PURE__ */ defineResource<{ tag: string }, semantic.TagSuggestion | null>({
   name: 'tag-entry',
   key: ({ tag }) => tag,
   ttl: 10 * MINUTES,
@@ -492,7 +496,7 @@ export const tagEntry = defineResource<{ tag: string }, semantic.TagSuggestion |
  * `contentFilter` is an argument so the key can be computed on the server, which renders with
  * the filter from the fingerprint cookie; callers that omit it get the device's own.
  */
-export const featuredImage = defineResource<{ apiKey?: string; contentFilter?: string }, PonyImage | null>({
+export const featuredImage = /* @__PURE__ */ defineResource<{ apiKey?: string; contentFilter?: string }, PonyImage | null>({
   name: 'featured',
   lane: 'derpi',
   /* The upstream image filter changes in developer mode, including for the featured read. */
@@ -526,7 +530,7 @@ export interface DiscussedResult {
  * withheld and how many no longer exist, instead of simply coming up short. Keyed on the
  * browsing fingerprint for that reason. Derpibooru's lane: the slot is spent waiting on its read.
  */
-export const discussedImages = defineResource<{ page: number; fp: string }, DiscussedResult>({
+export const discussedImages = /* @__PURE__ */ defineResource<{ page: number; fp: string }, DiscussedResult>({
   name: 'discussed-images',
   lane: 'derpi',
   key: ({ page, fp }) => `${page}:${fp}`,
@@ -561,7 +565,7 @@ export const discussedImages = defineResource<{ page: number; fp: string }, Disc
  * card (decision 15). A decoration: the grid never waits for it, and a failure shows the
  * Derpibooru count alone.
  */
-export const siteCommentCounts = defineResource<{ ids: readonly number[] }, Record<number, number>>({
+export const siteCommentCounts = /* @__PURE__ */ defineResource<{ ids: readonly number[] }, Record<number, number>>({
   name: 'site-comment-counts',
   key: ({ ids }) => ids.join(','),
   ttl: 2 * MINUTES,
@@ -578,7 +582,7 @@ export const siteCommentCounts = defineResource<{ ids: readonly number[] }, Reco
  * somebody else may be writing. A post or a delete corrects it in place (`write`) or re-reads it
  * under what is shown (`invalidate`).
  */
-export const siteComments = defineResource<{ imageId: number }, Comment[]>({
+export const siteComments = /* @__PURE__ */ defineResource<{ imageId: number }, Comment[]>({
   name: 'site-comments',
   key: ({ imageId }) => String(imageId),
   ttl: 1 * MINUTES,
@@ -587,7 +591,7 @@ export const siteComments = defineResource<{ imageId: number }, Comment[]>({
 });
 
 /** One page of the comments Derpibooru holds for a picture, newest first, with the total. */
-export const derpiComments = defineResource<
+export const derpiComments = /* @__PURE__ */ defineResource<
   { imageId: number; page: number },
   { comments: Comment[]; total: number }
 >({
@@ -603,7 +607,7 @@ export const derpiComments = defineResource<
  * Whether the one-click image translation is switched on (`translate_enabled`). Ten minutes: an
  * administrator's switch, read once per visit rather than per picture.
  */
-export const translateSwitch = defineResource<Record<string, never>, boolean>({
+export const translateSwitch = /* @__PURE__ */ defineResource<Record<string, never>, boolean>({
   name: 'translate-switch',
   key: () => 'translate',
   ttl: 10 * MINUTES,
@@ -621,7 +625,7 @@ export const translateSwitch = defineResource<Record<string, never>, boolean>({
  * carries the token — the rows then say what this viewer has liked and not yet read — and so is a
  * different answer from a visitor's.
  */
-export const forumPosts = defineResource<ForumListQuery, ForumPostsResponse>({
+export const forumPosts = /* @__PURE__ */ defineResource<ForumListQuery, ForumPostsResponse>({
   name: 'forum-posts',
   key: (args) => forumListKey(args),
   ttl: 1 * MINUTES,
@@ -636,7 +640,7 @@ export const forumPosts = defineResource<ForumListQuery, ForumPostsResponse>({
  * and a short TTL is what makes returning from a tab land on the replies rather than on what was
  * there when you left. A missing or malformed id is a `notFound` error.
  */
-export const forumThread = defineResource<{ id: string; page: number; token?: string | null }, ForumPostDetailResponse>({
+export const forumThread = /* @__PURE__ */ defineResource<{ id: string; page: number; token?: string | null }, ForumPostDetailResponse>({
   name: 'forum-thread',
   /* The page is in the key *and* in the fetch. Keys must be complete, not merely unique: a flat
      id-only key would carry page 4 of one thread into page 2 (unique is not the same as
@@ -648,7 +652,7 @@ export const forumThread = defineResource<{ id: string; page: number; token?: st
 });
 
 /** The viewer's own tag groups and block groups, for a 标签组分享 post. A minute: they change here. */
-export const shareableGroups = defineResource<
+export const shareableGroups = /* @__PURE__ */ defineResource<
   { token: string },
   { tagGroups: forum.ShareableTagGroup[]; blockGroups: forum.ShareableBlockGroup[] }
 >({
@@ -663,7 +667,7 @@ export const shareableGroups = defineResource<
 // Profiles
 // ---------------------------------------------------------------------------
 
-export const derpiUserProfile = defineResource<{ id: string }, DerpiProfileUser>({
+export const derpiUserProfile = /* @__PURE__ */ defineResource<{ id: string }, DerpiProfileUser>({
   name: 'derpi-user-profile',
   lane: 'derpi',
   key: ({ id }) => id,
@@ -677,7 +681,7 @@ export const derpiUserProfile = defineResource<{ id: string }, DerpiProfileUser>
  * filter is a snapshot (a preference changed while the request waits cannot put another mode's
  * pictures under this key); `fp` carries the rest of the exclusions into the key.
  */
-export const derpiUserUploads = defineResource<
+export const derpiUserUploads = /* @__PURE__ */ defineResource<
   { id: number; page: number; perPage: number; contentFilter: string; fp?: string },
   ApiResponse
 >({
@@ -692,7 +696,7 @@ export const derpiUserUploads = defineResource<
 });
 
 /** A public profile. An unknown id is a `notFound` error (the backend answers an HTML 404). */
-export const userProfile = defineResource<{ id: string }, ProfileUser | null>({
+export const userProfile = /* @__PURE__ */ defineResource<{ id: string }, ProfileUser | null>({
   name: 'user-profile',
   key: ({ id }) => id,
   ttl: 5 * MINUTES,
@@ -718,7 +722,7 @@ export interface SharedFolder {
  * folder id that does not exist answers like an empty main folder, so the route checks the folder
  * against the owner's public list (`profileFaveFolders`).
  */
-export const sharedFaveIds = defineResource<{ username: string; folderId?: number }, SharedFolder>({
+export const sharedFaveIds = /* @__PURE__ */ defineResource<{ username: string; folderId?: number }, SharedFolder>({
   name: 'shared-fave-ids',
   key: ({ username, folderId }) => `${username}
 ${folderId ?? 0}`,
@@ -730,7 +734,7 @@ ${folderId ?? 0}`,
   },
 });
 
-export const userPosts = defineResource<
+export const userPosts = /* @__PURE__ */ defineResource<
   { id: string; page: number },
   { posts: UserPost[]; totalPages: number }
 >({
@@ -744,7 +748,7 @@ export const userPosts = defineResource<
   },
 });
 
-export const userComments = defineResource<
+export const userComments = /* @__PURE__ */ defineResource<
   { id: string; page: number },
   { comments: UserComment[]; totalPages: number }
 >({
@@ -789,7 +793,7 @@ function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
  * state. The token is in the key because the owner sees what visitors do not; `fp` carries the
  * exclusions (it falls back to reading the fingerprint for callers that do not pass it yet).
  */
-export const userUploads = defineResource<
+export const userUploads = /* @__PURE__ */ defineResource<
   { id: string; page: number; perPage: number; token: string | null; fp?: string },
   UserUploadsResponse
 >({
@@ -824,7 +828,7 @@ export const userUploads = defineResource<
  * because that is what the endpoint takes; not sent until the tab is opened. Each folder opens
  * its own page (`/favorites/shared/<username>/<folderId>`), which reads the folder's pictures.
  */
-export const profileFaveFolders = defineResource<{ username: string }, ProfileFaveFolder[]>({
+export const profileFaveFolders = /* @__PURE__ */ defineResource<{ username: string }, ProfileFaveFolder[]>({
   name: 'profile-fave-folders',
   key: ({ username }) => username,
   ttl: 2 * MINUTES,
@@ -838,7 +842,7 @@ export const profileFaveFolders = defineResource<{ username: string }, ProfileFa
  * withhold is simply absent, and its folder shows the plain face. `fp` carries those rules into
  * the key. At most fifty ids a request (Derpibooru's page size); a longer list reads in chunks.
  */
-export const folderCovers = defineResource<{ ids: readonly number[]; fp: string }, Record<number, PonyImage>>({
+export const folderCovers = /* @__PURE__ */ defineResource<{ ids: readonly number[]; fp: string }, Record<number, PonyImage>>({
   name: 'folder-covers',
   lane: 'derpi',
   key: ({ ids, fp }) => `${ids.join(',')}\n${fp}`,
@@ -859,7 +863,7 @@ export const folderCovers = defineResource<{ ids: readonly number[]; fp: string 
  * Every badge's description, by name — the badge wall's 简介. Public and rarely edited: one read
  * serves the session, warmed when a pointer or focus reaches the wall.
  */
-export const badgeDictionary = defineResource<Record<string, never>, Record<string, string>>({
+export const badgeDictionary = /* @__PURE__ */ defineResource<Record<string, never>, Record<string, string>>({
   name: 'badge-dictionary',
   key: () => 'all',
   ttl: 30 * MINUTES,
@@ -871,7 +875,7 @@ export const badgeDictionary = defineResource<Record<string, never>, Record<stri
  * The signed-in user's own badges and worn set — what 管理佩戴 edits. Token-keyed; read when the
  * dialog opens, written in place when a save lands.
  */
-export const myBadges = defineResource<{ token: string }, { badges: HeldBadge[]; equipped: EquippedBadge[] }>({
+export const myBadges = /* @__PURE__ */ defineResource<{ token: string }, { badges: HeldBadge[]; equipped: EquippedBadge[] }>({
   name: 'my-badges',
   key: ({ token }) => token,
   ttl: 1 * MINUTES,
@@ -900,7 +904,7 @@ export interface DictionaryEntry {
  * becoming 暂无收藏. After a change the screens write what they know and `expire()` the rest, so
  * every mounted key is re-read underneath what it shows (`lib/favoritesActions.ts`).
  */
-export const faveIds = defineResource<{ token: string; folderId?: number }, favorites.FaveIndex>({
+export const faveIds = /* @__PURE__ */ defineResource<{ token: string; folderId?: number }, favorites.FaveIndex>({
   name: 'fave-ids',
   key: ({ token, folderId }) => `${token}
 ${folderId ?? 0}`,
@@ -910,7 +914,7 @@ ${folderId ?? 0}`,
 });
 
 /** The account's favourite folders (`get_fave_folders`), and the privacy space's card when the list has one. */
-export const faveFolders = defineResource<{ token: string }, favorites.FaveFolderList>({
+export const faveFolders = /* @__PURE__ */ defineResource<{ token: string }, favorites.FaveFolderList>({
   name: 'fave-folders',
   key: ({ token }) => token,
   ttl: 1 * MINUTES,
@@ -927,7 +931,7 @@ export const faveFolders = defineResource<{ token: string }, favorites.FaveFolde
  * for: a page held over a turn (`keepPrevious`) is withheld against its own ids, not the next
  * page's. Derpibooru's lane.
  */
-export const favePictures = defineResource<{ ids: readonly number[] }, { ids: readonly number[]; images: PonyImage[] }>({
+export const favePictures = /* @__PURE__ */ defineResource<{ ids: readonly number[] }, { ids: readonly number[]; images: PonyImage[] }>({
   name: 'fave-pictures',
   lane: 'derpi',
   key: ({ ids }) => ids.join(','),
@@ -941,7 +945,7 @@ export const favePictures = defineResource<{ ids: readonly number[] }, { ids: re
  * own API key — in the key, and in memory only, like every token-keyed resource). Read through the
  * Everything filter; the screen applies the device's settings and says what it withheld (C11).
  */
-export const derpiFaves = defineResource<{ apiKey: string; page: number }, favorites.DerpiFavesPage>({
+export const derpiFaves = /* @__PURE__ */ defineResource<{ apiKey: string; page: number }, favorites.DerpiFavesPage>({
   name: 'derpi-faves',
   lane: 'derpi',
   key: ({ apiKey, page }) => `${apiKey}
@@ -956,7 +960,7 @@ ${page}`,
  * password, or without one. Signed in only; in memory only, like every resource (signing out
  * clears them all). After the password is accepted the screen reads it again with `force`.
  */
-export const sharedPrivacyFaves = defineResource<{ token: string; ownerId: number }, favorites.SharedPrivacyAnswer>({
+export const sharedPrivacyFaves = /* @__PURE__ */ defineResource<{ token: string; ownerId: number }, favorites.SharedPrivacyAnswer>({
   name: 'shared-privacy-faves',
   key: ({ token, ownerId }) => `${token}
 ${ownerId}`,
@@ -969,7 +973,7 @@ ${ownerId}`,
  * 浏览历史, one page — or one page of one calendar day, `YYYY-MM-DD` (the original's 按日期筛选).
  * Token-gated: stays client-side. A minute: opening any picture adds a row.
  */
-export const browsingHistory = defineResource<
+export const browsingHistory = /* @__PURE__ */ defineResource<
   { token: string; page: number; date?: string | null },
   historyApi.HistoryPage
 >({
@@ -985,7 +989,7 @@ export const browsingHistory = defineResource<
  * one, and the TTL is the backstop for a claim in another tab. A checkout and a badge change
  * expire it.
  */
-export const tasks = defineResource<{ token: string }, taskApi.TaskDocument>({
+export const tasks = /* @__PURE__ */ defineResource<{ token: string }, taskApi.TaskDocument>({
   name: 'tasks',
   key: ({ token }) => token,
   ttl: 30 * SECONDS,
@@ -997,7 +1001,7 @@ export const tasks = defineResource<{ token: string }, taskApi.TaskDocument>({
  * 金币明细, one page (the whole ledger when the backend does not page it — `totalPages: null`).
  * A claim and a checkout add rows, so both expire it.
  */
-export const coinTransactions = defineResource<{ token: string; page: number }, taskApi.CoinLedgerPage>({
+export const coinTransactions = /* @__PURE__ */ defineResource<{ token: string; page: number }, taskApi.CoinLedgerPage>({
   name: 'coin-transactions',
   key: ({ token, page }) => `${token}:${page}`,
   ttl: 1 * MINUTES,
@@ -1015,7 +1019,7 @@ export const coinTransactions = defineResource<{ token: string; page: number }, 
  * original front end read them at every load. An answer for a session that has since changed is
  * not mirrored.
  */
-export const blockGroups = defineResource<{ token: string }, BlockGroup[]>({
+export const blockGroups = /* @__PURE__ */ defineResource<{ token: string }, BlockGroup[]>({
   name: 'block-groups',
   key: ({ token }) => token,
   ttl: 5 * MINUTES,
@@ -1028,7 +1032,7 @@ export const blockGroups = defineResource<{ token: string }, BlockGroup[]>({
 });
 
 /** The signed-in user's 标签组. Token-gated. The forum's import and this screen's edits invalidate it. */
-export const tagGroups = defineResource<{ token: string }, tagGroupApi.TagGroup[]>({
+export const tagGroups = /* @__PURE__ */ defineResource<{ token: string }, tagGroupApi.TagGroup[]>({
   name: 'tag-groups',
   key: ({ token }) => token,
   ttl: 5 * MINUTES,
@@ -1040,7 +1044,7 @@ export const tagGroups = defineResource<{ token: string }, tagGroupApi.TagGroup[
  * The Derpibooru filters an API key's own account made — what 从 Derpibooru 导入 offers. Keyed by
  * the key, which only ever lives in memory here; read when the dialog opens.
  */
-export const derpiFilters = defineResource<{ apiKey: string }, blockGroupApi.DerpiFilterSummary[]>({
+export const derpiFilters = /* @__PURE__ */ defineResource<{ apiKey: string }, blockGroupApi.DerpiFilterSummary[]>({
   name: 'derpi-filters',
   lane: 'derpi',
   key: ({ apiKey }) => apiKey,
@@ -1049,7 +1053,7 @@ export const derpiFilters = defineResource<{ apiKey: string }, blockGroupApi.Der
   fetch: ({ apiKey }, signal) => blockGroupApi.getDerpiUserFilters(apiKey, signal),
 });
 
-export const teamMembers = defineResource<Record<string, never>, TeamMember[]>({
+export const teamMembers = /* @__PURE__ */ defineResource<Record<string, never>, TeamMember[]>({
   name: 'team-members',
   key: () => 'all',
   /* /about's roster; read on the server and handed down as a seed. Half an hour, because it
@@ -1068,7 +1072,7 @@ export const teamMembers = defineResource<Record<string, never>, TeamMember[]>({
  * sent when there is one, as the original front end sent it, so it is in the key. A minute:
  * other people's purchases move the stock. A checkout invalidates it.
  */
-export const shopItems = defineResource<{ token: string | null }, shop.ShopItem[]>({
+export const shopItems = /* @__PURE__ */ defineResource<{ token: string | null }, shop.ShopItem[]>({
   name: 'shop-items',
   key: ({ token }) => token ?? 'guest',
   ttl: 1 * MINUTES,
@@ -1082,7 +1086,7 @@ export const shopItems = defineResource<{ token: string | null }, shop.ShopItem[
  * the unread badge. Two minutes. A sync, a subscribe, a removal and a 'seen' correct it in place
  * (`components/subscriptions/actions.ts`), so none of them costs a re-read.
  */
-export const tagSubscriptions = defineResource<{ token: string }, subscriptions.TagSubscription[]>({
+export const tagSubscriptions = /* @__PURE__ */ defineResource<{ token: string }, subscriptions.TagSubscription[]>({
   name: 'tag-subscriptions',
   key: ({ token }) => token,
   ttl: 2 * MINUTES,
@@ -1095,7 +1099,7 @@ export const tagSubscriptions = defineResource<{ token: string }, subscriptions.
  * (an alias is followed to its tag). Derpibooru's lane: capped with every other Derpibooru read
  * and cancellable. Thirty seconds, because a live count is the point.
  */
-export const derpiTagCount = defineResource<{ tag: string }, subscriptions.DerpiTagCount>({
+export const derpiTagCount = /* @__PURE__ */ defineResource<{ tag: string }, subscriptions.DerpiTagCount>({
   name: 'derpi-tag-count',
   lane: 'derpi',
   key: ({ tag }) => subscriptions.normaliseTagName(tag),
@@ -1109,7 +1113,7 @@ export const derpiTagCount = defineResource<{ tag: string }, subscriptions.Derpi
  * not have simply absent. Derpibooru's lane; the sync reads it at background priority, which can
  * never take a lane's last slot from a screen.
  */
-export const derpiTagCounts = defineResource<{ tags: readonly string[] }, Record<string, number>>({
+export const derpiTagCounts = /* @__PURE__ */ defineResource<{ tags: readonly string[] }, Record<string, number>>({
   name: 'derpi-tag-counts',
   lane: 'derpi',
   key: ({ tags }) => tags.join('\n'),
@@ -1124,7 +1128,7 @@ export const derpiTagCounts = defineResource<{ tags: readonly string[] }, Record
  * snapshot (a preference changed while the request waits cannot put another mode's pictures under
  * this key); `fp` carries the rest of the exclusions.
  */
-export const tagGallery = defineResource<
+export const tagGallery = /* @__PURE__ */ defineResource<
   { tag: string; page: number; perPage: number; contentFilter: string; fp: string },
   ApiResponse
 >({

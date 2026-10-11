@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { MdArrowForward } from 'react-icons/md';
-import { api } from '@/lib/api';
+import { captchaGet, captchaVerify } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { envelopeMessage } from '@/lib/api/http';
 import { encodeTrack, clamp, clamp01, cn } from '@/lib/utils';
@@ -274,7 +274,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     setBgImage('');
     setPieceImage('');
     try {
-      const data = await api.captchaGet();
+      const data = await captchaGet();
       if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
       if (data.success && data.bg && data.piece && Number.isFinite(data.y)) {
         setChallengeReady(true);
@@ -342,7 +342,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     verifyingRef.current = true;
     setChallengeReady(false);
     try {
-      const data = await api.captchaVerify(finalX, encodeTrack(trackRef.current));
+      const data = await captchaVerify(finalX, encodeTrack(trackRef.current));
       if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
       if (data.success && data.token) {
         onVerifyRef.current(data.token);

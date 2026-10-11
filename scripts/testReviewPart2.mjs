@@ -152,7 +152,7 @@ test('P2-F7: one parser for the upstream origin, failing loudly on a malformed o
 });
 
 test('P2-F8: the sign-in dialog uses the shared field-error hook rather than a private copy', () => {
-  const source = readFileSync(new URL('../components/AuthModal.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../components/AuthForms.tsx', import.meta.url), 'utf8');
   assert.match(source, /from '@\/lib\/useFieldErrors'/);
   assert.doesNotMatch(source, /function useFieldErrors/);
 });

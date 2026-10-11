@@ -2,7 +2,7 @@
 
 import { useState, useLayoutEffect, useRef, type FormEvent } from 'react';
 import { MdCloudUpload } from 'react-icons/md';
-import type { PonyImage } from '@/lib/api';
+import type { PonyImage } from '@/lib/types/image';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { searchImage } from '@/lib/api/picpony';
 import { searchImageByUrl } from '@/lib/api/semantic';

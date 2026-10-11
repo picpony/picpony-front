@@ -178,7 +178,7 @@ test('P2-F5 follow-up: a backslash-led address is emitted as the protocol-relati
 });
 
 test('P2-F9 follow-up: both session merges use the one credential rule', () => {
-  for (const file of ['components/AppLayout.tsx', 'components/AuthModal.tsx']) {
+  for (const file of ['components/AppLayout.tsx', 'components/AuthForms.tsx']) {
     assert.match(source(file), /resolveDerpiCredentials\(/, file);
   }
 });

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
-import { api, type Announcement } from '@/lib/api';
+import { getAnnouncement } from '@/lib/api/picpony';
+import type { Announcement } from '@/lib/types/message';
 import Modal from './Modal';
 import Button from './Button';
 import SectionHeading from '@/components/SectionHeading';
@@ -34,7 +35,7 @@ export default function AnnouncementModal() {
     const cancelIdle = runWhenIdle(() => {
       void (async () => {
         try {
-          const data = await api.getAnnouncement();
+          const data = await getAnnouncement();
           if (!data.success || !data.announcement) return;
           let savedVersion: string | null = null;
           try {

@@ -93,6 +93,9 @@ jobs:
       - name: Primitives
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run test:primitives
+      - name: Deferred authentication
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run test:auth-loading
       - name: Removal focus and the roving tab stop
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run test:presence

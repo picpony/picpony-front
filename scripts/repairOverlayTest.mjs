@@ -13,7 +13,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const virtual = {
   '@/lib/appearance': `exports.MOTION_SPEED_SCALE={slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;`,
   '@/lib/motion': `exports.spring=()=>({});exports.gsap={to:()=>({kill(){}})};`,
-  '@/lib/api': `exports.api={captchaGet:()=>window.captchaGet(),captchaVerify:(x,track)=>window.captchaVerify(x,track)};`,
+  '@/lib/api/picpony': `exports.captchaGet=()=>window.captchaGet();exports.captchaVerify=(x,track)=>window.captchaVerify(x,track);`,
   'react-icons/md': `const React=require('react');module.exports=new Proxy({}, {get:()=>props=>React.createElement('svg',props)});`,
   './IconButton': `const React=require('react');module.exports=({icon,dismiss,variant,tooltip,...props})=>React.createElement('button',{type:'button',...props},icon);`,
   './Button': `const React=require('react');module.exports=({children,variant,icon,...props})=>React.createElement('button',{type:'button',...props},children);`,

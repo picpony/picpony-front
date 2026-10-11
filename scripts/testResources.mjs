@@ -7,7 +7,7 @@ requireTypeStripping('testResources');
 const frames = [];
 globalThis.window = { requestAnimationFrame: (callback) => frames.push(callback) };
 globalThis.document = { visibilityState: 'visible', addEventListener() {} };
-const { defineResource, clearAllResources } = await import('../lib/resource.ts');
+const { defineResource, clearAllResources, expireAllResources } = await import('../lib/resource.ts');
 const tick = async () => {
   await new Promise((resolve) => setImmediate(resolve));
   while (frames.length) frames.shift()();
@@ -17,6 +17,64 @@ const deferred = () => {
   const promise = new Promise((settle) => { resolve = settle; });
   return { promise, resolve };
 };
+
+// Declaring or inspecting an unused resource must not install global lifecycle work.
+// This is the contract behind the catalogue's PURE annotations, not a claim that reads are pure.
+{
+  const unused = defineResource({ name: 'unused', key: () => 'one', fetch: async () => 'unexpected' });
+  let expirations = 0;
+  unused.expire = () => { expirations += 1; };
+  unused.peek({});
+  unused.peekKey('one');
+  const browser = globalThis.window;
+  try {
+    delete globalThis.window;
+    unused.seed({}, 'server render', Date.now());
+  } finally {
+    globalThis.window = browser;
+  }
+  expireAllResources();
+  clearAllResources();
+  assert.equal(expirations, 0, 'construction, pure peeks and a server seed never register a resource');
+  assert.equal(unused.peek({}).data, undefined, 'SSR must not put an account into a process-wide store');
+}
+
+// Every way a dormant resource gains data must participate in logout and global refresh.
+for (const firstUse of ['read', 'prefetch', 'seed', 'write']) {
+  let fetches = 0;
+  const owned = defineResource({ name: `first-${firstUse}`, key: () => 'account',
+    ttl: 60_000, fetch: async () => { fetches += 1; return 'private'; } });
+  if (firstUse === 'read') await owned.read({});
+  else if (firstUse === 'prefetch') owned.prefetch({});
+  else if (firstUse === 'seed') owned.seed({}, 'private', Date.now());
+  else owned.write({}, 'private');
+  await tick();
+  assert.equal(owned.peek({}).data, 'private', `${firstUse} installs the answer`);
+  expireAllResources();
+  assert.equal(owned.peek({}).isStale, true, `${firstUse} participates in global expiry`);
+  const beforeClear = fetches;
+  clearAllResources();
+  assert.equal(owned.peek({}).data, undefined, `${firstUse} participates in logout`);
+  assert.equal(fetches, beforeClear, 'logout does not send requests for the old account');
+  owned.write({}, 'next account');
+  await tick();
+  clearAllResources();
+  assert.equal(owned.peek({}).data, undefined, 'a reused resource remains registered after logout');
+}
+
+// A subscriber may arrive before any read. Logout must clear that listener slot too.
+{
+  const watched = defineResource({ name: 'subscribe-first', key: () => 'account', fetch: async () => 'private' });
+  let publications = 0;
+  const stop = watched.subscribe({}, () => { publications += 1; });
+  clearAllResources();
+  assert.equal(publications, 1, 'logout notifies a subscriber-only resource');
+  watched.write({}, 'next account');
+  await tick();
+  assert.equal(publications, 1, 'the previous account subscription was dropped');
+  stop();
+  clearAllResources();
+}
 
 let calls = 0;
 let answer = ['old'];

@@ -398,9 +398,15 @@ export function expireAllResources() {
   for (const entry of registry) entry.expireAll();
 }
 
+/**
+ * Constructing a resource has no external effects. It joins the global clear/refresh registry
+ * only when it first holds an entry (a read, subscription, seed or write). This lets callers
+ * mark the factory call PURE: importing one catalogue member need not retain every adapter.
+ */
 export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Resource<Args, T> {
   const { name, key: keyOf, fetch: fetcher, ttl = 60_000, maxEntries = 32, publishGate, lane = 'picpony' } = options;
   const store = new Map<string, Entry<T>>();
+  let registered = false;
 
   const isStale = (entry: Entry<T>) =>
     entry.status === 'resolved' && Date.now() - entry.fetchedAt >= ttl;
@@ -443,6 +449,10 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
   }
 
   function touch(key: string, entry: Entry<T>) {
+    if (!registered) {
+      registry.add(registration);
+      registered = true;
+    }
     store.delete(key);
     store.set(key, entry);
   }
@@ -491,7 +501,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
             listeners: entry.listeners,
           };
           holder.snapshot = buildSnapshot(holder);
-          store.set(key, holder);
+          touch(key, holder);
           const holderArgs = entry.args as Args;
           queueMicrotask(() => {
             if (store.get(key) === holder) void read(holderArgs, { force: true }).catch(() => {});
@@ -499,7 +509,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
         } else {
           /* An as-yet unread subscriber still needs its listener slot. */
           entry.snapshot = EMPTY as ResourceSnapshot<T>;
-          store.set(key, entry);
+          touch(key, entry);
         }
       }
       for (const listener of entry.listeners) listener();
@@ -540,7 +550,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       snapshot: Object.freeze({ data: undefined, error: undefined, isLoading: true, isStale: false }),
       listeners: new Set(),
     };
-    store.set(key, entry);
+    touch(key, entry);
 
     const controller = new AbortController();
     entry.controller = controller;
@@ -747,7 +757,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
           listeners: new Set(),
         };
         entry.promise.catch(() => {});
-        store.set(key, entry);
+        touch(key, entry);
       }
       entry.listeners.add(listener);
       return () => {
@@ -913,11 +923,11 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     },
   };
 
-  registry.add({
+  const registration = {
     /* Signing out must never re-read entries belonging to the old token. */
     clear: () => clear(false),
     expireAll: () => resource.expire(),
-  });
+  };
 
   return resource;
 }

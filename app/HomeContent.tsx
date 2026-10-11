@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { MdTune } from 'react-icons/md';
 import { usePathname, useRouter } from 'next/navigation';
-import { getBrowsingSettings } from '@/lib/api';
+import { getBrowsingSettings } from '@/lib/api/client';
 import { SKIP, useResource } from '@/lib/resource';
 import { DEFAULT_BROWSING_FINGERPRINT } from '@/lib/searchQuery';
 import { searchPage } from '@/lib/searchState';

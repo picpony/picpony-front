@@ -105,6 +105,7 @@ try {
   const browserScript = args.includes('--hero-visuals') ? 'captureHeroMotion.py'
     : args.includes('--hero-performance') ? 'probeHeroPerformance.py'
     : args.includes('--hero') ? 'testHeroInteractions.py'
+    : args.includes('--auth-loading') ? 'testAuthLoading.py'
     : args.includes('--profile-gallery') ? 'testProfileGallery.py' : 'reviewBrowser.py';
   python = spawn('python', [path.join(root, 'scripts', browserScript), base, fixtureUrl,
     ...args.filter((arg) => arg !== '--hero-visuals')], {
