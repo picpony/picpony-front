@@ -26,6 +26,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { stubFor } from './netAuditFixtures.mjs';
+import { createStepActivity } from './netAuditActivity.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const BASELINE_PATH = path.join(import.meta.dirname, 'netAudit.baseline.json');
@@ -52,10 +53,10 @@ const EDGE_CANDIDATES = [
 ];
 
 /**
- * Quiescence: no *new* counted request for this long **and** nothing still in flight. The second
- * half is load-bearing: with only the idle timer, `/api.php` through the route handler outlasted
- * the window, so the ledger closed while the policy request was still open and every request
- * waiting on it had not been sent — the first round was measured and called the whole screen.
+ * Quiescence includes both counted requests and the documents/RSC payloads that cause server
+ * reads. RSC requests are not API costs, but ending a step while a prefetch is still running
+ * charged its get_user_profile to the next navigation: favorites paid 1+4 instead of 2+3.
+ * Server activity also restarts this quiet interval. The count baseline stays unchanged.
  */
 const IDLE_MS = 900;
 /** A journey may not take longer than this, however busy it looks. */
@@ -423,14 +424,16 @@ function computeRounds(entries) {
 async function runStep(cdp, step, origin, serverReads) {
   const entries = [];
   const byId = new Map();
-  let lastAt = 0;
+  const activity = createStepActivity(origin, IDLE_MS);
   const t0 = performance.now();
 
   const off = cdp.on((message) => {
     if (message.method === 'Network.requestWillBeSent') {
-      const { requestId, request, timestamp } = message.params;
+      const { requestId, request, timestamp, type } = message.params;
       const hit = classify(request.url);
-      if (!hit || UNCOUNTED.has(requestName(hit))) return;
+      const counted = Boolean(hit && !UNCOUNTED.has(requestName(hit)));
+      activity.start(requestId, request, type, counted);
+      if (!counted) return;
       const entry = {
         ...hit,
         id: requestId,
@@ -441,18 +444,17 @@ async function runStep(cdp, step, origin, serverReads) {
       };
       entries.push(entry);
       byId.set(requestId, entry);
-      lastAt = performance.now();
       return;
     }
     if (
       message.method === 'Network.loadingFinished' ||
       message.method === 'Network.loadingFailed'
     ) {
+      activity.finish(message.params.requestId);
       const entry = byId.get(message.params.requestId);
       if (!entry) return;
       entry.end = message.params.timestamp;
       entry.failed = message.method === 'Network.loadingFailed';
-      lastAt = performance.now();
       return;
     }
     if (message.method === 'Network.responseReceived') {
@@ -483,13 +485,17 @@ async function runStep(cdp, step, origin, serverReads) {
       await cdp.evaluate('history.back()');
     }
 
-    lastAt = performance.now();
+    activity.touch();
+    let serverCount = serverReads?.length ?? 0;
     const cap = performance.now() + STEP_CAP_MS;
     for (;;) {
       await sleep(120);
-      if (performance.now() >= cap) break;
-      const inFlight = entries.some((e) => e.end === undefined);
-      if (!inFlight && performance.now() - lastAt >= IDLE_MS) break;
+      if (serverReads && serverReads.length !== serverCount) {
+        serverCount = serverReads.length;
+        activity.touch();
+      }
+      if (activity.isQuiet()) break;
+      if (performance.now() >= cap) throw new Error(`${step.label} did not settle within ${STEP_CAP_MS}ms`);
     }
   } finally {
     off();
@@ -537,6 +543,7 @@ async function runStep(cdp, step, origin, serverReads) {
     api: api.length,
     media: media.length,
     serverApi: serverApi.length,
+    serverEntries: serverApi,
     rounds,
     contentRound:
       contentEntry && typeof contentEntry.round === 'number'
@@ -823,9 +830,9 @@ try {
       /* Emptied per step, so the column is what *this* step cost. It was cumulative — which is
          not merely confusing: `serverContent` tests this list to classify a step's content as
          `r0`, so a read one screen made would mark a later screen's content as "already in the
-         first byte", the floor passing on a step that had stopped fetching. Reads still in flight
-         from the previous step land here; that jitter is why `serverApi` is reported rather than
-         asserted. */
+         first byte", the floor passing on a step that had stopped fetching. `runStep` waits for
+         pending route payloads as well as APIs, so their server reads stay in the step that
+         started them. */
       serverReads.length = 0;
       const result = await runStep(cdp, step, origin, LIVE ? null : serverReads);
       if (!LIVE) {
@@ -848,6 +855,7 @@ try {
             `${entry.label.padEnd(9)} ${entry.name}`,
         );
       }
+      for (const name of result.serverEntries) console.log(`      srv ${name}`);
     }
     /* `rounds` is deliberately absent from the record. It is reported above and asserted nowhere —
        see `computeRounds` for why the maximum cannot be held to a number. */
@@ -896,7 +904,7 @@ try {
            waits on) and to the total, because "move a request earlier, never add one" is a rule
            about requests, not about which process sends them. The floor is applied to the total,
            because a read moved to the server looks identical to a stopped screen from CDP alone.
-           Two consecutive runs are byte-identical now that the tally is per-step and
+           The tally is per-step, routing work must settle before the next step begins, and
            `PICPONY_SERVER_MEMO_TTL_MS=0` reaches both caches (Next's Data Cache persists to
            `.next/cache/fetch-cache`). */
         const dApi = step.api - was.api;
@@ -912,8 +920,7 @@ try {
             ? 'content —'
             : `content r${was.contentRound ?? '—'}→r${step.contentRound ?? '—'}`;
         /* `browser+server` when either side has a server read, so a step whose content moved
-           layers reads as such at a glance. The server half is reported, never asserted — see the
-           split above. */
+           layers reads as such at a glance. Both halves contribute to the total ceiling above. */
         const apiCell =
           (was.serverApi ?? 0) || step.serverApi
             ? `api ${was.api}+${was.serverApi ?? 0}→${step.api}+${step.serverApi}`

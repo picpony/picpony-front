@@ -1561,6 +1561,8 @@ That is the rule, and `npm run net:audit` asserts it: every journey's request co
 
 ### `npm run net:audit`
 
+**A step waits for route payloads as well as counted APIs.** Next's document and RSC prefetch requests are not API costs, but they can still start server reads after the browser APIs look quiet. Ignoring an in-flight profile prefetch moved one server read from the initial favourites step to the next navigation (1 + 4 instead of 2 + 3), falsely failing the unchanged per-step baseline. `scripts/netAuditActivity.mjs` tracks their completion; server activity restarts the quiet interval, failed requests release it, and an unsettled step fails at its deadline instead of reporting a partial count. The ledger prints server request names beside browser entries. Counts, content floors and round assertions remain in place; `scripts/testNetAuditActivity.mjs` covers the delayed-prefetch boundary.
+
 Drives Edge over CDP through a fixed set of journeys and counts requests per step. It asserts **counts** and the **round** of each step's own content request; wall-clock timings are printed and asserted nowhere, which is the same split `palette.mjs` draws between a `floor` pair and a `report` pair.
 
 The upstream is **stubbed** (`netAuditFixtures.mjs`), and not because it is down: `proxyFetch`'s retry ladder turns one logical read into one *or* three depending on which line is reachable, so the count stops being a property of the code. `--live` runs against the real thing for a payload-shape check and refuses to write a baseline. A second fixture server is handed to `next start` through `PICPONY_UPSTREAM_ORIGIN`, because CDP intercepts the *browser* and reaches nothing the server does — without it the SSR-side policy read could not be measured at all.
