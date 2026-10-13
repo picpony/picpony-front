@@ -79,6 +79,24 @@ export function rememberDetailOrigin(id: number | string) {
   origin = { id: String(id), at: performance.now() };
 }
 
+/**
+ * Whether an overlay of this picture mounting now grows out of the row it was pressed in — the
+ * press recorded it, inside the TTL, on the tier that plays the container. Read by the detail's
+ * first render, which then leaves its body for a later commit, as a flight's open does: the copy
+ * the container carries is taken in the commit that mounts the overlay, and with the whole body in
+ * that commit (its actions, tags, description and comments) a 4× throttled phone started the
+ * container ~300ms after it could have. The body mounts under the layer while the container runs
+ * and comes in with the handoff's fade.
+ */
+export function opensFromDetailOrigin(id: number | string): boolean {
+  return (
+    motionTier('image') === 'standard' &&
+    origin !== null &&
+    origin.id === String(id) &&
+    performance.now() - origin.at <= ORIGIN_TTL_MS
+  );
+}
+
 /** The row a picture was opened from, while it is in the list on screen. */
 export function findDetailOriginRow(id: number | string): HTMLElement | null {
   const row = document.querySelector<HTMLElement>(`[data-detail-origin="${CSS.escape(String(id))}"]`);
@@ -176,8 +194,22 @@ export function captureDetailExit(): DetailExitSnapshot | null {
   node.style.visibility = 'visible';
   node.style.opacity = '';
   node.removeAttribute('inert');
-  for (const back of node.querySelectorAll<HTMLElement>('[data-image-detail-floating-back]')) back.style.visibility = '';
+  unsealDetailCopy(node);
   return { id: section.getAttribute('data-image-hero-route-id') ?? '', snapshot, parent, box: section.getBoundingClientRect() };
+}
+
+/**
+ * Shows a copy of the overlay's back affordance, which the hero's seal hides with the overlay
+ * (`leaseHeroRouteSealed`). Found by its class: the copy has lost every `data-image-detail-*`
+ * marker (`captureVisualClone` strips them so no lookup resolves into it), and the marker the
+ * close used to look for matched nothing — the back affordance was missing from every copy, and
+ * popped back in as the live overlay took over.
+ */
+export function unsealDetailCopy(copy: HTMLElement) {
+  for (const back of copy.querySelectorAll<HTMLElement>('.image-detail-back')) {
+    back.style.visibility = '';
+    back.style.pointerEvents = '';
+  }
 }
 
 /** The overlay is on screen again (Forward before the router committed the close): its next close

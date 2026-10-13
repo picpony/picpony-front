@@ -187,8 +187,9 @@ export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot |
   return snapshot;
 }
 
-/** Hangs the watchdog and the hero guard on whichever animation is running. */
-export function arm(layer: HTMLElement, stop: () => void) {
+/** Hangs the watchdog and the hero guard on whichever animation is running; `allowanceMs` is how
+    long it may wait before it starts (the hold for a container's page), on top of the bound. */
+export function arm(layer: HTMLElement, stop: () => void, allowanceMs = 0) {
   /* A flight takes the pixels back. Either idle is not one: a fade that leaves a detail starts
      while the engine still reports `detail-idle`, and its report of `gallery-idle` lands a moment
      into the fade. */
@@ -200,7 +201,7 @@ export function arm(layer: HTMLElement, stop: () => void) {
   /* Armed on the first frame, which is when the animation's own clock starts. */
   fade.frame = window.requestAnimationFrame(() => {
     fade.frame = 0;
-    if (active === fade) fade.timer = window.setTimeout(cancelRouteCrossFade, MAX_LIFETIME_MS);
+    if (active === fade) fade.timer = window.setTimeout(cancelRouteCrossFade, MAX_LIFETIME_MS + allowanceMs);
   });
   active = fade;
 }

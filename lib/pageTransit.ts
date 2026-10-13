@@ -60,6 +60,29 @@ export function beginPageTransit(): () => void {
 }
 
 /**
+ * **A container transform will ride the route change to `to`** (a pathname): a press on a forum
+ * row or a folder card has recorded what the page grows out of, or the page is being left for the
+ * list it shrinks back into. The route's fade then runs on the container's clock rather than its
+ * own, and waits for the page past the route's fallback (`lib/routeCrossFadePlay.ts`): a dynamic
+ * route commits the root `loading.tsx` first and its page a moment later, and cross-faded to that
+ * silhouette, the list the container grows out of had gone by the time the page arrived — the row
+ * was not carried, and the container came in from nothing over a placeholder that had flashed up
+ * and been cut away. Until when, on the clock; a route change elsewhere reads nothing.
+ */
+let expectation: { to: string; until: number } | null = null;
+
+export function expectRouteContainer(to: string, withinMs: number) {
+  expectation = { to, until: performance.now() + withinMs };
+}
+
+/** Whether a container is expected to ride the route change to `to` — read once, by it. */
+export function takeRouteContainerExpectation(to: string): boolean {
+  const expected = expectation !== null && expectation.to === to && performance.now() < expectation.until;
+  expectation = null;
+  return expected;
+}
+
+/**
  * Set by whatever owns a transient overlay that must not be captured by the theme wipe (it
  * freezes rendering to snapshot a frame) — today the route cross-fade, whose half-faded
  * clone would be frozen into the wipe's snapshot. A registered callback rather than an

@@ -97,9 +97,16 @@ import { COOKIE_KEYS, LS_KEYS, MEDIA } from '@/lib/constants';
 import { hasModalLayer, useOverlayLayer, useScrollLock } from '@/lib/overlay';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { prefetchRoute } from '@/lib/prefetchRoute';
+import { setRoutePayloadPrefetch } from '@/lib/routePayload';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { focusLanding } from '@/lib/focusLanding';
 import { useMaintenanceStatus } from '@/lib/useSiteStatus';
+
+/**
+ * A prefetch of the whole route, page and all (`lib/routePayload.ts`). The router takes it as the
+ * `kind` its own `prefetch` declares, whose enum Next does not export; this is its `full` member.
+ */
+const FULL_PREFETCH = 'full' as NonNullable<Parameters<ReturnType<typeof useRouter>['prefetch']>[1]>['kind'];
 
 /**
  * The account's Derpibooru key, mirrored where the request layer reads it. Outside the component
@@ -506,6 +513,8 @@ export default function AppLayout({
       replace: (href) => router.replace(href, { scroll: false }),
       prefetch: (href) => router.prefetch(href),
     });
+    setRoutePayloadPrefetch((href) => router.prefetch(href, { kind: FULL_PREFETCH }));
+    return () => setRoutePayloadPrefetch(null);
   }, [router]);
 
   const getRevealOrigin = useCallback(() => {

@@ -27,6 +27,7 @@
 import { useCallback, useLayoutEffect, type RefObject } from 'react';
 import { heroOwnsScreen } from '@/lib/appScroller';
 import { motionTier } from '@/lib/appearance';
+import { expectRouteContainer } from '@/lib/pageTransit';
 
 /** Which folder page a card was pressed for — its address — and when. */
 export interface FolderOrigin {
@@ -39,6 +40,8 @@ const ORIGIN_TTL_MS = 3000;
 
 let pending: FolderOrigin | null = null;
 let returning: FolderOrigin | null = null;
+/** The list each folder page was last opened from (its pathname), for the way back to it. */
+const openedFrom = new Map<string, string>();
 /** The folder page last left, on every tier: its card takes the focus back (`useFolderReturn`). */
 let left: FolderOrigin | null = null;
 
@@ -62,6 +65,10 @@ export function rememberFolderOrigin(href: string, card: HTMLElement) {
   /* The gesture-driven warm, as the forum's: the page is a round trip away. */
   ensurePlay();
   pending = { key: href, at: performance.now() };
+  /* The route's fade runs on the container's clock, and waits for the page past the route's
+     fallback, so the card is still there to grow out of. */
+  expectRouteContainer(new URL(href, window.location.origin).pathname, ORIGIN_TTL_MS);
+  openedFrom.set(href, window.location.pathname);
 }
 
 /**
@@ -75,6 +82,9 @@ export function rememberFolderReturn(href: string, page: HTMLElement) {
   if (rect.top >= window.innerHeight || rect.bottom <= 0) return;
   ensurePlay();
   returning = { key: href, at: performance.now() };
+  /* Back to the list it was opened from, the container shrinking into its card on its own clock. */
+  const list = openedFrom.get(href);
+  if (list) expectRouteContainer(list, ORIGIN_TTL_MS);
 }
 
 /** The folder page the list was just left from, while it is fresh. Consumed by `clearFolderReturn`. */

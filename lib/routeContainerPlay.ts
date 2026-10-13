@@ -45,6 +45,15 @@ export function crossFadeLayer(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-route-crossfade-layer]');
 }
 
+/** Whether every tab pane around `el` is the one on screen: a concealed pane keeps its layout, so
+    what is in it still answers with rectangles, but nobody is looking at them. */
+export function inShownPanes(el: HTMLElement): boolean {
+  for (let pane = el.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
+    if (!pane.hasAttribute('data-tab-pane-active')) return false;
+  }
+  return true;
+}
+
 /** Whether a transform may ride this route change at all. */
 export function routePlayable(el: HTMLElement): boolean {
   return motionTier('page') === 'standard' && routeTransitActive(el) && supportsLinearEasing();
@@ -84,6 +93,7 @@ export function flyOnRoute(
   }
   let flight: Flight | null = null;
   const handle = playContainerRun(run, {
+    category: 'page',
     mount: (layer) => {
       layer.setAttribute(`data-${how.kind}-transform`, '');
       /* Above the cross-fade, and above any flight still fading off there: the newest on top. */

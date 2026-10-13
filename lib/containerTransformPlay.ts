@@ -1,18 +1,20 @@
 'use client';
 
 import { scaledMs } from '@/lib/appearance';
+import type { MotionCategory } from '@/lib/motionPreferences';
 import { springTiming } from '@/lib/springTiming';
-import { stripProgress, type StripLeg } from '@/lib/tabStrip';
 import {
+  FORUM_TRANSFORM_EASING,
   FORUM_TRANSFORM_MS,
   containerPose,
   fadeTrack,
   freshContainerLeg,
-  linearEasing,
   sameColumn,
   shutterLevels,
   turnContainer,
   type Box,
+  type ContainerLeg,
+  type FadeWindow,
   type Radii,
   type ShutterLevel,
 } from '@/lib/forumContainer';
@@ -25,24 +27,26 @@ import {
  * clock and why they are what they are live in `lib/forumContainer.ts`; this file builds the
  * overlay and plays its legs.
  *
- * **It plays on a layer of its own**, holding the container and a copy of each content: the
- * outgoing one stays opaque, the incoming one comes in on top of it with a surface covering the
- * whole container (`MaterialContainerTransform`'s `FADE_MODE_IN`), so the container is never
- * empty. Both contents are **anchored at the container's top left and never scaled**. The live
- * elements are hidden for the run, so nothing is on screen twice, and the layer is removed once
- * the container has landed, when the live element under it is exactly what the layer shows.
- * Web Animations throughout, every moving part a compositor transform or opacity (the corners
- * and the container's tone are the only main-thread properties, and a frame of lag there is
- * invisible).
+ * **It plays on a layer of its own**, holding the container — its surface, there from the first
+ * frame to the last — and a copy of each content, each on screen over its own window of the travel
+ * (`FORUM_FADE`): the outgoing one goes, then the incoming one comes. Both contents are **anchored
+ * at the container's top left and never scaled**, and each stacks as one block (a copy keeps no
+ * z-index of its own: the detail overlay's `z-detail-overlay` came along with its copy and painted
+ * it over the row arriving above it, so a picture closed back into its row never showed the row
+ * until the layer went). The live elements are hidden for the run, so nothing is on screen twice,
+ * and the layer is removed once the container has landed, when the live element under it is
+ * exactly what the layer shows. Web Animations throughout, every moving part a compositor
+ * transform or opacity (the corners and the container's tone are the only main-thread properties,
+ * and a frame of lag there is invisible).
  *
  * **A run is a handle, not a one-shot.** Its owner can land it (`finish`), stop it landing on a
  * scroll while a route change restores an offset (`suspend`/`resume`), fade it off where it is
  * (`fadeOut`), or send it from its pose on screen to another rectangle (`turn`): the pose is the
  * leg's own at the display's clock (`containerPose`), the clip carries on — rebuilt only if the
- * new pair needs another shape — and the new leg leaves on the strip's turn (`turnContainer`) with
- * the incoming content retracing its own fade window (`fadeTrack`). Nothing is re-copied for a
- * turn: the contents are already in the frame, anchored at the container's corner, and simply
- * ride the new leg.
+ * new pair needs another shape — and the new leg flies the curve from there (`turnContainer`) with
+ * each content retracing its own fade window (`fadeTrack`). Nothing is re-copied for a turn: the
+ * contents are already in the frame, anchored at the container's corner, and simply ride the new
+ * leg.
  */
 
 export interface Surface {
@@ -92,7 +96,9 @@ export function reveal(hidden: Hidden[]) {
 /**
  * A copy, placed in the content frame at its offset from the container's top left. Its corners
  * are the original's, written out: a lone list row in the frame would take a whole run's shape
- * from the list rules, and its corners would change at the handoff.
+ * from the list rules, and its corners would change at the handoff. Its z-index is the layer's to
+ * decide, so it is a stacking context at zero: whatever its original stacked at, and whatever its
+ * descendants stack at, stays inside it.
  */
 function place(node: HTMLElement, box: Box, anchor: Box, radii: Radii) {
   for (const marker of COPY_MARKERS) node.removeAttribute(marker);
@@ -103,6 +109,7 @@ function place(node: HTMLElement, box: Box, anchor: Box, radii: Radii) {
   node.style.width = `${box.width}px`;
   node.style.height = `${box.height}px`;
   node.style.transform = 'none';
+  node.style.zIndex = '0';
   node.style.opacity = '';
   node.style.visibility = 'visible';
   CORNER_PROPS.forEach((prop, corner) => {
@@ -139,13 +146,15 @@ export interface ContainerRun {
   /** The incoming content's copy and its own box (viewport), anchored at `to`. */
   incoming: HTMLElement;
   incomingBox: Box;
-  /** When the incoming content is on screen, as a window on the travel (`FORUM_FADE`). */
-  fade: { start: number; end: number };
+  /** When each content is on screen, as windows on the travel (`FORUM_FADE`). */
+  fade: { readonly outgoing: FadeWindow; readonly incoming: FadeWindow };
   /** Live elements hidden for the run, shown again at the handoff. */
   hidden: Hidden[];
 }
 
 export interface ContainerStage {
+  /** Whose motion preference times it — the speed and the tier of the screen it opens. */
+  category: MotionCategory;
   /** Puts the layer into the document, where it stacks above what it covers; false to give up. */
   mount: (layer: HTMLElement) => boolean;
   /** The layer's z-index, a `--z-*` token. */
@@ -255,32 +264,23 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   const from = local(run.from.box);
   const to = local(run.to.box);
 
-  /* The container's surface, as large as it ever gets: one under the outgoing content, and one
-     that comes in with the incoming content and covers the whole container — so the outgoing
-     content is covered everywhere as the incoming one arrives, not only inside the incoming
-     one's own box (a row's box is shorter than the card it leaves, and the strip of the card
-     under it read as a stray line of text while the container finished closing). A turn that
-     sends it somewhere larger grows them with it. */
-  const plates: HTMLElement[] = [];
+  /* The container's surface, as large as it ever gets, under both contents: it is what shows
+     where neither content's own box reaches (a row's box is shorter than the card it leaves) and
+     between the two windows. A turn that sends it somewhere larger grows it with it. */
+  const surface = document.createElement('div');
+  Object.assign(surface.style, { position: 'absolute', left: '0px', top: '0px', backgroundColor: run.from.colour });
   const reach = { width: 0, height: 0 };
   const cover = (box: Box) => {
     reach.width = Math.max(reach.width, box.width);
     reach.height = Math.max(reach.height, box.height);
-    for (const el of plates) Object.assign(el.style, { width: `${reach.width}px`, height: `${reach.height}px` });
+    Object.assign(surface.style, { width: `${reach.width}px`, height: `${reach.height}px` });
   };
-  const plate = (colour: string) => {
-    const el = document.createElement('div');
-    Object.assign(el.style, { position: 'absolute', left: '0px', top: '0px', backgroundColor: colour });
-    plates.push(el);
-    return el;
-  };
-  const surface = plate(run.from.colour);
   const arriving = document.createElement('div');
   Object.assign(arriving.style, { position: 'absolute', left: '0px', top: '0px', width: '0px', height: '0px' });
   /* Both contents are laid out at their own width, so their words wrap exactly as on the page. */
   if (run.outgoing) place(run.outgoing.el, run.outgoing.box, run.from.box, run.from.radii);
   place(run.incoming, run.incomingBox, run.to.box, run.to.radii);
-  arriving.append(plate(run.to.colour), run.incoming);
+  arriving.append(run.incoming);
   cover(from);
   cover(to);
   let chain = buildChain(layer, from, to, run.from.radii);
@@ -289,17 +289,17 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   /* With no outgoing content the whole container arrives through its fade, surface and all. */
   const fading = run.outgoing ? arriving : layer;
 
-  const full = scaledMs(FORUM_TRANSFORM_MS, 'page');
+  const full = scaledMs(FORUM_TRANSFORM_MS, stage.category);
   /** The current leg's two ends, for the pose a turn leaves from (`containerPose`). */
   let ends: { a: Surface; b: Surface };
   /**
-   * One leg: the clip from `a` to `b`, its corners and its tone, and the incoming content over
-   * the leg's stretch of travel. Offsets are in progress (the easing), so the fade window is a
-   * window on the travel.
+   * One leg: the clip from `a` to `b`, its corners and its tone, and each content over its own
+   * stretch of the travel. Offsets are in progress (the easing), so the fade windows are windows
+   * on the travel.
    */
-  const playLeg = (leg: StripLeg, a: Surface, b: Surface): Animation[] => {
+  const playLeg = (leg: ContainerLeg, a: Surface, b: Surface): Animation[] => {
     ends = { a, b };
-    const timing: KeyframeAnimationOptions = { duration: leg.duration, easing: linearEasing(stripProgress(leg.launch)), fill: 'both' };
+    const timing: KeyframeAnimationOptions = { duration: leg.duration, easing: FORUM_TRANSFORM_EASING, fill: 'both' };
     const list: Animation[] = [];
     chain.levels.forEach((level, index) => {
       const el = chain.elements[index];
@@ -314,11 +314,12 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
       }
     });
     if (a.colour !== b.colour) list.push(surface.animate([{ backgroundColor: a.colour }, { backgroundColor: b.colour }], timing));
-    /* The incoming content and its surface come in on top, the outgoing content stays opaque
-       beneath them: one of the two fills the container on every frame. */
-    list.push(fading.animate(fadeTrack(run.fade, leg.from, leg.to), timing));
+    /* The outgoing content goes over its window and the incoming one comes over its own, on top
+       of it, so where the two would meet the newer one is in front. */
+    if (run.outgoing) list.push(run.outgoing.el.animate(fadeTrack(run.fade.outgoing, leg.from, leg.to, true), timing));
+    list.push(fading.animate(fadeTrack(run.fade.incoming, leg.from, leg.to), timing));
     /* One frame ahead: the first frame that shows the container already shows it moving (the
-       response leaves at speed), rather than the page it replaced standing still. A current time,
+       curve leaves at once), rather than the page it replaced standing still. A current time,
        not a start time, so the leg stays pending until the compositor draws it, and starts there.
        The frame that brings the layer in has a whole page's copy to paint and raster — about
        120ms on the development server — and the display keeps showing the old frame until it is
@@ -375,7 +376,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   };
   const fadeOff = (onEnd: () => void) => {
     const opacity = getComputedStyle(layer).opacity;
-    retiring = layer.animate([{ opacity }, { opacity: 0 }], { ...springTiming('fastEffects', 'page'), fill: 'forwards' });
+    retiring = layer.animate([{ opacity }, { opacity: 0 }], { ...springTiming('fastEffects', stage.category), fill: 'forwards' });
     retiring.finished.then(onEnd, () => {});
   };
   let leaving = false;

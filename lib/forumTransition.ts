@@ -17,6 +17,7 @@
 
 import { heroOwnsScreen } from '@/lib/appScroller';
 import { motionTier } from '@/lib/appearance';
+import { expectRouteContainer } from '@/lib/pageTransit';
 import type { ForumPost } from '@/lib/types/forum';
 
 /** Viewport-space box of the row that was pressed, or of the card that was left. */
@@ -73,6 +74,10 @@ export function rememberForumOrigin(id: number | string, row: HTMLElement, previ
      transform never runs, so warming there would fetch a chunk that is unreachable. */
   ensurePlay();
   pending = boxOf(id, row);
+  /* The card flies only when it opens complete (`readForumPreview`): then the route's fade runs on
+     the container's clock, and waits for the card past the route's fallback, so the row is still
+     there to grow out of. */
+  if (readForumPreview(id)) expectRouteContainer(`/forum/${id}`, ORIGIN_TTL_MS);
 }
 
 function fresh(origin: ForumOrigin | null, id: number | string): ForumOrigin | null {
@@ -112,6 +117,8 @@ export function rememberForumReturn(id: number | string, card: HTMLElement) {
   if (box.top >= window.innerHeight || box.top + box.height <= 0) return;
   ensurePlay();
   returning = box;
+  /* The list it shrinks back into is the home route's forum pane (`components/forum/ForumPane.tsx`). */
+  expectRouteContainer('/', ORIGIN_TTL_MS);
 }
 
 /** The card the list was just left from, while it is fresh. Not consumed by reading — the list

@@ -11,6 +11,7 @@ import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import { CategoryBadge, PinnedBadge } from '@/components/forum/ForumBadges';
 import { readForumLeft, rememberForumOrigin } from '@/lib/forumTransition';
 import { forumThread } from '@/lib/resources';
+import { prefetchRoutePayload } from '@/lib/routePayload';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { isPlainActivation } from '@/lib/richTextLinks';
 import { forumTeaser } from '@/lib/forumText';
@@ -55,6 +56,12 @@ function ForumRow({ post, signedIn, token, now }: { post: ForumPost; signedIn: b
      its click ~100ms later (a finger's after the tap timeout, and not at all if it becomes a
      scroll), which is the head start worth having. */
   const intent = useIntentPrefetch(() => forumThread.prefetch({ id: String(post.id), page: 1, token }));
+  /* **The route's page, from a hover on, and at the press itself** — all a finger has. Its payload
+     is the server's render of a client page and reads nothing, so it counts no view: warmed ahead,
+     the press commits the thread in one piece and the row grows into its card at once
+     (`lib/routePayload.ts`). */
+  const href = `/forum/${post.id}`;
+  const page = useIntentPrefetch(() => prefetchRoutePayload(href));
   const unread = signedIn && post.is_unread;
   const teaser = forumTeaser(post);
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -65,11 +72,22 @@ function ForumRow({ post, signedIn, token, now }: { post: ForumPost; signedIn: b
 
   return (
     <Link
-      href={`/forum/${post.id}`}
+      href={href}
       scroll={false}
       onClick={onClick}
-      onPointerDown={(event) => { if (event.button === 0) intent.onPointerDown(event); }}
-      onPointerCancel={intent.onPointerCancel}
+      onPointerEnter={page.onPointerEnter}
+      onPointerLeave={page.onPointerLeave}
+      onFocus={page.onFocus}
+      onBlur={page.onBlur}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        intent.onPointerDown(event);
+        prefetchRoutePayload(href);
+      }}
+      onPointerCancel={() => {
+        intent.onPointerCancel();
+        page.onPointerCancel();
+      }}
       data-forum-row={post.id}
       data-ripple=""
       className={cn(

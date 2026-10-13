@@ -19,8 +19,9 @@ import { showToast } from '@/components/Toast';
 import SectionHeading from '@/components/SectionHeading';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { clearBrowsingHistory, type HistoryEntry } from '@/lib/api/history';
-import { prefetchImageDetail } from '@/lib/detail';
+import { detailStillPreview, prefetchImageDetail } from '@/lib/detail';
 import { findDetailOriginLink, rememberDetailOrigin } from '@/lib/detailTransit';
+import { prefetchRoutePayload } from '@/lib/routePayload';
 import { focusLanding } from '@/lib/focusLanding';
 import { openFromSequence, type ImageSequenceSource } from '@/lib/imageSequence';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
@@ -39,6 +40,30 @@ import { useHistorySequence } from './useHistorySequence';
 
 /** The backend's page, so the placeholder is the list's own length. */
 const PAGE_SIZE = 20;
+
+/**
+ * Stills decoded ahead of an open, newest last. Held, not only fetched: a decoded image nothing
+ * refers to may lose its bitmap, and the overlay's `<img>` would then paint a frame late — after
+ * the container's copy of it was taken. A thumbnail is small; six is a run along the list.
+ */
+const decodedStills: HTMLImageElement[] = [];
+const MAX_DECODED_STILLS = 6;
+
+function decodeStill(url: string | undefined) {
+  if (!url || decodedStills.some((still) => still.src === url)) return;
+  const still = new Image();
+  still.decoding = 'async';
+  still.src = url;
+  void still.decode().then(
+    () => {
+      decodedStills.push(still);
+      if (decodedStills.length > MAX_DECODED_STILLS) decodedStills.shift();
+    },
+    () => {
+      /* A dead line or a 404: the overlay asks for it again, and shows its placeholder meanwhile. */
+    },
+  );
+}
 
 const ROW = 'm3-row group relative bg-surface-container-low';
 
@@ -68,11 +93,24 @@ function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
   sequence: ImageSequenceSource | undefined;
   onDelete: (entry: HistoryEntry) => void;
 }) {
-  /* The picture's record on the intent ladder, so the detail usually opens complete rather than
-     on its skeleton — the same ladder, and the same background priority, as a gallery card's. */
-  const intent = useIntentPrefetch(() => {
+  /* The picture's route, its record and the still it shows first, warmed ahead of the open: the
+     overlay then mounts as soon as the press lands rather than a round trip later
+     (`lib/routePayload.ts`), complete rather than on its skeleton, and with its picture painted
+     in the frame it mounts, so the row's container carries the picture from its first frame
+     instead of an empty well that the picture popped into as the container landed
+     (`lib/detailTransitPlay.ts`). The record and the still on the intent ladder — the same ladder,
+     and the same background priority, as a gallery card's — and at the click, at the overlay's
+     own priority, beside the route's round trip rather than after it. */
+  const href = `/pic/${entry.id}`;
+  const warmDetail = (priority: 'background' | 'immediate') => {
     /* A warm that fails is the detail's own read to retry; nothing here waits on it. */
-    prefetchImageDetail(entry.id, { priority: 'background' }).catch(() => {});
+    prefetchImageDetail(entry.id, { priority })
+      .then(({ image }) => decodeStill(detailStillPreview(image)))
+      .catch(() => {});
+  };
+  const intent = useIntentPrefetch(() => {
+    prefetchRoutePayload(href);
+    warmDetail('background');
   });
   return (
     /* `data-detail-origin`: the row is what the picture grows out of and shrinks back into — a
@@ -85,8 +123,15 @@ function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
           finger. The ring is inset: a grouped list's seams would clip an outset one. */}
       <Link
         scroll={false}
-        href={`/pic/${entry.id}`}
+        href={href}
         {...intent}
+        onPointerDown={(event) => {
+          /* The route at the press itself, under a finger as well as a mouse — a finger has no
+             hover, and the ladder waits a tap's length under one. It is the server's render of a
+             client page, and reads nothing. */
+          if (event.button === 0) prefetchRoutePayload(href);
+          intent.onPointerDown(event);
+        }}
         onClick={(event) => {
           if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
             /* The list first, then the origin — both synchronously, before the link navigates:
@@ -94,6 +139,7 @@ function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
                A modified click opens a new tab and leaves this one's list alone. */
             if (sequence) openFromSequence(sequence);
             rememberDetailOrigin(entry.id);
+            warmDetail('immediate');
           }
         }}
         className="flex items-center gap-4 rounded-[inherit] p-4 pr-16 transition-ui state-layer focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset"

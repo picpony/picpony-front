@@ -2,12 +2,13 @@
 
 import { gsap, playSharedAxis, supportsEdgeMask } from '@/lib/motion';
 import { DURATION, EASE, PAGE_FADE_TIMING } from '@/lib/motionTokens';
-import { motionScale, motionTier } from '@/lib/appearance';
+import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
-import { setRouteTransit } from '@/lib/pageTransit';
+import { setRouteTransit, takeRouteContainerExpectation } from '@/lib/pageTransit';
 import { arm, cancelRouteCrossFade, routeMove, settleEntryAnimations } from '@/lib/routeCrossFade';
 import { restoreSnapshotScroll, type RouteSnapshot } from '@/lib/pageSnapshot';
 import { columnWindow } from '@/lib/tabStrip';
+import { FORUM_TRANSFORM_MS } from '@/lib/forumContainer';
 
 /**
  * **On a wide screen a route move slides past the pages' columns and a faded margin**, as a tab
@@ -58,6 +59,40 @@ function maskRouteWindow(layer: HTMLElement, clone: HTMLElement, page: HTMLEleme
 }
 
 /**
+ * How long a route change a container transform rides waits for its page past the route's
+ * fallback (`takeRouteContainerExpectation`): the rest of a round trip and the page's render.
+ * Past it the page fades in as any other does — onto the fallback, which says the wait is a wait.
+ */
+const CONTAINER_HOLD_MS = 600;
+
+/**
+ * Calls `arrived` once `page` holds more than the route's fallback (`data-route-fallback`), or
+ * after `bound` ms. Returns what calls it off. The commit that replaces the fallback is the one
+ * that mounts what the container lands on, which asks for its first frame from its ref, inside
+ * the commit; this answers after the commit, so its frame comes after the container's in the same
+ * frame — the list's still frame is still whole when the container takes its row from it.
+ */
+function whenPageArrives(page: HTMLElement, arrived: () => void, bound: number): () => void {
+  let done = false;
+  const stop = () => {
+    done = true;
+    observer.disconnect();
+    window.clearTimeout(timer);
+  };
+  const go = () => {
+    if (done) return;
+    stop();
+    arrived();
+  };
+  const observer = new MutationObserver(() => {
+    if (!page.querySelector('[data-route-fallback]')) go();
+  });
+  observer.observe(page, { childList: true, subtree: true });
+  const timer = window.setTimeout(go, bound);
+  return stop;
+}
+
+/**
  * The animated half of the route cross-fade, loaded on demand — the sanctioned GSAP half. The
  * split is about *when*: the front half is mounted on every route, so a static `gsap` import
  * here would put the engine and its plugins into the root shell of every route's first
@@ -75,6 +110,8 @@ export function playRouteCrossFade(
      the snapshot just taken is of whatever was on screen a moment ago, the truer thing to fade. */
   cancelRouteCrossFade();
   setRouteTransit(true);
+  /* Read once, by this route change, whichever way it plays. */
+  const containerExpected = takeRouteContainerExpectation(to);
 
   /* Before the clone goes in, so this cannot resolve into it — belt and braces beside the
      attribute strip in `pageSnapshot`. */
@@ -151,6 +188,11 @@ export function playRouteCrossFade(
     return;
   }
 
+  if (containerExpected) {
+    playUnderContainer(layer, snapshot.node, page, snapshot.chrome ?? null, slot);
+    return;
+  }
+
   /* Paused until the first frame after the commit (below). */
   const timeline = gsap.timeline({ paused: true, onComplete: () => cancelRouteCrossFade() });
   /* Reduced halves the outgoing leg's rise rather than removing it — 12px was never the
@@ -199,8 +241,8 @@ export function playRouteCrossFade(
   /* **Played from the first frame after the commit, not from the commit.** The commit is a
      long task, and a clock started inside it spent that task before anything was painted: on a
      development build the page being left was most of the way gone in the first frame that
-     showed it leaving, and a transform started with that frame (the forum's) ran a beat behind
-     the page around it. The from-states are already applied — `fromTo` renders immediately. */
+     showed it leaving, and a transform started with that frame ran a beat behind the page around
+     it. The from-states are already applied — `fromTo` renders immediately. */
   const start = requestAnimationFrame(() => timeline.play());
   arm(layer, () => {
     cancelAnimationFrame(start);
@@ -213,4 +255,117 @@ export function playRouteCrossFade(
     if (backArrives) gsap.set(backArrives, { clearProps: 'opacity,visibility' });
   });
 }
+
+/**
+ * **The fade a container transform rides, on the container's clock** — a forum post or a folder
+ * opening from its list and closing back into it (`takeRouteContainerExpectation`).
+ *
+ * The page fade's own clock is 400ms — 80ms of overlap and 320ms of `emphasized-decelerate` — and
+ * the container's is 260ms on the flight's curve (`lib/forumContainer.ts`): played side by side,
+ * a post's card had landed in its row while the list it was landing in was still on its way, and
+ * the thread it came from still on screen around it; a second motion after the first. So under a
+ * container the fade keeps its own shape — the leaving page out over the first quarter on the
+ * emphasized accelerate, the arriving one in from a fifth of the way on the emphasized decelerate,
+ * the same shares of the same curves — over the container's length, and the two land together.
+ *
+ * **On the compositor**, as the container is: on the main thread the fade stood still through the
+ * long frames a route change starts with while the container went on without it, which is what
+ * made them two motions on screen even when they were one on paper. Started in the same frame as
+ * the container — both are asked for by the commit that mounts what the container lands on — and
+ * one frame ahead, as its legs are, so their first presented frames are one.
+ *
+ * **And when the route has committed only its fallback, from the frame its page arrives in**
+ * (`whenPageArrives`): until then the list stays whole over the hidden page, and the container
+ * grows out of its row with the fade around it, as it does when the page commits at once.
+ */
+function playUnderContainer(
+  layer: HTMLElement,
+  clone: HTMLElement,
+  page: HTMLElement | null,
+  chrome: HTMLElement | null,
+  slot: HTMLElement | null,
+) {
+  const full = scaledMs(FORUM_TRANSFORM_MS, 'page');
+  if (page) {
+    page.style.animation = 'none';
+    settleEntryAnimations(page);
+  }
+  /* **The back affordance is settled when the page arrives, not when the route commits**: a page
+     held behind the route's fallback brings its own a commit later, which would otherwise have
+     popped in over the list. So the slot is hidden with the page, and `play` reads it then —
+     unless both pages already have one, which stays put. */
+  const staysPut = chrome !== null && slot !== null && slot.childElementCount > 0;
+  const hidden = [page, staysPut ? null : slot].filter((el): el is HTMLElement => el !== null);
+  /* Hidden from the commit on, as `autoAlpha` would have it: a focus cannot land in a page no
+     one can see yet, and a fallback held under the list is not on screen at all. */
+  for (const el of hidden) {
+    el.style.opacity = '0';
+    el.style.visibility = 'hidden';
+  }
+  const animations: Animation[] = [];
+  let frame = 0;
+  const play = () => {
+    frame = requestAnimationFrame(() => {
+      const arrivingBack = slot !== null && slot.childElementCount > 0;
+      /* Between two pages that both have one it stays put, as `PageBack` does: the live one shows
+         and its copy goes, with no fade. */
+      if (chrome && arrivingBack) chrome.remove();
+      const leaving = [clone, chrome && !arrivingBack ? chrome : null].filter((el): el is HTMLElement => el?.isConnected ?? false);
+      const arriving = [page, slot && arrivingBack && !chrome ? slot : null].filter((el): el is HTMLElement => el !== null);
+      for (const el of hidden) {
+        el.style.visibility = '';
+        if (!arriving.includes(el)) el.style.opacity = '';
+      }
+      for (const el of leaving) {
+        animations.push(
+          el.animate([{ opacity: getComputedStyle(el).opacity }, { opacity: 0 }], {
+            duration: full * FADE_SHARE.leave,
+            easing: EASE.accelerate,
+            fill: 'forwards',
+          }),
+        );
+      }
+      for (const el of arriving) {
+        animations.push(
+          el.animate([{ opacity: 0 }, { opacity: 1 }], {
+            delay: full * FADE_SHARE.arriveDelay,
+            duration: full * (1 - FADE_SHARE.arriveDelay),
+            easing: EASE.decelerate,
+            /* Held at its end too, until the stop below clears the inline 0 it was hidden with:
+               otherwise the frame between its end and that stop shows the page hidden again. */
+            fill: 'both',
+          }),
+        );
+      }
+      for (const animation of animations) animation.currentTime = 1000 / 60;
+      void Promise.all(animations.map((animation) => animation.finished)).then(
+        () => cancelRouteCrossFade(),
+        () => {},
+      );
+    });
+  };
+  const held = page?.querySelector('[data-route-fallback]') ? page : null;
+  const cancelHold = held ? whenPageArrives(held, play, CONTAINER_HOLD_MS) : null;
+  if (!held) play();
+  arm(
+    layer,
+    () => {
+      cancelHold?.();
+      cancelAnimationFrame(frame);
+      for (const animation of animations) animation.cancel();
+      for (const el of hidden) {
+        el.style.opacity = '';
+        el.style.visibility = '';
+      }
+    },
+    held ? CONTAINER_HOLD_MS : 0,
+  );
+}
+
+/** The page fade's shares of its own 400ms (`PAGE_FADE_TIMING`, and the leaving page's
+    `DURATION.press`), for the same fade on another clock. */
+const FADE_SHARE = {
+  leave: DURATION.press / DURATION.long,
+  arriveDelay: PAGE_FADE_TIMING.delay / DURATION.long,
+} as const;
 

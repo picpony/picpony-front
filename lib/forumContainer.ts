@@ -1,29 +1,35 @@
 /**
- * The forum's container transform, the pure half: its clock, its geometry and the shape of the
- * clip that carries it (`lib/forumTransitionPlay.ts` builds the DOM and plays it). A module of its
- * own so the numbers are a test (`scripts/testForum.mjs`) rather than a comment.
+ * The container transform, the pure half: its clock, its geometry and the shape of the clip that
+ * carries it (`lib/containerTransformPlay.ts` builds the DOM and plays it, for a forum post, a
+ * folder and a picture opened from a history row). A module of its own so the numbers are a test
+ * (`scripts/testForum.mjs`) rather than a comment.
  *
  * **What moves.** One rounded container travels from the list row's rectangle to the post card's
  * (and back); the two contents ride inside it, **anchored at its top left and never scaled** —
- * a row's title slides up to where the card's title sits and cross-fades into it, and the card's
- * slides back down into the row. Scaled content is the failure this replaces: the row used to be
- * stretched to the card's size with its words hidden (a blank slab), and its words then faded in
- * while it was still 1.5× tall. The incoming content wears its own surface and fades in on top of
- * the outgoing one, which stays opaque beneath it (`MaterialContainerTransform`'s `FADE_MODE_IN`),
- * so the container is never empty: whichever content is larger fills it.
+ * a row's title slides up to where the card's title sits and the card's slides back down into the
+ * row. Scaled content is the failure this replaces: the row used to be stretched to the card's
+ * size with its words hidden (a blank slab), and its words then faded in while it was still 1.5×
+ * tall. Each content is on screen over a window of the travel (`FORUM_FADE`), over the
+ * container's own surface, which is there from the first frame to the last.
  *
- * **Its clock is the tab strip's response** (`lib/tabStrip.ts`): critically damped, launched at
- * half the family's rate — the one launch with no jerk, leaving at its top speed and only slowing
- * from there — over the route cross-fade's 400ms. It moves 13.9% of the way in its first 60 Hz
- * frame and never more in any later one, halfway in 69ms and 90% in 194ms; `emphasized` at 500ms,
- * the pairing M3 gives a container transform, moves 0.8% in its first frame and 24% in its
- * fastest — the slow start the owner has turned down on every surface — and the hero's
- * `fastOutSlowIn` still hangs back for 45ms before it reaches 10%. It launched at twice its mean
- * speed once, as the strip did, and gained speed for its first 40ms: the glide that read as
- * dragging on the tabs. The strip runs 350ms and this 400ms because it rides a navigation whose
- * page arrives on the route's 400ms: the container lands as the incoming page finishes fading in,
- * so the transform and the page are one gesture, and the handoff to the live element happens at
- * rest.
+ * **Its curve is the hero flight's, over a little longer** — `HERO_FLIGHT_CURVE`, read from
+ * `lib/hero/constants.ts` rather than copied, over 260ms where the flight takes 220
+ * (`HERO_DURATIONS`). A gallery card opening into its picture, a row into its post or its picture
+ * and a card into its folder are one gesture, so they share one shape of motion; but a container
+ * hands one content over to another inside it, where the flight carries one picture end to end,
+ * and on the flight's 220ms that hand-over read a touch fast (owner, 2026-10-14). The shape is
+ * kept and every stage comes 18% later. Per 60 Hz frame, as a share of the way: 6.9, 10.5, 15.0,
+ * 17.0, 14.2, 10.3, 7.5, 5.5, 4.1, 3.0, 2.3, 1.6, 1.1, 0.7, 0.3, 0.1 — halfway at 68ms, 90% at
+ * 146ms and at rest by 237ms, the crest (2.7× its mean speed) in the air, never past its end.
+ * Until 2026-10 it was the tab strip's launched response over the route cross-fade's 400ms,
+ * chosen beside the flight's old `fastOutSlowIn` that hung back for 45ms: it left at its top speed
+ * (13.7% in the first frame) and slowed from there, 90% of the way at 194ms and the last tenth
+ * taking another 206ms. That tail is what read as not smooth — on a thread the card was still
+ * sliding up to its place under a page that had already arrived around it — and beside the
+ * flight, which the owner had moved off that response for the same creep, it was a second,
+ * slower kind of motion. Riding a route change, the route's fade runs on this clock too
+ * (`playUnderContainer`, `lib/routeCrossFadePlay.ts`), so the page around the container arrives
+ * as it lands, and the handoff to the live element waits for that fade to end (`holdHandoff`).
  *
  * **Its clip is made of translations only.** A rounded rectangle whose size changes cannot be a
  * scaled box (the corners stretch into ellipses and anything inside scales with it), and an
@@ -37,11 +43,20 @@
  * **A leg turns from where it is.** When the page a container is flying into goes away mid-leg —
  * Back pressed while a post or a folder is still opening, Forward while it is closing — the
  * container is not dropped and flown again from its far end: it goes back from the pose on
- * screen, on the tab strip's turn (`turnStrip`: at once, at a fresh tap's launch speed or the
- * speed it already had, over `full · clamp(√remaining, 0.6, 1)`), and the content that was coming
- * in goes back out over the same stretch of travel it came in on (`fadeTrack`).
+ * screen, on the same curve, over the flight's reversal rule for what is left of the way
+ * (`HERO_REVERSE_*`), and each content retraces its own window (`fadeTrack`). It does not coast
+ * on the old way first — the reader has just sent it back, as with the tab strip's turn — and
+ * it does not lunge either: a Back is a press, and every leg a press starts is the flight's.
  */
-import { stripLaunchFor, stripProgress, turnStrip, STRIP_LAUNCH, type StripLeg } from '@/lib/tabStrip';
+import {
+  HERO_CONTAINER_FADE,
+  HERO_CONTENT_FADE,
+  HERO_FLIGHT_CURVE,
+  HERO_REVERSE_BASE_RATIO,
+  HERO_REVERSE_MIN_DURATION_MS,
+  HERO_REVERSE_TRAVEL_RATIO,
+} from '@/lib/hero/constants';
+import { curveProgress } from '@/lib/hero/progress';
 
 /** A rectangle, in the overlay's coordinates (px). */
 export interface Box {
@@ -54,41 +69,81 @@ export interface Box {
 /** Corner radii, clockwise from the top left: top-left, top-right, bottom-right, bottom-left. */
 export type Radii = readonly [number, number, number, number];
 
-/** The container transform's duration at the default speed — the route cross-fade's. */
-export const FORUM_TRANSFORM_MS = 400;
-
-/** A fresh leg's launch, in the leg's own normalised units: the strip's own. Also a turn's
- *  floor (`turnContainer`). */
-const FORUM_TAP_LAUNCH = STRIP_LAUNCH;
-export const FORUM_TRANSFORM_LAUNCH = stripLaunchFor(FORUM_TAP_LAUNCH);
-
-/** Progress over the leg's own time, `t ∈ [0, 1]` → `p ∈ [0, 1]`. */
-export const forumTransformProgress = stripProgress(FORUM_TRANSFORM_LAUNCH);
-
-/** A fresh leg of `duration` ms (already scaled by the motion speed), as the strip states one. */
-export function freshContainerLeg(duration: number): StripLeg {
-  return { from: 0, to: 1, duration, launch: FORUM_TRANSFORM_LAUNCH };
-}
-
 /**
- * The leg a container turns onto `elapsed` ms into `leg` — the strip's own turn, in the same
- * units: `from`/`to` are travel between the two ends the container was flying between (0 its
- * first end, 1 its second), so a turn of a turn heads for the second end again.
+ * The container transform's duration at the default speed, both ways: the flight's curve over
+ * 260ms, where the flight takes 220 (`HERO_DURATIONS`) — see the module's note for why the two
+ * differ. Its own number rather than the flight's plus something: a change to either is a
+ * judgement about that motion, not the other.
  */
-export function turnContainer(leg: StripLeg, elapsed: number, full: number): StripLeg {
-  return turnStrip(leg, elapsed, full, FORUM_TAP_LAUNCH);
+export const FORUM_TRANSFORM_MS = 260;
+
+/** Its shape: the flight's curve, as a Web Animations easing for the legs' keyframes. */
+export const FORUM_TRANSFORM_EASING = HERO_FLIGHT_CURVE.css;
+
+/** Progress over a leg's own time, `t ∈ [0, 1]` → `[0, 1]`. */
+export const forumTransformProgress = (t: number) => curveProgress(HERO_FLIGHT_CURVE, t);
+
+/**
+ * One leg: travel from `from` to `to` over `duration` ms (already scaled by the motion speed).
+ * Travel runs between the two ends the container flies between, 0 its first end and 1 its
+ * second, so a turn of a turn heads for the second end again.
+ */
+export type ContainerLeg = { from: number; to: number; duration: number };
+
+/** A fresh leg of `duration` ms, from the first end to the second. */
+export function freshContainerLeg(duration: number): ContainerLeg {
+  return { from: 0, to: 1, duration };
+}
+
+/** Where a leg is `elapsed` ms in: its progress (the easing's output) and the travel it has reached. */
+export function legAt(leg: ContainerLeg, elapsed: number): { progress: number; travel: number } {
+  const progress = forumTransformProgress(leg.duration > 0 ? elapsed / leg.duration : 1);
+  return { progress, travel: leg.from + (leg.to - leg.from) * progress };
 }
 
 /**
- * When each content is on screen, as windows on the container's *progress* (not its clock — the
- * same rule as the hero's thresholds). Opening, the card arrives early, over the first half of
- * the travel; returning, the row arrives late, once the container is most of the way home. The
- * outgoing content never fades: it stays opaque under the incoming one and is covered or cut away.
+ * The leg a container turns onto `elapsed` ms into `leg`: towards the other end from the pose on
+ * screen, over `full · (0.35 + 0.65·√remaining)` — the flight's reversal rule, floored at its
+ * 90ms scaled with `full` — so a turn with little left to undo is quick and one from the far end
+ * takes a full leg.
+ */
+export function turnContainer(leg: ContainerLeg, elapsed: number, full: number): ContainerLeg {
+  const { travel } = legAt(leg, elapsed);
+  const to = leg.to === 1 ? 0 : 1;
+  const remaining = Math.min(1, Math.abs(to - travel));
+  const share = Math.max(
+    HERO_REVERSE_MIN_DURATION_MS / FORUM_TRANSFORM_MS,
+    HERO_REVERSE_BASE_RATIO + HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(remaining),
+  );
+  return { from: travel, to, duration: full * share };
+}
+
+/** A window on the travel, `start` → `end`, over which a content comes in (or goes out). */
+export type FadeWindow = { readonly start: number; readonly end: number };
+
+/**
+ * When each content is on screen, as windows on the container's *travel* (not its clock — the
+ * rule `MaterialContainerTransform` applies its thresholds by, and the hero's), and they are the
+ * flight's own windows, so a row opening and a card opening hand their contents over on the same
+ * stretch of the way:
+ *
+ * - **Opening**, the row's content goes in the first stretch, 0 → 0.15, as a gallery card's marks
+ *   go at take-off, and the larger content comes in over 0.15 → 0.85 (`HERO_CONTENT_FADE`): the box
+ *   leads and the page follows. That is 30ms → 128ms on the clock above.
+ * - **Returning**, the larger content leaves from the first frame, 0 → 0.6, as the flight's
+ *   content does, and the row's comes in late, 0.6 → 0.9 (`HERO_CONTAINER_FADE.back`), once the
+ *   container is most of the way home.
+ *
+ * The two contents are never on screen together at more than a trace. They used to cross: the
+ * incoming one came in on top of the outgoing one, which stayed opaque beneath it
+ * (`FADE_MODE_IN`, 0.05 → 0.4 opening), and two unscaled contents anchored at one corner doubled
+ * every line of text that did not line up — the row's title under the card's for the length of
+ * the fade.
  */
 export const FORUM_FADE = {
-  open: { start: 0.05, end: 0.4 },
-  back: { start: 0.6, end: 0.9 },
-} as const;
+  open: { outgoing: { start: 0, end: HERO_CONTENT_FADE.forward.start }, incoming: HERO_CONTENT_FADE.forward },
+  back: { outgoing: HERO_CONTENT_FADE.back, incoming: HERO_CONTAINER_FADE.back },
+} as const satisfies Record<'open' | 'back', { outgoing: FadeWindow; incoming: FadeWindow }>;
 
 /** A clip larger than any container: every edge but the one a level owns is this far away. */
 export const SHUTTER_SPAN = 16384;
@@ -131,16 +186,16 @@ export function colourAt(from: string, to: string, p: number): string {
  * linear in the box, and the corners and the tone ride the same easing, so this is the clip the
  * shutters draw then. A turn leaves from it, computed rather than read off the shutters: the
  * main thread's animation clock is the last main frame's, which a long task leaves hundreds of
- * milliseconds behind the compositor that is drawing the leg (the strip's turn reads the same
+ * milliseconds behind the compositor that is drawing the leg (the tab strip's turn reads the same
  * clock, `turnStrip`).
  */
 export function containerPose(
-  leg: StripLeg,
+  leg: ContainerLeg,
   a: { box: Box; radii: Radii; colour: string },
   b: { box: Box; radii: Radii; colour: string },
   elapsed: number,
 ): { box: Box; radii: Radii; colour: string } {
-  const p = stripProgress(leg.launch)(leg.duration > 0 ? elapsed / leg.duration : 1);
+  const { progress: p } = legAt(leg, elapsed);
   return { box: boxAt(a.box, b.box, p), radii: radiiAt(a.radii, b.radii, p), colour: colourAt(a.colour, b.colour, p) };
 }
 
@@ -222,23 +277,22 @@ export function resolveShutter(levels: readonly ShutterLevel[], box: Box): { cli
   };
 }
 
-/** A content's opacity at progress `p` for a fade window. */
-export function fadeAt(window: { start: number; end: number }, p: number): number {
-  if (p <= window.start) return 0;
-  if (p >= window.end) return 1;
-  return (p - window.start) / (window.end - window.start);
+/** A content's opacity at travel `p` for a fade window: coming in across it, or going out. */
+export function fadeAt(window: FadeWindow, p: number, out = false): number {
+  const shown = p <= window.start ? 0 : p >= window.end ? 1 : (p - window.start) / (window.end - window.start);
+  return out ? 1 - shown : shown;
 }
 
 /**
- * The incoming content's opacity over a leg that runs the travel from `from` to `to` (each 0 or 1
- * at the ends, anything between for a turned leg), as keyframes in the leg's own progress: the
- * window is always the same stretch of travel, whichever way it is crossed — a card that came in
- * over 5–40% of the way goes back out over the same 40–5% when the container is sent back.
- * Piecewise linear in the leg's progress (travel is linear in it), so its corners are the only
- * keyframes it needs.
+ * A content's opacity over a leg that runs the travel from `from` to `to` (each 0 or 1 at the
+ * ends, anything between for a turned leg), as keyframes in the leg's own progress: the window is
+ * always the same stretch of travel, whichever way it is crossed — a card that came in over 15–85%
+ * of the way goes back out over the same 85–15% when the container is sent back, and a row that
+ * went out over 0–15% comes back over it. Piecewise linear in the leg's progress (travel is linear
+ * in it), so its corners are the only keyframes it needs.
  */
-export function fadeTrack(window: { start: number; end: number }, from: number, to: number): { offset: number; opacity: number }[] {
-  const at = (u: number) => fadeAt(window, from + (to - from) * u);
+export function fadeTrack(window: FadeWindow, from: number, to: number, out = false): { offset: number; opacity: number }[] {
+  const at = (u: number) => fadeAt(window, from + (to - from) * u, out);
   const offsets = new Set([0, 1]);
   if (Math.abs(to - from) > 1e-9) {
     for (const edge of [window.start, window.end]) {
@@ -247,25 +301,4 @@ export function fadeTrack(window: { start: number; end: number }, from: number, 
     }
   }
   return [...offsets].sort((a, b) => a - b).map((offset) => ({ offset, opacity: at(offset) }));
-}
-
-/**
- * `ease` as a `linear()` easing, sampled where it bends until each straight segment stays within
- * `tolerance` of it — the Web Animations form of the progress above (keyframe offsets are then
- * in progress, which is what makes the fade windows progress windows).
- */
-export function linearEasing(ease: (t: number) => number, tolerance = 0.0015): string {
-  const stops: string[] = [`${+ease(0).toFixed(4)} 0%`];
-  const split = (t0: number, v0: number, t1: number, v1: number, depth: number) => {
-    const mid = (t0 + t1) / 2;
-    const value = ease(mid);
-    if (depth < 4 || (depth < 12 && Math.abs(value - (v0 + v1) / 2) > tolerance)) {
-      split(t0, v0, mid, value, depth + 1);
-      split(mid, value, t1, v1, depth + 1);
-      return;
-    }
-    stops.push(`${+v1.toFixed(4)} ${+(t1 * 100).toFixed(3)}%`);
-  };
-  split(0, ease(0), 1, ease(1), 0);
-  return `linear(${stops.join(', ')})`;
 }

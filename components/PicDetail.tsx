@@ -77,6 +77,8 @@ import { useBackOrParent } from '@/lib/backNavigation';
 import { LS_KEYS } from '@/lib/constants';
 import { plainTextOf } from '@/lib/derpiMarkup';
 import {
+  detailStillPreview,
+  mediaFacts,
   peekImageDetail,
   peekImageDetailError,
   prefetchImageDetail,
@@ -88,7 +90,7 @@ import { describeImage } from '@/lib/imageDescription';
 import { getRawImageUrl } from '@/lib/imageLoader';
 import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
 import { useDetailStep } from '@/lib/hero/useDetailStep';
-import { findDetailOriginLink, playDetailEntrance } from '@/lib/detailTransit';
+import { findDetailOriginLink, opensFromDetailOrigin, playDetailEntrance } from '@/lib/detailTransit';
 import {
   bindImageHeroDismissGesture,
   findImageHeroCardLink,
@@ -345,19 +347,6 @@ async function sendReport(token: string, imageId: number, reason: string): Promi
   }
 }
 
-/** The picture's own record over the list's row, and a row that is a video over one that is not. */
-function mediaFacts(image: ImagePreview) {
-  const reps = image.representations ?? {};
-  const preferMedium = (image.size || 0) > 16 * 1024 * 1024 || (image.width || 0) * (image.height || 0) > 40_000_000;
-  const imageSrc =
-    (preferMedium ? reps.medium : undefined) || reps.large || reps.medium || reps.full || image.view_url || '';
-  const format = (image.format || imageSrc.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
-  const isVideo = format === 'webm' || format === 'mp4';
-  const videoSrc = reps.medium || reps.large || reps.full || image.view_url || '';
-  const fullSrc = reps.full || image.view_url || '';
-  return { reps, imageSrc, format, isVideo, videoSrc, fullSrc };
-}
-
 // ---------------------------------------------------------------------------
 // The loading placeholder, shared with the route's streaming fallback
 // ---------------------------------------------------------------------------
@@ -513,7 +502,12 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
 
   const [revealedHeroSeedAt, setRevealedHeroSeedAt] = useState<number | null>(null);
   const [finalReadyId, setFinalReadyId] = useState<number | null>(null);
-  const [deferredBodyId, setDeferredBodyId] = useState<number | null>(() => (heroSeed ? null : imageId));
+  /* The body waits for a later commit when something is about to carry the overlay in — a flight,
+     or a row's container, whose copy is taken in the commit that mounts the overlay — so that
+     commit is the picture and its header rather than the whole page (`opensFromDetailOrigin`). */
+  const [deferredBodyId, setDeferredBodyId] = useState<number | null>(() =>
+    heroSeed || (presentation === 'overlay' && opensFromDetailOrigin(imageId)) ? null : imageId,
+  );
   const [visibleTags, setVisibleTags] = useState<VisibleTagLimits>(() => initialTagLimits(imageId));
   /* Keyed by image id, like `finalReadyId`: the route is reused across detail↔detail
      navigations, so a per-image answer must not outlive its image. */
@@ -1348,8 +1342,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const detailHeroStyle = getHeroMediaStyle(latchedMediaBox ?? { width: image.width, height: image.height });
   /* A direct load has no card to borrow a bitmap from: the record's thumbnail stands in until
      the full picture is decoded (a still — an animated thumbnail would restart the animation). */
-  const directPreview =
-    !heroSeed && !facts.isVideo && facts.format !== 'gif' && !image.animated ? facts.reps.thumb || undefined : undefined;
+  const directPreview = heroSeed ? undefined : detailStillPreview(image);
   const previewSrc = heroSeed?.previewSrc ?? directPreview;
   const canTranslate = Boolean(translationSource) && !translateOff;
   const shareItems: MenuAction[] = [

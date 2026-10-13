@@ -9,6 +9,7 @@ import {
   dismissFlight,
   flightOn,
   flyOnRoute,
+  inShownPanes,
   release,
   routePlayable,
   turnFlight,
@@ -25,7 +26,10 @@ import type { ForumOrigin } from '@/lib/forumTransition';
  * The outgoing content is taken from the route cross-fade's still frame of the page being left,
  * the incoming one from the live element. A post still opening when Back is pressed turns back
  * into its row from where it is, and a post still closing when Forward is pressed turns back out
- * (`claimable`).
+ * (`claimable`). Both legs hand off by fading the layer off the live element (`handoffFade`), as a
+ * folder's and a picture's do: the incoming copy is a frame of the card as it mounted, and a
+ * picture in the post that loaded during the run, or a count the thread's own read corrected,
+ * now cross-fades in at the landing instead of popping in.
  */
 
 const keyOf = (id: string) => `forum:${id}`;
@@ -91,7 +95,7 @@ export function playForumContainerTransform(card: HTMLElement, origin: ForumOrig
         fade: FORUM_FADE.open,
         hidden,
       },
-      { kind: 'forum', key, leg: 'open', target: card },
+      { kind: 'forum', key, leg: 'open', target: card, handoffFade: true },
     );
   });
   return () => {
@@ -111,7 +115,9 @@ export function playForumContainerTransform(card: HTMLElement, origin: ForumOrig
 export function playForumReturn(row: HTMLElement, origin: ForumOrigin): () => void {
   const adopted = flightOn(row);
   if (adopted) return () => release(adopted);
-  if (!routePlayable(row)) return () => {};
+  /* The forum pane is behind the gallery when the thread is left for 主页: a concealed pane keeps
+     its layout, so its row still answers with a rectangle nobody is looking at. */
+  if (!routePlayable(row) || !inShownPanes(row)) return () => {};
   const crossFade = crossFadeLayer();
   if (!crossFade) return () => {};
   const key = keyOf(origin.id);
@@ -156,7 +162,7 @@ export function playForumReturn(row: HTMLElement, origin: ForumOrigin): () => vo
       fade: FORUM_FADE.back,
       hidden,
     },
-    { kind: 'forum', key, leg: 'back', target: row },
+    { kind: 'forum', key, leg: 'back', target: row, handoffFade: true },
   );
   return () => {
     if (flight) release(flight);

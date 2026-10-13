@@ -22,11 +22,14 @@ import { PageFallback } from '@/components/ImageDetailSlot';
  * **`PageFallback`: the page column's, never the picture slot's.** Next hands this file to every
  * parallel slot of the root layout, and the `@imageDetail` slot is not in the page column — drawn
  * there, it was a gutterless page silhouette over the page itself (`components/ImageDetailSlot.tsx`).
+ *
+ * **`data-route-fallback`** says the page is this and nothing more: a route change that a container
+ * transform rides holds its fade until the page has replaced it (`lib/routeCrossFadePlay.ts`).
  */
 export default function Loading() {
   return (
     <PageFallback>
-      <div role="status" aria-live="polite" data-page-loading className="mx-auto max-w-4xl">
+      <div role="status" aria-live="polite" data-page-loading data-route-fallback className="mx-auto max-w-4xl">
         <span className="sr-only">加载中…</span>
         {/* Page title */}
         <Skeleton className="mb-6 h-8 w-48" />

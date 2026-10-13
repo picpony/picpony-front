@@ -10,6 +10,7 @@ import {
   dismissFlight,
   flightOn,
   flyOnRoute,
+  inShownPanes,
   release,
   routePlayable,
   turnFlight,
@@ -39,15 +40,6 @@ function pageSurface(box: Box): Surface {
     wrapper around it also holds the card's ⋮, and is what is copied. */
 function cardSurface(card: HTMLElement, box: Box): Surface {
   return surfaceOf(card.querySelector('a[href]') ?? card, box);
-}
-
-/** Whether every tab pane around `el` is the one on screen: a concealed pane keeps its layout, so
-    its cards still answer with rectangles, but nobody is looking at them. */
-function inShownPanes(el: HTMLElement): boolean {
-  for (let pane = el.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
-    if (!pane.hasAttribute('data-tab-pane-active')) return false;
-  }
-  return true;
 }
 
 /**

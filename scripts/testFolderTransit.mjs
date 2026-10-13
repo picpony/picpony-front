@@ -37,6 +37,7 @@ globalThis.window = { innerHeight: 900 };
 const route = await import('../lib/routeContainerPlay.ts');
 const transit = await import('../lib/folderTransit.ts');
 const { setHeroBusyCheck } = await import('../lib/appScroller.ts');
+const pageTransit = await import('../lib/pageTransit.ts');
 
 function standIn({ turns = true } = {}) {
   const calls = [];
@@ -211,5 +212,46 @@ test('a remembered page goes stale with its navigation, and stands down while a 
     assert.equal(transit.readFolderReturn(), null, 'three seconds: a Back much later replays nothing');
   } finally {
     performance.now = realNow;
+  }
+});
+
+test('a press on a card, and the page left for its list, tell that one route change to ride on the container’s clock', () => {
+  const { takeRouteContainerExpectation } = pageTransit;
+  window.location = { origin: 'https://app.invalid', pathname: '/favorites' };
+  const card = { getBoundingClientRect: () => ({ width: 240, height: 220 }) };
+  try {
+    transit.rememberFolderOrigin('/favorites/folder/3', card);
+    assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), true, 'the change to the page it opens');
+    assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, 'read once, by that change');
+
+    transit.rememberFolderOrigin('/favorites/folder/3', card);
+    assert.equal(takeRouteContainerExpectation('/search'), false, 'a change elsewhere rides nothing');
+    assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, 'and spends it');
+
+    /* Leaving the page expects the list it was opened from. */
+    window.location.pathname = '/favorites/folder/3';
+    transit.rememberFolderReturn('/favorites/folder/3', { getBoundingClientRect: () => ({ top: 100, bottom: 900 }) });
+    assert.equal(takeRouteContainerExpectation('/favorites'), true);
+
+    for (const tier of ['reduced', 'off']) {
+      root.dataset.motion = tier;
+      transit.rememberFolderOrigin('/favorites/folder/3', card);
+      assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, `${tier}: the route's own fade`);
+    }
+    root.dataset.motion = 'standard';
+
+    const realNow = performance.now.bind(performance);
+    let now = realNow();
+    performance.now = () => now;
+    try {
+      transit.rememberFolderOrigin('/favorites/folder/3', card);
+      now += 3100;
+      assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, 'a navigation much later rides nothing');
+    } finally {
+      performance.now = realNow;
+    }
+  } finally {
+    delete window.location;
+    transit.clearFolderReturn();
   }
 });

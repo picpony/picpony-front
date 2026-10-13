@@ -488,7 +488,8 @@ test('a reply’s floor number does not assume the page size (R6-038)', () => {
 /* ----- the container transform: its geometry and its clock ---------------------------------- */
 
 const container = await import('../lib/forumContainer.ts');
-const { stripProgress: stripProgressFor } = await import('../lib/tabStrip.ts');
+const heroConstants = await import('../lib/hero/constants.ts');
+const { curveProgress } = await import('../lib/hero/progress.ts');
 
 test('the container transform’s clip is the container at every sample, in both of its forms', () => {
   const card = { left: 416, top: 96, width: 896, height: 724 };
@@ -515,22 +516,55 @@ test('the container transform’s clip is the container at every sample, in both
   }
 });
 
-test('the container moves on its first frame and never lurches; the fades are windows on its travel', () => {
+test('the container flies the picture flight’s curve, a little longer: moves on its first frame, crests in the air, lands at rest', () => {
   const p = container.forumTransformProgress;
-  const frame = 1000 / 60 / container.FORUM_TRANSFORM_MS;
+  /* One gesture, one shape of motion: a gallery card opening's curve, over a little more than its
+     220ms — a container hands one content over to another inside it, which that length hurried —
+     and still over before the next thing anybody does. */
+  assert.equal(container.FORUM_TRANSFORM_EASING, heroConstants.HERO_FLIGHT_CURVE.css);
+  assert.ok(container.FORUM_TRANSFORM_MS > heroConstants.HERO_DURATIONS.forward, 'a little longer than the flight');
+  assert.ok(container.FORUM_TRANSFORM_MS <= 300, `${container.FORUM_TRANSFORM_MS}ms`);
+  for (let t = 0; t <= 1; t += 0.05) assert.equal(p(t), curveProgress(heroConstants.HERO_FLIGHT_CURVE, t));
   assert.equal(p(0), 0);
   assert.equal(p(1), 1);
-  /* The strip's launch: its fastest frame is its first, and no later one carries more. */
-  assert.ok(p(frame) > 0.12 && p(frame) < 0.16, `first frame ${p(frame)}`);
-  for (let t = 2 * frame; t <= 1 + 1e-9; t += frame) {
-    assert.ok(p(Math.min(1, t)) - p(t - frame) <= p(t - frame) - p(Math.max(0, t - 2 * frame)) + 1e-12, `slows from the first frame (${t})`);
-  }
+  const frame = 1000 / 60 / container.FORUM_TRANSFORM_MS;
+  const steps = [];
+  for (let t = frame; t < 1 + frame; t += frame) steps.push(p(Math.min(1, t)) - p(t - frame));
+  /* It answers the press on the next frame, and its fastest frame is in the air, not the first. */
+  assert.ok(steps[0] > 0.05 && steps[0] < 0.12, `first frame ${steps[0]}`);
+  const fastest = steps.indexOf(Math.max(...steps));
+  assert.ok(fastest >= 1 && fastest <= 4, `fastest frame ${fastest}`);
+  /* Half the way inside 75ms, nine tenths inside 160ms, and at rest by the end: no creep. */
+  const at = (q) => {
+    for (let ms = 0; ms <= container.FORUM_TRANSFORM_MS; ms += 0.5) if (p(ms / container.FORUM_TRANSFORM_MS) >= q) return ms;
+    return Infinity;
+  };
+  assert.ok(at(0.5) < 75, `half at ${at(0.5)}`);
+  assert.ok(at(0.9) < 160, `nine tenths at ${at(0.9)}`);
+  assert.ok(steps.at(-1) < 0.003, `last frame ${steps.at(-1)}`);
   for (let t = 0; t < 1; t += 0.01) assert.ok(p(t + 0.01) >= p(t), 'monotone: nothing overshoots its rectangle');
-  assert.equal(container.fadeAt(container.FORUM_FADE.back, 0.3), 0);
-  assert.equal(container.fadeAt(container.FORUM_FADE.back, 0.95), 1);
-  assert.ok(container.FORUM_FADE.open.end < container.FORUM_FADE.back.start, 'opening, the card arrives early; returning, the row late');
-  const easing = container.linearEasing(p);
-  assert.match(easing, /^linear\(0 0%, .*, 1 100%\)$/);
+});
+
+test('the contents hand over on the flight’s windows, one after the other', () => {
+  const { open, back } = container.FORUM_FADE;
+  /* Opening: the row goes over the first stretch, as a card's marks go at take-off; the page comes
+     in over the flight's content window. Returning: the page goes from the first frame and the row
+     comes in once the container is most of the way home. */
+  assert.deepEqual(open.incoming, heroConstants.HERO_CONTENT_FADE.forward);
+  assert.deepEqual(back.outgoing, heroConstants.HERO_CONTENT_FADE.back);
+  assert.deepEqual(back.incoming, heroConstants.HERO_CONTAINER_FADE.back);
+  assert.equal(open.outgoing.start, 0);
+  assert.equal(back.outgoing.start, 0);
+  /* Never two contents on screen at once: anchored at one corner and unscaled, two lines of text
+     that do not line up read as one doubled line. */
+  for (const leg of [open, back]) {
+    assert.ok(leg.outgoing.end <= leg.incoming.start + 1e-9, 'the outgoing content is gone before the incoming one comes');
+    for (let p = 0; p <= 1; p += 0.01) {
+      const shown = container.fadeAt(leg.outgoing, p, true) + container.fadeAt(leg.incoming, p);
+      assert.ok(shown <= 1 + 1e-9, `both at ${p}`);
+    }
+  }
+  assert.ok(back.incoming.start >= 0.5, 'returning, the row arrives late');
 });
 
 test('the container starts from what is on screen of a card, and not at all from nothing', () => {
@@ -540,13 +574,20 @@ test('the container starts from what is on screen of a card, and not at all from
   assert.deepEqual(container.radiiAt([12, 12, 12, 12], [4, 4, 16, 16], 0.5), [8, 8, 14, 14]);
 });
 
-test('a fresh leg fades the incoming content in over its window, exactly as the window states it', () => {
-  for (const window of [container.FORUM_FADE.open, container.FORUM_FADE.back]) {
+test('a fresh leg fades each content over its window, exactly as the window states it', () => {
+  for (const leg of [container.FORUM_FADE.open, container.FORUM_FADE.back]) {
+    const window = leg.incoming;
     assert.deepEqual(container.fadeTrack(window, 0, 1), [
       { offset: 0, opacity: 0 },
       { offset: window.start, opacity: 0 },
       { offset: window.end, opacity: 1 },
       { offset: 1, opacity: 1 },
+    ]);
+    /* The outgoing one starts with the leg: no keyframe at its own start but the leg's. */
+    assert.deepEqual(container.fadeTrack(leg.outgoing, 0, 1, true), [
+      { offset: 0, opacity: 1 },
+      { offset: leg.outgoing.end, opacity: 0 },
+      { offset: 1, opacity: 0 },
     ]);
   }
 });
@@ -561,47 +602,58 @@ function trackAt(track, u) {
   return track[track.length - 1].opacity;
 }
 
-test('a turned leg sends the incoming content back out over the same stretch of travel it came in on', () => {
-  for (const window of [container.FORUM_FADE.open, container.FORUM_FADE.back]) {
+test('a turned leg sends each content back over the same stretch of travel it came over', () => {
+  const windows = [container.FORUM_FADE.open, container.FORUM_FADE.back].flatMap((leg) => [
+    [leg.outgoing, true],
+    [leg.incoming, false],
+  ]);
+  for (const [window, out] of windows) {
     for (const p of [0.02, 0.1, 0.3, 0.45, 0.62, 0.8, 0.95, 1]) {
       for (const to of [0, 1]) {
-        const track = container.fadeTrack(window, p, to);
+        const track = container.fadeTrack(window, p, to, out);
         for (let i = 1; i < track.length; i += 1) assert.ok(track[i].offset > track[i - 1].offset, 'offsets climb');
         assert.equal(track[0].offset, 0);
         assert.equal(track.at(-1).offset, 1);
         for (let u = 0; u <= 1.0001; u += 0.025) {
-          const expected = container.fadeAt(window, p + (to - p) * Math.min(1, u));
+          const expected = container.fadeAt(window, p + (to - p) * Math.min(1, u), out);
           assert.ok(Math.abs(trackAt(track, Math.min(1, u)) - expected) < 1e-9, `p ${p} → ${to} at ${u}`);
         }
         /* It leaves from exactly what was on screen at the turn: no step in the content's opacity. */
-        assert.ok(Math.abs(track[0].opacity - container.fadeAt(window, p)) < 1e-12);
+        assert.ok(Math.abs(track[0].opacity - container.fadeAt(window, p, out)) < 1e-12);
       }
     }
   }
 });
 
-test('a turn leaves from where the container is, at once, and never back through the old leg’s tail', () => {
+test('a turn leaves from where the container is, at once, on the curve, over what is left of the way', () => {
   const full = container.FORUM_TRANSFORM_MS;
   const leg = container.freshContainerLeg(full);
   const frame = 1000 / 60;
-  for (const elapsed of [frame, 50, 120, 200, 320, full]) {
+  for (const elapsed of [frame, 30, 60, 120, 180, full]) {
     const turned = container.turnContainer(leg, elapsed, full);
     const p = container.forumTransformProgress(elapsed / full);
     assert.ok(Math.abs(turned.from - p) < 1e-9, 'from the pose on screen');
     assert.equal(turned.to, 0, 'back towards the first end');
-    assert.ok(turned.duration >= full * 0.6 - 1e-9 && turned.duration <= full + 1e-9, `duration ${turned.duration}`);
-    const progress = stripProgressFor(turned.launch);
-    /* In the first frame it already covers what a fresh tap's first frame would of the same way. */
-    const firstFrame = progress(frame / turned.duration) * turned.from;
-    const freshFirst = container.forumTransformProgress(frame / full) * Math.min(1, turned.from);
-    assert.ok(firstFrame >= freshFirst * 0.999, `elapsed ${elapsed}: first frame ${firstFrame} against ${freshFirst}`);
-    for (let t = 0; t < 1; t += 0.01) assert.ok(progress(t + 0.01) >= progress(t) - 1e-12, 'monotone: it does not overshoot the card it returns to');
+    /* The flight's reversal rule: a share of a full leg that shrinks with the way left to undo,
+       never under its floor. */
+    const share = Math.max(
+      heroConstants.HERO_REVERSE_MIN_DURATION_MS / full,
+      heroConstants.HERO_REVERSE_BASE_RATIO + heroConstants.HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(p),
+    );
+    assert.ok(Math.abs(turned.duration - full * share) < 1e-9, `duration ${turned.duration}`);
+    assert.ok(turned.duration <= full + 1e-9);
+    /* It moves on its first frame, the way it was sent, and lands on its end without passing it. */
+    const travel = (ms) => container.legAt(turned, ms).travel;
+    assert.ok(travel(frame) < turned.from - 1e-6, `elapsed ${elapsed}: still on the first frame`);
+    for (let ms = 0; ms < turned.duration; ms += 1) assert.ok(travel(ms + 1) <= travel(ms) + 1e-12, 'one way');
+    assert.ok(Math.abs(travel(turned.duration)) < 1e-12, 'lands on the first end');
   }
-  /* A turn of a turn heads for the second end again. */
-  const back = container.turnContainer(leg, 150, full);
-  const again = container.turnContainer(back, 60, full);
+  /* A turn of a turn heads for the second end again, from where the turned leg had got to. */
+  const back = container.turnContainer(leg, 120, full);
+  const again = container.turnContainer(back, 40, full);
   assert.equal(again.to, 1);
   assert.ok(again.from < back.from, 'from where the turned leg had got to');
+  assert.ok(Math.abs(again.from - container.legAt(back, 40).travel) < 1e-12);
 });
 
 test('a turn reads the container off the leg on the display’s clock: the clip the shutters draw then, tone and corners with it', () => {

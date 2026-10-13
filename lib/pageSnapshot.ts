@@ -136,8 +136,19 @@ function offscreenPaths(
 /**
  * Clones `source` into a detached, sanitised, viewport-pinned element.
  * Returns `null` when the subtree is too large to be worth cloning.
+ *
+ * `keepLoading` is for a copy taken in the commit that mounts its source — a container
+ * transform's arriving content — whose pictures were created in that same commit and are still
+ * loading, often from the memory cache, a task from showing. Disarmed like any picture that is not
+ * showing, the copy carried an empty well for the whole run; kept, an eager one paints in the copy
+ * the moment it lands, on the live picture's own fetch (same address, same document: joined, not
+ * repeated). A lazy one, or one that failed, is still disarmed.
  */
-export function captureVisualClone(source: HTMLElement, host: HTMLElement): RouteSnapshot | null {
+export function captureVisualClone(
+  source: HTMLElement,
+  host: HTMLElement,
+  { keepLoading = false }: { keepLoading?: boolean } = {},
+): RouteSnapshot | null {
   /* Which tab panes are concealed, found before the budget below.
     *
     * `STRIP_ATTRS` removes the tab markers so a query cannot resolve into the clone — and
@@ -219,9 +230,11 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
 
      An image is recorded with the resource it is showing, or `null` when it is not showing
      one yet — `complete && naturalWidth > 0`, since `complete` alone is also true of a
-     failed image. */
+     failed image. Under `keepLoading`, an eager one still on its way is recorded apart and its
+     copy left as it was cloned. */
   const sourceAll = source.getElementsByTagName('*');
   const imgSrcByIndex = new Map<number, string | null>();
+  const loadingImgIndices: number[] = [];
   const mediaSizeByIndex = new Map<number, { width: number; height: number }>();
   const scrolledByIndex = new Map<number, { top: number; left: number }>();
   for (let i = 0; i < sourceAll.length; i += 1) {
@@ -235,7 +248,8 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
       mediaSizeByIndex.set(i, { width: rect.width, height: rect.height });
     } else if (element.tagName === 'IMG') {
       const img = element as HTMLImageElement;
-      imgSrcByIndex.set(i, img.complete && img.naturalWidth > 0 ? img.currentSrc : null);
+      if (keepLoading && !img.complete && img.loading !== 'lazy') loadingImgIndices.push(i);
+      else imgSrcByIndex.set(i, img.complete && img.naturalWidth > 0 ? img.currentSrc : null);
     }
   }
 
@@ -250,6 +264,12 @@ export function captureVisualClone(source: HTMLElement, host: HTMLElement): Rout
     const node = nodeAt(clone, path);
     node?.replaceWith(spacer(pruneSizes[i]));
   });
+
+  /* A loading picture kept for the copy is kept only where the copy shows it: a pruned one is
+     disarmed below with the rest, since a detached copy still loads. */
+  for (const i of loadingImgIndices) {
+    if (!clone.contains(cloneAll[i])) imgSrcByIndex.set(i, null);
+  }
 
   /* Disarm every copy of an image that was not showing anything, pruned or not, before this
      task ends. `cloneNode` copies each `src`, and a copy outside the document is not gated on
