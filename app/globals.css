@@ -1874,7 +1874,15 @@ html[data-motion='reduced'] {
       color-mix(in oklab, var(--foreground) 7%, transparent),
       transparent
     );
-    animation: shimmer calc(1.6s * var(--motion-scale)) linear infinite;
+    /* **Fast through the pass, easing out of the exit.** The one loop in the app that takes a
+       one-sided curve, and it is geometry rather than taste: the band is wholly outside the
+       box it is clipped to at *both* ends of the cycle (`translateX(∓100%)`), so the wrap is
+       drawn nowhere and the velocity step `--ease-loop` exists to hide is not on screen. What
+       is on screen is the pass, and easing out of it reads as light going past rather than a
+       conveyor belt.
+       Not `--ease-decelerate`: that one spends 62% of its travel in the first tenth, which
+       over a 1.6s pass is a flash and then a stall. */
+    animation: shimmer calc(1.6s * var(--motion-scale)) ease-out infinite;
     /* Pseudo-elements do not inherit animation-delay implicitly; this lets a per-tile
        inline delay on the skeleton element stagger the sweep. */
     animation-delay: inherit;
